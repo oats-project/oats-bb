@@ -1,7 +1,7 @@
 // inspect and inspectMany: what bb shows of a home's thread, from one `bb thread list`.
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, fail, isObject } from "./errors.mjs";
+import { fail, isObject, recode } from "./errors.mjs";
 import { inspectHome, readEndpoint } from "./threads.mjs";
 
 function readHome(entry) {
@@ -11,10 +11,7 @@ function readHome(entry) {
 }
 
 /** bb unreachable, or any other failed read, is an error: never "stopped". */
-function unavailable(error) {
-  if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_UNAVAILABLE" ? error : fail("E_SESSION_UNAVAILABLE", error.message);
-}
+const unavailable = (error) => recode("E_SESSION_UNAVAILABLE", error);
 
 /** → { present, state, running, open? } */
 export async function inspect(input, settings, { deadline, env = process.env } = {}) {

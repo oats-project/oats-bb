@@ -14,3 +14,10 @@ export function fail(code, message) {
 }
 
 export const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** A verb's refusals carry that verb's own code: any other ProviderError is recoded to
+ *  it, keeping its message. Anything that is not a ProviderError is a bug, and rethrown. */
+export function recode(code, error) {
+  if (!(error instanceof ProviderError)) throw error;
+  return error.code === code ? error : fail(code, error.message);
+}

@@ -1,12 +1,9 @@
 // input: one tell, and only a dispatched tell is a submission (contract item 1).
 import { bbClient } from "./bb.mjs";
-import { ProviderError, fail, isObject } from "./errors.mjs";
+import { fail, isObject, recode } from "./errors.mjs";
 import { readEndpoint } from "./threads.mjs";
 
-const failed = (error) => {
-  if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_INPUT_FAILED" ? error : fail("E_SESSION_INPUT_FAILED", error.message);
-};
+const failed = (error) => recode("E_SESSION_INPUT_FAILED", error);
 
 /** → { submitted: true, verified }.
  *  1. A tell never answers a pending interaction (a permission prompt or a question):

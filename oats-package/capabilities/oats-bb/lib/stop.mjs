@@ -1,7 +1,7 @@
 // stop, and the retire hook's archive (contract item 3).
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, fail, isObject } from "./errors.mjs";
+import { ProviderError, fail, isObject, recode } from "./errors.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { isSettled, liveThreadsOfHome, projectsOfHome, readEndpoint } from "./threads.mjs";
 
@@ -12,10 +12,7 @@ export const MAX_GRACE_SECONDS = 300;
 const DEFAULT_GRACE_SECONDS = 10;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const failed = (error) => {
-  if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_STOP_FAILED" ? error : fail("E_SESSION_STOP_FAILED", error.message);
-};
+const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
 
 /** → { stopped: true } once bb shows the thread settled (idle, pending or error) or gone;
  *  E_SESSION_STOP_FAILED when it is still in a turn after the grace.

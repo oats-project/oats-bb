@@ -1,0 +1,15 @@
+{
+  "name": "@awebai/oats-bb",
+  "version": "0.1.0",
+  "description": "OATS on bb: the bb session provider (an OATS instance as one bb thread).",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "validate": "node scripts/validate-manifests.mjs",
+    "test": "npm run validate && node --test test/unit/",
+    "test:contract": "node --test --test-timeout=1500000 test/contract/"
+  }
+}

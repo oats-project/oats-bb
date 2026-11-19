@@ -1,0 +1,101 @@
+// launch: one OATS home becomes one bb thread (contract items 1, 4, 6).
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
+import { bbClient } from "./bb.mjs";
+import { readLaunchEnv, writeLaunchEnv } from "./claude-env.mjs";
+import { fail, isObject } from "./errors.mjs";
+import { backendProblems } from "./readiness.mjs";
+import { isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
+
+export const HARNESSES = Object.freeze(["claude"]);
+const BB_PROVIDER = "claude-code";
+// Claude Code's own permission-mode words, as a launch configuration writes them.
+const PERMISSION_ARG = { auto: "auto", acceptEdits: "accept-edits", bypassPermissions: "full" };
+
+/** bb's permission mode for the launch: `--permission-mode <mode>` from a launch
+ *  configuration when it is there (the only argument this backend can carry), else yolo:
+ *  true → full, false or no choice → accept-edits. Any other argument is refused by name:
+ *  bb starts Claude itself, so an argument has nowhere to go and is never dropped. */
+export function permissionMode(args, yolo) {
+  if (args !== undefined && args !== null && !Array.isArray(args)) throw fail("E_BACKEND_LAUNCH_ARG", "the launch args must be a list");
+  let mode = null;
+  const list = args ?? [];
+  for (let i = 0; i < list.length; i += 1) {
+    const arg = list[i];
+    let value = null;
+    if (arg === "--permission-mode" && typeof list[i + 1] === "string") { value = list[i + 1]; i += 1; }
+    else if (typeof arg === "string" && arg.startsWith("--permission-mode=")) value = arg.slice("--permission-mode=".length);
+    else throw fail("E_BACKEND_LAUNCH_ARG", `the bb backend cannot carry the launch argument ${JSON.stringify(arg)}: bb starts Claude Code itself. Remove it from the launch configuration or the capability that adds it (the one argument carried is --permission-mode auto|acceptEdits|bypassPermissions)`, { arg });
+    if (!Object.hasOwn(PERMISSION_ARG, value)) throw fail("E_BACKEND_LAUNCH_ARG", `the bb backend cannot carry --permission-mode ${JSON.stringify(value)}: bb's modes are auto, accept-edits (acceptEdits) and full (bypassPermissions)`, { arg: `--permission-mode ${value}` });
+    if (mode !== null && mode !== PERMISSION_ARG[value]) throw fail("E_BACKEND_LAUNCH_ARG", "the launch names --permission-mode twice, with different modes", { arg: "--permission-mode" });
+    mode = PERMISSION_ARG[value];
+  }
+  if (mode !== null) return mode;
+  if (yolo !== true && yolo !== false && yolo !== null && yolo !== undefined) throw fail("E_SESSION_START_FAILED", "the launch input's yolo must be true, false or null");
+  return yolo === true ? "full" : "accept-edits";
+}
+
+function readInput(input) {
+  if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
+  const { home, instance, harness, model, promptFile, previous } = input;
+  if (typeof harness !== "string" || !HARNESSES.includes(harness)) {
+    throw fail("E_BACKEND_HARNESS", `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}`);
+  }
+  if (typeof home !== "string" || !isAbsolute(home)) throw fail("E_SESSION_START_FAILED", "the launch input's home must be an absolute path");
+  if (typeof instance !== "string" || !instance) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name");
+  if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
+  if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
+  if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
+  return { home, instance, model: model ?? null, promptFile, previous: previous ?? null };
+}
+
+/** → { endpoint: { server, projectId, threadId } }. Order matters: everything that can
+ *  refuse runs before the first effect (archiving the previous thread, creating the
+ *  project, writing the env file, spawning). */
+export async function launch(input, settings, { deadline, env = process.env } = {}) {
+  const { home, instance, model, promptFile, previous } = readInput(input);
+  const mode = permissionMode(input.args, input.yolo);
+  const launchEnv = readLaunchEnv(input.env);
+  if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
+  if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
+
+  const { problems, server } = await backendProblems(settings, { deadline, env });
+  if (problems.length > 0) {
+    const [first, ...rest] = problems;
+    throw fail(first.code, rest.length ? `${first.message} (and ${rest.length} more: ${rest.map((problem) => problem.code).join(", ")}; see oats readiness)` : first.message);
+  }
+  const bb = bbClient({ cli: settings.cli, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
+
+  // One thread per home: the home's project may hold the thread this launch replaces
+  // (stopped by OATS, so settled), and nothing else alive.
+  const [projects, threads] = [await bb.projects(), await bb.threads()];
+  const mine = projectsOfHome(projects, home);
+  const live = liveThreadsOfHome(threads, home, mine.map((project) => project.id));
+  const previousId = typeof previous?.threadId === "string" ? previous.threadId : null;
+  const others = live.filter((thread) => thread.id !== previousId);
+  if (others.length > 0) {
+    throw fail("E_SESSION_START_FAILED", `a live bb thread already runs in ${home}: ${others.map((thread) => `${thread.id} (${thread.status})`).join(", ")}. One home is one thread: stop and archive ${others.length > 1 ? "them" : "it"} in bb, then start again`, { threads: others.map((thread) => thread.id) });
+  }
+  const replaced = live.find((thread) => thread.id === previousId) ?? null;
+  if (replaced && !isSettled(replaced)) {
+    throw fail("E_SESSION_START_FAILED", `the home's bb thread ${replaced.id} is still ${replaced.status}: stop it (oats instance stop ${instance}) before starting again`, { threads: [replaced.id] });
+  }
+  if (replaced) {
+    const archived = await bb.archive(replaced.id);
+    if (!archived.ok && archived.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
+  }
+
+  const project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? await bb.createProject(instance, home);
+  writeLaunchEnv(home, launchEnv);
+
+  const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
+    "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
+  const spawned = await bb.spawn(args);
+  if (!spawned.ok) {
+    // A spawn whose answer was lost may still have made the thread: say so.
+    throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`, spawned.timedOut ? { unconfirmed: true } : undefined);
+  }
+  const thread = spawned.value;
+  if (!isObject(thread) || typeof thread.id !== "string" || !thread.id) throw fail("E_SESSION_START_FAILED", "bb thread spawn answered no thread id", { unconfirmed: true });
+  return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+}

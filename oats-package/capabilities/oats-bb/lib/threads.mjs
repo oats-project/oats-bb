@@ -27,15 +27,18 @@ export const MISSING = Object.freeze({ present: false, state: "stopped", running
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;
 
+/** One of bb's ids (thr_…, proj_…, qmsg_…). An id is an argument to bb: it must never
+ *  read as an option. */
+export const isBbId = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+
 /** The endpoint the kernel recorded, checked: bb's own ids and a loopback server. */
 export function readEndpoint(endpoint, code = "E_SESSION_UNAVAILABLE") {
   if (!isObject(endpoint)) throw fail(code, "the recorded endpoint is not an object");
   for (const key of ["server", "projectId", "threadId"]) {
     if (typeof endpoint[key] !== "string" || !endpoint[key]) throw fail(code, `the recorded endpoint has no ${key}`);
   }
-  // An id is an argument to bb: it must never read as an option.
   for (const key of ["projectId", "threadId"]) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(endpoint[key])) throw fail(code, `the recorded endpoint's ${key} is not a bb id`);
+    if (!isBbId(endpoint[key])) throw fail(code, `the recorded endpoint's ${key} is not a bb id`);
   }
   return { server: loopbackOrigin(endpoint.server, "server"), projectId: endpoint.projectId, threadId: endpoint.threadId };
 }

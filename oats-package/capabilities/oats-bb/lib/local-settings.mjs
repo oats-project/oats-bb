@@ -181,7 +181,7 @@ export function everLaunched(home) {
 /** The mode of the home's last launch and whether it was handed sandbox allowances, or
  *  null before a first launch. */
 export function readLaunchRecord(home) {
-  if (!lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false })?.isDirectory()) return null;
+  if (!everLaunched(home)) return null;
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
   return record === null ? null : { mode: typeof record.mode === "string" ? record.mode : null, sandboxGiven: record.sandboxGiven === true };
 }
@@ -276,7 +276,7 @@ function withdraw(settings, envNames, sandboxRecord) {
 export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, dryRun = false }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);
-  const envRecord = lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false }) ? readJsonObject(envRecordPath, "the provider's record") : null;
+  const envRecord = everLaunched(home) ? readJsonObject(envRecordPath, "the provider's record") : null;
   const previousNames = strings(envRecord?.names);
   const previousSandbox = readSandboxRecord(home);
   env = { ...Object.fromEntries(unset.map((name) => [name, ""])), ...env };

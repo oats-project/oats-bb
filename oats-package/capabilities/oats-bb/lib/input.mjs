@@ -1,7 +1,7 @@
 // input: one tell, and only a dispatched tell is a submission (contract item 1).
 import { bbClient } from "./bb.mjs";
 import { fail, isObject, recode } from "./errors.mjs";
-import { readEndpoint } from "./threads.mjs";
+import { isBbId, readEndpoint } from "./threads.mjs";
 
 const failed = (error) => recode("E_SESSION_INPUT_FAILED", error);
 
@@ -49,7 +49,7 @@ export async function sendInput(input, settings, { deadline, env = process.env }
 
   const queued = isObject(answer.queuedMessage) ? answer.queuedMessage : {};
   const waitingOn = isObject(queued.waitingOn) && typeof queued.waitingOn.kind === "string" ? queued.waitingOn.kind : "unknown";
-  if (typeof queued.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(queued.id)) {
+  if (!isBbId(queued.id)) {
     throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and gave no id to withdraw it by: it may still be delivered`);
   }
   const withdrawn = await bb.queueDelete(endpoint.threadId, queued.id);

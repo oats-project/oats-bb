@@ -1,0 +1,128 @@
+// stop, and the retire hook that archives the home's threads (contract item 3).
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+
+const SERVER = "http://127.0.0.1:38886";
+const settings = { version: "0.50.1", trust: "single-user" };
+const endpoint = { server: SERVER, projectId: "proj_a", threadId: "thr_a" };
+const show = (status, extra) => ({ stdout: { thread: threadRow("thr_a", "proj_a", status, extra), environment: null, pendingTodos: null } });
+const verbs = (calls) => calls.map((c) => c.argv.filter((a) => !a.startsWith("-")).slice(0, 2).join(" "));
+
+async function stopWith(t, script, input = {}) {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, script);
+  const answer = await call("stop", { home, endpoint, graceSeconds: 5, ...input }, { settings, bb });
+  return { answer, calls: bb.calls() };
+}
+
+test("stop asks bb, then waits until the thread is idle", async (t) => {
+  const { answer, calls } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("stopping"), show("idle")] });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(calls[0].argv, ["thread", "stop", "thr_a", "--json"]);
+  assert.deepEqual(verbs(calls), ["thread stop", "thread show", "thread show", "thread show"]);
+});
+
+for (const status of ["idle", "pending", "error"]) {
+  test(`a thread that settles as ${status} is stopped`, async (t) => {
+    const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show(status) });
+    assert.deepEqual(answer.result, { stopped: true });
+  });
+}
+
+test("a thread bb no longer has is stopped", async (t) => {
+  const { answer, calls } = await stopWith(t, { "thread stop": NOT_FOUND });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(verbs(calls), ["thread stop"]);
+});
+
+test("a thread deleted while stopping is stopped", async (t) => {
+  const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": NOT_FOUND });
+  assert.deepEqual(answer.result, { stopped: true });
+});
+
+test("a thread still in a turn after the grace: E_SESSION_STOP_FAILED", async (t) => {
+  const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("active") }, { graceSeconds: 1 });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.match(answer.error.message, /still active 1 s after/);
+});
+
+for (const [name, script] of [
+  ["bb does not answer the stop", { "thread stop": UNREACHABLE }],
+  ["bb refuses the stop", { "thread stop": { error: { code: "invalid_request", message: "HTTP 409: no" } } }],
+  ["bb does not answer while the provider waits", { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": UNREACHABLE }],
+  ["bb shows something that is no thread", { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": { stdout: {} } }],
+]) {
+  test(`${name}: E_SESSION_STOP_FAILED`, async (t) => {
+    const { answer } = await stopWith(t, script);
+    assert.equal(answer.ok, false);
+    assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  });
+}
+
+test("a malformed endpoint: E_SESSION_STOP_FAILED, and bb is not called", async (t) => {
+  const { answer, calls } = await stopWith(t, {}, { endpoint: { server: "http://198.51.100.7:38886", projectId: "p", threadId: "t" } });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.deepEqual(calls, []);
+});
+
+// The retire hook: the kernel runs it after its own stop, with the hook environment.
+async function retireWith(t, script) {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, typeof script === "function" ? script(home) : script);
+  const run = await runBin(["retire-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
+  const lines = run.stdout.trim().split("\n");
+  return { run, last: JSON.parse(lines[lines.length - 1]), calls: bb.calls(), home };
+}
+const archived = (id) => ({ stdout: { ok: true, threadId: id, alreadyArchived: false, archivedAt: 9, archivedThreadIds: [id] } });
+
+test("retire archives the live threads of the home's project, and only those", async (t) => {
+  const { run, last, calls } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home), projectRow("proj_z", "/somewhere/else")] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle"), threadRow("thr_old", "proj_a", "idle", { archivedAt: 3 }), threadRow("thr_z", "proj_z", "idle")] },
+    "thread archive": archived("thr_a"),
+  }));
+  assert.equal(run.status, 0);
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
+  assert.deepEqual(calls.filter((c) => c.argv[1] === "archive").map((c) => c.argv), [["thread", "archive", "thr_a", "--json"]]);
+});
+
+test("retire stops a thread still in a turn before archiving it", async (t) => {
+  const { last, calls } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "active")] },
+    "thread stop": { stdout: { ok: true, threadId: "thr_a" } },
+    "thread archive": archived("thr_a"),
+  }));
+  assert.deepEqual(last.meta, { retired: true, archived: ["thr_a"] });
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread stop", "thread archive"]);
+});
+
+test("retire with nothing to archive is a complete cleanup (a home that never launched, or a second run)", async (t) => {
+  const { last } = await retireWith(t, { "project list": { stdout: [] }, "thread list": { stdout: [threadRow("thr_z", "proj_z", "idle")] } });
+  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
+});
+
+test("retire with a bb that does not answer warns and does not hold the retire", async (t) => {
+  const { run, last } = await retireWith(t, { "project list": UNREACHABLE });
+  assert.equal(run.status, 0);
+  assert.equal(last.meta.retired, undefined, "not an incomplete cleanup: the home goes, readiness reports the thread");
+  assert.match(last.warning, /session-provider-orphaned/);
+});
+
+test("retire names a thread it could not archive", async (t) => {
+  const { last } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle"), threadRow("thr_b", "proj_a", "idle")] },
+    "thread archive": [archived("thr_a"), { error: { code: "error", message: "HTTP 500: no" } }],
+  }));
+  assert.deepEqual(last.meta, { archived: ["thr_a"], left: ["thr_b"] });
+  assert.match(last.warning, /thr_b/);
+});
+
+test("the retire hook without a home in its environment fails loudly", async () => {
+  const run = await runBin(["retire-hook"], { env: { OATS_SETTINGS: "{}" } });
+  assert.equal(run.status, 2);
+  assert.match(run.stderr, /OATS_INSTANCE_HOME/);
+});

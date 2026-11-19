@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
+import { readSandboxRecord } from "./local-settings.mjs";
 import { TRUST_VALUES, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -164,4 +165,29 @@ export async function readinessResult(settings, options = {}) {
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
   return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
+}
+
+// Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
+// allows the whole forge, not only that base.
+const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "dev.azure.com", "git.sr.ht"]);
+
+/** What the provider added to the home's sandbox at its last launch, with who asked for
+ *  each entry: readiness lists it (contract item 6). → warnings; none in full mode or
+ *  before a first launch. */
+export function sandboxWarnings(home) {
+  let record;
+  try { record = readSandboxRecord(home); }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return [{ code: "session-provider-sandbox-unread", message: error.message }];
+  }
+  if (record === null || (record.domains.length === 0 && record.write.length === 0)) return [];
+  const hosts = record.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);
+  const paths = record.write.map((entry) => `${entry.path} (the kernel${entry.reason ? `: ${entry.reason}` : ""})`);
+  const warnings = [{ code: "session-provider-sandbox", message: `in bb's sandboxed modes this home's Claude may also reach ${hosts.length ? hosts.join(", ") : "no added host"} and write ${paths.length ? paths.join(", ") : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json at launch` }];
+  const forges = record.domains.filter((entry) => GENERAL_FORGES.has(String(entry.host).split(":")[0]));
+  if (forges.length > 0) {
+    warnings.push({ code: "session-provider-sandbox-forge", message: `${forges.map((entry) => `${entry.host} (${entry.capability})`).join(", ")} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
+  }
+  return warnings;
 }

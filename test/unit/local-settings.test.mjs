@@ -1,0 +1,182 @@
+// The sandbox allowances a launch writes into settings.local.json (contract item 6), and
+// the launch hook that removes what the provider wrote when the home leaves the provider.
+import assert from "node:assert/strict";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+import { VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
+
+const AWEB = { host: "app.aweb.ai", capability: "oats.aweb", setting: "server" };
+const FORGE = { host: "github.com", capability: "oats.okf", setting: "bases" };
+const events = (dir) => ({ path: join(dir, "deployment/.agents/events"), reason: "instance events" });
+
+async function setup(t) {
+  const { dir, home } = scratch(t);
+  const backend = await fakeBackend(t);
+  const bb = fakeBbIn(dir, {
+    "--version": { stdout: `${VERSION}\n` },
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [] },
+    "thread spawn": { stdout: { id: "thr_new", projectId: "proj_a", status: "starting" } },
+  });
+  const launch = (extra = {}) => call("launch", {
+    home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false,
+    env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }], unset: [], args: [],
+    promptFile: join(home, "TASK.md"), previous: null,
+    sandbox: { domains: [AWEB], write: [events(dir)] }, ...extra,
+  }, { settings: backend.settings(), bb });
+  const local = () => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
+  const record = () => JSON.parse(readFileSync(join(home, ".oats-bb-sandbox.json"), "utf8"));
+  const check = () => call("check", { home, soul: null }, { settings: backend.settings(), bb });
+  const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: "{}", ...extra } });
+  return { dir, home, bb, launch, local, record, check, hook };
+}
+
+test("a sandboxed launch writes exactly the hosts and paths it was handed, and records them", async (t) => {
+  const { dir, home, launch, local, record } = await setup(t);
+  assert.equal((await launch()).ok, true);
+  assert.deepEqual(local(), {
+    env: { OATS_INSTANCE: "dev-a" },
+    sandbox: { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: [events(dir).path] } },
+  });
+  assert.deepEqual(record(), {
+    domains: [AWEB], write: [events(dir)],
+    added: { domains: ["app.aweb.ai"], write: [events(dir).path], keys: ["sandbox", "sandbox.network", "sandbox.network.allowedDomains", "sandbox.filesystem", "sandbox.filesystem.allowWrite"] },
+  });
+  assert.equal(statSync(join(home, ".oats-bb-sandbox.json")).mode & 0o777, 0o600);
+  assert.deepEqual(readdirSync(join(home, ".oats-bb")), ["launch-env.json"], "no temporary file is left");
+});
+
+test("the allowances merge with what the file holds: a person's entries stay, nothing is replaced", async (t) => {
+  const { dir, home, launch, local, record } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ sandbox: { enabled: true, network: { allowedDomains: ["example.org", "app.aweb.ai"], allowLocalBinding: false }, filesystem: { denyRead: ["/secrets"] } } }));
+  assert.equal((await launch()).ok, true);
+  assert.deepEqual(local().sandbox, {
+    enabled: true,
+    network: { allowedDomains: ["example.org", "app.aweb.ai"], allowLocalBinding: false },
+    filesystem: { denyRead: ["/secrets"], allowWrite: [events(dir).path] },
+  });
+  // Only what the provider put in is its own: the host a person already allowed is not.
+  assert.deepEqual(record().added, { domains: [], write: [events(dir).path], keys: ["sandbox.filesystem.allowWrite"] });
+});
+
+test("a later launch removes what an earlier one wrote and this one does not carry", async (t) => {
+  const { dir, launch, local, record } = await setup(t);
+  await launch({ sandbox: { domains: [AWEB, FORGE], write: [events(dir)] } });
+  assert.deepEqual(local().sandbox.network.allowedDomains, ["app.aweb.ai", "github.com"]);
+  await launch({ sandbox: { domains: [AWEB], write: [] } });
+  assert.deepEqual(local().sandbox, { network: { allowedDomains: ["app.aweb.ai"] } });
+  assert.deepEqual(record().added, { domains: ["app.aweb.ai"], write: [], keys: ["sandbox", "sandbox.network", "sandbox.network.allowedDomains"] });
+});
+
+test("bb's full mode has no sandbox: nothing is written, and an earlier launch's allowances are removed", async (t) => {
+  const { home, launch, local } = await setup(t);
+  await launch();
+  assert.ok(local().sandbox);
+  assert.equal((await launch({ yolo: true })).ok, true);
+  assert.deepEqual(local(), { env: { OATS_INSTANCE: "dev-a" } });
+  assert.equal(existsSync(join(home, ".oats-bb-sandbox.json")), false);
+});
+
+test("removal takes exactly the provider's entries: one a person added to a list the provider made stays", async (t) => {
+  const { home, launch, local } = await setup(t);
+  await launch();
+  const edited = local();
+  edited.sandbox.network.allowedDomains.push("mine.example.org");
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify(edited));
+  await launch({ yolo: true });
+  assert.deepEqual(local(), { env: { OATS_INSTANCE: "dev-a" }, sandbox: { network: { allowedDomains: ["mine.example.org"] } } });
+});
+
+for (const [name, sandbox, code, pattern] of [
+  ["a wildcard host", { domains: [{ ...AWEB, host: "*.aweb.ai" }] }, "E_BACKEND_SANDBOX_HOST", /"\*\.aweb\.ai".*oats\.aweb.*not one exact host/],
+  ["a URL where a host belongs", { domains: [{ ...AWEB, host: "https://app.aweb.ai/api" }] }, "E_BACKEND_SANDBOX_HOST", /not one exact host/],
+  ["an uppercase or spaced host", { domains: [{ ...AWEB, host: "App.aweb.ai " }] }, "E_BACKEND_SANDBOX_HOST", /not one exact host/],
+  ["a host nobody asked for", { domains: [{ host: "app.aweb.ai" }] }, "E_BACKEND_SANDBOX_HOST", /without saying which capability asked/],
+  ["a relative path", { write: [{ path: "deployment/.agents/events", reason: "x" }] }, "E_BACKEND_SANDBOX_PATH", /not one exact absolute path/],
+  ["a path with a parent step", { write: [{ path: "/srv/acme/../etc", reason: "x" }] }, "E_BACKEND_SANDBOX_PATH", /not one exact absolute path/],
+  ["a path with a wildcard", { write: [{ path: "/srv/acme/*", reason: "x" }] }, "E_BACKEND_SANDBOX_PATH", /not one exact absolute path/],
+  ["the root", { write: [{ path: "/", reason: "x" }] }, "E_BACKEND_SANDBOX_PATH", /not one exact absolute path/],
+  ["a key the provider does not know", { domains: [], read: ["/etc"] }, "E_SESSION_START_FAILED", /does not know: read/],
+  ["domains that are not a list", { domains: "app.aweb.ai" }, "E_SESSION_START_FAILED", /sandbox\.domains is not a list/],
+]) {
+  test(`${name} refuses the launch (${code}), in full mode too, and nothing is written or started`, async (t) => {
+    const { home, bb, launch } = await setup(t);
+    for (const yolo of [false, true]) {
+      const answer = await launch({ sandbox, yolo });
+      assert.equal(answer.error.code, code);
+      assert.match(answer.error.message, pattern);
+    }
+    assert.equal(existsSync(join(home, ".claude")), false);
+    assert.deepEqual(bb.calls(), []);
+  });
+}
+
+test("a host with a port is one exact host; a launch with no sandbox field writes none", async (t) => {
+  const { home, launch, local } = await setup(t);
+  await launch({ sandbox: { domains: [{ ...AWEB, host: "aweb.internal:8443" }], write: [] } });
+  assert.deepEqual(local().sandbox, { network: { allowedDomains: ["aweb.internal:8443"] } });
+  await launch({ sandbox: undefined });
+  assert.equal(local().sandbox, undefined);
+  assert.equal(existsSync(join(home, ".oats-bb-sandbox.json")), false);
+});
+
+test("a settings.local.json whose sandbox list is not a list refuses the launch and is left as it is", async (t) => {
+  const { home, bb, launch } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  const before = JSON.stringify({ sandbox: { network: { allowedDomains: "example.org" } } });
+  writeFileSync(join(home, ".claude/settings.local.json"), before);
+  const answer = await launch();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /sandbox\.network\.allowedDomains.*not a list/);
+  assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
+  assert.equal(bb.calls().some((c) => c.argv[1] === "spawn"), false);
+});
+
+test("readiness lists what the provider added to the home's sandbox, with who asked, and warns of a general forge", async (t) => {
+  const { dir, launch, check } = await setup(t);
+  assert.deepEqual((await check()).result.warnings, [], "nothing before a launch");
+  await launch({ sandbox: { domains: [AWEB, FORGE], write: [events(dir)] } });
+  const { result } = await check();
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox", "session-provider-sandbox-forge"]);
+  assert.match(result.warnings[0].message, /app\.aweb\.ai \(oats\.aweb, its setting server\), github\.com \(oats\.okf, its setting bases\)/);
+  assert.match(result.warnings[0].message, new RegExp(`${events(dir).path} \\(the kernel: instance events\\)`));
+  assert.match(result.warnings[1].message, /github\.com \(oats\.okf\) is a general forge.*every repository/);
+  await launch({ yolo: true });
+  assert.deepEqual((await check()).result.warnings, [], "nothing in full mode");
+});
+
+test("the launch hook on another backend removes exactly what the provider wrote: the home stopped being a provider home", async (t) => {
+  const { home, launch, local, hook } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } }));
+  await launch();
+  assert.deepEqual(Object.keys(local()).sort(), ["env", "permissions", "sandbox"]);
+
+  // On this provider, and in a preview, the hook changes nothing and says nothing.
+  for (const run of [await hook("bb"), await hook("tmux", { OATS_LAUNCH_PREVIEW: "1" })]) {
+    assert.equal(run.status, 0);
+    assert.equal(run.stdout, "");
+  }
+  assert.ok(local().sandbox);
+
+  const moved = await hook("tmux");
+  assert.equal(moved.status, 0);
+  assert.match(JSON.parse(moved.stdout).warning, /starts on tmux, no longer on bb/);
+  assert.deepEqual(local(), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } });
+  assert.equal(existsSync(join(home, ".oats-bb-sandbox.json")), false);
+  assert.equal(existsSync(join(home, ".oats-bb/launch-env.json")), false);
+  // A second start on tmux finds nothing of the provider's, and is silent.
+  assert.equal((await hook("tmux")).stdout, "");
+});
+
+test("the launch hook in a home the provider never launched does nothing", async (t) => {
+  const { home, hook } = await setup(t);
+  const run = await hook("tmux");
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "");
+  assert.equal(existsSync(join(home, ".claude")), false);
+  assert.equal((await runBin(["launch-hook"], { env: { OATS_BACKEND: "tmux" } })).status, 2);
+});

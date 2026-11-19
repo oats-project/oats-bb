@@ -101,10 +101,10 @@ test("a .claude that is a link out of the home refuses the launch: the env file 
 
 test("a secret-sourced env entry: E_BACKEND_LAUNCH_ENV naming it, nothing written, bb never called", async (t) => {
   const { home, bb, run } = await setup(t);
-  const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "ANTHROPIC_API_KEY", value: "sk-not-a-real-key", source: "launch-config-reference", secret: true }] });
+  const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "GITHUB_TOKEN", value: "sk-not-a-real-key", source: "launch-config-reference", secret: true }] });
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ENV");
-  assert.match(answer.error.message, /ANTHROPIC_API_KEY \(source launch-config-reference\) comes from a secret source/);
+  assert.match(answer.error.message, /GITHUB_TOKEN \(source launch-config-reference\) comes from a secret source/);
   assert.doesNotMatch(JSON.stringify(answer), /sk-not-a-real-key/, "the value is never echoed");
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), false);
   assert.deepEqual(bb.calls(), []);
@@ -124,6 +124,12 @@ for (const [name, env, pattern] of [
   ["a source word the provider does not know", [{ name: "X_TOKEN", value: "v", source: "vault" }], /X_TOKEN \(source vault\) has no source this backend knows/],
   ["an entry with no source", [{ name: "X_TOKEN", value: "v" }], /X_TOKEN has no source this backend knows/],
   ["a secret mark that is not a boolean", [{ name: "X_TOKEN", value: "v", source: "kernel", secret: "no" }], /X_TOKEN.*neither true nor false/],
+  // bb's Claude runs with bb's own Claude configuration and account: an entry that would
+  // choose either is refused, never ignored, whatever its source.
+  ["CLAUDE_CONFIG_DIR", [entry("CLAUDE_CONFIG_DIR", "/home/ana/.claude-work", { source: "launch-config" })], /CLAUDE_CONFIG_DIR.*configuration bb's server runs with/],
+  ["an API key, even as a plain literal", [entry("ANTHROPIC_API_KEY", "sk-not-a-real-key", { source: "launch-config" })], /ANTHROPIC_API_KEY.*account of bb's own server/],
+  ["an OAuth token from a secret reference", [{ name: "CLAUDE_CODE_OAUTH_TOKEN", value: "t", source: "launch-config-reference", secret: true }], /CLAUDE_CODE_OAUTH_TOKEN.*account/],
+  ["another model endpoint", [entry("ANTHROPIC_BASE_URL", "https://llm.example.net", { source: "launch-config" })], /ANTHROPIC_BASE_URL.*account or endpoint/],
   ["a name both set and unset", { env: [entry("BOTH", "v")], unset: ["BOTH"] }, /both sets and unsets BOTH/],
   ["an unset that is not a list of names", { env: [], unset: ["not a name"] }, /unset must be a list/],
   ["a name that is not a variable name", [entry("BAD-NAME", "v")], /BAD-NAME/],

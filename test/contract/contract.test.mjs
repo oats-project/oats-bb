@@ -228,10 +228,16 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await once("T2-ERROR");
 });
 
-/** A home whose first turn asks for a permission: accept-edits, and a scripted Bash call. */
+const SANDBOX = {
+  domains: [{ host: "app.aweb.ai", capability: "oats.aweb", setting: "server" }],
+  write: [{ path: "/home/node/deployment/.agents/events", reason: "instance events" }],
+};
+
+/** A home whose first turn asks for a permission: accept-edits (a sandboxed mode, so the
+ *  launch carries the sandbox allowances), and a scripted Bash call. */
 async function waitingOnPermission(name, ranFile) {
   await armTool(`echo RAN > ${ranFile}`);
-  const { home, endpoint } = await launched(name, { yolo: false });
+  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX });
   const pending = await waitFor("a pending interaction", async () => (await bbJson(`thread interactions list ${endpoint.threadId}`)).find((i) => i.status === "pending"));
   return { home, endpoint, pending };
 }
@@ -239,6 +245,13 @@ async function waitingOnPermission(name, ranFile) {
 test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a raw tell leaves the interaction pending", async () => {
   const { home, endpoint, pending } = await waitingOnPermission("t3", "/tmp/t3-ran.txt");
   const id = endpoint.threadId;
+  // The sandboxed launch wrote exactly the allowances it was handed, beside the env, and
+  // Claude Code at the pinned bb started with them.
+  assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)), {
+    env: { OATS_INSTANCE: "t3", OATS_INSTANCE_HOME: home },
+    sandbox: { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } },
+  });
+  assert.deepEqual((await provider("check", { home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox"]);
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });
   assert.equal(answer.ok, false);
@@ -368,7 +381,29 @@ test("T9 a live thread whose project root is gone is reported by readiness as or
   assert.equal((await check()).result.warnings.some((w) => w.message.includes(endpoint.threadId)), false, "archived, it is no longer reported");
 });
 
-// Last: it starts a second bb server, bound to every address, beside the first.
+test("launch runs the provider's readiness first: a bb whose Claude is not signed in refuses with E_BACKEND_NOT_READY, bb's word in it", async () => {
+  // A second bb server with no credential for Claude at all (no mock key in its environment).
+  await run("docker", ["exec", "-d", NAME, "sh", "-c",
+    "cd ~ && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates > bb-app-signed-out.out 2>&1"]);
+  const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
+  await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 120_000, everyMs: 1_000 });
+
+  const result = (await check(signedOut)).result;
+  assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);
+  assert.match(result.problems[0].message, /claude-code provider as unauthenticated/);
+  assert.equal(result.status, "authorization-required");
+
+  const home = await makeHome("signed-out");
+  const answer = await provider("launch", launchInput(home, "signed-out"), signedOut);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
+  assert.match(answer.error.message, /unauthenticated/);
+  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb thread list --json")), [], "nothing was started");
+  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb project list --json")), [], "nothing was created");
+  assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
+});
+
+// Last: it starts another bb server, bound to every address, beside the first.
 test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", async () => {
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
     "cd ~ && bb-app --data-dir ~/bbdata-exposed --server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887 --no-in-app-updates > bb-app-exposed.out 2>&1"]);

@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { readLaunchEnv, readUnset, writeLaunchEnv } from "./claude-env.mjs";
+import { readLaunchEnv, readSandbox, readUnset, writeLaunchSettings } from "./local-settings.mjs";
 import { fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -64,12 +64,16 @@ function readInput(input) {
 
 /** → { endpoint: { server, projectId, threadId } }. Order matters: everything that can
  *  refuse runs before the first effect (archiving the previous thread, creating the
- *  project, writing the env file, spawning). */
+ *  project, writing Claude's local settings, spawning). */
 export async function launch(input, settings, { deadline, env = process.env } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
   const launchEnv = readLaunchEnv(input.env);
   const unset = readUnset(input.unset, launchEnv);
+  // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
+  // sandboxed launch wrote is removed).
+  const allowances = readSandbox(input.sandbox);
+  const sandbox = mode === "full" ? null : allowances;
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
 
@@ -100,7 +104,7 @@ export async function launch(input, settings, { deadline, env = process.env } = 
   }
 
   const project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? await bb.createProject(instance, home);
-  writeLaunchEnv(home, launchEnv, unset);
+  writeLaunchSettings(home, { env: launchEnv, unset, sandbox });
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];

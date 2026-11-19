@@ -36,6 +36,7 @@
     }
   },
   "hooks": {
+    "launch": "bin/oats-bb.mjs launch-hook",
     "retire": "bin/oats-bb.mjs retire-hook"
   },
   "settings": {
@@ -70,7 +71,8 @@
   "retirement": {
     "disposable": {
       "home": [
-        ".oats-bb"
+        ".oats-bb",
+        ".oats-bb-sandbox.json"
       ]
     }
   }

@@ -22,7 +22,7 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 
 | verb | input | result |
 |---|---|---|
-| launch | `{home, instance, harness, model, yolo, env, unset, args, promptFile, previous}` | `{endpoint: {server, projectId, threadId}}` |
+| launch | `{home, instance, harness, model, yolo, env, unset, args, promptFile, previous, sandbox}` | `{endpoint: {server, projectId, threadId}}` |
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
@@ -37,6 +37,10 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
+- **launch `sandbox`** is `{domains: [{host, capability, setting}], write: [{path, reason}]}`,
+  built by the kernel from recorded configuration. In a sandboxed mode the provider writes
+  exactly those hosts and paths; an entry that is not one exact host or one exact absolute
+  path refuses the launch (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
 - **stop** with `endpoint: null` stops every live thread that runs in the home (the kernel
   compensating a launch whose answer was lost).
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
@@ -45,7 +49,7 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 ## Codes
 `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
-`E_BACKEND_SETTINGS`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
+`E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
 `E_SESSION_PROMPT_OPEN`, `E_SESSION_INPUT_QUEUED`, `E_SESSION_INPUT_FAILED`,
 `E_SESSION_STOP_FAILED`.
 
@@ -62,3 +66,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - HTTP, loopback only, read-only, bounded in size and time, strictly decoded:
   `GET <server>/health`, `GET <daemon>/status`,
   `GET <server>/api/v1/system/providers/state?providerId=claude-code`.
+
+## Hooks
+- `launch`: runs at every start of a home that has the capability. On this provider it does
+  nothing (the launch verb writes Claude's local settings). On another backend
+  (`OATS_BACKEND` set and not `bb`) it removes what the provider wrote into
+  `.claude/settings.local.json`. It returns no env and no arguments.
+- `retire`: archives the home's live bb threads, after the kernel's stop.

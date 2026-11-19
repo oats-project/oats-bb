@@ -88,9 +88,9 @@ settings:
 
 | Call | What the provider does |
 |---|---|
-| launch | Runs the readiness checks. Finds or creates the bb project rooted at the home. Refuses if another live thread runs there. Archives the home's previous thread (a start after a stop is a fresh conversation). Writes the launch environment into `<home>/.claude/settings.local.json` (`env`, mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
+| launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Archives the home's previous thread (a start after a stop is a fresh conversation). Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
-| input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`. |
+| input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
 | stop | `bb thread stop`, then waits until bb shows the thread settled. Still in a turn after the grace: `E_SESSION_STOP_FAILED`. |
 | retire (hook) | Archives the home's live threads. |
 | stop (no endpoint) | Stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost. |
@@ -121,10 +121,36 @@ Where yolo and the argument disagree (`--yolo` with a mode other than
 `bypassPermissions`; `--no-yolo` with `bypassPermissions`), the launch is refused
 (`E_BACKEND_LAUNCH_ARG`): the provider never picks one.
 
-In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to the agent's
-commands: `aw` may not reach the aweb server, and `oats instance attention` may not write
-the deployment's events file. Until the provider writes those two allowances itself (not in
-this release), run an agent that uses messaging in `full` mode (`--yolo`).
+**The sandbox.** In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to
+the agent's commands: by itself, `aw` could not reach the aweb server and
+`oats instance attention` could not write the deployment's events file. So in those modes
+the launch adds, to the home's `.claude/settings.local.json`, exactly the entries the kernel
+hands it:
+
+- `sandbox.network.allowedDomains`: the hosts of the home's own messaging, knowledge and
+  tasks providers, each taken from that provider's recorded settings;
+- `sandbox.filesystem.allowWrite`: the deployment's events directory.
+
+Nothing else is added, and nothing an agent, a task, a mail or a launch argument says can
+add one. The entries add to bb's own sandbox settings; they never replace a restriction.
+The provider records what it wrote in `<home>/.oats-bb-sandbox.json`, never touches an
+entry you put in the file yourself, and removes exactly its own on the next launch that no
+longer carries them. In `full` mode there is no sandbox and it writes none. `oats readiness`
+lists, for a home, each host and path with who asked for it.
+
+Two things to know:
+
+- A knowledge base's host is often a general forge (github.com). Allowing it lets the
+  agent's commands reach every repository on that forge, not only the base. Readiness
+  warns when this is so.
+- In `accept-edits`, a compound command (`cmd; echo $?`) raises a bb approval even when
+  everything it touches is allowed. That is bb's behaviour.
+
+**bb's Claude, not the launch's.** A bb thread's Claude loads the home's own settings,
+hooks, skills and `CLAUDE.md` (bb starts it in the home), and beside them the **user
+settings and hooks of the Claude configuration bb's server runs with**. It runs on **the
+account of bb's server**: the Claude login of bb's user, or the credential in the bb
+server's environment. A launch cannot choose either.
 
 **What a launch refuses.** bb starts Claude Code itself, so the provider cannot pass
 arguments or a process environment:
@@ -135,10 +161,21 @@ arguments or a process environment:
   or `fromFile`) is refused, by name: `E_BACKEND_LAUNCH_ENV`. The environment travels in
   `.claude/settings.local.json`, and no secret is written there. Give bb's server the
   credential in its own environment instead.
+- A launch environment entry that would choose Claude's configuration (`CLAUDE_CONFIG_DIR`)
+  or its account or endpoint (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+  `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_BASE_URL`, the Bedrock, Vertex and Foundry
+  switches) is refused, by name, whatever its source: `E_BACKEND_LAUNCH_ENV`. It is never
+  ignored.
+- A sandbox entry that is not one exact host or one exact absolute path:
+  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
 
 The provider keeps the names it wrote in `<home>/.oats-bb/launch-env.json`, so a later
 launch removes a variable it no longer carries and never touches an entry you added to
 `settings.local.json` yourself.
+
+**Leaving bb.** When a home that ran on bb starts on another backend (`--backend tmux`),
+the capability's launch hook removes what the provider wrote into
+`.claude/settings.local.json`: its launch environment and its sandbox entries. Yours stay.
 
 ## Readiness
 
@@ -153,6 +190,8 @@ launch checks first:
 | a setting has the wrong shape | `E_BACKEND_SETTINGS` |
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read | `E_BACKEND_NOT_READY` |
+
+For a home, it lists what the provider added to the sandbox (`session-provider-sandbox`).
 
 It also reports, as a warning that blocks nothing, `session-provider-orphaned`: live bb
 threads whose project root no longer exists, with their ids and the root. That is what a

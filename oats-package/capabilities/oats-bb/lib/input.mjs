@@ -5,7 +5,7 @@ import { readEndpoint } from "./threads.mjs";
 
 const failed = (error) => {
   if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_INPUT_FAILED" ? error : fail("E_SESSION_INPUT_FAILED", error.message, error.details);
+  return error.code === "E_SESSION_INPUT_FAILED" ? error : fail("E_SESSION_INPUT_FAILED", error.message);
 };
 
 /** → { submitted: true, verified }.
@@ -14,8 +14,12 @@ const failed = (error) => {
  *     or a mail from anyone could stand in for a person's approval.
  *  2. bb answers "sent": dispatched into the thread: submitted.
  *  3. bb answers "queued", for any reason (an interaction that opened between the read
- *     and the tell included): the provider withdraws the queued copy and answers
- *     E_SESSION_INPUT_QUEUED. A copy bb no longer has was dispatched: submitted. */
+ *     and the tell included): not a submission. The provider withdraws the queued copy
+ *     and answers E_SESSION_INPUT_QUEUED. Only bb's own word that the copy already left
+ *     the queue (dispatched between the tell and the delete) answers submitted. Any
+ *     other failure of the delete, a timeout, or no id to delete by, is in doubt, and in
+ *     doubt the answer is not submitted: the mail stays unread and may be seen twice,
+ *     never lost. */
 export async function sendInput(input, settings, { deadline, env = process.env } = {}) {
   let endpoint, bb;
   try {
@@ -31,31 +35,32 @@ export async function sendInput(input, settings, { deadline, env = process.env }
   const open = interactions.filter((interaction) => isObject(interaction) && interaction.status === "pending");
   if (open.length > 0) {
     const kinds = [...new Set(open.map((interaction) => (isObject(interaction.payload) && typeof interaction.payload.kind === "string" ? interaction.payload.kind : "interaction")))];
-    throw fail("E_SESSION_PROMPT_OPEN", `bb thread ${endpoint.threadId} waits on a person (${open.length} pending ${kinds.join(", ")}): nothing was sent. Answer it in bb`, { interactions: open.map((interaction) => interaction.id).filter((id) => typeof id === "string") });
+    throw fail("E_SESSION_PROMPT_OPEN", `bb thread ${endpoint.threadId} waits on a person (${open.length} pending ${kinds.join(", ")}: ${open.map((interaction) => interaction.id).filter((id) => typeof id === "string").join(", ")}): nothing was sent. Answer it in bb`);
   }
 
   const told = await bb.tell(endpoint.threadId, input.text);
   if (!told.ok) {
     // A tell cut off by time may have reached bb: the caller must not take it for unsent.
-    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell failed: ${told.message}`, told.timedOut ? { unconfirmed: true } : undefined);
+    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell failed: ${told.message}${told.timedOut ? "; the message may have been delivered" : ""}`);
   }
   const answer = told.value;
   if (isObject(answer) && answer.ok === true && answer.delivery === "sent") return { submitted: true, verified: true };
   if (!isObject(answer) || answer.ok !== true || answer.delivery !== "queued") {
-    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell answered neither sent nor queued (${JSON.stringify(isObject(answer) ? answer.delivery ?? null : null)})`, { unconfirmed: true });
+    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell answered neither sent nor queued (${JSON.stringify(isObject(answer) ? answer.delivery ?? null : null)}); the message may have been delivered`);
   }
 
   const queued = isObject(answer.queuedMessage) ? answer.queuedMessage : {};
   const waitingOn = isObject(queued.waitingOn) && typeof queued.waitingOn.kind === "string" ? queued.waitingOn.kind : "unknown";
   if (typeof queued.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(queued.id)) {
-    throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and gave no id to withdraw it by: it may still be delivered`, { unconfirmed: true, waitingOn });
+    throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and gave no id to withdraw it by: it may still be delivered`);
   }
   const withdrawn = await bb.queueDelete(endpoint.threadId, queued.id);
   if (withdrawn.ok) {
-    throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message instead of dispatching it (waiting on ${waitingOn}); the queued copy was withdrawn, so nothing was delivered`, { waitingOn });
+    throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message instead of dispatching it (waiting on ${waitingOn}); the queued copy was withdrawn, so nothing was delivered`);
   }
-  // bb answers 404 "Queued message not found" (code invalid_request) for a copy that left
-  // the queue: it was dispatched between the tell and the delete.
+  // bb's one answer for a copy that is no longer queued: 404 "Queued message not found"
+  // (code invalid_request). The id is one bb issued to this very call, so it left the
+  // queue by being dispatched between the tell and the delete.
   if (withdrawn.code === "invalid_request" && /queued message not found/i.test(withdrawn.message)) return { submitted: true, verified: false };
-  throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and the queued copy could not be withdrawn (${withdrawn.message}): it may still be delivered`, { unconfirmed: true, waitingOn });
+  throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and the queued copy could not be withdrawn (${withdrawn.message}): it may still be delivered`);
 }

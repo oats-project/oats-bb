@@ -67,6 +67,33 @@ test("a malformed endpoint: E_SESSION_STOP_FAILED, and bb is not called", async 
   assert.deepEqual(calls, []);
 });
 
+test("a stop with no endpoint stops every live thread that runs in the home (a launch whose answer was lost)", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, {
+    "project list": { stdout: [projectRow("proj_a", home), projectRow("proj_z", "/somewhere/else")] },
+    "thread list": { stdout: [threadRow("thr_new", "proj_a", "active"), threadRow("thr_old", "proj_a", "idle", { archivedAt: 3 }), threadRow("thr_z", "proj_z", "active")] },
+    "thread stop": { stdout: { ok: true, threadId: "thr_new" } },
+    "thread show": { stdout: { thread: threadRow("thr_new", "proj_a", "idle"), environment: null, pendingTodos: null } },
+  });
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv), [["thread", "stop", "thr_new", "--json"]]);
+});
+
+test("a stop with no endpoint and nothing live in the home is stopped, and stops nothing", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, { "project list": { stdout: [] }, "thread list": { stdout: [threadRow("thr_z", "proj_z", "active")] } });
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list"]);
+});
+
+test("a stop with no endpoint and a bb that does not answer: E_SESSION_STOP_FAILED, never stopped", async (t) => {
+  const { dir, home } = scratch(t);
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb: fakeBbIn(dir, { "project list": UNREACHABLE }) });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+});
+
 // The retire hook: the kernel runs it after its own stop, with the hook environment.
 async function retireWith(t, script) {
   const { dir, home } = scratch(t);

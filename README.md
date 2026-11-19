@@ -1,25 +1,31 @@
 # oats-bb: OATS on bb
 
-`oats.bb` is an OATS capability that runs an instance as one [bb](https://getbb.app) thread
-instead of a tmux session. It is a **session provider**: it declares `sessionProviders.bb`,
-and the kernel calls its four commands (launch, inspect, input, stop) wherever it would
-have driven tmux. tmux stays the default; nothing changes for a home that does not ask for
-`--backend bb`.
+This repository holds the two parts of the integration between OATS and
+[bb](https://getbb.app), at one pinned bb-app version (the `bb-version` file):
+
+- **The session provider** (`oats-package/`, the OATS capability `oats.bb`): runs an OATS
+  instance as one bb thread instead of a tmux session. This README is about it.
+- **The OATS plugin for bb** (`plugin/`): shows OATS agents in bb's UI. It arrives in its
+  own change, with its own README there.
+
+## The session provider
+
+`oats.bb` declares `sessionProviders.bb`, and the kernel calls its commands (launch,
+inspect, input, stop, and a readiness check) wherever it would have driven tmux. tmux
+stays the default; nothing changes for a home that does not ask for `--backend bb`.
 
 - One OATS home is one bb project rooted at the home, with one live thread in it.
 - Claude Code only (`harnesses: ["claude"]`). pi and Codex are not supported yet.
-- bb is driven through its public CLI (`bb project …`, `bb thread …`), at one pinned
-  bb-app version. Readiness also reads two of bb's HTTP addresses on loopback: the host
+- bb is driven through its public CLI (`bb project …`, `bb thread …`). Readiness also
+  reads three of bb's HTTP addresses on loopback: the server's `/health`, the host
   daemon's `/status`, and the server's `/api/v1/system/providers/state` (bb's CLI has no
-  command for a provider's sign-in state).
+  command for a provider's sign-in state). [docs/wire.md](docs/wire.md) lists the whole
+  surface, and what the provider and the kernel say to each other.
 - There is no terminal. `oats session attach` refuses with a link, and a client shows
   **Open in bb**.
 
-This repository will also hold the OATS plugin for bb, in its own directory.
-
-> Status: built ahead of the contract decision (contract r7). The wire to the kernel is in
-> [docs/kernel-wire.md](docs/kernel-wire.md) and follows the kernel's session-provider
-> contract once that lands.
+> Status: built ahead of the kernel's session-provider contract (contract r8). It needs an
+> OATS kernel that lists the feature `session-providers` in `oats version --json`.
 
 ## Install
 
@@ -27,7 +33,7 @@ This repository will also hold the OATS plugin for bb, in its own directory.
    loopback** (its default):
 
    ```sh
-   npm install -g bb-app@0.50.1 @anthropic-ai/claude-code
+   npm install -g bb-app@0.50.1 @anthropic-ai/claude-code     # the version in bb-version
    bb-app --server-bind-host 127.0.0.1 --no-in-app-updates
    ```
 
@@ -48,8 +54,7 @@ This repository will also hold the OATS plugin for bb, in its own directory.
 
    Then `oats sync`.
 
-3. Set the host's facts in the deployment's `oats-local.yaml` (below): at least `version`
-   and `trust`.
+3. Set the host's facts in the deployment's `oats-local.yaml` (below): at least `trust`.
 
 4. Check it, then spawn:
 
@@ -67,13 +72,13 @@ executable, an endpoint that runs commands, and a statement about this machine.
 ```yaml
 settings:
   oats.bb:
-    version: 0.50.1          # required
     trust: single-user       # required: single-user | container
+    version: 0.50.1          # the default of this release
 ```
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `version` | none (required) | The bb-app version this deployment runs, exactly as `bb --version` prints it. Another version is refused at readiness and at every launch: `E_BACKEND_VERSION`. |
+| `version` | the version in `bb-version` | The bb-app version this deployment runs, exactly as `bb --version` prints it. The default is the one version this release of the provider is contract-tested against. Another version is refused at readiness and at every launch: `E_BACKEND_VERSION`. |
 | `trust` | none (required) | Who can reach bb's port: `single-user` or `container` (see [the trust group](#the-trust-group)). Unset or anything else: `E_BACKEND_TRUST`. |
 | `server` | `http://127.0.0.1:38886` | The bb server. A loopback address only. |
 | `daemon` | `http://127.0.0.1:38887` | The bb host daemon. A loopback address only. |
@@ -88,29 +93,48 @@ settings:
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`. |
 | stop | `bb thread stop`, then waits until bb shows the thread settled. Still in a turn after the grace: `E_SESSION_STOP_FAILED`. |
 | retire (hook) | Archives the home's live threads. |
+| stop (no endpoint) | Stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost. |
 
 | bb thread | present | state | running |
 |---|---|---|---|
 | starting, active, stopping | true | unknown | true |
 | pending, idle | true | unknown | null |
-| error | true | shell | false |
+| error | false | stopped | false |
 | missing or deleted | false | stopped | false |
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
-turn. The kernel records its own stop and answers "stopped" itself.
+turn. The kernel records its own stop and answers "stopped" itself. A thread in `error`
+is a lost session (bb never resumes an interrupted turn): it reads as stopped, and the
+kernel may resume it with an input, which restarts the thread in its own conversation.
 
-**Permission mode.** `--yolo` runs the thread in bb's `full` mode; `--no-yolo` or no choice
-runs `accept-edits`. A launch configuration can ask for `auto` with the argument
-`--permission-mode auto`.
+**Permission mode.**
+
+| The launch | bb's mode |
+|---|---|
+| `--yolo` | `full` |
+| `--no-yolo`, or no choice | `accept-edits` |
+| a launch configuration's argument `--permission-mode auto` | `auto` |
+| `--permission-mode acceptEdits` | `accept-edits` |
+| `--permission-mode bypassPermissions` | `full` |
+
+Where yolo and the argument disagree (`--yolo` with a mode other than
+`bypassPermissions`; `--no-yolo` with `bypassPermissions`), the launch is refused
+(`E_BACKEND_LAUNCH_ARG`): the provider never picks one.
+
+In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to the agent's
+commands: `aw` may not reach the aweb server, and `oats instance attention` may not write
+the deployment's events file. Until the provider writes those two allowances itself (not in
+this release), run an agent that uses messaging in `full` mode (`--yolo`).
 
 **What a launch refuses.** bb starts Claude Code itself, so the provider cannot pass
 arguments or a process environment:
 
 - A launch argument other than `--permission-mode auto|acceptEdits|bypassPermissions` is
   refused, by name: `E_BACKEND_LAUNCH_ARG`. Nothing is dropped silently.
-- A launch environment entry that comes from a secret is refused, by name:
-  `E_BACKEND_LAUNCH_ENV`. The environment travels in `.claude/settings.local.json`, and no
-  secret is written there. Give bb's server the credential in its own environment instead.
+- A launch environment entry that comes from a secret (a launch configuration's `fromEnv`
+  or `fromFile`) is refused, by name: `E_BACKEND_LAUNCH_ENV`. The environment travels in
+  `.claude/settings.local.json`, and no secret is written there. Give bb's server the
+  credential in its own environment instead.
 
 The provider keeps the names it wrote in `<home>/.oats-bb/launch-env.json`, so a later
 launch removes a variable it no longer carries and never touches an entry you added to
@@ -118,21 +142,26 @@ launch removes a variable it no longer carries and never touches an entry you ad
 
 ## Readiness
 
-`oats readiness` (and `oats bb doctor`) check, and every launch checks first:
+`oats readiness` (the provider's `check` command) and `oats bb doctor` check, and every
+launch checks first:
 
 | Finding | Code |
 |---|---|
 | `trust` is not set, or not one of the two words | `E_BACKEND_TRUST` |
-| `version` is not set; bb is another version; the CLI cannot be run | `E_BACKEND_VERSION` |
+| bb is another version than `version`; the CLI cannot be run | `E_BACKEND_VERSION` |
 | `server` or `daemon` is not a loopback address; bb's port answers on an address of this host that is not loopback | `E_BACKEND_EXPOSED` |
 | a setting has the wrong shape | `E_BACKEND_SETTINGS` |
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
-| the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unauthenticated`, `expired` or `unknown` | `E_BACKEND_NOT_READY` |
+| the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read | `E_BACKEND_NOT_READY` |
 
 It also reports, as a warning that blocks nothing, `session-provider-orphaned`: live bb
 threads whose project root no longer exists, with their ids and the root. That is what a
 retire leaves when it could not reach bb, or when an older kernel retired the home.
 Archive them: `bb thread archive <id>`.
+
+`oats bb doctor` also says where bb's Claude takes its credential from, by bb's own report
+(a Claude login of bb's user, or a credential in bb's configuration or the bb server's
+environment). It never prints a credential or an account name.
 
 ## The trust group
 
@@ -182,10 +211,12 @@ bb. `oats session input` never answers one; it refuses while one is open.
 A team container image that runs bb has two version pins:
 
 1. the image's bb-app (its `package.json`), which is what gets installed;
-2. this provider's `version` setting, which is what the deployment expects.
+2. this provider's `version` setting, which is what the deployment expects: by default the
+   version this release of the provider was tested against (`bb-version`).
 
 They must be equal. `E_BACKEND_VERSION`, at readiness and at every launch, is the check
-that keeps them so: move both in one change. In the container, set `trust: container`,
+that keeps them so: move the image's pin together with the provider release (or the
+`version` setting). In the container, set `trust: container`,
 and give Claude's token to the bb server's own environment (the image's supervisor does
 this); it is never a launch environment entry.
 
@@ -196,8 +227,9 @@ npm test                 # manifest validation and the unit tests (a fake bb)
 npm run test:contract    # the contract test: the pinned bb-app in a container (needs docker)
 ```
 
-The contract test builds `test/contract/Dockerfile` at the version in
-`test/contract/bb-version`, starts bb and a mock Anthropic endpoint inside the container,
-and calls the provider's commands on their wire. bb runs only in the container: no port is
-published. Moving the bb pin is a change to `test/contract/bb-version` that the contract
-test must pass.
+The contract test builds `test/contract/Dockerfile` at the version in `bb-version`, starts
+bb and a mock Anthropic endpoint inside the container, and calls the provider's commands
+on their wire: every bb command and HTTP address the provider uses. bb runs only in the
+container: no port is published. Moving the bb pin is one change to `bb-version` and the
+manifest's `version` default (`npm run validate` keeps them equal) that the contract test
+must pass.

@@ -77,22 +77,24 @@ export async function fakeBackend(t, overrides = {}) {
     server.listen(0, host, () => { t.after(() => new Promise((done) => { server.closeAllConnections?.(); server.close(done); })); resolveListen(server); });
   });
   const json = (res, status, doc) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(doc)); };
-  const requests = [];
+  const requests = [], daemonRequests = [];
   const server = await listen((req, res) => {
     requests.push(req.url);
     if (req.url === "/health") return json(res, 200, state.health);
     if (req.url === "/api/v1/system/providers/state?providerId=claude-code") {
+      if (state.providerRaw !== undefined) { res.writeHead(200, { "content-type": "application/json" }); return res.end(state.providerRaw); }
       return json(res, state.providerHttpStatus, state.providerHttpStatus === 200 ? { providers: state.provider ? [state.provider] : [] } : { code: "error" });
     }
     return json(res, 404, { code: "not_found", message: "Not found" });
   }, overrides.bindHost);
   const serverUrl = `http://127.0.0.1:${server.address().port}`;
   const daemon = await listen((req, res) => {
+    daemonRequests.push(req.url);
     if (req.url === "/status") return json(res, 200, state.daemonStatus ?? { hostId: "host_1", connected: true, protocolVersion: 268, serverUrl, platform: "linux" });
     return json(res, 404, {});
   });
   const daemonUrl = `http://127.0.0.1:${daemon.address().port}`;
-  return { state, requests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", ...extra }) };
+  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", ...extra }) };
 }
 
 /** A loopback port nothing listens on. */
@@ -121,15 +123,23 @@ export function runBin(args, { stdin = "", env = {} } = {}) {
   });
 }
 
-/** One session call on the wire. → the answer envelope (asserted to be exactly one JSON
- *  document on stdout, exit 0, with the request's echo). */
-export async function call(phase, input, { settings, bb, env = {} }) {
-  const request = { schemaVersion: 1, phase, provider: "bb", capability: "oats.bb", settings: { ...settings, cli: bb.cli }, input };
-  const run = await runBin(["session", phase], { stdin: JSON.stringify(request), env: { ...bb.env, ...env } });
+export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb, input, ...extra });
+
+/** One call on the kernel's wire: the request on stdin, the home's settings in
+ *  OATS_SETTINGS. → the answer envelope, asserted to be the wire's: exactly one JSON
+ *  document on stdout, exit 0, the five header keys echoed, then a result or a refusal of
+ *  {code, message} and nothing else. */
+export async function call(verb, input, { settings = {}, bb, env = {} }) {
+  const request = requestFor(verb, input);
+  const run = await runBin(["session", verb], { stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
   if (run.status !== 0 || run.doc === null) throw new Error(`the provider did not answer one JSON document (exit ${run.status}): ${run.stdout}\n${run.stderr}`);
-  for (const key of ["schemaVersion", "phase", "provider", "capability"]) {
+  if (run.stdout.trim().split("\n").length !== 1) throw new Error(`more than one line on stdout: ${run.stdout}`);
+  const expected = ["schemaVersion", "phase", "capability", "provider", "verb", "ok", run.doc.ok === true ? "result" : "error"];
+  if (JSON.stringify(Object.keys(run.doc)) !== JSON.stringify(expected)) throw new Error(`the answer's keys are not the wire's: ${run.stdout}`);
+  for (const key of ["schemaVersion", "phase", "capability", "provider", "verb"]) {
     if (run.doc[key] !== request[key]) throw new Error(`the answer does not echo ${key}: ${run.stdout}`);
   }
+  if (run.doc.ok === false && (JSON.stringify(Object.keys(run.doc.error)) !== '["code","message"]' || !/^E_[A-Z0-9_]{1,60}$/.test(run.doc.error.code))) throw new Error(`a refusal is {code, message}: ${run.stdout}`);
   return run.doc;
 }
 

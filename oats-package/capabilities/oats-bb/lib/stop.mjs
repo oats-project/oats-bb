@@ -1,4 +1,5 @@
 // stop, and the retire hook's archive (contract item 3).
+import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject } from "./errors.mjs";
 import { loopbackOrigin } from "./settings.mjs";
@@ -11,31 +12,46 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const failed = (error) => {
   if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_STOP_FAILED" ? error : fail("E_SESSION_STOP_FAILED", error.message, error.details);
+  return error.code === "E_SESSION_STOP_FAILED" ? error : fail("E_SESSION_STOP_FAILED", error.message);
 };
 
 /** → { stopped: true } once bb shows the thread settled (idle, pending or error) or gone;
- *  E_SESSION_STOP_FAILED when it is still in a turn after the grace. */
+ *  E_SESSION_STOP_FAILED when it is still in a turn after the grace.
+ *  With no endpoint (the kernel compensating a launch whose answer was lost): stop
+ *  whatever live thread runs in the home; `stopped: true` also when there is none. */
 export async function stop(input, settings, { deadline = Infinity, env = process.env, now = Date.now } = {}) {
   try {
     if (!isObject(input)) throw fail("E_SESSION_STOP_FAILED", "the stop input is not an object");
-    const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
     const grace = Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : MAX_GRACE_SECONDS;
-    const bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
-    const asked = await bb.stop(endpoint.threadId);
-    if (!asked.ok && asked.code === "thread_not_found") return { stopped: true };
-    if (!asked.ok) throw bb.refusal(asked, ["thread", "stop"]);
     const until = Math.min(now() + grace * 1000, deadline);
-    let last = null;
-    for (;;) {
-      const thread = await bb.thread(endpoint.threadId);
-      if (thread === null || thread.deletedAt || isSettled(thread)) return { stopped: true };
-      last = thread.status;
-      if (now() + POLL_MS >= until) break;
-      await sleep(POLL_MS);
+    if (input.endpoint === null || input.endpoint === undefined) {
+      if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
+      const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
+      const [projects, threads] = [await bb.projects(), await bb.threads()];
+      const live = liveThreadsOfHome(threads, input.home, projectsOfHome(projects, input.home).map((project) => project.id));
+      for (const thread of live) await stopThread(bb, thread.id, { until, grace, now });
+      return { stopped: true };
     }
-    throw fail("E_SESSION_STOP_FAILED", `bb thread ${endpoint.threadId} is still ${last} ${grace} s after bb thread stop`);
+    const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
+    const bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
+    await stopThread(bb, endpoint.threadId, { until, grace, now });
+    return { stopped: true };
   } catch (error) { throw failed(error); }
+}
+
+async function stopThread(bb, threadId, { until, grace, now }) {
+  const asked = await bb.stop(threadId);
+  if (!asked.ok && asked.code === "thread_not_found") return;
+  if (!asked.ok) throw bb.refusal(asked, ["thread", "stop"]);
+  let last = null;
+  for (;;) {
+    const thread = await bb.thread(threadId);
+    if (thread === null || thread.deletedAt || isSettled(thread)) return;
+    last = thread.status;
+    if (now() + POLL_MS >= until) break;
+    await sleep(POLL_MS);
+  }
+  throw fail("E_SESSION_STOP_FAILED", `bb thread ${threadId} is still ${last} ${grace} s after bb thread stop`);
 }
 
 /** The retire hook: archive every live thread that runs in the home, after the kernel's

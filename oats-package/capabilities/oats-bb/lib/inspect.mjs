@@ -13,7 +13,7 @@ function readHome(entry) {
 /** bb unreachable, or any other failed read, is an error: never "stopped". */
 function unavailable(error) {
   if (!(error instanceof ProviderError)) throw error;
-  return error.code === "E_SESSION_UNAVAILABLE" ? error : fail("E_SESSION_UNAVAILABLE", error.message, error.details);
+  return error.code === "E_SESSION_UNAVAILABLE" ? error : fail("E_SESSION_UNAVAILABLE", error.message);
 }
 
 /** → { present, state, running, open? } */

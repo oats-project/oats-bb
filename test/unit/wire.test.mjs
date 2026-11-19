@@ -3,45 +3,49 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runBb } from "../../oats-package/capabilities/oats-bb/lib/bb.mjs";
-import { fakeBbIn, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { fakeBbIn, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
-const request = (phase, input, extra = {}) => JSON.stringify({ schemaVersion: 1, phase, provider: "bb", capability: "oats.bb", settings: {}, input, ...extra });
+const SETTINGS_ENV = { OATS_CAPABILITY: "oats.bb", OATS_SETTINGS: "{}" };
 
-for (const [phase, code] of [["launch", "E_SESSION_START_FAILED"], ["inspect", "E_SESSION_UNAVAILABLE"], ["inspectMany", "E_SESSION_UNAVAILABLE"], ["input", "E_SESSION_INPUT_FAILED"], ["stop", "E_SESSION_STOP_FAILED"]]) {
-  test(`${phase}: a request that is not JSON is refused with ${code}, one document, exit 0`, async () => {
-    const run = await runBin(["session", phase], { stdin: "{ nope", env: { OATS_CAPABILITY: "oats.bb" } });
+for (const [verb, code] of [["launch", "E_SESSION_START_FAILED"], ["inspect", "E_SESSION_UNAVAILABLE"], ["inspectMany", "E_SESSION_UNAVAILABLE"], ["input", "E_SESSION_INPUT_FAILED"], ["stop", "E_SESSION_STOP_FAILED"], ["check", "E_BACKEND_NOT_READY"]]) {
+  test(`${verb}: a request that is not JSON is refused with ${code}, one document, exit 0`, async () => {
+    const run = await runBin(["session", verb], { stdin: "{ nope", env: SETTINGS_ENV });
     assert.equal(run.status, 0);
-    assert.deepEqual({ ...run.doc, error: { code: run.doc.error.code } }, { schemaVersion: 1, phase, provider: "bb", capability: "oats.bb", ok: false, error: { code } });
+    assert.deepEqual({ ...run.doc, error: { code: run.doc.error.code } }, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb, ok: false, error: { code } });
+    assert.deepEqual(Object.keys(run.doc.error), ["code", "message"]);
     assert.equal(run.stdout.trim().split("\n").length, 1);
   });
+}
 
-  test(`${phase}: an input that is not an object is refused with ${code}`, async () => {
-    const run = await runBin(["session", phase], { stdin: request(phase, null) });
+for (const [verb, code] of [["launch", "E_SESSION_START_FAILED"], ["inspect", "E_SESSION_UNAVAILABLE"], ["inspectMany", "E_SESSION_UNAVAILABLE"], ["input", "E_SESSION_INPUT_FAILED"], ["stop", "E_SESSION_STOP_FAILED"]]) {
+  test(`${verb}: an input that is not an object is refused with ${code}`, async () => {
+    const run = await runBin(["session", verb], { stdin: JSON.stringify(requestFor(verb, null)), env: SETTINGS_ENV });
     assert.equal(run.status, 0);
     assert.equal(run.doc.ok, false);
-    assert.ok([code, "E_BACKEND_HARNESS"].includes(run.doc.error.code), run.doc.error.code);
+    assert.equal(run.doc.error.code, code);
   });
 }
 
 for (const [name, stdin, pattern] of [
-  ["another schema version", request("inspect", {}, { schemaVersion: 2 }), /schemaVersion is 2/],
-  ["another phase than the command", request("stop", {}), /phase is "stop"/],
-  ["another provider's name", request("inspect", {}, { provider: "herdr" }), /"herdr"/],
+  ["another schema version", JSON.stringify(requestFor("inspect", {}, { schemaVersion: 2 })), /schemaVersion is 2/],
+  ["another phase", JSON.stringify(requestFor("inspect", {}, { phase: "poll" })), /phase is "poll"/],
+  ["another verb than the command", JSON.stringify(requestFor("stop", {})), /verb is "stop"/],
+  ["another provider's name", JSON.stringify(requestFor("inspect", {}, { provider: "herdr" })), /"herdr"/],
   ["an array", "[]", /not a JSON object/],
 ]) {
   test(`a request with ${name} is refused`, async () => {
-    const run = await runBin(["session", "inspect"], { stdin });
+    const run = await runBin(["session", "inspect"], { stdin, env: SETTINGS_ENV });
     assert.equal(run.status, 0);
     assert.equal(run.doc.error.code, "E_SESSION_UNAVAILABLE");
     assert.match(run.doc.error.message, pattern);
   });
 }
 
-test("with no settings in the request the provider reads OATS_SETTINGS", async (t) => {
+test("the settings are the home's recorded ones, from OATS_SETTINGS; a request cannot carry its own", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] } });
-  const doc = { schemaVersion: 1, phase: "inspect", provider: "bb", capability: "oats.bb", input: { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" } } };
+  const doc = requestFor("inspect", { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" }, settings: { cli: "/nonexistent/bb" } });
   const run = await runBin(["session", "inspect"], { stdin: JSON.stringify(doc), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
   assert.equal(run.doc.ok, true);
   assert.equal(bb.calls().length, 1);
@@ -50,7 +54,7 @@ test("with no settings in the request the provider reads OATS_SETTINGS", async (
 });
 
 test("settings of the wrong shape are refused with E_BACKEND_SETTINGS", async () => {
-  const run = await runBin(["session", "inspect"], { stdin: request("inspect", {}, { settings: { cli: "relative/bb" } }) });
+  const run = await runBin(["session", "inspect"], { stdin: JSON.stringify(requestFor("inspect", {})), env: { OATS_SETTINGS: JSON.stringify({ cli: "relative/bb" }) } });
   assert.equal(run.doc.error.code, "E_BACKEND_SETTINGS");
 });
 

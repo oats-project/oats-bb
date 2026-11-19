@@ -3,7 +3,8 @@
 # only inside this container, on its loopback; no port is published and nothing of the
 # host is mounted but this repository, read-only.
 FROM node:22-bookworm
-ARG BB_APP_VERSION=0.50.1
+# The pinned bb-app: the repository's bb-version file, passed by the test.
+ARG BB_APP_VERSION
 ARG CLAUDE_CODE_VERSION=2.1.328
 USER node
 ENV BB_TELEMETRY=false \

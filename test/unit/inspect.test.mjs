@@ -22,12 +22,14 @@ for (const [status, expected] of [
   ["stopping", { present: true, state: "unknown", running: true }],
   ["pending", { present: true, state: "unknown", running: null }],
   ["idle", { present: true, state: "unknown", running: null }],
-  ["error", { present: true, state: "shell", running: false }],
+  // A thread in error is a lost session, as the kernel reads one: eligible for a resume.
+  ["error", { present: false, state: "stopped", running: false }],
 ]) {
   test(`a bb thread that is ${status} reads ${JSON.stringify(expected)}, with the link to open it`, async (t) => {
     const { answer, bb } = await inspectWith(t, [threadRow("thr_a", "proj_a", status)]);
     assert.deepEqual(answer.result, { ...expected, open: OPEN });
     assert.equal(answer.ok, true);
+    assert.deepEqual(Object.keys(answer.result), ["present", "state", "running", "open"]);
     // One read of bb, against the endpoint's server, with no thread context leaking in.
     assert.deepEqual(bb.calls().map((c) => c.argv), [["thread", "list", "--include-archived", "--include-hidden", "--json"]]);
     assert.equal(bb.calls()[0].server, SERVER);
@@ -62,7 +64,6 @@ test("a second live thread in the home's project is E_SESSION_UNAVAILABLE naming
   assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
   assert.match(answer.error.message, /thr_a/);
   assert.match(answer.error.message, /thr_b/);
-  assert.deepEqual(answer.error.details.threads, ["thr_a", "thr_b"]);
 });
 
 test("a live thread of another project whose environment is the home counts as a second thread", async (t) => {
@@ -131,12 +132,12 @@ test("inspectMany reads bb once for many homes and answers in their order, each 
     threadRow("thr_a", "proj_a", "active"), threadRow("thr_b", "proj_b", "error"),
     threadRow("thr_d", "proj_d", "idle"), threadRow("thr_d2", "proj_d", "idle"),
   ] } });
-  const at = (projectId, threadId) => ({ home: `${home}/${projectId}`, endpoint: { server: SERVER, projectId, threadId } });
+  const at = (projectId, threadId) => ({ home: `${home}/${projectId}`, instance: projectId, endpoint: { server: SERVER, projectId, threadId } });
   const answer = await call("inspectMany", { homes: [at("proj_a", "thr_a"), at("proj_b", "thr_b"), at("proj_c", "thr_c"), at("proj_d", "thr_d"), { home, endpoint: null }] }, { settings, bb });
   assert.equal(answer.ok, true);
   const { results } = answer.result;
   assert.deepEqual(results[0], { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `${SERVER}/projects/proj_a/threads/thr_a` } });
-  assert.deepEqual(results[1], { present: true, state: "shell", running: false, open: { label: "Open in bb", url: `${SERVER}/projects/proj_b/threads/thr_b` } });
+  assert.deepEqual(results[1], { present: false, state: "stopped", running: false, open: { label: "Open in bb", url: `${SERVER}/projects/proj_b/threads/thr_b` } });
   assert.deepEqual(results[2], { present: false, state: "stopped", running: false });
   assert.equal(results[3].error.code, "E_SESSION_UNAVAILABLE");
   assert.match(results[3].error.message, /thr_d2/);

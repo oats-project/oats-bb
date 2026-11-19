@@ -1,5 +1,5 @@
-// Readiness (contract items 6a, 7, 8): the check the kernel relays, on the released
-// binding.check wire, and the same checks a launch runs first.
+// Readiness (contract items 6a, 7, 8): the provider's `check` verb, whose result the kernel
+// relays as a readiness providers item, and the same checks a launch runs first.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
@@ -7,36 +7,32 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { accepts, exposedListeners, nonLoopbackAddresses } from "../../oats-package/capabilities/oats-bb/lib/exposure.mjs";
 import { isLoopbackHost, loopbackOrigin, readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { UNREACHABLE, VERSION, closedPort, fakeBackend, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
-
-const REQUEST = { schemaVersion: 1, phase: "check", slot: null, capability: "oats.bb",
-  input: { context: { kind: "workspace", workspace: "github.com/acme/agents", deployment: "/srv/acme", soul: "dev", instance: "dev-a", home: "/srv/acme/agents/dev/instances/dev-a" }, action: { kind: "readiness" } } };
+import { UNREACHABLE, VERSION, call, closedPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 async function setup(t, script = {}, backendOverrides = {}) {
   const { dir, home } = scratch(t);
   const backend = await fakeBackend(t, backendOverrides);
   const bb = fakeBbIn(dir, { "--version": { stdout: `${VERSION}\n` }, "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] }, ...(typeof script === "function" ? script(home, dir) : script) });
-  const check = async (settings = {}, request = REQUEST) => {
-    const run = await runBin(["check"], { stdin: JSON.stringify({ ...request, settings: { cli: bb.cli, ...backend.settings(settings) } }), env: bb.env });
-    assert.equal(run.status, 0, run.stderr);
-    assert.notEqual(run.doc, null, `one JSON document on stdout: ${run.stdout}`);
-    return run.doc;
-  };
+  // For a home, the settings are the recorded ones (OATS_SETTINGS), as for every verb.
+  const check = (settings = {}) => call("check", { home, soul: null }, { settings: backend.settings(settings), bb });
   return { dir, home, backend, bb, check };
 }
 const codes = (answer) => answer.result.problems.map((problem) => problem.code);
 
-test("a bb that is fit answers ready on the binding.check wire, echoing the request", async (t) => {
+test("a bb that is fit answers ready: {status, problems, warnings}, the shape oats readiness relays", async (t) => {
   const { check, bb, backend } = await setup(t);
   const answer = await check();
-  assert.deepEqual(answer, { schemaVersion: 1, phase: "check", slot: null, capability: "oats.bb", ok: true, result: { status: "ready", problems: [], warnings: [] } });
-  assert.deepEqual(Object.keys(answer), ["schemaVersion", "phase", "slot", "capability", "ok", "result"], "exactly the wire's keys");
+  assert.deepEqual(answer, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "check", ok: true, result: { status: "ready", problems: [], warnings: [] } });
   assert.equal(bb.calls().every((c) => c.server === backend.server), true);
+  assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
+  assert.deepEqual(backend.daemonRequests, ["/status"]);
 });
 
-test("the check echoes the slot the kernel sends", async (t) => {
-  const { check } = await setup(t);
-  assert.equal((await check({}, { ...REQUEST, slot: "messaging" })).slot, "messaging");
+test("for a soul (no home) the check takes the settings from its input", async (t) => {
+  const { backend, bb } = await setup(t);
+  const run = await runBin(["session", "check"], { stdin: JSON.stringify(requestFor("check", { home: null, soul: "dev", settings: { ...backend.settings({ trust: "everyone" }), cli: bb.cli } })), env: bb.env });
+  assert.equal(run.status, 0);
+  assert.deepEqual(run.doc.result.problems.map((p) => p.code), ["E_BACKEND_TRUST"]);
 });
 
 test("no trust setting: E_BACKEND_TRUST, needs-configuration", async (t) => {
@@ -52,7 +48,7 @@ test("a trust value that is neither word: E_BACKEND_TRUST", async (t) => {
   assert.deepEqual(codes(await check({ trust: "everyone" })), ["E_BACKEND_TRUST"]);
 });
 
-test("no version pin: E_BACKEND_VERSION", async (t) => {
+test("no version pin (a kernel that merged no manifest default): E_BACKEND_VERSION", async (t) => {
   const { check } = await setup(t);
   const answer = await check({ version: undefined });
   assert.deepEqual(codes(answer), ["E_BACKEND_VERSION"]);
@@ -72,8 +68,8 @@ test("a version that only starts like the pin is another version", async (t) => 
 });
 
 test("no bb CLI: E_BACKEND_VERSION says the version could not be read", async (t) => {
-  const { check, dir } = await setup(t);
-  const answer = await check({ cli: join(dir, "no-such-bb") });
+  const { dir, backend, bb } = await setup(t);
+  const answer = await call("check", { home: null, soul: "dev" }, { settings: backend.settings(), bb: { cli: join(dir, "no-such-bb"), env: bb.env } });
   assert.ok(codes(answer).includes("E_BACKEND_VERSION"));
   assert.match(answer.result.problems.find((p) => p.code === "E_BACKEND_VERSION").message, /could not be read/);
 });
@@ -185,28 +181,43 @@ test("when bb's threads cannot be listed, the check says orphans were not looked
   assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphans-unchecked"]);
 });
 
-for (const [name, stdin] of [["not JSON", "nope"], ["not a check request", JSON.stringify({ schemaVersion: 1, phase: "bind", slot: null, capability: "oats.bb" })], ["another schema version", JSON.stringify({ ...REQUEST, schemaVersion: 2 })]]) {
-  test(`a check request that is ${name} is refused on the wire, exit 0`, async () => {
-    const run = await runBin(["check"], { stdin });
-    assert.equal(run.status, 0);
-    assert.equal(run.doc.ok, false);
-    assert.equal(run.doc.error.code, "E_BACKEND_REQUEST");
-    assert.deepEqual(Object.keys(run.doc.error).sort(), ["code", "message"]);
+for (const [name, daemonStatus] of [["with no connected field", { hostId: "host_1" }], ["whose connected is not a boolean", { connected: "yes" }], ["that is a list", [true]]]) {
+  test(`a host daemon /status ${name} is not ready, never ready`, async (t) => {
+    const { check } = await setup(t, {}, { daemonStatus });
+    const answer = await check();
+    assert.deepEqual(codes(answer), ["E_BACKEND_NOT_READY"]);
+    assert.equal(answer.result.status, "unavailable");
   });
 }
 
-test("settings that are not a map are refused on the wire", async () => {
-  const run = await runBin(["check"], { stdin: JSON.stringify({ ...REQUEST, settings: { version: 50 } }) });
-  assert.equal(run.doc.ok, false);
-  assert.equal(run.doc.error.code, "E_BACKEND_SETTINGS");
+for (const [name, raw] of [["that is not JSON", "<html>bb</html>"], ["larger than the provider reads", `{"providers":[{"providerId":"claude-code","status":"ready","pad":"${"x".repeat(300_000)}"}]}`], ["whose providers is not a list", '{"providers":{"claude-code":"ready"}}'], ["whose status is not a word", '{"providers":[{"providerId":"claude-code","status":true}]}']]) {
+  test(`a provider state ${name} is not ready, never ready`, async (t) => {
+    const { check, backend } = await setup(t);
+    backend.state.providerRaw = raw;
+    const answer = await check();
+    assert.deepEqual(codes(answer), ["E_BACKEND_NOT_READY"]);
+    assert.equal(answer.result.status, "unavailable");
+  });
+}
+
+test("settings that are not a map are refused on the wire", async (t) => {
+  const { bb } = await setup(t);
+  const answer = await call("check", { home: null, soul: "dev" }, { settings: { version: 50 }, bb });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "E_BACKEND_SETTINGS");
 });
 
-test("oats bb doctor prints the same findings for a person, and exits nonzero when not ready", async (t) => {
+test("oats bb doctor prints the same findings for a person, names where the credential comes from, never a value", async (t) => {
   const { backend, bb } = await setup(t);
-  const ready = await runBin(["doctor"], { env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) } });
+  const env = (settings) => ({ ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(settings), cli: bb.cli }) });
+  const ready = await runBin(["doctor"], { env: env() });
   assert.equal(ready.status, 0);
-  assert.match(ready.stdout, /^bb session provider: ready\n$/);
-  const not = await runBin(["doctor", "--json"], { env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings({ trust: undefined }), cli: bb.cli }) } });
+  assert.equal(ready.stdout, "bb session provider: ready\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n");
+  backend.state.provider.accountEmail = "person@example.com";
+  const login = await runBin(["doctor", "--json"], { env: env() });
+  assert.equal(login.doc.credential, "a Claude login of bb's user");
+  assert.doesNotMatch(login.stdout, /person@example\.com/);
+  const not = await runBin(["doctor", "--json"], { env: env({ trust: undefined }) });
   assert.equal(not.status, 1);
   assert.deepEqual(not.doc.problems.map((p) => p.code), ["E_BACKEND_TRUST"]);
 });

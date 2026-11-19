@@ -1,4 +1,6 @@
-name: ci
+# The bb session provider (oats-package/): its unit tests and its contract test.
+# Both read the bb-app pin from the repository's bb-version file.
+name: provider
 
 on:
   pull_request:
@@ -19,10 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Validate manifests and run the unit tests (a fake bb)
+      - name: Validate manifests (the version default equals bb-version) and run the unit tests (a fake bb)
         run: npm test
 
-  # The provider against the pinned bb-app (test/contract/bb-version), in a container, with
+  # The provider against the pinned bb-app (bb-version), in a container, with
   # a mock Anthropic endpoint: no credential. bb's API has no login, so bb runs only
   # inside that container and no port is published.
   contract:

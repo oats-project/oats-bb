@@ -16,7 +16,7 @@
     "session-inspect-many": "bin/oats-bb.mjs session inspectMany",
     "session-input": "bin/oats-bb.mjs session input",
     "session-stop": "bin/oats-bb.mjs session stop",
-    "check": "bin/oats-bb.mjs check",
+    "session-check": "bin/oats-bb.mjs session check",
     "doctor": "bin/oats-bb.mjs doctor"
   },
   "sessionProviders": {
@@ -26,9 +26,12 @@
         "inspect": "session-inspect",
         "inspectMany": "session-inspect-many",
         "input": "session-input",
-        "stop": "session-stop"
+        "stop": "session-stop",
+        "check": "session-check"
       },
-      "harnesses": ["claude"],
+      "harnesses": [
+        "claude"
+      ],
       "description": "One bb thread per home, in a bb project rooted at the home. No terminal: open the thread in bb."
     }
   },
@@ -47,11 +50,15 @@
       "description": "The bb host daemon's address on this host (its /status says when threads can start). Loopback only. Set it only in oats-local.yaml."
     },
     "version": {
-      "description": "The bb-app version this deployment runs, exactly as `bb --version` prints it. Required: readiness and every launch refuse another version (E_BACKEND_VERSION)."
+      "default": "0.50.1",
+      "description": "The bb-app version this deployment runs, exactly as `bb --version` prints it. The default is the version this release of the provider is contract-tested against. Readiness and every launch refuse another version (E_BACKEND_VERSION)."
     },
     "trust": {
       "hostOnly": true,
-      "values": ["single-user", "container"],
+      "values": [
+        "single-user",
+        "container"
+      ],
       "description": "Who can reach bb's loopback port. single-user: this host has one person's user. container: one OATS team container with one bb server. Required (E_BACKEND_TRUST): unlike tmux's socket, the port is open to every local user's processes. Set it only in oats-local.yaml."
     },
     "cli": {
@@ -62,7 +69,9 @@
   },
   "retirement": {
     "disposable": {
-      "home": [".oats-bb"]
+      "home": [
+        ".oats-bb"
+      ]
     }
   }
 }

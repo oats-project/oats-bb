@@ -14,7 +14,10 @@ export function inspectAnswer(thread) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
   if (SETTLED.has(status)) return { present: true, state: "unknown", running: null };
-  if (status === "error") return { present: true, state: "shell", running: false };
+  // A thread in error is a lost session: bb never resumes an interrupted turn. It reads as
+  // the kernel reads any lost session (not "shell", which on a tmux home means the harness
+  // ended and a shell remains), so the kernel may resume it with an input.
+  if (status === "error") return { present: false, state: "stopped", running: false };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
@@ -62,8 +65,7 @@ export function inspectHome({ home, endpoint }, threads) {
   const recorded = threads.find((thread) => isObject(thread) && thread.id === endpoint.threadId && !thread.deletedAt) ?? null;
   const others = liveThreadsOfHome(threads, home, [endpoint.projectId]).filter((thread) => thread.id !== endpoint.threadId);
   if (others.length > 0) {
-    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}: the recorded ${endpoint.threadId}${recorded ? "" : " (missing)"} and ${others.map((thread) => thread.id).join(", ")}. One home is one thread: archive the others in bb`,
-      { threads: [endpoint.threadId, ...others.map((thread) => thread.id)] });
+    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}: the recorded ${endpoint.threadId}${recorded ? "" : " (missing)"} and ${others.map((thread) => thread.id).join(", ")}. One home is one thread: archive the others in bb`);
   }
   if (!recorded) return { ...MISSING };
   return { ...inspectAnswer(recorded), open: openLink(endpoint) };

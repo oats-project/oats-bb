@@ -16,9 +16,10 @@ function readJson(path) {
 }
 
 const NAME = /^[a-z0-9][a-z0-9-]*$/;
-const PROVIDER_NAME = /^[a-z0-9-]{1,40}$/;
+const PROVIDER_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const RESERVED_PROVIDERS = ["tmux", "herdr"];
 const PROVIDER_COMMANDS = ["launch", "inspect", "input", "stop"];
-const OPTIONAL_PROVIDER_COMMANDS = ["inspectMany"];
+const OPTIONAL_PROVIDER_COMMANDS = ["inspectMany", "check"];
 const HARNESSES = ["claude", "codex", "pi"];
 
 /** A command's script: a regular file inside the capability (no link, no way out). */
@@ -36,6 +37,12 @@ function checkScript(capDir, command, at) {
   }
   if (!lstatSync(path).isFile()) report(at, `script ${script} is not a regular file`);
 }
+
+// The one bb-app pin of the repository: the provider's default and the contract test read it.
+let bbVersion = null;
+try { bbVersion = readFileSync(join(repoRoot, "bb-version"), "utf8").trim(); }
+catch (error) { report("bb-version", `unreadable (${error.message})`); }
+if (bbVersion !== null && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(bbVersion)) report("bb-version", "must hold one bb-app version");
 
 const repoPackage = readJson(join(repoRoot, "package.json"));
 const pkg = readJson(join(root, "oats-package.json"));
@@ -75,7 +82,7 @@ if (isObject(pkg)) {
       for (const [name, provider] of Object.entries(isObject(manifest.sessionProviders) ? manifest.sessionProviders : {})) {
         const here = `${at}#/sessionProviders/${name}`;
         if (!PROVIDER_NAME.test(name)) report(here, "a provider name is 1-40 lowercase letters, digits and dashes");
-        if (name === "tmux") report(here, "tmux is the kernel's built-in backend");
+        if (RESERVED_PROVIDERS.includes(name)) report(here, `${name} is reserved by the kernel`);
         if (!isObject(provider)) { report(here, "must be a map"); continue; }
         for (const key of Object.keys(provider)) if (!["commands", "harnesses", "description"].includes(key)) report(here, `unknown key ${key}`);
         const map = isObject(provider.commands) ? provider.commands : {};
@@ -86,7 +93,7 @@ if (isObject(pkg)) {
           if (typeof command !== "string" || !Object.hasOwn(commands, command)) report(`${here}/commands/${verb}`, `names ${JSON.stringify(command)}, which is not one of the manifest's commands`);
         }
         if (!Array.isArray(provider.harnesses) || provider.harnesses.length === 0 || provider.harnesses.some((h) => !HARNESSES.includes(h))) report(`${here}/harnesses`, `must be a non-empty list of ${HARNESSES.join(", ")}`);
-        if (provider.description !== undefined && typeof provider.description !== "string") report(`${here}/description`, "must be a string");
+        if (provider.description !== undefined && (typeof provider.description !== "string" || provider.description.length > 200 || /[\r\n]/.test(provider.description))) report(`${here}/description`, "must be one line of at most 200 characters");
       }
     }
 
@@ -98,6 +105,9 @@ if (isObject(pkg)) {
       if (setting.hostOnly === true && setting.committedOnly === true) report(here, "cannot be both hostOnly and committedOnly");
       if (setting.values !== undefined && (!Array.isArray(setting.values) || setting.values.some((v) => typeof v !== "string"))) report(here, "values must be a list of strings");
       if (Array.isArray(setting.values) && setting.default !== undefined && !setting.values.includes(setting.default)) report(here, "default is not one of values");
+    }
+    if (manifest.sessionProviders?.bb && manifest.settings?.version?.default !== bbVersion) {
+      report(`${at}#/settings/version/default`, `is ${JSON.stringify(manifest.settings?.version?.default)}, and bb-version pins ${bbVersion}: the default is the version the contract test runs`);
     }
     for (const [i, entry] of (manifest.retirement?.disposable?.home ?? []).entries()) {
       if (typeof entry !== "string" || !/^\.[A-Za-z0-9_][A-Za-z0-9._-]*(-\*)?$/.test(entry)) report(`${at}#/retirement/disposable/home/${i}`, "must name one hidden top-level home entry");

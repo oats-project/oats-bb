@@ -8,7 +8,7 @@ import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settin
 import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
-const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", secret: false, ...extra });
+const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
 const EFFECTS = new Set(["project create", "thread spawn", "thread archive", "thread stop", "thread tell"]);
 const verbs = (bb) => bb.calls().map((c) => (c.argv[0] === "--version" ? "--version" : c.argv.slice(0, 2).join(" ")));
 const effects = (bb) => verbs(bb).filter((verb) => EFFECTS.has(verb));
@@ -32,7 +32,7 @@ const localSettings = (home) => JSON.parse(readFileSync(join(home, ".claude/sett
 test("launch spawns one thread in the home's project and answers its endpoint", async (t) => {
   const { home, backend, bb, run } = await setup(t);
   const answer = await run();
-  assert.deepEqual(answer, { schemaVersion: 1, phase: "launch", provider: "bb", capability: "oats.bb", ok: true,
+  assert.deepEqual(answer, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "launch", ok: true,
     result: { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_new" } } });
   const spawn = bb.calls().find((c) => c.argv[1] === "spawn");
   assert.deepEqual(spawn.argv, ["thread", "spawn", "--project", "proj_a", "--provider", "claude-code", "--model", "claude-opus-5-5",
@@ -47,6 +47,7 @@ test("launch runs the readiness checks before it reads or changes anything in bb
   await run();
   assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread spawn"]);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
+  assert.deepEqual(backend.daemonRequests, ["/status"]);
 });
 
 test("launch writes the env into .claude/settings.local.json, 0600, before the spawn", async (t) => {
@@ -61,8 +62,8 @@ test("launch keeps a person's settings and env entries, and removes what an earl
   const { home, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
   writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } }), { mode: 0o644 });
-  await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("AWEB_DELIVERY", "session", { source: "hook:oats.aweb" })] });
-  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept", OATS_INSTANCE: "dev-a", AWEB_DELIVERY: "session" } });
+  await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "EDITOR", value: "vi", source: "launch-config" }] });
+  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept", OATS_INSTANCE: "dev-a", AWEB_DELIVERY: "session", EDITOR: "vi" } });
   assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o600, "a wider file is narrowed");
   await run({ env: [entry("OATS_INSTANCE", "dev-a")] });
   assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept", OATS_INSTANCE: "dev-a" } });
@@ -100,29 +101,41 @@ test("a .claude that is a link out of the home refuses the launch: the env file 
 
 test("a secret-sourced env entry: E_BACKEND_LAUNCH_ENV naming it, nothing written, bb never called", async (t) => {
   const { home, bb, run } = await setup(t);
-  const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("ANTHROPIC_API_KEY", "sk-not-a-real-key", { source: "launch-config secret", secret: true })] });
+  const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "ANTHROPIC_API_KEY", value: "sk-not-a-real-key", source: "launch-config-reference", secret: true }] });
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ENV");
-  assert.match(answer.error.message, /ANTHROPIC_API_KEY/);
-  assert.match(answer.error.message, /launch-config secret/);
+  assert.match(answer.error.message, /ANTHROPIC_API_KEY \(source launch-config-reference\) comes from a secret source/);
   assert.doesNotMatch(JSON.stringify(answer), /sk-not-a-real-key/, "the value is never echoed");
-  assert.deepEqual(answer.error.details, { name: "ANTHROPIC_API_KEY" });
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), false);
   assert.deepEqual(bb.calls(), []);
 });
 
+test("unset names are removed from the env file, a person's own entry of that name included", async (t) => {
+  const { home, run } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { AWEB_DELIVERY: "channel", MINE: "kept" } }));
+  assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a")], unset: ["AWEB_DELIVERY", "AWID_REGISTRY_URL"] })).ok, true);
+  assert.deepEqual(localSettings(home), { env: { MINE: "kept", OATS_INSTANCE: "dev-a" } });
+});
+
 for (const [name, env, pattern] of [
-  ["an entry whose secret mark is missing", [{ name: "X_TOKEN", value: "v", source: "hook" }], /X_TOKEN.*not marked as not secret/],
+  ["a secret reference that is not marked secret", [{ name: "X_TOKEN", value: "v", source: "launch-config-reference" }], /X_TOKEN.*secret source/],
+  ["a plain source marked secret", [{ name: "X_TOKEN", value: "v", source: "launch-config", secret: true }], /X_TOKEN.*secret source/],
+  ["a source word the provider does not know", [{ name: "X_TOKEN", value: "v", source: "vault" }], /X_TOKEN \(source vault\) has no source this backend knows/],
+  ["an entry with no source", [{ name: "X_TOKEN", value: "v" }], /X_TOKEN has no source this backend knows/],
+  ["a secret mark that is not a boolean", [{ name: "X_TOKEN", value: "v", source: "kernel", secret: "no" }], /X_TOKEN.*neither true nor false/],
+  ["a name both set and unset", { env: [entry("BOTH", "v")], unset: ["BOTH"] }, /both sets and unsets BOTH/],
+  ["an unset that is not a list of names", { env: [], unset: ["not a name"] }, /unset must be a list/],
   ["a name that is not a variable name", [entry("BAD-NAME", "v")], /BAD-NAME/],
   ["a value with a newline", [entry("MULTI", "a\nb")], /MULTI.*one-line/],
   ["a value that is not a string", [entry("NUM", 7)], /NUM/],
   ["one name twice", [entry("TWICE", "a"), entry("TWICE", "b")], /TWICE twice/],
-  ["an entry with no name", [{ value: "v", secret: false }], /no name/],
+  ["an entry with no name", [{ value: "v", source: "kernel" }], /no name/],
   ["an env that is not a list", { OATS_INSTANCE: "dev-a" }, /must be a list/],
 ]) {
   test(`${name}: E_BACKEND_LAUNCH_ENV, bb never called`, async (t) => {
     const { bb, run } = await setup(t);
-    const answer = await run({ env });
+    const answer = await run(Array.isArray(env) || !("unset" in env) ? { env } : env);
     assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ENV");
     assert.match(answer.error.message, pattern);
     assert.deepEqual(bb.calls(), []);
@@ -137,10 +150,14 @@ for (const [name, args, pattern] of [
   ["two different permission modes", ["--permission-mode=auto", "--permission-mode", "acceptEdits"], /twice/],
   ["an argument that is not a string", [7], /7/],
   ["args that are not a list", "--verbose", /must be a list/],
+  // Where yolo and the argument disagree the provider refuses rather than picks one.
+  ["yolo with --permission-mode auto", { yolo: true, args: ["--permission-mode", "auto"] }, /yolo and for --permission-mode auto, which disagree/],
+  ["yolo with --permission-mode acceptEdits", { yolo: true, args: ["--permission-mode=acceptEdits"] }, /acceptEdits, which disagree/],
+  ["no yolo with --permission-mode bypassPermissions", { yolo: false, args: ["--permission-mode", "bypassPermissions"] }, /no yolo and for --permission-mode bypassPermissions, which disagree/],
 ]) {
   test(`${name}: E_BACKEND_LAUNCH_ARG naming it, bb never called`, async (t) => {
     const { home, bb, run } = await setup(t);
-    const answer = await run({ args });
+    const answer = await run(Array.isArray(args) || typeof args === "string" ? { args } : args);
     assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ARG");
     assert.match(answer.error.message, pattern);
     assert.deepEqual(bb.calls(), []);
@@ -153,9 +170,11 @@ for (const [name, extra, mode] of [
   ["yolo false", { yolo: false }, "accept-edits"],
   ["no yolo choice", { yolo: null }, "accept-edits"],
   ["a launch configuration's --permission-mode auto", { yolo: null, args: ["--permission-mode", "auto"] }, "auto"],
-  ["--permission-mode=auto over yolo", { yolo: true, args: ["--permission-mode=auto"] }, "auto"],
-  ["--permission-mode acceptEdits", { yolo: true, args: ["--permission-mode", "acceptEdits"] }, "accept-edits"],
-  ["--permission-mode bypassPermissions", { yolo: false, args: ["--permission-mode", "bypassPermissions"] }, "full"],
+  ["--permission-mode=auto with no yolo", { yolo: false, args: ["--permission-mode=auto"] }, "auto"],
+  ["--permission-mode acceptEdits", { yolo: null, args: ["--permission-mode", "acceptEdits"] }, "accept-edits"],
+  ["--permission-mode bypassPermissions with no choice", { yolo: null, args: ["--permission-mode", "bypassPermissions"] }, "full"],
+  ["yolo and --permission-mode bypassPermissions, which agree", { yolo: true, args: ["--permission-mode", "bypassPermissions"] }, "full"],
+  ["the same mode named twice", { yolo: null, args: ["--permission-mode", "auto", "--permission-mode=auto"] }, "auto"],
 ]) {
   test(`${name} spawns with --permission-mode ${mode}`, async (t) => {
     const { bb, run } = await setup(t);
@@ -234,7 +253,6 @@ test("another live thread in the home's project refuses the launch, naming it", 
   const answer = await run();
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
   assert.match(answer.error.message, /thr_squatter \(idle\)/);
-  assert.deepEqual(answer.error.details.threads, ["thr_squatter"]);
   assert.deepEqual(effects(bb), []);
   assert.equal(existsSync(join(home, ".claude")), false);
 });
@@ -296,12 +314,12 @@ for (const [name, script, pattern] of [
   });
 }
 
-test("a spawn cut off by time may have made the thread: E_SESSION_START_FAILED, unconfirmed", async (t) => {
+test("a spawn cut off by time may have made the thread: E_SESSION_START_FAILED, saying so", async (t) => {
   const { home, backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() } });
   // In process, so the deadline can be near: the provider's own launch budget is 100 s.
   await assert.rejects(
     launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 3_000, env: { ...process.env, ...bb.env } }),
-    (error) => error.code === "E_SESSION_START_FAILED" && error.details.unconfirmed === true,
+    (error) => error.code === "E_SESSION_START_FAILED" && /may have been created/.test(error.message),
   );
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), true);
 });

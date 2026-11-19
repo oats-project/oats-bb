@@ -11,14 +11,26 @@ import { isLive } from "./threads.mjs";
 
 const HTTP_TIMEOUT_MS = 5_000;
 // bb's provider health words (bb plugins/provider-claude-code provider-maintenance).
-const PROVIDER_STATUS = { not_installed: "needs-configuration", unauthenticated: "authorization-required", expired: "authorization-required" };
+const PROVIDER_STATUS = { not_installed: "needs-configuration", unauthenticated: "authorization-required", expired: "authorization-required", unknown: "unavailable" };
 
-/** GET a JSON document. Resolves { ok: true, value } or { ok: false, message }. */
+const HTTP_MAX_BYTES = 256 * 1024;
+
+/** GET a JSON document from bb, read-only: a loopback address (the callers pass only
+ *  origins that passed loopbackOrigin), no redirect followed, bounded in time and in size.
+ *  Resolves { ok: true, value } or { ok: false, message }; never throws. */
 export async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(Math.max(1, timeoutMs)), redirect: "error", headers: { accept: "application/json" } });
-    if (!response.ok) return { ok: false, message: `HTTP ${response.status}` };
-    return { ok: true, value: await response.json() };
+    const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(Math.max(1, timeoutMs)), redirect: "error", headers: { accept: "application/json" } });
+    if (!response.ok) { await response.body?.cancel(); return { ok: false, message: `HTTP ${response.status}` }; }
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of response.body ?? []) {
+      size += chunk.length;
+      if (size > HTTP_MAX_BYTES) return { ok: false, message: `an answer larger than ${HTTP_MAX_BYTES} bytes` };
+      chunks.push(chunk);
+    }
+    try { return { ok: true, value: JSON.parse(Buffer.concat(chunks).toString("utf8")) }; }
+    catch { return { ok: false, message: "an answer that is not JSON" }; }
   } catch (error) {
     const cause = error?.cause?.code || error?.cause?.message;
     return { ok: false, message: error?.name === "TimeoutError" ? `no answer within ${Math.round(timeoutMs / 1000)} s` : cause ? `${error.message} (${cause})` : String(error?.message ?? error) };
@@ -26,8 +38,9 @@ export async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
 }
 
 /** Every reason this bb must not run a home now, in the order a person would fix them.
- *  → { problems, server, daemon, bb, listable } (the addresses as origins, null when
- *  refused; `listable` when bb's CLI runs and its server answers). */
+ *  → { problems, server, daemon, bb, listable, credential } (the addresses as origins,
+ *  null when refused; `listable` when bb's CLI runs and its server answers; `credential`
+ *  names where bb's Claude takes its credential from, when bb reports it ready). */
 export async function backendProblems(settings, { deadline = Date.now() + 25_000, env = process.env, http = getJson, exposure = exposedListeners } = {}) {
   const problems = [];
   const add = (code, status, message) => problems.push({ code, message, status });
@@ -44,7 +57,7 @@ export async function backendProblems(settings, { deadline = Date.now() + 25_000
     add("E_BACKEND_VERSION", "needs-configuration", "settings.oats.bb.version is not set: pin the bb-app version this deployment runs (the output of `bb --version`)");
   }
 
-  let server = null, daemon = null, cliRuns = settings.version == null;
+  let server = null, daemon = null, cliRuns = settings.version == null, credential = null;
   for (const [name, set] of [["server", (origin) => { server = origin; }], ["daemon", (origin) => { daemon = origin; }]]) {
     try { set(loopbackOrigin(settings[name], name)); }
     catch (error) {
@@ -78,14 +91,16 @@ export async function backendProblems(settings, { deadline = Date.now() + 25_000
     const health = await http(`${server}/health`, left(HTTP_TIMEOUT_MS));
     if (!health.ok || !isObject(health.value) || health.value.ok !== true) {
       add("E_BACKEND_UNREACHABLE", "unavailable", `bb's server at ${server} does not answer (${health.ok ? "its /health is not ok" : health.message}): start bb-app, or set settings.oats.bb.server`);
-      return { problems, server, daemon, bb, listable: false };
+      return { problems, server, daemon, bb, listable: false, credential };
     }
   }
   if (daemon) {
     // The server's /health answers before the host daemon is up; threads need the daemon.
     const status = await http(`${daemon}/status`, left(HTTP_TIMEOUT_MS));
-    if (!status.ok || !isObject(status.value)) {
-      add("E_BACKEND_UNREACHABLE", "unavailable", `bb's host daemon at ${daemon} does not answer (${status.ok ? "its /status is not an object" : status.message}): start bb-app, or set settings.oats.bb.daemon`);
+    if (!status.ok) {
+      add("E_BACKEND_UNREACHABLE", "unavailable", `bb's host daemon at ${daemon} does not answer (${status.message}): start bb-app, or set settings.oats.bb.daemon`);
+    } else if (!isObject(status.value) || typeof status.value.connected !== "boolean") {
+      add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "connected": true or false)`);
     } else if (status.value.connected !== true) {
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} is not connected to its server yet`);
     } else if (server && typeof status.value.serverUrl === "string" && originOf(status.value.serverUrl) !== server) {
@@ -102,9 +117,15 @@ export async function backendProblems(settings, { deadline = Date.now() + 25_000
       const hint = typeof provider.loginCommand === "string" && PROVIDER_STATUS[provider.status] === "authorization-required" ? `: run \`${provider.loginCommand}\` as bb's user, or give bb's server the credential in its environment` : "";
       const detail = typeof provider.statusMessage === "string" && provider.statusMessage ? ` (${provider.statusMessage.slice(0, 300)})` : "";
       add("E_BACKEND_NOT_READY", PROVIDER_STATUS[provider.status] ?? "unavailable", `bb reports its claude-code provider as ${provider.status}${detail}${hint}`);
+    } else {
+      // Where the credential comes from, by bb's own report; never the credential, and
+      // no account name.
+      credential = typeof provider.accountEmail === "string" && provider.accountEmail
+        ? "a Claude login of bb's user"
+        : "no Claude login: a credential in bb's own configuration or in the bb server's environment";
     }
   }
-  return { problems, server, daemon, bb, listable: server !== null && cliRuns };
+  return { problems, server, daemon, bb, listable: server !== null && cliRuns, credential };
 }
 
 function originOf(value) {
@@ -127,9 +148,11 @@ export async function orphanedThreads(bb, { exists = existsSync } = {}) {
   return warnings;
 }
 
-/** The readiness wire's result: {status, problems, warnings}. */
+/** The readiness result: {status, problems, warnings}, the shape `oats readiness` relays
+ *  as a providers item. `status` is ready (no problem), needs-configuration,
+ *  authorization-required or unavailable. `credential` is for a person's report only. */
 export async function readinessResult(settings, options = {}) {
-  const { problems, bb, listable } = await backendProblems(settings, options);
+  const { problems, bb, listable, credential } = await backendProblems(settings, options);
   const warnings = [];
   if (listable) {
     try { warnings.push(...await orphanedThreads(bb, options)); }
@@ -140,5 +163,5 @@ export async function readinessResult(settings, options = {}) {
   }
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
-  return { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings };
+  return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
 }

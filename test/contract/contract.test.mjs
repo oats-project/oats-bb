@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
-const BB_VERSION = readFileSync(resolve(here, "bb-version"), "utf8").trim();
+const BB_VERSION = readFileSync(resolve(repo, "bb-version"), "utf8").trim();
 const IMAGE = `oats-bb-contract:${BB_VERSION}`;
 const NAME = `oats-bb-contract-${process.pid}`;
 const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
@@ -40,18 +40,17 @@ async function sh(line, { input, ok = true } = {}) {
 }
 const bbJson = async (args, options) => JSON.parse(await sh(`bb ${args} --json`, options));
 
-/** One session call on the provider's wire, inside the container. → the answer envelope. */
-async function provider(phase, input, settings = SETTINGS) {
-  const request = { schemaVersion: 1, phase, provider: "bb", capability: "oats.bb", settings, input };
-  const stdout = await sh(`node ${PROVIDER} session ${phase}`, { input: JSON.stringify(request) });
+/** One call on the provider's wire, inside the container, as the kernel makes it: the
+ *  request on stdin, the settings in OATS_SETTINGS. → the answer envelope. */
+async function provider(verb, input, settings = SETTINGS) {
+  const request = { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb, input };
+  const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
   const answer = JSON.parse(stdout);
-  assert.equal(answer.phase, phase);
+  assert.deepEqual(Object.keys(answer), ["schemaVersion", "phase", "capability", "provider", "verb", "ok", answer.ok ? "result" : "error"]);
+  assert.equal(answer.verb, verb);
   return answer;
 }
-async function check(settings = SETTINGS) {
-  const request = { schemaVersion: 1, phase: "check", slot: null, capability: "oats.bb", settings, input: { context: { kind: "workspace" }, action: { kind: "readiness" } } };
-  return JSON.parse(await sh(`node ${PROVIDER} check`, { input: JSON.stringify(request) }));
-}
+const check = (settings = SETTINGS) => provider("check", { home: null, soul: null }, settings);
 
 async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } = {}) {
   const until = Date.now() + timeoutMs;
@@ -87,8 +86,8 @@ async function makeHome(name) {
 }
 const launchInput = (home, name, extra = {}) => ({
   home, instance: name, harness: "claude", model: MODEL, yolo: true,
-  env: [{ name: "OATS_INSTANCE", value: name, source: "kernel", secret: false }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel", secret: false }],
-  args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
+  env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }],
+  unset: [], args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
 });
 async function launched(name, extra) {
   const home = await makeHome(name);
@@ -103,7 +102,7 @@ before(async () => {
   await run("docker", ["exec", "-d", NAME, "sh", "-c", "cd ~ && node /repo/test/contract/mock-anthropic.mjs > mock.out 2>&1"]);
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
     "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates > bb-app.out 2>&1"]);
-  await waitFor("bb to be ready", async () => (await check()).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
+  await waitFor("bb to be ready", async () => (await check()).result?.status === "ready", { timeoutMs: 180_000, everyMs: 1_000 });
 }, { timeout: 900_000 });
 
 after(async () => {
@@ -114,12 +113,47 @@ after(async () => {
 test("the image runs the pinned bb-app, and readiness reads it ready", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
   assert.deepEqual((await check()).result, { status: "ready", problems: [], warnings: [] });
+  // The provider's default version is this pin: with no version setting it is ready too.
+  const manifest = JSON.parse(await sh("cat /repo/oats-package/capabilities/oats-bb/oats.json"));
+  assert.equal(manifest.settings.version.default, BB_VERSION);
+});
+
+test("the two HTTP reads the provider makes answer what it decodes, at the pinned version", async () => {
+  // The host daemon's /status: "connected" is a boolean, and its serverUrl is the server.
+  const status = JSON.parse(await sh("curl -s -m 5 http://127.0.0.1:38887/status"));
+  assert.equal(status.connected, true);
+  assert.equal(status.serverUrl, SERVER);
+  // bb's provider state (its CLI has no command for it): one entry per provider, with a
+  // status word. With the mock endpoint's API key, bb reports claude-code ready.
+  const state = JSON.parse(await sh("curl -s -m 30 'http://127.0.0.1:38886/api/v1/system/providers/state?providerId=claude-code'"));
+  assert.equal(Array.isArray(state.providers), true);
+  const claude = state.providers.find((p) => p.providerId === "claude-code");
+  assert.equal(claude.status, "ready");
+  assert.ok("accountEmail" in claude && "loginCommand" in claude);
+  assert.equal(JSON.parse(await sh("curl -s -m 5 http://127.0.0.1:38886/health")).ok, true);
+  // And the person's report names where the credential comes from, never a value.
+  const doctor = await sh(`OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} doctor`);
+  assert.match(doctor, /^bb session provider: ready\n  claude-code credential: no Claude login/);
+  assert.doesNotMatch(doctor, /dummy-not-a-real-key/);
+});
+
+test("the launch's refusals reach no bb: a secret-sourced env entry, an argument bb cannot carry", async () => {
+  const home = await makeHome("refused");
+  const secret = launchInput(home, "refused");
+  secret.env.push({ name: "ANTHROPIC_API_KEY", value: "dummy-not-a-real-key", source: "launch-config-reference", secret: true });
+  const envAnswer = await provider("launch", secret);
+  assert.equal(envAnswer.error.code, "E_BACKEND_LAUNCH_ENV");
+  assert.match(envAnswer.error.message, /ANTHROPIC_API_KEY/);
+  const argAnswer = await provider("launch", launchInput(home, "refused", { args: ["--channels", "plugin:aweb-channel@awebai-marketplace"] }));
+  assert.equal(argAnswer.error.code, "E_BACKEND_LAUNCH_ARG");
+  assert.equal((await bbJson("project list")).some((p) => p.sources.some((s) => s.path === home)), false);
+  assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
 });
 
 test("T1 launch: the thread exists in a project rooted at the home, and a hook sees the settings.local.json env", async () => {
   const home = await makeHome("t1");
   const input = launchInput(home, "t1");
-  input.env.push({ name: "CONTRACT_PROBE", value: "seen-by-the-hook", source: "launch-config", secret: false });
+  input.env.push({ name: "CONTRACT_PROBE", value: "seen-by-the-hook", source: "launch-config" });
   const answer = await provider("launch", input);
   assert.equal(answer.ok, true, JSON.stringify(answer));
   const { endpoint } = answer.result;
@@ -182,12 +216,13 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await once("T2-MIDTOOL");
   assert.equal(await landed("T2-TOOLSTART"), 1);
 
-  // error: the model endpoint refuses a turn; bb shows error; the next tell recovers it
+  // error: the model endpoint refuses a turn; bb shows error, which reads as a lost
+  // session; the next tell recovers the thread
   await sh("touch mock-error");
   await tell("T2-FAILS marker");
   await waitStatus(id, "error");
   const errored = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "shell", running: false });
+  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: false, state: "stopped", running: false });
   await sh("rm mock-error");
   await tell("T2-ERROR marker");
   await once("T2-ERROR");
@@ -208,7 +243,7 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_SESSION_PROMPT_OPEN");
-  assert.deepEqual(answer.error.details.interactions, [pending.id]);
+  assert.match(answer.error.message, new RegExp(pending.id));
   assert.deepEqual(await bbJson(`thread queue list ${id}`), [], "the provider sent nothing");
 
   // The pin: a tell never answers or cancels a pending interaction (bb queues behind it).
@@ -234,8 +269,7 @@ test("T4 a queued tell is withdrawn: INPUT_QUEUED, and nothing lands later", asy
   const answer = await provider("input", { home, endpoint, text: "T4-QUEUED marker" }, { ...SETTINGS, cli: "/repo/test/contract/bb-hide-interactions.sh" });
   assert.equal(answer.ok, false, JSON.stringify(answer));
   assert.equal(answer.error.code, "E_SESSION_INPUT_QUEUED");
-  assert.equal(answer.error.details.waitingOn, "interaction");
-  assert.equal(answer.error.details.unconfirmed, undefined);
+  assert.match(answer.error.message, /waiting on interaction.*withdrawn, so nothing was delivered/);
   assert.deepEqual(await bbJson(`thread queue list ${id}`), [], "the queued copy was deleted");
 
   // A person approves; the turn goes on and ends; the withdrawn message never arrives.
@@ -265,6 +299,9 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   const inspect = await provider("inspect", { home, endpoint });
   assert.deepEqual({ present: inspect.result.present, state: inspect.result.state, running: inspect.result.running }, { present: true, state: "unknown", running: null });
   // The retire hook then archives the thread; after that nothing live runs in the home.
+  // A stop with no endpoint (the kernel after a launch whose answer was lost) finds the
+  // home's thread by itself, and has nothing left to stop.
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
   assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
   assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
@@ -280,7 +317,6 @@ test("T6 a second live thread in the home's project is reported by inspect, and 
   const inspect = await provider("inspect", { home, endpoint });
   assert.equal(inspect.ok, false);
   assert.equal(inspect.error.code, "E_SESSION_UNAVAILABLE");
-  assert.deepEqual(inspect.error.details.threads, [endpoint.threadId, second.id]);
   assert.match(inspect.error.message, new RegExp(`${endpoint.threadId}.*${second.id}`));
   const many = await provider("inspectMany", { homes: [{ home, endpoint }] });
   assert.equal(many.result.results[0].error.code, "E_SESSION_UNAVAILABLE");
@@ -288,7 +324,7 @@ test("T6 a second live thread in the home's project is reported by inspect, and 
   const again = await provider("launch", launchInput(home, "t6", { previous: endpoint }));
   assert.equal(again.ok, false);
   assert.equal(again.error.code, "E_SESSION_START_FAILED");
-  assert.deepEqual(again.error.details.threads, [second.id]);
+  assert.match(again.error.message, new RegExp(second.id));
 
   // With the stray thread archived, the home reads normally again and a start replaces
   // the previous thread.

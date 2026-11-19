@@ -263,10 +263,10 @@ function withdraw(settings, envNames, sandboxRecord) {
  *  (minus `unset`), and, unless `sandbox` is null (bb's full mode has no sandbox), the
  *  sandbox allowances. Every other key, and every entry the provider did not write, is
  *  kept; what an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven }) {
-  const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: true });
+export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, dryRun = false }) {
+  const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);
-  const envRecord = readJsonObject(envRecordPath, "the provider's record");
+  const envRecord = lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false }) ? readJsonObject(envRecordPath, "the provider's record") : null;
   const previousNames = strings(envRecord?.names);
   const previousSandbox = readSandboxRecord(home);
   const names = Object.keys(env).sort();
@@ -282,6 +282,10 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sand
     const keys = [...new Set([...domains.keys, ...write.keys, ...(previousSandbox?.added.keys ?? []).filter((key) => hasKey(settings, key))])];
     sandboxRecord = { domains: sandbox.domains, write: sandbox.write, added: { domains: domains.values, write: write.values, keys } };
   }
+
+  // A dry run has done everything that can refuse (a file that is not what it should be),
+  // and writes nothing: the launch runs it before its first effect.
+  if (dryRun) return { path: settingsPath, names, sandbox: sandboxRecord };
 
   // The records first, covering what was there and what will be: a launch cut short
   // between the writes leaves no entry of ours that a later one would take for a person's.

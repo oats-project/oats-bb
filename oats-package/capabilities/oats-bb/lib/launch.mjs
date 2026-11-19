@@ -55,7 +55,8 @@ function readInput(input) {
     throw fail("E_BACKEND_HARNESS", `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}`);
   }
   if (typeof home !== "string" || !isAbsolute(home)) throw fail("E_SESSION_START_FAILED", "the launch input's home must be an absolute path");
-  if (typeof instance !== "string" || !instance) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name");
+  // The name becomes bb's project name and thread title: an argument, never an option.
+  if (typeof instance !== "string" || !/^[A-Za-z0-9][^\0\n\r]*$/.test(instance)) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name (one line, starting with a letter or digit)");
   if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
   if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
   if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
@@ -78,6 +79,10 @@ export async function launch(input, settings, { deadline, env = process.env } = 
   const sandbox = mode === "full" ? null : allowances;
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
+  // Claude's local settings must be writable as they are (a file that is not JSON, a
+  // .claude that is a link): found now, before anything in bb changes.
+  const settingsToWrite = { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox) };
+  writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
   const { problems, server } = await backendProblems(settings, { deadline, env });
   if (problems.length > 0) {
@@ -114,7 +119,7 @@ export async function launch(input, settings, { deadline, env = process.env } = 
       throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
     }
   }
-  writeLaunchSettings(home, { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox) });
+  writeLaunchSettings(home, settingsToWrite);
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];

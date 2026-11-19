@@ -131,7 +131,7 @@ test("a settings.local.json whose sandbox list is not a list refuses the launch 
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
   assert.match(answer.error.message, /sandbox\.network\.allowedDomains.*not a list/);
   assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
-  assert.equal(bb.calls().some((c) => c.argv[1] === "spawn"), false);
+  assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
 });
 
 test("readiness lists what the provider added to the home's sandbox, with who asked, and warns of a general forge", async (t) => {

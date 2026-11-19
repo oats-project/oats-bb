@@ -85,7 +85,7 @@ for (const [name, write, pattern] of [
     assert.equal(answer.error.code, "E_SESSION_START_FAILED");
     assert.match(answer.error.message, pattern);
     assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
-    assert.deepEqual(effects(bb), [], "no thread was spawned");
+    assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
   });
 }
 
@@ -96,7 +96,7 @@ test("a .claude that is a link out of the home refuses the launch: the env file 
   const answer = await run();
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
   assert.equal(existsSync(join(dir, "elsewhere/settings.local.json")), false);
-  assert.deepEqual(effects(bb), []);
+  assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
 });
 
 test("pathPrepend is carried as the env file's PATH: the shim directory first, then the PATH the provider was called with", async (t) => {
@@ -239,6 +239,7 @@ test("a harness the provider does not run: E_BACKEND_HARNESS, bb never called", 
 for (const [name, extra, pattern] of [
   ["a home that is not absolute", { home: "relative/home" }, /home must be an absolute path/],
   ["no instance name", { instance: "" }, /no instance name/],
+  ["an instance name that reads as an option", { instance: "--archived" }, /no instance name/],
   ["a model that reads as an option", { model: "--archived" }, /model must be a model id/],
   ["a prompt file that does not exist", { promptFile: "/nonexistent/TASK.md" }, /does not exist/],
   ["a yolo that is not a boolean", { yolo: "yes" }, /yolo must be/],

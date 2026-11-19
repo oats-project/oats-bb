@@ -2,6 +2,7 @@
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject, recode } from "./errors.mjs";
+import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { isSettled, liveThreadsOfHome, projectsOfHome, readEndpoint } from "./threads.mjs";
 
@@ -64,6 +65,9 @@ async function stopThread(bb, threadId, { until, grace, now }) {
  *  does not hold the retire: the thread is left, and readiness reports it
  *  (`session-provider-orphaned`) once the home is gone. */
 export async function retire(home, settings, { deadline, env = process.env } = {}) {
+  // The hook runs for every home that has the capability. One the provider never
+  // launched (a tmux home) has nothing in bb: bb is not asked, and need not be there.
+  if (!everLaunched(home)) return { meta: { retired: false, reason: "nothing-to-delete" } };
   let bb;
   try {
     bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });

@@ -2,6 +2,9 @@
   "capability": "oats.bb",
   "command": "bb",
   "version": "0.1.0",
+  "compatibility": {
+    "oats": ">=0.70.0"
+  },
   "description": "Session provider bb: runs an instance as one bb thread (Claude Code) through bb's public CLI, at one pinned bb-app version, instead of a tmux session.",
   "requires": [
     {

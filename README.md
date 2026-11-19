@@ -24,8 +24,9 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 - There is no terminal. `oats session attach` refuses with a link, and a client shows
   **Open in bb**.
 
-> Status: built ahead of the kernel's session-provider contract (contract r8). It needs an
-> OATS kernel that lists the feature `session-providers` in `oats version --json`.
+> Status: built ahead of the kernel's session-provider contract. It needs an OATS kernel
+> that lists the feature `session-providers` in `oats version --json`; the manifests'
+> `compatibility.oats` floor (`>=0.70.0`) is a placeholder until that release has a number.
 
 ## Install
 
@@ -100,7 +101,7 @@ settings:
 | starting, active, stopping | true | unknown | true |
 | pending, idle | true | unknown | null |
 | error | false | stopped | false |
-| missing or deleted | false | stopped | false |
+| missing, deleted or archived | false | stopped | false |
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself. A thread in `error`
@@ -172,6 +173,11 @@ arguments or a process environment:
   ignored.
 - A sandbox entry that is not one exact host or one exact absolute path:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
+
+A variable the launch removes on purpose (one a capability declares and this launch
+leaves out) is written with an **empty value**: a settings file can set a variable but not
+remove one, and bb's Claude would otherwise inherit whatever the bb server's own
+environment holds under that name. Start bb's server from a clean environment all the same.
 
 The launch's PATH addition (the home's `.oats/bin`, so the agent's plain `oats` is the
 kernel that launched it) travels the same way: the env file's `PATH` is that directory
@@ -249,6 +255,10 @@ A thread stopped in bb's own UI is not stopped for OATS: bb shows it `idle`, OAT
 record of the stop, and the next mail's tell restarts it. **Stop an OATS agent with OATS**
 (`oats instance stop <instance>`), which records the stop and then stops the thread. The
 OATS plugin for bb routes its stop button there.
+
+An OATS agent's thread **archived** in bb is gone for OATS: bb refuses every message to an
+archived thread, so the home reads as stopped, mail to it is refused, and
+`oats session start` gives it a new thread. Unarchive it in bb to keep the conversation.
 
 The same goes for a person's answer: answer a thread's question or permission prompt in
 bb. `oats session input` never answers one; it refuses while one is open.

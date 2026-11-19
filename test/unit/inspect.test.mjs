@@ -46,9 +46,11 @@ test("a deleted thread reads stopped", async (t) => {
   assert.deepEqual(answer.result, { present: false, state: "stopped", running: false });
 });
 
-test("an archived thread still reads by what bb shows of it", async (t) => {
-  const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", "active", { archivedAt: 5 })]);
-  assert.deepEqual(answer.result, { present: true, state: "unknown", running: true, open: OPEN });
+test("an archived thread is no longer the home's session, whatever its status: bb refuses every tell to it", async (t) => {
+  for (const status of ["active", "idle"]) {
+    const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", status, { archivedAt: 5 })]);
+    assert.deepEqual(answer.result, { present: false, state: "stopped", running: false });
+  }
 });
 
 test("a status word the provider does not know is an error, never a guess", async (t) => {

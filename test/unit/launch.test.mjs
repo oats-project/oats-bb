@@ -147,11 +147,14 @@ test("a secret-sourced env entry: E_BACKEND_LAUNCH_ENV naming it, nothing writte
   assert.deepEqual(bb.calls(), []);
 });
 
-test("unset names are removed from the env file, a person's own entry of that name included", async (t) => {
+test("an unset name is written empty: it reaches Claude neither from an earlier entry nor from bb's server environment", async (t) => {
   const { home, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
   writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { AWEB_DELIVERY: "channel", MINE: "kept" } }));
   assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a")], unset: ["AWEB_DELIVERY", "AWID_REGISTRY_URL"] })).ok, true);
+  assert.deepEqual(localSettings(home), { env: { AWEB_DELIVERY: "", MINE: "kept", AWID_REGISTRY_URL: "", OATS_INSTANCE: "dev-a" } });
+  // A later launch that no longer unsets them takes the empty entries away again.
+  await run({ env: [entry("OATS_INSTANCE", "dev-a")], unset: [] });
   assert.deepEqual(localSettings(home), { env: { MINE: "kept", OATS_INSTANCE: "dev-a" } });
 });
 

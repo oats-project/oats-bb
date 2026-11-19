@@ -9,6 +9,7 @@ import { accepts, exposedListeners, nonLoopbackAddresses } from "../../oats-pack
 import { isLoopbackHost, loopbackOrigin, readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
 import { UNREACHABLE, VERSION, call, closedPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
+
 async function setup(t, script = {}, backendOverrides = {}) {
   const { dir, home } = scratch(t);
   const backend = await fakeBackend(t, backendOverrides);
@@ -149,6 +150,24 @@ test("bb's provider state cannot be read: E_BACKEND_NOT_READY, unavailable", asy
   backend.state.providerHttpStatus = 500;
   const answer = await check();
   assert.deepEqual(codes(answer), ["E_BACKEND_NOT_READY"]);
+  assert.equal(answer.result.status, "unavailable");
+});
+
+test("a bb that hangs gets its named problems inside the check's own time, which is inside the kernel's 20 s", async (t) => {
+  const { dir } = scratch(t);
+  // A server whose /health answers and whose provider state never does; a daemon that never answers.
+  const hang = (answerHealth) => new Promise((done) => {
+    const server = createServer((req, res) => { if (answerHealth && req.url === "/health") { res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}'); } });
+    server.listen(0, "127.0.0.1", () => { t.after(() => new Promise((closed) => { server.closeAllConnections(); server.close(closed); })); done(`http://127.0.0.1:${server.address().port}`); });
+  });
+  const bb = fakeBbIn(dir, { "--version": { stdout: `${VERSION}\n` }, "project list": { stdout: [] }, "thread list": { stdout: [] } });
+  const settings = { server: await hang(true), daemon: await hang(false), version: VERSION, trust: "single-user" };
+  const started = Date.now();
+  const answer = await call("check", { home: null, soul: "dev" }, { settings, bb });
+  const took = Date.now() - started;
+  assert.ok(took < 17_000, `answered in ${took} ms`);
+  assert.deepEqual(codes(answer), ["E_BACKEND_UNREACHABLE", "E_BACKEND_NOT_READY"]);
+  assert.match(answer.result.problems[0].message, /host daemon.*no answer within/);
   assert.equal(answer.result.status, "unavailable");
 });
 

@@ -44,11 +44,18 @@ try { bbVersion = readFileSync(join(repoRoot, "bb-version"), "utf8").trim(); }
 catch (error) { report("bb-version", `unreadable (${error.message})`); }
 if (bbVersion !== null && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(bbVersion)) report("bb-version", "must hold one bb-app version");
 
+// The floor: the OATS that lists `session-providers`. An older kernel would compose the
+// capability and ignore `sessionProviders`, failing only at `--backend bb`.
+function floor(manifest, at) {
+  if (!isObject(manifest.compatibility) || typeof manifest.compatibility.oats !== "string" || !/^>=\d+\.\d+\.\d+$/.test(manifest.compatibility.oats)) report(at, 'compatibility.oats must be a floor, ">=<version>"');
+}
+
 const repoPackage = readJson(join(repoRoot, "package.json"));
 const pkg = readJson(join(root, "oats-package.json"));
 if (isObject(pkg)) {
   if (typeof pkg.package !== "string" || !/^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(pkg.package)) report("oats-package.json", "package must be a dotted id");
   if (typeof pkg.version !== "string" || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(pkg.version)) report("oats-package.json", "version must be a semantic version");
+  floor(pkg, "oats-package.json");
   if (isObject(repoPackage) && repoPackage.version !== pkg.version) report("package.json", `version ${repoPackage.version} differs from oats-package.json's ${pkg.version}`);
   if (!Array.isArray(pkg.capabilities) || pkg.capabilities.length === 0) report("oats-package.json", "capabilities must be a non-empty list");
   const seen = new Set();
@@ -62,6 +69,8 @@ if (isObject(pkg)) {
     if (seen.has(manifest.capability)) report(at, `capability ${manifest.capability} is declared twice`);
     seen.add(manifest.capability);
     if (manifest.version !== pkg.version) report(at, `version ${manifest.version} differs from the package's ${pkg.version}`);
+    floor(manifest, at);
+    if (manifest.compatibility?.oats !== pkg.compatibility?.oats) report(at, "compatibility.oats differs from the package's");
     if (manifest.command !== undefined && (typeof manifest.command !== "string" || !NAME.test(manifest.command))) report(at, "command must be a lowercase namespace");
     if (typeof manifest.description !== "string" || !manifest.description) report(at, "description must be a non-empty string");
 

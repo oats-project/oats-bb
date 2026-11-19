@@ -134,6 +134,17 @@ test("a settings.local.json whose sandbox list is not a list refuses the launch 
   assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
 });
 
+test("a sandbox key a person turned into something else after a launch refuses the next launch plainly", async (t) => {
+  const { home, bb, launch, local } = await setup(t);
+  await launch();
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ ...local(), sandbox: null }));
+  const calls = bb.calls().length;
+  const answer = await launch();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /"sandbox" that is not a map/);
+  assert.equal(bb.calls().length, calls, "found before bb is asked or changed at all");
+});
+
 test("readiness lists what the provider added to the home's sandbox, with who asked, and warns of a general forge", async (t) => {
   const { dir, launch, check } = await setup(t);
   assert.deepEqual((await check()).result.warnings, [], "nothing before a launch");

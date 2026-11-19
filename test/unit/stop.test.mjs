@@ -1,6 +1,8 @@
 // stop, and the retire hook that archives the home's threads (contract item 3).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
@@ -101,8 +103,9 @@ test("a stop with no endpoint and a bb that does not answer: E_SESSION_STOP_FAIL
 });
 
 // The retire hook: the kernel runs it after its own stop, with the hook environment.
-async function retireWith(t, script) {
+async function retireWith(t, script, { launched = true } = {}) {
   const { dir, home } = scratch(t);
+  if (launched) mkdirSync(join(home, ".oats-bb")); // the provider's state directory: its first launch makes it
   const bb = fakeBbIn(dir, typeof script === "function" ? script(home) : script);
   const run = await runBin(["retire-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
   const lines = run.stdout.trim().split("\n");
@@ -135,6 +138,13 @@ test("retire stops a thread still in a turn before archiving it", async (t) => {
 test("retire with nothing to archive is a complete cleanup (a home that never launched, or a second run)", async (t) => {
   const { last } = await retireWith(t, { "project list": { stdout: [] }, "thread list": { stdout: [threadRow("thr_z", "proj_z", "idle")] } });
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
+});
+
+test("retire of a home the provider never launched (a tmux home) asks bb nothing", async (t) => {
+  const { run, last, calls } = await retireWith(t, { "project list": UNREACHABLE }, { launched: false });
+  assert.equal(run.status, 0);
+  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
+  assert.deepEqual(calls, []);
 });
 
 test("retire with a bb that does not answer warns and does not hold the retire", async (t) => {

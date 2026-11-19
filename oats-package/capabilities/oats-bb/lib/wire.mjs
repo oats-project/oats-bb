@@ -22,8 +22,8 @@ const VERB_FAILURE = {
 };
 export const VERBS = Object.freeze(Object.keys(VERB_FAILURE));
 // The provider's own time per call, inside the kernel's (launch 120 s; stop 20 s plus its
-// graceSeconds; the others 20 s; a readiness check 30 s).
-const VERB_BUDGET_MS = { launch: 100_000, inspect: 16_000, inspectMany: 16_000, input: 16_000, stop: 16_000, check: 25_000 };
+// graceSeconds; the others, the readiness check included, 20 s).
+const VERB_BUDGET_MS = { launch: 100_000, inspect: 16_000, inspectMany: 16_000, input: 16_000, stop: 16_000, check: 16_000 };
 const budgetMs = (verb, input) => VERB_BUDGET_MS[verb] + (verb === "stop" && isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds > 0 ? Math.min(input.graceSeconds, 300) * 1000 : 0);
 const MAX_STDIN = 8 * 1024 * 1024;
 

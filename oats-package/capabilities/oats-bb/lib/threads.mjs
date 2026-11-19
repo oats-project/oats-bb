@@ -67,12 +67,15 @@ export function openLink({ server, projectId, threadId }) {
 }
 
 /** The inspect answer of one home, from one list of the server's threads. Throws
- *  E_SESSION_UNAVAILABLE when a second live thread runs in the home. */
+ *  E_SESSION_UNAVAILABLE when a second live thread runs in the home.
+ *  The home's thread is its recorded thread while that is live. Archived (in bb's UI, or
+ *  by a retire) it is no longer the home's session: bb refuses every tell to an archived
+ *  thread, so it reads as missing, and a start replaces it. */
 export function inspectHome({ home, endpoint }, threads) {
-  const recorded = threads.find((thread) => isObject(thread) && thread.id === endpoint.threadId && !thread.deletedAt) ?? null;
+  const recorded = threads.find((thread) => isObject(thread) && thread.id === endpoint.threadId && isLive(thread)) ?? null;
   const others = liveThreadsOfHome(threads, home, [endpoint.projectId]).filter((thread) => thread.id !== endpoint.threadId);
   if (others.length > 0) {
-    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}: the recorded ${endpoint.threadId}${recorded ? "" : " (missing)"} and ${others.map((thread) => thread.id).join(", ")}. One home is one thread: archive the others in bb`);
+    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}: the recorded ${endpoint.threadId}${recorded ? "" : " (missing or archived)"} and ${others.map((thread) => thread.id).join(", ")}. One home is one thread: archive the others in bb`);
   }
   if (!recorded) return { ...MISSING };
   return { ...inspectAnswer(recorded), open: openLink(endpoint) };

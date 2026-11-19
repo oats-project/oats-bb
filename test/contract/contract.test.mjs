@@ -3,7 +3,7 @@
 // commands are called on their wire, as the kernel calls them.
 //
 // Run: npm run test:contract   (needs docker; builds test/contract/Dockerfile at the
-// bb-app version in test/contract/bb-version). bb's API has no login and runs commands,
+// bb-app version in the repository's bb-version file). bb's API has no login and runs commands,
 // so bb runs only inside the container: no port is published and only this repository is
 // mounted, read-only.
 import assert from "node:assert/strict";
@@ -82,7 +82,7 @@ async function makeHome(name) {
   const home = `/home/node/homes/${name}`;
   // The hook also runs `contract-shim` by its bare name: it is found only if the launch's
   // pathPrepend (the home's shim directory) reached Claude's PATH.
-  const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" "$(contract-shim 2>/dev/null)" >> ${home}/hook-env.log` }] }] } };
+  const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s|%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" "$(contract-shim 2>/dev/null)" "\${CONTRACT_AMBIENT-unset}" >> ${home}/hook-env.log` }] }] } };
   await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
   return home;
 }
@@ -103,7 +103,8 @@ before(async () => {
   execFileSync("docker", ["run", "-d", "--name", NAME, "--init", "--cpus", "2", "--memory", "4g", "-v", `${repo}:/repo:ro`, IMAGE], { stdio: ["ignore", "ignore", "inherit"] });
   await run("docker", ["exec", "-d", NAME, "sh", "-c", "cd ~ && node /repo/test/contract/mock-anthropic.mjs > mock.out 2>&1"]);
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
-    "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates > bb-app.out 2>&1"]);
+    // CONTRACT_AMBIENT stands for a variable bb's server happens to carry: bb's Claude inherits it.
+    "cd ~ && CONTRACT_AMBIENT=from-the-bb-server bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates > bb-app.out 2>&1"]);
   await waitFor("bb to be ready", async () => (await check()).result?.status === "ready", { timeoutMs: 180_000, everyMs: 1_000 });
 }, { timeout: 900_000 });
 
@@ -156,6 +157,7 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   const home = await makeHome("t1");
   const input = launchInput(home, "t1");
   input.env.push({ name: "CONTRACT_PROBE", value: "seen-by-the-hook", source: "launch-config" });
+  input.unset = ["CONTRACT_AMBIENT"];
   const answer = await provider("launch", input);
   assert.equal(answer.ok, true, JSON.stringify(answer));
   const { endpoint } = answer.result;
@@ -174,12 +176,19 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   const written = JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`));
   assert.deepEqual(Object.keys(written), ["env"]);
   const { PATH, ...rest } = written.env;
-  assert.deepEqual(rest, { OATS_INSTANCE: "t1", OATS_INSTANCE_HOME: home, CONTRACT_PROBE: "seen-by-the-hook" });
+  assert.deepEqual(rest, { OATS_INSTANCE: "t1", OATS_INSTANCE_HOME: home, CONTRACT_PROBE: "seen-by-the-hook", CONTRACT_AMBIENT: "" });
   assert.equal(PATH.split(":")[0], `${home}/.oats/bin`);
   assert.equal((await sh(`stat -c %a ${home}/.claude/settings.local.json`)).trim(), "600");
   // Claude ran the home's hook with that env, though bb passed none of it.
   const seen = await waitFor("the hook to run", async () => (await sh(`cat ${home}/hook-env.log 2>/dev/null || true`)).trim());
-  assert.equal(seen.split("\n")[0], "t1|seen-by-the-hook|shim-on-path", "the env and the PATH prepend reached Claude's hook");
+  // The env and the PATH prepend reached Claude's hook, and the name the launch unsets is
+  // empty there, not the value bb's server carries.
+  assert.equal(seen.split("\n")[0], "t1|seen-by-the-hook|shim-on-path|");
+  // The rows of bb thread list carry what the one-thread-per-home rule reads.
+  const row = (await bbJson("thread list --include-archived --include-hidden")).find((r) => r.id === endpoint.threadId);
+  assert.equal(row.environmentPath, home);
+  assert.equal(row.archivedAt, null);
+  assert.equal(row.deletedAt, null);
   assert.equal((await bbJson(`machine env list --project ${endpoint.projectId}`)).variables.length, 0, "nothing of the launch env is in bb's database");
   // TASK.md was the thread's prompt: the model was sent its text (the mock keeps each
   // request's body).
@@ -201,6 +210,10 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
     await waitStatus(id, "idle");
     assert.equal(await landed(marker), 1, `${marker} landed exactly once`);
   });
+
+  // Without `unset`, bb's Claude does inherit what bb's server carries: T1's empty value is
+  // the launch's doing.
+  assert.match((await sh(`cat ${home}/hook-env.log`)).split("\n")[0], /\|from-the-bb-server$/);
 
   // idle
   await tell("T2-IDLE marker");
@@ -322,6 +335,14 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
   assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
   assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
+  // An archived thread is no longer the home's session: bb refuses a tell to it, so the
+  // provider reads it as missing (a person archiving it in bb's UI gives the same).
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
+  const told = await provider("input", { home, endpoint, text: "T5-ARCHIVED marker" });
+  assert.equal(told.ok, false);
+  assert.equal(told.error.code, "E_SESSION_INPUT_FAILED");
+  assert.match(told.error.message, /archived/i);
+  assert.equal(await landed("T5-ARCHIVED"), 0);
 });
 
 test("T5 via the kernel: after oats instance stop, session inspect answers stopped and session input is refused", { todo: "needs a kernel with the session-provider contract (spec K1), which is not merged; the provider half is the test above" }, () => {});

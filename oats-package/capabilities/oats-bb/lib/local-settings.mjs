@@ -70,7 +70,10 @@ export function readLaunchEnv(env) {
 }
 
 /** The names a launch leaves out on purpose (`unset`): they must not reach the process
- *  from an earlier launch or from a person's own entry. */
+ *  from an earlier launch, from a person's own entry, or from the environment bb's server
+ *  was started with (which bb's Claude inherits). A settings file can set a variable but
+ *  not remove one, so each is written with an empty value: the nearest thing to unset
+ *  that can be carried, and never the inherited value. */
 export function readUnset(unset, env) {
   if (unset === undefined || unset === null) return [];
   if (!Array.isArray(unset) || unset.some((name) => typeof name !== "string" || !NAME.test(name))) throw fail("E_BACKEND_LAUNCH_ENV", "the launch's unset must be a list of variable names");
@@ -169,6 +172,12 @@ function readJsonObject(path, what) {
 
 const strings = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
 
+/** Whether the provider ever launched this home: its state directory is made by the first
+ *  launch and stays (a move to another backend removes its records, not the directory). */
+export function everLaunched(home) {
+  return lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
 /** The mode of the home's last launch and whether it was handed sandbox allowances, or
  *  null before a first launch. */
 export function readLaunchRecord(home) {
@@ -198,9 +207,10 @@ const WRITE_KEYS = ["sandbox", "filesystem", "allowWrite"];
 function removeFrom(settings, keys, values, created) {
   const chain = [settings];
   for (const key of keys) {
-    const next = chain[chain.length - 1][key];
-    if (next === undefined) return;
-    chain.push(next);
+    const at = chain[chain.length - 1];
+    // Whatever stands where a map belonged (a null, a string) holds nothing of ours.
+    if (!isObject(at) || at[key] === undefined) return;
+    chain.push(at[key]);
   }
   const list = chain[chain.length - 1];
   if (!Array.isArray(list)) return;
@@ -269,9 +279,10 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sand
   const envRecord = lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false }) ? readJsonObject(envRecordPath, "the provider's record") : null;
   const previousNames = strings(envRecord?.names);
   const previousSandbox = readSandboxRecord(home);
+  env = { ...Object.fromEntries(unset.map((name) => [name, ""])), ...env };
   const names = Object.keys(env).sort();
 
-  withdraw(settings, [...previousNames, ...unset], previousSandbox);
+  withdraw(settings, previousNames, previousSandbox);
   if (names.length > 0) settings.env = { ...(settings.env ?? {}), ...env };
   else if (isObject(settings.env) && Object.keys(settings.env).length === 0) delete settings.env;
   let sandboxRecord = null;

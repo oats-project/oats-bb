@@ -33,7 +33,8 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
   writes an entry only when its `source` is `kernel`, `capability` or `launch-config` and it
   is not marked `secret`; any other entry refuses the launch (`E_BACKEND_LAUNCH_ENV`). So a
   source word the provider does not know is refused, never written. `unset` names are
-  removed from the env file.
+  written with an empty value (a settings file cannot remove a variable, and bb's Claude
+  inherits the bb server's environment): empty, never the inherited value.
 - **launch `pathPrepend`** (the home's kernel shim directory) is carried as the env file's
   `PATH`: those directories, then the launch's own `PATH` entry if it has one, else the
   `PATH` the provider was called with. An entry that cannot go on a PATH refuses the launch.
@@ -60,13 +61,16 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 `E_SESSION_STOP_FAILED`.
 
 ## Time
-The kernel gives launch 120 s, stop 20 s plus its `graceSeconds`, and the other verbs 20 s.
-The provider bounds every bb call (10 s) and its own total (launch 100 s; stop 16 s plus
-the grace, which is how long it waits for bb to settle; the others 16 s).
+The kernel gives launch 120 s, stop 20 s plus its `graceSeconds`, and the other verbs,
+`check` included, 20 s. The provider bounds every bb call (10 s), every HTTP read (4 s; the
+provider state 6 s) and its own total (launch 100 s; stop 16 s plus the grace, which is how
+long it waits for bb to settle; the others 16 s), so a bb that hangs gets a named problem,
+never a killed call.
 
 ## The bb surface used
 At the bb-app version in `bb-version`, pinned by `test/contract/`:
-- CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list`,
+- CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
+  `archivedAt`, `deletedAt` and `environmentPath` included),
   `bb thread show`, `bb thread spawn`, `bb thread tell`, `bb thread interactions list`,
   `bb thread queue delete`, `bb thread stop`, `bb thread archive`.
 - HTTP, loopback only, read-only, bounded in size and time, strictly decoded:

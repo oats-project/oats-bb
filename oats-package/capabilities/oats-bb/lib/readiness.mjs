@@ -10,7 +10,10 @@ import { readLaunchRecord, readSandboxRecord } from "./local-settings.mjs";
 import { TRUST_VALUES, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
-const HTTP_TIMEOUT_MS = 5_000;
+// Each read's own cap. Every read is also cut at the call's deadline (`left`), so a bb
+// that hangs still gets a named problem inside the kernel's time, never a killed check.
+const HTTP_TIMEOUT_MS = 4_000;
+const PROVIDER_STATE_TIMEOUT_MS = 6_000;
 // bb's provider health words (bb plugins/provider-claude-code provider-maintenance).
 const PROVIDER_STATUS = { not_installed: "needs-configuration", unauthenticated: "authorization-required", expired: "authorization-required", unknown: "unavailable" };
 
@@ -42,7 +45,7 @@ export async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
  *  → { problems, server, daemon, bb, listable, credential } (the addresses as origins,
  *  null when refused; `listable` when bb's CLI runs and its server answers; `credential`
  *  names where bb's Claude takes its credential from, when bb reports it ready). */
-export async function backendProblems(settings, { deadline = Date.now() + 25_000, env = process.env, http = getJson, exposure = exposedListeners } = {}) {
+export async function backendProblems(settings, { deadline = Date.now() + 16_000, env = process.env, http = getJson, exposure = exposedListeners } = {}) {
   const problems = [];
   const add = (code, status, message) => problems.push({ code, message, status });
   const left = (cap) => Math.min(cap, deadline - Date.now());
@@ -109,7 +112,7 @@ export async function backendProblems(settings, { deadline = Date.now() + 25_000
     }
   }
   if (server) {
-    const state = await http(`${server}/api/v1/system/providers/state?providerId=claude-code`, left(HTTP_TIMEOUT_MS * 3));
+    const state = await http(`${server}/api/v1/system/providers/state?providerId=claude-code`, left(PROVIDER_STATE_TIMEOUT_MS));
     const provider = state.ok && isObject(state.value) && Array.isArray(state.value.providers)
       ? state.value.providers.find((entry) => isObject(entry) && entry.providerId === "claude-code") : null;
     if (!provider || typeof provider.status !== "string") {

@@ -6,8 +6,10 @@ import { loopbackOrigin } from "./settings.mjs";
 import { isSettled, liveThreadsOfHome, projectsOfHome, readEndpoint } from "./threads.mjs";
 
 const POLL_MS = 300;
-// The kernel gives a stop call 20 s; the wait for bb to settle stays inside it.
-export const MAX_GRACE_SECONDS = 12;
+// The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
+// settle is the grace, and the calls around it stay inside the 20 s.
+export const MAX_GRACE_SECONDS = 300;
+const DEFAULT_GRACE_SECONDS = 10;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const failed = (error) => {
@@ -22,7 +24,7 @@ const failed = (error) => {
 export async function stop(input, settings, { deadline = Infinity, env = process.env, now = Date.now } = {}) {
   try {
     if (!isObject(input)) throw fail("E_SESSION_STOP_FAILED", "the stop input is not an object");
-    const grace = Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : MAX_GRACE_SECONDS;
+    const grace = graceOf(input);
     const until = Math.min(now() + grace * 1000, deadline);
     if (input.endpoint === null || input.endpoint === undefined) {
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
@@ -37,6 +39,11 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     await stopThread(bb, endpoint.threadId, { until, grace, now });
     return { stopped: true };
   } catch (error) { throw failed(error); }
+}
+
+/** The seconds to wait for bb to settle after `bb thread stop`. */
+export function graceOf(input) {
+  return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
 async function stopThread(bb, threadId, { until, grace, now }) {

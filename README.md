@@ -91,7 +91,7 @@ settings:
 | launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Archives the home's previous thread (a start after a stop is a fresh conversation). Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
-| stop | `bb thread stop`, then waits until bb shows the thread settled. Still in a turn after the grace: `E_SESSION_STOP_FAILED`. |
+| stop | `bb thread stop`, then waits, for the grace the kernel gives, until bb shows the thread settled. Still in a turn after it: `E_SESSION_STOP_FAILED`. |
 | retire (hook) | Archives the home's live threads. |
 | stop (no endpoint) | Stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost. |
 
@@ -138,8 +138,12 @@ entry you put in the file yourself, and removes exactly its own on the next laun
 longer carries them. In `full` mode there is no sandbox and it writes none. `oats readiness`
 lists, for a home, each host and path with who asked for it.
 
-Two things to know:
+Three things to know:
 
+- The entries come from the kernel. A kernel that hands a launch none leaves a sandboxed
+  home without them: readiness says so (`session-provider-sandbox-missing`), `aw` and
+  `oats instance attention` are blocked there, and the home should run in `full` mode
+  (`--yolo`) until the kernel supplies them.
 - A knowledge base's host is often a general forge (github.com). Allowing it lets the
   agent's commands reach every repository on that forge, not only the base. Readiness
   warns when this is so.
@@ -168,6 +172,10 @@ arguments or a process environment:
   ignored.
 - A sandbox entry that is not one exact host or one exact absolute path:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
+
+The launch's PATH addition (the home's `.oats/bin`, so the agent's plain `oats` is the
+kernel that launched it) travels the same way: the env file's `PATH` is that directory
+followed by the PATH the kernel ran the provider with.
 
 The provider keeps the names it wrote in `<home>/.oats-bb/launch-env.json`, so a later
 launch removes a variable it no longer carries and never touches an entry you added to

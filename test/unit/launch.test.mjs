@@ -99,6 +99,43 @@ test("a .claude that is a link out of the home refuses the launch: the env file 
   assert.deepEqual(effects(bb), []);
 });
 
+test("pathPrepend is carried as the env file's PATH: the shim directory first, then the PATH the provider was called with", async (t) => {
+  const { home, run } = await setup(t);
+  const shim = join(home, ".oats/bin");
+  assert.equal((await run({ pathPrepend: [shim] })).ok, true);
+  const dirs = localSettings(home).env.PATH.split(":");
+  assert.equal(dirs[0], shim);
+  assert.deepEqual(dirs.slice(1), process.env.PATH.split(":").filter((dir) => dir && dir !== shim), "the rest is the caller's PATH, in order");
+  // A launch that names its own PATH: the directories go before that one.
+  await run({ pathPrepend: [shim], env: [entry("PATH", "/usr/bin:/bin", { source: "launch-config" })] });
+  assert.equal(localSettings(home).env.PATH, `${shim}:/usr/bin:/bin`);
+  // And a later launch without it removes the PATH the provider wrote.
+  await run({ pathPrepend: [] });
+  assert.equal(localSettings(home).env.PATH, undefined);
+});
+
+for (const [name, pathPrepend, pattern] of [
+  ["a relative directory", ["bin"], /"bin" is not an absolute directory/],
+  ["a directory holding the PATH separator", ["/a:/b"], /"\/a:\/b"/],
+  ["a pathPrepend that is not a list", "/abs/bin", /must be a list/],
+]) {
+  test(`${name} in pathPrepend: E_BACKEND_LAUNCH_ENV naming it, never dropped`, async (t) => {
+    const { bb, run } = await setup(t);
+    const answer = await run({ pathPrepend });
+    assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ENV");
+    assert.match(answer.error.message, pattern);
+    assert.deepEqual(bb.calls(), []);
+  });
+}
+
+test("a launch that asks to resume is refused: a bb thread is resumed by an input, never relaunched", async (t) => {
+  const { bb, run } = await setup(t);
+  const answer = await run({ resume: { notice: "continue" } });
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /does not resume by launching/);
+  assert.deepEqual(bb.calls(), []);
+});
+
 test("a secret-sourced env entry: E_BACKEND_LAUNCH_ENV naming it, nothing written, bb never called", async (t) => {
   const { home, bb, run } = await setup(t);
   const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "GITHUB_TOKEN", value: "sk-not-a-real-key", source: "launch-config-reference", secret: true }] });
@@ -222,11 +259,29 @@ test("with no model the spawn names none (bb's own default)", async (t) => {
 });
 
 test("a home with no bb project gets one, rooted at the home and named after the instance", async (t) => {
-  const { home, bb, run } = await setup(t, { "project list": { stdout: [projectRow("proj_other", "/another/home")] }, "project create": { stdout: projectRow("proj_made", "/replaced-below") } });
+  const { home, bb, run } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_other", "/another/home")] }, "project create": { stdout: projectRow("proj_made", h) } }));
   const answer = await run();
   assert.equal(answer.result.endpoint.projectId, "proj_made");
   assert.deepEqual(bb.calls().find((c) => c.argv[1] === "create").argv, ["project", "create", "--name", "dev-a", "--root", home, "--json"]);
   assert.deepEqual(effects(bb), ["project create", "thread spawn"]);
+});
+
+test("a project bb roots elsewhere than the home is refused: the root is exactly the home, never a parent or work/", async (t) => {
+  const { home, bb, run } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_parent", join(h, "..")), projectRow("proj_work", join(h, "work"))] }, "project create": { stdout: projectRow("proj_made", join(h, "work")) } }));
+  const answer = await run();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /another root than the home/);
+  assert.deepEqual(effects(bb), ["project create"], "the parent's and work/'s projects were not reused, and no thread was spawned");
+  assert.equal(existsSync(join(home, ".claude")), false);
+});
+
+test("a home reached through a link is the same home: its project is reused", async (t) => {
+  const { dir, home, bb, run } = await setup(t);
+  symlinkSync(home, join(dir, "linked-home"));
+  const answer = await run({ home: join(dir, "linked-home"), promptFile: join(dir, "linked-home/TASK.md") });
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  assert.equal(answer.result.endpoint.projectId, "proj_a");
+  assert.deepEqual(effects(bb), ["thread spawn"]);
 });
 
 test("a readiness problem refuses the launch with its own code, before any effect", async (t) => {

@@ -80,14 +80,16 @@ const armTool = (command) => sh("cat > mock-next-cmd", { input: command });
  *  settings with one hook that records the environment it runs in. */
 async function makeHome(name) {
   const home = `/home/node/homes/${name}`;
-  const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" >> ${home}/hook-env.log` }] }] } };
-  await sh(`mkdir -p ${home}/.claude && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
+  // The hook also runs `contract-shim` by its bare name: it is found only if the launch's
+  // pathPrepend (the home's shim directory) reached Claude's PATH.
+  const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" "$(contract-shim 2>/dev/null)" >> ${home}/hook-env.log` }] }] } };
+  await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
   return home;
 }
 const launchInput = (home, name, extra = {}) => ({
   home, instance: name, harness: "claude", model: MODEL, yolo: true,
   env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }],
-  unset: [], args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
+  unset: [], pathPrepend: [`${home}/.oats/bin`], args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
 });
 async function launched(name, extra) {
   const home = await makeHome(name);
@@ -169,11 +171,15 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   assert.equal((await bbJson(`thread show ${endpoint.threadId}`)).environment?.path ?? environment?.path, home);
 
   // The env file: only what the launch carried, owner-only.
-  assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)), { env: { OATS_INSTANCE: "t1", OATS_INSTANCE_HOME: home, CONTRACT_PROBE: "seen-by-the-hook" } });
+  const written = JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`));
+  assert.deepEqual(Object.keys(written), ["env"]);
+  const { PATH, ...rest } = written.env;
+  assert.deepEqual(rest, { OATS_INSTANCE: "t1", OATS_INSTANCE_HOME: home, CONTRACT_PROBE: "seen-by-the-hook" });
+  assert.equal(PATH.split(":")[0], `${home}/.oats/bin`);
   assert.equal((await sh(`stat -c %a ${home}/.claude/settings.local.json`)).trim(), "600");
   // Claude ran the home's hook with that env, though bb passed none of it.
   const seen = await waitFor("the hook to run", async () => (await sh(`cat ${home}/hook-env.log 2>/dev/null || true`)).trim());
-  assert.equal(seen.split("\n")[0], "t1|seen-by-the-hook");
+  assert.equal(seen.split("\n")[0], "t1|seen-by-the-hook|shim-on-path", "the env and the PATH prepend reached Claude's hook");
   assert.equal((await bbJson(`machine env list --project ${endpoint.projectId}`)).variables.length, 0, "nothing of the launch env is in bb's database");
   // TASK.md was the thread's prompt: the model was sent its text (the mock keeps each
   // request's body).
@@ -247,10 +253,8 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   const id = endpoint.threadId;
   // The sandboxed launch wrote exactly the allowances it was handed, beside the env, and
   // Claude Code at the pinned bb started with them.
-  assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)), {
-    env: { OATS_INSTANCE: "t3", OATS_INSTANCE_HOME: home },
-    sandbox: { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } },
-  });
+  assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
+    { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
   assert.deepEqual((await provider("check", { home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox"]);
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });

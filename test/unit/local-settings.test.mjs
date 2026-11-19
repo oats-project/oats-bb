@@ -44,7 +44,7 @@ test("a sandboxed launch writes exactly the hosts and paths it was handed, and r
     added: { domains: ["app.aweb.ai"], write: [events(dir).path], keys: ["sandbox", "sandbox.network", "sandbox.network.allowedDomains", "sandbox.filesystem", "sandbox.filesystem.allowWrite"] },
   });
   assert.equal(statSync(join(home, ".oats-bb-sandbox.json")).mode & 0o777, 0o600);
-  assert.deepEqual(readdirSync(join(home, ".oats-bb")), ["launch-env.json"], "no temporary file is left");
+  assert.deepEqual(readdirSync(join(home, ".oats-bb")).sort(), ["launch-env.json", "launch.json"], "no temporary file is left");
 });
 
 test("the allowances merge with what the file holds: a person's entries stay, nothing is replaced", async (t) => {
@@ -146,6 +146,20 @@ test("readiness lists what the provider added to the home's sandbox, with who as
   assert.match(result.warnings[1].message, /github\.com \(oats\.okf\) is a general forge.*every repository/);
   await launch({ yolo: true });
   assert.deepEqual((await check()).result.warnings, [], "nothing in full mode");
+});
+
+test("a sandboxed launch that was handed no allowances writes none, and readiness says they are missing", async (t) => {
+  const { launch, local, check } = await setup(t);
+  // A kernel whose launch input has no sandbox key yet.
+  assert.equal((await launch({ sandbox: undefined, yolo: false })).ok, true);
+  assert.equal(local().sandbox, undefined);
+  const { result } = await check();
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox-missing"]);
+  assert.match(result.warnings[0].message, /accept-edits mode.*no sandbox allowances.*aw .*oats instance attention.*--yolo/);
+  // In full mode there is no sandbox to open: nothing is missing.
+  await launch({ sandbox: undefined, yolo: true });
+  assert.deepEqual((await check()).result.warnings, []);
 });
 
 test("the launch hook on another backend removes exactly what the provider wrote: the home stopped being a provider home", async (t) => {

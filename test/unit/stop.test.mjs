@@ -41,6 +41,12 @@ test("a thread deleted while stopping is stopped", async (t) => {
   assert.deepEqual(answer.result, { stopped: true });
 });
 
+test("stop waits the whole grace the kernel gives, beyond the other verbs' time", async (t) => {
+  const slow = Array.from({ length: 45 }, () => show("stopping"));
+  const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [...slow, show("idle")] }, { graceSeconds: 30 });
+  assert.deepEqual(answer.result, { stopped: true });
+});
+
 test("a thread still in a turn after the grace: E_SESSION_STOP_FAILED", async (t) => {
   const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("active") }, { graceSeconds: 1 });
   assert.equal(answer.ok, false);

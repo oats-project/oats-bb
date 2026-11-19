@@ -1,4 +1,5 @@
 // What a bb thread means for OATS: contract item 4's table, and one thread per home.
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fail, isObject } from "./errors.mjs";
 import { loopbackOrigin } from "./settings.mjs";
@@ -39,7 +40,13 @@ export function readEndpoint(endpoint, code = "E_SESSION_UNAVAILABLE") {
   return { server: loopbackOrigin(endpoint.server, "server"), projectId: endpoint.projectId, threadId: endpoint.threadId };
 }
 
-const samePath = (a, b) => typeof a === "string" && typeof b === "string" && resolve(a) === resolve(b);
+/** The same directory: the same path, or (where bb recorded the path it resolved) the
+ *  same real path. Exactly the home: never a parent, never a directory inside it. */
+function samePath(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (resolve(a) === resolve(b)) return true;
+  try { return realpathSync(a) === realpathSync(b); } catch { return false; }
+}
 
 /** The bb projects rooted at the home (a local source whose path is the home). */
 export function projectsOfHome(projects, home) {

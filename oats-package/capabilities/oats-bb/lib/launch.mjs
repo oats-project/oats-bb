@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { readLaunchEnv, readSandbox, readUnset, writeLaunchSettings } from "./local-settings.mjs";
+import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -59,6 +59,8 @@ function readInput(input) {
   if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
   if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
   if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
+  // A bb thread is resumed by an input into its own conversation, never by a launch.
+  if (input.resume !== undefined && input.resume !== null) throw fail("E_SESSION_START_FAILED", "the bb backend does not resume by launching: a launch starts a fresh thread, and a resume is an input to the home's thread");
   return { home, instance, model: model ?? null, promptFile, previous: previous ?? null };
 }
 
@@ -68,7 +70,7 @@ function readInput(input) {
 export async function launch(input, settings, { deadline, env = process.env } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
-  const launchEnv = readLaunchEnv(input.env);
+  const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
   const unset = readUnset(input.unset, launchEnv);
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
   // sandboxed launch wrote is removed).
@@ -103,8 +105,16 @@ export async function launch(input, settings, { deadline, env = process.env } = 
     if (!archived.ok && archived.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
   }
 
-  const project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? await bb.createProject(instance, home);
-  writeLaunchSettings(home, { env: launchEnv, unset, sandbox });
+  let project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;
+  if (project === null) {
+    project = await bb.createProject(instance, home);
+    // The project must be rooted exactly at the home: that is what makes the home's own
+    // .claude, CLAUDE.md and hooks the thread's, and one home one project.
+    if (projectsOfHome([project], home).length === 0) {
+      throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
+    }
+  }
+  writeLaunchSettings(home, { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox) });
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];

@@ -22,7 +22,7 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 
 | verb | input | result |
 |---|---|---|
-| launch | `{home, instance, harness, model, yolo, env, unset, args, promptFile, previous, sandbox}` | `{endpoint: {server, projectId, threadId}}` |
+| launch | `{home, instance, harness, model, yolo, env, unset, pathPrepend, args, promptFile, resume, previous, sandbox?}` | `{endpoint: {server, projectId, threadId}}` |
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
@@ -34,11 +34,17 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
   is not marked `secret`; any other entry refuses the launch (`E_BACKEND_LAUNCH_ENV`). So a
   source word the provider does not know is refused, never written. `unset` names are
   removed from the env file.
+- **launch `pathPrepend`** (the home's kernel shim directory) is carried as the env file's
+  `PATH`: those directories, then the launch's own `PATH` entry if it has one, else the
+  `PATH` the provider was called with. An entry that cannot go on a PATH refuses the launch.
+- **launch `resume`** must be null: a bb thread is resumed by an input, never by a launch.
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
 - **launch `sandbox`** is `{domains: [{host, capability, setting}], write: [{path, reason}]}`,
-  built by the kernel from recorded configuration. In a sandboxed mode the provider writes
+  built by the kernel from recorded configuration; a kernel may not send it yet, and then
+  nothing is written (readiness says the allowances are missing). In a sandboxed mode the
+  provider writes
   exactly those hosts and paths; an entry that is not one exact host or one exact absolute
   path refuses the launch (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
 - **stop** with `endpoint: null` stops every live thread that runs in the home (the kernel
@@ -54,9 +60,9 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 `E_SESSION_STOP_FAILED`.
 
 ## Time
-The kernel gives launch 120 s and the other verbs 20 s. The provider bounds every bb call
-(10 s) and its own total (launch 100 s, the others 16 s). `stop` waits `graceSeconds` for bb
-to settle, at most 12 s, so that it answers inside the kernel's 20 s.
+The kernel gives launch 120 s, stop 20 s plus its `graceSeconds`, and the other verbs 20 s.
+The provider bounds every bb call (10 s) and its own total (launch 100 s; stop 16 s plus
+the grace, which is how long it waits for bb to settle; the others 16 s).
 
 ## The bb surface used
 At the bb-app version in `bb-version`, pinned by `test/contract/`:

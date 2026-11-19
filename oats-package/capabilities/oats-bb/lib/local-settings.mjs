@@ -11,14 +11,15 @@
 //
 // The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
 // and later removes exactly that: an entry a person put in the file is never touched.
-import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, normalize } from "node:path";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { delimiter, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
 import { fail, isObject } from "./errors.mjs";
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const STATE_DIR = ".oats-bb";
 const ENV_RECORD = join(STATE_DIR, "launch-env.json");
+const LAUNCH_RECORD = join(STATE_DIR, "launch.json");
 export const SANDBOX_RECORD = ".oats-bb-sandbox.json";
 
 // Where a launch env entry may come from and still be written to a file: the kernel, a
@@ -76,6 +77,25 @@ export function readUnset(unset, env) {
   const both = unset.find((name) => Object.hasOwn(env, name));
   if (both !== undefined) throw fail("E_BACKEND_LAUNCH_ENV", `the launch both sets and unsets ${both}`);
   return unset;
+}
+
+/** The directories a launch puts first on PATH (`pathPrepend`: the home's kernel shim
+ *  directory, so the agent's plain `oats` is the kernel that launched it), carried as the
+ *  env file's PATH: those directories, then the launch's own PATH entry when it has one,
+ *  else the PATH this provider was called with (the kernel's, as a tmux pane would get
+ *  it). → the env map with PATH set, or the map as it was when there is nothing to
+ *  prepend. A directory that cannot go on a PATH is refused by name. */
+export function withPathPrepend(env, pathPrepend, ambientPath) {
+  if (pathPrepend === undefined || pathPrepend === null) return env;
+  if (!Array.isArray(pathPrepend)) throw fail("E_BACKEND_LAUNCH_ENV", "the launch's pathPrepend must be a list of directories");
+  for (const dir of pathPrepend) {
+    if (typeof dir !== "string" || !isAbsolute(dir) || dir.includes(delimiter) || /[\0\n\r]/.test(dir)) {
+      throw fail("E_BACKEND_LAUNCH_ENV", `the launch's pathPrepend entry ${JSON.stringify(dir)} is not an absolute directory that can go on PATH`);
+    }
+  }
+  if (pathPrepend.length === 0) return env;
+  const base = Object.hasOwn(env, "PATH") ? env.PATH : typeof ambientPath === "string" ? ambientPath : "";
+  return { ...env, PATH: [...pathPrepend, ...base.split(delimiter).filter((dir) => dir && !pathPrepend.includes(dir))].join(delimiter) };
 }
 
 // A bare host: labels of letters, digits and dashes, an optional port. No wildcard, no
@@ -149,6 +169,14 @@ function readJsonObject(path, what) {
 
 const strings = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
 
+/** The mode of the home's last launch and whether it was handed sandbox allowances, or
+ *  null before a first launch. */
+export function readLaunchRecord(home) {
+  if (!lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false })?.isDirectory()) return null;
+  const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
+  return record === null ? null : { mode: typeof record.mode === "string" ? record.mode : null, sandboxGiven: record.sandboxGiven === true };
+}
+
 /** The record of the sandbox entries this provider added: the launch's list (who asked
  *  for what, for readiness to show) and exactly which entries and keys it put in. */
 export function readSandboxRecord(home) {
@@ -206,7 +234,7 @@ function addTo(settings, keys, values, file) {
 }
 
 function directories(home, { create }) {
-  if (!realDirectory(home, "the home")) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
+  if (!statSync(home, { throwIfNoEntry: false })?.isDirectory()) throw fail("E_SESSION_START_FAILED", `the home ${home} is not a directory`);
   const claudeDir = join(home, ".claude"), stateDir = join(home, STATE_DIR);
   const hasClaude = realDirectory(claudeDir, "the home's"), hasState = realDirectory(stateDir, "the provider's state directory");
   if (create && !hasClaude) mkdirSync(claudeDir, { mode: 0o700 });
@@ -235,7 +263,7 @@ function withdraw(settings, envNames, sandboxRecord) {
  *  (minus `unset`), and, unless `sandbox` is null (bb's full mode has no sandbox), the
  *  sandbox allowances. Every other key, and every entry the provider did not write, is
  *  kept; what an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox }) {
+export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: true });
   const settings = readSettingsFile(settingsPath);
   const envRecord = readJsonObject(envRecordPath, "the provider's record");
@@ -272,6 +300,9 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox }) {
   writeJson(home, envRecordPath, { names });
   if (sandboxRecord) writeJson(home, sandboxRecordPath, sandboxRecord);
   else rmSync(sandboxRecordPath, { force: true });
+  // What readiness needs to say of this home's sandbox: the mode it runs in, and whether
+  // the kernel handed the launch any allowances at all.
+  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true });
   return { path: settingsPath, names, sandbox: sandboxRecord };
 }
 
@@ -301,5 +332,6 @@ export function removeLaunchSettings(home) {
   }
   rmSync(envRecordPath, { force: true });
   rmSync(sandboxRecordPath, { force: true });
+  rmSync(join(home, LAUNCH_RECORD), { force: true });
   return true;
 }

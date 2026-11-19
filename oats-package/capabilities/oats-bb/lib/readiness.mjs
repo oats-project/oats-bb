@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
-import { readSandboxRecord } from "./local-settings.mjs";
+import { readLaunchRecord, readSandboxRecord } from "./local-settings.mjs";
 import { TRUST_VALUES, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -175,11 +175,16 @@ const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "co
  *  each entry: readiness lists it (contract item 6). → warnings; none in full mode or
  *  before a first launch. */
 export function sandboxWarnings(home) {
-  let record;
-  try { record = readSandboxRecord(home); }
+  let record, launched;
+  try { record = readSandboxRecord(home); launched = readLaunchRecord(home); }
   catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     return [{ code: "session-provider-sandbox-unread", message: error.message }];
+  }
+  if (launched && launched.mode !== null && launched.mode !== "full" && !launched.sandboxGiven) {
+    // A kernel that hands a launch no sandbox allowances: bb's sandbox then blocks OATS's
+    // own commands, and nothing in the home says so but this.
+    return [{ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` }];
   }
   if (record === null || (record.domains.length === 0 && record.write.length === 0)) return [];
   const hosts = record.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);

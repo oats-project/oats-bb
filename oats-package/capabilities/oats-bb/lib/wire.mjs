@@ -21,9 +21,10 @@ const VERB_FAILURE = {
   check: "E_BACKEND_NOT_READY",
 };
 export const VERBS = Object.freeze(Object.keys(VERB_FAILURE));
-// The provider's own time per call, inside the kernel's (launch 120 s, the others 20 s;
-// a readiness check 30 s).
+// The provider's own time per call, inside the kernel's (launch 120 s; stop 20 s plus its
+// graceSeconds; the others 20 s; a readiness check 30 s).
 const VERB_BUDGET_MS = { launch: 100_000, inspect: 16_000, inspectMany: 16_000, input: 16_000, stop: 16_000, check: 25_000 };
+const budgetMs = (verb, input) => VERB_BUDGET_MS[verb] + (verb === "stop" && isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds > 0 ? Math.min(input.graceSeconds, 300) * 1000 : 0);
 const MAX_STDIN = 8 * 1024 * 1024;
 
 export async function readStdin(stream = process.stdin) {
@@ -68,7 +69,7 @@ export async function answer(verb, text, handlers, { env = process.env, now = Da
     if (request.provider !== PROVIDER) throw new ProviderError(fallback, `the request names the session provider ${JSON.stringify(request.provider)}; this one is ${PROVIDER}`);
     const settings = verb === "check" && isObject(request.input) && request.input.settings !== undefined && request.input.settings !== null
       ? request.input.settings : settingsFromEnv(env);
-    const result = await handlers[verb](request.input, settings, { deadline: now() + VERB_BUDGET_MS[verb], env });
+    const result = await handlers[verb](request.input, settings, { deadline: now() + budgetMs(verb, request.input), env });
     return { ...head, ok: true, result };
   } catch (error) {
     return { ...head, ok: false, error: refusal(error, fallback) };

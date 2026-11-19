@@ -59,12 +59,10 @@ test("bb answers queued for a turn that is starting: still E_SESSION_INPUT_QUEUE
   assert.match(answer.error.message, /waiting on turn-starting/);
 });
 
-test("bb says the queued copy already left the queue: it was dispatched, so submitted (not verified)", async (t) => {
-  const { answer } = await inputWith(t, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: tellQueued("thr_a", "turn-starting") }, "thread queue delete": QUEUE_GONE });
-  assert.deepEqual(answer.result, { submitted: true, verified: false });
-});
-
+// Only "sent" is a submission. A queued copy the delete does not withdraw is in doubt, and
+// in doubt is not submitted: bb's 404 cannot tell "dispatched" from "removed by someone".
 for (const [name, gone] of [
+  ["bb no longer has the queued copy (404 Queued message not found)", QUEUE_GONE],
   ["bb does not answer the delete", UNREACHABLE],
   ["the delete fails with another 404", NOT_FOUND],
   ["the delete fails with invalid_request for another reason", { error: { code: "invalid_request", message: "HTTP 409: Queued message is being sent" } }],
@@ -74,7 +72,8 @@ for (const [name, gone] of [
     const { answer } = await inputWith(t, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: tellQueued("thr_a") }, "thread queue delete": gone });
     assert.equal(answer.ok, false);
     assert.equal(answer.error.code, "E_SESSION_INPUT_QUEUED");
-    assert.match(answer.error.message, /may still be delivered/);
+    assert.match(answer.error.message, /may still be delivered, or already was/);
+    assert.equal(answer.result, undefined, "never submitted");
   });
 }
 

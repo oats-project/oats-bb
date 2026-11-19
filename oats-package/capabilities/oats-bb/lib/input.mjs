@@ -14,12 +14,13 @@ const failed = (error) => {
  *     or a mail from anyone could stand in for a person's approval.
  *  2. bb answers "sent": dispatched into the thread: submitted.
  *  3. bb answers "queued", for any reason (an interaction that opened between the read
- *     and the tell included): not a submission. The provider withdraws the queued copy
- *     and answers E_SESSION_INPUT_QUEUED. Only bb's own word that the copy already left
- *     the queue (dispatched between the tell and the delete) answers submitted. Any
- *     other failure of the delete, a timeout, or no id to delete by, is in doubt, and in
- *     doubt the answer is not submitted: the mail stays unread and may be seen twice,
- *     never lost. */
+ *     and the tell included): never a submission. The provider withdraws the queued copy
+ *     (`bb thread queue delete`) and answers E_SESSION_INPUT_QUEUED whatever the delete
+ *     says. A delete that succeeds means nothing was delivered. Any other outcome is in
+ *     doubt: bb's "Queued message not found" cannot tell a copy that was dispatched from
+ *     one that someone removed, and a failure or a timeout tells nothing. In doubt the
+ *     answer is not submitted: the mail stays unread and the agent may see it twice (its
+ *     message_id makes that one message), never lose it. */
 export async function sendInput(input, settings, { deadline, env = process.env } = {}) {
   let endpoint, bb;
   try {
@@ -58,9 +59,5 @@ export async function sendInput(input, settings, { deadline, env = process.env }
   if (withdrawn.ok) {
     throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message instead of dispatching it (waiting on ${waitingOn}); the queued copy was withdrawn, so nothing was delivered`);
   }
-  // bb's one answer for a copy that is no longer queued: 404 "Queued message not found"
-  // (code invalid_request). The id is one bb issued to this very call, so it left the
-  // queue by being dispatched between the tell and the delete.
-  if (withdrawn.code === "invalid_request" && /queued message not found/i.test(withdrawn.message)) return { submitted: true, verified: false };
-  throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and the queued copy could not be withdrawn (${withdrawn.message}): it may still be delivered`);
+  throw fail("E_SESSION_INPUT_QUEUED", `bb queued the message (waiting on ${waitingOn}) and the queued copy could not be withdrawn (${withdrawn.message}): it may still be delivered, or already was`);
 }

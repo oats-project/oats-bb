@@ -17,7 +17,7 @@ function readJson(path) {
 
 const NAME = /^[a-z0-9][a-z0-9-]*$/;
 const PROVIDER_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const RESERVED_PROVIDERS = ["tmux", "herdr"];
+const RESERVED_PROVIDERS = ["tmux", "herdr", "session-provider"];
 const PROVIDER_COMMANDS = ["launch", "inspect", "input", "stop"];
 const OPTIONAL_PROVIDER_COMMANDS = ["inspectMany", "check"];
 const HARNESSES = ["claude", "codex", "pi"];

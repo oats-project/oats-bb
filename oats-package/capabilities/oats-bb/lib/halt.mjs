@@ -89,23 +89,46 @@ export const relistOf = (bb, projectIds) => async () => {
   return rows;
 };
 
+// How many acknowledgement stops of archived threads run at once. One bb call takes a
+// quarter of a second, a home's archived threads only grow (every start archives one, and
+// a new home at the same path inherits them), and the sweep starts over at every call:
+// one after the other, a few hundred would never fit a stop's time.
+const SWEEP_AT_ONCE = 8;
+
 /** Stop each archived thread given, so that no Claude of it is left in the home, and
  *  confirm it by what bb shows AFTER the stops, never by the rows they were found in: bb
  *  acknowledges each stop, then the lists are read once more, and every thread stopped
  *  here must show settled with nothing in line (or be gone). One that does not, or that
  *  had work in line to begin with, goes through the whole rule (confirmStop). So the rule
- *  is the same as for a live thread; only the reads are shared between the threads, since
- *  a home's archived threads can be many. `relist()` → the threads to look in (archived
- *  and live). Throws on the first thread that cannot be confirmed. */
+ *  is the same as for a live thread; only the reads are shared between the threads, and
+ *  the stops run several at a time, since a home's archived threads can be many.
+ *  `relist()` → the threads to look in (archived and live). Throws on the first thread
+ *  that cannot be confirmed; where the command's time ran out, it says how many of how
+ *  many were stopped and what to do about it. */
 export async function stopArchived(bb, threads, relist, options = {}) {
   const asked = [];
+  const plain = [];
   for (const thread of threads) {
-    if (hasQueuedWork(thread)) { await confirmStop(bb, thread.id, options); continue; }
-    const answer = await bb.stop(thread.id);
-    if (answer.code === "thread_not_found") continue;
-    if (!answer.ok && answer.timedOut) throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of archived thread ${thread.id} in time: its Claude process may still be loaded in the home`);
-    if (!answer.ok) throw bb.refusal(answer, ["thread", "stop"]);
-    asked.push(thread.id);
+    if (hasQueuedWork(thread)) await confirmStop(bb, thread.id, options);
+    else plain.push(thread.id);
+  }
+  let next = 0, outOfTime = 0, refused = null;
+  const worker = async () => {
+    while (next < plain.length && refused === null) {
+      const id = plain[next];
+      next += 1;
+      const answer = await bb.stop(id);
+      if (answer.ok) asked.push(id);
+      else if (answer.code === "thread_not_found") continue;
+      else if (answer.timedOut) outOfTime += 1;
+      else refused ??= bb.refusal(answer, ["thread", "stop"]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SWEEP_AT_ONCE, plain.length) }, worker));
+  if (refused !== null) throw refused;
+  if (outOfTime > 0) {
+    // The count and the remedy first: the kernel relays 500 characters.
+    throw fail("E_SESSION_STOP_FAILED", `this home's bb project holds ${threads.length} archived threads, and ${outOfTime} of them could not be stopped in the time this command has (${asked.length} were): a Claude process of one may still be loaded in the home. Delete old archived threads of that project in bb (bb thread list --project <id> --archived, then bb thread delete <id>), and try again`);
   }
   if (asked.length === 0) return;
   const now = await relist();

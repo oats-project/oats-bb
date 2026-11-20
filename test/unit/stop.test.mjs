@@ -157,10 +157,10 @@ test("a stop with no endpoint also stops the home's archived threads: bb keeps t
     "thread stop": { stdout: { ok: true } }, "thread show": show("pending", { archivedAt: 6 }),
   });
   assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb })).result, { stopped: true });
-  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread list --archived", "thread list"], "one with a held turn: the whole rule; one with nothing in line: bb acknowledges the stop, and the lists read after it must show it at rest");
+  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread stop", "thread list --archived", "thread list"], "the one with a held turn first, by the whole rule; then the one with nothing in line: bb acknowledges the stop, and the lists read after it must show it at rest");
   const archivedRead = bb.calls().find((c) => c.argv.includes("--archived"));
   assert.deepEqual(archivedRead.argv, ["thread", "list", "--project", "proj_a", "--archived", "--include-hidden", "--json"], "the home's project only");
-  assert.deepEqual(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_arch", "thr_arch_queued"], "a deleted thread is not stopped");
+  assert.deepEqual(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]).sort(), ["thr_arch", "thr_arch_queued"], "a deleted thread is not stopped");
 });
 
 // What confirms a stop is what bb shows after it, never the row a thread was found in.
@@ -195,6 +195,29 @@ test("an archived thread whose row does not say its queue is empty is not taken 
   assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb })).result, { stopped: true });
   assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list",
     "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"], "the held turn it could not see in the row was found and withdrawn");
+});
+
+// A home's archived threads only grow (every start archives one, and a home made again at
+// the same path inherits them), and the sweep starts over at every call: its stops run
+// several at a time, so that a few hundred fit a stop's time.
+test("three hundred archived threads, each stop taking a tenth of a second, are swept inside a stop's time", async (t) => {
+  const { dir, home } = scratch(t);
+  const rows = Array.from({ length: 300 }, (_, i) => threadRow(`thr_arch_${String(i).padStart(3, "0")}`, "proj_a", "idle", { archivedAt: 5 + i }));
+  const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 100, stdout: { ok: true } } });
+  const started = Date.now();
+  assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb })).result, { stopped: true });
+  assert.ok(Date.now() - started < 21_000, `took ${Date.now() - started} ms`);
+  assert.equal(new Set(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2])).size, 300, "every one was stopped, once");
+});
+
+test("where the time runs out on a home's archived threads, the stop says how many were stopped, of how many, and what to do", async (t) => {
+  const { dir, home } = scratch(t);
+  const rows = Array.from({ length: 40 }, (_, i) => threadRow(`thr_arch_${i}`, "proj_a", "idle", { archivedAt: 5 + i }));
+  const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 30_000, stdout: { ok: true } } });
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 1 }, { settings, bb });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.match(answer.error.message, /^this home's bb project holds 40 archived threads, and \d+ of them could not be stopped in the time this command has \(\d+ were\).*Delete old archived threads of that project in bb \(bb thread list --project <id> --archived, then bb thread delete <id>\), and try again$/);
+  assert.ok(answer.error.message.length <= 480);
 });
 
 test("a project list whose source does not say what it is cannot show the home has no thread: a stop with no endpoint is E_SESSION_STOP_FAILED, never stopped", async (t) => {

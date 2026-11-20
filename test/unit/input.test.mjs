@@ -53,6 +53,15 @@ test("an interaction bb is resolving right now still holds input; one resolved o
   assert.deepEqual(after.answer.result, { submitted: true, verified: true });
 });
 
+test("with thirty prompts open, the refusal still says nothing was sent and what to do, before it names them", async (t) => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ ...pendingInteraction("thr_a"), id: `pint_m5byy7u9ux${String(i).padStart(2, "0")}` }));
+  const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: many }, "thread tell": { stdout: tellSent("thr_a") } });
+  assert.equal(answer.error.code, "E_SESSION_PROMPT_OPEN");
+  assert.ok(answer.error.message.length <= 480);
+  assert.match(answer.error.message, /waits on a person \(30 pending .*\): nothing was sent\. Answer them in bb\. Open: pint_m5byy7u9ux00, .* and 24 more$/);
+  assert.deepEqual(verbs(calls), ["thread interactions list"]);
+});
+
 test("a pending interaction: E_SESSION_PROMPT_OPEN, and nothing is sent", async (t) => {
   const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: [pendingInteraction("thr_a")] }, "thread tell": { stdout: tellSent("thr_a") } });
   assert.equal(answer.ok, false);

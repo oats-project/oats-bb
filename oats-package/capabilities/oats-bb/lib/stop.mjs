@@ -124,7 +124,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     if (!launched) return { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } };
-    // The reason by its code: bb's own words are not relayed, and may be long.
+    // Why, in the provider's own words (they may carry bb's), cut short: the remedy stands before it.
     return { meta: { archived: [], unchecked: true }, warning: `the home's bb threads were not archived: oats readiness reports them as session-provider-orphaned once bb answers; stop and archive them in bb. Why bb could not be asked: ${bounded(error.message).slice(0, 260)}` };
   }
 }

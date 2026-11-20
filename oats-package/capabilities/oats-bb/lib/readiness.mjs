@@ -145,9 +145,6 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
   return { problems, server, daemon, bb, listable: server !== null && cliRuns, credential };
 }
 
-/** Whether the server a daemon says it serves is the configured one. The daemon reports
- *  127.0.0.1 whatever loopback name the setting uses (localhost, ::1): between two
- *  loopback addresses, the port decides. */
 /** Whether the value is an address a bb server can have: an http or https URL with a host. */
 function usableOrigin(value) {
   if (typeof value !== "string" || !URL.canParse(value)) return false;

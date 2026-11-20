@@ -114,7 +114,10 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (earlier ones were swept by the launch that made that thread); with no `previous`, or
   where bb does not show when it was created, it sweeps them all. A stop with
   `endpoint: null` and the retire hook are told no thread to count from, and sweep them
-  all: one bb call per archived thread of that project, and one more read of the lists.
+  all: one bb call per archived thread of that project (several at a time: the count only
+  grows, and the sweep starts over at every call), and one more read of the lists. Where
+  the command's time still runs out, it says how many were stopped, of how many, and to
+  delete old archived threads of the project in bb.
   An archived thread is confirmed stopped by the same rule as a live one, with the reads
   shared: bb acknowledges each stop, the lists are read again, and every thread stopped
   must show, in its one row, settled and `queuedWork: "none"`; one whose row says anything

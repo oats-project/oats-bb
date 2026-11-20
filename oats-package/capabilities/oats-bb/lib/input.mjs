@@ -1,6 +1,6 @@
 // input: one tell, and only a dispatched tell is a submission (contract item 1).
 import { bbClient, nothingHappened } from "./bb.mjs";
-import { InDoubt, fail, isObject, recode } from "./errors.mjs";
+import { InDoubt, fail, isObject, recode, someOf } from "./errors.mjs";
 import { isBbId, readEndpoint } from "./threads.mjs";
 
 const failed = (error) => recode("E_SESSION_INPUT_FAILED", error);
@@ -37,7 +37,8 @@ export async function sendInput(input, settings, { deadline, env = process.env }
   const open = interactions.filter((interaction) => interaction.status === "pending" || interaction.status === "resolving");
   if (open.length > 0) {
     const kinds = [...new Set(open.map((interaction) => (isObject(interaction.payload) && typeof interaction.payload.kind === "string" ? interaction.payload.kind : "interaction")))];
-    throw fail("E_SESSION_PROMPT_OPEN", `bb thread ${endpoint.threadId} waits on a person (${open.length} pending ${kinds.join(", ")}: ${open.map((interaction) => interaction.id).filter((id) => typeof id === "string").join(", ")}): nothing was sent. Answer it in bb`);
+    // What happened and what to do first: the list of prompts may be long.
+    throw fail("E_SESSION_PROMPT_OPEN", `bb thread ${endpoint.threadId} waits on a person (${open.length} pending ${someOf(kinds, 3)}): nothing was sent. Answer ${open.length > 1 ? "them" : "it"} in bb. Open: ${someOf(open.map((interaction) => interaction.id))}`);
   }
 
   const told = await bb.tell(endpoint.threadId, input.text);

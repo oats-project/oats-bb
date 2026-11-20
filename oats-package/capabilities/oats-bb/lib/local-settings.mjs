@@ -305,9 +305,12 @@ function pinDirectory(dir, refuse, { follow = false } = {}) {
   // see a directory swapped and put back in between, so it is weaker; what it protects is
   // also less than it looks, since the agent that could do the swap runs as the same
   // user as the provider and can read whatever the provider can.
-  const through = (name) => (process.platform === "linux" ? `/proc/self/fd/${fd}/${name}` : join(dir, name));
+  // (A Linux with no /proc mounted, a chroot or a hardened sandbox, has no such name
+  // either: it is then read the way the other systems are, never taken for a missing file.)
+  const byHandle = process.platform === "linux" && lstatSync(`/proc/self/fd/${fd}`, { throwIfNoEntry: false }) !== undefined;
+  const through = (name) => (byHandle ? `/proc/self/fd/${fd}/${name}` : join(dir, name));
   const same = (name, opened) => {
-    if (process.platform === "linux") return true;
+    if (byHandle) return true;
     const now = lstatSync(dir, { throwIfNoEntry: false }), held = fstatSync(fd), file = lstatSync(join(dir, name), { throwIfNoEntry: false });
     return now?.isDirectory() === true && now.dev === held.dev && now.ino === held.ino && file?.isFile() === true && file.dev === opened.dev && file.ino === opened.ino;
   };
@@ -395,6 +398,8 @@ export function readLaunchRecord(home) {
 
 export const isExactHost = (value) => typeof value === "string" && HOST.test(value);
 export const isExactPath = (value) => typeof value === "string" && isAbsolute(value) && normalize(value) === value && value !== "/" && !/[*?\x00-\x1f\x7f]/.test(value);
+// A path as it may be shown from a file in the home: letters, digits and . _ - @ + between slashes.
+const PLAIN_PATH = /^(\/[A-Za-z0-9._@+-]{1,120}){1,30}$/;
 
 /** What the home's sandbox allowances are now, for readiness to show: the entries of the
  *  provider's record that are well formed AND are in settings.local.json's two lists at
@@ -411,7 +416,9 @@ export function currentSandbox(home) {
   const allowedDomains = listAt(DOMAINS_KEYS), allowWrite = listAt(WRITE_KEYS);
   const domains = record.domains.filter((entry) => isExactHost(entry.host) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && allowedDomains.includes(entry.host))
     .map((entry) => ({ host: entry.host, capability: entry.capability, setting: typeof entry.setting === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(entry.setting) ? entry.setting : null }));
-  const write = record.write.filter((entry) => isExactPath(entry.path) && allowWrite.includes(entry.path))
+  // A path is shown only if it is one plainly: what stands in the home is its agent's to
+  // write, and a line of text there must not reach a person as the provider's word.
+  const write = record.write.filter((entry) => isExactPath(entry.path) && PLAIN_PATH.test(entry.path) && allowWrite.includes(entry.path))
     // The reason beside a path is free text from a file in the home: never relayed.
     .map((entry) => ({ path: entry.path }));
   return { domains, write, mismatch: record.domains.length - domains.length + record.write.length - write.length };

@@ -1,7 +1,7 @@
 // What a bb thread means for OATS: contract item 4's table, and one thread per home.
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { fail, isObject } from "./errors.mjs";
+import { fail, isObject, someOf } from "./errors.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 
 // bb's thread statuses (bb packages/domain thread-status). bb has no "stopped": a stopped
@@ -86,7 +86,7 @@ export function inspectHome({ home, endpoint }, threads) {
   if (others.length > 0) {
     // The remedy and the count first: the list may be long, and a message is cut at 500.
     const ids = others.map((thread) => thread.id);
-    const named = ids.length <= 6 ? ids.join(", ") : `${ids.slice(0, 6).join(", ")} and ${ids.length - 6} more`;
+    const named = someOf(ids);
     throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}. One home is one thread: archive the ${ids.length > 1 ? `${ids.length} others` : "other"} in bb. The recorded thread is ${endpoint.threadId}${recorded ? "" : " (missing or archived)"}; the other${ids.length > 1 ? "s" : ""}: ${named}`);
   }
   if (!recorded) return { ...MISSING };

@@ -551,7 +551,8 @@ test("a previous thread with a turn bb holds in line refuses the launch: the tur
 // nothing that says so. So a launch stops the home's archived threads before it spawns:
 // those archived since the previous thread was made, or all where that is not known.
 const ARCHIVED = [threadRow("thr_long_ago", "proj_a", "idle", { archivedAt: 1_000 }), threadRow("thr_in_ui", "proj_a", "idle", { archivedAt: 5_000 }), threadRow("thr_gone", "proj_a", "idle", { archivedAt: 6_000, deletedAt: 7_000 })];
-const stops = (bb) => bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]);
+// The threads a launch stopped. Archived ones are stopped several at a time, in no fixed order.
+const stops = (bb) => bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]).sort();
 
 test("a launch stops the home's threads archived since its previous thread was made, then spawns: the previous one live", async (t) => {
   const { backend, bb, run } = await setup(t, {
@@ -560,7 +561,7 @@ test("a launch stops the home's threads archived since its previous thread was m
   });
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.ok, true, JSON.stringify(answer));
-  assert.deepEqual(stops(bb), ["thr_prev", "thr_in_ui"], "the previous thread before its archive, and the one archived after it was made; an older one was stopped by the launch that made the previous thread");
+  assert.deepEqual(stops(bb), ["thr_in_ui", "thr_prev"], "the previous thread before its archive, and the one archived after it was made; an older one was stopped by the launch that made the previous thread");
   assert.deepEqual(verbs(bb).slice(0, 4), ["--version", "project list", "thread list", "thread list --archived"], "every read first");
   assert.deepEqual(effects(bb), ["thread stop", "thread stop", "thread archive", "thread spawn"], "then the stops, the archive, and the spawn last");
 });
@@ -583,7 +584,7 @@ for (const [name, extra, script] of [
   test(`with ${name}, a launch stops every archived thread of the home's project`, async (t) => {
     const { bb, run } = await setup(t, { "thread list --archived": { stdout: ARCHIVED }, ...script });
     assert.equal((await run(extra)).ok, true);
-    assert.deepEqual(stops(bb), ["thr_long_ago", "thr_in_ui"], "a deleted thread is not stopped");
+    assert.deepEqual(stops(bb), ["thr_in_ui", "thr_long_ago"], "a deleted thread is not stopped");
   });
 }
 

@@ -180,10 +180,34 @@ test("in full mode a missing host changes nothing at launch, and readiness names
   const { result } = await check();
   assert.equal(result.status, "ready");
   assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox-host-missing"]);
-  assert.match(result.warnings[0].message, /services for team ops:acme\.aweb\.ai.*full mode.*oats aweb setup/);
+  assert.match(result.warnings[0].message, /^at this home's last launch.*services for team ops:acme\.aweb\.ai.*full mode.*oats aweb setup/);
   // A later launch with nothing missing clears it.
   await launch({ yolo: true, sandbox: { domains: [AWEB], write: [], missing: [] } });
   assert.deepEqual((await check()).result.warnings, []);
+});
+
+test("a team id as the kernel writes one (a plus sign, a long name) is named in the refusal, and ignored in full mode", async (t) => {
+  const { launch, check } = await setup(t);
+  const teams = ["ops+eu:acme.aweb.ai", `${"t".repeat(200)}:acme.aweb.ai`];
+  const missing = teams.map((team) => ({ capability: "oats.aweb", setting: "services", team }));
+  const refused = await launch({ yolo: false, sandbox: { missing } });
+  assert.equal(refused.error.code, "E_BACKEND_SANDBOX_HOST");
+  for (const team of teams) assert.ok(refused.error.message.includes(team), team);
+  assert.match(refused.error.message, /oats aweb setup/);
+  assert.equal((await launch({ yolo: true, sandbox: { missing } })).ok, true);
+  assert.ok((await check()).result.warnings[0].message.includes("ops+eu:acme.aweb.ai"));
+});
+
+test("a record the agent wrote cannot make readiness speak of a sandboxed home, nor print without bound", async (t) => {
+  const { home, launch, check } = await setup(t);
+  await launch({ yolo: true, sandbox: { missing: MISSING } });
+  const many = Array.from({ length: 2_000 }, (_, i) => ({ capability: "oats.aweb", setting: "services", team: `team-${i}:acme.aweb.ai` }));
+  writeFileSync(join(home, ".oats-bb/launch.json"), JSON.stringify({ mode: "full", sandboxGiven: true, missing: many }));
+  const [warning] = (await check()).result.warnings;
+  assert.match(warning.message, /team-15:acme\.aweb\.ai and 1984 more/);
+  assert.ok(warning.message.length < 2_000);
+  writeFileSync(join(home, ".oats-bb/launch.json"), JSON.stringify({ mode: "auto", sandboxGiven: true, missing: many }));
+  assert.deepEqual((await check()).result.warnings.map((w) => w.code), [], "only a full-mode launch records a gap");
 });
 
 test("a missing entry that is not {capability, setting, team} refuses the launch; one the agent wrote into the record is not shown", async (t) => {

@@ -147,21 +147,25 @@ export function readSandbox(sandbox) {
   // What a slot provider's line named and the deployment has no value for (a team with no
   // recorded service): a host the sandbox would need and cannot be given.
   const missing = list(sandbox.missing, "missing").map((entry) => {
-    const sane = readMissing(entry);
-    if (sane === null) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox.missing holds an entry that is not {capability, setting, team}");
-    return sane;
+    // The launch input is the kernel's: each entry is taken as given, checked only for
+    // what a message can carry (the kernel's own rules decide what a team id is).
+    const text = (value) => value === undefined || value === null || (typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\x00-\x1f\x7f]/.test(value));
+    if (!isObject(entry) || typeof entry.capability !== "string" || !CAPABILITY_ID.test(entry.capability) || !text(entry.setting) || !text(entry.team)) {
+      throw fail("E_SESSION_START_FAILED", "the launch input's sandbox.missing holds an entry that is not {capability, setting, team}");
+    }
+    return { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
   });
   return { domains, write, missing };
 }
 
-const WORD = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,119}$/;
-/** One `missing` entry, checked: a capability id, and a setting and a team that are plain
- *  words or absent. → the entry, or null. (Also read back from the home's record, which
- *  its agent can write.) */
-function readMissing(entry) {
+// A team id as the kernel writes one, and a setting key: what a record in the home must
+// look like to be shown (the home is writable by its agent).
+const RECORDED_WORD = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,255}$/;
+/** One `missing` entry read back from the home's record. → the entry, or null. */
+function readRecordedMissing(entry) {
   if (!isObject(entry) || typeof entry.capability !== "string" || !CAPABILITY_ID.test(entry.capability)) return null;
   for (const key of ["setting", "team"]) {
-    if (entry[key] !== undefined && entry[key] !== null && (typeof entry[key] !== "string" || !WORD.test(entry[key]))) return null;
+    if (entry[key] !== undefined && entry[key] !== null && (typeof entry[key] !== "string" || !RECORDED_WORD.test(entry[key]))) return null;
   }
   return { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
 }
@@ -217,7 +221,7 @@ export function readLaunchRecord(home) {
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
   return record === null ? null : {
     mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
-    missing: (Array.isArray(record.missing) ? record.missing : []).map(readMissing).filter(Boolean),
+    missing: (Array.isArray(record.missing) ? record.missing : []).map(readRecordedMissing).filter(Boolean),
   };
 }
 

@@ -198,6 +198,7 @@ export async function readinessResult(settings, options = {}) {
 
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.
+const MISSING_SHOWN = 16;
 const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "dev.azure.com", "git.sr.ht"]);
 
 /** What the provider added to the home's sandbox at its last launch, with who asked for
@@ -216,8 +217,11 @@ export function sandboxWarnings(home) {
     // own commands, and nothing in the home says so but this.
     warnings.push({ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` });
   }
-  if (launched && launched.missing.length > 0) {
-    warnings.push({ code: "session-provider-sandbox-host-missing", message: `the deployment records no host for ${launched.missing.map(describeMissing).join("; ")}. This home runs in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
+  if (launched && launched.mode === "full" && launched.missing.length > 0) {
+    // Only a full-mode launch records a gap (a sandboxed one is refused before any record).
+    const shown = launched.missing.slice(0, MISSING_SHOWN).map(describeMissing).join("; ");
+    const more = launched.missing.length > MISSING_SHOWN ? ` and ${launched.missing.length - MISSING_SHOWN} more` : "";
+    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for ${shown}${more}. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
   }
   if (current.domains.length > 0 || current.write.length > 0) {
     const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);

@@ -98,9 +98,9 @@ How the supervisor treats its optional child (the start order, what counts as re
 restart after an exit, the stop order and its time budget, and what acceptance checks) is
 the team image's, and is described once, in the section "An optional child" of
 `docs/container.md` in the OATS repository. Read it at the commit your team image is built
-from: a revision without that section has no optional child. For bb the declared values are: ready when
-`http://127.0.0.1:38887/status` says `connected: true`, and 8 seconds to stop before it is
-killed. A thread's process ends with its bb; the thread itself is kept, the next bb lists
+from: a revision without that section has no optional child. For bb the declared values
+are: ready when `http://127.0.0.1:38887/status` says `connected: true`, and 8 seconds to
+stop before it is killed. A thread's process ends with its bb; the thread itself is kept, the next bb lists
 it idle, and a message to it starts a new turn.
 
 ## The deployment's settings
@@ -186,7 +186,8 @@ builds this image on it, starts it under that commit's Compose files with this f
 and runs that commit's acceptance with `AGENT_CHILD=bb`
 ([the workflow](../.github/workflows/container.yml)). It uses no token and no model.
 
-Run by hand on amd64, on the same pinned commit: both builds; the start (broker, then bb
+Run by hand on amd64, on an earlier commit of the same OATS change (`e1b23202`): both
+builds; the start (broker, then bb
 ready in about 3 seconds, then sshd and host run); `bb --version` equal to the pin; the
 ordered stop (host run first, then sshd, the broker and bb, each exiting 0); and that
 acceptance, which checks the declaration file, bb's two declared ports, that nothing but

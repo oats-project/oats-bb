@@ -22,6 +22,8 @@ const read = (name) => readFileSync(new URL(`../../container/${name}`, import.me
 const MAX_BYTES = 16 * 1024;
 const WRITABLE_MOUNTS = ["/state", "/work", "/tmp", "/run", "/outbox", "/dev/shm"];
 const RESERVED_NAMES = ["PATH", "HOME", "LD_PRELOAD", "NSS_WRAPPER_PASSWD", "NSS_WRAPPER_GROUP", "NODE_OPTIONS", "AGENT_CHILD"];
+// What the supervisor's own lines call its other children and itself.
+const RESERVED_CHILD_NAMES = ["broker", "sshd", "host-run", "status", "supervisor"];
 const SSHD_PORT = 2222;
 
 class Refused extends Error {}
@@ -47,7 +49,7 @@ export function admit(text, switchName) {
   try { value = JSON.parse(text); } catch { refuse("(json)"); }
   keys(value, "", ["name", "command", "env", "ready", "listen", "version", "stopMs"], ["envFromFile"]);
 
-  if (typeof value.name !== "string" || !/^[a-z0-9-]{1,20}$/.test(value.name)) refuse("name");
+  if (typeof value.name !== "string" || !/^[a-z0-9-]{1,20}$/.test(value.name) || RESERVED_CHILD_NAMES.includes(value.name)) refuse("name");
   if (value.name !== switchName) refuse("name");
   argv(value.command, "command");
 
@@ -212,6 +214,11 @@ test("a declaration with an unknown key, a wrong port, a writable command path o
     ["more than 16 KiB", "(size)", JSON.stringify({ ...base, env: { PAD: "x".repeat(16 * 1024) } })],
   ]) assert.throws(() => admit(text, "bb"), refused(key), what);
   assert.throws(() => admit(committed, "other"), refused("name"), "the switch names another child");
+  // A name the supervisor keeps for itself is refused even when the switch asks for it.
+  for (const name of ["broker", "sshd", "host-run", "status", "supervisor"]) {
+    assert.throws(() => admit(changedBy((d) => { d.name = name; }), name), refused("name"), `the reserved name ${name}`);
+  }
+  assert.equal(admit(changedBy((d) => { d.name = "host-run2"; }), "host-run2").name, "host-run2", "only the exact reserved names");
 
   // The optional key may be absent, and the admitted file passes unchanged.
   const { envFromFile, ...without } = base;

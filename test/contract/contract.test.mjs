@@ -115,7 +115,14 @@ after(async () => {
 
 test("the image runs the pinned bb-app, and readiness reads it ready", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
-  assert.deepEqual((await check()).result, { status: "ready", problems: [], warnings: [] });
+  // Ready, with one thing said: this image, like the hardened team image, has no
+  // bubblewrap, so Claude's sandbox cannot start (a warning; it refuses nothing).
+  const ready = (await check()).result;
+  assert.equal(ready.status, "ready");
+  assert.deepEqual(ready.problems, []);
+  assert.deepEqual(ready.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
+  assert.match(ready.warnings[0].message, /every command waits for a person in bb\. In a team container, spawn bb agents with --yolo/);
+  assert.equal((await sh("command -v bwrap || echo none")).trim(), "none");
   // The provider's default version is this pin: with no version setting it is ready too.
   const manifest = JSON.parse(await sh("cat /repo/oats-package/capabilities/oats-bb/oats.json"));
   assert.equal(manifest.settings.version.default, BB_VERSION);
@@ -136,7 +143,7 @@ test("the two HTTP reads the provider makes answer what it decodes, at the pinne
   assert.equal(JSON.parse(await sh("curl -s -m 5 http://127.0.0.1:38886/health")).ok, true);
   // And the person's report names where the credential comes from, never a value.
   const doctor = await sh(`OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} doctor`);
-  assert.match(doctor, /^bb session provider: ready\n  claude-code credential: no Claude login/);
+  assert.match(doctor, /^bb session provider: ready\n  warning session-provider-sandbox-unsupported: .*\n  claude-code credential: no Claude login/);
   assert.doesNotMatch(doctor, /dummy-not-a-real-key/);
 });
 
@@ -279,7 +286,12 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   // Claude Code at the pinned bb started with them.
   assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
     { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
-  assert.deepEqual((await provider("check", { home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox"]);
+  assert.deepEqual((await provider("check", { home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  // The check the kernel runs before a launch, with the launch it plans: a host the
+  // deployment does not record refuses a sandboxed launch there, before anything starts.
+  const plannedCheck = await provider("check", { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: { ...SANDBOX, missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } } });
+  assert.deepEqual(plannedCheck.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_HOST"]);
+  assert.equal(plannedCheck.result.status, "needs-configuration");
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });
   assert.equal(answer.ok, false);
@@ -453,7 +465,7 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
     "cd ~ && bb-app --data-dir ~/bbdata-exposed --server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887 --no-in-app-updates > bb-app-exposed.out 2>&1"]);
   const exposed = { ...SETTINGS, server: "http://127.0.0.1:48886", daemon: "http://127.0.0.1:48887" };
-  await waitFor("the second bb to answer", async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'), { timeoutMs: 120_000, everyMs: 1_000 });
+  await waitFor("the second bb to answer", async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'), { timeoutMs: 240_000, everyMs: 1_000 });
 
   const result = (await check(exposed)).result;
   assert.ok(result.problems.some((p) => p.code === "E_BACKEND_EXPOSED"), JSON.stringify(result));

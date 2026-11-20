@@ -113,12 +113,14 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     try { const ids = projects.map((project) => project.id); await stopArchived(bb, await archivedOf(bb, ids), relistOf(bb, ids), options); }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
-      unswept = error.message;
+      // The sweep's own account (how many, the remedy) is carried; bb's raw words are not.
+      unswept = error.code === "E_SESSION_STOP_FAILED" ? error.message : `bb could not be asked (${error.code}): a Claude process of one may still be loaded; look at them in bb (bb thread list --project <id> --archived)`;
     }
     const warnings = [];
-    if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
-    // The sweep's own words: they begin with the count and the remedy.
+    // The sweep's own words first: they begin with the count and the remedy, and the cut
+    // to what the kernel relays then falls in a list of ids.
     if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped: ${unswept}`);
+    if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
     if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}) }, warning: bounded(warnings.join(". ")) };
     if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
     return { meta: { retired: true, archived } };

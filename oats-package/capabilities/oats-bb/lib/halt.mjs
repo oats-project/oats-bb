@@ -123,9 +123,9 @@ export async function stopArchived(bb, threads, relist, options = {}) {
       const answer = await bb.stop(id);
       if (answer.ok) asked.push(id);
       else if (answer.code === "thread_not_found") continue;
-      // Two different ends: the command had no time left to ask at all, or bb was asked
-      // and did not answer one call in that call's own time.
-      else if (answer.timedOut) (/^no time left/.test(answer.message) ? unreached : slow).push(id);
+      // Two different ends: the command's own time was up (the call was cut by it, or
+      // never made), or bb did not answer one call in that call's time, with time left.
+      else if (answer.timedOut) (Date.now() >= (options.deadline ?? Infinity) ? unreached : slow).push(id);
       else refused ??= bb.refusal(answer, ["thread", "stop"]);
     }
   };

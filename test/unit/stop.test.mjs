@@ -225,12 +225,12 @@ test("where the time runs out on a home's archived threads, the stop says how ma
 // left, is not "too many threads".
 test("one archived thread whose stop bb does not answer in the call's own time is named, with time left: try again, not 'delete old threads'", async (t) => {
   const { dir, home } = scratch(t);
-  const rows = ["thr_slow", "thr_b", "thr_c"].map((id, i) => threadRow(id, "proj_a", "idle", { archivedAt: 5 + i }));
+  const rows = [threadRow("thr_slow", "proj_a", "idle", { archivedAt: 5 })];
   const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": [{ delayMs: 30_000, stdout: { ok: true } }, { stdout: { ok: true } }] });
   const started = Date.now();
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 120 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.match(answer.error.message, /^bb did not acknowledge the stop of 1 archived thread of this home in time, so its Claude process may still be loaded there\. Try again; if it repeats, look at it in bb: thr_/);
+  assert.equal(answer.error.message, "bb did not acknowledge the stop of 1 archived thread of this home in time, so its Claude process may still be loaded there. Try again; if it repeats, look at it in bb: thr_slow");
   assert.doesNotMatch(answer.error.message, /delete/);
   assert.ok(Date.now() - started < 20_000, "at the call's own limit, not the command's");
 });
@@ -431,11 +431,25 @@ test("retire's warnings stay inside what the kernel relays, however many threads
   assert.equal(last.meta.left.length, 40);
   assert.equal(last.meta.unswept, true);
   assert.ok(last.warning.length <= 480, String(last.warning.length));
-  assert.match(last.warning, /^40 bb threads of this home could not be stopped and archived: stop and archive them in bb \(bb thread stop <id>, bb thread archive <id>\)\. They are thr_000_x+, /);
+  assert.match(last.warning, /^the home's archived bb threads could not all be stopped: bb could not be asked \(E_[A-Z_]+\).*\. 40 bb threads of this home could not be stopped and archived: stop and archive them in bb \(bb thread stop <id>, bb thread archive <id>\)\. They are thr_000_x+, /);
   assert.doesNotMatch(last.warning, /boom|noise/);
   const unreachable = await retireWith(t, { "project list": { error: { code: "error", message: `fetch failed: ${"very long ".repeat(300)}` } } });
   assert.ok(unreachable.last.warning.length <= 480);
   assert.match(unreachable.last.warning, /^the home's bb threads were not archived: oats readiness reports them as session-provider-orphaned/);
+});
+
+test("retire says what the sweep said, first: how many archived threads were stopped, of how many, and to stop then delete old ones; then what it left", async (t) => {
+  const rows = Array.from({ length: 40 }, (_, i) => threadRow(`thr_arch_${i}`, "proj_a", "idle", { archivedAt: 5 + i }));
+  // The hook has 40 s. Each stop hangs for its own 10 s, eight at a time: the hook's time runs out on them.
+  const { run, last } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_live", "proj_a", "active")] }, "thread show": show("active"),
+    "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 60_000, stdout: { ok: true } },
+  }));
+  assert.equal(run.status, 0, "the retire is never failed or held");
+  assert.deepEqual(last.meta, { archived: [], left: ["thr_live"], unswept: true });
+  assert.ok(last.warning.length <= 480);
+  assert.match(last.warning, /^the home's archived bb threads could not all be stopped: this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has \(0 were\).*bb thread stop <id>, then bb thread delete --yes <id>\), and try again\. 1 bb thread of this home could not be stopped and archived/);
 });
 
 test("launchSent is a time only when it is one: an impossible date archives nothing", async () => {

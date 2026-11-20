@@ -297,6 +297,11 @@ test("a configuration the kernel could not resolve refuses a launch that would b
   assert.match(long.error.message, /launch in full mode \(--yolo\)\. Cause: E_SOUL_UNKNOWN: x/);
   const object = await launch({ yolo: false, sandbox: { unavailable: { code: "E_X", message: "m".repeat(300) } } });
   assert.match(object.error.message, /Cause: E_X: m+…$/);
+  // A long part of an object cause is clipped, not dropped; a clip never splits a character.
+  const longParts = await launch({ yolo: false, sandbox: { unavailable: { code: "E_X", message: "m".repeat(5_000) } } });
+  assert.match(longParts.error.message, /Cause: E_X: m+…$/);
+  const emoji = await launch({ yolo: false, sandbox: { unavailable: "😀".repeat(400) } });
+  assert.ok(emoji.error.message.length < 500 && emoji.error.message.isWellFormed());
   // `false` and "" say the configuration was resolved: the lists beside them are read.
   for (const unavailable of [false, ""]) {
     assert.equal((await launch({ yolo: false, sandbox: { unavailable, domains: [AWEB], write: [], missing: [] } })).ok, true);

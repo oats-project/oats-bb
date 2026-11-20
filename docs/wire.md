@@ -76,8 +76,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on
   a plain readiness read), it also answers what that launch would be refused for (its
   harness, its arguments, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
-  capabilities and, for a full-mode launch, the gaps, as warnings (optional rows are named
-  only here: the provider keeps no record of them after a launch). Without it, the check
+  capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
+  capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
   can only say, for a home, what its last launch left on record.
 
 ## Codes

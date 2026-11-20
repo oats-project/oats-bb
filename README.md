@@ -33,8 +33,10 @@ stays the default; nothing changes for a home that does not ask for `--backend b
   **Open in bb**.
 
 > Status: built ahead of the kernel's session-provider contract. It needs an OATS kernel
-> that lists the feature `session-providers` in `oats version --json`; the manifests'
-> `compatibility.oats` floor (`>=0.70.0`) is a placeholder until that release has a number.
+> that lists the feature `session-providers` in `oats version --json`. The manifests'
+> `compatibility.oats` floor will be the first OATS release whose kernel speaks this
+> provider's wire (version 1.3, see [docs/wire.md](docs/wire.md)); `>=0.70.0` is a
+> placeholder until the release lane names that version.
 >
 > It also needs the oats.aweb release that registers a provider home with the host wake
 > broker without a `--backend` (the release carrying awebai/oats-aweb#293; its version is
@@ -159,8 +161,8 @@ Where the deployment has no value for something a provider's line names (a team 
 aweb service was never recorded), a launch in a sandboxed mode is **refused**
 (`E_BACKEND_SANDBOX_HOST`, naming it; for oats.aweb the remedy is `oats aweb setup`): the agent's
 messaging would be cut off inside the sandbox. A line a provider marks optional never
-refuses; the kernel's check before the launch names it (after the launch, the kernel's own
-readiness does; the provider keeps no record of it). Where the kernel cannot resolve the deployment's
+refuses; the kernel's check before the launch names it (the provider keeps no record of it
+after the launch). Where the kernel cannot resolve the deployment's
 configuration at all, a sandboxed launch is refused too (`E_BACKEND_SANDBOX_UNAVAILABLE`).
 In `full` mode the launch goes on in every one of these cases. The kernel asks the provider
 before every launch (a spawn, a start, and a restart before it stops anything), handing it

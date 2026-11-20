@@ -123,7 +123,8 @@ const SANDBOX_KEYS = ["domains", "write", "missing", "skipped", "unavailable"];
 // The kernel relays at most 500 characters of a provider's message: what a message
 // quotes is clipped so that the remedy and the counts always arrive.
 const CAUSE_MAX = 240;
-const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+// Clipped text ends in "…", and never in half a surrogate pair.
+const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).replace(/[\ud800-\udbff]$/, "")}…` : text);
 
 /** The launch input's `sandbox`, as the kernel built it from recorded configuration:
  *
@@ -155,8 +156,10 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
   // a line, or an object with one under `message` or `cause`.
   // `false` and "" say "resolved": only a cause makes the configuration unavailable.
   if (sandbox.unavailable !== undefined && sandbox.unavailable !== null && sandbox.unavailable !== false && sandbox.unavailable !== "") {
-    const given = isObject(sandbox.unavailable) ? [sandbox.unavailable.code, sandbox.unavailable.message ?? sandbox.unavailable.cause].filter((part) => oneLine(part, 2_000)).join(": ") : sandbox.unavailable;
-    return { ...empty, unavailable: oneLine(given, 4_000) ? clip(given, CAUSE_MAX) : "no cause given" };
+    // Each part is clipped, never dropped for its length: only what cannot be shown is left out.
+    const part = (value) => (typeof value === "string" && value.length > 0 && !UNPRINTABLE.test(value) ? clip(value, CAUSE_MAX) : null);
+    const given = isObject(sandbox.unavailable) ? [part(sandbox.unavailable.code), part(sandbox.unavailable.message ?? sandbox.unavailable.cause)].filter(Boolean).join(": ") : part(sandbox.unavailable);
+    return { ...empty, unavailable: given ? clip(given, CAUSE_MAX) : "no cause given" };
   }
   const unknown = Object.keys(sandbox).find((key) => !SANDBOX_KEYS.includes(key));
   if (unknown !== undefined && sandboxed) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${oneLine(unknown, 60) ? unknown : "(unprintable)"}`);

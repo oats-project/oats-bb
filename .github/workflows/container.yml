@@ -7,9 +7,11 @@
 # fixture script and the acceptance. To move the pin, change that one line.
 name: container
 
-# It runs only for what its result depends on: the image, its tests, the pin
-# and this file. A pull request that touches none of them does not run it, so a
-# branch cut before container/ existed is not asked to build it.
+# It runs only when the image, its unit tests, the pin or this file change. That
+# scope is chosen, not complete: the pin test also reads the plugin's and the
+# provider's manifests when they exist, and a change to those alone does not
+# run this workflow. A pull request that touches none of the four does not run
+# it, so a branch cut before container/ existed is not asked to build it.
 on:
   pull_request:
     paths:

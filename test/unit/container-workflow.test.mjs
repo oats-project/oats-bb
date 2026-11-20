@@ -42,12 +42,12 @@ test("the container workflow builds the base from one pinned OATS commit and run
 
 test("the container workflow runs only for the image, its tests, the pin and itself, and runs the image's unit tests", () => {
   const paths = ["container/**", "test/unit/container-*.test.mjs", "bb-version", ".github/workflows/container.yml"];
-  const filter = paths.map((path) => `      - "${path}"\n`).join("");
-  assert.ok(code.includes(`  pull_request:\n    paths:\n${filter}`), "pull requests are filtered to those paths, in that order");
-  assert.ok(code.includes(`  push:\n    branches: [main]\n    paths:\n${filter}`), "pushes to main are filtered the same way");
-  assert.match(code, /^  workflow_dispatch:$/m, "it can still be run by hand");
-  assert.equal(code.match(/^    paths:$/gm).length, 2, "no other filter");
-  assert.doesNotMatch(code, /paths-ignore/);
+  // The whole `on:` block, compared entire: a path added to or dropped from either list, another
+  // trigger or a paths-ignore changes it.
+  const on = code.match(/^on:\n(?:(?: +.*)?\n)+/m)?.[0].replace(/\n+$/, "\n");
+  const list = paths.map((path) => `      - "${path}"\n`).join("");
+  assert.equal(on, `on:\n  pull_request:\n    paths:\n${list}  push:\n    branches: [main]\n    paths:\n${list}  workflow_dispatch:\n`);
+  assert.equal(code.match(/^on:$/gm).length, 1);
   // A filter that left out this file or the tests would let a change to either go unproven.
   assert.match(code, /working-directory: oats-bb\n\s+run: node --test test\/unit\/container-\*\.test\.mjs\n/);
   assert.ok(code.indexOf("node --test test/unit/container-") < code.indexOf("docker build"), "the unit tests run before any image is built");

@@ -293,9 +293,27 @@ test("check, with the planned launch, answers what that launch would be refused 
   assert.deepEqual((await run({ launch: planned({ yolo: true, sandbox: { unavailable: "the lock could not be read" } }) })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unavailable"]);
   // A launch argument the launch would refuse is a problem of the check too.
   assert.deepEqual((await run({ launch: planned({ args: ["--verbose"] }) })).result.problems.map((p) => p.code), ["E_BACKEND_LAUNCH_ARG"]);
-  // Nothing wrong: ready, nothing said. And the four values beside home and soul read the same.
+  // Nothing wrong: ready, nothing said.
   assert.deepEqual((await run({ launch: planned() })).result, { status: "ready", problems: [], warnings: [] });
-  assert.deepEqual((await run(planned({ sandbox: { unavailable: "the lock could not be read" } }))).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_UNAVAILABLE"]);
+  // A harness the launch would refuse is a problem of the check too, before a restart's stop.
+  const codex = await run({ launch: planned({ harness: "codex" }) });
+  assert.deepEqual(codex.result.problems.map((p) => p.code), ["E_BACKEND_HARNESS"]);
+  // A planned sandboxed launch with no sandbox at all: nothing will be added, and the check says so.
+  for (const launch of [{ harness: "claude", yolo: false, args: [] }, planned({ sandbox: null })]) {
+    assert.deepEqual((await run({ launch })).result.warnings.map((w) => w.code), ["session-provider-sandbox-missing"]);
+  }
+  assert.deepEqual((await run({ launch: { harness: "claude", yolo: true, args: [] } })).result.warnings, []);
+  // Rows that cannot be named are counted, optional and skipped ones too: none is dropped.
+  const unnamed = await run({ launch: planned({ sandbox: { missing: [{ capability: "oats.aweb", setting: "x\ny", optional: true }, { capability: "BAD CAP", optional: true }], skipped: [{ capability: "Bad Cap", reason: "r" }, "x"] } }) });
+  assert.equal(unnamed.result.status, "ready");
+  assert.deepEqual(unnamed.result.warnings.map((w) => w.code), ["session-provider-sandbox-host-optional", "session-provider-sandbox-skipped"]);
+  assert.match(unnamed.result.warnings[0].message, /no host for 2 entries that cannot be shown, which are optional/);
+  assert.match(unnamed.result.warnings[1].message, /taken for 2 capabilities that cannot be shown/);
+  assert.match((await run({ launch: planned({ sandbox: { missing: [], skipped: { capability: "a.b" } } }) })).result.warnings[0].message, /taken for a\.b$/); // one row where a list belonged: read as that row
+  // An unresolved configuration is read first, whatever stands beside it, and its cause may be an object.
+  const beside = await run({ launch: planned({ sandbox: { unavailable: { code: "E_X", message: "lock unreadable" }, cause: "x", domains: [{ host: "*.evil" }] } }) });
+  assert.deepEqual(beside.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_UNAVAILABLE"]);
+  assert.match(beside.result.problems[0].message, /\(E_X: lock unreadable\)/);
 });
 
 test("a sandboxed launch that was handed no allowances writes none, and readiness says they are missing", async (t) => {

@@ -64,6 +64,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     sandboxed launch with a row that is not `optional` is refused (`E_BACKEND_SANDBOX_HOST`,
     naming each and `oats aweb setup`); a row the provider cannot name is counted, never
     dropped. `unavailable` refuses a sandboxed launch (`E_BACKEND_SANDBOX_UNAVAILABLE`).
+  - Beside `unavailable` nothing else of the object is read: there are no lists to write.
   - A sandboxed launch must understand everything it is told: a key the provider does not
     know, or a `missing` that is not a list, refuses it. A full-mode launch writes nothing
     and ignores `missing`, `skipped`, `unavailable` and unknown keys, whatever they hold.
@@ -71,9 +72,9 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   compensating a launch whose answer was lost).
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
-  launch (`launch: {harness, yolo, args, sandbox}`; the four values beside `home` and `soul`
-  are read the same), it also answers what that launch would be refused for in bb's
-  sandbox, as a problem with the launch's own code, and lists optional rows, skipped
+  launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on
+  a plain readiness read), it also answers what that launch would be refused for (its
+  harness, its arguments, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings. Without it, the check
   can only say, for a home, what its last launch left on record.
 

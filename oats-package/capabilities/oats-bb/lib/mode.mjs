@@ -42,6 +42,14 @@ export function permissionMode(args, yolo) {
   return mode;
 }
 
+export const HARNESSES = Object.freeze(["claude"]);
+
+/** Why this provider cannot run the harness, or null. → {code, message} | null. */
+export function harnessRefusal(harness) {
+  if (typeof harness === "string" && HARNESSES.includes(harness)) return null;
+  return { code: "E_BACKEND_HARNESS", message: `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}` };
+}
+
 /** Why a launch in this mode cannot have the sandbox it needs, or null. A sandboxed launch
  *  that would lack a host OATS's own commands reach is refused before anything starts:
  *  the agent's messaging would be cut off inside the sandbox. Full mode has no sandbox, so

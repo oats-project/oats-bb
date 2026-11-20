@@ -41,12 +41,11 @@ function doctorArgs(args) {
   }
   return { json };
 }
-/** The planned launch of a check: under `launch`, or (a kernel that sends the four values
- *  beside home and soul) the input itself when it carries a sandbox. */
+/** The planned launch of a check: `launch: {harness, yolo, args, sandbox}`, there before
+ *  every launch and absent on a plain readiness read. */
 function plannedLaunch(input) {
-  if (input === null || typeof input !== "object") return null;
-  if (input.launch !== null && typeof input.launch === "object" && !Array.isArray(input.launch)) return input.launch;
-  return input.sandbox !== undefined ? input : null;
+  const launch = input !== null && typeof input === "object" ? input.launch : null;
+  return launch !== null && typeof launch === "object" && !Array.isArray(launch) ? launch : null;
 }
 const print = (doc) => process.stdout.write(`${JSON.stringify(doc)}\n`);
 

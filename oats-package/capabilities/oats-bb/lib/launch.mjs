@@ -3,12 +3,11 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
-import { permissionMode, sandboxRefusal } from "./mode.mjs";
+import { harnessRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
-const HARNESSES = Object.freeze(["claude"]);
 const BB_PROVIDER = "claude-code";
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
@@ -18,9 +17,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function readInput(input) {
   if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
   const { home, instance, harness, model, promptFile, previous } = input;
-  if (typeof harness !== "string" || !HARNESSES.includes(harness)) {
-    throw fail("E_BACKEND_HARNESS", `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}`);
-  }
+  const unsupported = harnessRefusal(harness);
+  if (unsupported !== null) throw fail(unsupported.code, unsupported.message);
   if (typeof home !== "string" || !isAbsolute(home)) throw fail("E_SESSION_START_FAILED", "the launch input's home must be an absolute path");
   // The name becomes bb's project name and thread title: an argument, never an option.
   if (typeof instance !== "string" || !/^[A-Za-z0-9][^\0\n\r]*$/.test(instance)) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name (one line, starting with a letter or digit)");

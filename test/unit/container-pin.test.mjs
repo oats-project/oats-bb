@@ -19,12 +19,15 @@ const compare = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
 
 /** Whether `version` (x.y.z) is inside an npm-style range: comparators
  * joined by spaces (and) and `||` (or), with `^`, `~` and partial versions.
- * A form it does not know fails the test rather than passing it. */
+ * A form it does not know, anywhere in the range, fails the test rather than
+ * passing it: the whole range is read before any of it decides. */
 export function contains(range, version) {
   const wanted = parts(version).numbers;
-  const one = (comparator) => {
+  const read = (comparator) => {
     const match = /^(>=|<=|>|<|=|\^|~)?v?(.+)$/.exec(comparator);
-    const operator = match[1] ?? "=", { given, numbers } = parts(match[2]);
+    return { operator: match[1] ?? "=", ...parts(match[2]) };
+  };
+  const one = ({ operator, given, numbers }) => {
     const order = compare(wanted, numbers);
     // The first version after everything a partial or a caret/tilde admits.
     const after = (index) => numbers.map((number, at) => (at < index ? number : at === index ? number + 1 : 0));
@@ -38,11 +41,12 @@ export function contains(range, version) {
     const lead = numbers.findIndex((number, at) => number > 0 || at === given - 1);
     return order >= 0 && compare(wanted, after(lead)) < 0;
   };
-  return range.split("||").some((alternative) => {
+  const alternatives = range.split("||").map((alternative) => {
     const comparators = alternative.trim().split(/\s+/).filter(Boolean);
     assert.ok(comparators.length, `empty alternative in range ${JSON.stringify(range)}`);
-    return comparators.every(one);
+    return comparators.map(read);
   });
+  return alternatives.some((comparators) => comparators.every(one));
 }
 
 test("bb-version is the one pin: the container's dependency and lock, the provider's default and the plugin's dev dependency equal it, and the plugin's engines range contains it", () => {
@@ -73,5 +77,5 @@ test("bb-version is the one pin: the container's dependency and lock, the provid
     [">0.50", "0.50.9", false], [">0.50", "0.51.0", true], ["<=0.50", "0.50.9", true], ["<=0.50", "0.51.0", false], [">0.50.1", "0.50.1", false], ["<=0.50.1", "0.50.1", true],
     ["<0.50 || >=0.50.1", "0.50.1", true], ["<0.50 || >=0.50.2", "0.50.1", false],
   ]) assert.equal(contains(range, version), inside, `${range} and ${version}`);
-  for (const range of ["0.50.x", "*", ">=0.50.1 - 0.51", "latest", ""]) assert.throws(() => contains(range, "0.50.1"), /unsupported version|empty alternative/, `an unknown range form fails: ${JSON.stringify(range)}`);
+  for (const range of ["0.50.x", "*", ">=0.50.1 - 0.51", "latest", "", ">=0.50.1 <0.51 || latest", ">=0.50.1 <0.51 ||", "<0.40 latest", ">=0.50.1 <0.51 || 0.50.x"]) assert.throws(() => contains(range, "0.50.1"), /unsupported version|empty alternative/, `an unknown range form fails: ${JSON.stringify(range)}`);
 });

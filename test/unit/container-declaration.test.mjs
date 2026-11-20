@@ -1,9 +1,17 @@
 // container/agent-child.json against the grammar of the base supervisor's
 // optional child (oats-project/oats, docs/container.md, "An optional child").
 // The supervisor refuses a bad declaration when the container starts; this
-// refuses it before an image is built. What only a running image can show
-// (the command exists, its real path, the file's owner and mode) is
-// acceptance's, in the container workflow. Dependency-free.
+// refuses it before an image is built.
+//
+// `admit` is that grammar and nothing more: it mirrors parseChildDeclaration
+// in container/agent/supervisor.mjs at the commit the container workflow
+// pins, plus the supervisor's check that the name is the switch's. It must
+// refuse what the supervisor refuses and admit what it admits.
+// `admitForBuild` adds one check the supervisor can only make in a running
+// image, as an approximation: the command's path, read as text, must not lie
+// under a writable mount (the supervisor resolves the real path). What only a
+// running image can show (the command exists, its real path, the file's owner
+// and mode) is acceptance's, in the container workflow. Dependency-free.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { posix } from "node:path";
@@ -27,14 +35,12 @@ const keys = (value, key, required, optional = []) => {
 };
 const argv = (value, key) => {
   if (!Array.isArray(value) || !value.length || value.some((word) => typeof word !== "string" || word.includes("\0"))) refuse(key);
-  const [command] = value;
-  if (!command.startsWith("/") || posix.normalize(command) !== command || command.endsWith("/")) refuse(key);
-  if (WRITABLE_MOUNTS.some((mount) => command === mount || command.startsWith(`${mount}/`))) refuse(key);
+  if (!value[0].startsWith("/")) refuse(key);
 };
 
-/** Throws `Refused`, whose message is the key at fault, as the supervisor's
- * line names it; returns the declaration when it is admitted. `switchName` is
- * what the deployment sets as AGENT_CHILD. */
+/** The supervisor's grammar. Throws `Refused`, whose message is the key at
+ * fault; returns the declaration when it is admitted. `switchName` is what
+ * the deployment sets as AGENT_CHILD. */
 export function admit(text, switchName) {
   if (Buffer.byteLength(text) > MAX_BYTES) refuse("(size)");
   let value;
@@ -56,7 +62,7 @@ export function admit(text, switchName) {
   for (const [name, path] of Object.entries(fromFile)) {
     if (name in value.env) refuse(`envFromFile.${name}`);
     // Directly under /etc/agent-login/: one file name, no further directory.
-    if (!/^\/etc\/agent-login\/[^/]+$/.test(path) || [".", ".."].includes(posix.basename(path))) refuse(`envFromFile.${name}`);
+    if (!/^\/etc\/agent-login\/[^/\0]+$/.test(path) || [".", ".."].includes(posix.basename(path))) refuse(`envFromFile.${name}`);
   }
 
   const { listen } = value;
@@ -72,9 +78,19 @@ export function admit(text, switchName) {
   keys(value.version, "version", ["command", "file"]);
   argv(value.version.command, "version.command");
   const { file } = value.version;
-  if (typeof file !== "string" || file.includes("\0") || !file.startsWith("/") || posix.normalize(file) !== file || file.endsWith("/")) refuse("version.file");
+  if (typeof file !== "string" || file.includes("\0") || !file.startsWith("/")) refuse("version.file");
 
   if (!Number.isInteger(value.stopMs) || value.stopMs < 1000 || value.stopMs > 8000) refuse("stopMs");
+  return value;
+}
+
+/** `admit`, and the command's path as written must not lie under a writable
+ * mount. The supervisor refuses on the real path, which only the image has:
+ * this catches the plain case before a build, and acceptance the rest. */
+export function admitForBuild(text, switchName) {
+  const value = admit(text, switchName);
+  const command = posix.normalize(value.command[0]);
+  if (WRITABLE_MOUNTS.some((mount) => command === mount || command.startsWith(`${mount}/`))) refuse("command");
   return value;
 }
 
@@ -83,7 +99,7 @@ const switchName = /^\s*AGENT_CHILD: "([^"]*)"$/m.exec(read("compose.agent.child
 
 test("the declaration is valid under the base supervisor's grammar and declares bb on loopback", () => {
   assert.equal(switchName, "bb", "the fragment's switch");
-  assert.deepEqual(admit(committed, switchName), {
+  assert.deepEqual(admitForBuild(committed, switchName), {
     name: "bb",
     // bb's data stays in its default directory, /state/home/.bb: no --data-dir.
     command: ["/usr/local/bin/bb-app", "--no-in-app-updates", "--server-bind-host", "127.0.0.1"],
@@ -118,7 +134,6 @@ test("a declaration with an unknown key, a wrong port, a writable command path o
     ["an empty command", "command", (d) => { d.command = []; }],
     ["a command found on PATH", "command", (d) => { d.command[0] = "bb-app"; }],
     ["a command with a number in it", "command", (d) => { d.command.push(1); }],
-    ...["/state/home/bb-app", "/work/bb-app", "/tmp/bb-app", "/run/bb-app", "/outbox/bb-app", "/dev/shm/bb-app", "/usr/../state/bb-app"].map((path) => [`a command at ${path}`, "command", (d) => { d.command[0] = path; }]),
     ["an env value that is not a string", "env.BB_TELEMETRY", (d) => { d.env.BB_TELEMETRY = false; }],
     ["a lowercase env name", "env.bb_telemetry", (d) => { d.env.bb_telemetry = "false"; }],
     ...["PATH", "HOME", "LD_PRELOAD", "NSS_WRAPPER_PASSWD", "NSS_WRAPPER_GROUP", "NODE_OPTIONS", "AGENT_CHILD"].flatMap((name) => [
@@ -150,21 +165,53 @@ test("a declaration with an unknown key, a wrong port, a writable command path o
     ["a NUL in the version command", "version.command", (d) => { d.version.command.push("a\0b"); }],
     ["a version command on PATH", "version.command", (d) => { d.version.command = ["bb", "--version"]; }],
     ["a relative version file", "version.file", (d) => { d.version.file = "version"; }],
+    ["a version file with a NUL", "version.file", (d) => { d.version.file = "/opt/agent-child/version\0"; }],
+    ["an env value with a NUL", "env.BB_TELEMETRY", (d) => { d.env.BB_TELEMETRY = "false\0"; }],
     ["a stop budget over the cap", "stopMs", (d) => { d.stopMs = 8001; }],
     ["a stop budget under a second", "stopMs", (d) => { d.stopMs = 999; }],
     ["a stop budget that is a string", "stopMs", (d) => { d.stopMs = "8000"; }],
   ];
+  const refused = (key) => (error) => error instanceof Refused && error.message === key;
+  const changedBy = (change) => { const changed = structuredClone(base); change(changed); return JSON.stringify(changed); };
   for (const [what, key, change] of cases) {
-    const changed = structuredClone(base);
-    change(changed);
-    assert.throws(() => admit(JSON.stringify(changed), "bb"), (error) => error instanceof Refused && error.message === key, `${what} must be refused, naming ${key}`);
+    for (const check of [admit, admitForBuild]) assert.throws(() => check(changedBy(change), "bb"), refused(key), `${what} must be refused, naming ${key}`);
+  }
+
+  // A command under a writable mount: the grammar admits the text (the
+  // supervisor refuses it on the real path, in the image); the build check
+  // refuses the path as written.
+  for (const path of ["/state/home/bb-app", "/work/bb-app", "/tmp/bb-app", "/run/bb-app", "/outbox/bb-app", "/dev/shm/bb-app", "/usr/../state/bb-app", "/state", "//tmp/bb-app"]) {
+    const text = changedBy((d) => { d.command[0] = path; });
+    assert.equal(admit(text, "bb").command[0], path, `the grammar alone admits ${path}`);
+    assert.throws(() => admitForBuild(text, "bb"), refused("command"), `a command at ${path} must be refused before a build`);
+  }
+
+  // What the supervisor's grammar admits, this admits too: neither check is
+  // stricter than the base, so a declaration valid there never fails here.
+  for (const [what, change] of [
+    ["a version file with a dot segment", (d) => { d.version.file = "/opt/agent-child/./version"; }],
+    ["a version command under a writable mount", (d) => { d.version.command = ["/tmp/bb", "--version"]; }],
+    ["a command with a dot-dot that stays read-only", (d) => { d.command[0] = "/usr/local/bin/../bin/bb-app"; }],
+    ["a command in a directory whose name starts like a mount", (d) => { d.command[0] = "/statement/bb-app"; }],
+    ["a ready URL with a query", (d) => { d.ready.url = "http://127.0.0.1:38886/health?full=1&x=%20"; }],
+    ["a ready URL that is only the root path", (d) => { d.ready.url = "http://127.0.0.1:38887/"; }],
+    ["an empty env", (d) => { d.env = {}; }],
+    ["an empty envFromFile", (d) => { d.envFromFile = {}; }],
+    ["an env name that starts with an underscore", (d) => { d.env._X9 = ""; }],
+    ["the ports at both ends of the range", (d) => { d.listen = [1024, 65535, 38887]; }],
+    ["a one-character name's stop budget at the floor", (d) => { d.stopMs = 1000; }],
+    ["a ready field of 64 characters", (d) => { d.ready.field = "_".repeat(64); }],
+    ["a version command of one word", (d) => { d.version.command = ["/usr/local/bin/bb"]; }],
+  ]) {
+    const text = changedBy(change);
+    for (const check of [admit, admitForBuild]) assert.deepEqual(check(text, "bb"), JSON.parse(text), `${what} is admitted`);
   }
   for (const [what, key, text] of [
     ["text that is not JSON", "(json)", committed.slice(0, -2)],
     ["a list", "", "[]"],
     ["more than 16 KiB", "(size)", JSON.stringify({ ...base, env: { PAD: "x".repeat(16 * 1024) } })],
-  ]) assert.throws(() => admit(text, "bb"), (error) => error instanceof Refused && error.message === key, what);
-  assert.throws(() => admit(committed, "other"), (error) => error instanceof Refused && error.message === "name", "the switch names another child");
+  ]) assert.throws(() => admit(text, "bb"), refused(key), what);
+  assert.throws(() => admit(committed, "other"), refused("name"), "the switch names another child");
 
   // The optional key may be absent, and the admitted file passes unchanged.
   const { envFromFile, ...without } = base;

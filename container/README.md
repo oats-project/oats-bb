@@ -24,7 +24,12 @@ Not to be confused with `plugin/container/`, which holds the plugin's CI checks.
 Two things, together:
 
 1. **The image.** Build it on a team image you have built and accepted from
-   `container/agent` of the OATS repository. `AGENT_IMAGE` has no default:
+   `container/agent` of the OATS repository, **at a commit whose supervisor runs an
+   optional child**: the one this repository's
+   [container workflow](../.github/workflows/container.yml) pins as `OATS_COMMIT`, which
+   is the commit this image is accepted on, or a later one whose `docs/container.md` has
+   the section "An optional child". An older team image does not know `AGENT_CHILD`: it
+   ignores the fragment, and no bb starts. `AGENT_IMAGE` has no default:
 
    ```sh
    docker build --platform linux/amd64 \
@@ -52,11 +57,18 @@ no fragment, no bb starts.
 
 **Changing bb's version.** `bb-version` is the one pin of this repository; a test fails
 unless this directory's dependency and lock, the provider's default `version` and the
-plugin's build agree with it. To move it: change `bb-version` and the dependency in
-`container/package.json`, regenerate the lock in `container/` with npm 11 or later
-(`npm install --package-lock-only --ignore-scripts`; npm 10 drops the `libc` field of
-platform packages, and `npm ci` then also installs their musl builds), review both files,
-and build a new image.
+plugin's build agree with it. So one change moves them all:
+
+- `bb-version`;
+- the dependency in `container/package.json`, and the lock in `container/`, regenerated
+  with npm 11 or later (`npm install --package-lock-only --ignore-scripts`; npm 10 drops
+  the `libc` field of platform packages, and `npm ci` then also installs their musl
+  builds);
+- the provider's default `version` (`oats-package/`), with its contract test;
+- the plugin's `bb-app` dev dependency (`plugin/package.json`), and its `engines.bb`
+  range if the new version falls outside it.
+
+Review the two files of this directory and build a new image.
 
 ## What runs
 
@@ -84,9 +96,9 @@ ssh team-agent bb plugin disable push-notifications
 
 How the supervisor treats its optional child (the start order, what counts as ready, the
 restart after an exit, the stop order and its time budget, and what acceptance checks) is
-the team image's, and is described once, in "An optional child" of
-[docs/container.md](https://github.com/oats-project/oats/blob/main/docs/container.md) in
-the OATS repository. For bb the declared values are: ready when
+the team image's, and is described once, in the section "An optional child" of
+`docs/container.md` in the OATS repository. Read it at the commit your team image is built
+from: a revision without that section has no optional child. For bb the declared values are: ready when
 `http://127.0.0.1:38887/status` says `connected: true`, and 8 seconds to stop before it is
 killed. A thread's process ends with its bb; the thread itself is kept, the next bb lists
 it idle, and a message to it starts a new turn.

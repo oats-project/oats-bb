@@ -3,13 +3,13 @@ import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
 import { bounded } from "./errors.mjs";
-import { FULL_MODE_ONLY, plannedLaunchFindings, readinessResult } from "./readiness.mjs";
+import { FULL_MODE_ONLY, homeSandboxWarnings, plannedLaunchFindings, readinessResult } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
 import { stop } from "./stop.mjs";
 
 const withSettings = (run) => (input, rawSettings, options) => run(input, readSettings(rawSettings), options);
 
-/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox}`, there before
+/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox, trees?}`, there before
  *  every launch and absent on a plain readiness read. */
 function plannedLaunch(input) {
   const planned = input !== null && typeof input === "object" ? input.launch : null;
@@ -19,11 +19,12 @@ function plannedLaunch(input) {
 /** The handlers of the six verbs.
  *
  *  `sandboxedModes`: whether a launch in one of bb's sandboxed modes (auto, accept-edits)
- *  is taken. The provider's command does not take one yet (false, the default, and the
- *  only value `bin/oats-bb.mjs` uses): the rules that keep a sandboxed agent's tools off
- *  what runs outside its sandbox (contract item 6c) are not in this release, so such a
- *  launch is refused before anything starts and the check says so. The code and the tests
- *  of the sandboxed modes are here already; the tests reach them with `true`. */
+ *  is taken. The provider's command takes none (false, the default, and the only value
+ *  `bin/oats-bb.mjs` uses): the contract keeps bb homes in full mode until its two sides
+ *  offer the sandboxed modes (bb lets a command leave the sandbox, so they are no
+ *  boundary), so such a launch is refused before anything starts and the check says so.
+ *  What a sandboxed launch does (the allowances, the deny rules of contract item 6c) is
+ *  here and tested; the tests reach it with `true`. */
 export function sessionHandlers({ sandboxedModes = false } = {}) {
   return {
     launch: (input, rawSettings, options) => launch(input, readSettings(rawSettings), { ...options, sandboxedModes }),
@@ -36,7 +37,11 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
     // hands it, the check also says what that launch would be refused for and would write.
     check: async (input, rawSettings, options) => {
       const planned = plannedLaunch(input);
-      const { result } = await readinessResult(readSettings(rawSettings), { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes }) : undefined });
+      const settings = readSettings(rawSettings);
+      const home = input !== null && typeof input === "object" ? input.home : null;
+      const { result } = await readinessResult(settings, { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      // For a home, what its own settings say of the sandbox (a report only).
+      result.warnings.push(...homeSandboxWarnings(home));
       // With no planned launch the check cannot know the mode a launch would run in: it
       // says what the command launches in, so `oats readiness` does not read "ready" and
       // the spawn that follows is then refused with nothing having said why.

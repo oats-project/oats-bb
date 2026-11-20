@@ -24,11 +24,11 @@ async function setup(t) {
     home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false,
     env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }], unset: [], args: [],
     promptFile: join(home, "TASK.md"), previous: null,
-    sandbox: { domains: [AWEB], write: [events(dir)] }, ...extra,
+    sandbox: { domains: [AWEB], write: [events(dir)] }, trees: [join(home, "work")], ...extra,
   }, { settings: backend.settings(), bb, sandboxedModes: true });
   const local = () => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
   // The check as the kernel makes it before a launch: with the launch it plans.
-  const check = (launch) => call("check", { home, soul: null, ...(launch ? { launch: { harness: "claude", yolo: false, args: [], ...launch } } : {}) }, { settings: backend.settings(), bb, sandboxedModes: true });
+  const check = (launch) => call("check", { home, soul: null, ...(launch ? { launch: { harness: "claude", yolo: false, args: [], trees: [join(home, "work")], ...launch } } : {}) }, { settings: backend.settings(), bb, sandboxedModes: true });
   const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: "{}", ...extra } });
   return { dir, home, bb, backend, launch, local, check, hook, settings: backend.settings() };
 }
@@ -196,7 +196,7 @@ test("a missing host refuses only for the agent's default team; another team's i
   assert.equal((await launch({ yolo: false, sandbox: otherGap })).ok, true);
   const after = (await check({ sandbox: otherGap })).result;
   assert.equal(after.status, "ready");
-  assert.deepEqual(after.warnings.map((w) => w.code), ["session-provider-sandbox-team-unreachable", "session-provider-sandbox"]);
+  assert.deepEqual(after.warnings.map((w) => w.code), ["session-provider-sandbox-team-unreachable", "session-provider-sandbox", "session-provider-sandboxed"]);
   assert.match(after.warnings[0].message, /not this agent's default: in bb's accept-edits mode every command that reaches that team's mail raises a prompt.*oats aweb setup.*Missing: oats\.aweb's setting services for team ops:acme\.aweb\.ai$/);
   // In auto the same gap reads as unreachable mail; the check of a planned launch says it before the launch.
   const plannedAuto = await call("check", { home, soul: null, launch: { harness: "claude", yolo: null, args: ["--permission-mode", "auto"], sandbox: { domains: [AWEB], write: [], missing: [other] } } }, { settings, bb, sandboxedModes: true });
@@ -304,7 +304,7 @@ test("the launch hook in a tmux home the provider never launched says nothing, w
   assert.equal(run.stdout, "");
 });
 
-test("the launch hook removes the provider's two keys only on the kernel's word that the home ran on bb before", async (t) => {
+test("the launch hook removes the provider's keys only on the kernel's word that the home ran on bb before", async (t) => {
   const { home, launch, local, hook } = await setup(t);
   mkdirSync(join(home, ".claude"));
   writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } }));
@@ -332,7 +332,7 @@ test("the launch hook removes the provider's two keys only on the kernel's word 
   // home holds, and the sandbox block that stands there is named as possibly stale.
   const unknown = await hook("tmux");
   assert.equal(unknown.status, 0);
-  assert.match(JSON.parse(unknown.stdout).warning, /holds a sandbox block.*removed nothing.*remove them by hand$/);
+  assert.match(JSON.parse(unknown.stdout).warning, /holds sandbox keys.*removed nothing.*may be stale: remove them by hand$/);
   assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
   assert.equal(existsSync(join(home, ".oats-bb")), false, "the old names go, unread, whatever the home ran on");
   leftovers();
@@ -344,7 +344,7 @@ test("the launch hook removes the provider's two keys only on the kernel's word 
   // It ran on bb before: the two keys go, every other key stays, and so do the leftovers.
   const moved = await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" });
   assert.equal(moved.status, 0);
-  assert.match(JSON.parse(moved.stdout).warning, /starts on tmux, no longer on bb.*removed its two keys/);
+  assert.match(JSON.parse(moved.stdout).warning, /starts on tmux, no longer on bb.*removed its keys/);
   assert.deepEqual(local(), { permissions: { allow: ["Bash(ls)"] } });
   assert.equal(existsSync(join(home, ".oats-bb-sandbox.json")), false);
   assert.equal(existsSync(join(home, ".oats-bb")), false);
@@ -374,7 +374,7 @@ test("an old record nobody can delete holds nothing up: the launch answers, the 
   assert.equal(existsSync(join(home, ".oats-bb/a/b")), true);
   const moved = await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" });
   assert.equal(moved.status, 0);
-  assert.match(JSON.parse(moved.stdout).warning, /removed its two keys/);
+  assert.match(JSON.parse(moved.stdout).warning, /removed its keys/);
   assert.deepEqual(local(), {});
   const retired = await runBin(["retire-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "/nonexistent/oats-bb-test/bb" }) } });
   assert.equal(retired.status, 0);
@@ -385,24 +385,35 @@ test("an old record nobody can delete holds nothing up: the launch answers, the 
   assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".oats-bb")), []);
 });
 
-test("a launch rewrites its two keys from the launch input, keeps the rest, and keeps nothing of its own in the home", async (t) => {
+test("a launch rewrites its keys from the launch input, keeps the rest, and keeps nothing of its own in the home", async (t) => {
   const { home, launch, local } = await setup(t);
   mkdirSync(join(home, ".claude"));
   mkdirSync(join(home, ".oats-bb"));
   writeFileSync(join(home, ".oats-bb/launch-env.json"), JSON.stringify({ names: ["permissions", "MINE"] }));
-  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "x", OATS_INSTANCE: "other" }, sandbox: { network: { allowedDomains: ["evil.example.org"] }, enabled: false } }));
+  // What the agent might leave there: its own allowances, a deny list emptied of the
+  // provider's rules, the switch turned off.
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"], deny: ["Read(//etc/passwd)"], blockWritesOutsideWorkingDirectories: false, defaultMode: "plan" }, env: { MINE: "x", OATS_INSTANCE: "other" }, sandbox: { network: { allowedDomains: ["evil.example.org"] }, enabled: false } }));
   assert.equal((await launch({ unset: ["GONE"] })).ok, true);
-  assert.deepEqual(local(), {
-    permissions: { allow: ["Bash(ls)"] },
+  const { permissions, ...rest } = local();
+  assert.deepEqual(rest, {
     env: { GONE: "", OATS_INSTANCE: "dev-a" },
     sandbox: { network: { allowedDomains: [AWEB.host] }, filesystem: { allowWrite: [events(join(home, "..")).path] } },
   });
+  // Under permissions, two keys are the provider's, whole; the others stay.
+  assert.deepEqual(Object.keys(permissions).sort(), ["allow", "blockWritesOutsideWorkingDirectories", "defaultMode", "deny"]);
+  assert.deepEqual([permissions.allow, permissions.defaultMode, permissions.blockWritesOutsideWorkingDirectories], [["Bash(ls)"], "plan", true]);
+  assert.equal(permissions.deny.includes("Read(//etc/passwd)"), false, "a person's own deny rule is not kept");
+  for (const rule of [`Edit(/${join(home, ".oats/**")})`, `Edit(/${join(home, "TASK.md")})`, `Edit(/${join(home, "work/.git/hooks/**")})`, "mcp__bb-bridge__update_environment_directory"]) assert.ok(permissions.deny.includes(rule), rule);
   assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o600);
   assert.deepEqual(readdirSync(join(home, ".claude")), ["settings.local.json"]);
   assert.equal(existsSync(join(home, ".oats-bb")), false);
   // Full mode has no sandbox: the key goes.
   assert.equal((await launch({ yolo: true })).ok, true);
-  assert.deepEqual(Object.keys(local()).sort(), ["env", "permissions"]);
+  assert.deepEqual(local(), { permissions: { allow: ["Bash(ls)"], defaultMode: "plan" }, env: { OATS_INSTANCE: "dev-a" } });
+  // A permissions block that held nothing but the provider's two keys goes with them.
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { deny: ["x"], blockWritesOutsideWorkingDirectories: true } }));
+  assert.equal((await launch({ yolo: true })).ok, true);
+  assert.deepEqual(local(), { env: { OATS_INSTANCE: "dev-a" } });
   // A file the provider cannot read as a JSON object is not overwritten: the launch refuses.
   writeFileSync(join(home, ".claude/settings.local.json"), "{ not json");
   assert.match((await launch({ yolo: true })).error.message, /is not JSON: fix or remove it; the provider does not overwrite it/);
@@ -416,4 +427,70 @@ test("the launch hook in a home the provider never launched does nothing", async
   assert.equal(run.stdout, "");
   assert.equal(existsSync(join(home, ".claude")), false);
   assert.equal((await runBin(["launch-hook"], { env: { OATS_BACKEND: "tmux" } })).status, 2);
+});
+
+// The deny rules of a sandboxed launch (contract item 6c): built from what the kernel says
+// and from this host, checked before anything starts, and reported for a home only when whole.
+test("a sandboxed launch that names no trees, or a tree that is none, is refused before bb is asked; the check of that launch says so first", async (t) => {
+  const { dir, home, bb, launch, check, local } = await setup(t);
+  const none = await launch({ trees: undefined });
+  assert.equal(none.error.code, "E_BACKEND_SANDBOX_TREES");
+  assert.match(none.error.message, /no "trees".*upgrade OATS.*or launch in full mode \(--yolo\)/);
+  for (const trees of [[join(home, "nowhere")], ["work"], [join(dir, "a(b")], "work", [7]]) {
+    const answer = await launch({ trees });
+    assert.equal(answer.error.code, typeof trees === "string" ? "E_BACKEND_SANDBOX_TREES" : "E_BACKEND_SANDBOX_PATH", JSON.stringify(trees));
+  }
+  assert.deepEqual(bb.calls(), [], "bb is not asked or changed at all");
+  assert.equal(existsSync(join(home, ".claude")), false);
+  // The check of the planned launch: with the trees, the same refusal, as a problem.
+  const bad = (await check({ trees: [join(home, "nowhere")] })).result;
+  assert.deepEqual([bad.status, bad.problems.map((p) => p.code)], ["needs-configuration", ["E_BACKEND_SANDBOX_PATH"]]);
+  // With none in the planned launch, the check cannot know them: it says nothing, and the launch refuses.
+  assert.deepEqual((await check({ trees: undefined })).result.problems, []);
+  // Full mode writes no deny rule and needs no trees.
+  assert.equal((await launch({ yolo: true, trees: undefined })).ok, true);
+  assert.equal(local().permissions, undefined);
+});
+
+test("a data directory that is not bb's refuses a sandboxed launch and its check: bb's thread storage would go uncovered", async (t) => {
+  const { home, bb, backend } = await setup(t);
+  const settings = backend.settings({ dataDir: join(home, "notes") });
+  const input = { home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false, env: [], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, sandbox: { domains: [AWEB], write: [] }, trees: [join(home, "work")] };
+  const answer = await call("launch", input, { settings, bb, sandboxedModes: true });
+  assert.equal(answer.error.code, "E_BACKEND_SETTINGS");
+  assert.match(answer.error.message, /settings\.oats\.bb\.dataDir .* holds no thread-storage directory/);
+  assert.deepEqual(bb.calls(), []);
+  for (const trees of [input.trees, undefined]) {
+    const { result } = await call("check", { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: input.sandbox, trees } }, { settings, bb, sandboxedModes: true });
+    assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_SETTINGS"]);
+  }
+  assert.equal((await call("launch", { ...input, yolo: true }, { settings, bb, sandboxedModes: true })).ok, true, "full mode does not look at it");
+});
+
+test("readiness reports a home sandboxed only when its settings hold the sandbox block and both additions; anything less is said, and a full-mode home says nothing", async (t) => {
+  const { home, launch, local, check } = await setup(t);
+  const codes = async () => (await check()).result.warnings.map((w) => w.code).filter((code) => code.startsWith("session-provider-sandbox"));
+  assert.deepEqual(await codes(), [], "a home never launched");
+  await launch();
+  assert.deepEqual(await codes(), ["session-provider-sandboxed"]);
+  assert.match((await check()).result.warnings.find((w) => w.code === "session-provider-sandboxed").message, /limit accidents, not a determined agent: they are not a security boundary/);
+  const whole = local();
+  const write = (doc) => writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify(doc));
+  for (const [what, doc, lacking] of [
+    ["the switch turned off", { ...whole, permissions: { ...whole.permissions, blockWritesOutsideWorkingDirectories: false } }, /not permissions\.blockWritesOutsideWorkingDirectories:/],
+    ["the move tool no longer denied", { ...whole, permissions: { ...whole.permissions, deny: whole.permissions.deny.slice(0, -1) } }, /not the deny of bb.s directory-move tool \(permissions\.deny\):/],
+    ["no sandbox block", { env: whole.env, permissions: whole.permissions }, /not the sandbox block:/],
+    ["a deny list that is no list", { ...whole, permissions: { deny: "x" } }, /not the deny of .* and not permissions\.blockWrites/],
+  ]) {
+    write(doc);
+    assert.deepEqual(await codes(), ["session-provider-sandbox-incomplete"], what);
+    const { message } = (await check()).result.warnings.find((w) => w.code === "session-provider-sandbox-incomplete");
+    assert.match(message, lacking, what);
+    assert.match(message, /not reported as sandboxed.*restart the home/, what);
+  }
+  // The report decides nothing: the next launch rewrites all of it.
+  await launch();
+  assert.deepEqual(local(), whole);
+  await launch({ yolo: true });
+  assert.deepEqual(await codes(), []);
 });

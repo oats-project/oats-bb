@@ -1,5 +1,6 @@
 // The provider's settings (`settings.oats.bb`): where bb is, which bb, and who can reach it.
-import { isAbsolute } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join, normalize } from "node:path";
 import { fail, isObject } from "./errors.mjs";
 
 const DEFAULT_SERVER = "http://127.0.0.1:38886";
@@ -54,11 +55,16 @@ export function readSettings(raw) {
   };
   const cli = text("cli", DEFAULT_CLI);
   if (/[\\/]/.test(cli) && !isAbsolute(cli)) throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.cli must be a command name on PATH or an absolute path, got ${JSON.stringify(cli)}`);
+  // bb's data directory (bb-app's --data-dir): bb does not say where it is. Its default
+  // is `.bb` in the home of the user that runs bb, who is the user this provider runs as.
+  const dataDir = text("dataDir", join(homedir(), ".bb")).replace(/\/+$/, "");
+  if (!isAbsolute(dataDir) || normalize(dataDir) !== dataDir || dataDir === "/") throw fail("E_BACKEND_SETTINGS", "settings.oats.bb.dataDir must be an absolute path with no . or .. step");
   return {
     server: text("server", DEFAULT_SERVER),
     daemon: text("daemon", DEFAULT_DAEMON),
     version: text("version", null),
     trust: text("trust", null),
     cli,
+    dataDir,
   };
 }

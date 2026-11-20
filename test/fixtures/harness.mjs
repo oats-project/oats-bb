@@ -1,7 +1,7 @@
 // What the unit tests share: a fake bb on disk, a fake bb server and host daemon on
 // loopback, and the provider run as the kernel runs it (a process, JSON in, JSON out).
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -59,7 +59,8 @@ export function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), "oats-bb-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const home = join(dir, "home");
-  mkdirSync(home, { mode: 0o700 });
+  mkdirSync(join(home, "work"), { recursive: true, mode: 0o700 });
+  chmodSync(home, 0o700);
   writeFileSync(join(home, "TASK.md"), "Say hi.\n");
   return { dir, home };
 }
@@ -111,7 +112,11 @@ export async function fakeBackend(t, overrides = {}) {
     return json(res, 404, {});
   });
   const daemonUrl = `http://127.0.0.1:${daemon.address().port}`;
-  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", ...extra }) };
+  // bb's data directory, as bb-app makes it: the provider looks for its thread-storage.
+  const dataDir = mkdtempSync(join(tmpdir(), "oats-bb-test-data-"));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  mkdirSync(join(dataDir, "thread-storage"));
+  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", dataDir, ...extra }) };
 }
 
 /** A loopback port where nothing answers, held for the whole test: a listener that drops

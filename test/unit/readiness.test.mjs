@@ -2,7 +2,7 @@
 // relays as a readiness providers item, and the same checks a launch runs first.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { networkInterfaces } from "node:os";
+import { homedir, networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { accepts, exposedListeners, nonLoopbackAddresses } from "../../oats-package/capabilities/oats-bb/lib/exposure.mjs";
@@ -415,9 +415,11 @@ test("a bb server bound to every address is E_BACKEND_EXPOSED, naming where it a
 });
 
 test("settings: defaults, and shapes that are refused", () => {
-  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: null, trust: null, cli: "bb" });
-  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb" });
+  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: null, trust: null, cli: "bb", dataDir: join(homedir(), ".bb") });
+  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container", dataDir: "/srv/bb/" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb", dataDir: "/srv/bb" });
   assert.throws(() => readSettings([]), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ cli: "./bb" }), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ server: 38886 }), { code: "E_BACKEND_SETTINGS" });
+  // bb's data directory: an absolute path with no . or .. step, never the root.
+  for (const dataDir of ["bbdata", "/srv/../bb", "/", 7]) assert.throws(() => readSettings({ dataDir }), { code: "E_BACKEND_SETTINGS" });
 });

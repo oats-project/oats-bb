@@ -172,7 +172,17 @@ bb counts toward the container's limits. Add to `AGENT_MEMORY` and `AGENT_PIDS` 
 Each pull request here builds a team image from one pinned commit of the OATS repository,
 builds this image on it, starts it under that commit's Compose files with this fragment,
 and runs that commit's acceptance with `AGENT_CHILD=bb`
-([the workflow](../.github/workflows/container.yml)), on amd64, with no token and no
-model.
+([the workflow](../.github/workflows/container.yml)). It uses no token and no model.
+
+Run by hand on amd64, on the same pinned commit: both builds; the start (broker, then bb
+ready in about 3 seconds, then sshd and host run); `bb --version` equal to the pin; the
+ordered stop (host run first, then sshd, the broker and bb, each exiting 0); and that
+acceptance, which checks the declaration file, bb's two declared ports, that nothing but
+sshd listens beyond loopback, and the declared version.
+
+Run before the move, on the image and relay as they were in the OATS repository (the relay
+is unchanged): a bb restart after `kill` and after `kill -9`, each followed by a new turn
+in a thread made before it, on a mock model; and the relay with the real `ssh`, the bb web
+page and API through it.
 
 **NOT RUN:** arm64; Tailscale Serve; the desktop and phone apps; push notifications.

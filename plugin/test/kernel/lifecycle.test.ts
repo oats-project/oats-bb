@@ -82,8 +82,8 @@ describe("stop", () => {
 describe("start and restart", () => {
   const home = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
   it("starts the home the kernel named and answers the new thread", async () => {
-    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_digest2" } });
-    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_digest2" } });
+    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_yp26z4d5ac" } });
+    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_bxr8mrr972" } });
     expect((await fake.calls()).map((call) => call.argv)).toEqual([
       ["session", "start", "--home", home, "--json"],
       ["session", "restart", "--home", home, "--json"],
@@ -109,13 +109,18 @@ describe("retire", () => {
     expect(plan).toEqual({
       ok: true,
       value: {
-        revision: "4e5f6a7b8c9d0e1f2a3b4c5d",
+        revision: "0e7a222400927b98e70ac281",
         lines: [
           "Removed: the home of weekly-digest-helper (/abs/deployment/agents/oats-expert/instances/weekly-digest-helper). Its session is not running.",
           "Kept: its work tree on branch agents/weekly-digest-helper, moved out of the home (0 changed and 1 untracked file in its work tree).",
           "Kept: its branch.",
           "Its child (digest-links-helper): stopped and kept.",
-          "1 untracked file in the work tree is copied to the recovery directory before the home is removed",
+          // The kernel's own notes, as it words them, after the plugin's lines.
+          "0 changed and 1 untracked file(s) would be retained with the worktree",
+          "1 recorded child instance(s) are stopped first (bounded SIGTERM, never escalated) and retained (their homes are not removed); a child still running after the grace refuses the retirement",
+          "pull request state is unknown to the kernel; the ADE reports it when a forge connection exists",
+          "recovery: the home is copied to /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery before the home is removed, when it changed since spawn; not copied: .oats-bb, .oats-bb-sandbox.json (oats.bb)",
+          "recovery: uncommitted worktree state is copied there too",
         ],
       },
     });
@@ -158,18 +163,18 @@ describe("retire", () => {
   });
 
   it("applies the plan: the first answer is the receipt itself, a replay is an envelope", async () => {
-    const apply = { instance: "weekly-digest-helper", revision: "4e5f6a7b8c9d0e1f2a3b4c5d", key: "retire-2b9d4e6f8a1c" };
+    const apply = { instance: "weekly-digest-helper", revision: "0e7a222400927b98e70ac281", key: "retire-2b9d4e6f8a1c" };
     expect(await oats.retireApply(apply)).toEqual({ ok: true, value: {} });
     const receipt = JSON.parse(await readFile(join(FIXTURES, "retire-apply.json"), "utf8"));
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { ...receipt, replayed: true } }) } });
     expect(await oats.retireApply(apply)).toEqual({ ok: true, value: {} });
-    expect((await fake.calls())[0]?.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "4e5f6a7b8c9d0e1f2a3b4c5d", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
+    expect((await fake.calls())[0]?.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "0e7a222400927b98e70ac281", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
   });
 
   it("says what the kernel left when a retire's cleanup is incomplete (the receipt, with exit 1)", async () => {
     const receipt = JSON.parse(await readFile(join(FIXTURES, "retire-incomplete.json"), "utf8"));
     await fake.behave({ retire: { file: "retire-incomplete.json", exit: 1 } });
-    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "4e5f6a7b8c9d0e1f2a3b4c5d", key: "retire-2b9d4e6f8a1c" });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "0e7a222400927b98e70ac281", key: "retire-2b9d4e6f8a1c" });
     expect(applied).toEqual({
       ok: false,
       error: {
@@ -180,13 +185,13 @@ describe("retire", () => {
     expect(receipt.rollbackIncomplete.length).toBeGreaterThan(0);
     // Asked again with the same key, the kernel replays that receipt in an envelope, with exit 0.
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { ...receipt, replayed: true } }) } });
-    const replayed = await oats.retireApply({ instance: "weekly-digest-helper", revision: "4e5f6a7b8c9d0e1f2a3b4c5d", key: "retire-2b9d4e6f8a1c" });
+    const replayed = await oats.retireApply({ instance: "weekly-digest-helper", revision: "0e7a222400927b98e70ac281", key: "retire-2b9d4e6f8a1c" });
     expect(replayed).toEqual(applied);
   });
 
   it("does not take a retire that exits nonzero for done, whatever it printed", async () => {
     await fake.behave({ retire: { file: "retire-apply.json", exit: 1, stderr: "TypeError: boom\n" } });
-    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "4e5f6a7b8c9d0e1f2a3b4c5d", key: "retire-2b9d4e6f8a1c" });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "0e7a222400927b98e70ac281", key: "retire-2b9d4e6f8a1c" });
     expect(applied).toEqual({ ok: false, error: { code: codes.failed, message: "`oats` exited 1: TypeError: boom" } });
   });
 
@@ -198,7 +203,7 @@ describe("retire", () => {
 
   it("answers the kernel's refusal unchanged", async () => {
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CHILDREN_RUNNING", message: "1 child still runs: digest-links-helper", details: {} } }) } });
-    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "4e5f6a7b8c9d0e1f2a3b4c5d", key: "retire-2b9d4e6f8a1c" });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "0e7a222400927b98e70ac281", key: "retire-2b9d4e6f8a1c" });
     expect(applied).toEqual({ ok: false, error: { code: "E_CHILDREN_RUNNING", message: "1 child still runs: digest-links-helper" } });
   });
 });

@@ -227,7 +227,7 @@ describe("the pages", () => {
 describe("acts", () => {
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
-    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ci2" });
+    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zte8wn34p7" });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
@@ -254,7 +254,7 @@ describe("acts", () => {
     const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
-    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ci2" });
+    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zte8wn34p7" });
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn --preview", "spawn"]);
     expect(calls[3]!.argv[calls[3]!.argv.indexOf("--expect-decision") + 1]).toBe("aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -294,7 +294,7 @@ describe("acts", () => {
     await fake.behave({ "instance stop --apply": { file: "stop-apply-stale.json" } });
     expect(await refusalOf(rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-0000aaaa1111" }))).toEqual({
       code: "conflict",
-      message: "E_PLAN_STALE: the stop plan for redesign-ui-lead changed since revision 9c1f2e3d4b5a69788796a5b4 was read; read the plan again and confirm it",
+      message: "E_PLAN_STALE: the stop plan changed since it was shown (f9dcbb5542487fc328e88b07 → c30af39bbdfb748db5e0b1b5); review the fresh plan",
     });
   });
 
@@ -307,8 +307,8 @@ describe("acts", () => {
     await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
     expect(await verbs()).toEqual(["status"]);
 
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_digest2" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_digest2" });
+    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_yp26z4d5ac" });
+    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_bxr8mrr972" });
     const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
     expect(sessions.map((call) => call.argv)).toEqual([
       ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
@@ -337,11 +337,11 @@ describe("acts", () => {
 
   it("retires through the plan and its guarded apply", async () => {
     const plan = await rpc("retirePlan", { instance: "weekly-digest-helper" });
-    expect(plan.revision).toBe("4e5f6a7b8c9d0e1f2a3b4c5d");
+    expect(plan.revision).toBe("0e7a222400927b98e70ac281");
     expect(plan.lines[0]).toMatch(/^Removed: the home of weekly-digest-helper/);
     expect(await rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" })).toEqual({ ok: true });
     const retire = (await fake.calls()).find((call) => call.verb === "retire")!;
-    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "4e5f6a7b8c9d0e1f2a3b4c5d", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
+    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "0e7a222400927b98e70ac281", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
   });
 
   it("rereads the snapshot after an act", async () => {

@@ -5,62 +5,64 @@
   "instance": "flaky-ci-2-developer",
   "agent": "oats-developer",
   "home": "/abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer",
-  "work": "worktree",
-  "branch": "agents/flaky-ci-2-developer",
-  "base": {
-   "ref": "github.com/awebai/oats",
-   "oid": "e5b6c5ac4f3eabbb73990d9c2a4c0c3ca14ca422"
-  },
+  "work": "directory",
+  "branch": null,
+  "base": null,
   "launched": true,
-  "warnings": [
-   "the bb server at http://127.0.0.1:38886 runs bb-app 0.50.1; the capability was tested up to 0.50.1"
-  ],
+  "warnings": [],
+  "launchPrompts": {
+   "status": "not-engaged",
+   "startId": "5357d5d3-1c92-4f2b-8f3c-33a09e656c39",
+   "at": "2026-11-20T10:07:23.922Z"
+  },
   "tmux": null,
   "backend": "bb",
   "session": {
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_ci2",
-    "threadId": "thr_ci2"
+    "projectId": "proj_6vehnms87j",
+    "threadId": "thr_zte8wn34p7"
    }
   },
-  "repo": "/abs/clones/oats",
-  "harness": "pi",
-  "model": "github-copilot/claude-fable-5.1",
+  "repo": "/abs/deployment",
+  "harness": "claude",
+  "model": "claude-opus-5-5",
   "parent": null,
   "sibling": null,
   "relation": null,
   "spawnOrigin": "operator",
-  "attach": "oats session attach --home /abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer",
+  "attach": null,
+  "yolo": true,
+  "background": false,
   "decision": {
    "instance": "flaky-ci-2-developer",
    "home": "/abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer",
-   "branch": "agents/flaky-ci-2-developer",
-   "base": {
-    "ref": "github.com/awebai/oats",
-    "oid": "e5b6c5ac4f3eabbb73990d9c2a4c0c3ca14ca422"
-   },
+   "branch": null,
+   "base": null,
    "effective": {
-    "repo": "/abs/clones/oats",
-    "work": "worktree",
-    "harness": "pi",
-    "model": "github-copilot/claude-fable-5.1",
-    "launchConfig": null,
-    "yolo": null,
+    "repo": "/abs/deployment",
+    "work": "directory",
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": "claude-full",
+    "yolo": true,
     "backend": "bb",
     "childSpawns": true,
     "relation": null,
     "providers": {
-     "oats.aweb": {},
-     "oats.build": {},
-     "oats.core": {},
-     "oats.developer": {},
-     "oats.landing-rules": {}
+     "oats.bb": {
+      "server": "http://127.0.0.1:38886",
+      "daemon": "http://127.0.0.1:38887",
+      "version": "0.50.1",
+      "cli": "bb",
+      "trust": "container"
+     },
+     "oats.core": {}
     }
    },
-   "resolution": "370495ec8a708df4d543f7aa",
-   "revision": "f48a98cea8a3a34508aab024"
+   "resolution": "e74419eccdcf800d51f57803",
+   "revision": "6bfb4c2f01939d7e11680bcd"
   },
   "replayed": false,
   "wake": {
@@ -68,18 +70,20 @@
    "saved": null,
    "error": null
   },
-  "launchConfig": null,
+  "launchConfig": "claude-full",
   "launch": {
    "version": 2,
-   "harness": "pi",
-   "launchConfig": null,
-   "launchConfigSource": null,
-   "executable": "/usr/local/bin/pi",
+   "harness": "claude",
+   "launchConfig": "claude-full",
+   "launchConfigSource": "/abs/deployment",
+   "launchConfigDefault": true,
+   "executable": null,
    "executableDeclared": null,
-   "executableResolvedFrom": "PATH",
+   "executableResolvedFrom": "session provider bb",
    "args": [],
    "env": {},
-   "model": "github-copilot/claude-fable-5.1",
+   "model": "claude-opus-5-5",
+   "yolo": true,
    "hooks": {
     "launch": {},
     "env": {},

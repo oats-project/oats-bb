@@ -30,14 +30,16 @@
      },
      "running": null,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": {
       "since": "2026-11-19T12:22:00.000Z",
       "producer": "oats.core",
       "reason": "attention",
       "message": "Green light at 9f2e1c? Second reader done."
      },
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_release/threads/thr_release"
+     }
     }
    ]
   },
@@ -70,9 +72,11 @@
      },
      "running": true,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": null,
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_redesign/threads/thr_redesign"
+     }
     }
    ]
   },
@@ -105,9 +109,11 @@
      },
      "running": true,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": null,
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_mockups/threads/thr_mockups"
+     }
     }
    ]
   },
@@ -140,9 +146,11 @@
      },
      "running": null,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": null,
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_harvest/threads/thr_harvest"
+     }
     }
    ]
   },
@@ -175,14 +183,16 @@
      },
      "running": null,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": {
       "since": "2026-11-19T12:22:00.000Z",
       "producer": "oats.core",
       "reason": "permission",
       "message": "needs your permission to use Bash"
      },
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_ci/threads/thr_ci"
+     }
     },
     {
      "agent": "oats-developer",
@@ -241,14 +251,16 @@
      },
      "running": null,
      "runtimeState": "unknown",
-     "runtimeError": null,
      "waitingOnYou": {
       "since": "2026-11-19T12:22:00.000Z",
       "producer": "oats.core",
       "reason": "question",
       "message": "Keep depth 6 and sweep lr, or try depth 7?"
      },
-     "open": null
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_research/threads/thr_research"
+     }
     }
    ]
   },
@@ -281,9 +293,9 @@
      },
      "running": false,
      "runtimeState": "stopped",
-     "runtimeError": null,
      "waitingOnYou": null,
-     "open": null
+     "open": null,
+     "sessionEnd": "stopped"
     }
    ]
   }

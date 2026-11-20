@@ -4,7 +4,7 @@
 // (a spawn or a tell whose fate is unknown) it answers nothing and exits nonzero: a failed
 // call, which the kernel treats as uncertain. All of the envelope lives here.
 //
-//   request  { schemaVersion: 1, phase: "session", capability, provider, verb, input }
+//   request  { schemaVersion: 1, wire: "1.3", phase: "session", capability, provider, verb, input }
 //   answer   the same five header keys, then  ok: true,  result: { … }
 //                                         or  ok: false, error: { code, message }
 //
@@ -14,6 +14,10 @@ import { InDoubt, ProviderError, isObject } from "./errors.mjs";
 import { graceOf } from "./stop.mjs";
 
 export const PROVIDER = "bb";
+// The one version of this wire the provider speaks. The manifest declares the same
+// (`sessionProviders.bb.wire`), and the kernel sends its own in every request: a kernel
+// that speaks another, or names none, is refused before anything is read or done.
+export const WIRE = "1.3";
 // What a failure the provider did not classify means, per verb (contract item 1).
 const VERB_FAILURE = {
   launch: "E_SESSION_START_FAILED",
@@ -68,6 +72,10 @@ export async function answer(verb, text, handlers, { env = process.env, now = Da
     if (typeof request.capability === "string") head.capability = request.capability;
     if (typeof request.provider === "string") head.provider = request.provider;
     if (request.schemaVersion !== 1) throw new ProviderError(fallback, `the request's schemaVersion is ${JSON.stringify(request.schemaVersion)}; this provider speaks 1`);
+    if (request.wire !== WIRE) {
+      const theirs = typeof request.wire === "string" && /^\d{1,3}\.\d{1,3}$/.test(request.wire) ? `wire ${request.wire}` : request.wire === undefined ? "no wire version (an older kernel)" : "a wire version this provider cannot read";
+      throw new ProviderError("E_BACKEND_WIRE", `the kernel speaks ${theirs}, and this provider (oats.bb) speaks wire ${WIRE}: use an OATS and an oats.bb release that agree`);
+    }
     if (request.phase !== "session") throw new ProviderError(fallback, `the request's phase is ${JSON.stringify(request.phase)}, not "session"`);
     if (request.verb !== verb) throw new ProviderError(fallback, `the request's verb is ${JSON.stringify(request.verb)}, and the command run is ${verb}`);
     if (request.provider !== PROVIDER) throw new ProviderError(fallback, `the request names the session provider ${JSON.stringify(request.provider)}; this one is ${PROVIDER}`);

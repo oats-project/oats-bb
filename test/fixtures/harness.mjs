@@ -136,7 +136,7 @@ export function runBin(args, { stdin = "", env = {} } = {}) {
   });
 }
 
-export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb, input, ...extra });
+export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input, ...extra });
 
 /** One call on the kernel's wire: the request on stdin, the home's settings in
  *  OATS_SETTINGS. → the answer envelope, asserted to be the wire's: exactly one JSON

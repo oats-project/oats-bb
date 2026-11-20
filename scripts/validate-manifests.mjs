@@ -4,6 +4,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WIRE } from "../oats-package/capabilities/oats-bb/lib/wire.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = join(repoRoot, "oats-package");
@@ -93,7 +94,10 @@ if (isObject(pkg)) {
         if (!PROVIDER_NAME.test(name)) report(here, "a provider name is 1-40 lowercase letters, digits and dashes");
         if (RESERVED_PROVIDERS.includes(name)) report(here, `${name} is reserved by the kernel`);
         if (!isObject(provider)) { report(here, "must be a map"); continue; }
-        for (const key of Object.keys(provider)) if (!["commands", "harnesses", "description"].includes(key)) report(here, `unknown key ${key}`);
+        for (const key of Object.keys(provider)) if (!["commands", "harnesses", "description", "wire"].includes(key)) report(here, `unknown key ${key}`);
+        // The wire the provider speaks: declared here, and the same in its code.
+        if (typeof provider.wire !== "string" || !/^\d+\.\d+$/.test(provider.wire)) report(`${here}/wire`, 'must be the wire version, "<major>.<minor>"');
+        else if (name === "bb" && provider.wire !== WIRE) report(`${here}/wire`, `is ${provider.wire}, and lib/wire.mjs speaks ${WIRE}`);
         const map = isObject(provider.commands) ? provider.commands : {};
         if (!isObject(provider.commands)) report(`${here}/commands`, "must be a map");
         for (const verb of PROVIDER_COMMANDS) if (!Object.hasOwn(map, verb)) report(`${here}/commands`, `missing ${verb}`);

@@ -42,6 +42,37 @@ for (const [name, stdin, pattern] of [
   });
 }
 
+for (const [name, wire, pattern] of [
+  ["an older wire", "1.2", /the kernel speaks wire 1\.2, and this provider \(oats\.bb\) speaks wire 1\.3/],
+  ["a newer wire", "2.0", /wire 2\.0.*wire 1\.3/],
+  ["no wire version (a kernel from before it was sent)", undefined, /no wire version \(an older kernel\).*wire 1\.3/],
+  ["a wire version that is no version", "1.3\nALL CLEAR", /a wire version this provider cannot read.*wire 1\.3/],
+]) {
+  test(`a request with ${name} is refused E_BACKEND_WIRE naming both, for every verb, before anything is read or done`, async (t) => {
+    const { dir, home } = scratch(t);
+    const bb = fakeBbIn(dir, { "thread list": { stdout: [] } });
+    for (const verb of ["launch", "inspect", "inspectMany", "input", "stop", "check"]) {
+      const request = requestFor(verb, { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" } }, { wire });
+      const run = await runBin(["session", verb], { stdin: JSON.stringify(request), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
+      assert.equal(run.status, 0);
+      assert.equal(run.doc.ok, false);
+      assert.equal(run.doc.error.code, "E_BACKEND_WIRE", verb);
+      assert.match(run.doc.error.message, pattern);
+      assert.doesNotMatch(run.doc.error.message, /ALL CLEAR/);
+      assert.deepEqual(Object.keys(run.doc), ["schemaVersion", "phase", "capability", "provider", "verb", "ok", "error"], "the answer's header is the five keys: the wire version is not echoed");
+    }
+    assert.deepEqual(bb.calls(), []);
+  });
+}
+
+test("the manifest declares the wire the code speaks", async () => {
+  const { WIRE } = await import("../../oats-package/capabilities/oats-bb/lib/wire.mjs");
+  const { readFileSync } = await import("node:fs");
+  const manifest = JSON.parse(readFileSync(new URL("../../oats-package/capabilities/oats-bb/oats.json", import.meta.url), "utf8"));
+  assert.equal(manifest.sessionProviders.bb.wire, WIRE);
+  assert.equal(WIRE, "1.3");
+});
+
 test("the settings are the home's recorded ones, from OATS_SETTINGS; a request cannot carry its own", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] } });

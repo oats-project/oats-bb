@@ -13,7 +13,7 @@ environment (`OATS_SETTINGS` holds `settings.oats.bb`), one JSON request on stdi
 one JSON document on stdout, exit 0 for a result and for a refusal.
 
 ```json
-{"schemaVersion":1,"phase":"session","capability":"oats.bb","provider":"bb","verb":"inspect",
+{"schemaVersion":1,"wire":"1.3","phase":"session","capability":"oats.bb","provider":"bb","verb":"inspect",
  "input":{"home":"/abs/home","endpoint":{"server":"http://127.0.0.1:38886","projectId":"proj_…","threadId":"thr_…"}}}
 ```
 ```json
@@ -21,6 +21,12 @@ one JSON document on stdout, exit 0 for a result and for a refusal.
  "result":{"present":true,"state":"unknown","running":null,"open":{"label":"Open in bb","url":"http://127.0.0.1:38886/projects/proj_…/threads/thr_…"}}}
 ```
 A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and nothing else.
+
+**One wire version.** The provider speaks wire 1.3. Its manifest declares it
+(`sessionProviders.bb.wire: "1.3"`), and the kernel calls it only if that is the kernel's
+own. Every request carries the kernel's version in `wire`; the provider refuses a request
+whose `wire` is absent or another value with `E_BACKEND_WIRE`, naming both, before it reads
+or does anything. The answer's header does not echo `wire`.
 A refusal says nothing happened: bb's server said no (its own error code, or a 4xx status
 in the CLI's message), or the request never reached it. Where the provider cannot tell (a `bb thread spawn` or a `bb thread tell`
 that did not answer in time, answered something it cannot read, died, lost its connection
@@ -81,7 +87,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   can only say, for a home, what its last launch left on record.
 
 ## Codes
-`E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
+`E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
 `E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
 `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,

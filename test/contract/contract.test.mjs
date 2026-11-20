@@ -43,7 +43,7 @@ const bbJson = async (args, options) => JSON.parse(await sh(`bb ${args} --json`,
 /** One call on the provider's wire, inside the container, as the kernel makes it: the
  *  request on stdin, the settings in OATS_SETTINGS. → the answer envelope. */
 async function provider(verb, input, settings = SETTINGS) {
-  const request = { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb, input };
+  const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
   const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
   const answer = JSON.parse(stdout);
   assert.deepEqual(Object.keys(answer), ["schemaVersion", "phase", "capability", "provider", "verb", "ok", answer.ok ? "result" : "error"]);
@@ -189,6 +189,10 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   assert.deepEqual(project.sources.map((s) => s.path), [home]);
   await waitStatus(endpoint.threadId, "idle");
   assert.equal((await bbJson(`thread show ${endpoint.threadId}`)).environment?.path ?? environment?.path, home);
+  // --yolo is bb's full mode: the thread was started in it (bb's own record of the turn),
+  // and the launch wrote no sandbox entry, since full mode has no sandbox.
+  const started = (await bbJson(`thread log ${endpoint.threadId} --limit 5`)).find((event) => event.type === "client/turn/requested");
+  assert.equal(started.data.execution.permissionMode, "full");
 
   // The env file: only what the launch carried, owner-only.
   const written = JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`));

@@ -18,10 +18,16 @@ this plugin's dependencies are installed and run only in containers (see [Develo
 ```sh
 # from the repository, at a tag, a branch or a commit; bb builds it and loads it; the plugin id is "oats"
 bb plugin install git:https://github.com/oats-project/oats-bb.git@<ref> --subdirectory plugin
-# or from a checkout
+# or from a checkout whose dependencies are installed (`npm ci` in plugin/, in a container: see
+# Developing); a path install builds from what is there and installs nothing itself
 bb plugin install <path to the checkout>/plugin --yes
 bb plugin list                                       # oats … running
 ```
+
+`@get-bb/plugin-sdk` is under `dependencies`, not `devDependencies`: the app imports `contract.ts`
+(the watched reads need the contract as a value), bb's frontend build bundles the SDK's root from
+the plugin's own install, and a git install omits dev dependencies. The live tests install by
+`git:` to keep that true.
 
 The plugin needs, on the bb machine that holds the OATS homes: an OATS deployment (a directory
 with `oats-local.yaml`), `oats` on the PATH of that machine's login shell, and an OATS kernel whose

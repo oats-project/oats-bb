@@ -8,6 +8,7 @@
 #   L3  a status slower than the kernel's limit is the typed OATS_TIMEOUT, not a lost host call
 #   A14 (backend) with the fake oats removed, the snapshot says what is missing and bb answers as usual
 #   A15 `bb plugin reload oats` during a slow oats leaves no oats process
+#   G1  the plugin installs from git with --subdirectory plugin (the README's route), and runs
 #   A15b stopping bb during a slow oats leaves none either
 set -euo pipefail
 PLUGIN=$(cd "$(dirname "$0")/.." && pwd)
@@ -156,6 +157,31 @@ if [ -f "$PLUGIN/container/live-ui.mjs" ] && [ -f "$LIVE/app.tsx" ]; then
   say "== container/live-ui.mjs"
   OUT=$OUT node "$PLUGIN/container/live-ui.mjs" || fail "live-ui.mjs"
 fi
+
+# ---- G1: the documented install route, `bb plugin install git:<repository>@<ref> --subdirectory plugin`.
+# A git install gets the manifest's `dependencies` only (bb runs `npm install --omit=dev`) and none of
+# this checkout's node_modules, so it proves that what the build needs is declared there. The
+# repository is a local one holding this tree as plugin/, reached through the README's own URL.
+GIT_REPO=$HOME_DIR/git-repo
+GIT_URL=https://github.com/oats-project/oats-bb.git
+rm -rf "$GIT_REPO"
+mkdir -p "$GIT_REPO/plugin"
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./.git --exclude ./container/out .) | tar -x -C "$GIT_REPO/plugin"
+git -C "$GIT_REPO" init -q -b main
+git -C "$GIT_REPO" add -A
+git -C "$GIT_REPO" -c user.name=live -c user.email=live@example.invalid commit -q -m "the tree under test"
+git config --global "url.file://$GIT_REPO.insteadOf" "$GIT_URL"
+bb plugin remove oats --yes > "$OUT/install-git.txt" 2>&1 || true
+if bb plugin install "git:$GIT_URL@main" --subdirectory plugin --yes >> "$OUT/install-git.txt" 2>&1 \
+  && bb plugin list | grep -A1 '^oats@.* running' | grep -q "source: git:"; then
+  pass "G1 the plugin installs from git with --subdirectory plugin, and runs"
+else
+  fail "G1 the install from git"; tail -15 "$OUT/install-git.txt"
+fi
+git config --global --unset "url.file://$GIT_REPO.insteadOf"
+fake
+rpc refresh > /dev/null 2>&1 || true
+[ "$(field ok <<<"$(rpc snapshot)")" = true ] && pass "G1 the git-installed plugin reads the deployment" || fail "G1 snapshot of the git-installed plugin"
 
 # ---- A15b: bb itself stops in the middle of a slow oats. Last: it ends the server.
 if [ -f "$OUT/bb.pid" ]; then

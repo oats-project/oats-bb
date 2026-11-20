@@ -22,7 +22,7 @@ host's home; the plugin's directory goes in through `tar` and the artefacts come
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
 | `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, `bb plugin build` |
-| `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
+| `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked (`test/fixtures/`) and logs each call; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
@@ -38,7 +38,8 @@ The live checks of the backend:
 - **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (the check allows the 5 s floor before it): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended.
 - **A14** (the backend's part) with `oats` removed, the snapshot says what is missing and bb's own lists answer; with `oats` back, the snapshot is back.
 - **A15** `bb plugin reload oats` while a fake `oats` sleeps and holds a child of its own: neither process is left.
-- **A15b** the same when bb itself is stopped.
+- **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
+- **A15b** the same as A15 when bb itself is stopped.
 
 To work in a container for a while:
 

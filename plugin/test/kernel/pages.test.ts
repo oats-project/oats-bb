@@ -84,8 +84,8 @@ describe("the pages' verbs", () => {
       ok: true,
       value: {
         machines: [
-          { id: "devbox-oats", route: "devbox", isThisMachine: false, note: "devbox · workspace /srv/oats · 2 saved instance routes" },
-          { id: "build", route: "build.internal", isThisMachine: false, note: "workspace /home/ci/oats · 0 saved instance routes" },
+          { id: "devbox-oats", route: "devbox.invalid", isThisMachine: false, note: "devbox · workspace /srv/oats · 0 saved instance routes" },
+          { id: "build", route: "build.invalid", isThisMachine: false, note: "workspace /home/ci/oats · 0 saved instance routes" },
         ],
       },
     });

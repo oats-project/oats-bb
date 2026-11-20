@@ -1,9 +1,82 @@
 {
  "retired": "weekly-digest-helper",
  "agent": "oats-expert",
+ "workRecovery": {
+  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-l9glae",
+  "classes": [
+   "changed instance-home bytes",
+   "untracked or ignored worktree bytes"
+  ],
+  "bytes": 308472,
+  "home": {
+   "paths": [
+    {
+     "path": ".oats/",
+     "bytes": 204722
+    },
+    {
+     "path": ".agents/",
+     "bytes": 38440
+    },
+    {
+     "path": "instance.json",
+     "bytes": 16885
+    },
+    {
+     "path": ".claude/",
+     "bytes": 5525
+    },
+    {
+     "path": "AGENTS.md",
+     "bytes": 4690
+    },
+    {
+     "path": ".oats-events.jsonl",
+     "bytes": 2541
+    },
+    {
+     "path": ".oats-stop-receipt.stop-6a7b8c9d0e1f.json",
+     "bytes": 928
+    },
+    {
+     "path": ".oats-stop-receipt.stop-8c9d0e1f2a3b.json",
+     "bytes": 928
+    },
+    {
+     "path": "TASK.md",
+     "bytes": 472
+    },
+    {
+     "path": ".oats-stop.json",
+     "bytes": 222
+    },
+    {
+     "path": "CLAUDE.md",
+     "bytes": 9
+    }
+   ],
+   "bytes": 275362
+  },
+  "outputs": {
+   "paths": [
+    {
+     "path": "digest-draft.md",
+     "bytes": 36
+    }
+   ],
+   "bytes": 36
+  },
+  "notCopied": [
+   {
+    "scope": "home",
+    "path": ".oats-bb",
+    "owner": "oats.bb"
+   }
+  ]
+ },
  "retention": {
   "worktree": "retained",
-  "movedTo": "/abs/deployment/.agents/worktrees/oats/agents-weekly-digest-helper",
+  "movedTo": "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
   "branch": "agents/weekly-digest-helper",
   "detachedAt": null,
   "recordedBranch": "agents/weekly-digest-helper"
@@ -11,7 +84,11 @@
  "worktreeRemoved": false,
  "branchDeleted": false,
  "removedDir": true,
- "workRecovery": null,
+ "relinked": [
+  {
+   "instance": "digest-links-helper"
+  }
+ ],
  "childrenStopped": [
   {
    "instance": "digest-links-helper",
@@ -21,7 +98,15 @@
    "alreadyIdle": true
   }
  ],
- "planRevision": "4e5f6a7b8c9d0e1f2a3b4c5d",
+ "capabilityMeta": {
+  "oats.bb": {
+   "retired": true,
+   "archived": [
+    "thr_etz89sc25g"
+   ]
+  }
+ },
+ "planRevision": "0e7a222400927b98e70ac281",
  "idempotencyKey": "retire-2b9d4e6f8a1c",
  "replayed": false
 }

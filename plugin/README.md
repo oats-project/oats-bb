@@ -176,6 +176,13 @@ of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake 
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
 CI runs the same command: `.github/workflows/plugin.yml`.
 
+The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`
+puts bb-app, a real OATS kernel, the bb session provider and Claude Code on a mock model in one
+container, drives the plugin through its RPC (spawn, stop, start, restart, retire, and the
+refusals), and records what the kernel printed; `test/fixtures/README.md` says which fixtures are
+those recordings, and at which commits. It is run by hand, not by CI
+(`plugin/container/real/README.md`).
+
 The bb version the tests run is the repository's pin: the one line of `bb-version` at the
 repository's root where that file exists, else `devDependencies["bb-app"]` in `package.json`. The
 two are kept equal, and `engines.bb` contains it.

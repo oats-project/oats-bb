@@ -23,6 +23,7 @@ host's home; the plugin's directory goes in through `tar` and the artefacts come
 | `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
+| `live-ui.mjs`, `browser.mjs` | in the container | the app's live checks (A13, A14) with screenshots at two widths, and the small DevTools-protocol driver of the image's Chromium they use |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked (`test/fixtures/`) and logs each call; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
@@ -50,6 +51,18 @@ tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out . | d
 docker exec -u node -w /home/node/plugin bb-plugin-dev npx vitest run test/kernel
 docker exec -u node -w /home/node/plugin bb-plugin-dev bash container/live.sh
 docker rm -f bb-plugin-dev
+```
+
+## Against a real kernel
+
+`real/` holds the other run: the plugin against a real OATS kernel and the bb session provider,
+with Claude Code on a mock model, in the same image. It is where the recorded fixtures come from.
+It is run by hand and is not part of `ci.sh all`: `real/README.md` says why, and what will let it
+join.
+
+```sh
+KERNEL_REPO=<a clone of the OATS repository> PROVIDER_REPO=<a clone of oats-bb with the provider> \
+  plugin/container/real/run.sh
 ```
 
 Where the host's Docker DNS forwarder is unreliable, pass a resolver:

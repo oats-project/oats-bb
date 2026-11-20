@@ -6,7 +6,7 @@
   "action": "retire",
   "instance": "weekly-digest-helper",
   "home": "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper",
-  "at": "2026-11-19T12:50:00.000Z",
+  "at": "2026-11-20T11:24:58.166Z",
   "facts": {
    "session": {
     "state": "stopped",
@@ -16,7 +16,7 @@
    },
    "work": {
     "observed": true,
-    "revision": "46c20668d4e2a1b7c3f09e5d8a6b7c1d2e3f4a5b",
+    "revision": "574f0452ba7f993c0a49d0ed193f9a6f9a118767",
     "branch": "agents/weekly-digest-helper",
     "detached": false,
     "drift": false,
@@ -29,34 +29,34 @@
     },
     "base": {
      "ref": "origin/main",
-     "ahead": 2,
+     "ahead": 0,
      "behind": 0
     },
     "remote": {
-     "host": "github.com",
-     "path": "awebai/oats"
+     "host": null,
+     "path": null
     }
    },
    "workMode": "worktree",
    "ownWorktree": true,
-   "repo": "/abs/clones/oats",
+   "repo": "/abs/deployment/oats-real",
    "recordedBranch": "agents/weekly-digest-helper",
+   "extraWorktrees": [],
    "children": [
     {
      "instance": "digest-links-helper",
      "agent": "oats-expert",
      "home": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
      "session": {
-      "state": "shell",
-      "present": true,
+      "state": "stopped",
+      "present": false,
       "backend": "bb",
       "established": true
      }
     }
    ],
    "ambiguous": [],
-   "pullRequest": "unknown",
-   "extraWorktrees": []
+   "pullRequest": "unknown"
   },
   "defaults": {
    "retainWorktree": true,
@@ -64,9 +64,13 @@
    "stopChildren": true,
    "retainChildren": true
   },
-  "planRevision": "4e5f6a7b8c9d0e1f2a3b4c5d",
+  "planRevision": "0e7a222400927b98e70ac281",
   "notes": [
-   "1 untracked file in the work tree is copied to the recovery directory before the home is removed"
+   "0 changed and 1 untracked file(s) would be retained with the worktree",
+   "1 recorded child instance(s) are stopped first (bounded SIGTERM, never escalated) and retained (their homes are not removed); a child still running after the grace refuses the retirement",
+   "pull request state is unknown to the kernel; the ADE reports it when a forge connection exists",
+   "recovery: the home is copied to /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery before the home is removed, when it changed since spawn; not copied: .oats-bb, .oats-bb-sandbox.json (oats.bb)",
+   "recovery: uncommitted worktree state is copied there too"
   ]
  }
 }

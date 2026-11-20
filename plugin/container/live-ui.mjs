@@ -6,16 +6,17 @@
 //   A14 with the fake oats removed: bb's threads are listed, the "not found" line shows, and a
 //       thread opens.
 // Screenshots go to $OUT (kept as CI artefacts). No dependency: it drives the image's Chromium
-// over the DevTools protocol with node's own WebSocket.
+// over the DevTools protocol with node's own WebSocket (container/browser.mjs).
 //
 // The fixtures name threads bb does not have (`thr_release`, …). So that the join is real, this
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { launchBrowser, showSidebar, testId, textOf, texts, visible } from "./browser.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -105,126 +106,6 @@ async function untilSnapshot(matches, seconds = 30) {
     await sleep(1500);
   }
   throw new Error(`live-ui: the snapshot did not settle: ${JSON.stringify(last).slice(0, 400)}`);
-}
-
-// ---- a small DevTools-protocol driver
-
-async function launchBrowser() {
-  const port = 9300 + Math.floor(Math.random() * 500);
-  const child = spawn(
-    CHROMIUM,
-    ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--hide-scrollbars", `--remote-debugging-port=${port}`, `--user-data-dir=${join(OUT, ".chromium")}`, "about:blank"],
-    { stdio: "ignore" },
-  );
-  let version;
-  for (let attempt = 0; attempt < 100 && version === undefined; attempt++) {
-    await sleep(200);
-    try {
-      version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
-    } catch {
-      // not listening yet
-    }
-  }
-  if (version === undefined) throw new Error(`live-ui: ${CHROMIUM} did not open its debugging port`);
-  const socket = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", () => reject(new Error("live-ui: no DevTools connection")), { once: true });
-  });
-  let nextId = 0;
-  const waiting = new Map();
-  const errors = [];
-  socket.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id !== undefined) {
-      const entry = waiting.get(message.id);
-      waiting.delete(message.id);
-      if (message.error) entry?.reject(new Error(`${entry.method}: ${message.error.message}`));
-      else entry?.resolve(message.result);
-    } else if (message.method === "Runtime.exceptionThrown") {
-      errors.push(message.params.exceptionDetails?.exception?.description ?? message.params.exceptionDetails?.text ?? "exception");
-    }
-  });
-  const send = (method, params = {}, sessionId) =>
-    new Promise((resolve, reject) => {
-      const id = ++nextId;
-      waiting.set(id, { resolve, reject, method });
-      socket.send(JSON.stringify({ id, method, params, sessionId }));
-    });
-
-  /** A page in a browser context of its own, at one viewport. */
-  async function page(viewport) {
-    const { browserContextId } = await send("Target.createBrowserContext");
-    const { targetId } = await send("Target.createTarget", { url: "about:blank", browserContextId });
-    const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
-    const cdp = (method, params) => send(method, params, sessionId);
-    await cdp("Page.enable");
-    await cdp("Runtime.enable");
-    await cdp("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile });
-    if (viewport.mobile) await cdp("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
-
-    const evaluate = async (expression) => {
-      const { result, exceptionDetails } = await cdp("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-      if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? exceptionDetails.text);
-      return result.value;
-    };
-    const until = async (expression, seconds = 30) => {
-      const deadline = Date.now() + seconds * 1000;
-      for (;;) {
-        let value;
-        try {
-          value = await evaluate(expression);
-        } catch {
-          value = undefined; // the page is navigating
-        }
-        if (value) return value;
-        if (Date.now() > deadline) return undefined;
-        await sleep(250);
-      }
-    };
-    return {
-      evaluate,
-      until,
-      goto: async (path) => {
-        await cdp("Page.navigate", { url: BASE + path });
-        await until("document.readyState === 'complete'", 30);
-      },
-      shot: async (name) => {
-        const { data } = await cdp("Page.captureScreenshot", { format: "png" });
-        writeFileSync(join(OUT, `${name}.png`), Buffer.from(data, "base64"));
-        console.log(`     screenshot ${name}.png`);
-      },
-      close: () => send("Target.disposeBrowserContext", { browserContextId }),
-    };
-  }
-  return {
-    page,
-    errors,
-    close: async () => {
-      socket.close();
-      child.kill("SIGTERM");
-    },
-  };
-}
-
-// ---- what the page is asked
-
-/** On screen and not covered: the point at the element's middle (clamped to the viewport) is its own. */
-const visible = (selector) =>
-  `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0) return false; const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(r.top + Math.min(r.height / 2, 40), 0), innerHeight - 1); const top = document.elementFromPoint(x, y); return top !== null && (e.contains(top) || top.contains(e)); })()`;
-const testId = (id) => `[data-testid="${id}"]`;
-const texts = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`;
-const textOf = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
-
-/** At phone width the thread list is in bb's drawer: open it with bb's own toggle. */
-async function showSidebar(page, viewport) {
-  if (await page.until(visible(testId("oats-sidebar")), viewport.mobile ? 4 : 30)) return true;
-  if (!viewport.mobile) return false;
-  await page.evaluate(
-    `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`,
-  );
-  await sleep(600); // the drawer slides in
-  return Boolean(await page.until(visible(testId("oats-sidebar")), 15));
 }
 
 async function a13(browser, viewport, threads) {
@@ -355,7 +236,7 @@ const threads = threadsByFixtureId();
 fake({ status: { stdout: statusWithRealIds(threads) } });
 await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.threadId === threads.get("thr_release").id));
 
-const browser = await launchBrowser();
+const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {
   for (const viewport of VIEWPORTS) await a13(browser, viewport, threads);
 

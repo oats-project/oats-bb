@@ -26,7 +26,7 @@ const HTTP_MAX_BYTES = 256 * 1024;
  *  Resolves { ok: true, value } or { ok: false, message }; never throws. */
 async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
   // The time limit is a timer of this process's own, not AbortSignal.timeout: that one
-  // does not keep the process alive, and on Node 20 a fetch whose connection is dropped
+  // does not keep the process alive, and on Node 20 a fetch whose connection is dropped as it is accepted
   // never settles, so the process ended, with status 0 and no answer, while it waited.
   const limit = new AbortController();
   const timer = setTimeout(() => limit.abort(new DOMException("timed out", "TimeoutError")), Math.max(1, timeoutMs));

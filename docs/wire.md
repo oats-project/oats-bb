@@ -125,7 +125,7 @@ provider state 6 s) and its own total (launch 100 s; stop 16 s plus the grace, w
 long it waits for bb to settle, counted from the moment `bb thread stop` answered; the
 others 16 s), so a bb that hangs gets a named problem,
 never a killed call. Each limit is a timer of the provider's own process (on Node 20 a
-read whose connection is dropped never settles by itself), and a provider that ever ran
+read whose connection is dropped as it is accepted never settles by itself), and a provider that ever ran
 out of work before it had an answer exits 1 with a line on stderr: never status 0 with
 nothing on stdout.
 

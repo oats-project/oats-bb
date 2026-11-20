@@ -268,7 +268,7 @@ test("where bubblewrap is missing readiness warns that bb's sandboxed modes wait
   assert.equal(sandboxCanStart({ platform: "linux", path: "" }), false);
 });
 
-// Node 20's fetch never settles when the other side drops the connection, and a wait that
+// Node 20's fetch never settles when the other side drops the connection as it accepts it, and a wait that
 // nothing keeps alive ends the process with status 0 and no answer, which the kernel would
 // read as a failed call with no reason. The fetch here is replaced by one that does the
 // same on every Node (test/fixtures/hanging-fetch.mjs).

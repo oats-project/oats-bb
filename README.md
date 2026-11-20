@@ -27,6 +27,10 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 > Status: built ahead of the kernel's session-provider contract. It needs an OATS kernel
 > that lists the feature `session-providers` in `oats version --json`; the manifests'
 > `compatibility.oats` floor (`>=0.70.0`) is a placeholder until that release has a number.
+>
+> It also needs the oats.aweb release that registers a provider home with the host wake
+> broker without a `--backend` (the release carrying awebai/oats-aweb#293; its version is
+> not known yet): with an older oats.aweb, a bb home's messaging identity is not set up.
 
 ## Install
 
@@ -301,7 +305,7 @@ list `session-providers`; the release lane sets the real number. A kernel built 
 unmerged branch reports an older version and refuses the capability
 (`E_CAPABILITY_INCOMPATIBLE`). For a trial only: make a local commit on top of the commit
 you are trying that sets `compatibility.oats` in `oats-package/oats-package.json` and
-`oats-package/capabilities/oats-bb/oats.json` to your kernel's version, and pin that commit
+`oats-package/capabilities/oats-bb/oats.json` to `>=<your kernel's version>`, and pin that commit
 (`oats.bb: git:<repository>@<that commit>`). Never ship or push that commit: the floor in
 the repository stays.
 

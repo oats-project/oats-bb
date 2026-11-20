@@ -249,15 +249,17 @@ test("where bubblewrap is missing readiness warns that bb's sandboxed modes wait
   assert.equal(sandboxCanStart({ platform: "linux", path: "" }), false);
 });
 
-test("oats bb doctor takes the kernel's own selectors, which change nothing here: --soul and --dir", async (t) => {
+test("oats bb doctor takes --soul, which the kernel reads and forwards; nothing else", async (t) => {
   const { backend, bb } = await setup(t);
   const env = { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) };
-  for (const args of [["--soul", "dev"], ["--soul=acme/dev", "--json"], ["--json", "--dir", "/srv/acme", "--soul", "dev"]]) {
+  for (const args of [["--soul", "dev"], ["--soul=acme/dev", "--json"], ["--json", "--soul", "dev"]]) {
     const run = await runBin(["doctor", ...args], { env });
     assert.equal(run.status, 0, `${args.join(" ")}: ${run.stderr}`);
     assert.match(run.stdout, args.includes("--json") ? /^\{"status":"ready"/ : /^bb session provider: ready/);
   }
-  for (const args of [["--soul"], ["--verbose"], ["--soul", "--json"], ["extra"]]) {
+  // --dir is not one of them: the kernel does not read it for a capability's command, so
+  // accepting it would report another deployment's bb than the one asked for.
+  for (const args of [["--soul"], ["--verbose"], ["--soul", "--json"], ["extra"], ["--dir", "/srv/acme"], ["--dir=/srv/acme"]]) {
     const run = await runBin(["doctor", ...args], { env });
     assert.equal(run.status, 2, args.join(" "));
     assert.match(run.stderr, /unknown command/);

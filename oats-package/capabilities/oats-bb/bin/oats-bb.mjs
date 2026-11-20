@@ -26,16 +26,15 @@ const handlers = {
     return result;
   },
 };
-/** doctor's arguments: `--json`, and the kernel's own selectors, which it forwards
- *  (`--soul <name>`, `--dir <path>`: the kernel has already resolved the settings of that
- *  soul and deployment into OATS_SETTINGS, so they change nothing here). → {json} | null
- *  for anything else. */
+/** doctor's arguments: `--json`, and `--soul <name>`, which the kernel reads to choose
+ *  whose settings it resolves into OATS_SETTINGS and then forwards: it changes nothing
+ *  here. → {json} | null for anything else. */
 function doctorArgs(args) {
   let json = false;
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--json") json = true;
-    else if ((args[i] === "--soul" || args[i] === "--dir") && typeof args[i + 1] === "string" && !args[i + 1].startsWith("--")) i += 1;
-    else if (!/^--(soul|dir)=.+/.test(args[i])) return null;
+    else if (args[i] === "--soul" && typeof args[i + 1] === "string" && !args[i + 1].startsWith("--")) i += 1;
+    else if (!/^--soul=.+/.test(args[i])) return null;
   }
   return { json };
 }

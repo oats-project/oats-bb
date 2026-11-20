@@ -291,6 +291,13 @@ runs outside it writes past every rule above. What then happens differs by mode:
 - in `auto`, no person is asked: Claude's own classifier decides, and a command it does not
   flag runs outside the sandbox.
 
+So the rules above are a defence against accidents only. One part of them is known not
+to be settled: how the provider finds the directories git will use for a tree (a pointer,
+a `commondir`, links, names git reads differently from other programs). Four reviews of
+that code each found a way a rule could be missing, each since closed, and nothing says a
+fifth would find none. Before OATS offers the sandboxed modes, that code is reviewed again
+on its own.
+
 A property of the sandboxed modes, if they are offered: a sandboxed agent can read and edit
 the files of its trees, but can neither stage nor commit. In a linked worktree, git writes
 its index, objects and refs in the clone, outside the home, and the provider adds no

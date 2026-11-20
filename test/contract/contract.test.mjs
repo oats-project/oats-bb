@@ -24,7 +24,7 @@ const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
 const SANDBOXED_ENTRY = "/repo/test/fixtures/sandboxed-bin.mjs";
 const SERVER = "http://127.0.0.1:38886";
 const MODEL = "claude-opus-5-5";
-const SETTINGS = { version: BB_VERSION, trust: "container" };
+const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 /** Run a shell line in the container. → stdout. `ok: false` tolerates a nonzero exit. */
@@ -87,7 +87,7 @@ async function makeHome(name) {
   // The hook also runs `contract-shim` by its bare name: it is found only if the launch's
   // pathPrepend (the home's shim directory) reached Claude's PATH.
   const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s|%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" "$(contract-shim 2>/dev/null)" "\${CONTRACT_AMBIENT-unset}" >> ${home}/hook-env.log` }] }] } };
-  await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
+  await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin ${home}/work && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
   return home;
 }
 const launchInput = (home, name, extra = {}) => ({
@@ -303,7 +303,7 @@ const SANDBOX = {
  *  launch carries the sandbox allowances), and a scripted Bash call. */
 async function waitingOnPermission(name, ranFile) {
   await armTool(`echo RAN > ${ranFile}`);
-  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX }, { sandboxedModes: true });
+  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX, trees: [`/home/node/homes/${name}/work`] }, { sandboxedModes: true });
   const pending = await waitFor("a pending interaction", async () => (await bbJson(`thread interactions list ${endpoint.threadId}`)).find((i) => i.status === "pending"));
   return { home, endpoint, pending };
 }
@@ -316,10 +316,11 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
     { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
   const sandboxedCheck = (input) => provider("check", input, SETTINGS, { sandboxedModes: true });
-  // The provider keeps no record of a launch in the home: a plain check says nothing of
-  // it, and the check of the launch the kernel plans lists what that launch adds.
-  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
-  assert.deepEqual((await sandboxedCheck({ home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: SANDBOX } })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  // The provider keeps no record of a launch in the home: a plain check says what the
+  // home's settings hold now (the sandbox block and both additions that keep Claude's
+  // file tools in), and the check of the launch the kernel plans lists what that launch adds.
+  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandboxed"]);
+  assert.deepEqual((await sandboxedCheck({ home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: SANDBOX } })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox", "session-provider-sandboxed"]);
   assert.equal((await sh(`ls -A ${home} | grep -c '^\\.oats-bb' || true`)).trim(), "0", "nothing of the provider's own in the home");
   // The check the kernel runs before a launch, with the launch it plans: a host the
   // deployment does not record refuses a sandboxed launch there, before anything starts.

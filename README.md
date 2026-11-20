@@ -8,13 +8,15 @@ Nothing has been released yet. The work arrives as reviewed pull requests, and i
 OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
-The repository holds the two parts of the integration, at one pinned bb-app version (the
+The repository holds the three parts of the integration, at one pinned bb-app version (the
 `bb-version` file):
 
 - **The session provider** (`oats-package/`, the OATS capability `oats.bb`): runs an OATS
   instance as one bb thread instead of a tmux session. This README is about it.
 - **The OATS plugin for bb** (`plugin/`): shows OATS agents in bb's UI and acts on them
   through OATS. Its README is there.
+- **The team image for bb** (`container/`): an OATS team image with `bb-app` in it, at the
+  version in `bb-version`. Its README is there.
 
 ## The session provider
 

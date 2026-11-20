@@ -96,25 +96,3 @@ export async function liveInHome(bb, home) {
   const projects = projectsOfHome(allProjects, home);
   return { projects, live: liveThreadsOfHome(threads, home, projects.map((project) => project.id)) };
 }
-
-/** Stop every archived thread of the projects given (the home's). bb keeps the Claude
- *  process of an archived thread loaded, with the home as its working directory, and shows
- *  nothing that tells such a thread from one whose process is gone; `bb thread stop`
- *  releases it, and on a thread with nothing loaded it changes nothing. An archived thread
- *  takes no input, so nothing is lost. What bb still holds in line for it is withdrawn.
- *  `since` (a time in milliseconds, or null): only threads archived at or after it; null
- *  sweeps them all. → the ids stopped. Throws the client's refusal when bb says no. */
-export async function sweepArchived(bb, projectIds, { since = null } = {}) {
-  const stopped = [];
-  for (const projectId of projectIds) {
-    for (const thread of await bb.archivedThreads(projectId)) {
-      if (thread.deletedAt) continue;
-      if (since !== null && typeof thread.archivedAt === "number" && thread.archivedAt < since) continue;
-      if (hasQueuedWork(thread)) for (const message of await bb.queue(thread.id)) await bb.queueDelete(thread.id, message.id);
-      const asked = await bb.stop(thread.id);
-      if (!asked.ok && asked.code !== "thread_not_found") throw bb.refusal(asked, ["thread", "stop"]);
-      stopped.push(thread.id);
-    }
-  }
-  return stopped;
-}

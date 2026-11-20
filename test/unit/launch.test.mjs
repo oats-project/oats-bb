@@ -26,6 +26,8 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "project list": { stdout: [projectRow("proj_a", home)] },
     "thread list": { stdout: [] },
     "thread stop": { stdout: { ok: true } },
+    // A thread at rest, for the launch's stop of the home's previous thread.
+    "thread show": { stdout: { thread: threadRow("thr_prev", "proj_a", "idle"), environment: null, pendingTodos: null } },
     "thread spawn": spawned(),
     ...(typeof script === "function" ? script(home) : script),
   });
@@ -367,13 +369,53 @@ test("a home with no bb project gets one, rooted at the home and named after the
   assert.deepEqual(effects(bb), ["project create", "thread spawn"]);
 });
 
-test("a project bb roots elsewhere than the home is refused: the root is exactly the home, never a parent or work/", async (t) => {
-  const { home, bb, run } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_parent", join(h, "..")), projectRow("proj_work", join(h, "work"))] }, "project create": { stdout: projectRow("proj_made", join(h, "work")) } }));
-  const answer = await run();
-  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
-  assert.match(answer.error.message, /another root than the home/);
+test("a project bb roots elsewhere than the home: no thread is started, and the launch says a project was made (not a refusal: bb was changed)", async (t) => {
+  const { home, backend, bb, input } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_parent", join(h, "..")), projectRow("proj_work", join(h, "work"))] }, "project create": { stdout: projectRow("proj_made", join(h, "work")) } }));
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "", "the kernel reads a refusal as 'nothing happened', and a project was created");
+  assert.match(run.stderr, /another root than the home.*bb project proj_made was created.*not a refusal/);
   assert.deepEqual(effects(bb), ["project create"], "the parent's and work/'s projects were not reused, and no thread was spawned");
   assert.equal(existsSync(join(home, ".claude")), false);
+});
+
+// A refusal says "nothing happened". Every read and every stop of a thread at rest comes
+// before the first change (the previous thread archived, a project made); after it, what
+// cannot be completed ends with no answer.
+test("what a launch must read is read before it changes anything: a list that cannot be read refuses with the previous thread untouched", async (t) => {
+  const { backend, bb, run } = await setup(t, {
+    "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle", { createdAt: 4_000 })] }, "thread list --archived": { stdout: [null] },
+    "thread archive": { stdout: { ok: true } },
+  });
+  const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.deepEqual(effects(bb), [], "nothing was stopped, archived or started");
+});
+
+for (const [name, script, pattern] of [
+  ["bb refuses the spawn", { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } }, /bb thread spawn failed.*previous thread thr_prev is archived.*not a refusal/],
+  ["whether bb archived it is not known", { "thread archive": { error: { code: "error", message: "HTTP 500: boom" } } }, /whether bb archived the home's previous thread thr_prev is not known/],
+  ["the archive call is cut off", { "thread archive": { exit: 3, stderr: "killed\n" } }, /whether bb archived the home's previous thread thr_prev is not known/],
+]) {
+  test(`after the previous thread is archived, a launch that cannot go on is in doubt, never a refusal: ${name}`, async (t) => {
+    const { backend, bb, input } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } }, ...script });
+    const run = await rawLaunch(bb, backend, input({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } }));
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "");
+    assert.match(run.stderr, pattern);
+  });
+}
+
+test("a project bb may or may not have created (a server error) leaves the launch in doubt; bb's own no is a refusal", async (t) => {
+  const unknown = await setup(t, { "project list": { stdout: [] }, "project create": { error: { code: "error", message: "HTTP 500: no" } } });
+  const run = await rawLaunch(unknown.bb, unknown.backend, unknown.input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "");
+  assert.match(run.stderr, /whether bb created the home's project is not known/);
+  const refused = await setup(t, { "project list": { stdout: [] }, "project create": { error: { code: "invalid_request", message: "HTTP 400: bad root" } } });
+  const answer = await refused.run();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /project create/);
 });
 
 test("a home reached through a link is the same home: its project is reused", async (t) => {
@@ -477,7 +519,8 @@ test("a launch stops the home's threads archived since its previous thread was m
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.ok, true, JSON.stringify(answer));
   assert.deepEqual(stops(bb), ["thr_prev", "thr_in_ui"], "the previous thread before its archive, and the one archived after it was made; an older one was stopped by the launch that made the previous thread");
-  assert.deepEqual(verbs(bb).slice(-4), ["thread archive", "thread list --archived", "thread stop", "thread spawn"], "all of it before the spawn");
+  assert.deepEqual(verbs(bb).slice(0, 4), ["--version", "project list", "thread list", "thread list --archived"], "every read first");
+  assert.deepEqual(effects(bb), ["thread stop", "thread stop", "thread archive", "thread spawn"], "then the stops, the archive, and the spawn last");
 });
 
 test("the previous thread already archived (in bb's UI): its creation time is read, and it is stopped with what was archived since", async (t) => {
@@ -523,8 +566,8 @@ test("a home with no bb project yet has no archived thread to stop: none is aske
   assert.equal(verbs(bb).includes("thread list --archived"), false);
 });
 
-test("a previous thread that cannot be archived refuses the launch before the spawn", async (t) => {
-  const { backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "error")] }, "thread archive": { error: { code: "error", message: "HTTP 500: no" } } });
+test("a previous thread bb says it will not archive refuses the launch before the spawn: nothing was changed", async (t) => {
+  const { backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "error")] }, "thread archive": { error: { code: "invalid_request", message: "HTTP 409: no" } } });
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
   assert.deepEqual(effects(bb), ["thread stop", "thread archive"]);
@@ -542,7 +585,7 @@ for (const [name, script, pattern] of [
   ["bb refuses the spawn", { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } }, /Project not found/],
   ["bb cannot list its projects", { "project list": UNREACHABLE }, /does not answer/],
   ["bb cannot list its threads", { "thread list": { stdout: "garbage" } }, /not JSON/],
-  ["bb cannot create the project", { "project list": { stdout: [] }, "project create": { error: { code: "error", message: "HTTP 500: no" } } }, /project create/],
+  ["bb cannot create the project", { "project list": { stdout: [] }, "project create": { error: { code: "invalid_request", message: "HTTP 409: a project is rooted there" } } }, /project create/],
 ]) {
   test(`${name}: the launch fails and says why`, async (t) => {
     const { run } = await setup(t, script);

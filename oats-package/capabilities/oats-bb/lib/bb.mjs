@@ -21,27 +21,32 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
     for (const name of CONTEXT_ENV) delete childEnv[name];
     if (server) childEnv.BB_SERVER_URL = server;
     let child;
-    // Its own process group: `bb` is a launcher that starts the real CLI as a child with
-    // the same pipes, so ending a call means ending the group, not one process.
-    try { child = spawn(cli, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, detached: true }); }
+    // In the provider's own process group, never one of its own: the kernel gives each
+    // provider command a group and kills that group when it must end the command, so a
+    // helper that left the group would outlive it. (`bb` is a launcher that starts the
+    // real CLI as a child with the same pipes: when a call is cut off, the provider ends
+    // the launcher and lets go of the pipes; what the launcher started stays in the
+    // kernel's group, for the kernel to end.)
+    try { child = spawn(cli, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }); }
     catch (error) { resolve({ ok: false, code: "cli_missing", missing: true, message: `cannot run ${cli}: ${error.message}` }); return; }
     let stdout = "", stderr = "", size = 0, settled = false, timedOut = false;
     const finish = (answer) => { if (!settled) { settled = true; clearTimeout(timer); resolve(answer); } };
-    const killGroup = () => {
-      try { process.kill(-child.pid, "SIGKILL"); }
-      catch { child.kill("SIGKILL"); } // no group to signal (already gone, or no pid): the process itself
+    const endCall = () => {
+      child.kill("SIGKILL");
+      // The pipes too: a process the launcher started may hold them open, and must not
+      // hold this call, or the provider's exit, with them.
+      child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy();
     };
     // The timed-out answer comes from the timer, not from `close`: a grandchild that
     // survived would keep the pipes open, and the call would never end.
     const timer = setTimeout(() => {
       timedOut = true;
-      killGroup();
-      child.stdout.destroy(); child.stderr.destroy();
+      endCall();
       finish({ ok: false, code: "timeout", timedOut: true, message: `bb ${args.slice(0, 2).join(" ")} did not answer within ${Math.round(timeoutMs / 100) / 10} s` });
     }, Math.max(1, timeoutMs));
     const take = (chunk, into) => {
       size += chunk.length;
-      if (size > MAX_OUTPUT) { killGroup(); return into; }
+      if (size > MAX_OUTPUT) { endCall(); finish({ ok: false, code: "error", message: `bb ${args.slice(0, 2).join(" ")} wrote more than ${MAX_OUTPUT} bytes` }); return into; }
       return into + chunk;
     };
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");

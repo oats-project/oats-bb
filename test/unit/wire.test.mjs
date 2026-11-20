@@ -1,9 +1,11 @@
 // The wire: one JSON document in, exactly one out, exit 0, whatever goes wrong; and bb's
 // CLI run without a shell, against one server, bounded in time.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runBb } from "../../oats-package/capabilities/oats-bb/lib/bb.mjs";
-import { fakeBbIn, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { fakeBbIn, providerBin, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
 const SETTINGS_ENV = { OATS_CAPABILITY: "oats.bb", OATS_SETTINGS: "{}" };
@@ -116,17 +118,40 @@ test("a bb call that outlives its time is killed and reported as a timeout", asy
   assert.ok(Date.now() - started < 5_000);
 });
 
-test("a timeout ends the call though bb is a launcher whose child holds the pipes, and ends the child too", async (t) => {
+// The kernel gives every provider command a process group and kills that group when it
+// must end the command. So the provider never starts a helper in a group of its own: a bb
+// call, and what bb's launcher starts, stay where the kernel can reach them.
+const groupOf = (pid) => Number(readFileSync(`/proc/${pid}/stat`, "utf8").split(") ").pop().split(" ")[2]);
+
+test("a bb call runs in the provider's own process group, and so does what bb's launcher starts: nothing is detached", { skip: process.platform === "linux" ? false : "reads /proc" }, async (t) => {
   const { dir } = scratch(t);
   const bb = fakeBbIn(dir, { "thread list": { launcherChildMs: 30_000, stdout: [] } });
   const started = Date.now();
   const answer = await runBb(bb.cli, ["thread", "list", "--json"], { server: SERVER, env: { ...process.env, ...bb.env }, timeoutMs: 1_000 });
   assert.equal(answer.timedOut, true);
-  assert.ok(Date.now() - started < 4_000, "the call ended at its timeout, not when the child let go of the pipes");
+  assert.ok(Date.now() - started < 4_000, "the call ended at its timeout, not when the launcher's child let go of the pipes");
   const [childPid] = bb.childPids();
   assert.equal(typeof childPid, "number");
+  t.after(() => { try { process.kill(childPid, "SIGKILL"); } catch { /* already gone */ } });
+  // What the launcher started outlives the call the provider cut off, and it is in the
+  // group the provider itself is in: the kernel's kill of that group ends it.
+  assert.equal(groupOf(childPid), groupOf(process.pid));
+});
+
+test("the provider's command leaves its bb call in the group it was started in", { skip: process.platform === "linux" ? false : "reads /proc" }, async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, { "thread list": { launcherChildMs: 3_000, stdout: [] } });
+  // The command as the kernel runs it, in a group of its own (what `detached` gives a test).
+  const child = spawn(process.execPath, [providerBin, "session", "inspect"], { detached: true, stdio: ["pipe", "ignore", "ignore"], env: { ...process.env, ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli, version: "0.50.1", trust: "single-user" }) } });
+  t.after(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } });
+  child.stdin.end(JSON.stringify(requestFor("inspect", { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" } })));
+  let helper = null;
+  for (let i = 0; i < 100 && helper === null; i += 1) { await new Promise((done) => setTimeout(done, 50)); [helper = null] = bb.childPids(); }
+  assert.equal(typeof helper, "number", "the bb call's own child was started");
+  assert.equal(groupOf(helper), child.pid, "in the command's group: the kernel's kill of the group reaches it");
+  process.kill(-child.pid, "SIGKILL");
   await new Promise((done) => setTimeout(done, 300));
-  assert.throws(() => process.kill(childPid, 0), { code: "ESRCH" }, "the launcher's child was killed with it");
+  assert.throws(() => process.kill(helper, 0), { code: "ESRCH" }, "and that kill ended it");
 });
 
 test("bb's failure envelope is read from stdout; its code and message are bb's own", async (t) => {

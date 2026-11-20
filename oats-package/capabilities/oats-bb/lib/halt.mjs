@@ -1,0 +1,97 @@
+// Stopping a bb thread so that nothing of it can run: the one rule every path uses (the
+// stop verb, the stop with no endpoint, the retire hook, a launch's cleanup).
+//
+// Two things bb does make "bb thread stop answered ok" too little:
+// - bb's concurrency limit holds a turn in the thread's queue (the thread stays `pending`),
+//   `bb thread stop` leaves it there, and bb starts it by itself when a slot frees;
+// - bb keeps the Claude process of an archived thread loaded, in the home, until the
+//   thread is stopped, and shows nothing that tells such a thread from one without.
+import { fail } from "./errors.mjs";
+import { hasQueuedWork, isSettled } from "./threads.mjs";
+
+const POLL_MS = 300;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Take out of bb's line every message it holds for the thread. A delete bb answers with
+ *  "not found" may mean bb has just started that message as a turn: the caller looks at
+ *  the thread again. → how many were there. */
+async function withdraw(bb, threadId) {
+  const held = await bb.queue(threadId);
+  for (const message of held) await bb.queueDelete(threadId, message.id);
+  return held.length;
+}
+
+/** Stop one thread and confirm it: returns once bb has acknowledged a stop (or has no
+ *  such thread), shows the thread settled, holds nothing in line for it, and shows it
+ *  settled again after that last look at its queue. Anything else by the end of the grace
+ *  (or the command's deadline) throws E_SESSION_STOP_FAILED, saying what is still there.
+ *
+ *  The order matters. A message found in line after the thread settled is withdrawn, but
+ *  bb may have started it as a turn in the same instant (the delete then says "not found"
+ *  and the queue reads empty): so after every withdrawal the thread is stopped and looked
+ *  at again, and "stopped" is never taken from a look that came before the queue's.
+ *
+ *  `grace` (seconds) is counted from the first stop bb was asked for: finding the thread
+ *  takes none of it. `refusal(answer, args)` is the client's way to say bb's own no. */
+export async function confirmStop(bb, threadId, { deadline = Infinity, grace, now = Date.now, stopCallTimeoutMs } = {}) {
+  let until = null, acknowledged = false, last = "not settled";
+  for (;;) {
+    // What waits in line first, so that nothing starts while the thread is being stopped.
+    await withdraw(bb, threadId);
+    const asked = await bb.stop(threadId, stopCallTimeoutMs === undefined ? {} : { timeoutMs: stopCallTimeoutMs });
+    if (!asked.ok && asked.code === "thread_not_found") return;
+    // bb's stop may wait for the thread to settle, longer than one bb call gets here: a
+    // stop cut off by time has still been asked, and it is asked again once the thread is
+    // settled, when it answers at once. Any other failure is bb's no.
+    if (!asked.ok && !asked.timedOut) throw bb.refusal(asked, ["thread", "stop"]);
+    if (asked.ok) acknowledged = true;
+    if (until === null) until = Math.min(now() + grace * 1000, deadline);
+    for (;;) {
+      const thread = await bb.thread(threadId);
+      if (thread === null || thread.deletedAt) return;
+      if (isSettled(thread)) {
+        const inLine = await bb.queue(threadId);
+        if (inLine.length > 0) { last = `${thread.status}, with ${inLine.length} message${inLine.length > 1 ? "s" : ""} bb still holds in line for it`; break; } // withdraw, stop and look again
+        if (!acknowledged) { last = `${thread.status}, and bb has not acknowledged a stop`; break; }
+        // The queue was empty AFTER the thread was seen settled; one more look tells
+        // whether a turn started in between.
+        const again = await bb.thread(threadId);
+        if (again === null || again.deletedAt || isSettled(again)) return;
+        last = again.status;
+      } else last = thread.status;
+      if (now() + POLL_MS >= until) throw fail("E_SESSION_STOP_FAILED", `bb thread ${threadId} is still ${last} ${grace} s after bb thread stop`);
+      await sleep(POLL_MS);
+    }
+    if (now() >= until) throw fail("E_SESSION_STOP_FAILED", `bb thread ${threadId} is ${last}, ${grace} s after bb thread stop: a turn bb holds in line starts by itself when bb has a free slot. Look at it in bb (bb thread queue list ${threadId}), then stop again`);
+  }
+}
+
+/** The archived, undeleted threads of the projects given (the home's): what a sweep
+ *  stops. `since` (milliseconds, or null): only those archived at or after it. A read
+ *  only, so a caller can make it before it changes anything. */
+export async function archivedOf(bb, projectIds, { since = null } = {}) {
+  const found = [];
+  for (const projectId of projectIds) {
+    for (const thread of await bb.archivedThreads(projectId)) {
+      if (thread.deletedAt) continue;
+      if (since !== null && typeof thread.archivedAt === "number" && thread.archivedAt < since) continue;
+      found.push(thread);
+    }
+  }
+  return found;
+}
+
+/** Stop each archived thread given, so that no Claude of it is left in the home. An
+ *  archived thread takes no input (bb refuses a tell to it), so nothing new reaches its
+ *  queue: where its row shows nothing in line, bb's acknowledgement of the stop is the
+ *  confirmation; where it shows work in line, the thread is stopped by the full rule.
+ *  Throws on the first thread that cannot be confirmed. */
+export async function stopArchived(bb, threads, options = {}) {
+  for (const thread of threads) {
+    if (hasQueuedWork(thread)) { await confirmStop(bb, thread.id, options); continue; }
+    const asked = await bb.stop(thread.id);
+    if (asked.ok || asked.code === "thread_not_found") continue;
+    if (asked.timedOut) throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of archived thread ${thread.id} in time: its Claude process may still be loaded in the home`);
+    throw bb.refusal(asked, ["thread", "stop"]);
+  }
+}

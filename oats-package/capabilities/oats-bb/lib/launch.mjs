@@ -6,13 +6,17 @@ import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSett
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
-import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, sweepArchived } from "./threads.mjs";
+import { archivedOf, confirmStop, stopArchived } from "./halt.mjs";
+import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
 const BB_PROVIDER = "claude-code";
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
 const SPAWN_LOOKS = 3;
 const SPAWN_LOOK_MS = 1_000;
+// How long a launch waits for an earlier thread of the home to settle when it stops it:
+// the kernel stopped the home before this start, so the thread is at rest already.
+const CLEANUP_GRACE_SECONDS = 5;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function readInput(input) {
   if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
@@ -79,37 +83,62 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // stopped: those archived since the previous thread was made (in bb's UI, by a person),
   // or all of them where that time is not known. Earlier ones were stopped by the launch
   // that made the previous thread.
-  if (replaced) {
-    const released = await bb.stop(replaced.id);
-    if (!released.ok && released.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be stopped before it is archived (${released.message})`);
-    const archived = await bb.archive(replaced.id);
-    if (!archived.ok && archived.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
-  }
-  if (mine.length > 0) {
-    let since = null;
-    if (replaced && typeof replaced.createdAt === "number") since = replaced.createdAt;
-    else if (previousId && isBbId(previousId) && !replaced) {
-      // Only a bound on the sweep: where bb does not show the previous thread, all are swept.
-      try {
-        const before = await bb.thread(previousId);
-        if (before !== null && typeof before.createdAt === "number") since = before.createdAt;
-      } catch (error) {
-        if (!(error instanceof ProviderError)) throw error;
-      }
+  //
+  // Every read comes first, so that nothing has changed when one of them fails.
+  let since = null;
+  if (replaced && typeof replaced.createdAt === "number") since = replaced.createdAt;
+  else if (previousId && isBbId(previousId) && !replaced) {
+    // Only a bound on the sweep: where bb does not show the previous thread, all are swept.
+    try {
+      const before = await bb.thread(previousId);
+      if (before !== null && typeof before.createdAt === "number") since = before.createdAt;
+    } catch (error) {
+      if (!(error instanceof ProviderError)) throw error;
     }
-    await sweepArchived(bb, mine.map((candidate) => candidate.id), { since });
+  }
+  const toSweep = mine.length > 0 ? await archivedOf(bb, mine.map((candidate) => candidate.id), { since }) : [];
+
+  // Then the stops. A stop of a thread that is at rest (settled, or archived) changes
+  // nothing the kernel's records know: it releases a loaded Claude. So a failure here is
+  // still a refusal: no conversation was archived, no project made, nothing started.
+  try {
+    if (replaced) await confirmStop(bb, replaced.id, { deadline, grace: CLEANUP_GRACE_SECONDS });
+    await stopArchived(bb, toSweep, { deadline, grace: CLEANUP_GRACE_SECONDS });
+  } catch (error) {
+    if (!(error instanceof ProviderError) || error.code !== "E_SESSION_STOP_FAILED") throw error;
+    throw fail("E_SESSION_START_FAILED", `an earlier bb thread of this home could not be stopped before the launch, so its Claude may still be loaded there: ${error.message}`);
   }
 
-  let project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;
-  if (project === null) {
-    project = await bb.createProject(instance, home);
-    // The project must be rooted exactly at the home: that is what makes the home's own
-    // .claude, CLAUDE.md and hooks the thread's, and one home one project.
-    if (projectsOfHome([project], home).length === 0) {
-      throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
+  // From the first change on (the previous thread archived, a project made), a failure is
+  // no longer a refusal: the kernel reads a refusal as "nothing happened". What cannot be
+  // completed then ends with no answer, as every outcome in doubt does.
+  let changed = null;
+  const noLongerARefusal = (error) => (changed !== null && error instanceof ProviderError
+    ? new InDoubt(`${error.message}. The launch had already changed bb (${changed}), so this is not a refusal`) : error);
+  let project;
+  try {
+    if (replaced) {
+      const archived = await bb.archive(replaced.id);
+      if (archived.ok || archived.code === "thread_not_found") changed = `the home's previous thread ${replaced.id} is archived`;
+      else if (nothingHappened(archived)) throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
+      else throw new InDoubt(`whether bb archived the home's previous thread ${replaced.id} is not known (${archived.message}): the launch stopped there`);
     }
-  }
-  writeLaunchSettings(home, settingsToWrite);
+    project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;
+    if (project === null) {
+      try { project = await bb.createProject(instance, home); }
+      catch (error) {
+        if (error instanceof ProviderError && isObject(error.bb) && !nothingHappened(error.bb)) throw new InDoubt(`whether bb created the home's project is not known (${error.message}): the launch stopped there`);
+        throw error;
+      }
+      changed = `bb project ${project.id} was created`;
+      // The project must be rooted exactly at the home: that is what makes the home's own
+      // .claude, CLAUDE.md and hooks the thread's, and one home one project.
+      if (projectsOfHome([project], home).length === 0) {
+        throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
+      }
+    }
+    writeLaunchSettings(home, settingsToWrite);
+  } catch (error) { throw noLongerARefusal(error); }
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
@@ -120,7 +149,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // and the previous thread's is never answered (the kernel tells a new session by it).
   if (spawned.ok && isObject(thread) && isBbId(thread.id) && thread.id !== previousId) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
   // bb said no, or the request never reached it: nothing was created.
-  if (nothingHappened(spawned)) throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
+  if (nothingHappened(spawned)) throw noLongerARefusal(fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`));
 
   // The spawn's fate is unknown: no answer in time, an answer that cannot be read or has
   // no thread id, a CLI that died, a connection that dropped after the request went out. A

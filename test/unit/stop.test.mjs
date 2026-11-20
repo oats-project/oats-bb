@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { NOT_FOUND, QUEUE_GONE, UNREACHABLE, call, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
 const settings = { version: "0.50.1", trust: "single-user" };
@@ -27,7 +27,7 @@ test("stop asks bb, then waits until the thread is idle", async (t) => {
   const { answer, calls } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("stopping"), show("idle")] });
   assert.deepEqual(answer.result, { stopped: true });
   assert.deepEqual(calls[1].argv, ["thread", "stop", "thr_a", "--json"]);
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread show", "thread queue list"], "what bb holds in line is read before the stop and again once the thread is settled");
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread show", "thread queue list", "thread show"], "what bb holds in line is read before the stop and again once the thread is settled");
 });
 
 for (const status of ["idle", "pending", "error"]) {
@@ -57,7 +57,7 @@ test("stop waits the whole grace the kernel gives, beyond the other verbs' time"
 test("the grace starts when bb has been asked: a slow stop call takes none of it", async (t) => {
   const { answer, calls } = await stopWith(t, { "thread stop": { delayMs: 1100, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] }, { graceSeconds: 1 });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list"]);
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show"]);
 });
 
 test("with no endpoint, finding the home's thread and a slow stop take none of the grace", async (t) => {
@@ -93,22 +93,47 @@ test("stop withdraws what bb holds in line for the thread, before it stops it, a
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("pending"),
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread queue delete", "thread queue delete", "thread queue list", "thread stop", "thread show", "thread queue list"]);
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread queue delete", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"], "withdrawn first; and after the thread is seen settled, the queue is read and the thread is looked at once more");
   assert.deepEqual(calls.filter((c) => c.argv[2] === "delete").map((c) => c.argv.slice(3, 5)), [["thr_a", "qmsg_1"], ["thr_a", "qmsg_2"]]);
 });
 
-test("a message that reaches the line while the thread is being stopped is withdrawn too", async (t) => {
+test("a message that reaches the line while the thread is being stopped is withdrawn, and the thread is stopped and looked at again", async (t) => {
+  const late = { stdout: [{ id: "qmsg_late", state: "waiting" }] };
   const { answer, calls } = await stopWith(t, {
-    "thread queue list": [{ stdout: [] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [] }],
+    "thread queue list": [{ stdout: [] }, late, late, { stdout: [] }],
     "thread queue delete": { stdout: { ok: true } },
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("idle"),
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread queue delete", "thread queue list"]);
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"]);
+});
+
+// The race a stop must not lose: the thread is seen idle, a held message is found, and bb
+// starts it as a turn before the delete arrives (the delete says "not found", the queue
+// then reads empty). "Stopped" is never taken from the look that came before the queue's.
+test("a held turn bb starts just as it is withdrawn: the stop sees the thread active again, stops it again, and answers only once it is at rest", async (t) => {
+  const { answer, calls } = await stopWith(t, {
+    "thread queue list": [{ stdout: [] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [] }],
+    "thread queue delete": QUEUE_GONE,
+    "thread stop": { stdout: { ok: true, threadId: "thr_a" } },
+    "thread show": [show("idle"), show("active"), show("stopping"), show("idle"), show("idle")],
+  });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.equal(calls.filter((c) => c.argv[1] === "stop").length, 2, "stopped again after the withdrawal");
+  assert.deepEqual(verbs(calls).slice(-3), ["thread show", "thread queue list", "thread show"], "the last looks: settled, nothing in line, settled");
+});
+
+test("a thread that turns active between the queue's look and the last one is not stopped yet: the stop goes on waiting", async (t) => {
+  const { answer } = await stopWith(t, {
+    "thread stop": { stdout: { ok: true, threadId: "thr_a" } },
+    "thread show": [show("idle"), show("active")],
+  }, { graceSeconds: 1 });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.match(answer.error.message, /thr_a is still active 1 s after bb thread stop/);
 });
 
 for (const [name, script, pattern] of [
-  ["a held message bb will not withdraw", { "thread queue list": { stdout: [{ id: "qmsg_1", state: "waiting" }] }, "thread queue delete": { error: { code: "invalid_request", message: "HTTP 409: nope" } } }, /still holds 1 message in line.*starts by itself when bb has a free slot.*bb thread queue list thr_a/],
+  ["a held message bb will not withdraw", { "thread queue list": { stdout: [{ id: "qmsg_1", state: "waiting" }] }, "thread queue delete": { error: { code: "invalid_request", message: "HTTP 409: nope" } } }, /with 1 message bb still holds in line.*starts by itself when bb has a free slot.*bb thread queue list thr_a/],
   ["a queue bb does not answer for", { "thread queue list": UNREACHABLE }, /does not answer/],
   ["a queue that cannot be read", { "thread queue list": { stdout: [null] } }, /a row this provider cannot read/],
   ["a queue that is no list", { "thread queue list": { stdout: { messages: [] } } }, /not a list/],
@@ -128,11 +153,11 @@ test("a stop with no endpoint also stops the home's archived threads: bb keeps t
   const bb = fakeBbIn(dir, {
     "project list": { stdout: [projectRow("proj_a", home), projectRow("proj_z", `${home}-other`)] }, "thread list": { stdout: [] },
     "thread list --archived": { stdout: [threadRow("thr_arch", "proj_a", "idle", { archivedAt: 5 }), threadRow("thr_arch_queued", "proj_a", "pending", { archivedAt: 6, queuedWork: "waiting" }), threadRow("thr_deleted", "proj_a", "idle", { archivedAt: 7, deletedAt: 8 })] },
-    "thread queue list": { stdout: [{ id: "qmsg_9", state: "waiting" }] }, "thread queue delete": { stdout: { ok: true } },
-    "thread stop": { stdout: { ok: true } },
+    "thread queue list": [{ stdout: [{ id: "qmsg_9", state: "waiting" }] }, { stdout: [] }], "thread queue delete": { stdout: { ok: true } },
+    "thread stop": { stdout: { ok: true } }, "thread show": show("pending", { archivedAt: 6 }),
   });
   assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb })).result, { stopped: true });
-  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread queue list", "thread queue delete", "thread stop"]);
+  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"], "one with nothing in line: the stop bb acknowledges; one with a held turn: the whole rule");
   const archivedRead = bb.calls().find((c) => c.argv.includes("--archived"));
   assert.deepEqual(archivedRead.argv, ["thread", "list", "--project", "proj_a", "--archived", "--include-hidden", "--json"], "the home's project only");
   assert.deepEqual(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_arch", "thr_arch_queued"], "a deleted thread is not stopped");
@@ -148,7 +173,7 @@ for (const [name, script] of [["cannot be listed", { "thread list --archived": U
 
 test("a bb stop cut off by time has still been asked: what bb shows next decides", async (t) => {
   const { dir, home } = scratch(t);
-  const bb = fakeBbIn(dir, { "thread stop": { delayMs: 30_000, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] });
+  const bb = fakeBbIn(dir, { "thread stop": [{ delayMs: 30_000, stdout: { ok: true, threadId: "thr_a" } }, { stdout: { ok: true, threadId: "thr_a" } }], "thread show": [show("stopping"), show("idle")] });
   // In process, so the stop call's own time can be short: one bb call gets 10 s otherwise.
   const { stop } = await import("../../oats-package/capabilities/oats-bb/lib/stop.mjs");
   const { readSettings } = await import("../../oats-package/capabilities/oats-bb/lib/settings.mjs");
@@ -228,7 +253,7 @@ test("a stop with no endpoint whose archive bb refuses is still stopped; a stop 
   assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5, launchSent: "1970-01-01T00:00:00.001Z" }, { settings, bb })).result, { stopped: true });
   assert.equal(bb.calls().filter((c) => c.argv[1] === "archive").length, 1);
   const withEndpoint = await stopWith(t, { "thread stop": { stdout: { ok: true } }, "thread show": show("idle"), "thread archive": { stdout: { ok: true } } }, { launchSent: "1970-01-01T00:00:00.001Z" });
-  assert.deepEqual(verbs(withEndpoint.calls), ["thread queue list", "thread stop", "thread show", "thread queue list"]);
+  assert.deepEqual(verbs(withEndpoint.calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show"]);
 });
 
 test("a stop with no endpoint and nothing live in the home is stopped, and stops nothing", async (t) => {
@@ -249,11 +274,14 @@ test("a stop with no endpoint and a bb that does not answer: E_SESSION_STOP_FAIL
 async function retireWith(t, script, { launched = true } = {}) {
   const { dir, home } = scratch(t);
   if (launched) mkdirSync(join(home, ".oats-bb")); // the provider's state directory: its first launch makes it
-  const bb = fakeBbIn(dir, typeof script === "function" ? script(home) : script);
+  // A thread that stops when asked, unless the test says otherwise: a retire archives only what it has seen stopped.
+  const bb = fakeBbIn(dir, { "thread stop": { stdout: { ok: true } }, "thread show": show("idle"), ...(typeof script === "function" ? script(home) : script) });
   const run = await runBin(["retire-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
   const lines = run.stdout.trim().split("\n");
   return { run, last: JSON.parse(lines[lines.length - 1]), calls: bb.calls(), home };
 }
+// A stop that is confirmed: what waits in line, the stop, settled, nothing in line, settled.
+const CONFIRMED = ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show"];
 const archived = (id) => ({ stdout: { ok: true, threadId: id, alreadyArchived: false, archivedAt: 9, archivedThreadIds: [id] } });
 
 test("retire archives the live threads of the home's project, and only those", async (t) => {
@@ -275,7 +303,7 @@ test("retire stops a thread still in a turn before archiving it", async (t) => {
     "thread archive": archived("thr_a"),
   }));
   assert.deepEqual(last.meta, { retired: true, archived: ["thr_a"] });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread stop", "thread archive", "thread list --archived"]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived"]);
 });
 
 test("retire withdraws what bb holds in line for a thread, stops it and archives it; and stops the home's threads archived before", async (t) => {
@@ -287,7 +315,7 @@ test("retire withdraws what bb holds in line for a thread, stops it and archives
     "thread stop": { stdout: { ok: true } }, "thread archive": archived("thr_a"),
   }));
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread queue list", "thread stop", "thread archive", "thread list --archived", "thread stop"]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop"]);
   assert.deepEqual(calls.filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_a", "thr_arch"]);
 });
 
@@ -298,6 +326,45 @@ test("retire with nothing live still stops the home's archived threads, and is a
   }));
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
   assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop"]);
+});
+
+test("retire archives only a thread it has seen stopped: one that will not stop is left, named, and the retire goes on", async (t) => {
+  const { run, last, calls } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "active")] },
+    "thread show": show("active"), "thread archive": archived("thr_a"),
+  }));
+  assert.equal(run.status, 0);
+  assert.deepEqual(last.meta, { archived: [], left: ["thr_a"] });
+  assert.match(last.warning, /^1 bb thread of this home could not be stopped and archived \(thr_a\): stop and archive it in bb/);
+  assert.equal(verbs(calls).includes("thread archive"), false, "an archived thread would keep its Claude: it is not archived unstopped");
+});
+
+test("retire's warnings stay inside what the kernel relays, however many threads and whatever bb says", async (t) => {
+  const many = Array.from({ length: 40 }, (_, i) => `thr_${String(i).padStart(3, "0")}_${"x".repeat(40)}`);
+  const { last } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: many.map((id) => threadRow(id, "proj_a", "idle")) },
+    "thread archive": { error: { code: "error", message: `HTTP 500: ${"boom ".repeat(400)}` } },
+    "thread list --archived": { exit: 3, stderr: `${"noise ".repeat(400)}\n` },
+  }));
+  assert.equal(last.meta.left.length, 40);
+  assert.equal(last.meta.unswept, true);
+  assert.ok(last.warning.length <= 480, String(last.warning.length));
+  assert.match(last.warning, /^40 bb threads of this home could not be stopped and archived \(thr_000_x+, .* and 34 more\): stop and archive them in bb/);
+  assert.doesNotMatch(last.warning, /boom|noise/);
+  const unreachable = await retireWith(t, { "project list": { error: { code: "error", message: `fetch failed: ${"very long ".repeat(300)}` } } });
+  assert.ok(unreachable.last.warning.length <= 480);
+  assert.match(unreachable.last.warning, /^the home's bb threads were not archived: oats readiness reports them as session-provider-orphaned/);
+});
+
+test("launchSent is a time only when it is one: an impossible date archives nothing", async () => {
+  const { launchSentOf } = await import("../../oats-package/capabilities/oats-bb/lib/stop.mjs");
+  assert.equal(launchSentOf("2028-02-29T10:00:00.000Z"), Date.parse("2028-02-29T10:00:00.000Z"));
+  assert.equal(launchSentOf("2026-11-20T10:00:00Z"), Date.parse("2026-11-20T10:00:00Z"));
+  for (const bad of ["2026-02-29T10:00:00Z", "2026-02-30T10:00:00.000Z", "2026-04-31T00:00:00Z", "2026-11-20T24:00:00Z", "2026-11-20T10:60:00Z", "2026-13-01T00:00:00Z", "2026-11-20T10:00:00", "1", "", null, 5]) {
+    assert.ok(Number.isNaN(launchSentOf(bad)), String(bad));
+  }
 });
 
 test("retire with nothing to archive is a complete cleanup (a home that never launched, or a second run)", async (t) => {
@@ -312,7 +379,7 @@ test("retire of a home with no state directory still asks bb: a home's agent can
     "thread archive": archived("thr_a"),
   }), { launched: false });
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread stop", "thread archive", "thread list --archived"], "a settled thread is stopped too: bb keeps an archived thread's process otherwise");
+  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived"], "a settled thread is stopped too: bb keeps an archived thread's process otherwise");
 });
 
 test("retire of a home the provider shows no sign of having launched (a tmux home): a bb that cannot be asked is no warning", async (t) => {
@@ -358,7 +425,7 @@ for (const [name, script, cli] of [
       const answer = JSON.parse(lines[0]);
       if (launched) {
         assert.deepEqual(answer.meta, { archived: [], unchecked: true });
-        assert.match(answer.warning, /were not archived .*session-provider-orphaned/);
+        assert.match(answer.warning, /were not archived: .*session-provider-orphaned/);
       } else {
         assert.deepEqual(answer, { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
       }

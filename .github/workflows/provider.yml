@@ -48,10 +48,12 @@ jobs:
       - name: Let the contract container make user namespaces
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          # Tried for the probe (the first sysctl alone did not let a nested namespace be made):
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0 || echo "no such sysctl"
-          sudo sysctl -w kernel.unprivileged_userns_clone=1 || echo "no such sysctl"
-          sudo sysctl kernel.apparmor_restrict_unprivileged_userns user.max_user_namespaces || true
-          uname -r
+          # Probe: the sysctl alone was not enough. Ubuntu attaches a profile to
+          # /usr/bin/bwrap by its path (bwrap-userns-restrict), which an unconfined
+          # container's bwrap matches too, and which forbids a namespace inside bwrap's.
+          sudo aa-status 2>/dev/null | grep -i -e bwrap -e userns || echo "no bwrap or userns profile loaded"
+          for profile in bwrap-userns-restrict unprivileged_userns; do
+            if [ -e /etc/apparmor.d/$profile ]; then sudo apparmor_parser -R /etc/apparmor.d/$profile && echo "removed $profile"; fi
+          done
       - name: Contract test against the pinned bb-app
         run: npm run test:contract

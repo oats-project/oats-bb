@@ -143,6 +143,14 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | error | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |
 
+**A known limit: many archived threads.** Every start archives the home's previous
+thread, and bb keeps an archived thread's Claude process until the thread is stopped, so
+a stop, a retire and a launch stop the home's archived threads (several at a time). A bb
+project that holds more of them than fit the command's time (some hundreds, fewer on a
+small or busy machine) makes the stop fail, and it says so: how many were stopped, of how
+many, and the remedy. Remove old archived threads of that project in bb: for each,
+`bb thread stop <id>`, then `bb thread delete --yes <id>`.
+
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself. A thread in `error`
 is a lost session (bb never resumes an interrupted turn): it reads as stopped, and the

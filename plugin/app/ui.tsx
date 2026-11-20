@@ -5,7 +5,8 @@ import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
 
 // bb's tokens for coloured text on a surface: they keep their contrast against it in both themes,
-// which its fill tokens (`attention`, `success`) do not in the light one.
+// which its fill tokens (`attention`, `success`) do not in the light one. For the same reason a
+// refusal's text is `text-destructive-text`, never `text-destructive` (3.56:1 in the dark theme).
 const DOT: Record<AgentState, string> = {
   "needs-you": "bg-warning-text",
   working: "bg-success-foreground",
@@ -84,7 +85,7 @@ export function Note({ children }: { children: ReactNode }) {
 /** A kernel refusal or a failed call, printed unchanged. */
 export function ErrorLine({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive-text">
       <span className="min-w-0 whitespace-pre-wrap break-words">{children}</span>
       {onRetry === undefined ? null : <Button onClick={onRetry}>Retry</Button>}
     </div>

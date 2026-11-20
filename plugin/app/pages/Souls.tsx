@@ -51,7 +51,7 @@ function SummaryView({ summary }: { summary: Summary }) {
   return (
     <div data-testid="oats-preview" className="flex flex-col gap-2 rounded-md border border-border bg-card p-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What OATS would do</span>
-      {list("Problems", summary.problems, "text-destructive")}
+      {list("Problems", summary.problems, "text-destructive-text")}
       {list("Warnings", summary.warnings)}
       {list("Modules", summary.modules)}
       {list("Teams", summary.teams)}
@@ -145,7 +145,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
           onChange={(event) => edit(setName, event.target.value)}
         />
         {name !== "" && !nameOk ? (
-          <span className="text-destructive">
+          <span className="text-destructive-text">
             Lower-case letters, digits and dashes; starts with a letter or a digit; 63 characters at most.
           </span>
         ) : null}
@@ -269,7 +269,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         {soul.spawnable ? (
           <SpawnForm key={soul.name} soul={soul} />
         ) : (
-          <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive">
+          <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive-text">
             {clean(soul.problem ?? "This soul cannot be spawned.")}
           </p>
         )}

@@ -5,7 +5,8 @@
 // What it covers: inside every element the plugin marks with `data-testid="oats-…"` (the sidebar
 // block and tree, the identity row, the home, the four pages, the dialogs and the running line),
 // every rendered element that has text of its own (rows, chips, card text, headings, links,
-// buttons, the dialog's lines), the placeholder of an empty input or textarea, and every state dot
+// buttons, the dialog's lines), what a field shows (the value typed into an input or a textarea,
+// the chosen option of a select, or the placeholder of an empty one), and every state dot
 // (`role="img"` with `data-state`). A row's thread title is bb's own component, drawn inside the
 // plugin's row: it is covered too.
 //
@@ -15,8 +16,11 @@
 // composites it; an ancestor's `opacity` blends its content with what is behind it.
 //
 // What it cannot see, and why:
-//   - a state the page is not in: hover, focus, active, a disabled control (skipped: WCAG exempts
-//     it), a dialog that is not open;
+//   - a state the page is not in: hover, focus, active, a dialog that is not open, a refusal
+//     that is not shown. live-ui.mjs brings up the ones it can (a typed name the form refuses, the
+//     filled forms with their buttons enabled, the plan dialog);
+//   - a disabled control, and what is inside one: skipped, as WCAG exempts it;
+//   - the options of an open select: the browser draws that list, not the page;
 //   - what is drawn but is no text and no state dot: borders, icons, focus rings;
 //   - a background that is no colour (an image or a gradient on the element or an ancestor): the
 //     row is reported as `unsure`, and the check fails on it rather than guess;
@@ -66,13 +70,14 @@ function contrastInPage() {
     return box.width > 0 && box.height > 0 && getComputedStyle(element).visibility !== "hidden";
   };
   const named = (element) => {
-    const text = (element.innerText || element.getAttribute("placeholder") || element.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    const text = ((element.tagName === "SELECT" ? element.selectedOptions[0]?.text : element.value) || element.innerText || element.getAttribute("placeholder") || element.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 40);
     return `${element.closest("[data-testid]")?.getAttribute("data-testid") ?? "?"} <${element.tagName.toLowerCase()}> ${JSON.stringify(text)}`;
   };
   const roots = [...document.querySelectorAll('[data-testid^="oats-"]')].filter((element) => !element.parentElement?.closest('[data-testid^="oats-"]'));
   const rows = [];
+  // The ratio is kept as computed and compared as computed; it is only printed cut to two decimals.
   const row = (kind, element, need, resolved, behind) =>
-    rows.push({ kind, what: named(element), need, ratio: Math.round(ratio(resolved.paint, behind) * 100) / 100, unsure: resolved.unsure, paint: resolved.paint.join(","), behind: behind.join(",") });
+    rows.push({ kind, what: named(element), need, ratio: ratio(resolved.paint, behind), unsure: resolved.unsure, paint: resolved.paint.join(","), behind: behind.join(",") });
   for (const root of roots) {
     for (const element of [root, ...root.querySelectorAll("*")]) {
       if (!rendered(element)) continue;
@@ -87,11 +92,16 @@ function contrastInPage() {
         continue;
       }
       if (element.closest(":disabled, [aria-disabled='true']")) continue;
-      if ([...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== "")) {
+      const field = element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT";
+      if (!field && [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== "")) {
         const text = resolve(element, style.color);
         row("text", element, 4.5, text, text.background);
       }
-      if ((element.tagName === "INPUT" || element.tagName === "TEXTAREA") && element.getAttribute("placeholder") && element.value === "") {
+      // A field's own text is no text node: what is typed or chosen in it, else its placeholder.
+      if (field && element.value !== "") {
+        const value = resolve(element, style.color);
+        row("value", element, 4.5, value, value.background);
+      } else if (field && element.getAttribute("placeholder")) {
         const placeholder = resolve(element, getComputedStyle(element, "::placeholder").color);
         row("placeholder", element, 4.5, placeholder, placeholder.background);
       }
@@ -100,8 +110,11 @@ function contrastInPage() {
   return JSON.stringify({ theme: document.documentElement.classList.contains("dark") ? "dark" : "light", roots: roots.map((element) => element.getAttribute("data-testid")), rows });
 }
 
-/** The expression: → JSON of `{theme, roots, rows: [{kind, what, need, ratio, unsure, paint, behind}]}`. */
+/** The expression: → JSON of `{theme, roots, rows: [{kind: "text" | "value" | "placeholder" | "dot", what, need, ratio, unsure, paint, behind}]}`. */
 export const CONTRAST = `(${contrastInPage.toString()})()`;
 
 /** The rows that fail: a ratio under its floor, or a background the check cannot read. */
 export const failing = (rows) => rows.filter((row) => row.ratio < row.need || row.unsure !== null);
+
+/** A ratio as it is printed: cut, never rounded up, so that 4.499 does not read as 4.5. */
+export const shown = (ratio) => String(Math.floor(ratio * 100) / 100);

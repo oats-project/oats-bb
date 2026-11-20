@@ -46,7 +46,9 @@ The live checks of the app (`live-ui.mjs`), each at 1280x800 and 390x800, in bb'
 again in its dark theme:
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the home (its badge
-  shows 3), the four pages and a soul's page with the spawn form.
+  shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
+  page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
+  and their preview (Preview and Spawn enabled).
 - **A14** with `oats` removed: bb's threads are listed, the "not found" line shows, a thread opens.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
   Retire opens the plan dialog with the kernel's plan.
@@ -56,7 +58,7 @@ the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: wha
 Appearance writes) and puts the class `dark` on the document's root when it loads; no server
 setting and no `bb settings` key holds it. `browser.mjs` sets that key before any script of bb
 runs, and each check asserts the theme bb then draws. The screenshots are
-`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (48
+`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (60
 files, in `container/out/`, kept as CI artefacts).
 
 **The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
@@ -64,16 +66,22 @@ text the plugin draws there reads at 4.5:1 or more against its effective backgro
 state dot at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
 colours). It covers every rendered element with text of its own inside the plugin's elements
 (`data-testid="oats-…"`: the sidebar block and tree, the identity row and its chips, the home's
-cards and lists, the four pages, the spawn form, the plan dialog and its buttons), the placeholder
-of an empty field, and the state dots. It cannot see: hover, focus and other states the page is not
-in; a disabled control (skipped, as WCAG does); borders, icons and focus rings; a background that
-is an image or a gradient (reported and failed, never guessed); what a non-ancestor draws over a
-text; and bb's own UI. `contrast.mjs` says how it computes.
+cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
+and the buttons that are enabled in a scene: default, primary and destructive), what a field
+shows (the typed value of an input or a textarea, the chosen option of a select, or the
+placeholder of an empty one), and the state dots. It cannot see: hover, focus and other states the
+page is not in (a failed call's error line, the "Starting…" line, a spawn's problems: no scene
+brings them up; they use the same token as the form's refusal, which one does); a disabled
+control (skipped, as WCAG does); the options of an open select (the browser draws them); borders,
+icons and focus rings; a background that is an image or a gradient (reported and failed, never
+guessed); what a non-ancestor draws over a text; and bb's own UI. `contrast.mjs` says how it
+computes.
 
 The plugin's colours are bb's tokens only (`app/ui.tsx`). Where a state needs a colour, it is one
-of bb's tokens for coloured text on a surface (`warning-text`, `success-foreground`), which hold
-3:1 against the surface in both themes; bb's fill tokens (`attention`, `success`) and a fixed
-palette colour (`amber-500`, `green-500`) do not in the light theme.
+of bb's tokens for coloured text on a surface (`warning-text`, `success-foreground`,
+`destructive-text`), which hold their contrast against the surface in both themes; bb's fill
+tokens (`attention`, `success`, and `destructive` as a text colour in the dark theme) and a fixed
+palette colour (`amber-500`, `green-500`) do not.
 
 To work in a container for a while:
 

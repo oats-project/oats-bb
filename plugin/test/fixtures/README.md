@@ -46,5 +46,5 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
 - Shaped as docs/desktop-cli-api.md documents the answer: `retire-incomplete.json` (a receipt with
   `rollbackIncomplete`, which the kernel prints with exit 1), and what `stop-plan.json` holds
   around its recorded targets. In it, the idle child's `midTask` is `"unknown"`, as the kernel of
-  the real run prints it for a bb agent whose thread is idle (`real/out/answers/stop-plan.json`).
+  the real run prints it for a bb agent whose thread is idle (`container/real/out/answers/stop-plan.json`).
 `container/fake-oats.mjs` prints them; the unit and live tests run the plugin against it.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs inside the container, as node: bb-app at the pinned version, the plugin installed from the
 # checkout, a fake `oats` that prints the fixtures (container/fake-oats.mjs). The backend's live
-# checks; the app's (A13, A14: screenshots at two widths) are container/live-ui.mjs, run from here
+# checks; the app's (A13, A14, A16: screenshots at two widths, in bb's light and dark themes) are container/live-ui.mjs, run from here
 # when it is there.
 #   L1  the installed plugin reads the deployment through the host entry
 #   L2  a line appended to the deployment's event log, with the poll off, makes the server reread (watch -> signal -> reread)

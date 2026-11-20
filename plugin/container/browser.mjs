@@ -122,6 +122,13 @@ export const testId = (id) => `[data-testid="${id}"]`;
 export const texts = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`;
 export const textOf = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 
+/**
+ * Types `value` into an input or a textarea as a person does, so that React sees it (the native
+ * setter, then an `input` event), and brings the field into view.
+ */
+export const fill = (selector, value) =>
+  `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const kind = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement; Object.getOwnPropertyDescriptor(kind.prototype, "value").set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event("input", { bubbles: true })); e.scrollIntoView({ block: "center" }); return true; })()`;
+
 /** At phone width the thread list is in bb's drawer: open it with bb's own toggle. */
 export async function showSidebar(page, viewport) {
   if (await page.until(visible(testId("oats-sidebar")), viewport.mobile ? 4 : 30)) return true;

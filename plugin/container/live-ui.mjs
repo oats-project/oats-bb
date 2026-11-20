@@ -22,8 +22,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchBrowser, showSidebar, testId, textOf, texts, visible } from "./browser.mjs";
-import { CONTRAST, failing } from "./contrast.mjs";
+import { fill, launchBrowser, showSidebar, testId, textOf, texts, visible } from "./browser.mjs";
+import { CONTRAST, failing, shown } from "./contrast.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -127,12 +127,13 @@ async function themedPage(browser, viewport, theme, at) {
     const { theme: drawn, roots, rows } = JSON.parse(await page.evaluate(CONTRAST));
     const bad = failing(rows);
     const count = (kind) => rows.filter((row) => row.kind === kind).length;
-    const lowest = (kinds) => Math.min(...rows.filter((row) => kinds.includes(row.kind)).map((row) => row.ratio));
+    const lowest = (kinds) => shown(Math.min(...rows.filter((row) => kinds.includes(row.kind)).map((row) => row.ratio)));
+    const TEXTS = ["text", "value", "placeholder"];
     const dots = count("dot") === 0 ? "no state dot" : `its ${count("dot")} state dots at 3:1 or more (lowest ${lowest(["dot"])}:1)`;
     check(
       drawn === theme && roots.length > 0 && rows.length > 0 && bad.length === 0,
-      `${at} ${name}: bb draws its ${theme} theme, and the plugin's ${count("text") + count("placeholder")} texts read at 4.5:1 or more (lowest ${lowest(["text", "placeholder"])}:1), ${dots}`,
-      `theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}: ${[...new Set(bad.map((row) => `${row.kind} ${row.what} ${row.ratio}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))].join(" | ")}`,
+      `${at} ${name}: bb draws its ${theme} theme, and the plugin's ${rows.filter((row) => TEXTS.includes(row.kind)).length} texts read at 4.5:1 or more (lowest ${lowest(TEXTS)}:1), ${dots}`,
+      `theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}: ${[...new Set(bad.map((row) => `${row.kind} ${row.what} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))].join(" | ")}`,
     );
     await shot(theme === "light" ? name : `${name}-${theme}`);
   };
@@ -199,6 +200,11 @@ async function a13(browser, viewport, threads, theme) {
     const sections = await page.evaluate(`["needs", "working", "finished"].map((s) => document.querySelector('[data-testid="oats-home-' + s + '"] h2')?.innerText.replace(/\\s+/g, " ").trim())`);
     check(/^needs you 3$/i.test(sections[0] ?? "") && /^working 2$/i.test(sections[1] ?? ""), `${at} the home's counts: Needs you 3, Working 2`, JSON.stringify(sections));
     await page.shot(`a13-${viewport.name}-home`);
+    // the reply box, with a message typed: its fields, and Send enabled
+    await page.evaluate(fill(testId("oats-reply-text"), "Keep depth 6 and sweep lr."));
+    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-reply-send"))})?.disabled === false`, 10)), `${at} a typed message enables Send`);
+    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-reply-send"))}).scrollIntoView({ block: "center" })`);
+    await page.shot(`a13-${viewport.name}-home-reply`);
 
     // the four pages
     const pages = [
@@ -219,6 +225,18 @@ async function a13(browser, viewport, threads, theme) {
     check(Boolean(await page.until(visible(testId("oats-soul-detail")), 30)), `${at} a soul's page renders, with the spawn form`, await page.evaluate(textOf(testId("oats-souls-page"))));
     check((await page.evaluate(visible(testId("oats-soul-row")))) === !viewport.mobile, `${at} ${viewport.mobile ? "the list gives way to the soul, with Back" : "the list stays beside the soul"}`);
     await page.shot(`a13-${viewport.name}-soul`);
+    // the spawn form: a name it refuses, then a name and a task it takes, and the preview
+    await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));
+    const refused = await page.until(`(() => { const t = ${textOf(testId("oats-spawn-form"))}; return /Lower-case letters, digits and dashes/.test(t) ? t : ""; })()`, 10);
+    check(Boolean(refused), `${at} the form says why it refuses a name`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    await page.shot(`a13-${viewport.name}-soul-refused`);
+    await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
+    await page.evaluate(fill(testId("oats-spawn-task"), "Try depth 7."));
+    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))})?.disabled === false`, 10)), `${at} a name and a task enable Preview`);
+    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))}).click()`);
+    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))})?.disabled === false && ${visible(testId("oats-preview"))}`, 30)), `${at} Preview shows what OATS would do, and enables the spawn`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))}).scrollIntoView({ block: "center" })`);
+    await page.shot(`a13-${viewport.name}-soul-form`);
     // a package soul's key has a slash: its row opens its own page too
     await page.goto("/plugins/oats/souls");
     await page.until(visible(testId("oats-soul-row")), 30);

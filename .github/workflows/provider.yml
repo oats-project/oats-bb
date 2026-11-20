@@ -46,6 +46,12 @@ jobs:
       # unprivileged process ("nested userns is capability-restricted"); the restriction is
       # lifted for this job's own runner, which is thrown away after it.
       - name: Let the contract container make user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          # Tried for the probe (the first sysctl alone did not let a nested namespace be made):
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0 || echo "no such sysctl"
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || echo "no such sysctl"
+          sudo sysctl kernel.apparmor_restrict_unprivileged_userns user.max_user_namespaces || true
+          uname -r
       - name: Contract test against the pinned bb-app
         run: npm run test:contract

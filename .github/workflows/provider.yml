@@ -41,17 +41,16 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-      # The second contract file runs Claude Code's sandbox inside its container, which
-      # makes user namespaces there. The runner's AppArmor policy forbids that to an
-      # unprivileged process ("nested userns is capability-restricted"); the restriction is
-      # lifted for this job's own runner, which is thrown away after it.
+      # The second contract file runs Claude Code's sandbox inside its container: bubblewrap
+      # makes a user namespace there, and Claude Code's seccomp helper another inside it.
+      # Ubuntu's AppArmor forbids the inner one: it attaches a profile to /usr/bin/bwrap by
+      # its path (bwrap-userns-restrict), which the container's bwrap matches too, since the
+      # container runs unconfined. Lifting the sysctl alone was not enough (tried); with
+      # the two profiles unloaded the sandbox starts. This is the job's own runner, thrown
+      # away after it.
       - name: Let the contract container make user namespaces
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          # Probe: the sysctl alone was not enough. Ubuntu attaches a profile to
-          # /usr/bin/bwrap by its path (bwrap-userns-restrict), which an unconfined
-          # container's bwrap matches too, and which forbids a namespace inside bwrap's.
-          sudo aa-status 2>/dev/null | grep -i -e bwrap -e userns || echo "no bwrap or userns profile loaded"
           for profile in bwrap-userns-restrict unprivileged_userns; do
             if [ -e /etc/apparmor.d/$profile ]; then sudo apparmor_parser -R /etc/apparmor.d/$profile && echo "removed $profile"; fi
           done

@@ -39,7 +39,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
 }
 
 /** The seconds to wait for bb to settle after `bb thread stop`. */
-function graceOf(input) {
+export function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 

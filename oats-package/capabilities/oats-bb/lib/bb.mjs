@@ -121,8 +121,9 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
       if (!isObject(project) || typeof project.id !== "string") throw fail(fallbackCode, "bb project create answered no project id");
       return project;
     },
-    /** Every thread of the server, archived and hidden ones included: one read. */
-    async threads() { return list(await must(["thread", "list", "--include-archived", "--include-hidden", "--json"]), "bb thread list"); },
+    /** Every unarchived thread of the server, hidden ones included: one read. (Archived
+     *  threads are nobody's session; each start archives one, so they only grow.) */
+    async threads() { return list(await must(["thread", "list", "--include-hidden", "--json"]), "bb thread list"); },
     /** The thread, or null when bb has none by that id. */
     async thread(id) {
       const answer = await raw(["thread", "show", id, "--json"]);

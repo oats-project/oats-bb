@@ -31,7 +31,7 @@ for (const [status, expected] of [
     assert.equal(answer.ok, true);
     assert.deepEqual(Object.keys(answer.result), ["present", "state", "running", "open"]);
     // One read of bb, against the endpoint's server, with no thread context leaking in.
-    assert.deepEqual(bb.calls().map((c) => c.argv), [["thread", "list", "--include-archived", "--include-hidden", "--json"]]);
+    assert.deepEqual(bb.calls().map((c) => c.argv), [["thread", "list", "--include-hidden", "--json"]]);
     assert.equal(bb.calls()[0].server, SERVER);
   });
 }

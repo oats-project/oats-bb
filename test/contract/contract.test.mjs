@@ -185,7 +185,7 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   // empty there, not the value bb's server carries.
   assert.equal(seen.split("\n")[0], "t1|seen-by-the-hook|shim-on-path|");
   // The rows of bb thread list carry what the one-thread-per-home rule reads.
-  const row = (await bbJson("thread list --include-archived --include-hidden")).find((r) => r.id === endpoint.threadId);
+  const row = (await bbJson("thread list --include-hidden")).find((r) => r.id === endpoint.threadId);
   assert.equal(row.environmentPath, home);
   assert.equal(row.archivedAt, null);
   assert.equal(row.deletedAt, null);

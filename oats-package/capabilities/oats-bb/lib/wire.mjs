@@ -11,6 +11,7 @@
 // The settings are the home's recorded ones, in OATS_SETTINGS (the hook environment); the
 // readiness verb, which also runs for a soul with no home, may carry them in its input.
 import { InDoubt, ProviderError, isObject } from "./errors.mjs";
+import { graceOf } from "./stop.mjs";
 
 export const PROVIDER = "bb";
 // What a failure the provider did not classify means, per verb (contract item 1).
@@ -26,7 +27,7 @@ export const VERBS = Object.freeze(Object.keys(VERB_FAILURE));
 // The provider's own time per call, inside the kernel's (launch 120 s; stop 20 s plus its
 // graceSeconds; the others, the readiness check included, 20 s).
 const VERB_BUDGET_MS = { launch: 100_000, inspect: 16_000, inspectMany: 16_000, input: 16_000, stop: 16_000, check: 16_000 };
-const budgetMs = (verb, input) => VERB_BUDGET_MS[verb] + (verb === "stop" && isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds > 0 ? Math.min(input.graceSeconds, 300) * 1000 : 0);
+const budgetMs = (verb, input) => VERB_BUDGET_MS[verb] + (verb === "stop" ? graceOf(input) * 1000 : 0);
 const MAX_STDIN = 8 * 1024 * 1024;
 
 export async function readStdin(stream = process.stdin) {

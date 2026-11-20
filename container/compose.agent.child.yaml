@@ -1,0 +1,6 @@
+# Include only for a team that runs a bb server; AGENT_IMAGE is then an image
+# built from this directory. The name is the one agent-child.json declares.
+services:
+  agent:
+    environment:
+      AGENT_CHILD: "bb"

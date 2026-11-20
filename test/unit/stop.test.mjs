@@ -246,6 +246,36 @@ test("a malformed setting does not fail a retire: a tmux home says nothing, a bb
   assert.equal(dir.length > 0, true);
 });
 
+// Whatever keeps bb from being asked, the hook exits 0 and never reports an incomplete
+// retire (`retired: false` beside a warning or a failure): a home's retire is not held for
+// bb. A home with the provider's state directory gets a warning, one without gets none.
+for (const [name, script, cli] of [
+  ["no bb CLI on this host", {}, "/nonexistent/oats-bb-test/bb"],
+  ["a bb that does not answer", { "project list": UNREACHABLE }, null],
+  ["a bb whose thread list cannot be read", (home) => ({ "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [null] } }), null],
+  ["a bb that fails with a code of its own", { "project list": { exit: 3, stderr: "boom\n" } }, null],
+  ["a bb that hangs", { "project list": { delayMs: 60_000, stdout: [] } }, null],
+]) {
+  for (const launched of [false, true]) {
+    test(`retire with ${name} never fails or holds the retire: ${launched ? "a bb home gets a warning" : "a home with no state directory gets none"}`, async (t) => {
+      const { dir, home } = scratch(t);
+      if (launched) mkdirSync(join(home, ".oats-bb"));
+      const bb = fakeBbIn(dir, typeof script === "function" ? script(home) : script);
+      const run = await runBin(["retire-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: cli ?? bb.cli }) } });
+      assert.equal(run.status, 0, run.stderr);
+      const lines = run.stdout.trim().split("\n");
+      assert.equal(lines.length, 1);
+      const answer = JSON.parse(lines[0]);
+      if (launched) {
+        assert.deepEqual(answer.meta, { archived: [], unchecked: true });
+        assert.match(answer.warning, /were not archived .*session-provider-orphaned/);
+      } else {
+        assert.deepEqual(answer, { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
+      }
+    });
+  }
+}
+
 test("retire with a bb that does not answer warns and does not hold the retire", async (t) => {
   const { run, last } = await retireWith(t, { "project list": UNREACHABLE });
   assert.equal(run.status, 0);

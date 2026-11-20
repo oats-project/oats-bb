@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  OATS_COMMIT: 2fa448b56a162c4042fc859c4b387b44deba6c92
+  OATS_COMMIT: 47af6d138901fc96fabb96a0b097454010eeb52c
 
 jobs:
   image:

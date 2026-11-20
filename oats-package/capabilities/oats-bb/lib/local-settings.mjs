@@ -12,10 +12,10 @@
 // The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
 // and later removes exactly that. An entry a person put in the file under another name is
 // never touched; a name the launch carries is the launch's.
-import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
-import { fail, isObject } from "./errors.mjs";
+import { ProviderError, fail, isObject } from "./errors.mjs";
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const STATE_DIR = ".oats-bb";
@@ -142,16 +142,21 @@ const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).repla
  *  its other teams, `optional` the optional ones, `unavailable` the cause or null, and the
  *  three counts of rows that cannot be named in a message (counted, so none is dropped).
  *
- *  The provider writes exactly `domains` and `write`, so each entry must be what the lists
- *  may hold (an exact host, an exact absolute path), in every mode: E_BACKEND_SANDBOX_HOST,
- *  E_BACKEND_SANDBOX_PATH. The rest is read by `sandboxed`: a launch that will run in bb's
- *  sandbox must understand everything it is told (an unknown key, a `missing` that is no
- *  list refuse it); a full-mode launch writes nothing and ignores all of it, whatever it
- *  holds. A row that cannot be named is still a gap: counted, never dropped. */
+ *  The provider writes exactly `domains` and `write`, so in a sandboxed mode each entry must
+ *  be what the lists may hold (an exact host, an exact absolute path):
+ *  E_BACKEND_SANDBOX_HOST, E_BACKEND_SANDBOX_PATH. The rest is read by `sandboxed` too: a
+ *  launch that will run in bb's sandbox must understand everything it is told (an unknown
+ *  key, a `missing` that is no list refuse it). A full-mode launch writes nothing, so it is
+ *  never refused for what this object holds: the two lists are not read at all, and the
+ *  gaps are read only to be recorded for readiness. A row that cannot be named is still a
+ *  gap: counted, never dropped. */
 export function readSandbox(sandbox, { sandboxed = true } = {}) {
   const empty = { domains: [], write: [], missing: [], otherTeams: [], optional: [], unnamed: 0, unnamedOptional: 0, unavailable: null, skipped: [], unnamedSkipped: 0 };
   if (sandbox === undefined || sandbox === null) return empty;
-  if (!isObject(sandbox)) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
+  if (!isObject(sandbox)) {
+    if (!sandboxed) return empty;
+    throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
+  }
   // An unresolved configuration comes first: beside it nothing else is read (there are no
   // lists to write), whatever else the object holds. Its shape is not final: the cause is
   // a line, or an object with one under `message` or `cause`.
@@ -170,7 +175,7 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
     if (strict) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox.${what} is not a list`);
     return [value]; // one thing that is no row: counted as a gap that cannot be named
   };
-  const domains = list(sandbox.domains, "domains").map((entry) => {
+  const domains = !sandboxed ? [] : list(sandbox.domains, "domains").map((entry) => {
     const who = isObject(entry) && typeof entry.capability === "string" && entry.capability ? entry.capability : null;
     if (!isObject(entry) || !isExactHost(entry.host)) {
       throw fail("E_BACKEND_SANDBOX_HOST", `the launch asks the sandbox to allow ${JSON.stringify(isObject(entry) ? entry.host ?? null : entry)}${who ? ` (for ${who})` : ""}, which is not one exact host: no wildcard, scheme or path`);
@@ -178,7 +183,7 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
     if (who === null) throw fail("E_BACKEND_SANDBOX_HOST", `the launch asks the sandbox to allow ${entry.host} without saying which capability asked`);
     return { host: entry.host, capability: who, setting: typeof entry.setting === "string" ? entry.setting : null };
   });
-  const write = list(sandbox.write, "write").map((entry) => {
+  const write = !sandboxed ? [] : list(sandbox.write, "write").map((entry) => {
     const path = isObject(entry) ? entry.path : null;
     if (!isExactPath(path)) {
       throw fail("E_BACKEND_SANDBOX_PATH", `the launch asks the sandbox to allow writes to ${JSON.stringify(path)}, which is not one exact absolute path`);
@@ -278,13 +283,42 @@ function writeAtomic(home, path, text) {
 }
 const writeJson = (home, path, doc) => writeAtomic(home, path, `${JSON.stringify(doc, null, 2)}\n`);
 
+const READ_MAX = 1024 * 1024;
+
+/** Read a JSON object from a file in the home, or null when there is none. The home is
+ *  writable by its agent, so the read is confined: a regular file only (a link, a
+ *  directory or a pipe is refused, never followed or waited on), opened without following
+ *  a link, at most 1 MiB, and nothing of its content goes into a message. */
 function readJsonObject(path, what) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return null;
+  const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
+  if (!stat.isFile()) throw refuse("is not a regular file (a link, a directory or a pipe is not read)");
+  if (stat.size > READ_MAX) throw refuse(`is larger than ${READ_MAX} bytes`);
+  let text;
+  let fd = null;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || opened.size > READ_MAX) throw refuse("changed while it was read");
+    const buffer = Buffer.alloc(opened.size);
+    let got = 0;
+    while (got < opened.size) {
+      const n = readSync(fd, buffer, got, opened.size - got, got);
+      if (n === 0) break;
+      got += n;
+    }
+    text = buffer.subarray(0, got).toString("utf8");
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    throw refuse(`could not be read (${typeof error?.code === "string" ? error.code : "error"})`);
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
   let doc;
-  try { doc = JSON.parse(readFileSync(path, "utf8")); }
-  catch (error) { throw fail("E_SESSION_START_FAILED", `${what} ${path} is not JSON (${error.message}): fix or remove it; the provider does not overwrite it`); }
-  if (!isObject(doc)) throw fail("E_SESSION_START_FAILED", `${what} ${path} is not a JSON object: fix or remove it; the provider does not overwrite it`);
+  try { doc = JSON.parse(text); }
+  catch { throw refuse("is not JSON"); }
+  if (!isObject(doc)) throw refuse("is not a JSON object");
   return doc;
 }
 
@@ -328,7 +362,9 @@ export const isExactPath = (value) => typeof value === "string" && isAbsolute(va
 export function currentSandbox(home) {
   const record = readSandboxRecord(home);
   if (record === null) return { domains: [], write: [], mismatch: 0 };
-  const settings = readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {};
+  // The file is read only inside a `.claude` that is a real directory of the home, as a
+  // launch requires: a link there would take the read out of the home.
+  const settings = realDirectory(join(home, ".claude"), "the home's") ? readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {} : {};
   const listAt = (keys) => { let at = settings; for (const key of keys) at = isObject(at) ? at[key] : undefined; return strings(at); };
   const allowedDomains = listAt(DOMAINS_KEYS), allowWrite = listAt(WRITE_KEYS);
   const domains = record.domains.filter((entry) => isExactHost(entry.host) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && allowedDomains.includes(entry.host))

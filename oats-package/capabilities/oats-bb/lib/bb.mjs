@@ -121,10 +121,21 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     error.bb = answer;
     return error;
   };
-  const list = (value, what) => {
+  // A read establishes a fact only if every row of it can be read: one malformed row, and
+  // "no such thread", "no live thread" or "no pending interaction" would rest on nothing.
+  const list = (value, what, valid) => {
     if (!Array.isArray(value)) throw fail(fallbackCode, `${what} answered something that is not a list`);
+    const bad = value.findIndex((row) => !valid(row));
+    if (bad !== -1) throw fail(fallbackCode, `${what} answered a row this provider cannot read (row ${bad + 1} of ${value.length})`);
     return value;
   };
+  const stamp = (value) => value === null || value === undefined || typeof value === "number" || typeof value === "string";
+  const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string"
+    && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
+    && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string");
+  const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources)
+    && row.sources.every((source) => isObject(source) && (source.path === null || source.path === undefined || typeof source.path === "string"));
+  const interactionRow = (row) => isObject(row) && typeof row.id === "string" && typeof row.status === "string";
   return {
     server, raw, refusal,
     async version() {
@@ -132,26 +143,26 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
       if (!answer.ok) throw refusal(answer, ["--version"]);
       return answer.value.trim();
     },
-    async projects() { return list(await must(["project", "list", "--json"]), "bb project list"); },
+    async projects() { return list(await must(["project", "list", "--json"]), "bb project list", projectRow); },
     async createProject(name, root) {
       const project = await must(["project", "create", "--name", name, "--root", root, "--json"]);
-      if (!isObject(project) || typeof project.id !== "string") throw fail(fallbackCode, "bb project create answered no project id");
+      if (!projectRow(project)) throw fail(fallbackCode, "bb project create answered no project this provider can read");
       return project;
     },
     /** Every unarchived thread of the server, hidden ones included: one read. (Archived
      *  threads are nobody's session; each start archives one, so they only grow.) */
-    async threads() { return list(await must(["thread", "list", "--include-hidden", "--json"]), "bb thread list"); },
+    async threads() { return list(await must(["thread", "list", "--include-hidden", "--json"]), "bb thread list", threadRow); },
     /** The thread, or null when bb has none by that id. */
     async thread(id) {
       const answer = await raw(["thread", "show", id, "--json"]);
       if (answer.ok) {
-        if (!isObject(answer.value) || !isObject(answer.value.thread)) throw fail(fallbackCode, "bb thread show answered no thread");
+        if (!isObject(answer.value) || !threadRow(answer.value.thread)) throw fail(fallbackCode, "bb thread show answered no thread this provider can read");
         return answer.value.thread;
       }
       if (answer.code === "thread_not_found") return null;
       throw refusal(answer, ["thread", "show"]);
     },
-    async interactions(id) { return list(await must(["thread", "interactions", "list", id, "--json"]), "bb thread interactions list"); },
+    async interactions(id) { return list(await must(["thread", "interactions", "list", id, "--json"]), "bb thread interactions list", interactionRow); },
     spawn(args, options) { return raw(["thread", "spawn", ...args, "--json"], options); },
     tell(id, text) { return raw(["thread", "tell", id, "--message-file", "-", "--mode", "auto", "--json"], { input: text }); },
     queueDelete(threadId, messageId) { return raw(["thread", "queue", "delete", threadId, messageId, "--json"]); },

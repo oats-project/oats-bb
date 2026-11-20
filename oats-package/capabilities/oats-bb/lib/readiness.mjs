@@ -109,8 +109,11 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "connected": true or false)`);
     } else if (status.value.connected !== true) {
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} is not connected to its server yet`);
-    } else if (server && typeof status.value.serverUrl === "string" && !sameServer(status.value.serverUrl, server)) {
-      add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${status.value.serverUrl}, not settings.oats.bb.server ${server}: point both settings at one bb`);
+    } else if (typeof status.value.serverUrl !== "string" || !URL.canParse(status.value.serverUrl)) {
+      // Without the server the daemon names, nothing says it serves this one.
+      add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "serverUrl" that is a URL)`);
+    } else if (server && !sameServer(status.value.serverUrl, server)) {
+      add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${new URL(status.value.serverUrl).origin}, not settings.oats.bb.server ${server}: point both settings at one bb`);
     }
   }
   if (server) {

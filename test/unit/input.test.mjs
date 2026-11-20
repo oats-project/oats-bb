@@ -35,6 +35,15 @@ test("a resolved interaction does not hold input", async (t) => {
   assert.deepEqual(answer.result, { submitted: true, verified: true });
 });
 
+for (const [name, rows] of [["a row that is no object", [null]], ["a row with no status", [{ id: "pint_1" }]], ["a row with no id", [{ status: "pending" }]]]) {
+  test(`an interactions list holding ${name} proves no prompt is closed: E_SESSION_INPUT_FAILED, and nothing is sent`, async (t) => {
+    const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: rows }, "thread tell": { stdout: tellSent("thr_a") } });
+    assert.equal(answer.error.code, "E_SESSION_INPUT_FAILED");
+    assert.match(answer.error.message, /a row this provider cannot read/);
+    assert.deepEqual(verbs(calls), ["thread interactions list"], "no tell");
+  });
+}
+
 test("a pending interaction: E_SESSION_PROMPT_OPEN, and nothing is sent", async (t) => {
   const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: [pendingInteraction("thr_a")] }, "thread tell": { stdout: tellSent("thr_a") } });
   assert.equal(answer.ok, false);

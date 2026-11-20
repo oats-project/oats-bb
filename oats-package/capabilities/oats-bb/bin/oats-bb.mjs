@@ -86,14 +86,15 @@ async function main(argv) {
   if (command === "retire-hook" && rest.length === 0) {
     const home = process.env.OATS_INSTANCE_HOME;
     if (!home) { process.stderr.write("oats bb retire-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
-    // The settings are read inside retire, after it has asked whether the provider ever
-    // launched this home: a tmux home's retire never depends on bb's settings.
+    // The settings are read inside retire, where a failure to read them or to reach bb is
+    // kept quiet for a home the provider shows no sign of having launched (a tmux home).
     print(await retire(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));
     return 0;
   }
-  if (command === "doctor" && doctorArgs(rest) !== null) {
+  const doctor = command === "doctor" ? doctorArgs(rest) : null;
+  if (doctor !== null) {
     const { result, credential } = await readinessResult(readSettings(settingsFromEnv(process.env)));
-    if (doctorArgs(rest).json) print({ ...result, credential });
+    if (doctor.json) print({ ...result, credential });
     else {
       process.stdout.write(`bb session provider: ${result.status}\n`);
       for (const problem of result.problems) process.stdout.write(`  problem ${problem.code}: ${problem.message}\n`);

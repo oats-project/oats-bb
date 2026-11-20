@@ -18,14 +18,16 @@ export function isLoopbackHost(hostname) {
 
 /** A bb address as its origin (`http://127.0.0.1:38886`), or a refusal: E_BACKEND_SETTINGS
  *  when it is not a plain http(s) origin, E_BACKEND_EXPOSED when it names a host off
- *  loopback (bb's API has no login: the provider only ever talks to it on loopback). */
+ *  loopback (bb's API has no login: the provider only ever talks to it on loopback).
+ *  A refusal never repeats the value: a URL may carry a user and a password. */
 export function loopbackOrigin(value, name) {
   let url;
   try { url = new URL(String(value)); }
-  catch { throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} is not a URL: ${JSON.stringify(value)}`); }
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} must be an http or https URL, got ${JSON.stringify(value)}`);
+  catch { throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} is not a URL (the value is not shown: it could hold a credential)`); }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} must be an http or https URL (the value is not shown: it could hold a credential)`);
   if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
-    throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} must be a bare origin (scheme, host and port), got ${JSON.stringify(value)}`);
+    const extra = [url.username || url.password ? "a user or password" : null, url.pathname !== "/" && url.pathname !== "" ? "a path" : null, url.search ? "a query" : null, url.hash ? "a fragment" : null].filter(Boolean).join(", ");
+    throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.${name} must be a bare origin (scheme, host and port), and it has ${extra} (the value is not shown: it could hold a credential)`);
   }
   if (!isLoopbackHost(url.hostname)) {
     throw fail("E_BACKEND_EXPOSED", `settings.oats.bb.${name} names ${url.hostname}, which is not loopback: bb's API has no login, so this provider reaches bb only on 127.0.0.1, ::1 or localhost (a Tailscale Serve route in front of a loopback bb is fine)`);

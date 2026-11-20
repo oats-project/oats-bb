@@ -96,6 +96,24 @@ for (const bad of ["not a url", "ftp://127.0.0.1:38886", "http://user:pw@127.0.0
   });
 }
 
+// A URL may carry a user and a password: a refused one is described, never repeated.
+for (const bad of ["http://dummy-user:dummy-pass-71@127.0.0.1:38886", "ftp://dummy-user:dummy-pass-71@127.0.0.1:38886", "dummy-user:dummy-pass-71@ 127.0.0.1", "http://127.0.0.1:38886/?token=dummy-pass-71"]) {
+  test(`a refused server or daemon setting is never repeated in the check's answer or in doctor's output: ${JSON.stringify(bad)}`, async (t) => {
+    const { backend, bb, check } = await setup(t);
+    for (const key of ["server", "daemon"]) {
+      const answer = await check({ [key]: bad });
+      assert.ok(codes(answer).includes("E_BACKEND_SETTINGS"));
+      assert.doesNotMatch(JSON.stringify(answer), /dummy-user|dummy-pass-71/);
+      for (const args of [["doctor"], ["doctor", "--json"]]) {
+        const run = await runBin(args, { env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings({ [key]: bad }), cli: bb.cli }) } });
+        assert.equal(run.status, 1);
+        assert.match(run.stdout, /E_BACKEND_SETTINGS/);
+        assert.doesNotMatch(run.stdout + run.stderr, /dummy-user|dummy-pass-71/);
+      }
+    }
+  });
+}
+
 test("bb's server down: E_BACKEND_UNREACHABLE, unavailable (not a configuration verdict)", async (t) => {
   const { check } = await setup(t);
   const answer = await check({ server: `http://127.0.0.1:${await deadPort(t)}` });
@@ -207,7 +225,8 @@ test("when bb's threads cannot be listed, the check says orphans were not looked
   assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphans-unchecked"]);
 });
 
-for (const [name, daemonStatus] of [["with no connected field", { hostId: "host_1" }], ["whose connected is not a boolean", { connected: "yes" }], ["that is a list", [true]]]) {
+for (const [name, daemonStatus] of [["with no connected field", { hostId: "host_1" }], ["whose connected is not a boolean", { connected: "yes" }], ["that is a list", [true]],
+  ["that is connected and names no server", { hostId: "host_1", connected: true }], ["whose serverUrl is a number", { connected: true, serverUrl: 42 }], ["whose serverUrl is no URL", { connected: true, serverUrl: "over there" }]]) {
   test(`a host daemon /status ${name} is not ready, never ready`, async (t) => {
     const { check } = await setup(t, {}, { daemonStatus });
     const answer = await check();

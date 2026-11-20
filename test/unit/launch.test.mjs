@@ -1,5 +1,6 @@
 // launch: one home, one bb project, one bb thread; every refusal before the first effect.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -86,6 +87,59 @@ for (const [name, write, pattern] of [
     assert.match(answer.error.message, pattern);
     assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
     assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
+  });
+}
+
+// The home is its agent's to write: what the provider reads there is a regular file of the
+// home, of a bounded size, and none of its content reaches a message.
+for (const [name, plant] of [
+  ["a link to a file outside the home", (home, dir) => { writeFileSync(join(dir, "outside"), "TOP-SECRET-LINE not json"); symlinkSync(join(dir, "outside"), join(home, ".claude/settings.local.json")); }],
+  ["a link to nothing", (home, dir) => symlinkSync(join(dir, "nowhere"), join(home, ".claude/settings.local.json"))],
+  ["a named pipe nobody writes to", (home) => execFileSync("mkfifo", [join(home, ".claude/settings.local.json")])],
+  ["a directory", (home) => mkdirSync(join(home, ".claude/settings.local.json"))],
+]) {
+  test(`a settings.local.json that is ${name} refuses the launch at once: it is not followed, waited on or quoted`, async (t) => {
+    const { dir, home, bb, run } = await setup(t);
+    mkdirSync(join(home, ".claude"));
+    plant(home, dir);
+    const started = Date.now();
+    const answer = await run();
+    assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+    assert.match(answer.error.message, /is not a regular file/);
+    assert.doesNotMatch(JSON.stringify(answer), /TOP-SECRET-LINE/);
+    assert.ok(Date.now() - started < 8000, "no wait on a pipe");
+    assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
+  });
+}
+
+test("a settings.local.json that is not JSON is named, never quoted; one larger than 1 MiB is not read", async (t) => {
+  const { home, bb, run } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude/settings.local.json"), "TOP-SECRET-LINE { nope");
+  const notJson = await run();
+  assert.match(notJson.error.message, /is not JSON/);
+  assert.doesNotMatch(JSON.stringify(notJson), /TOP-SECRET-LINE|Unexpected token/);
+  writeFileSync(join(home, ".claude/settings.local.json"), `{"pad":"${"x".repeat(1024 * 1024)}"}`);
+  const large = await run();
+  assert.equal(large.error.code, "E_SESSION_START_FAILED");
+  assert.match(large.error.message, /is larger than 1048576 bytes/);
+  assert.deepEqual(bb.calls(), []);
+});
+
+// Only a list the provider can read row by row says the home is free.
+for (const [name, script, pattern] of [
+  ["a thread list holding a row that is no object", { "thread list": { stdout: [null] } }, /bb thread list answered a row this provider cannot read/],
+  ["a thread list holding a thread with no status", { "thread list": { stdout: [{ id: "thr_x", projectId: "proj_a" }] } }, /bb thread list answered a row this provider cannot read/],
+  ["a project list holding a row that is no object", { "project list": { stdout: [null] } }, /bb project list answered a row this provider cannot read/],
+  ["a project list holding a project with no sources", { "project list": { stdout: [{ id: "proj_a" }] } }, /bb project list answered a row this provider cannot read/],
+]) {
+  test(`${name} refuses the launch before any effect: it cannot show the home is free`, async (t) => {
+    const { home, bb, run } = await setup(t, script);
+    const answer = await run();
+    assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+    assert.match(answer.error.message, pattern);
+    assert.deepEqual(effects(bb), []);
+    assert.equal(existsSync(join(home, ".claude")), false);
   });
 }
 
@@ -312,6 +366,15 @@ test("a home reached through a link is the same home: its project is reused", as
   assert.deepEqual(effects(bb), ["thread spawn"]);
 });
 
+test("a host daemon that does not say which server it serves refuses the launch before any effect: it is not known to serve this one", async (t) => {
+  const { home, bb, run } = await setup(t, {}, { daemonStatus: { connected: true, serverUrl: 42 } });
+  const answer = await run();
+  assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
+  assert.match(answer.error.message, /no "serverUrl" that is a URL/);
+  assert.deepEqual(effects(bb), []);
+  assert.equal(existsSync(join(home, ".claude")), false);
+});
+
 test("a readiness problem refuses the launch with its own code, before any effect", async (t) => {
   const { home, bb, run } = await setup(t, { "--version": { stdout: "0.51.0\n" } });
   const answer = await run();
@@ -420,6 +483,14 @@ test("a spawn that answers no thread id, and no new thread shows: in doubt, no a
   assert.equal(run.stdout, "", "no envelope: the kernel reads a failed call, and stops whatever runs in the home");
   assert.match(run.stderr, /answered no thread id, and no new thread shows/);
   assert.equal(verbs(bb).filter((verb) => verb === "thread list").length, 4, "the list before the spawn, and three looks after it");
+});
+
+test("a spawn in doubt, and the home's threads come back as a list that cannot be read: in doubt, never 'nothing started'", async (t) => {
+  const { backend, bb, input } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, { stdout: [null] }] });
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "");
+  assert.match(run.stderr, /could not be read/);
 });
 
 test("a spawn in doubt, and the home's threads cannot be read: in doubt", async (t) => {

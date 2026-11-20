@@ -63,11 +63,14 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
   `{unavailable: "<cause>"}` when the kernel could not resolve it (`false` or an empty
   string there mean it was resolved). A `skipped: [{capability, reason}]` is read and
-  listed by the check if it comes; the kernel does not send it today. A kernel may not send the key yet, and then nothing is written (readiness says the
+  listed by the check if it comes; the kernel does not send it today. The shape is the
+  one decided in the contract (r12); the kernel change that sends it is not released yet,
+  and a kernel that sends no `sandbox` key gets nothing written (readiness says the
   allowances are missing).
-  - In a sandboxed mode the provider writes exactly the `domains` and `write` entries. An
-    entry that is not one exact host or one exact absolute path refuses the launch in
-    every mode (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
+  - In a sandboxed mode the provider writes exactly the `domains` and `write` entries, and
+    an entry that is not one exact host or one exact absolute path refuses the launch
+    (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`). A full-mode launch writes none
+    of it, so it reads neither list and is never refused for what the object holds.
   - `missing` is what a provider's line named and the deployment has no value for. A
     sandboxed launch is refused (`E_BACKEND_SANDBOX_HOST`, naming each and the remedy) for
     a row that is neither `optional: true` nor another team's (`defaultTeam: false`): the
@@ -101,7 +104,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 The kernel gives launch 120 s, stop 20 s plus its `graceSeconds`, and the other verbs,
 `check` included, 20 s. The provider bounds every bb call (10 s), every HTTP read (4 s; the
 provider state 6 s) and its own total (launch 100 s; stop 16 s plus the grace, which is how
-long it waits for bb to settle; the others 16 s), so a bb that hangs gets a named problem,
+long it waits for bb to settle, counted from the moment `bb thread stop` answered; the
+others 16 s), so a bb that hangs gets a named problem,
 never a killed call.
 
 ## The bb surface used
@@ -109,9 +113,14 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
   `archivedAt`, `deletedAt` and `environmentPath` included),
   `bb thread show`, `bb thread spawn`, `bb thread tell`, `bb thread interactions list`,
-  `bb thread queue delete`, `bb thread stop`, `bb thread archive`.
+  `bb thread queue delete`, `bb thread stop`, `bb thread archive`. A list is read row by
+  row: a project needs an `id` and its `sources`, a thread an `id` and a `status` (and a
+  `projectId`, `archivedAt`, `deletedAt`, `environmentPath` of the kind bb writes), an
+  interaction an `id` and a `status`. One row that is not that, and the whole read is an
+  error: only a list the provider can read says a thread, or a prompt, is not there.
 - HTTP, loopback only, read-only, bounded in size and time, strictly decoded:
-  `GET <server>/health`, `GET <daemon>/status`,
+  `GET <server>/health`, `GET <daemon>/status` (`connected`, and a `serverUrl` that is this
+  server),
   `GET <server>/api/v1/system/providers/state?providerId=claude-code`.
 
 ## Hooks
@@ -119,4 +128,8 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   nothing (the launch verb writes Claude's local settings). On another backend
   (`OATS_BACKEND` set and not `bb`) it removes what the provider wrote into
   `.claude/settings.local.json`. It returns no env and no arguments.
-- `retire`: archives the home's live bb threads, after the kernel's stop.
+- `retire`: archives the home's live bb threads, after the kernel's stop. The hook is not
+  told the home's backend, and nothing in the home proves it has no thread (its agent can
+  write there), so bb is asked for every home. Where the provider's state directory is
+  absent (a tmux home, or a cleaned one) a bb that cannot be asked gives no warning;
+  threads left that way are what readiness reports as `session-provider-orphaned`.

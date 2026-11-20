@@ -377,6 +377,46 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   assert.equal(await landed("T5-ARCHIVED"), 0);
 });
 
+// What the kernel relies on after a spawn that died while the launch ran: its receipt says
+// a launch was sent and holds no endpoint, so its stop, start and retire first call stop
+// with `endpoint: null`: "stop whatever live session is rooted at this home".
+test("a launch whose caller is killed mid-launch: stop with no endpoint finds the home's thread and stops it", async () => {
+  const home = await makeHome("killed");
+  const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb: "launch", input: launchInput(home, "killed") };
+  await sh("rm -f slow-spawn-made killed-launch.out && cat > killed-launch.json", { input: JSON.stringify(request) });
+  // The launch runs in a session of its own, so the kill takes the provider and the bb
+  // call it waits on together, as a killed `oats spawn` takes its children.
+  const settings = { ...SETTINGS, cli: "/repo/test/contract/bb-slow-spawn.sh" };
+  await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' setsid sh -c 'echo $$ > killed-launch.pid; exec node ${PROVIDER} session launch < killed-launch.json > killed-launch.out 2>&1' < /dev/null > /dev/null 2>&1 &`);
+  await waitFor("bb to have made the thread", async () => (await sh("test -e slow-spawn-made && echo made || true")).trim() === "made", { timeoutMs: 120_000 });
+  await sh("kill -KILL -$(cat killed-launch.pid)");
+  await waitFor("the killed launch to be gone", async () => (await sh("kill -0 $(cat killed-launch.pid) 2>/dev/null && echo alive || echo gone")).trim() === "gone");
+  assert.equal(await sh("cat killed-launch.out"), "", "the launch answered nothing: the kernel has no endpoint");
+
+  // bb did start a thread in the home, and nothing of OATS knows its id.
+  const project = (await bbJson("project list")).find((p) => p.sources.some((s) => s.path === home));
+  assert.ok(project, "the killed launch made the home's project");
+  const live = async () => (await bbJson("thread list --include-hidden")).filter((thread) => thread.projectId === project.id && !thread.archivedAt && !thread.deletedAt);
+  const [thread] = await live();
+  assert.ok(thread, "and a live thread in it");
+
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 30 })).result, { stopped: true });
+  assert.ok(["idle", "pending", "error"].includes(await threadStatus(thread.id)), "the thread the stop found is settled");
+  const working = async () => (await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim();
+  await waitFor("no process to work in the home", async () => (await working()) === "0", { timeoutMs: 20_000 });
+  // The same call again, and for a home bb never saw: stopped, with nothing to stop.
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
+  assert.deepEqual((await provider("stop", { home: "/home/node/homes/never-launched", endpoint: null, graceSeconds: 10 })).result, { stopped: true });
+  // A start may then launch again: the settled thread nobody recorded is in the way, and
+  // the launch says so (one home, one thread) until the retire hook, or a person, archives it.
+  const again = await provider("launch", launchInput(home, "killed"));
+  assert.equal(again.error.code, "E_SESSION_START_FAILED");
+  assert.match(again.error.message, new RegExp(thread.id));
+  const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+  assert.deepEqual(retired, { meta: { retired: true, archived: [thread.id] } });
+  assert.deepEqual(await live(), []);
+});
+
 // Owner of this half: the kernel's suite (spec K1, its T4: after an OATS stop the kernel
 // answers stopped and refuses input from its own stoppedAt, without calling the provider).
 // This repository adds the joint run, kernel and provider together, to this contract

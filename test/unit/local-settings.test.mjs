@@ -1,7 +1,8 @@
 // The sandbox allowances a launch writes into settings.local.json (contract item 6), and
 // the launch hook that removes what the provider wrote when the home leaves the provider.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
@@ -100,17 +101,58 @@ for (const [name, sandbox, code, pattern] of [
   ["the root", { write: [{ path: "/", reason: "x" }] }, "E_BACKEND_SANDBOX_PATH", /not one exact absolute path/],
   ["domains that are not a list", { domains: "app.aweb.ai" }, "E_SESSION_START_FAILED", /sandbox\.domains is not a list/],
 ]) {
-  test(`${name} refuses the launch (${code}), in full mode too, and nothing is written or started`, async (t) => {
-    const { home, bb, launch } = await setup(t);
-    for (const yolo of [false, true]) {
-      const answer = await launch({ sandbox, yolo });
-      assert.equal(answer.error.code, code);
-      assert.match(answer.error.message, pattern);
-    }
+  test(`${name} refuses a sandboxed launch (${code}), and nothing is written or started; full mode, which writes none of it, launches`, async (t) => {
+    const { home, bb, launch, local, settings } = await setup(t);
+    const answer = await launch({ sandbox, yolo: false });
+    assert.equal(answer.error.code, code);
+    assert.match(answer.error.message, pattern);
     assert.equal(existsSync(join(home, ".claude")), false);
     assert.deepEqual(bb.calls(), []);
+    const planned = (yolo) => call("check", { home, soul: null, launch: { harness: "claude", yolo, args: [], sandbox } }, { settings, bb });
+    assert.deepEqual((await planned(false)).result.problems.map((p) => p.code), [code], "the check says what the launch would be refused for");
+    assert.deepEqual((await planned(true)).result.problems, [], "and nothing for a full-mode launch");
+    const full = await launch({ sandbox, yolo: true });
+    assert.equal(full.ok, true, "full mode is never refused for what the sandbox object holds");
+    assert.equal(local().sandbox, undefined);
+    assert.equal(existsSync(join(home, ".oats-bb-sandbox.json")), false);
   });
 }
+
+test("full mode ignores a sandbox that is no object at all; a sandboxed launch refuses it", async (t) => {
+  const { launch, local } = await setup(t);
+  assert.equal((await launch({ sandbox: "everything", yolo: false })).error.code, "E_SESSION_START_FAILED");
+  assert.equal((await launch({ sandbox: "everything", yolo: true })).ok, true);
+  assert.equal(local().sandbox, undefined);
+});
+
+test("readiness never reads Claude's settings through a .claude that is a link out of the home", async (t) => {
+  const { dir, home, launch, check } = await setup(t);
+  await launch();
+  mkdirSync(join(dir, "elsewhere"));
+  writeFileSync(join(dir, "elsewhere/settings.local.json"), JSON.stringify({ sandbox: { network: { allowedDomains: ["app.aweb.ai", "planted.example.org"] } } }));
+  renameSync(join(home, ".claude"), join(home, ".claude-was"));
+  symlinkSync(join(dir, "elsewhere"), join(home, ".claude"));
+  const { result } = await check();
+  assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox-unread"]);
+  assert.doesNotMatch(JSON.stringify(result), /planted\.example\.org|app\.aweb\.ai/);
+});
+
+test("readiness does not follow or wait on a sandbox record or a settings file that is a link or a pipe", async (t) => {
+  const { dir, home, launch, check } = await setup(t);
+  await launch();
+  writeFileSync(join(dir, "outside.json"), JSON.stringify({ domains: [{ host: "planted.example.org", capability: "oats.aweb" }], write: [] }));
+  rmSync(join(home, ".oats-bb-sandbox.json"));
+  symlinkSync(join(dir, "outside.json"), join(home, ".oats-bb-sandbox.json"));
+  const linked = await check();
+  assert.deepEqual(linked.result.warnings.map((w) => w.code), ["session-provider-sandbox-unread"]);
+  assert.doesNotMatch(JSON.stringify(linked), /planted\.example\.org/);
+  rmSync(join(home, ".oats-bb-sandbox.json"));
+  execFileSync("mkfifo", [join(home, ".oats-bb-sandbox.json")]);
+  const started = Date.now();
+  const piped = await check();
+  assert.deepEqual(piped.result.warnings.map((w) => w.code), ["session-provider-sandbox-unread"]);
+  assert.ok(Date.now() - started < 8000, "no wait on a pipe");
+});
 
 test("a host with a port is one exact host; a launch with no sandbox field writes none", async (t) => {
   const { home, launch, local } = await setup(t);

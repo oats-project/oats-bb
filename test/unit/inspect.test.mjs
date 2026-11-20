@@ -148,6 +148,25 @@ test("inspectMany reads bb once for many homes and answers in their order, each 
   assert.equal(bb.calls().length, 1, "one bb thread list for the whole status");
 });
 
+// Only a list this provider can read row by row establishes that a thread is absent.
+for (const [name, rows] of [
+  ["a row that is no object", [null]],
+  ["a row with no id", [{ projectId: "proj_a", status: "idle" }]],
+  ["a row with no status", [{ id: "thr_a", projectId: "proj_a" }]],
+  ["a row whose project is no string", [{ id: "thr_a", projectId: 7, status: "idle" }]],
+  ["a row whose archive mark is an object", [{ id: "thr_a", projectId: "proj_a", status: "idle", archivedAt: {} }]],
+]) {
+  test(`a thread list holding ${name} is E_SESSION_UNAVAILABLE, never stopped: inspect and inspectMany`, async (t) => {
+    const { dir, home } = scratch(t);
+    const bb = fakeBbIn(dir, { "thread list": { stdout: rows } });
+    const one = await call("inspect", { home, endpoint }, { settings, bb });
+    assert.equal(one.error.code, "E_SESSION_UNAVAILABLE");
+    assert.match(one.error.message, /a row this provider cannot read \(row 1 of 1\)/);
+    const many = await call("inspectMany", { homes: [{ home, endpoint }, { home, endpoint: null }] }, { settings, bb });
+    assert.deepEqual(many.result.results.map((r) => r.error?.code ?? r), ["E_SESSION_UNAVAILABLE", "E_SESSION_UNAVAILABLE"], "also the home with no endpoint: the list says nothing");
+  });
+}
+
 test("inspectMany: a bb that does not answer is an error for each of its homes, never stopped", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread list": UNREACHABLE });

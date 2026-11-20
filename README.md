@@ -13,8 +13,8 @@ The repository holds the two parts of the integration, at one pinned bb-app vers
 
 - **The session provider** (`oats-package/`, the OATS capability `oats.bb`): runs an OATS
   instance as one bb thread instead of a tmux session. This README is about it.
-- **The OATS plugin for bb** (`plugin/`): shows OATS agents in bb's UI. It arrives in its
-  own change, with its own README there.
+- **The OATS plugin for bb** (`plugin/`): shows OATS agents in bb's UI and acts on them
+  through OATS. Its README is there.
 
 ## The session provider
 
@@ -81,8 +81,10 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 
    ```sh
    oats bb doctor --soul <soul>         # or: oats readiness --soul <soul>
-   oats spawn <soul> --backend bb --harness claude --name <task>-<role>
+   oats spawn <soul> --backend bb --harness claude --yolo --name <task>-<role>
    ```
+
+   `--yolo` is bb's full mode, the one to use for now (above).
 
 ## Settings
 
@@ -116,9 +118,9 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Archives the home's previous thread (a start after a stop is a fresh conversation). Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
-| stop | `bb thread stop`, then waits, for the grace the kernel gives, until bb shows the thread settled. Still in a turn after it: `E_SESSION_STOP_FAILED`. |
-| retire (hook) | Archives the home's live threads. |
-| stop (no endpoint) | Stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost. |
+| stop | `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from when bb was asked. Still in a turn after it: `E_SESSION_STOP_FAILED`. |
+| retire (hook) | Archives the home's live threads. It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
+| stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. The thread stays in bb, settled, and the next launch names it until it is archived (in bb, or by the retire). |
 
 | bb thread | present | state | running |
 |---|---|---|---|
@@ -163,8 +165,14 @@ entry you put in the file yourself, and removes exactly its own on the next laun
 longer carries them. In `full` mode there is no sandbox and it writes none. `oats readiness`
 lists, for a home, each host and path with who asked for it.
 
-Where the deployment has no value for something a provider's line names (a team whose
-aweb service was never recorded, for the agent's default team), a launch in a sandboxed mode is **refused**
+Two limits of bb's sandbox that no entry lifts. A service on this machine (an aweb server
+on `localhost` or a loopback address) cannot be reached from a sandboxed mode: run the
+agent in `full` mode, or give the service an address that is not loopback. And the two
+modes differ in what a host outside the list does: in `auto` the command is refused, in
+`accept-edits` it raises a prompt for a person in bb.
+
+Where the deployment has no value for something a provider's line names (the agent's
+default team, when its aweb service was never recorded), a launch in a sandboxed mode is **refused**
 (`E_BACKEND_SANDBOX_HOST`, naming it; for oats.aweb the remedy is `oats aweb setup`): the agent's
 messaging would be cut off inside the sandbox. A line a provider marks optional never
 refuses; the kernel's check before the launch names it (the provider keeps no record of it
@@ -213,10 +221,15 @@ arguments or a process environment:
   `ANTHROPIC_CUSTOM_MODEL_OPTION*`), `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_API_*`,
   `CLAUDE_CODE_OAUTH_*`, `CLAUDE_CODE_SKIP_*_AUTH` and `AWS_BEARER_TOKEN_BEDROCK`. It is never ignored. A launch
   that would remove one of them is refused the same way.
-- A sandbox entry that is not one exact host or one exact absolute path:
-  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`; in a sandboxed mode, a host the
-  deployment does not record, or a configuration the kernel could not resolve:
-  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_UNAVAILABLE`.
+- In a sandboxed mode, a sandbox entry that is not one exact host or one exact absolute
+  path: `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`; a host the deployment does not
+  record for the agent's default team, or a configuration the kernel could not resolve:
+  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_UNAVAILABLE`. A launch in `full` mode writes
+  no sandbox entry and is never refused for any of these.
+- A file of the home that the provider reads (`.claude/settings.local.json`, its own
+  records) and that is not a regular file there (a link, a pipe, a directory), is larger
+  than 1 MiB or is not a JSON object: `E_SESSION_START_FAILED`. The provider follows no
+  link out of the home, and puts nothing of such a file into a message.
 
 A variable the launch removes on purpose (one a capability declares and this launch
 leaves out) is written with an **empty value**: a settings file can set a variable but not
@@ -303,7 +316,7 @@ exposed bb to the check, and is refused.
 A thread stopped in bb's own UI is not stopped for OATS: bb shows it `idle`, OATS has no
 record of the stop, and the next mail's tell restarts it. **Stop an OATS agent with OATS**
 (`oats instance stop <instance>`), which records the stop and then stops the thread. The
-OATS plugin for bb will route its stop button there.
+OATS plugin for bb adds a **Stop agent (OATS)** entry to the thread's menu that does this.
 
 An OATS agent's thread **archived** in bb is gone for OATS: bb refuses every message to an
 archived thread, so the home reads as stopped, mail to it is refused, and
@@ -334,10 +347,14 @@ person in bb. Readiness says so wherever bubblewrap is missing
 
 ## A trial against an unreleased kernel
 
-The manifests' floor (`compatibility.oats`, `>=0.70.0`) names the OATS release that will
-list `session-providers`; the release lane sets the real number. A kernel built from an
+The manifests' floor (`compatibility.oats`, `>=0.70.0`) is a placeholder for the first
+OATS release that carries both the session-provider wire 1.3 and the kernel's protection
+of a provider home's files ([What it needs](#what-it-needs)); the release lane sets the
+real number. A kernel built from an
 unmerged branch reports an older version and refuses the capability
-(`E_CAPABILITY_INCOMPATIBLE`). For a trial only: make a local commit on top of the commit
+(`E_CAPABILITY_INCOMPATIBLE`). A kernel that has session providers but not yet wire 1.3
+refuses this manifest for its `wire` key (`E_BACKEND_UNKNOWN`): that is intended, the two
+must speak the same wire. For a trial only: make a local commit on top of the commit
 you are trying that sets `compatibility.oats` in `oats-package/oats-package.json` and
 `oats-package/capabilities/oats-bb/oats.json` to `>=<your kernel's version>`, and pin that commit
 (`oats.bb: git:<repository>@<that commit>`). Never ship or push that commit: the floor in

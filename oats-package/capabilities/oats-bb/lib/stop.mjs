@@ -23,17 +23,16 @@ export async function stop(input, settings, { deadline = Infinity, env = process
   try {
     if (!isObject(input)) throw fail("E_SESSION_STOP_FAILED", "the stop input is not an object");
     const grace = graceOf(input);
-    const until = Math.min(now() + grace * 1000, deadline);
     if (input.endpoint === null || input.endpoint === undefined) {
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
       const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
       const { live } = await liveInHome(bb, input.home);
-      for (const thread of live) await stopThread(bb, thread.id, { until, grace, now, stopCallTimeoutMs });
+      for (const thread of live) await stopThread(bb, thread.id, { deadline, grace, now, stopCallTimeoutMs });
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
     const bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
-    await stopThread(bb, endpoint.threadId, { until, grace, now, stopCallTimeoutMs });
+    await stopThread(bb, endpoint.threadId, { deadline, grace, now, stopCallTimeoutMs });
     return { stopped: true };
   } catch (error) { throw failed(error); }
 }
@@ -43,12 +42,15 @@ export function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
-async function stopThread(bb, threadId, { until, grace, now, stopCallTimeoutMs }) {
+async function stopThread(bb, threadId, { deadline, grace, now, stopCallTimeoutMs }) {
   const asked = await bb.stop(threadId, stopCallTimeoutMs === undefined ? {} : { timeoutMs: stopCallTimeoutMs });
   if (!asked.ok && asked.code === "thread_not_found") return;
   // bb's stop may wait for the thread to settle, longer than one bb call gets here: a
   // stop cut off by time has still been asked, and what bb shows next decides.
   if (!asked.ok && !asked.timedOut) throw bb.refusal(asked, ["thread", "stop"]);
+  // The grace is the time bb gets to settle after it was asked: finding the thread and
+  // the stop call itself take none of it. The command's own deadline still ends the wait.
+  const until = Math.min(now() + grace * 1000, deadline);
   let last = null;
   for (;;) {
     const thread = await bb.thread(threadId);
@@ -66,9 +68,13 @@ async function stopThread(bb, threadId, { until, grace, now, stopCallTimeoutMs }
  *  does not hold the retire: the thread is left, and readiness reports it
  *  (`session-provider-orphaned`) once the home is gone. */
 export async function retire(home, readSettings, { deadline, env = process.env } = {}) {
-  // The hook runs for every home that has the capability. One the provider never
-  // launched (a tmux home) has nothing in bb: bb is not asked, and need not be there.
-  if (!everLaunched(home)) return { meta: { retired: false, reason: "nothing-to-delete" } };
+  // The hook runs for every home that has the capability, and is not told the home's
+  // backend. The provider's state directory says it launched this home, but the home is
+  // its agent's to write and may have been cleaned: its absence proves nothing, so bb is
+  // asked either way. What its absence does change: a home the provider may never have
+  // launched (a tmux home, perhaps on a host with no bb) gets no warning when bb cannot be
+  // asked. Threads left that way are what readiness reports as orphaned.
+  const launched = everLaunched(home);
   try {
     const settings = readSettings();
     const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
@@ -84,6 +90,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     return { meta: { archived, left }, warning: `bb thread${left.length > 1 ? "s" : ""} ${left.join(", ")} could not be archived: archive ${left.length > 1 ? "them" : "it"} in bb (bb thread archive <id>)` };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
+    if (!launched) return { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } };
     return { meta: { archived: [], unchecked: true }, warning: `the home's bb threads were not archived (${error.message}): oats readiness reports them as session-provider-orphaned once bb answers; archive them in bb` };
   }
 }

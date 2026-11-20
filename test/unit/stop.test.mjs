@@ -49,6 +49,35 @@ test("stop waits the whole grace the kernel gives, beyond the other verbs' time"
   assert.deepEqual(answer.result, { stopped: true });
 });
 
+test("the grace starts when bb has been asked: a slow stop call takes none of it", async (t) => {
+  const { answer, calls } = await stopWith(t, { "thread stop": { delayMs: 1100, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] }, { graceSeconds: 1 });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(verbs(calls), ["thread stop", "thread show", "thread show"]);
+});
+
+test("with no endpoint, finding the home's thread and a slow stop take none of the grace", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, {
+    "project list": { delayMs: 700, stdout: [projectRow("proj_a", home)] },
+    "thread list": { delayMs: 700, stdout: [threadRow("thr_a", "proj_a", "active")] },
+    "thread stop": { delayMs: 700, stdout: { ok: true, threadId: "thr_a" } },
+    "thread show": [show("stopping"), show("idle")],
+  });
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 1 }, { settings, bb });
+  assert.deepEqual(answer.result, { stopped: true });
+});
+
+for (const [name, rows] of [["a row that is no object", [null]], ["a thread with no status", [{ id: "thr_a", projectId: "proj_a" }]]]) {
+  test(`a stop with no endpoint and a thread list holding ${name}: E_SESSION_STOP_FAILED, never stopped`, async (t) => {
+    const { dir, home } = scratch(t);
+    const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: rows } });
+    const answer = await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb });
+    assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+    assert.match(answer.error.message, /a row this provider cannot read/);
+    assert.deepEqual(verbs(bb.calls()), ["project list", "thread list"]);
+  });
+}
+
 test("a bb stop cut off by time has still been asked: what bb shows next decides", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread stop": { delayMs: 30_000, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] });
@@ -150,19 +179,30 @@ test("retire with nothing to archive is a complete cleanup (a home that never la
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
 });
 
-test("retire of a home the provider never launched (a tmux home) asks bb nothing", async (t) => {
-  const { run, last, calls } = await retireWith(t, { "project list": UNREACHABLE }, { launched: false });
-  assert.equal(run.status, 0);
-  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
-  assert.deepEqual(calls, []);
+test("retire of a home with no state directory still asks bb: a home's agent can remove the directory, its threads stay", async (t) => {
+  const { last, calls } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] },
+    "thread archive": archived("thr_a"),
+  }), { launched: false });
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread archive"]);
 });
 
-test("a malformed setting does not fail a retire: a tmux home is not asked, a bb home gets the warning", async (t) => {
+test("retire of a home the provider shows no sign of having launched (a tmux home): a bb that cannot be asked is no warning", async (t) => {
+  const { run, last } = await retireWith(t, { "project list": UNREACHABLE }, { launched: false });
+  assert.equal(run.status, 0);
+  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
+  const none = await retireWith(t, (home) => ({ "project list": { stdout: [projectRow("proj_z", `${home}-other`)] }, "thread list": { stdout: [] } }), { launched: false });
+  assert.deepEqual(none.last, { meta: { retired: false, reason: "nothing-to-delete" } });
+});
+
+test("a malformed setting does not fail a retire: a tmux home says nothing, a bb home gets the warning", async (t) => {
   const { dir, home } = scratch(t);
   const env = { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "bin/bb" }) };
   const tmuxHome = await runBin(["retire-hook"], { env });
   assert.equal(tmuxHome.status, 0);
-  assert.deepEqual(JSON.parse(tmuxHome.stdout), { meta: { retired: false, reason: "nothing-to-delete" } });
+  assert.deepEqual(JSON.parse(tmuxHome.stdout), { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
   mkdirSync(join(home, ".oats-bb"));
   const bbHome = await runBin(["retire-hook"], { env });
   assert.equal(bbHome.status, 0);

@@ -25,8 +25,13 @@ const HTTP_MAX_BYTES = 256 * 1024;
  *  origins that passed loopbackOrigin), no redirect followed, bounded in time and in size.
  *  Resolves { ok: true, value } or { ok: false, message }; never throws. */
 async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
+  // The time limit is a timer of this process's own, not AbortSignal.timeout: that one
+  // does not keep the process alive, and on Node 20 a fetch whose connection is dropped
+  // never settles, so the process ended, with status 0 and no answer, while it waited.
+  const limit = new AbortController();
+  const timer = setTimeout(() => limit.abort(new DOMException("timed out", "TimeoutError")), Math.max(1, timeoutMs));
   try {
-    const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(Math.max(1, timeoutMs)), redirect: "error", headers: { accept: "application/json" } });
+    const response = await fetch(url, { method: "GET", signal: limit.signal, redirect: "error", headers: { accept: "application/json" } });
     if (!response.ok) { await response.body?.cancel(); return { ok: false, message: `HTTP ${response.status}` }; }
     const chunks = [];
     let size = 0;
@@ -40,6 +45,8 @@ async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
   } catch (error) {
     const cause = error?.cause?.code || error?.cause?.message;
     return { ok: false, message: error?.name === "TimeoutError" ? `no answer within ${Math.round(timeoutMs / 1000)} s` : cause ? `${error.message} (${cause})` : String(error?.message ?? error) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

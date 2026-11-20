@@ -109,7 +109,16 @@ async function main(argv) {
 }
 
 // A rejection here is an outcome in doubt (or a bug): nothing on stdout, a nonzero exit.
-main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (error) => {
+// So is a process that runs out of work before main has finished (a wait that nothing
+// keeps alive): it must never end with status 0 and no answer, which reads as success.
+let finished = false;
+process.on("exit", (code) => {
+  if (finished || code !== 0) return;
+  process.stderr.write("oats bb: ended before it had an answer\n");
+  process.exitCode = 1;
+});
+main(process.argv.slice(2)).then((code) => { finished = true; process.exitCode = code; }, (error) => {
+  finished = true;
   process.stderr.write(`oats bb: ${error?.message ?? error}\n`);
   process.exitCode = 1;
 });

@@ -268,6 +268,32 @@ test("where bubblewrap is missing readiness warns that bb's sandboxed modes wait
   assert.equal(sandboxCanStart({ platform: "linux", path: "" }), false);
 });
 
+// Node 20's fetch never settles when the other side drops the connection, and a wait that
+// nothing keeps alive ends the process with status 0 and no answer, which the kernel would
+// read as a failed call with no reason. The fetch here is replaced by one that does the
+// same on every Node (test/fixtures/hanging-fetch.mjs).
+const withFetch = (mode) => ({ NODE_OPTIONS: `--import=${new URL("../fixtures/hanging-fetch.mjs", import.meta.url).href}`, OATS_BB_TEST_FETCH: mode });
+
+test("a read of bb that never settles is ended by the provider's own time limit: a named problem, never an exit with no answer", async (t) => {
+  const { backend, bb } = await setup(t);
+  const answer = await call("check", { home: null, soul: null }, { settings: backend.settings(), bb, env: withFetch("abortable") });
+  assert.deepEqual(codes(answer), ["E_BACKEND_UNREACHABLE"]);
+  assert.match(answer.result.problems[0].message, /no answer within 4 s/);
+  assert.equal(answer.result.status, "unavailable");
+});
+
+test("a provider that runs out of work before it has an answer exits nonzero and says so: never status 0 with nothing", async (t) => {
+  const { backend, bb } = await setup(t);
+  const env = { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }), ...withFetch("deaf") };
+  const run = await runBin(["session", "check"], { stdin: JSON.stringify(requestFor("check", { home: null, soul: null })), env });
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "");
+  assert.match(run.stderr, /ended before it had an answer/);
+  const doctor = await runBin(["doctor"], { env });
+  assert.equal(doctor.status, 1);
+  assert.match(doctor.stderr, /ended before it had an answer/);
+});
+
 test("oats bb doctor takes --soul, which the kernel reads and forwards; nothing else", async (t) => {
   const { backend, bb } = await setup(t);
   const env = { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) };

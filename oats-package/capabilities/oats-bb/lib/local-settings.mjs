@@ -32,10 +32,14 @@ const PLAIN_SOURCES = new Set(["kernel", "capability", "launch-config"]);
 // never the launch's. A launch entry that would choose either cannot be honoured, and is
 // refused rather than ignored (contract item 1, the preflights a provider launch skips).
 const CONFIGURATION_NAMES = new Set(["CLAUDE_CONFIG_DIR"]);
-const ACCOUNT_NAMES = new Set([
-  "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL",
-  "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "AWS_BEARER_TOKEN_BEDROCK",
-]);
+// Which variables choose the account or the endpoint is Claude Code's list, and it grows
+// (keys and tokens per cloud, base URLs, headers, sockets): so by pattern, not by name.
+// Every ANTHROPIC_* variable does, but the ones that only pick a model.
+const MODEL_NAMES = /^ANTHROPIC_(MODEL|SMALL_FAST_MODEL.*|DEFAULT_.*_MODEL.*|CUSTOM_MODEL_OPTION.*)$/;
+const ACCOUNT_NAMES = /^(ANTHROPIC_.*|CLAUDE_CODE_USE_.*|CLAUDE_CODE_API_.*|CLAUDE_CODE_OAUTH_TOKEN|AWS_BEARER_TOKEN_BEDROCK)$/;
+const choosesAccount = (name) => ACCOUNT_NAMES.test(name) && !MODEL_NAMES.test(name);
+// A name a JSON map cannot carry as a plain entry.
+const UNCARRIABLE = new Set(["__proto__"]);
 
 /** The launch input's env as a name → value map, or a refusal naming the entry
  *  (E_BACKEND_LAUNCH_ENV): one that would choose Claude's configuration or account, one
@@ -49,11 +53,11 @@ export function readLaunchEnv(env) {
   for (const entry of env) {
     if (!isObject(entry) || typeof entry.name !== "string") throw fail("E_BACKEND_LAUNCH_ENV", "a launch env entry has no name");
     const from = typeof entry.source === "string" && entry.source ? ` (source ${entry.source}${typeof entry.capability === "string" ? `, ${entry.capability}` : ""})` : "";
-    if (!NAME.test(entry.name)) throw fail("E_BACKEND_LAUNCH_ENV", `the launch env entry ${JSON.stringify(entry.name)}${from} is not a portable variable name`);
+    if (!NAME.test(entry.name) || UNCARRIABLE.has(entry.name)) throw fail("E_BACKEND_LAUNCH_ENV", `the launch env entry ${JSON.stringify(entry.name)}${from} is not a variable name the bb backend can carry`);
     if (CONFIGURATION_NAMES.has(entry.name)) {
       throw fail("E_BACKEND_LAUNCH_ENV", `the launch sets ${entry.name}${from}, which the bb backend cannot honour: a bb thread's Claude loads the user settings and hooks of the Claude configuration bb's server runs with. Remove it from the launch`);
     }
-    if (ACCOUNT_NAMES.has(entry.name)) {
+    if (choosesAccount(entry.name)) {
       throw fail("E_BACKEND_LAUNCH_ENV", `the launch sets ${entry.name}${from}, which would choose Claude's account or endpoint: a bb thread runs on the account of bb's own server. Remove it from the launch, or give bb's server the credential in its own environment`);
     }
     const why = entry.secret === true || entry.source === "launch-config-reference" ? "comes from a secret source"
@@ -76,10 +80,10 @@ export function readLaunchEnv(env) {
  *  that can be carried, and never the inherited value. */
 export function readUnset(unset, env) {
   if (unset === undefined || unset === null) return [];
-  if (!Array.isArray(unset) || unset.some((name) => typeof name !== "string" || !NAME.test(name))) throw fail("E_BACKEND_LAUNCH_ENV", "the launch's unset must be a list of variable names");
+  if (!Array.isArray(unset) || unset.some((name) => typeof name !== "string" || !NAME.test(name) || UNCARRIABLE.has(name))) throw fail("E_BACKEND_LAUNCH_ENV", "the launch's unset must be a list of variable names the bb backend can carry");
   // An empty value under one of these names would take from bb's Claude the configuration
   // or the credential bb's own server gives it.
-  const chosen = unset.find((name) => CONFIGURATION_NAMES.has(name) || ACCOUNT_NAMES.has(name));
+  const chosen = unset.find((name) => CONFIGURATION_NAMES.has(name) || choosesAccount(name));
   if (chosen !== undefined) throw fail("E_BACKEND_LAUNCH_ENV", `the launch unsets ${chosen}, which the bb backend cannot honour: a bb thread's Claude takes its configuration and its account from bb's own server, and the launch can neither choose nor remove them`);
   const both = unset.find((name) => Object.hasOwn(env, name));
   if (both !== undefined) throw fail("E_BACKEND_LAUNCH_ENV", `the launch both sets and unsets ${both}`);

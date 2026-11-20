@@ -99,6 +99,23 @@ test("a .claude that is a link out of the home refuses the launch: the env file 
   assert.deepEqual(bb.calls(), [], "found before bb is asked or changed at all");
 });
 
+test("variables that only pick a model are carried", async (t) => {
+  const { home, run } = await setup(t);
+  const names = ["ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME", "ANTHROPIC_CUSTOM_MODEL_OPTION"];
+  assert.equal((await run({ env: names.map((name) => entry(name, "m", { source: "launch-config" })) })).ok, true);
+  assert.deepEqual(Object.keys(localSettings(home).env).sort(), [...names].sort());
+});
+
+test("a person's own entry under a name the launch carries is the launch's: replaced, and gone with it", async (t) => {
+  const { home, run } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { MY_VAR: "persons", OTHER: "kept" } }));
+  await run({ env: [entry("MY_VAR", "launch")] });
+  assert.deepEqual(localSettings(home).env, { MY_VAR: "launch", OTHER: "kept" });
+  await run({ env: [] });
+  assert.deepEqual(localSettings(home).env, { OTHER: "kept" });
+});
+
 test("pathPrepend is carried as the env file's PATH: the shim directory first, then the PATH the provider was called with", async (t) => {
   const { home, run } = await setup(t);
   const shim = join(home, ".oats/bin");
@@ -172,6 +189,11 @@ for (const [name, env, pattern] of [
   ["another model endpoint", [entry("ANTHROPIC_BASE_URL", "https://llm.example.net", { source: "launch-config" })], /ANTHROPIC_BASE_URL.*account or endpoint/],
   ["an unset of the account's credential", { env: [], unset: ["ANTHROPIC_API_KEY"] }, /unsets ANTHROPIC_API_KEY.*neither choose nor remove/],
   ["an unset of Claude's configuration", { env: [], unset: ["CLAUDE_CONFIG_DIR"] }, /unsets CLAUDE_CONFIG_DIR/],
+  ...["ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "ANTHROPIC_IDENTITY_TOKEN_FILE", "CLAUDE_CODE_API_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_SOMETHING_NEW"]
+    .map((name) => [`${name}, which would choose the account or endpoint`, [entry(name, "v", { source: "launch-config" })], new RegExp(`${name}.*account or endpoint`)]),
+  ["an unset of a cloud's key", { env: [], unset: ["ANTHROPIC_FOUNDRY_API_KEY"] }, /unsets ANTHROPIC_FOUNDRY_API_KEY/],
+  ["__proto__ as a name: refused, never dropped", [entry("__proto__", "x"), entry("A", "1")], /"__proto__".*cannot|"__proto__".*can carry/],
+  ["__proto__ in unset", { env: [], unset: ["__proto__"] }, /unset must be a list of variable names/],
   ["a name both set and unset", { env: [entry("BOTH", "v")], unset: ["BOTH"] }, /both sets and unsets BOTH/],
   ["an unset that is not a list of names", { env: [], unset: ["not a name"] }, /unset must be a list/],
   ["a name that is not a variable name", [entry("BAD-NAME", "v")], /BAD-NAME/],

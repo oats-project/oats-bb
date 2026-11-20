@@ -171,10 +171,12 @@ arguments or a process environment:
   `.claude/settings.local.json`, and no secret is written there. Give bb's server the
   credential in its own environment instead.
 - A launch environment entry that would choose Claude's configuration (`CLAUDE_CONFIG_DIR`)
-  or its account or endpoint (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-  `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_BASE_URL`, the Bedrock, Vertex and Foundry
-  switches) is refused, by name, whatever its source: `E_BACKEND_LAUNCH_ENV`. It is never
-  ignored. A launch that would remove one of them is refused the same way.
+  or its account or endpoint is refused, by name, whatever its source:
+  `E_BACKEND_LAUNCH_ENV`. That is every `ANTHROPIC_*` variable except the ones that only
+  pick a model (`ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`,
+  `ANTHROPIC_CUSTOM_MODEL_OPTION`), `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_API_*`,
+  `CLAUDE_CODE_OAUTH_TOKEN` and `AWS_BEARER_TOKEN_BEDROCK`. It is never ignored. A launch
+  that would remove one of them is refused the same way.
 - A sandbox entry that is not one exact host or one exact absolute path:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
 
@@ -188,8 +190,10 @@ kernel that launched it) travels the same way: the env file's `PATH` is that dir
 followed by the PATH the kernel ran the provider with.
 
 The provider keeps the names it wrote in `<home>/.oats-bb/launch-env.json`, so a later
-launch removes a variable it no longer carries and never touches an entry you added to
-`settings.local.json` yourself.
+launch removes a variable it no longer carries, and it leaves alone an entry you added to
+`settings.local.json` yourself under another name. A name the launch carries is the
+launch's: your own entry of that name is replaced, and goes when the launch stops carrying
+it.
 
 **Leaving bb.** When a home that ran on bb starts on another backend (`--backend tmux`),
 the capability's launch hook removes what the provider wrote into

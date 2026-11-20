@@ -6,7 +6,9 @@ The kernel's session-provider contract defines the wire (the OATS repository,
 envelope is in `lib/wire.mjs`.
 
 ## The call
-`node <home>/.oats/modules/oats.bb/bin/oats-bb.mjs session <verb>`, with the home's hook
+`node <home>/.oats/modules/oats.bb/bin/oats-bb.mjs session <verb>`, run from the filesystem
+root (never from the home: the provider reads the home from its input, and leaves no
+process of its own working there), with the home's hook
 environment (`OATS_SETTINGS` holds `settings.oats.bb`), one JSON request on stdin, exactly
 one JSON document on stdout, exit 0 for a result and for a refusal.
 
@@ -28,7 +30,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 
 | verb | input | result |
 |---|---|---|
-| launch | `{home, instance, harness, model, yolo, env, unset, pathPrepend, args, promptFile, resume, previous, sandbox?}` | `{endpoint: {server, projectId, threadId}}` |
+| launch | `{home, instance, harness, model, yolo, env, unset, pathPrepend, args, promptFile, previous, sandbox?}` | `{endpoint: {server, projectId, threadId}}` |
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
@@ -44,7 +46,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `pathPrepend`** (the home's kernel shim directory) is carried as the env file's
   `PATH`: those directories, then the launch's own `PATH` entry if it has one, else the
   `PATH` the provider was called with. An entry that cannot go on a PATH refuses the launch.
-- **launch `resume`** must be null: a bb thread is resumed by an input, never by a launch.
+- A launch never resumes: a bb thread is resumed by an input into its own conversation. (An
+  input that carried a `resume` request would be refused.)
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).

@@ -334,6 +334,10 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
 
   const stopped = await provider("stop", { home, endpoint, graceSeconds: 10 });
   assert.deepEqual(stopped.result, { stopped: true });
+  // After the stop no process works in the home: bb released the thread's Claude and the
+  // tool it ran (the kernel scans the home for such processes before it retires it).
+  const working = async () => (await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim();
+  await waitFor("no process to work in the home", async () => (await working()) === "0", { timeoutMs: 20_000 });
   // What the provider can say of a stopped thread is bb's word: settled, running unknown.
   // "stopped, input refused" is the kernel's answer from its own stoppedAt, without calling
   // the provider (contract item 1; spec K1 T4).

@@ -1,0 +1,80 @@
+# The team image for bb (container/): built on an OATS team image and accepted
+# by the OATS repository's own, unmodified acceptance.
+#
+# The team image is not published, so this workflow builds it from one pinned
+# commit of oats-project/oats: OATS_COMMIT below, the only place that names it.
+# That checkout supplies the base image's recipe, the Compose files, the CI
+# fixture script and the acceptance. To move the pin, change that one line.
+name: container
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  OATS_COMMIT: aaa754b11228666149da946dd619205162339607
+
+jobs:
+  image:
+    name: Team image for bb / amd64 acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BASE_IMAGE: oats-bb-container-base:${{ github.event.pull_request.head.sha || github.sha }}
+      AGENT_IMAGE: oats-bb-container-agent:${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # The pull request's head, rather than GitHub's synthetic merge commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: oats-bb
+          persist-credentials: false
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: oats-project/oats
+          ref: ${{ env.OATS_COMMIT }}
+          path: oats
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Check the OATS checkout is the pinned commit
+        run: test "$(git -C oats rev-parse HEAD)" = "$OATS_COMMIT"
+
+      - name: Build the base team image from the pinned OATS commit
+        run: docker build --platform linux/amd64 --tag "$BASE_IMAGE" oats/container/agent
+
+      - name: Build the team image for bb from that base
+        run: docker build --platform linux/amd64 --build-arg "AGENT_IMAGE=$BASE_IMAGE" --tag "$AGENT_IMAGE" oats-bb/container
+
+      - name: Record the pinned commit and both images
+        run: |
+          {
+            printf 'OATS commit: `%s`\n\n' "$OATS_COMMIT"
+            printf 'Base team image: `%s`\n\n' "$(docker image inspect --format '{{.Id}}' "$BASE_IMAGE")"
+            printf 'Team image for bb: `%s`\n' "$(docker image inspect --format '{{.Id}}' "$AGENT_IMAGE")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The OATS checkout's fixture script and acceptance, as committed there:
+      # its Compose files plus this repository's fragment. No token, no model.
+      # bb adds about 650 MB and 180 pids to an idle team.
+      - name: Accept the real container with the fragment
+        working-directory: oats
+        run: bash .github/scripts/team-image-accept.sh
+        env:
+          AGENT_CHILD: bb
+          AGENT_CHILD_FRAGMENT: ${{ github.workspace }}/oats-bb/container/compose.agent.child.yaml
+          AGENT_PIDS: "512"
+          AGENT_MEMORY: 2g

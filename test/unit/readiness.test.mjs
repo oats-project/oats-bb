@@ -24,9 +24,9 @@ const codes = (answer) => answer.result.problems.map((problem) => problem.code);
 test("a bb that is fit answers ready: {status, problems, warnings}, the shape oats readiness relays", async (t) => {
   const { check, bb, backend } = await setup(t);
   const answer = await check();
-  // Ready, with the one thing a plain readiness read always says for now: which mode the command launches in.
+  // Ready, with the one thing a plain readiness read always says: which mode the command launches in.
   assert.deepEqual({ ...answer, result: { ...answer.result, warnings: answer.result.warnings.map((w) => w.code) } }, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "check", ok: true, result: { status: "ready", problems: [], warnings: ["session-provider-full-mode-only"] } });
-  assert.match(answer.result.warnings[0].message, /full mode only for now: a spawn or start that does not choose it \(--yolo, or a launch configuration.s --permission-mode bypassPermissions\) .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
+  assert.match(answer.result.warnings[0].message, /full mode only \(sandboxed modes are not offered\): a spawn or start that does not choose it \(--yolo, or a launch configuration.s --permission-mode bypassPermissions\) .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
   assert.ok(answer.result.warnings[0].message.length < 500);
   assert.equal(bb.calls().every((c) => c.server === backend.server), true);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
@@ -52,7 +52,7 @@ test("the check of a planned launch that is not in full mode: E_BACKEND_SANDBOXE
       const answer = await check(target, launch);
       assert.equal(answer.result.status, "needs-configuration");
       assert.deepEqual(answer.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"], "the launch's own first refusal, alone");
-      assert.match(answer.result.problems[0].message, /a sandboxed mode.*does not launch in one yet.*--yolo/);
+      assert.match(answer.result.problems[0].message, /a sandboxed mode.*launches in bb.s full mode only: sandboxed modes are not offered.*--yolo.*Nothing was started$/);
       assert.ok(answer.result.problems[0].message.length < 500);
     }
     for (const launch of [{ harness: "claude", yolo: true, args: [] }, { harness: "claude", yolo: null, args: ["--permission-mode", "bypassPermissions"] }]) {
@@ -362,7 +362,7 @@ test("oats bb doctor prints the same findings for a person, names where the cred
   const env = (settings) => ({ ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(settings), cli: bb.cli }) });
   const ready = await runBin(["doctor"], { env: env() });
   assert.equal(ready.status, 0);
-  assert.match(ready.stdout, /^bb session provider: ready\n  warning session-provider-full-mode-only: the bb backend launches in bb's full mode only for now: .*\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n$/);
+  assert.match(ready.stdout, /^bb session provider: ready\n  warning session-provider-full-mode-only: the bb backend launches in bb's full mode only \(sandboxed modes are not offered\): .*\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n$/);
   backend.state.provider.accountEmail = "person@example.com";
   const login = await runBin(["doctor", "--json"], { env: env() });
   assert.equal(login.doc.credential, "a Claude login of bb's user");
@@ -420,6 +420,8 @@ test("settings: defaults, and shapes that are refused", () => {
   assert.throws(() => readSettings([]), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ cli: "./bb" }), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ server: 38886 }), { code: "E_BACKEND_SETTINGS" });
-  // bb's data directory: an absolute path with no . or .. step, never the root.
-  for (const dataDir of ["bbdata", "/srv/../bb", "/", 7]) assert.throws(() => readSettings({ dataDir }), { code: "E_BACKEND_SETTINGS" });
+  // bb's data directory is read only by a launch in a sandboxed mode, which checks its
+  // shape there: a wrong value holds up no other verb. A value that is no string is a shape.
+  assert.equal(readSettings({ dataDir: "bbdata" }).dataDir, "bbdata");
+  assert.throws(() => readSettings({ dataDir: 7 }), { code: "E_BACKEND_SETTINGS" });
 });

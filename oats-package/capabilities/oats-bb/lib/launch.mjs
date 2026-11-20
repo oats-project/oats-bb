@@ -41,7 +41,7 @@ function readInput(input) {
 export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
-  // Before anything else is read or started: a mode the command does not launch in yet.
+  // Before anything else is read or started: a mode the command does not launch in (not offered).
   const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
   const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);

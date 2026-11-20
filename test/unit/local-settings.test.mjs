@@ -455,6 +455,7 @@ test("a sandboxed launch that names no trees, or a tree that is none, is refused
 test("a data directory that is not bb's refuses a sandboxed launch and its check: bb's thread storage would go uncovered", async (t) => {
   const { home, bb, backend } = await setup(t);
   const settings = backend.settings({ dataDir: join(home, "notes") });
+  mkdirSync(join(home, "notes"));
   const input = { home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false, env: [], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, sandbox: { domains: [AWEB], write: [] }, trees: [join(home, "work")] };
   const answer = await call("launch", input, { settings, bb, sandboxedModes: true });
   assert.equal(answer.error.code, "E_BACKEND_SETTINGS");
@@ -464,11 +465,18 @@ test("a data directory that is not bb's refuses a sandboxed launch and its check
     const { result } = await call("check", { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: input.sandbox, trees } }, { settings, bb, sandboxedModes: true });
     assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_SETTINGS"]);
   }
+  // A value of the wrong shape refuses the same launch, and holds up nothing else.
+  for (const dataDir of ["~/.bb", "bbdata", "/srv/../bb", "/"]) {
+    const wrong = await call("launch", input, { settings: backend.settings({ dataDir }), bb, sandboxedModes: true });
+    assert.equal(wrong.error.code, "E_BACKEND_SETTINGS", dataDir);
+    assert.match(wrong.error.message, /dataDir must be an absolute path/);
+  }
+  assert.equal((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings: backend.settings({ dataDir: "~/.bb" }), bb })).ok, true, "a stop does not read it");
   assert.equal((await call("launch", { ...input, yolo: true }, { settings, bb, sandboxedModes: true })).ok, true, "full mode does not look at it");
 });
 
-test("readiness reports a home sandboxed only when its settings hold the sandbox block and both additions; anything less is said, and a full-mode home says nothing", async (t) => {
-  const { home, launch, local, check } = await setup(t);
+test("readiness reports a home sandboxed only when its settings hold both additions; anything less is said, a full-mode home says nothing, and the shipped command reports neither", async (t) => {
+  const { home, bb, backend, launch, local, check } = await setup(t);
   const codes = async () => (await check()).result.warnings.map((w) => w.code).filter((code) => code.startsWith("session-provider-sandbox"));
   assert.deepEqual(await codes(), [], "a home never launched");
   await launch();
@@ -479,7 +487,7 @@ test("readiness reports a home sandboxed only when its settings hold the sandbox
   for (const [what, doc, lacking] of [
     ["the switch turned off", { ...whole, permissions: { ...whole.permissions, blockWritesOutsideWorkingDirectories: false } }, /not permissions\.blockWritesOutsideWorkingDirectories:/],
     ["the move tool no longer denied", { ...whole, permissions: { ...whole.permissions, deny: whole.permissions.deny.slice(0, -1) } }, /not the deny of bb.s directory-move tool \(permissions\.deny\):/],
-    ["no sandbox block", { env: whole.env, permissions: whole.permissions }, /not the sandbox block:/],
+    ["the sandbox block alone", { env: whole.env, sandbox: whole.sandbox }, /not the deny of .* and not permissions\.blockWrites/],
     ["a deny list that is no list", { ...whole, permissions: { deny: "x" } }, /not the deny of .* and not permissions\.blockWrites/],
   ]) {
     write(doc);
@@ -488,9 +496,16 @@ test("readiness reports a home sandboxed only when its settings hold the sandbox
     assert.match(message, lacking, what);
     assert.match(message, /not reported as sandboxed.*restart the home/, what);
   }
+  // The provider's own command takes no sandboxed launch, wrote none of this, and says nothing of it.
+  const shipped = (await call("check", { home, soul: null }, { settings: backend.settings(), bb })).result.warnings.map((w) => w.code);
+  assert.deepEqual(shipped, ["session-provider-full-mode-only"]);
   // The report decides nothing: the next launch rewrites all of it.
   await launch();
   assert.deepEqual(local(), whole);
+  // A sandboxed launch that was handed no allowances writes no sandbox block, and is sandboxed all the same.
+  await launch({ sandbox: undefined });
+  assert.equal(local().sandbox, undefined);
+  assert.deepEqual(await codes(), ["session-provider-sandboxed"]);
   await launch({ yolo: true });
   assert.deepEqual(await codes(), []);
 });

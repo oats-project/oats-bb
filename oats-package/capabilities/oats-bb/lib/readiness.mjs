@@ -225,7 +225,7 @@ export async function readinessResult(settings, options = {}) {
  *  launch would run in (`oats readiness`, for a soul or a home; `oats bb doctor`): the
  *  backend launches in full mode only. A warning: a soul that launches with yolo is
  *  ready. */
-export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only for now: a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). bb lets a command leave its sandbox, so those modes are no boundary; full mode claims none" });
+export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only (sandboxed modes are not offered): a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). bb lets a command leave its sandbox, so those modes are no boundary; full mode claims none" });
 
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.
@@ -239,18 +239,19 @@ function otherTeamsWarning(mode, rows, unnamed) {
 }
 
 /** What a home's own Claude settings say of the sandbox, for a person reading readiness
- *  (contract item 6c, A5a): a home is reported sandboxed only where the sandbox block stands
- *  there WITH both additions that keep Claude's file tools inside its working
- *  directories. Read for the report only: nothing the provider writes or deletes depends
+ *  (contract item 6c, A5a): a home is reported sandboxed only where BOTH additions that
+ *  keep Claude's file tools inside its working directories stand there (the deny of bb's
+ *  directory-move tool, and the switch). The sandbox block is not part of the condition:
+ *  a sandboxed launch that was handed no allowances writes none. Read for the report only: nothing the provider writes or deletes depends
  *  on it, and the next launch rewrites all of it. → warnings. */
 export function homeSandboxWarnings(home) {
   if (typeof home !== "string" || !isAbsolute(home)) return [];
   const keys = sandboxKeysOf(home);
   if (!keys.any) return [];
-  if (keys.sandbox && keys.deny && keys.block) {
-    return [{ code: "session-provider-sandboxed", message: "this home's .claude/settings.local.json holds the provider's sandbox block, its deny rules and the switch that keeps Claude's Write and Edit tools inside its working directories: its last launch was written for one of bb's sandboxed modes. Those modes limit accidents, not a determined agent: they are not a security boundary between an agent and the operator's account" }];
+  if (keys.deny && keys.block) {
+    return [{ code: "session-provider-sandboxed", message: "this home's .claude/settings.local.json holds the provider's deny rules and the switch that keeps Claude's Write and Edit tools inside its working directories: its last launch was written for one of bb's sandboxed modes. Those modes limit accidents, not a determined agent: they are not a security boundary between an agent and the operator's account" }];
   }
-  const lacking = [keys.sandbox ? null : "the sandbox block", keys.deny ? null : "the deny of bb's directory-move tool (permissions.deny)", keys.block ? null : "permissions.blockWritesOutsideWorkingDirectories"].filter(Boolean);
+  const lacking = [keys.deny ? null : "the deny of bb's directory-move tool (permissions.deny)", keys.block ? null : "permissions.blockWritesOutsideWorkingDirectories"].filter(Boolean);
   return [{ code: "session-provider-sandbox-incomplete", message: `this home's .claude/settings.local.json holds some of the provider's sandbox keys but not ${lacking.join(" and not ")}: the home is not reported as sandboxed (without all of them Claude's Write and Edit tools can write outside the home). The file is the home's agent's to write, and the provider rewrites all of it at every launch: restart the home (oats session restart), and if this shows again, something in the home is changing the file` }];
 }
 
@@ -266,7 +267,7 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
   let mode, allowances;
   try {
     mode = permissionMode(planned.args, planned.yolo);
-    // A mode the command does not launch in yet: that is the whole answer, as it is the
+    // A mode the command does not launch in (not offered): that is the whole answer, as it is the
     // launch's own first refusal.
     const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
     if (notOffered !== null) return { problems: [{ ...notOffered, status: "needs-configuration" }], warnings };

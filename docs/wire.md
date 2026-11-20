@@ -201,12 +201,13 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
   says nothing of a launch (the provider keeps no record of one in the home), and says, for a soul or a home,
   which mode the command launches in (`session-provider-full-mode-only`).
-  For a home, it also reads the home's `.claude/settings.local.json`, for the report only
+  Where sandboxed launches are taken (the tests' entry; never the provider's command), it
+  also reads, for a home, the home's `.claude/settings.local.json`, for the report only
   (nothing the provider writes or deletes depends on it): `session-provider-sandboxed`
-  where the file holds the sandbox block, the deny of bb's directory-move tool and
+  where the file holds the deny of bb's directory-move tool and
   `permissions.blockWritesOutsideWorkingDirectories: true`;
   `session-provider-sandbox-incomplete` where it holds some of the provider's sandbox
-  keys and not all of those; nothing where it holds none.
+  keys and not both of those; nothing where it holds none.
 
 ## Codes
 `E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,

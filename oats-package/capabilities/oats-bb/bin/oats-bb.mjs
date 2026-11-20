@@ -9,7 +9,7 @@ import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
 
-// The command takes no launch in a sandboxed mode yet (lib/commands.mjs says why).
+// The command takes no launch in a sandboxed mode: they are not offered (lib/commands.mjs says why).
 const handlers = sessionHandlers();
 /** doctor's arguments: `--json`, and `--soul <name>`, which the kernel reads to choose
  *  whose settings it resolves into OATS_SETTINGS and then forwards: it changes nothing

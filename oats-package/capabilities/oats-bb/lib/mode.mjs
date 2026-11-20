@@ -50,7 +50,7 @@ export function harnessRefusal(harness) {
   return { code: "E_BACKEND_HARNESS", message: `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}` };
 }
 
-/** Why the provider's command does not launch in this mode, or null. bb's sandboxed modes
+/** Why the provider's command does not launch in this mode (not offered), or null. bb's sandboxed modes
  *  (auto, accept-edits) are not a boundary: bb lets a command ask to run outside the
  *  sandbox, and such a command writes past the rules a sandboxed launch writes (contract
  *  item 6c, rule 4). The contract keeps bb homes in full mode, which claims no boundary,
@@ -58,7 +58,7 @@ export function harnessRefusal(harness) {
  *  → {code, message} | null (the launch and the readiness check share it). */
 export function sandboxedModeRefusal(mode) {
   if (mode === "full") return null;
-  return { code: "E_BACKEND_SANDBOXED_MODE", message: `this launch would run in bb's ${mode} mode, a sandboxed mode, and the bb backend does not launch in one yet: bb lets a command leave its sandbox, so those modes are no boundary between an agent and your account, and OATS runs bb homes in full mode, which claims none. Launch in bb's full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started` };
+  return { code: "E_BACKEND_SANDBOXED_MODE", message: `this launch would run in bb's ${mode} mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started` };
 }
 
 /** Why a launch in this mode cannot have the sandbox it needs, or null. A sandboxed launch

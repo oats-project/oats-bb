@@ -40,8 +40,9 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       const settings = readSettings(rawSettings);
       const home = input !== null && typeof input === "object" ? input.home : null;
       const { result } = await readinessResult(settings, { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
-      // For a home, what its own settings say of the sandbox (a report only).
-      result.warnings.push(...homeSandboxWarnings(home));
+      // For a home, what its own settings say of the sandbox (a report only). Where no
+      // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
+      if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));
       // With no planned launch the check cannot know the mode a launch would run in: it
       // says what the command launches in, so `oats readiness` does not read "ready" and
       // the spawn that follows is then refused with nothing having said why.

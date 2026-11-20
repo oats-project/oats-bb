@@ -29,7 +29,7 @@ const box = rig({
   // What bubblewrap needs to make its namespaces inside a container.
   runArgs: ["--security-opt", "seccomp=unconfined", "--security-opt", "apparmor=unconfined", "--security-opt", "systempaths=unconfined"],
   settings: { version: BB_VERSION, trust: "container", dataDir: DATA },
-  // Until the provider's own command takes a sandboxed launch: the tests' entry that does.
+  // The provider's own command takes no sandboxed launch (not offered): the tests' entry does.
   entry: "/repo/test/fixtures/sandboxed-bin.mjs",
 });
 const { sh, provider, toolCall } = box;
@@ -43,6 +43,7 @@ async function makeHome(name) {
     `mkdir -p ${home}/.oats/modules ${home}/.claude ${home}/.agents/skills/a ${home}/.aw ${home}/notes ${EVENTS}`,
     `test -d ${CLONE} || (git init -q ${CLONE} && git -C ${CLONE} -c user.name=t -c user.email=t@example.org commit -q --allow-empty -m first)`,
     `git -C ${CLONE} worktree add -q ${home}/work -b agents/${name}`,
+    `git -C ${CLONE} worktree add -q ${home}/trees/extra -b agents/${name}-extra`,
     `printf '#!/bin/sh\\necho hook\\n' > ${home}/.oats/modules/hook.sh`,
     `echo '{"name":"${name}"}' > ${home}/instance.json`,
     `echo '{}' > ${home}/.claude/settings.json`,
@@ -59,7 +60,7 @@ const SANDBOX = { domains: [{ host: "app.aweb.ai", capability: "oats.aweb", sett
 const launchInput = (home, name, extra = {}) => ({
   home, instance: name, harness: "claude", model: MODEL, yolo: false,
   env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }], unset: [], args: [],
-  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`], ...extra,
+  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`, `${home}/trees/extra`], ...extra,
 });
 const started = [];
 async function launched(name, extra) {
@@ -101,6 +102,11 @@ after(() => box.stop());
 test("the image can start Claude Code's sandbox, and readiness says nothing against it", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
   await sh("command -v bwrap && command -v socat && command -v rg");
+  // The sandbox makes a user namespace inside this container. A host that forbids it
+  // (an AppArmor policy on unprivileged user namespaces, a container with too few rights)
+  // fails here, by name, before the tests that need the sandbox fail one by one.
+  const userns = await sh("bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc --dev /dev true 2>&1 && echo userns-ok || true");
+  assert.match(userns, /userns-ok/, `this host does not let the container make user namespaces, so Claude Code's sandbox cannot start: ${userns.trim().slice(0, 300)}`);
   const { result } = await provider("check", { home: null, soul: null });
   assert.equal(result.status, "ready");
   assert.equal(result.warnings.some((warning) => warning.code === "session-provider-sandbox-unsupported"), false, JSON.stringify(result.warnings));
@@ -134,24 +140,33 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
 
     // The four keys the provider owns, as it wrote them.
     const settings = await settingsOf(home);
-    // The worktree's own git directory, as its pointer names it.
-    const gitDir = (await sh(`cat ${home}/work/.git`)).trim().replace(/^gitdir: /, "");
-    assert.match(gitDir, new RegExp(`^${CLONE}/\\.git/worktrees/`));
+    // Each worktree's own git directory, as its pointer names it.
+    const gitDirOf = async (tree) => (await sh(`cat ${tree}/.git`)).trim().replace(/^gitdir: /, "");
+    const gitDir = await gitDirOf(`${home}/work`), extraGitDir = await gitDirOf(`${home}/trees/extra`);
+    for (const dir of [gitDir, extraGitDir]) assert.match(dir, new RegExp(`^${CLONE}/\\.git/worktrees/`));
+    assert.notEqual(gitDir, extraGitDir);
     assert.deepEqual(Object.keys(settings).sort(), ["env", "permissions", "sandbox"]);
     assert.deepEqual(settings.sandbox, { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: [EVENTS] } });
     assert.deepEqual(Object.keys(settings.permissions).sort(), ["blockWritesOutsideWorkingDirectories", "deny"]);
     assert.equal(settings.permissions.blockWritesOutsideWorkingDirectories, true);
     assert.equal(settings.permissions.deny.at(-1), MOVE_TOOL);
     for (const path of [`${home}/.oats/**`, `${home}/TASK.md`, `${INSTANCES}/.mcp.json`, "/home/node/.claude.json", "/home/node/.claude/**", "/etc/claude-code/**",
-      `${home}/work/.git`, `${gitDir}/config`, `${gitDir}/hooks/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**"]) {
+      `${home}/work/.git`, `${gitDir}/config`, `${gitDir}/hooks/**`, `${gitDir}/commondir`, `${gitDir}/gitdir`,
+      `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**"]) {
       assert.ok(settings.permissions.deny.includes(`Edit(/${path})`), path);
     }
     // Readiness reports the home sandboxed: the block and both additions stand in its settings.
     assert.ok((await provider("check", { home, soul: null })).result.warnings.some((warning) => warning.code === "session-provider-sandboxed"));
 
     // Bash, in the sandbox: every listed path, by append, by a new file, by rename and by
-    // removal. What the agent works in stays writable, and so does what OATS needs.
-    const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`];
+    // removal, and by renaming away the directory that holds a denied file. What the agent
+    // works in stays writable, and so does what OATS needs. (For the paths outside the
+    // home, sandboxed Bash is refused with or without a rule: there the rules are shown by
+    // the file tools below. Inside the home, only the rule stands in the way.)
+    const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`, `${gitDir}/commondir`, `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/pre-commit`];
+    // bb's plugin directory is where the rule says it is: an attempt on a name that
+    // matches nothing would prove nothing.
+    assert.notEqual((await sh("ls -d /tmp/bb-provider-bridge-*/ 2>/dev/null | head -1")).trim(), "", "bb builds its Claude plugin directory under /tmp/bb-provider-bridge-*");
     // The attempts are a script the test puts in the agent's notes, so Claude's own look
     // at a command line (which asks a person about one it cannot read ahead) is not what
     // answers: the sandbox is.
@@ -159,6 +174,9 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
       "#!/bin/sh",
       `for p in ${paths.map((path) => `'${path}'`).join(" ")} /tmp/bb-provider-bridge-*/PLANTED-HERE; do mkdir -p "$(dirname "$p")" 2>/dev/null; (echo PLANTED >> "$p") 2>/dev/null; done`,
       `mv ${home}/TASK.md ${home}/TASK.moved 2>/dev/null; rm -f ${home}/AGENTS.md ${home}/instance.json 2>/dev/null; rm -rf ${home}/.oats 2>/dev/null`,
+      // A denied file whose directory carries no rule: rename the directory away, make it anew, write the file.
+      `mv ${home}/.aw ${home}/.aw-old 2>/dev/null; mkdir ${home}/.aw 2>/dev/null; (echo PLANTED > ${home}/.aw/workspace.yaml) 2>/dev/null; (echo PLANTED > ${home}/.aw/signing.key) 2>/dev/null`,
+      `mv ${home}/work ${home}/work-old 2>/dev/null; mkdir ${home}/work 2>/dev/null; (echo PLANTED > ${home}/work/.git) 2>/dev/null`,
       `echo FREE > ${home}/notes/bash.txt; echo FREE > ${home}/work/file.txt; echo FREE > ${EVENTS}/bash.jsonl; echo attempted`,
     ].join("\n");
     await sh(`cat > ${home}/notes/attempt.sh`, { input: attempt });
@@ -167,14 +185,18 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     assert.match(bash.result, /attempted/);
     assert.deepEqual(await planted(paths), [], "Bash changed a path the deny rules cover");
     assert.equal((await sh(`cat ${home}/TASK.md ${home}/AGENTS.md ${home}/instance.json ${home}/.oats/modules/hook.sh | wc -l`)).trim(), "5", "nothing was moved or removed");
+    assert.equal((await sh(`ls -d ${home}/.aw-old ${home}/work-old 2>/dev/null | wc -l`)).trim(), "0", "a directory that holds a denied file cannot be renamed away");
+    assert.equal((await sh(`cat ${home}/.aw/signing.key ${home}/.aw/workspace.yaml`)).trim(), "key\nteam");
+    assert.equal(await gitDirOf(`${home}/work`), gitDir, "the worktree's pointer still names its git directory");
     assert.equal((await sh(`cat ${home}/notes/bash.txt ${home}/work/file.txt ${EVENTS}/bash.jsonl | tr '\\n' ' '`)).trim(), "FREE FREE FREE");
 
     // Claude's own file tools: a deny rule refuses each, with no prompt; a path outside the
     // working directories is refused by the switch, whatever it is.
-    for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${DATA}/thread-storage/.mcp.json`]) {
+    for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${home}/.aw/signing.key`, `${home}/trees/extra/.git`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${extraGitDir}/config`, `${DATA}/thread-storage/.mcp.json`]) {
       const write = await toolCall(id, { tool: "Write", input: { file_path: path, content: "PLANTED\n" } });
       assert.deepEqual(write.pending, [], path);
-      assert.match(write.result, /denied by your permission settings|blockWritesOutsideWorkingDirectories/, path);
+      // The rule's own refusal, not the switch's: these are paths a rule covers.
+      assert.match(write.result, /denied by your permission settings/, path);
     }
     const outside = await toolCall(id, { tool: "Write", input: { file_path: "/home/node/outside-the-home.txt", content: "PLANTED\n" } });
     assert.deepEqual(outside.pending, []);

@@ -33,7 +33,7 @@ async function setup(t, script = {}, backendOverrides = {}) {
   });
   const input = (extra = {}) => ({ home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: true, env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });
   const run = (extra, settings = {}) => call("launch", input(extra), { settings: backend.settings(settings), bb });
-  // The same launch with bb's sandboxed modes taken, which the command refuses for now.
+  // The same launch with bb's sandboxed modes taken, which the command refuses (they are not offered).
   const runSandboxed = (extra) => call("launch", { ...input(extra), trees: [join(home, "work")] }, { settings: backend.settings(), bb, sandboxedModes: true });
   return { dir, home, backend, bb, run, runSandboxed, input };
 }

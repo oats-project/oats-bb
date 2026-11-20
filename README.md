@@ -98,7 +98,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    oats spawn <soul> --backend bb --harness claude --yolo --name <task>-<role>
    ```
 
-   `--yolo` is bb's full mode, the only one a launch is taken in for now (above).
+   `--yolo` is bb's full mode, the only one a launch is taken in (above).
 
 ## Settings
 
@@ -163,9 +163,9 @@ kernel may resume it with an input, which restarts the thread in its own convers
 | The launch | bb's mode | |
 |---|---|---|
 | `--yolo` | `full` | launched |
-| `--no-yolo`, or no choice | `accept-edits` | refused for now: `E_BACKEND_SANDBOXED_MODE` |
-| a launch configuration's argument `--permission-mode auto` | `auto` | refused for now |
-| `--permission-mode acceptEdits` | `accept-edits` | refused for now |
+| `--no-yolo`, or no choice | `accept-edits` | refused (not offered): `E_BACKEND_SANDBOXED_MODE` |
+| a launch configuration's argument `--permission-mode auto` | `auto` | refused |
+| `--permission-mode acceptEdits` | `accept-edits` | refused |
 | `--permission-mode bypassPermissions` | `full` | launched |
 
 Where yolo and the argument disagree (`--yolo` with a mode other than
@@ -238,9 +238,13 @@ hooks. So a launch in a sandboxed mode also writes, into the same
   - the Claude configuration of the user that runs bb (`~/.claude.json`, `~/.claude/`) and
     Claude's managed settings (`/etc/claude-code/`);
   - in `work/` and every extra tree: the `.git` pointer, and `config` and `hooks/` of its
-    git directory and of the clone behind it;
-  - in bb's data directory: the thread storage's `.mcp.json`, `CLAUDE.md` and `.claude/`,
-    and bb's own plugin directory for Claude;
+    git directory and of the clone behind it, with the two files there that say where
+    those directories are. A pointer or a `commondir` the provider cannot read as git
+    would refuses the launch (`E_BACKEND_SANDBOX_PATH`): a rule silently missing is worse;
+  - in bb's data directory: the thread storage's `.mcp.json`, `CLAUDE.md` and `.claude/`;
+  - bb's own plugin directory for Claude, under the temporary directory
+    (`bb-provider-bridge-*`; the provider takes its own temporary directory for bb's,
+    which holds where both run with the same `TMPDIR`);
   - and the one MCP tool bb pre-allows for its Claude, which moves a thread to another
     directory (`mcp__bb-bridge__update_environment_directory`).
 - `permissions.blockWritesOutsideWorkingDirectories: true`: without it Claude's Write and
@@ -277,7 +281,7 @@ runs outside it writes past every rule above. What then happens differs by mode:
 - in `auto`, no person is asked: Claude's own classifier decides, and a command it does not
   flag runs outside the sandbox.
 
-A limit to know before those modes are ever offered: a sandboxed agent can read and edit
+A property of the sandboxed modes, if they are offered: a sandboxed agent can read and edit
 its work tree, but cannot commit in a linked worktree. Git writes its objects and refs in
 the clone, outside the home, and the provider adds no write path there (the allowances
 are the kernel's to send). An agent that commits runs in `full` mode.
@@ -285,10 +289,12 @@ are the kernel's to send). An agent that commits runs in `full` mode.
 Also by design: the agent's messaging key (`.aw/signing.key`) stays readable, since `aw`
 signs with it. A sandboxed agent can read, and so use, its own key; it cannot replace it.
 
-`oats readiness` reports a home as sandboxed (`session-provider-sandboxed`) only where its
-settings hold the sandbox block, the deny of bb's directory-move tool and the switch. A
-file with some of the keys and not all says so (`session-provider-sandbox-incomplete`): the
-home's agent can write that file, and the next launch rewrites it.
+Where sandboxed launches are taken, readiness reports a home as sandboxed
+(`session-provider-sandboxed`) only where its settings hold both the deny of bb's
+directory-move tool and the switch. A file with some of the provider's sandbox keys and
+not both of those says so (`session-provider-sandbox-incomplete`): the home's agent can
+write that file, and the next launch rewrites it. The provider's command, which takes no
+sandboxed launch, wrote none of those keys and reports neither.
 
 **bb's Claude, not the launch's.** A bb thread's Claude loads the home's own settings,
 hooks, skills and `CLAUDE.md` (bb starts it in the home), and beside them the **user
@@ -374,7 +380,7 @@ launch would write into the home's sandbox, each host and path with who asked fo
 the provider reads no record of an earlier launch, and keeps none.
 
 On every read with no planned launch it carries the warning
-`session-provider-full-mode-only`: for now the backend launches in bb's full mode only.
+`session-provider-full-mode-only`: the backend launches in bb's full mode only; sandboxed modes are not offered.
 
 It also reports, as a warning that blocks nothing, `session-provider-orphaned`: live bb
 threads whose project root no longer exists, with their ids and the root. That is what a
@@ -449,7 +455,7 @@ this); it is never a launch environment entry.
 In a team container (`trust: container`), spawn bb agents with `--yolo` (bb `full` mode):
 the container is the boundary, as it is for tmux agents there. bb's sandboxed modes need
 bubblewrap, which the hardened image doesn't carry; without it every command would wait
-for a person in bb (for now a launch without `--yolo` is refused altogether, above).
+for a person in bb (a launch without `--yolo` is refused altogether, above).
 Readiness says so wherever bubblewrap is missing
 (`session-provider-sandbox-unsupported`, a warning: it refuses nothing).
 

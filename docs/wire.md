@@ -58,16 +58,16 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
-- **A launch in a sandboxed mode is refused for now.** With `yolo` not true and no
+- **A launch in a sandboxed mode is refused.** With `yolo` not true and no
   `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
   `auto` mode. The provider refuses it before any effect, right after the launch input's own checks
   (`E_BACKEND_SANDBOXED_MODE`). The check says the same of a planned launch: the refusal
   stands alone among the planned launch's findings, beside whatever is wrong with bb
   itself. A check with no planned launch (`oats readiness`, for a soul or a home) cannot
-  know the mode, and carries the warning `session-provider-full-mode-only` instead. The deny set of contract item 6c (D16) is not in this release; the
-  provider's next change brings it and lifts the refusal. What is written below about
-  `sandbox` describes that code, which is here and tested, and runs once the refusal is
-  lifted.
+  know the mode, and carries the warning `session-provider-full-mode-only` instead. The contract keeps bb homes
+  in full mode (bb lets a command leave its sandbox, so the sandboxed modes are no
+  boundary) until its two sides offer them. What is written below about `sandbox`,
+  `trees` and the deny rules describes code that is here and tested, behind that refusal.
 - **The endpoint a launch answers is new.** Every launch answers a thread bb made for it.
   bb makes a new thread id for each spawn, and the provider does not take that on trust:
   bb's answer to the spawn is the launch's thread only when it names a thread bb did not
@@ -153,6 +153,23 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   - A sandboxed launch must understand everything it is told: a key the provider does not
     know, or a `missing` that is not a list, refuses it. A full-mode launch writes nothing
     and ignores `missing`, `skipped`, `unavailable` and unknown keys, whatever they hold.
+- **launch `trees`** (optional, wire 1.3): `[<absolute path>]`, the home's `work/` and every
+  extra tree, as the kernel reads them from Git's own worktree list (never from the home).
+  A launch in a sandboxed mode needs it for its deny rules (the `.git` pointer of each
+  tree, and `config` and `hooks/**` of its git directory and of the common directory
+  behind it): with no `trees`, or one that is not a list, it is refused
+  (`E_BACKEND_SANDBOX_TREES`); an entry that is not an exact absolute path of an existing
+  directory, or that a rule cannot carry, refuses it too (`E_BACKEND_SANDBOX_PATH`), never
+  skipped. A full-mode launch does not read it. The check reads `launch.trees` the same
+  way where the planned launch carries it, and says nothing of trees where it does not.
+- **what a sandboxed launch writes** into `<home>/.claude/settings.local.json`, each key
+  whole and from the launch input alone: `sandbox` (the allowances), `permissions.deny`
+  (one `Edit(//<path>)` rule per path of contract item 6c, then
+  `mcp__bb-bridge__update_environment_directory`),
+  `permissions.blockWritesOutsideWorkingDirectories: true`, and `env`. A full-mode launch
+  writes `env` and removes the other three. Before it writes, a sandboxed launch checks
+  that `settings.oats.bb.dataDir` holds a `thread-storage` directory
+  (`E_BACKEND_SETTINGS`).
 - **stop** with `endpoint: null` stops every live thread that runs in the home (the kernel
   compensating a launch whose answer was lost, or whose caller was killed while it ran):
   it finds the home's bb project and its live threads, and answers `stopped` also when
@@ -177,19 +194,25 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     stop did not stop it.
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
-  launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on
+  launch (`launch: {harness, yolo, args, sandbox, trees?}`, there before every launch and absent on
   a plain readiness read), it also answers what that launch would be refused for (its
-  harness, its arguments, its mode, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
+  harness, its arguments, its mode, the sandbox it needs, its trees where it carries them, bb's data directory), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
   capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
   says nothing of a launch (the provider keeps no record of one in the home), and says, for a soul or a home,
   which mode the command launches in (`session-provider-full-mode-only`).
+  For a home, it also reads the home's `.claude/settings.local.json`, for the report only
+  (nothing the provider writes or deletes depends on it): `session-provider-sandboxed`
+  where the file holds the sandbox block, the deny of bb's directory-move tool and
+  `permissions.blockWritesOutsideWorkingDirectories: true`;
+  `session-provider-sandbox-incomplete` where it holds some of the provider's sandbox
+  keys and not all of those; nothing where it holds none.
 
 ## Codes
 `E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
 `E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
-`E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
+`E_BACKEND_SANDBOX_TREES`, `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
 `E_SESSION_PROMPT_OPEN`, `E_SESSION_INPUT_QUEUED`, `E_SESSION_INPUT_FAILED`,
 `E_SESSION_STOP_FAILED`.
 
@@ -228,10 +251,11 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 ## Hooks
 - `launch`: runs at every start of a home that has the capability. On this provider it does
   nothing (the launch verb writes Claude's local settings). On another backend
-  (`OATS_BACKEND` set and not `bb`) it removes the provider's two keys (`env`, `sandbox`)
+  (`OATS_BACKEND` set and not `bb`) it removes the provider's four keys (`env`, `sandbox`,
+  `permissions.deny`, `permissions.blockWritesOutsideWorkingDirectories`)
   from `.claude/settings.local.json` when `OATS_PREVIOUS_BACKEND` is `bb`, and only then:
   nothing in the home decides it. Where that variable is absent it removes nothing, and
-  warns if a `sandbox` block stands in the file. In every case it deletes, unread and best effort, what an earlier
+  warns that they may be stale if one of the three sandbox keys stands in the file. In every case it deletes, unread and best effort, what an earlier
   version of the provider kept in the home (`.oats-bb/`, `.oats-bb-sandbox.json`).
   It returns no env and no arguments.
 - `retire`: archives the home's live bb threads, after the kernel's stop, and deletes those

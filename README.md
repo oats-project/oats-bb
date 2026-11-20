@@ -44,18 +44,19 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 >   wake broker without a `--backend`. With an older oats.aweb, spawning a bb home fails
 >   in its spawn hook.
 >
-> **bb agents run in full mode (`--yolo`), and nothing else is launched yet.** A launch in
+> **bb agents run in full mode (`--yolo`), and nothing else is launched.** A launch in
 > one of bb's sandboxed modes (`auto`, `accept-edits`; that is `--no-yolo`, or no choice)
 > is **refused** before anything starts (`E_BACKEND_SANDBOXED_MODE`). `oats readiness` and
 > `oats bb doctor` say, as a warning on every read, that the backend launches in full mode
 > only (they are not told which mode a launch would run in); the kernel's check before a
-> spawn or a start, which carries the planned launch, names the refusal itself. In those modes the agent's tools can
-> write files of its own home that are later run, or read as configuration, outside the
-> sandbox; the rules that keep them off (the deny set, contract item 6c) come with the
-> provider's next change, which lifts the refusal. This README already says what the
-> provider does in a sandboxed mode, because that code is here and tested. Even then the
-> modes are no security boundary until the OATS release named above protects the home's
-> instructions, hooks and settings from the agent that runs in it.
+> spawn or a start, which carries the planned launch, names the refusal itself. Why: bb's
+> sandboxed modes limit accidents, not a determined agent. bb lets a command ask to run
+> outside the sandbox, and one that does writes past every rule this provider can write.
+> Full mode claims no boundary, so nothing is promised that is not kept. This README
+> says what the provider does in a sandboxed mode (the allowances, and the rules that keep
+> a sandboxed agent's tools off what runs outside the sandbox), because that code is here
+> and tested against the pinned bb; it runs for no launch until OATS decides to offer
+> those modes.
 >
 > **No release yet, and what its notes will say.** oats-bb is not released before a run
 > against a real OATS kernel with `--backend bb`. The first release's notes say: bb homes
@@ -101,8 +102,8 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 
 ## Settings
 
-All under `settings.oats.bb` in `oats-local.yaml`. `server`, `daemon`, `trust` and `cli`
-are host-only: a committed workspace or soul file cannot set them, because they choose an
+All under `settings.oats.bb` in `oats-local.yaml`. `server`, `daemon`, `trust`, `cli` and
+`dataDir` are host-only: a committed workspace or soul file cannot set them, because they choose an
 executable, an endpoint that runs commands, and a statement about this machine.
 
 ```yaml
@@ -119,6 +120,7 @@ settings:
 | `server` | `http://127.0.0.1:38886` | The bb server. A loopback address only. |
 | `daemon` | `http://127.0.0.1:38887` | The bb host daemon. A loopback address only. |
 | `cli` | `bb` | The bb CLI: a command on `PATH`, or an absolute path. |
+| `dataDir` | `.bb` in the home of the user that runs bb | bb's data directory on this host (bb-app's `--data-dir`), an absolute path. Read only for a launch in a sandboxed mode, which keeps the agent's tools off bb's thread storage there (see "What a sandboxed agent cannot change", below). |
 
 The capability declares no host requirement for `bb`: a soul that has it may run on tmux on
 a host with no bb at all, and `cli` may point off `PATH`. Readiness is what checks the CLI
@@ -170,7 +172,7 @@ Where yolo and the argument disagree (`--yolo` with a mode other than
 `bypassPermissions`; `--no-yolo` with `bypassPermissions`), the launch is refused
 (`E_BACKEND_LAUNCH_ARG`): the provider never picks one.
 
-**The sandbox** (what a launch in a sandboxed mode does, once such a launch is taken). In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to
+**The sandbox** (what a launch in a sandboxed mode does; no launch is taken in one today, above). In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to
 the agent's commands: by itself, `aw` could not reach the aweb server and
 `oats instance attention` could not write the deployment's events file. So in those modes
 the launch adds, to the home's `.claude/settings.local.json`, exactly the entries the kernel
@@ -181,10 +183,9 @@ hands it:
 - `sandbox.filesystem.allowWrite`: the deployment's events directory.
 
 Nothing else is added, and nothing an agent, a task, a mail or a launch argument says can
-add one. The `sandbox` key of that file is the provider's in a bb home, whole: every
-launch writes it anew from what the kernel hands it, never reads what it held, and keeps
-no record of it in the home (the home is its agent's to write). A `sandbox` entry you put
-there yourself is not kept. In `full` mode there is no sandbox and the key is removed.
+add one. The provider keeps no record of them in the home (the home is its agent's to
+write): the `sandbox` key is rewritten whole at every launch (see "What a sandboxed agent
+cannot change", below). In `full` mode there is no sandbox and the key is removed.
 The kernel's check before a launch lists each host and path that launch would add, with
 who asked for it.
 
@@ -222,6 +223,73 @@ Three things to know:
 - In `accept-edits`, a compound command (`cmd; echo $?`) raises a bb approval even when
   everything it touches is allowed. That is bb's behaviour.
 
+**What a sandboxed agent cannot change** (again: what such a launch does, were one taken). In bb's sandboxed modes the agent can write its
+own home, and some of what is there is later run, or read as configuration, *outside* its
+sandbox: OATS's module copies and hooks, Claude's settings, `.mcp.json`, git's config and
+hooks. So a launch in a sandboxed mode also writes, into the same
+`.claude/settings.local.json`:
+
+- `permissions.deny`: one rule per path below. Claude refuses its Edit and Write tools
+  there, and makes the same paths read-only for sandboxed commands:
+  - in the home: `.oats/`, `instance.json`, `.claude/`, `.agents/`, `.mcp.json`,
+    `.aw/signing.key`, `.aw/workspace.yaml`, and the instructions `AGENTS.md`,
+    `CLAUDE.md`, `CLAUDE.local.md` and `TASK.md`;
+  - in every directory above the home: `.mcp.json`, `CLAUDE.md` and `.claude/`;
+  - the Claude configuration of the user that runs bb (`~/.claude.json`, `~/.claude/`) and
+    Claude's managed settings (`/etc/claude-code/`);
+  - in `work/` and every extra tree: the `.git` pointer, and `config` and `hooks/` of its
+    git directory and of the clone behind it;
+  - in bb's data directory: the thread storage's `.mcp.json`, `CLAUDE.md` and `.claude/`,
+    and bb's own plugin directory for Claude;
+  - and the one MCP tool bb pre-allows for its Claude, which moves a thread to another
+    directory (`mcp__bb-bridge__update_environment_directory`).
+- `permissions.blockWritesOutsideWorkingDirectories: true`: without it Claude's Write and
+  Edit tools write anywhere the user can, whatever the sandbox says.
+
+`sandbox`, `permissions.deny`, `permissions.blockWritesOutsideWorkingDirectories` and `env`
+are the provider's keys in a bb home, each whole: every launch rewrites them from the
+launch input and never reads what they held, so a file the agent changed is put right at
+the next launch, and **an entry of your own under one of those four keys is not kept**. A
+launch in `full` mode removes the first three. Every other key (`permissions.allow`, where
+Claude keeps a person's "don't ask again", and the rest) is left as it is. No other OATS
+capability writes those four keys in that file; one that wanted to would be a change to
+the contract between OATS and this provider.
+
+Two things the launch must be told, and is refused without:
+
+- **The home's trees** (`trees` in the launch input: `work/` and every extra tree). Only the
+  kernel knows them, from Git's own worktree list; the home's record of them is its agent's
+  to write. A sandboxed launch with no `trees` is refused (`E_BACKEND_SANDBOX_TREES`): it
+  needs an OATS kernel that sends them. A tree that is not an existing directory, or a
+  path a rule cannot carry (a wildcard, a parenthesis, a line break, in the tree's path or
+  the home's), is refused too (`E_BACKEND_SANDBOX_PATH`), never skipped.
+- **bb's data directory** (`settings.oats.bb.dataDir`). bb does not say where it is; the
+  default is `.bb` in the home of the user that runs bb. A directory that holds no
+  `thread-storage` refuses a sandboxed launch (`E_BACKEND_SETTINGS`).
+
+**bb's sandboxed modes limit accidents, not a determined agent: they are not a security
+boundary between an agent and the operator's account.** bb lets a command ask to run
+outside the sandbox, and nothing this provider can write takes that away; a command that
+runs outside it writes past every rule above. What then happens differs by mode:
+
+- in `accept-edits`, every way out of the sandbox raises a prompt in bb that a person must
+  approve. No mail can approve such a prompt, only a person at bb's interface;
+- in `auto`, no person is asked: Claude's own classifier decides, and a command it does not
+  flag runs outside the sandbox.
+
+A limit to know before those modes are ever offered: a sandboxed agent can read and edit
+its work tree, but cannot commit in a linked worktree. Git writes its objects and refs in
+the clone, outside the home, and the provider adds no write path there (the allowances
+are the kernel's to send). An agent that commits runs in `full` mode.
+
+Also by design: the agent's messaging key (`.aw/signing.key`) stays readable, since `aw`
+signs with it. A sandboxed agent can read, and so use, its own key; it cannot replace it.
+
+`oats readiness` reports a home as sandboxed (`session-provider-sandboxed`) only where its
+settings hold the sandbox block, the deny of bb's directory-move tool and the switch. A
+file with some of the keys and not all says so (`session-provider-sandbox-incomplete`): the
+home's agent can write that file, and the next launch rewrites it.
+
 **bb's Claude, not the launch's.** A bb thread's Claude loads the home's own settings,
 hooks, skills and `CLAUDE.md` (bb starts it in the home), and beside them the **user
 settings and hooks of the Claude configuration bb's server runs with**. It runs on **the
@@ -234,7 +302,7 @@ arguments or a process environment:
 - A launch argument other than `--permission-mode auto|acceptEdits|bypassPermissions` is
   refused, by name: `E_BACKEND_LAUNCH_ARG`. Nothing is dropped silently.
 - A launch that is not in bb's full mode: `E_BACKEND_SANDBOXED_MODE`, before any effect
-  (after the launch input's own checks), until the provider's next change brings the deny set (above).
+  (after the launch input's own checks): bb homes run in full mode only (above).
 - A launch environment entry that comes from a secret (a launch configuration's `fromEnv`
   or `fromFile`) is refused, by name: `E_BACKEND_LAUNCH_ENV`. The environment travels in
   `.claude/settings.local.json`, and no secret is written there. Give bb's server the
@@ -269,20 +337,21 @@ followed by the PATH the kernel ran the provider with.
 key of `.claude/settings.local.json` anew from the launch input and never reads what it
 held: a variable an earlier launch carried and this one does not is gone, and so is an
 entry you added under `env` yourself. Put a variable of your own in the launch
-configuration instead. Every other key of the file (`permissions`, and whatever else
-Claude Code or you keep there) is left as it is. The provider keeps nothing of its own in
+configuration instead. Every key of the file that is not one of the provider's four
+(above) is left as it is. The provider keeps nothing of its own in
 the home: no record, no state directory. What an earlier version kept there (`.oats-bb/`,
 `.oats-bb-sandbox.json`) is deleted, unread, at the home's next start, on any backend, or
 at its retire (best effort: a name that cannot be deleted holds nothing up).
 
 **Leaving bb.** When a home that ran on bb starts on another backend (`--backend tmux`),
-the capability's launch hook removes the provider's two keys from
-`.claude/settings.local.json` (`env` and `sandbox`). It does so only on the kernel's word
+the capability's launch hook removes the provider's four keys from
+`.claude/settings.local.json` (`env`, `sandbox`, `permissions.deny` and
+`permissions.blockWritesOutsideWorkingDirectories`). It does so only on the kernel's word
 that the home ran on bb before (`OATS_PREVIOUS_BACKEND=bb` in the hook's environment):
 nothing in the home decides it, so a home that never ran on bb keeps its own `env`. A
 kernel that does not say removes nothing: the launch environment of the home's last bb
-launch then stays in the file, to be removed by hand, and the hook says so only where a
-`sandbox` block stands there.
+launch then stays in the file, to be removed by hand, and the hook says the keys may be
+stale only where one of the three sandbox keys stands there.
 
 ## Readiness
 

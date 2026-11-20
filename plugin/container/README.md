@@ -61,8 +61,7 @@ It is run by hand and is not part of `ci.sh all`: `real/README.md` says why, and
 join.
 
 ```sh
-KERNEL_REPO=<a clone of the OATS repository> PROVIDER_REPO=<a clone of oats-bb with the provider> \
-  plugin/container/real/run.sh
+KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
 ```
 
 Where the host's Docker DNS forwarder is unreliable, pass a resolver:

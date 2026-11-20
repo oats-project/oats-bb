@@ -16,7 +16,7 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
 REPOSITORY=$(dirname "$PLUGIN")
-KERNEL_REF=${KERNEL_REF:-4ca1444597b0c1c5fedf59229273474c022e7238}
+KERNEL_REF=${KERNEL_REF:-da296359e97eb435f6de561947ef2fdda92c927c}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
 OUT=$HERE/out

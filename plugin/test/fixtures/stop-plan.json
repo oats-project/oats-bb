@@ -68,7 +68,7 @@
     },
     "retiring": false,
     "stopPending": false,
-    "midTask": false
+    "midTask": "unknown"
    },
    {
     "instance": "redesign-ui-lead",

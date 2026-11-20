@@ -17,9 +17,10 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   kernel of oats-project/oats#1991 at 5a9db77014443607131f1ed5def0867dd1597dc0 (0.69.21), the bb
   session provider at 37e9abaf83157cf0cdcfc09022ea0a701dee2a78 (wire 1.3), on 2026-11-20. Each is
   what the kernel printed for a call the plugin made through its own RPC, whole, printed with one
-  space of indentation. Two substitutions and no other edit: the paths (the deployment is
-  `/abs/deployment`, the run's directory `/abs/real`, the container user's home `/abs/home`) and
-  the container's host name (`machine`). bb's thread and project ids, start ids, plan and decision
+  space of indentation. One substitution and no other edit: the paths (the deployment is
+  `/abs/deployment`, the run's directory `/abs/real`, the container user's home `/abs/home`). The
+  recorder would also write the container's host name as `machine`; no answer of this recording
+  held it. bb's thread and project ids, start ids, plan and decision
   revisions, commit ids, times and byte counts are as recorded, and the tests hold them as literals:
   a new recording changes both.
   - `spawn.json`: the spawn of `flaky-ci-2-developer`.

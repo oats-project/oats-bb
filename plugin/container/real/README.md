@@ -26,9 +26,11 @@ mount, no port, no Docker socket, nothing of the host's home. The trees go in th
 artefacts come out to `plugin/container/real/out/` (ignored by git, and its own directory: the other
 tests' `container/out/` is emptied at each of their runs): the run's log is what `run.sh`
 prints, and beside it are the screenshots, `fixtures/` (the recorded answers), `answers/` (two more
-kernel answers kept as evidence), `doctor.txt`, `bb.out` and `mock.out`. It needs the network for
+kernel answers kept as evidence), `doctor.txt` (the provider's readiness), `install.txt` (the
+plugin's install), `bb.out`, `mock.out` and `mock-requests.jsonl` (the model requests), and the
+run's own inputs (`rpc-input.json`, the children's `task-*.md`). It needs the network for
 npm and for the `oats.framework` package (github.com); nothing else leaves the container. A run
-takes about five minutes.
+takes six to eight minutes.
 
 ## Why CI does not run it
 

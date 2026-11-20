@@ -4,14 +4,15 @@
 // draws for an agent that is working, idle, waiting for a person, stopped by OATS, and whose thread
 // was deleted in bb, and for a parent with two children.
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseStatus } from "../../kernel/status";
 import type { Agent, BbThread } from "../../model/types";
 import { view } from "../../model/view";
+import { FIXTURES } from "../support/fake-oats.js";
 
 type Recorded = Record<"working" | "idle" | "needsYou" | "stoppedByOats" | "threadDeleted" | "parentWithTwoChildren", unknown>;
-const recorded = JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/status-recorded.json"), "utf8")) as Recorded;
+const recorded = JSON.parse(readFileSync(join(FIXTURES, "status-recorded.json"), "utf8")) as Recorded;
 
 function agentsOf(state: keyof Recorded): Agent[] {
   const status = parseStatus(recorded[state]);

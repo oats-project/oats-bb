@@ -3,7 +3,7 @@
 // and no other edit:
 //   - paths: the deployment directory is /abs/deployment, the run's own directory /abs/real, and
 //     the container user's home /abs/home;
-//   - the container's host name is "machine".
+//   - the container's host name is "machine" (the kernel's answers recorded so far hold none).
 // Everything else stays as recorded: bb's thread and project ids, start ids, plan and decision
 // revisions, commit ids, times, byte counts. No field is added, removed or reordered.
 import { mkdirSync, writeFileSync } from "node:fs";

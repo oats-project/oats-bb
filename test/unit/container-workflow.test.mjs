@@ -39,3 +39,20 @@ test("the container workflow builds the base from one pinned OATS commit and run
   assert.match(code, />> "\$GITHUB_STEP_SUMMARY"/);
   assert.ok(code.indexOf("GITHUB_STEP_SUMMARY") < code.indexOf("team-image-accept.sh"), "recorded before acceptance, so a failed run shows them too");
 });
+
+test("the container workflow runs only for the image, its tests, the pin and itself, and runs the image's unit tests", () => {
+  const paths = ["container/**", "test/unit/container-*.test.mjs", "bb-version", ".github/workflows/container.yml"];
+  // The whole `on:` block, compared entire: a path added to or dropped from either list, another
+  // trigger or a paths-ignore changes it.
+  const on = code.match(/^on:\n(?:(?: +.*)?\n)+/m)?.[0].replace(/\n+$/, "\n");
+  const list = paths.map((path) => `      - "${path}"\n`).join("");
+  assert.equal(on, `on:\n  pull_request:\n    paths:\n${list}  push:\n    branches: [main]\n    paths:\n${list}  workflow_dispatch:\n`);
+  assert.equal(code.match(/^on:$/gm).length, 1);
+  // A filter that left out this file or the tests would let a change to either go unproven.
+  assert.match(code, /working-directory: oats-bb\n\s+run: node --test test\/unit\/container-\*\.test\.mjs\n/);
+  assert.ok(code.indexOf("node --test test/unit/container-") < code.indexOf("docker build"), "the unit tests run before any image is built");
+  const setup = code.indexOf("actions/setup-node@");
+  assert.ok(setup !== -1 && setup < code.indexOf("node --test test/unit/container-"), "on the Node version the job sets up");
+  // No command of any kind runs before them, so nothing is installed for them.
+  assert.equal(code.match(/^\s*(?:- )?run: (.*)$/m)?.[1], "node --test test/unit/container-*.test.mjs", "the unit tests are the job's first command");
+});

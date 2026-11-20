@@ -181,9 +181,10 @@ bb counts toward the container's limits. Add to `AGENT_MEMORY` and `AGENT_PIDS` 
 
 ## What was run
 
-Each pull request here builds a team image from one pinned commit of the OATS repository,
-builds this image on it, starts it under that commit's Compose files with this fragment,
-and runs that commit's acceptance with `AGENT_CHILD=bb`
+Each pull request here that touches `container/`, the image's unit tests, `bb-version` or
+the workflow itself runs those unit tests, builds a team image from one pinned commit of
+the OATS repository, builds this image on it, starts it under that commit's Compose files
+with this fragment, and runs that commit's acceptance with `AGENT_CHILD=bb`
 ([the workflow](../.github/workflows/container.yml)). It uses no token and no model.
 
 Run by hand on amd64, on an earlier commit of the same OATS change (`e1b23202`): both

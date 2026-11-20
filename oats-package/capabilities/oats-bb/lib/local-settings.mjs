@@ -120,12 +120,17 @@ const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:
 const UNPRINTABLE = /[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 const oneLine = (value, max) => typeof value === "string" && value.length > 0 && value.length <= max && !UNPRINTABLE.test(value);
 const SANDBOX_KEYS = ["domains", "write", "missing", "skipped", "unavailable"];
+// The kernel relays at most 500 characters of a provider's message: what a message
+// quotes is clipped so that the remedy and the counts always arrive.
+const CAUSE_MAX = 240;
+const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 /** The launch input's `sandbox`, as the kernel built it from recorded configuration:
  *
  *    {domains: [{host, capability, setting}], write: [{path, reason}],
- *     missing: [{capability, setting, team, optional}], skipped?: [{capability, reason}]}
+ *     missing: [{capability, setting, team, optional}]}
  *    or {unavailable: "<cause>"} when the kernel could not resolve the configuration.
+ *  (`skipped: [{capability, reason}]` is read if it comes; the kernel does not send it.)
  *
  *  `missing`: what a slot provider's line named and the deployment has no value for (a
  *  team with no recorded service): a host the sandbox would need and cannot be given.
@@ -148,9 +153,10 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
   // An unresolved configuration comes first: beside it nothing else is read (there are no
   // lists to write), whatever else the object holds. Its shape is not final: the cause is
   // a line, or an object with one under `message` or `cause`.
-  if (sandbox.unavailable !== undefined && sandbox.unavailable !== null) {
-    const given = isObject(sandbox.unavailable) ? [sandbox.unavailable.code, sandbox.unavailable.message ?? sandbox.unavailable.cause].filter((part) => oneLine(part, 300)).join(": ") : sandbox.unavailable;
-    return { ...empty, unavailable: oneLine(given, 600) ? given : "no cause given" };
+  // `false` and "" say "resolved": only a cause makes the configuration unavailable.
+  if (sandbox.unavailable !== undefined && sandbox.unavailable !== null && sandbox.unavailable !== false && sandbox.unavailable !== "") {
+    const given = isObject(sandbox.unavailable) ? [sandbox.unavailable.code, sandbox.unavailable.message ?? sandbox.unavailable.cause].filter((part) => oneLine(part, 2_000)).join(": ") : sandbox.unavailable;
+    return { ...empty, unavailable: oneLine(given, 4_000) ? clip(given, CAUSE_MAX) : "no cause given" };
   }
   const unknown = Object.keys(sandbox).find((key) => !SANDBOX_KEYS.includes(key));
   if (unknown !== undefined && sandboxed) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${oneLine(unknown, 60) ? unknown : "(unprintable)"}`);
@@ -210,18 +216,19 @@ function readRecordedMissing(entry) {
 /** "oats.aweb's setting services for team default:acme.aweb.ai". */
 export const describeMissing = (entry) => `${entry.capability}'s ${entry.setting ? `setting ${entry.setting}` : "service"}${entry.team ? ` for team ${entry.team}` : ""}`;
 
-// The kernel relays at most 500 characters of a provider's message: a list of rows is
-// cut to this many, with a count of the rest, so the count and what stands before the
-// list always arrive.
-const LIST_MAX = 220;
+// A list of rows is cut to this many characters, each row to ROW_MAX, with a count of the
+// rest: with the longest sentence that stands before it, the whole stays under the 500
+// characters the kernel relays.
+const LIST_MAX = 150;
+const ROW_MAX = 110;
 /** "a; b; 3 more" for the rows that fit and a count of the rest, some of which (`unnamed`)
  *  have no name that can be shown. */
 export function gapList(rows, unnamed, { describe = describeMissing, noun = ["entry", "entries"] } = {}) {
   const shown = [];
   let length = 0;
   for (const row of rows) {
-    const text = describe(row);
-    // The first row is always named, however long; the rest while they fit.
+    const text = clip(describe(row), ROW_MAX);
+    // The first row is always named (clipped if long); the rest while they fit.
     if (shown.length > 0 && (shown.length >= 16 || length + text.length > LIST_MAX)) break;
     shown.push(text);
     length += text.length + 2;

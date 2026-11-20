@@ -159,7 +159,8 @@ Where the deployment has no value for something a provider's line names (a team 
 aweb service was never recorded), a launch in a sandboxed mode is **refused**
 (`E_BACKEND_SANDBOX_HOST`, naming it; for oats.aweb the remedy is `oats aweb setup`): the agent's
 messaging would be cut off inside the sandbox. A line a provider marks optional never
-refuses; readiness names it. Where the kernel cannot resolve the deployment's
+refuses; the kernel's check before the launch names it (after the launch, the kernel's own
+readiness does; the provider keeps no record of it). Where the kernel cannot resolve the deployment's
 configuration at all, a sandboxed launch is refused too (`E_BACKEND_SANDBOX_UNAVAILABLE`).
 In `full` mode the launch goes on in every one of these cases. The kernel asks the provider
 before every launch (a spawn, a start, and a restart before it stops anything), handing it

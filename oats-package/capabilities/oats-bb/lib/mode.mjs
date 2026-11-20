@@ -58,7 +58,8 @@ export function harnessRefusal(harness) {
 export function sandboxRefusal(mode, allowances) {
   if (mode === "full") return null;
   if (allowances.unavailable !== null) {
-    return { code: "E_BACKEND_SANDBOX_UNAVAILABLE", message: `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts and paths OATS's own commands reach, and the deployment's configuration could not be resolved for it (${allowances.unavailable}). Fix that, or launch in full mode (--yolo)` };
+    // The remedy before the cause: the kernel relays 500 characters.
+    return { code: "E_BACKEND_SANDBOX_UNAVAILABLE", message: `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts and paths OATS's own commands reach, and the deployment's configuration could not be resolved for it. Fix the cause, or launch in full mode (--yolo). Cause: ${allowances.unavailable}` };
   }
   if (allowances.missing.length + allowances.unnamed === 0) return null;
   // The remedy before the list: the kernel relays 500 characters, and the list can be long.

@@ -196,7 +196,9 @@ test("a team id as the kernel writes one (a plus sign, a long name) is named in 
   assert.ok(refused.error.message.includes("ops+eu:acme.aweb.ai; 1 more"));
   assert.ok(refused.error.message.slice(0, 499).includes("oats aweb setup"));
   const long = await launch({ yolo: false, sandbox: { missing: [missing[1]] } });
-  assert.ok(long.error.message.includes(teams[1]));
+  // A name too long for what the kernel relays is clipped, never left out.
+  assert.ok(long.error.message.includes(`for team ${teams[1].slice(0, 60)}`) && long.error.message.endsWith("…"));
+  assert.ok(long.error.message.length < 500);
   assert.equal((await launch({ yolo: true, sandbox: { missing } })).ok, true);
   assert.ok((await check()).result.warnings[0].message.includes("ops+eu:acme.aweb.ai"));
 });
@@ -252,6 +254,11 @@ test("the remedy is the capability's own: oats aweb setup for oats.aweb, the dep
   assert.doesNotMatch(other.error.message, /oats aweb setup/);
   const both = await launch({ yolo: false, sandbox: { missing: [{ capability: "acme.tasks", setting: "url", team: null }, { capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } });
   assert.match(both.error.message, /Run `oats aweb setup` for oats\.aweb's, and record the other settings in the deployment's configuration/);
+  // The longest sentence (two remedies), long rows and rows without a name: all of it, the
+  // count's last word included, inside the 500 characters the kernel relays.
+  const worst = await launch({ yolo: false, sandbox: { missing: [{ capability: "oats.aweb", setting: "s".repeat(250), team: "t".repeat(250) }, ...Array.from({ length: 40 }, (_, i) => ({ capability: i % 2 ? "acme.tasks" : "oats.aweb", setting: "services", team: `team-${i}:acme.aweb.ai` })), "unnamed"] } });
+  assert.ok(worst.error.message.length < 500, String(worst.error.message.length));
+  assert.match(worst.error.message, /…; .*\d+ more \(not all can be shown\)$/);
   // Many rows: the remedy and the count still arrive in the first 500 characters.
   const many = await launch({ yolo: false, sandbox: { missing: Array.from({ length: 40 }, (_, i) => ({ capability: "oats.aweb", setting: "services", team: `team-${i}:acme.aweb.ai` })) } });
   assert.ok(many.error.message.length < 500);
@@ -276,15 +283,25 @@ test("a configuration the kernel could not resolve refuses a launch that would b
   for (const args of [[], ["--permission-mode", "auto"]]) {
     const refused = await launch({ yolo: null, args, sandbox });
     assert.equal(refused.error.code, "E_BACKEND_SANDBOX_UNAVAILABLE");
-    assert.match(refused.error.message, /could not be resolved for it \(the workspace repository could not be read\)/);
+    assert.match(refused.error.message, /could not be resolved for it\. Fix the cause, or launch in full mode \(--yolo\)\. Cause: the workspace repository could not be read$/);
   }
   assert.deepEqual(bb.calls(), []);
   assert.equal(existsSync(join(home, ".claude")), false);
   assert.equal((await launch({ yolo: true, sandbox })).ok, true);
   assert.equal(local().sandbox, undefined);
-  // A cause that cannot be shown is not shown.
+  // A cause that cannot be shown is not shown; a long one is clipped, after the remedy.
   const hidden = await launch({ yolo: false, sandbox: { unavailable: "x\nALL CLEAR" } });
-  assert.match(hidden.error.message, /\(no cause given\)/);
+  assert.match(hidden.error.message, /Cause: no cause given$/);
+  const long = await launch({ yolo: false, sandbox: { unavailable: `E_SOUL_UNKNOWN: ${"x".repeat(900)}` } });
+  assert.ok(long.error.message.length < 500 && long.error.message.endsWith("…"));
+  assert.match(long.error.message, /launch in full mode \(--yolo\)\. Cause: E_SOUL_UNKNOWN: x/);
+  const object = await launch({ yolo: false, sandbox: { unavailable: { code: "E_X", message: "m".repeat(300) } } });
+  assert.match(object.error.message, /Cause: E_X: m+…$/);
+  // `false` and "" say the configuration was resolved: the lists beside them are read.
+  for (const unavailable of [false, ""]) {
+    assert.equal((await launch({ yolo: false, sandbox: { unavailable, domains: [AWEB], write: [], missing: [] } })).ok, true);
+    assert.deepEqual(local().sandbox.network.allowedDomains, ["app.aweb.ai"]);
+  }
 });
 
 // The readiness check of a planned launch: the kernel hands it what the launch would carry.
@@ -331,7 +348,7 @@ test("check, with the planned launch, answers what that launch would be refused 
   // An unresolved configuration is read first, whatever stands beside it, and its cause may be an object.
   const beside = await run({ launch: planned({ sandbox: { unavailable: { code: "E_X", message: "lock unreadable" }, cause: "x", domains: [{ host: "*.evil" }] } }) });
   assert.deepEqual(beside.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_UNAVAILABLE"]);
-  assert.match(beside.result.problems[0].message, /\(E_X: lock unreadable\)/);
+  assert.match(beside.result.problems[0].message, /Cause: E_X: lock unreadable$/);
 });
 
 test("a sandboxed launch that was handed no allowances writes none, and readiness says they are missing", async (t) => {

@@ -53,9 +53,10 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (`E_BACKEND_LAUNCH_ARG`).
 - **launch `sandbox`** (provisional: the kernel's change that sends it is not merged) is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
-  setting, team, optional}], skipped?: [{capability, reason}]}`, built by the kernel from
-  recorded configuration, or `{unavailable: "<cause>"}` when the kernel could not resolve
-  it. A kernel may not send the key yet, and then nothing is written (readiness says the
+  setting, team, optional}]}`, built by the kernel from recorded configuration, or
+  `{unavailable: "<cause>"}` when the kernel could not resolve it (`false` or an empty
+  string there mean it was resolved). A `skipped: [{capability, reason}]` is read and
+  listed by the check if it comes; the kernel does not send it today. A kernel may not send the key yet, and then nothing is written (readiness says the
   allowances are missing).
   - In a sandboxed mode the provider writes exactly the `domains` and `write` entries. An
     entry that is not one exact host or one exact absolute path refuses the launch in
@@ -75,7 +76,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on
   a plain readiness read), it also answers what that launch would be refused for (its
   harness, its arguments, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
-  capabilities and, for a full-mode launch, the gaps, as warnings. Without it, the check
+  capabilities and, for a full-mode launch, the gaps, as warnings (optional rows are named
+  only here: the provider keeps no record of them after a launch). Without it, the check
   can only say, for a home, what its last launch left on record.
 
 ## Codes

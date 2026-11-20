@@ -1,7 +1,7 @@
 // The mode a launch runs in, and what that mode needs of the sandbox: read by the launch
 // and by the readiness check of a planned launch, so both answer the same.
 import { fail } from "./errors.mjs";
-import { describeMissing } from "./local-settings.mjs";
+import { gapList, missingRemedy } from "./local-settings.mjs";
 
 // Claude Code's own permission-mode words, as a launch configuration writes them.
 const PERMISSION_ARG = { auto: "auto", acceptEdits: "accept-edits", bypassPermissions: "full" };
@@ -61,6 +61,6 @@ export function sandboxRefusal(mode, allowances) {
     return { code: "E_BACKEND_SANDBOX_UNAVAILABLE", message: `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts and paths OATS's own commands reach, and the deployment's configuration could not be resolved for it (${allowances.unavailable}). Fix that, or launch in full mode (--yolo)` };
   }
   if (allowances.missing.length + allowances.unnamed === 0) return null;
-  const named = [...allowances.missing.map(describeMissing), ...(allowances.unnamed > 0 ? [`${allowances.unnamed} ${allowances.missing.length > 0 ? "more " : ""}that the launch does not name in a form that can be shown`] : [])];
-  return { code: "E_BACKEND_SANDBOX_HOST", message: `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts OATS's own commands reach, and the deployment records none for ${named.join("; ")}. Run \`oats aweb setup\` to record it, or launch in full mode (--yolo)` };
+  // The remedy before the list: the kernel relays 500 characters, and the list can be long.
+  return { code: "E_BACKEND_SANDBOX_HOST", message: `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts OATS's own commands reach, and the deployment records none for some. ${missingRemedy(allowances.missing)}, or launch in full mode (--yolo). Missing: ${gapList(allowances.missing, allowances.unnamed)}` };
 }

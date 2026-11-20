@@ -210,6 +210,36 @@ function readRecordedMissing(entry) {
 /** "oats.aweb's setting services for team default:acme.aweb.ai". */
 export const describeMissing = (entry) => `${entry.capability}'s ${entry.setting ? `setting ${entry.setting}` : "service"}${entry.team ? ` for team ${entry.team}` : ""}`;
 
+// The kernel relays at most 500 characters of a provider's message: a list of rows is
+// cut to this many, with a count of the rest, so the count and what stands before the
+// list always arrive.
+const LIST_MAX = 220;
+/** "a; b; 3 more" for the rows that fit and a count of the rest, some of which (`unnamed`)
+ *  have no name that can be shown. */
+export function gapList(rows, unnamed, { describe = describeMissing, noun = ["entry", "entries"] } = {}) {
+  const shown = [];
+  let length = 0;
+  for (const row of rows) {
+    const text = describe(row);
+    // The first row is always named, however long; the rest while they fit.
+    if (shown.length > 0 && (shown.length >= 16 || length + text.length > LIST_MAX)) break;
+    shown.push(text);
+    length += text.length + 2;
+  }
+  const rest = rows.length - shown.length + unnamed;
+  if (rest === 0) return shown.join("; ");
+  if (shown.length === 0) return unnamed === rest ? `${rest} ${noun[rest > 1 ? 1 : 0]} that cannot be shown` : `${rest} ${noun[rest > 1 ? 1 : 0]}, too long to list here`;
+  return `${shown.join("; ")}; ${rest} more${unnamed > 0 ? " (not all can be shown)" : ""}`;
+}
+
+/** How a missing host gets recorded. Only oats.aweb has a command for it today. */
+export function missingRemedy(rows) {
+  const aweb = rows.some((row) => row.capability === "oats.aweb"), other = rows.some((row) => row.capability !== "oats.aweb");
+  if (aweb && !other) return "Run `oats aweb setup` to record it";
+  if (aweb) return "Run `oats aweb setup` for oats.aweb's, and record the other settings in the deployment's configuration";
+  return "Record that setting in the deployment's configuration";
+}
+
 function realDirectory(path, what) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return false;

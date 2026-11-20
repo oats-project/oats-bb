@@ -1,7 +1,7 @@
 // launch: one home, one bb project, one bb thread; every refusal before the first effect.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
@@ -65,26 +65,31 @@ test("launch writes the env into .claude/settings.local.json, 0600, before the s
   await run();
   assert.deepEqual(localSettings(home), { env: { OATS_INSTANCE: "dev-a", OATS_INSTANCE_HOME: home } });
   assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o600);
-  assert.equal(statSync(join(home, ".oats-bb/launch-env.json")).mode & 0o777, 0o600);
+  assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".oats-bb")), [], "the provider keeps nothing of its own in the home");
+  assert.deepEqual(readdirSync(join(home, ".claude")), ["settings.local.json"]);
 });
 
-test("launch keeps a person's settings and env entries, and removes what an earlier launch wrote and this one does not carry", async (t) => {
+test("launch keeps a person's other settings, and owns env whole: rewritten from the launch input, whatever it held", async (t) => {
   const { home, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
-  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } }), { mode: 0o644 });
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, env: { MINE: "not kept" } }), { mode: 0o644 });
   await run({ env: [entry("OATS_INSTANCE", "dev-a"), { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "EDITOR", value: "vi", source: "launch-config" }] });
-  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept", OATS_INSTANCE: "dev-a", AWEB_DELIVERY: "session", EDITOR: "vi" } });
+  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { OATS_INSTANCE: "dev-a", AWEB_DELIVERY: "session", EDITOR: "vi" } });
   assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o600, "a wider file is narrowed");
   await run({ env: [entry("OATS_INSTANCE", "dev-a")] });
-  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept", OATS_INSTANCE: "dev-a" } });
+  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { OATS_INSTANCE: "dev-a" } });
+  // An env that is no map at all is the provider's key all the same: replaced.
+  writeFileSync(join(home, ".claude/settings.local.json"), '{"permissions":{"allow":["Bash(ls)"]},"env":"x"}');
+  await run({ env: [entry("OATS_INSTANCE", "dev-a")] });
+  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { OATS_INSTANCE: "dev-a" } });
+  // A launch that carries nothing leaves no env key.
   await run({ env: [] });
-  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] }, env: { MINE: "kept" } });
+  assert.deepEqual(localSettings(home), { permissions: { allow: ["Bash(ls)"] } });
 });
 
 for (const [name, write, pattern] of [
   ["that is not JSON", (home) => writeFileSync(join(home, ".claude/settings.local.json"), "{ nope"), /is not JSON/],
   ["that is not an object", (home) => writeFileSync(join(home, ".claude/settings.local.json"), "[]"), /not a JSON object/],
-  ["whose env is not a map", (home) => writeFileSync(join(home, ".claude/settings.local.json"), '{"env":"x"}'), /"env" that is not a map/],
 ]) {
   test(`a settings.local.json ${name} refuses the launch and is left as it is`, async (t) => {
     const { home, bb, run } = await setup(t);
@@ -181,14 +186,14 @@ test("variables that only pick a model are carried", async (t) => {
   assert.deepEqual(Object.keys(localSettings(home).env).sort(), [...names].sort());
 });
 
-test("a person's own entry under a name the launch carries is the launch's: replaced, and gone with it", async (t) => {
+test("a person's own entry under env is not kept, whatever its name: the key is the provider's", async (t) => {
   const { home, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
-  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { MY_VAR: "persons", OTHER: "kept" } }));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { MY_VAR: "persons", OTHER: "persons" } }));
   await run({ env: [entry("MY_VAR", "launch")] });
-  assert.deepEqual(localSettings(home).env, { MY_VAR: "launch", OTHER: "kept" });
+  assert.deepEqual(localSettings(home).env, { MY_VAR: "launch" });
   await run({ env: [] });
-  assert.deepEqual(localSettings(home).env, { OTHER: "kept" });
+  assert.deepEqual(localSettings(home), {});
 });
 
 test("pathPrepend is carried as the env file's PATH: the shim directory first, then the PATH the provider was called with", async (t) => {
@@ -242,12 +247,12 @@ test("a secret-sourced env entry: E_BACKEND_LAUNCH_ENV naming it, nothing writte
 test("an unset name is written empty: it reaches Claude neither from an earlier entry nor from bb's server environment", async (t) => {
   const { home, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
-  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { AWEB_DELIVERY: "channel", MINE: "kept" } }));
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify({ env: { AWEB_DELIVERY: "channel" } }));
   assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a")], unset: ["AWEB_DELIVERY", "AWID_REGISTRY_URL"] })).ok, true);
-  assert.deepEqual(localSettings(home), { env: { AWEB_DELIVERY: "", MINE: "kept", AWID_REGISTRY_URL: "", OATS_INSTANCE: "dev-a" } });
+  assert.deepEqual(localSettings(home), { env: { AWEB_DELIVERY: "", AWID_REGISTRY_URL: "", OATS_INSTANCE: "dev-a" } });
   // A later launch that no longer unsets them takes the empty entries away again.
   await run({ env: [entry("OATS_INSTANCE", "dev-a")], unset: [] });
-  assert.deepEqual(localSettings(home), { env: { MINE: "kept", OATS_INSTANCE: "dev-a" } });
+  assert.deepEqual(localSettings(home), { env: { OATS_INSTANCE: "dev-a" } });
 });
 
 for (const [name, env, pattern] of [
@@ -681,7 +686,6 @@ test("a settings write the disk refuses after the previous thread was archived i
   const { home, backend, bb, input } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } } });
   // The file the launch must replace cannot be replaced: its directory takes no new entry.
   mkdirSync(join(home, ".claude"));
-  mkdirSync(join(home, ".oats-bb"));
   chmodSync(join(home, ".claude"), 0o500);
   t.after(() => { try { chmodSync(join(home, ".claude"), 0o700); } catch { /* the scratch directory is already gone */ } });
   const run = await rawLaunch(bb, backend, input({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } }));
@@ -694,31 +698,33 @@ test("a settings write the disk refuses after the previous thread was archived i
 test("the same failure with nothing changed in bb is a refusal, and the home is left as it was", { skip: process.getuid?.() === 0 ? "root writes anywhere" : false }, async (t) => {
   const { home, bb, run } = await setup(t);
   mkdirSync(join(home, ".claude"));
-  mkdirSync(join(home, ".oats-bb"));
   chmodSync(join(home, ".claude"), 0o500);
   t.after(() => { try { chmodSync(join(home, ".claude"), 0o700); } catch { /* the scratch directory is already gone */ } });
   const answer = await run();
   assert.equal(answer.ok, false);
   assert.equal(effects(bb).includes("thread spawn"), false);
-  assert.deepEqual(readdirSync(join(home, ".oats-bb")), [], "no record of a launch that did not happen");
+  assert.deepEqual(readdirSync(join(home, ".claude")), [], "nothing is left of a write that did not happen");
 });
 
-// The launch's files in the home are read by the confined read before anything is changed.
+// What an earlier version of the provider kept in the home is never read: whatever stands
+// under those names (the home is its agent's to write), a launch is not held by it.
 for (const [name, plant] of [
-  ["a record that is a directory", (home) => mkdirSync(join(home, ".oats-bb/launch.json"), { recursive: true })],
-  ["a record larger than the provider reads", (home) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(home, ".oats-bb/launch.json"), "x".repeat(1024 * 1024 + 1)); }],
-  ["a record that is a link out of the home", (home, dir) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(dir, "outside"), "{}"); symlinkSync(join(dir, "outside"), join(home, ".oats-bb/launch-env.json")); }],
-  ["a record that is a pipe", (home) => { mkdirSync(join(home, ".oats-bb")); execFileSync("mkfifo", [join(home, ".oats-bb/launch.json")]); }],
+  ["a directory", (home) => mkdirSync(join(home, ".oats-bb/launch.json"), { recursive: true })],
+  ["larger than a megabyte", (home) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(home, ".oats-bb/launch.json"), "x".repeat(1024 * 1024 + 1)); }],
+  ["a link out of the home", (home, dir) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(dir, "outside"), "{}"); symlinkSync(join(dir, "outside"), join(home, ".oats-bb/launch-env.json")); }],
+  ["a pipe", (home) => { mkdirSync(join(home, ".oats-bb")); execFileSync("mkfifo", [join(home, ".oats-bb/launch.json")]); }],
+  ["itself a link to a directory outside the home", (home, dir) => { mkdirSync(join(dir, "kept")); writeFileSync(join(dir, "kept/file"), "x"); symlinkSync(join(dir, "kept"), join(home, ".oats-bb")); }],
 ]) {
-  test(`${name} refuses the launch before bb is changed: it is not read whole, followed or waited on`, async (t) => {
-    const { dir, home, backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } } });
+  test(`an old record of the provider that is ${name} is not read, followed or waited on: the launch goes on and removes it`, async (t) => {
+    const { dir, home, run } = await setup(t);
     plant(home, dir);
     const started = Date.now();
-    const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
-    assert.equal(answer.error.code, "E_SESSION_START_FAILED");
-    assert.match(answer.error.message, /is not a regular file|is larger than 1048576 bytes/);
-    assert.deepEqual(effects(bb), [], "nothing was stopped or archived");
+    assert.equal((await run()).ok, true);
     assert.ok(Date.now() - started < 8000);
+    assert.equal(lstatSync(join(home, ".oats-bb"), { throwIfNoEntry: false }), undefined);
+    // Only the name in the home goes: what a link pointed at is not the provider's.
+    if (existsSync(join(dir, "outside"))) assert.equal(readFileSync(join(dir, "outside"), "utf8"), "{}");
+    if (existsSync(join(dir, "kept"))) assert.deepEqual(readdirSync(join(dir, "kept")), ["file"]);
   });
 }
 

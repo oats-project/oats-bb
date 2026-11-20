@@ -9,19 +9,15 @@
 //   the launch, which are the ones OATS's own messaging, knowledge, tasks and events need.
 //   Claude Code adds them to bb's own sandbox settings; they never replace a restriction.
 //
-// The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
-// and later removes exactly that. An entry a person put in the file under another name is
-// never touched; a name the launch carries is the launch's.
+// In a bb home these two keys are the provider's, whole: every launch rewrites them from
+// the launch input and never reads what they held, and no record of them is kept in the
+// home, which its agent can write. Every other key of the file is left as it is.
 import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
 import { ProviderError, fail, isObject } from "./errors.mjs";
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const STATE_DIR = ".oats-bb";
-const ENV_RECORD = join(STATE_DIR, "launch-env.json");
-const LAUNCH_RECORD = join(STATE_DIR, "launch.json");
-const SANDBOX_RECORD = ".oats-bb-sandbox.json";
 
 // Where a launch env entry may come from and still be written to a file: the kernel, a
 // capability's hook (which must not return a secret) or a launch configuration's literal.
@@ -148,7 +144,7 @@ const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).repla
  *  launch that will run in bb's sandbox must understand everything it is told (an unknown
  *  key, a `missing` that is no list refuse it). A full-mode launch writes nothing, so it is
  *  never refused for what this object holds: the two lists are not read at all, and the
- *  gaps are read only to be recorded for readiness. A row that cannot be named is still a
+ *  gaps are read only to be named by the check of that launch. A row that cannot be named is still a
  *  gap: counted, never dropped. */
 export function readSandbox(sandbox, { sandboxed = true } = {}) {
   const empty = { domains: [], write: [], missing: [], otherTeams: [], optional: [], unnamed: 0, unnamedOptional: 0, unavailable: null, skipped: [], unnamedSkipped: 0 };
@@ -214,18 +210,6 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
   return { domains, write, missing, otherTeams, optional, unnamed, unnamedOptional, unavailable: null, skipped, unnamedSkipped };
 }
 
-// A team id as the kernel writes one, and a setting key: what a record in the home must
-// look like to be shown (the home is writable by its agent).
-const RECORDED_WORD = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,255}$/;
-/** One `missing` entry read back from the home's record. → the entry, or null. */
-function readRecordedMissing(entry) {
-  if (!isObject(entry) || typeof entry.capability !== "string" || !CAPABILITY_ID.test(entry.capability)) return null;
-  for (const key of ["setting", "team"]) {
-    if (entry[key] !== undefined && entry[key] !== null && (typeof entry[key] !== "string" || !RECORDED_WORD.test(entry[key]))) return null;
-  }
-  return { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
-}
-
 /** "oats.aweb's setting services for team default:acme.aweb.ai". */
 export const describeMissing = (entry) => `${entry.capability}'s ${entry.setting ? `setting ${entry.setting}` : "service"}${entry.team ? ` for team ${entry.team}` : ""}`;
 
@@ -267,11 +251,12 @@ function realDirectory(path, what) {
   return true;
 }
 
-/** Write a file whole or not at all, owner-only. The temporary file lives in the
- *  provider's own state directory (declared disposable), so a write killed before its
- *  rename leaves nothing that reads as the instance's work. */
-function writeAtomic(home, path, text) {
-  const tmp = join(home, STATE_DIR, `${randomBytes(6).toString("hex")}.tmp`);
+/** Write a file whole or not at all, owner-only. The temporary file lives beside the
+ *  target, in the home's `.claude` (a real directory: the callers checked), under a name
+ *  of the provider's own, so a write killed before its rename leaves one stray file there
+ *  and nothing in the agent's work. The provider keeps no directory of its own in the home. */
+function writeAtomic(path, text) {
+  const tmp = join(dirname(path), `.settings.local.json.oats-bb-${randomBytes(6).toString("hex")}.tmp`);
   try {
     writeFileSync(tmp, text, { mode: 0o600, flag: "wx" });
     chmodSync(tmp, 0o600);
@@ -281,7 +266,7 @@ function writeAtomic(home, path, text) {
     throw error;
   }
 }
-const writeJson = (home, path, doc) => writeAtomic(home, path, `${JSON.stringify(doc, null, 2)}\n`);
+const writeJson = (path, doc) => writeAtomic(path, `${JSON.stringify(doc, null, 2)}\n`);
 
 const READ_MAX = 1024 * 1024;
 
@@ -368,252 +353,117 @@ function readJsonObject(path, what, options) {
   return doc;
 }
 
-const strings = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
-
-/** Whether the provider ever launched this home: its state directory is made by the first
- *  launch and stays (a move to another backend removes its records, not the directory). */
-export function everLaunched(home) {
-  return lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false })?.isDirectory() === true;
-}
-
-/** The mode of the home's last launch, whether it was handed sandbox allowances, and what
- *  the deployment lacked for them; or null before a first launch. */
-export function readLaunchRecord(home) {
-  if (!everLaunched(home)) return null;
-  const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
-  if (record === null) return null;
-  const recorded = Array.isArray(record.missing) ? record.missing : [];
-  const missing = recorded.map(readRecordedMissing).filter(Boolean);
-  const recordedTeams = Array.isArray(record.otherTeams) ? record.otherTeams : [];
-  const otherTeams = recordedTeams.map(readRecordedMissing).filter(Boolean);
-  return {
-    mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
-    missing,
-    // What the record holds and cannot be shown: entries that are not a capability id with
-    // a plain setting and team, and what the launch itself could not name.
-    unnamed: recorded.length - missing.length + (Number.isInteger(record.unnamed) && record.unnamed > 0 ? record.unnamed : 0),
-    otherTeams, unnamedOtherTeams: recordedTeams.length - otherTeams.length,
-  };
-}
-
 export const isExactHost = (value) => typeof value === "string" && HOST.test(value);
 export const isExactPath = (value) => typeof value === "string" && isAbsolute(value) && normalize(value) === value && value !== "/" && !/[*?\x00-\x1f\x7f]/.test(value);
-// A path as it may be shown from a file in the home: letters, digits and . _ - @ + between slashes.
-const PLAIN_PATH = /^(\/[A-Za-z0-9._@+-]{1,120}){1,30}$/;
 
-/** What the home's sandbox allowances are now, for readiness to show: the entries of the
- *  provider's record that are well formed AND are in settings.local.json's two lists at
- *  this moment. The record and the file sit in the home, which a sandboxed agent can
- *  write: neither is taken at its word. `mismatch` counts what the record claims and the
- *  file does not hold, or what is not a host, a path or a capability name at all. */
-export function currentSandbox(home) {
-  const record = readSandboxRecord(home);
-  if (record === null) return { domains: [], write: [], mismatch: 0 };
-  // The file is read only inside a `.claude` that is a real directory of the home, as a
-  // launch requires: a link there would take the read out of the home.
-  const settings = realDirectory(join(home, ".claude"), "the home's") ? readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {} : {};
-  const listAt = (keys) => { let at = settings; for (const key of keys) at = isObject(at) ? at[key] : undefined; return strings(at); };
-  const allowedDomains = listAt(DOMAINS_KEYS), allowWrite = listAt(WRITE_KEYS);
-  const domains = record.domains.filter((entry) => isExactHost(entry.host) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && allowedDomains.includes(entry.host))
-    .map((entry) => ({ host: entry.host, capability: entry.capability, setting: typeof entry.setting === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(entry.setting) ? entry.setting : null }));
-  // A path is shown only if it is one plainly: what stands in the home is its agent's to
-  // write, and a line of text there must not reach a person as the provider's word.
-  const write = record.write.filter((entry) => isExactPath(entry.path) && PLAIN_PATH.test(entry.path) && allowWrite.includes(entry.path))
-    // The reason beside a path is free text from a file in the home: never relayed.
-    .map((entry) => ({ path: entry.path }));
-  return { domains, write, mismatch: record.domains.length - domains.length + record.write.length - write.length };
-}
-
-/** The record of the sandbox entries this provider added: the launch's list (who asked
- *  for what, for readiness to show) and exactly which entries and keys it put in. */
-export function readSandboxRecord(home) {
-  const record = readJsonObject(join(home, SANDBOX_RECORD), "the provider's sandbox record", { inHome: true });
-  if (record === null) return null;
-  return {
-    domains: Array.isArray(record.domains) ? record.domains.filter(isObject) : [],
-    write: Array.isArray(record.write) ? record.write.filter(isObject) : [],
-    added: { domains: strings(record.added?.domains), write: strings(record.added?.write), keys: strings(record.added?.keys) },
-  };
-}
-
-// The two lists, as paths of keys in settings.local.json.
-const DOMAINS_KEYS = ["sandbox", "network", "allowedDomains"];
-const WRITE_KEYS = ["sandbox", "filesystem", "allowWrite"];
-
-/** Take `values` out of the list at `keys`, then delete the list and its parents where
- *  the provider created them (`created`, dotted paths) and they are now empty. */
-function removeFrom(settings, keys, values, created) {
-  const chain = [settings];
-  for (const key of keys) {
-    const at = chain[chain.length - 1];
-    // Whatever stands where a map belonged (a null, a string) holds nothing of ours.
-    if (!isObject(at) || at[key] === undefined) return;
-    chain.push(at[key]);
+// What an earlier version of the provider kept in the home: a state directory and a
+// record. The provider keeps nothing of its own there now (the home is its agent's to
+// write, so a file in it must never decide what the provider writes or deletes): a launch
+// and the move-away hook delete them where they are found, unread.
+const LEFTOVERS = [".oats-bb", ".oats-bb-sandbox.json"];
+export function removeLeftovers(home) {
+  for (const name of LEFTOVERS) {
+    const stat = lstatSync(join(home, name), { throwIfNoEntry: false });
+    if (stat) rmSync(join(home, name), { recursive: stat.isDirectory(), force: true });
   }
-  const list = chain[chain.length - 1];
-  if (!Array.isArray(list)) return;
-  const kept = list.filter((item) => !values.includes(item));
-  chain[chain.length - 2][keys[keys.length - 1]] = kept;
-  for (let depth = keys.length; depth >= 1; depth -= 1) {
-    const value = chain[depth - 1][keys[depth - 1]];
-    const empty = Array.isArray(value) ? value.length === 0 : isObject(value) && Object.keys(value).length === 0;
-    if (!empty || !created.includes(keys.slice(0, depth).join("."))) break;
-    delete chain[depth - 1][keys[depth - 1]];
-  }
-}
-
-/** Add `values` to the list at `keys`. → what was added: the values not already there,
- *  and the keys that had to be created (dotted paths). */
-function addTo(settings, keys, values, file) {
-  if (values.length === 0) return { values: [], keys: [] };
-  const addedKeys = [];
-  let at = settings;
-  keys.forEach((key, depth) => {
-    const last = depth === keys.length - 1;
-    if (at[key] === undefined) { at[key] = last ? [] : {}; addedKeys.push(keys.slice(0, depth + 1).join(".")); }
-    else if (last ? !Array.isArray(at[key]) : !isObject(at[key])) {
-      throw fail("E_SESSION_START_FAILED", `Claude's local settings ${file} has a "${keys.slice(0, depth + 1).join(".")}" that is not ${last ? "a list" : "a map"}: fix or remove it; the provider does not overwrite it`);
-    }
-    at = at[key];
-  });
-  const added = values.filter((value) => !at.includes(value));
-  at.push(...added);
-  return { values: added, keys: addedKeys };
 }
 
 function directories(home, { create }) {
   if (!statSync(home, { throwIfNoEntry: false })?.isDirectory()) throw fail("E_SESSION_START_FAILED", `the home ${home} is not a directory`);
-  const claudeDir = join(home, ".claude"), stateDir = join(home, STATE_DIR);
-  const hasClaude = realDirectory(claudeDir, "the home's"), hasState = realDirectory(stateDir, "the provider's state directory");
+  const claudeDir = join(home, ".claude");
+  const hasClaude = realDirectory(claudeDir, "the home's");
   if (create && !hasClaude) mkdirSync(claudeDir, { mode: 0o700 });
-  if (create && !hasState) mkdirSync(stateDir, { mode: 0o700 });
-  return { settingsPath: join(claudeDir, "settings.local.json"), envRecordPath: join(home, ENV_RECORD), sandboxRecordPath: join(home, SANDBOX_RECORD), hasClaude, hasState };
+  return { settingsPath: join(claudeDir, "settings.local.json"), hasClaude };
 }
 
-function readSettingsFile(settingsPath) {
-  const settings = readJsonObject(settingsPath, "Claude's local settings") ?? {};
-  if (settings.env !== undefined && !isObject(settings.env)) throw fail("E_SESSION_START_FAILED", `Claude's local settings ${settingsPath} has an "env" that is not a map: fix or remove it; the provider does not overwrite it`);
+/** What `settings.local.json` holds, to keep every key that is not the provider's. A
+ *  file that is not a regular file, larger than the provider reads, or not a JSON object
+ *  refuses: the provider does not overwrite what it cannot read. What its own two keys
+ *  hold is never looked at: they are replaced whole, whatever stands there. */
+const readOthers = (settingsPath) => readJsonObject(settingsPath, "Claude's local settings") ?? {};
+
+/** Put the provider's keys into `settings`, replacing whatever they held: `env` whole and
+ *  `sandbox` whole. A key with nothing to hold is removed. Every other key stays. */
+function own(settings, { env, sandbox }) {
+  if (env && Object.keys(env).length > 0) settings.env = env; else delete settings.env;
+  if (sandbox) settings.sandbox = sandbox; else delete settings.sandbox;
   return settings;
 }
 
-/** Take out of `settings` everything the records say this provider put in. */
-function withdraw(settings, envNames, sandboxRecord) {
-  if (isObject(settings.env)) {
-    for (const name of envNames) delete settings.env[name];
-  }
-  if (sandboxRecord) {
-    removeFrom(settings, DOMAINS_KEYS, sandboxRecord.added.domains, sandboxRecord.added.keys);
-    removeFrom(settings, WRITE_KEYS, sandboxRecord.added.write, sandboxRecord.added.keys);
-  }
+/** The `sandbox` block of a sandboxed launch: exactly the hosts and paths the kernel
+ *  handed it, or null when there is none of either. */
+function sandboxBlock(sandbox) {
+  if (sandbox === null) return null;
+  const domains = [...new Set(sandbox.domains.map((entry) => entry.host))], write = [...new Set(sandbox.write.map((entry) => entry.path))];
+  const block = {};
+  if (domains.length > 0) block.network = { allowedDomains: domains };
+  if (write.length > 0) block.filesystem = { allowWrite: write };
+  return Object.keys(block).length > 0 ? block : null;
 }
 
-/** What a launch writes in the home, as it stands now: Claude's local settings and the
- *  provider's records, read by the confined read (a name that is no regular file, or a
- *  file too large, refuses here, before anything is changed). → restore(): puts every one
- *  of them back as it was (its bytes and mode, or its absence), and removes a directory
- *  the launch made. For a launch that ends in a refusal after it wrote them: a refusal
- *  means nothing was changed. Taken before the launch changes anything in bb. */
+/** Claude's local settings as they stand now, read by the confined read (a name that is
+ *  no regular file, or a file too large, refuses here, before anything is changed).
+ *  → restore(): puts the file back as it was (its bytes and mode, or its absence), and
+ *  removes a `.claude` the launch made. For a launch that ends in a refusal after it wrote
+ *  the file: a refusal means nothing was changed. Taken before the launch changes
+ *  anything in bb. */
 export function snapshotLaunchSettings(home) {
-  const dirs = [join(home, ".claude"), join(home, STATE_DIR)].map((dir) => ({ dir, was: realDirectory(dir, "the launch's directory") }));
-  const before = [
-    [join(home, ".claude", "settings.local.json"), "Claude's local settings", {}],
-    [join(home, ENV_RECORD), "the provider's record", {}],
-    [join(home, LAUNCH_RECORD), "the provider's launch record", {}],
-    [join(home, SANDBOX_RECORD), "the provider's sandbox record", { inHome: true }],
-  ].map(([path, what, options]) => ({ path, was: readHomeBytes(path, what, options) }));
+  const claudeDir = join(home, ".claude");
+  const hadDir = realDirectory(claudeDir, "the home's");
+  const path = join(claudeDir, "settings.local.json");
+  const was = hadDir ? readHomeBytes(path, "Claude's local settings") : null;
   return () => {
-    for (const { path, was } of before) {
-      if (was === null) rmSync(path, { force: true });
-      else { writeFileSync(path, was.bytes, { mode: was.mode }); chmodSync(path, was.mode); }
-    }
-    for (const { dir, was } of dirs) {
-      if (was) continue;
-      try { rmdirSync(dir); } catch { /* not empty, or not there: left as it is */ }
+    if (was === null) rmSync(path, { force: true });
+    else { writeFileSync(path, was.bytes, { mode: was.mode }); chmodSync(path, was.mode); }
+    if (!hadDir) {
+      try { rmdirSync(claudeDir); } catch { /* not empty, or not there: left as it is */ }
     }
   };
 }
 
-/** Write a launch's settings into `<home>/.claude/settings.local.json` (0600): the env
- *  (minus `unset`), and, unless `sandbox` is null (bb's full mode has no sandbox), the
- *  sandbox allowances. Every other key is kept, and every entry under a name the launch
- *  does not carry; a name it carries is the launch's (a person's entry of that name is
- *  replaced). What an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], unnamed = 0, otherTeams = [], dryRun = false }) {
-  const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
-  const settings = readSettingsFile(settingsPath);
-  const envRecord = everLaunched(home) ? readJsonObject(envRecordPath, "the provider's record") : null;
-  const previousNames = strings(envRecord?.names);
-  const previousSandbox = readSandboxRecord(home);
+/** Write a launch's settings into `<home>/.claude/settings.local.json` (0600).
+ *
+ *  Two keys of that file are the provider's in a bb home, whole: `env` (the launch
+ *  environment, minus `unset`) and `sandbox` (the allowances of a sandboxed launch). Every
+ *  launch rewrites them from the launch input and never reads what they held: the home is
+ *  its agent's to write, so what stands there proves nothing, and the provider keeps no
+ *  record of its own in the home. A person's own entries under those two keys are not
+ *  kept. In bb's full mode there is no sandbox: `sandbox` is removed. Every other key is
+ *  kept as it is. */
+export function writeLaunchSettings(home, { env, unset = [], sandbox, dryRun = false }) {
+  const { settingsPath } = directories(home, { create: !dryRun });
+  const settings = readOthers(settingsPath);
   env = { ...Object.fromEntries(unset.map((name) => [name, ""])), ...env };
-  const names = Object.keys(env).sort();
-
-  withdraw(settings, previousNames, previousSandbox);
-  if (names.length > 0) settings.env = { ...(settings.env ?? {}), ...env };
-  else if (isObject(settings.env) && Object.keys(settings.env).length === 0) delete settings.env;
-  let sandboxRecord = null;
-  if (sandbox !== null && (sandbox.domains.length > 0 || sandbox.write.length > 0)) {
-    const domains = addTo(settings, DOMAINS_KEYS, [...new Set(sandbox.domains.map((entry) => entry.host))], settingsPath);
-    const write = addTo(settings, WRITE_KEYS, [...new Set(sandbox.write.map((entry) => entry.path))], settingsPath);
-    // Keys the provider created on an earlier launch are still the provider's.
-    const keys = [...new Set([...domains.keys, ...write.keys, ...(previousSandbox?.added.keys ?? []).filter((key) => hasKey(settings, key))])];
-    sandboxRecord = { domains: sandbox.domains, write: sandbox.write, added: { domains: domains.values, write: write.values, keys } };
-  }
-
-  // A dry run has done everything that can refuse (a file that is not what it should be),
-  // and writes nothing: the launch runs it before its first effect.
-  if (dryRun) return { path: settingsPath, names, sandbox: sandboxRecord };
-
-  // The records first, covering what was there and what will be: a launch cut short
-  // between the writes leaves no entry of ours that a later one would take for a person's.
-  writeJson(home, envRecordPath, { names: [...new Set([...previousNames, ...names])].sort() });
-  if (sandboxRecord || previousSandbox) {
-    writeJson(home, sandboxRecordPath, {
-      domains: sandboxRecord?.domains ?? [], write: sandboxRecord?.write ?? [],
-      added: {
-        domains: [...new Set([...(previousSandbox?.added.domains ?? []), ...(sandboxRecord?.added.domains ?? [])])],
-        write: [...new Set([...(previousSandbox?.added.write ?? []), ...(sandboxRecord?.added.write ?? [])])],
-        keys: [...new Set([...(previousSandbox?.added.keys ?? []), ...(sandboxRecord?.added.keys ?? [])])],
-      },
-    });
-  }
-  writeJson(home, settingsPath, settings);
-  writeJson(home, envRecordPath, { names });
-  if (sandboxRecord) writeJson(home, sandboxRecordPath, sandboxRecord);
-  else rmSync(sandboxRecordPath, { force: true });
-  // What readiness needs to say of this home's sandbox: the mode it runs in, and whether
-  // the kernel handed the launch any allowances at all.
-  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing, unnamed, otherTeams });
-  return { path: settingsPath, names, sandbox: sandboxRecord };
+  own(settings, { env, sandbox: sandboxBlock(sandbox) });
+  // A dry run has done everything that can refuse (a home, a .claude or a file that is not
+  // what it should be), and writes nothing: the launch runs it before its first effect.
+  if (dryRun) return { path: settingsPath, names: Object.keys(env).sort() };
+  writeJson(settingsPath, settings);
+  removeLeftovers(home);
+  return { path: settingsPath, names: Object.keys(env).sort() };
 }
 
-function hasKey(settings, dotted) {
-  let at = settings;
-  for (const key of dotted.split(".")) {
-    if (!isObject(at) || at[key] === undefined) return false;
-    at = at[key];
+/** Whether Claude's local settings in the home hold a `sandbox` block now. Read for one
+ *  thing only, what a warning says: it decides nothing the provider writes or deletes.
+ *  → true | false, false when unreadable. */
+export function holdsSandboxKey(home) {
+  try {
+    if (!realDirectory(join(home, ".claude"), "the home's")) return false;
+    return (readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {}).sandbox !== undefined;
+  } catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return false;
   }
-  return true;
 }
 
-/** The home is no longer a provider home (it starts on another backend): take out of
- *  settings.local.json exactly what the provider wrote, and drop the records. → whether
- *  anything was there to remove. */
+/** The home ran on bb before this launch and now starts on another backend (the kernel
+ *  says so, from its own record outside the home): take the provider's two keys out of
+ *  settings.local.json. Nothing in the home decides this: the caller removes only on the
+ *  kernel's word. */
 export function removeLaunchSettings(home) {
-  // A home the provider never wrote to has nothing of its to remove, whatever its .claude is.
-  if (!everLaunched(home) && !lstatSync(join(home, SANDBOX_RECORD), { throwIfNoEntry: false })) return false;
-  const { settingsPath, envRecordPath, sandboxRecordPath, hasClaude, hasState } = directories(home, { create: false });
-  const envRecord = hasState ? readJsonObject(envRecordPath, "the provider's record") : null;
-  const sandboxRecord = readSandboxRecord(home);
-  if (envRecord === null && sandboxRecord === null) return false;
+  const { settingsPath, hasClaude } = directories(home, { create: false });
   if (hasClaude && lstatSync(settingsPath, { throwIfNoEntry: false })) {
-    const settings = readSettingsFile(settingsPath);
-    withdraw(settings, strings(envRecord?.names), sandboxRecord);
-    if (isObject(settings.env) && Object.keys(settings.env).length === 0) delete settings.env;
-    if (!hasState) mkdirSync(join(home, STATE_DIR), { mode: 0o700 });
-    writeJson(home, settingsPath, settings);
+    writeJson(settingsPath, own(readOthers(settingsPath), { env: null, sandbox: null }));
   }
-  rmSync(envRecordPath, { force: true });
-  rmSync(sandboxRecordPath, { force: true });
-  rmSync(join(home, LAUNCH_RECORD), { force: true });
-  return true;
+  removeLeftovers(home);
 }

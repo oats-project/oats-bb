@@ -353,7 +353,7 @@ test("a stop with no endpoint and a bb that does not answer: E_SESSION_STOP_FAIL
 // The retire hook: the kernel runs it after its own stop, with the hook environment.
 async function retireWith(t, script, { launched = true } = {}) {
   const { dir, home } = scratch(t);
-  if (launched) mkdirSync(join(home, ".oats-bb")); // the provider's state directory: its first launch makes it
+  if (launched) mkdirSync(join(home, ".oats-bb")); // what an earlier version of the provider kept in the home: it decides nothing now
   // A thread that stops when asked, unless the test says otherwise: a retire archives only what it has seen stopped.
   const bb = fakeBbIn(dir, { "thread stop": { stdout: { ok: true } }, "thread show": show("idle"), ...(typeof script === "function" ? script(home) : script) });
   const run = await runBin(["retire-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
@@ -466,7 +466,7 @@ test("retire with nothing to archive is a complete cleanup (a home that never la
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
 });
 
-test("retire of a home with no state directory still asks bb: a home's agent can remove the directory, its threads stay", async (t) => {
+test("retire asks bb for every home, whatever the home holds: nothing in it says which backend it ran on", async (t) => {
   const { last, calls } = await retireWith(t, (home) => ({
     "project list": { stdout: [projectRow("proj_a", home)] },
     "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] },
@@ -476,30 +476,30 @@ test("retire of a home with no state directory still asks bb: a home's agent can
   assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived"], "a settled thread is stopped too: bb keeps an archived thread's process otherwise");
 });
 
-test("retire of a home the provider shows no sign of having launched (a tmux home): a bb that cannot be asked is no warning", async (t) => {
+test("retire of any home (a tmux home too) warns when bb cannot be asked, and says nothing when bb holds nothing of it", async (t) => {
   const { run, last } = await retireWith(t, { "project list": UNREACHABLE }, { launched: false });
   assert.equal(run.status, 0);
-  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
+  assert.deepEqual(last.meta, { archived: [], unchecked: true });
+  assert.match(last.warning, /were not archived: .*session-provider-orphaned/);
   const none = await retireWith(t, (home) => ({ "project list": { stdout: [projectRow("proj_z", `${home}-other`)] }, "thread list": { stdout: [] } }), { launched: false });
   assert.deepEqual(none.last, { meta: { retired: false, reason: "nothing-to-delete" } });
 });
 
-test("a malformed setting does not fail a retire: a tmux home says nothing, a bb home gets the warning", async (t) => {
-  const { dir, home } = scratch(t);
+test("a malformed setting does not fail a retire: the home gets the warning, whatever it holds", async (t) => {
+  const { home } = scratch(t);
   const env = { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "bin/bb" }) };
-  const tmuxHome = await runBin(["retire-hook"], { env });
-  assert.equal(tmuxHome.status, 0);
-  assert.deepEqual(JSON.parse(tmuxHome.stdout), { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
-  mkdirSync(join(home, ".oats-bb"));
-  const bbHome = await runBin(["retire-hook"], { env });
-  assert.equal(bbHome.status, 0);
-  assert.match(JSON.parse(bbHome.stdout).warning, /settings\.oats\.bb\.cli/);
-  assert.equal(dir.length > 0, true);
+  for (const old of [false, true]) {
+    if (old) mkdirSync(join(home, ".oats-bb"));
+    const run = await runBin(["retire-hook"], { env });
+    assert.equal(run.status, 0);
+    assert.match(JSON.parse(run.stdout).warning, /settings\.oats\.bb\.cli/);
+  }
 });
 
 // Whatever keeps bb from being asked, the hook exits 0 and never reports an incomplete
 // retire (`retired: false` beside a warning or a failure): a home's retire is not held for
-// bb. A home with the provider's state directory gets a warning, one without gets none.
+// bb. The home gets a warning either way: with or without what an earlier version of the
+// provider kept there, which the hook does not look at.
 for (const [name, script, cli] of [
   ["no bb CLI on this host", {}, "/nonexistent/oats-bb-test/bb"],
   ["a bb that does not answer", { "project list": UNREACHABLE }, null],
@@ -508,7 +508,7 @@ for (const [name, script, cli] of [
   ["a bb that hangs", { "project list": { delayMs: 60_000, stdout: [] } }, null],
 ]) {
   for (const launched of [false, true]) {
-    test(`retire with ${name} never fails or holds the retire: ${launched ? "a bb home gets a warning" : "a home with no state directory gets none"}`, async (t) => {
+    test(`retire with ${name} never fails or holds the retire, and warns: ${launched ? "a home with an old .oats-bb" : "a home with nothing of the provider's"}`, async (t) => {
       const { dir, home } = scratch(t);
       if (launched) mkdirSync(join(home, ".oats-bb"));
       const bb = fakeBbIn(dir, typeof script === "function" ? script(home) : script);
@@ -517,12 +517,8 @@ for (const [name, script, cli] of [
       const lines = run.stdout.trim().split("\n");
       assert.equal(lines.length, 1);
       const answer = JSON.parse(lines[0]);
-      if (launched) {
-        assert.deepEqual(answer.meta, { archived: [], unchecked: true });
-        assert.match(answer.warning, /were not archived: .*session-provider-orphaned/);
-      } else {
-        assert.deepEqual(answer, { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } });
-      }
+      assert.deepEqual(answer.meta, { archived: [], unchecked: true });
+      assert.match(answer.warning, /were not archived: .*session-provider-orphaned/);
     });
   }
 }

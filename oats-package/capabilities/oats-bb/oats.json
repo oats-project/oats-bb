@@ -64,13 +64,5 @@
       "default": "bb",
       "description": "The bb CLI: a command name on PATH, or an absolute path. Set it only in oats-local.yaml."
     }
-  },
-  "retirement": {
-    "disposable": {
-      "home": [
-        ".oats-bb",
-        ".oats-bb-sandbox.json"
-      ]
-    }
   }
 }

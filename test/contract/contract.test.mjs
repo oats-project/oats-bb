@@ -316,7 +316,11 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
     { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
   const sandboxedCheck = (input) => provider("check", input, SETTINGS, { sandboxedModes: true });
-  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  // The provider keeps no record of a launch in the home: a plain check says nothing of
+  // it, and the check of the launch the kernel plans lists what that launch adds.
+  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
+  assert.deepEqual((await sandboxedCheck({ home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: SANDBOX } })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  assert.equal((await sh(`ls -A ${home} | grep -c '^\\.oats-bb' || true`)).trim(), "0", "nothing of the provider's own in the home");
   // The check the kernel runs before a launch, with the launch it plans: a host the
   // deployment does not record refuses a sandboxed launch there, before anything starts.
   const planned = { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: { ...SANDBOX, missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } } };

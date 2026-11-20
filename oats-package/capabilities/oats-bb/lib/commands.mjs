@@ -1,10 +1,9 @@
 // The provider's session commands, as the kernel calls them: one handler per verb.
-import { isAbsolute } from "node:path";
 import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
 import { bounded } from "./errors.mjs";
-import { FULL_MODE_ONLY, plannedLaunchFindings, readinessResult, sandboxWarnings } from "./readiness.mjs";
+import { FULL_MODE_ONLY, plannedLaunchFindings, readinessResult } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
 import { stop } from "./stop.mjs";
 
@@ -34,12 +33,10 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
     stop: withSettings(stop),
     // input: {home | null, soul | null, settings?, launch?: {harness, yolo, args, sandbox}}.
     // bb's own state depends on the settings alone. With the planned launch the kernel
-    // hands it, the check also says what that launch would be refused for; for a home, it
-    // lists what the provider added to the sandbox at its last launch.
+    // hands it, the check also says what that launch would be refused for and would write.
     check: async (input, rawSettings, options) => {
       const planned = plannedLaunch(input);
       const { result } = await readinessResult(readSettings(rawSettings), { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes }) : undefined });
-      if (typeof input?.home === "string" && isAbsolute(input.home)) result.warnings.push(...sandboxWarnings(input.home, { planned: planned !== null }));
       // With no planned launch the check cannot know the mode a launch would run in: it
       // says what the command launches in, so `oats readiness` does not read "ready" and
       // the spawn that follows is then refused with nothing having said why.

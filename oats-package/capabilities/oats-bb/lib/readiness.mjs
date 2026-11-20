@@ -8,7 +8,7 @@ import { bbClient } from "./bb.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
-import { currentSandbox, gapList, missingRemedy, readLaunchRecord, readSandbox } from "./local-settings.mjs";
+import { gapList, missingRemedy, readSandbox } from "./local-settings.mjs";
 import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -277,46 +277,19 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false } = {}) 
     const names = gapList(allowances.skipped, allowances.unnamedSkipped, { describe: (entry) => `${entry.capability}${entry.reason ? ` (${entry.reason})` : ""}`, noun: ["capability", "capabilities"] });
     warnings.push({ code: "session-provider-sandbox-skipped", message: `no sandbox host was taken for ${names}` });
   }
+  // What a sandboxed launch would write into the home, with who asked for each entry. The
+  // provider keeps no record of an earlier launch (the home is its agent's to write), so
+  // readiness speaks of the launch the kernel plans, never of what the home holds.
+  if (mode !== "full" && (allowances.domains.length > 0 || allowances.write.length > 0)) {
+    const plain = (value) => typeof value === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(value);
+    const hosts = gapList(allowances.domains, 0, { describe: (entry) => `${entry.host} (${entry.capability}${plain(entry.setting) ? `, its setting ${entry.setting}` : ""})`, noun: ["host", "hosts"] });
+    const paths = gapList(allowances.write, 0, { describe: (entry) => entry.path, noun: ["path", "paths"] });
+    warnings.push({ code: "session-provider-sandbox", message: `in bb's ${mode} mode this launch lets the home's Claude also reach ${allowances.domains.length ? hosts : "no added host"} and write ${allowances.write.length ? paths : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json` });
+    const forges = allowances.domains.filter((entry) => GENERAL_FORGES.has(entry.host.split(":")[0]));
+    if (forges.length > 0) {
+      warnings.push({ code: "session-provider-sandbox-forge", message: `${gapList(forges, 0, { describe: (entry) => `${entry.host} (${entry.capability})`, noun: ["host", "hosts"] })} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
+    }
+  }
   return { problems, warnings };
 }
 
-/** What the provider added to the home's sandbox at its last launch, with who asked for
- *  each entry: readiness lists it (contract item 6). → warnings; none before a first
- *  launch. In full mode nothing was added, and the one thing said is which hosts the
- *  deployment lacked at that launch. */
-export function sandboxWarnings(home, { planned = false } = {}) {
-  let current, launched;
-  try { current = currentSandbox(home); launched = readLaunchRecord(home); }
-  catch (error) {
-    if (!(error instanceof ProviderError)) throw error;
-    return [{ code: "session-provider-sandbox-unread", message: "what the provider added to this home's sandbox could not be read: its record or .claude/settings.local.json in the home is not what the provider wrote. The next launch refuses or rewrites it" }];
-  }
-  const warnings = [];
-  if (!planned && launched && launched.mode !== null && launched.mode !== "full" && !launched.sandboxGiven) {
-    // A kernel that hands a launch no sandbox allowances: bb's sandbox then blocks OATS's
-    // own commands, and nothing in the home says so but this.
-    warnings.push({ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` });
-  }
-  if (!planned && launched && launched.mode === "full" && launched.missing.length + launched.unnamed > 0) {
-    // Only a full-mode launch records a gap (a sandboxed one is refused before any record).
-    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for some of what a sandbox would need. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused. ${missingRemedy(launched.missing)}. Missing: ${gapList(launched.missing, launched.unnamed)}` });
-  }
-  if (!planned && launched && (launched.mode === "auto" || launched.mode === "accept-edits") && launched.otherTeams.length + launched.unnamedOtherTeams > 0) {
-    warnings.push(otherTeamsWarning(launched.mode, launched.otherTeams, launched.unnamedOtherTeams));
-  }
-  if (current.domains.length > 0 || current.write.length > 0) {
-    const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);
-    const paths = current.write.map((entry) => `${entry.path} (the kernel)`);
-    warnings.push({ code: "session-provider-sandbox", message: `in bb's sandboxed modes this home's Claude may also reach ${hosts.length ? hosts.join(", ") : "no added host"} and write ${paths.length ? paths.join(", ") : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json at launch` });
-    const forges = current.domains.filter((entry) => GENERAL_FORGES.has(entry.host.split(":")[0]));
-    if (forges.length > 0) {
-      warnings.push({ code: "session-provider-sandbox-forge", message: `${forges.map((entry) => `${entry.host} (${entry.capability})`).join(", ")} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
-    }
-  }
-  if (current.mismatch > 0) {
-    // The home is writable by its own agent: say that the two disagree, and print nothing
-    // of what either holds beyond what passed the checks above.
-    warnings.push({ code: "session-provider-sandbox-mismatch", message: `${current.mismatch} entr${current.mismatch > 1 ? "ies" : "y"} of the provider's sandbox record in this home ${current.mismatch > 1 ? "are" : "is"} not in .claude/settings.local.json, or not an exact host or a path this check shows (letters, digits and . _ - @ + between slashes): the record or the file was changed after the launch, or the launch was handed such a path. Read the file itself for what the sandbox allows now; the next launch rewrites both` });
-  }
-  return warnings;
-}

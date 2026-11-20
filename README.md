@@ -181,11 +181,12 @@ hands it:
 - `sandbox.filesystem.allowWrite`: the deployment's events directory.
 
 Nothing else is added, and nothing an agent, a task, a mail or a launch argument says can
-add one. The entries add to bb's own sandbox settings; they never replace a restriction.
-The provider records what it wrote in `<home>/.oats-bb-sandbox.json`, never touches an
-entry you put in the file yourself, and removes exactly its own on the next launch that no
-longer carries them. In `full` mode there is no sandbox and it writes none. `oats readiness`
-lists, for a home, each host and path with who asked for it.
+add one. The `sandbox` key of that file is the provider's in a bb home, whole: every
+launch writes it anew from what the kernel hands it, never reads what it held, and keeps
+no record of it in the home (the home is its agent's to write). A `sandbox` entry you put
+there yourself is not kept. In `full` mode there is no sandbox and the key is removed.
+The kernel's check before a launch lists each host and path that launch would add, with
+who asked for it.
 
 Two limits of bb's sandbox that no entry lifts. A service on this machine (an aweb server
 on `localhost` or a loopback address) cannot be reached from a sandboxed mode: run the
@@ -206,8 +207,8 @@ configuration at all, a sandboxed launch is refused too (`E_BACKEND_SANDBOX_UNAV
 In `full` mode the launch goes on in every one of these cases. The kernel asks the provider
 before every launch (a spawn, a start, and a restart before it stops anything), handing it
 the launch it plans, so the refusal comes before anything changes. A plain `oats readiness`
-plans no launch: there the provider can say only what the home's last launch left on
-record.
+plans no launch: there the provider says nothing of a launch, as it keeps no record of
+one.
 
 Three things to know:
 
@@ -250,8 +251,8 @@ arguments or a process environment:
   record for the agent's default team, or a configuration the kernel could not resolve:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_UNAVAILABLE`. A launch in `full` mode writes
   no sandbox entry and is never refused for any of these.
-- A file of the home that the provider reads (`.claude/settings.local.json`, its own
-  records) and that is not a regular file there (a link, a pipe, a directory), is larger
+- A file of the home that the provider reads (`.claude/settings.local.json`, the only one)
+  and that is not a regular file there (a link, a pipe, a directory), is larger
   than 1 MiB or is not a JSON object: `E_SESSION_START_FAILED`. The provider follows no
   link out of the home, and puts nothing of such a file into a message.
 
@@ -264,15 +265,23 @@ The launch's PATH addition (the home's `.oats/bin`, so the agent's plain `oats` 
 kernel that launched it) travels the same way: the env file's `PATH` is that directory
 followed by the PATH the kernel ran the provider with.
 
-The provider keeps the names it wrote in `<home>/.oats-bb/launch-env.json`, so a later
-launch removes a variable it no longer carries, and it leaves alone an entry you added to
-`settings.local.json` yourself under another name. A name the launch carries is the
-launch's: your own entry of that name is replaced, and goes when the launch stops carrying
-it.
+**The `env` key is the provider's, whole.** In a bb home, every launch writes the `env`
+key of `.claude/settings.local.json` anew from the launch input and never reads what it
+held: a variable an earlier launch carried and this one does not is gone, and so is an
+entry you added under `env` yourself. Put a variable of your own in the launch
+configuration instead. Every other key of the file (`permissions`, and whatever else
+Claude Code or you keep there) is left as it is. The provider keeps nothing of its own in
+the home: no record, no state directory. What an earlier version kept there (`.oats-bb/`,
+`.oats-bb-sandbox.json`) is deleted, unread, at the home's next start, on any backend.
 
 **Leaving bb.** When a home that ran on bb starts on another backend (`--backend tmux`),
-the capability's launch hook removes what the provider wrote into
-`.claude/settings.local.json`: its launch environment and its sandbox entries. Yours stay.
+the capability's launch hook removes the provider's two keys from
+`.claude/settings.local.json` (`env` and `sandbox`). It does so only on the kernel's word
+that the home ran on bb before (`OATS_PREVIOUS_BACKEND=bb` in the hook's environment):
+nothing in the home decides it, so a home that never ran on bb keeps its own `env`. A
+kernel that does not say removes nothing: the launch environment of the home's last bb
+launch then stays in the file, to be removed by hand, and the hook says so only where a
+`sandbox` block stands there.
 
 ## Readiness
 

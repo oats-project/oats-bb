@@ -182,7 +182,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   harness, its arguments, its mode, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
   capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
-  can only say, for a home, what its last launch left on record, and, for a soul or a home,
+  says nothing of a launch (the provider keeps no record of one in the home), and says, for a soul or a home,
   which mode the command launches in (`session-provider-full-mode-only`).
 
 ## Codes
@@ -228,10 +228,14 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 ## Hooks
 - `launch`: runs at every start of a home that has the capability. On this provider it does
   nothing (the launch verb writes Claude's local settings). On another backend
-  (`OATS_BACKEND` set and not `bb`) it removes what the provider wrote into
-  `.claude/settings.local.json`. It returns no env and no arguments.
+  (`OATS_BACKEND` set and not `bb`) it removes the provider's two keys (`env`, `sandbox`)
+  from `.claude/settings.local.json` when `OATS_PREVIOUS_BACKEND` is `bb`, and only then:
+  nothing in the home decides it. Where that variable is absent it removes nothing, and
+  warns if a `sandbox` block stands in the file. In every case it deletes, unread, what an earlier
+  version of the provider kept in the home (`.oats-bb/`, `.oats-bb-sandbox.json`).
+  It returns no env and no arguments.
 - `retire`: archives the home's live bb threads, after the kernel's stop. The hook is not
   told the home's backend, and nothing in the home proves it has no thread (its agent can
-  write there), so bb is asked for every home. Where the provider's state directory is
-  absent (a tmux home, or a cleaned one) a bb that cannot be asked gives no warning;
+  write there, and the provider keeps nothing of its own there), so bb is asked for every
+  home, and a bb that cannot be asked is a warning for every home, a tmux home too;
   threads left that way are what readiness reports as `session-provider-orphaned`.

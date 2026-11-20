@@ -3,7 +3,7 @@
 // stdin, one JSON document out); `retire-hook` is its retire hook; `doctor` is a person's.
 import { sessionHandlers } from "../lib/commands.mjs";
 import { bounded } from "../lib/errors.mjs";
-import { removeLaunchSettings } from "../lib/local-settings.mjs";
+import { holdsSandboxKey, removeLaunchSettings, removeLeftovers } from "../lib/local-settings.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
@@ -47,24 +47,39 @@ async function main(argv) {
   }
   if (command === "launch-hook" && rest.length === 0) {
     // Runs at every start of a home that has this capability, whatever its backend. On
-    // this provider the launch verb writes Claude's local settings. On any other backend
-    // the home has stopped being a provider home: what the provider wrote is removed, so
+    // this provider the launch verb writes Claude's local settings. Where the home ran on
+    // bb before and now starts on another backend, the provider's two keys are removed, so
     // a tmux Claude neither reads a stale launch env nor keeps the sandbox allowances.
-    const home = process.env.OATS_INSTANCE_HOME, backend = process.env.OATS_BACKEND;
+    // Which backend it ran on before is the kernel's word (OATS_PREVIOUS_BACKEND, from its
+    // record outside the home), never anything the home holds: a tmux home a person set
+    // up by hand keeps its own `env`.
+    const home = process.env.OATS_INSTANCE_HOME, backend = process.env.OATS_BACKEND, previous = process.env.OATS_PREVIOUS_BACKEND;
     if (!home) { process.stderr.write("oats bb launch-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
     if (!backend || backend === PROVIDER || process.env.OATS_LAUNCH_PREVIEW === "1") return 0;
+    // What an earlier version of the provider kept in the home goes, unread, whatever the
+    // home ran on: those names are the provider's own, and they decide nothing.
+    try { removeLeftovers(home); }
+    catch (error) { print({ warning: `the bb provider could not delete what an earlier version of it kept in the home (.oats-bb, .oats-bb-sandbox.json): ${error?.code ?? "it failed"}; delete them by hand` }); }
+    if (!previous) {
+      // A first launch, or a kernel that does not say: nothing is removed. Where a sandbox
+      // block stands in the file, it may be the provider's, left behind.
+      if (holdsSandboxKey(home)) print({ warning: `this home starts on ${backend}, its .claude/settings.local.json holds a sandbox block, and this kernel does not say which backend the home ran on before: the bb provider removed nothing. If the home ran on bb, that block and the env key are the provider's, now stale: remove them by hand` });
+      return 0;
+    }
+    if (previous !== PROVIDER) return 0;
     try {
-      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed what it had written into .claude/settings.local.json (its launch env and sandbox allowances)` });
+      removeLaunchSettings(home);
+      print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its two keys from .claude/settings.local.json (env and sandbox)` });
     } catch (error) {
-      print({ warning: `the bb provider could not remove what it wrote into .claude/settings.local.json (${error?.message ?? error}); remove its env and sandbox entries by hand` });
+      print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env and sandbox there by hand` });
     }
     return 0;
   }
   if (command === "retire-hook" && rest.length === 0) {
     const home = process.env.OATS_INSTANCE_HOME;
     if (!home) { process.stderr.write("oats bb retire-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
-    // The settings are read inside retire, where a failure to read them or to reach bb is
-    // kept quiet for a home the provider shows no sign of having launched (a tmux home).
+    // The settings are read inside retire: a failure to read them, or to reach bb, is a
+    // warning there, never a failed retire.
     print(await retire(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));
     return 0;
   }

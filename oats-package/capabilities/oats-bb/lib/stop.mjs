@@ -3,7 +3,6 @@ import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
-import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { liveInHome, readEndpoint } from "./threads.mjs";
 
@@ -83,12 +82,10 @@ const RETIRE_GRACE_SECONDS = 5;
  *  a warning, and readiness reports it (`session-provider-orphaned`) once the home is gone. */
 export async function retire(home, readSettings, { deadline, env = process.env } = {}) {
   // The hook runs for every home that has the capability, and is not told the home's
-  // backend. The provider's state directory says it launched this home, but the home is
-  // its agent's to write and may have been cleaned: its absence proves nothing, so bb is
-  // asked either way. What its absence does change: a home the provider may never have
-  // launched (a tmux home, perhaps on a host with no bb) gets no warning when bb cannot be
-  // asked. Threads left that way are what readiness reports as orphaned.
-  const launched = everLaunched(home);
+  // backend; nothing in the home says it either (the home is its agent's to write, and
+  // the provider keeps nothing of its own there). So bb is asked for every home, and where
+  // it cannot be asked the hook warns, whatever the home: it never fails or holds a retire.
+  // Threads left that way are what readiness reports as orphaned.
   try {
     const settings = readSettings();
     const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
@@ -126,7 +123,6 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     return { meta: { retired: true, archived } };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    if (!launched) return { meta: { retired: false, reason: "nothing-to-delete", unchecked: true } };
     // Why, in the provider's own words (they may carry bb's), cut short: the remedy stands before it.
     return { meta: { archived: [], unchecked: true }, warning: `the home's bb threads were not archived: oats readiness reports them as session-provider-orphaned once bb answers; stop and archive them in bb. Why bb could not be asked: ${bounded(error.message).slice(0, 260)}` };
   }

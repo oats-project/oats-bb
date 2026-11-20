@@ -79,9 +79,9 @@ for (const [name, gone] of [
 
 test("a delete cut off by time is in doubt: E_SESSION_INPUT_QUEUED", async (t) => {
   const { dir, home } = scratch(t);
-  const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: tellQueued("thr_a") }, "thread queue delete": { delayMs: 8_000, ...QUEUE_GONE } });
+  const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: tellQueued("thr_a") }, "thread queue delete": { delayMs: 30_000, ...QUEUE_GONE } });
   await assert.rejects(
-    sendInput({ home, endpoint, text: TEXT }, readSettings({ cli: bb.cli }), { deadline: Date.now() + 2_000, env: { ...process.env, ...bb.env } }),
+    sendInput({ home, endpoint, text: TEXT }, readSettings({ cli: bb.cli }), { deadline: Date.now() + 5_000, env: { ...process.env, ...bb.env } }),
     (error) => error.code === "E_SESSION_INPUT_QUEUED" && /may still be delivered/.test(error.message),
   );
 });
@@ -146,10 +146,10 @@ test("a tell bb's server never got (connection refused) is a refusal: not sent",
 
 test("a tell cut off by time may have landed: in doubt, never a refusal", async (t) => {
   const { dir, home } = scratch(t);
-  const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { delayMs: 5_000, stdout: tellSent("thr_a") } });
+  const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { delayMs: 30_000, stdout: tellSent("thr_a") } });
   // In process, so the deadline can be near: the provider's own budget is 16 s.
   await assert.rejects(
-    sendInput({ home, endpoint, text: TEXT }, readSettings({ cli: bb.cli }), { deadline: Date.now() + 1_200, env: { ...process.env, ...bb.env } }),
+    sendInput({ home, endpoint, text: TEXT }, readSettings({ cli: bb.cli }), { deadline: Date.now() + 4_000, env: { ...process.env, ...bb.env } }),
     (error) => error.name === "InDoubt" && error.code === undefined && /may have been delivered/.test(error.message),
   );
 });

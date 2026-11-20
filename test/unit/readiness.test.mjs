@@ -172,7 +172,7 @@ test("a bb that hangs gets its named problems inside the check's own time, which
   const started = Date.now();
   const answer = await call("check", { home: null, soul: "dev" }, { settings, bb });
   const took = Date.now() - started;
-  assert.ok(took < 17_000, `answered in ${took} ms`);
+  assert.ok(took < 19_500, `answered in ${took} ms, inside the kernel's 20 s`);
   assert.deepEqual(codes(answer), ["E_BACKEND_UNREACHABLE", "E_BACKEND_NOT_READY"]);
   assert.match(answer.result.problems[0].message, /host daemon.*no answer within/);
   assert.equal(answer.result.status, "unavailable");

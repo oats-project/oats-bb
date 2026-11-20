@@ -39,3 +39,16 @@ test("the container workflow builds the base from one pinned OATS commit and run
   assert.match(code, />> "\$GITHUB_STEP_SUMMARY"/);
   assert.ok(code.indexOf("GITHUB_STEP_SUMMARY") < code.indexOf("team-image-accept.sh"), "recorded before acceptance, so a failed run shows them too");
 });
+
+test("the container workflow runs only for the image, its tests, the pin and itself, and runs the image's unit tests", () => {
+  const paths = ["container/**", "test/unit/container-*.test.mjs", "bb-version", ".github/workflows/container.yml"];
+  const filter = paths.map((path) => `      - "${path}"\n`).join("");
+  assert.ok(code.includes(`  pull_request:\n    paths:\n${filter}`), "pull requests are filtered to those paths, in that order");
+  assert.ok(code.includes(`  push:\n    branches: [main]\n    paths:\n${filter}`), "pushes to main are filtered the same way");
+  assert.match(code, /^  workflow_dispatch:$/m, "it can still be run by hand");
+  assert.equal(code.match(/^    paths:$/gm).length, 2, "no other filter");
+  assert.doesNotMatch(code, /paths-ignore/);
+  // A filter that left out this file or the tests would let a change to either go unproven.
+  assert.match(code, /working-directory: oats-bb\n\s+run: node --test test\/unit\/container-\*\.test\.mjs\n/);
+  assert.ok(code.indexOf("node --test test/unit/container-") < code.indexOf("docker build"), "the unit tests run before any image is built");
+});

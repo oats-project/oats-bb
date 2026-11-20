@@ -7,10 +7,23 @@
 # fixture script and the acceptance. To move the pin, change that one line.
 name: container
 
+# It runs only for what its result depends on: the image, its tests, the pin
+# and this file. A pull request that touches none of them does not run it, so a
+# branch cut before container/ existed is not asked to build it.
 on:
   pull_request:
+    paths:
+      - "container/**"
+      - "test/unit/container-*.test.mjs"
+      - "bb-version"
+      - ".github/workflows/container.yml"
   push:
     branches: [main]
+    paths:
+      - "container/**"
+      - "test/unit/container-*.test.mjs"
+      - "bb-version"
+      - ".github/workflows/container.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,6 +62,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+
+      # Dependency-free, so no install: the image's own unit tests run here
+      # whether or not another workflow's `npm test` picks them up.
+      - name: Run the image's unit tests
+        working-directory: oats-bb
+        run: node --test test/unit/container-*.test.mjs
 
       - name: Check the OATS checkout is the pinned commit
         run: test "$(git -C oats rev-parse HEAD)" = "$OATS_COMMIT"

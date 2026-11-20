@@ -84,6 +84,19 @@ test("a bb call that outlives its time is killed and reported as a timeout", asy
   assert.ok(Date.now() - started < 5_000);
 });
 
+test("a timeout ends the call though bb is a launcher whose child holds the pipes, and ends the child too", async (t) => {
+  const { dir } = scratch(t);
+  const bb = fakeBbIn(dir, { "thread list": { launcherChildMs: 30_000, stdout: [] } });
+  const started = Date.now();
+  const answer = await runBb(bb.cli, ["thread", "list", "--json"], { server: SERVER, env: { ...process.env, ...bb.env }, timeoutMs: 1_000 });
+  assert.equal(answer.timedOut, true);
+  assert.ok(Date.now() - started < 4_000, "the call ended at its timeout, not when the child let go of the pipes");
+  const [childPid] = bb.childPids();
+  assert.equal(typeof childPid, "number");
+  await new Promise((done) => setTimeout(done, 300));
+  assert.throws(() => process.kill(childPid, 0), { code: "ESRCH" }, "the launcher's child was killed with it");
+});
+
 test("bb's failure envelope is read from stdout; its code and message are bb's own", async (t) => {
   const { dir } = scratch(t);
   const bb = fakeBbIn(dir, { "thread show": { error: { code: "thread_not_found", message: "HTTP 404: Thread not found" } } });

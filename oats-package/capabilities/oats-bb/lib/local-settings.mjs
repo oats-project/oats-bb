@@ -77,6 +77,10 @@ export function readLaunchEnv(env) {
 export function readUnset(unset, env) {
   if (unset === undefined || unset === null) return [];
   if (!Array.isArray(unset) || unset.some((name) => typeof name !== "string" || !NAME.test(name))) throw fail("E_BACKEND_LAUNCH_ENV", "the launch's unset must be a list of variable names");
+  // An empty value under one of these names would take from bb's Claude the configuration
+  // or the credential bb's own server gives it.
+  const chosen = unset.find((name) => CONFIGURATION_NAMES.has(name) || ACCOUNT_NAMES.has(name));
+  if (chosen !== undefined) throw fail("E_BACKEND_LAUNCH_ENV", `the launch unsets ${chosen}, which the bb backend cannot honour: a bb thread's Claude takes its configuration and its account from bb's own server, and the launch can neither choose nor remove them`);
   const both = unset.find((name) => Object.hasOwn(env, name));
   if (both !== undefined) throw fail("E_BACKEND_LAUNCH_ENV", `the launch both sets and unsets ${both}`);
   return unset;

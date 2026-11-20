@@ -8,7 +8,7 @@
 // Script: { "<command words>": <answer> | [<answer>, …] }, the key being the longest
 // prefix of the non-option arguments ("thread list", "thread queue delete", "--version").
 // An answer is { stdout?: <JSON value or string>, exit?: number, stderr?: string,
-// error?: { code, message }, delayMs?: number }. A list is consumed one per call; its
+// error?: { code, message }, delayMs?: number, launcherChildMs?: number }. A list is consumed one per call; its
 // last answer repeats.
 import { appendFileSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 
@@ -38,6 +38,14 @@ if (Array.isArray(answer)) {
   const n = existsSync(counterFile) ? Number(readFileSync(counterFile, "utf8")) : 0;
   writeFileSync(counterFile, String(n + 1));
   answer = answer[Math.min(n, answer.length - 1)];
+}
+if (answer.launcherChildMs) {
+  // As the real `bb`: a launcher whose child holds the same pipes. The child's pid goes
+  // to the log, so a test can see whether a timeout ended it too.
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, ["-e", `setTimeout(() => {}, ${Number(answer.launcherChildMs)})`], { stdio: "inherit" });
+  appendFileSync(process.env.FAKE_BB_LOG, `${JSON.stringify({ childPid: child.pid })}\n`);
+  await new Promise((resolve) => child.on("close", resolve));
 }
 if (answer.delayMs) await new Promise((resolve) => setTimeout(resolve, answer.delayMs));
 if (answer.error) {

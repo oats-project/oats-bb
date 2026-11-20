@@ -19,7 +19,7 @@ const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
  *  E_SESSION_STOP_FAILED when it is still in a turn after the grace.
  *  With no endpoint (the kernel compensating a launch whose answer was lost): stop
  *  whatever live thread runs in the home; `stopped: true` also when there is none. */
-export async function stop(input, settings, { deadline = Infinity, env = process.env, now = Date.now } = {}) {
+export async function stop(input, settings, { deadline = Infinity, env = process.env, now = Date.now, stopCallTimeoutMs } = {}) {
   try {
     if (!isObject(input)) throw fail("E_SESSION_STOP_FAILED", "the stop input is not an object");
     const grace = graceOf(input);
@@ -28,12 +28,12 @@ export async function stop(input, settings, { deadline = Infinity, env = process
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
       const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
       const { live } = await liveInHome(bb, input.home);
-      for (const thread of live) await stopThread(bb, thread.id, { until, grace, now });
+      for (const thread of live) await stopThread(bb, thread.id, { until, grace, now, stopCallTimeoutMs });
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
     const bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
-    await stopThread(bb, endpoint.threadId, { until, grace, now });
+    await stopThread(bb, endpoint.threadId, { until, grace, now, stopCallTimeoutMs });
     return { stopped: true };
   } catch (error) { throw failed(error); }
 }
@@ -43,10 +43,12 @@ export function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
-async function stopThread(bb, threadId, { until, grace, now }) {
-  const asked = await bb.stop(threadId);
+async function stopThread(bb, threadId, { until, grace, now, stopCallTimeoutMs }) {
+  const asked = await bb.stop(threadId, stopCallTimeoutMs === undefined ? {} : { timeoutMs: stopCallTimeoutMs });
   if (!asked.ok && asked.code === "thread_not_found") return;
-  if (!asked.ok) throw bb.refusal(asked, ["thread", "stop"]);
+  // bb's stop may wait for the thread to settle, longer than one bb call gets here: a
+  // stop cut off by time has still been asked, and what bb shows next decides.
+  if (!asked.ok && !asked.timedOut) throw bb.refusal(asked, ["thread", "stop"]);
   let last = null;
   for (;;) {
     const thread = await bb.thread(threadId);

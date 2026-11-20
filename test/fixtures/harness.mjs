@@ -1,7 +1,7 @@
 // What the unit tests share: a fake bb on disk, a fake bb server and host daemon on
 // loopback, and the provider run as the kernel runs it (a process, JSON in, JSON out).
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -52,11 +52,11 @@ export function scratch(t) {
 export function fakeBbIn(dir, script) {
   const scriptFile = join(dir, "bb-script.json"), log = join(dir, "bb-calls.jsonl");
   writeFileSync(scriptFile, JSON.stringify(script));
-  chmodSync(fakeBb, 0o755);
   return {
     cli: fakeBb,
     env: { FAKE_BB_SCRIPT: scriptFile, FAKE_BB_LOG: log },
-    calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []),
+    calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => entry.argv) : []),
+    childPids: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => entry.childPid).map((entry) => entry.childPid) : []),
     setScript: (next) => writeFileSync(scriptFile, JSON.stringify(next)),
   };
 }

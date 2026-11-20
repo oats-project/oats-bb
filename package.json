@@ -9,7 +9,7 @@
   },
   "scripts": {
     "validate": "node scripts/validate-manifests.mjs",
-    "test": "npm run validate && node --test test/unit/",
-    "test:contract": "node --test --test-timeout=1500000 test/contract/"
+    "test": "npm run validate && node --test test/unit/*.test.mjs",
+    "test:contract": "node --test --test-timeout=1500000 test/contract/*.test.mjs"
   }
 }

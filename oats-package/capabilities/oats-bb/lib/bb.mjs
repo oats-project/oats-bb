@@ -21,14 +21,27 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
     for (const name of CONTEXT_ENV) delete childEnv[name];
     if (server) childEnv.BB_SERVER_URL = server;
     let child;
-    try { child = spawn(cli, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }); }
+    // Its own process group: `bb` is a launcher that starts the real CLI as a child with
+    // the same pipes, so ending a call means ending the group, not one process.
+    try { child = spawn(cli, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, detached: true }); }
     catch (error) { resolve({ ok: false, code: "cli_missing", missing: true, message: `cannot run ${cli}: ${error.message}` }); return; }
     let stdout = "", stderr = "", size = 0, settled = false, timedOut = false;
     const finish = (answer) => { if (!settled) { settled = true; clearTimeout(timer); resolve(answer); } };
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, Math.max(1, timeoutMs));
+    const killGroup = () => {
+      try { process.kill(-child.pid, "SIGKILL"); }
+      catch { child.kill("SIGKILL"); } // no group to signal (already gone, or no pid): the process itself
+    };
+    // The timed-out answer comes from the timer, not from `close`: a grandchild that
+    // survived would keep the pipes open, and the call would never end.
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup();
+      child.stdout.destroy(); child.stderr.destroy();
+      finish({ ok: false, code: "timeout", timedOut: true, message: `bb ${args.slice(0, 2).join(" ")} did not answer within ${Math.round(timeoutMs / 100) / 10} s` });
+    }, Math.max(1, timeoutMs));
     const take = (chunk, into) => {
       size += chunk.length;
-      if (size > MAX_OUTPUT) { child.kill("SIGKILL"); return into; }
+      if (size > MAX_OUTPUT) { killGroup(); return into; }
       return into + chunk;
     };
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
@@ -39,7 +52,7 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
       ? { ok: false, code: "cli_missing", missing: true, message: `cannot run ${cli}: ${error.message}` }
       : { ok: false, code: "error", message: `${cli} ${args[0] ?? ""}: ${error.message}` }));
     child.on("close", (status, signal) => {
-      if (timedOut) return finish({ ok: false, code: "timeout", timedOut: true, message: `bb ${args.slice(0, 2).join(" ")} did not answer within ${Math.round(timeoutMs / 100) / 10} s` });
+      if (timedOut) return; // answered by the timer
       if (size > MAX_OUTPUT) return finish({ ok: false, code: "error", message: `bb ${args.slice(0, 2).join(" ")} wrote more than ${MAX_OUTPUT} bytes` });
       if (!json) {
         return finish(status === 0 ? { ok: true, value: stdout }
@@ -63,16 +76,20 @@ const firstLine = (text) => String(text).split("\n").map((line) => line.trim()).
 
 /** A failed call after which nothing can have happened in bb: the CLI could not be run,
  *  the request never reached a server (the connection was refused), or bb's server
- *  answered no in its own words (a 4xx with bb's error envelope, an invocation bb's CLI
- *  rejected). Everything else is in doubt for a call that changes something: no answer
+ *  answered no in its own words (bb's error envelope with its code or a 4xx status, an
+ *  invocation bb's CLI rejected). Everything else is in doubt for a call that changes something: no answer
  *  in time, a CLI that died or wrote something unreadable, a connection that dropped
  *  after the request went out, a server error. */
 export function nothingHappened(answer) {
   if (answer.ok) return false;
   if (answer.missing) return true;
   if (!answer.refused) return false;
-  if (answer.code === "error") return /ECONNREFUSED|ENOTFOUND|bad port/.test(answer.message);
-  return !/^http_5\d\d$/.test(answer.code) && !/^HTTP 5\d\d\b/.test(answer.message);
+  // bb's CLI wraps some failures in a plain error whose message carries the server's
+  // status ("Failed to create thread: HTTP 404: Project not found"): a 4xx there is the
+  // server's no; a 5xx, anywhere, is not.
+  if (/\bHTTP 5\d\d\b/.test(answer.message) || /^http_5\d\d$/.test(answer.code)) return false;
+  if (answer.code === "error") return /ECONNREFUSED|ENOTFOUND|bad port/.test(answer.message) || /\bHTTP 4\d\d:/.test(answer.message);
+  return true;
 }
 
 /** bb says the server did not answer (the CLI's fetch failed), as opposed to answering no. */
@@ -138,7 +155,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     spawn(args, options) { return raw(["thread", "spawn", ...args, "--json"], options); },
     tell(id, text) { return raw(["thread", "tell", id, "--message-file", "-", "--mode", "auto", "--json"], { input: text }); },
     queueDelete(threadId, messageId) { return raw(["thread", "queue", "delete", threadId, messageId, "--json"]); },
-    stop(id) { return raw(["thread", "stop", id, "--json"]); },
+    stop(id, options) { return raw(["thread", "stop", id, "--json"], options); },
     archive(id) { return raw(["thread", "archive", id, "--json"]); },
   };
 }

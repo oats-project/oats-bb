@@ -153,6 +153,17 @@ test("the launch's refusals reach no bb: a secret-sourced env entry, an argument
   assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
 });
 
+test("a spawn bb's server refuses: the CLI's envelope carries the server's 4xx, which the provider reads as bb's no", async () => {
+  // bb 0.50.1 wraps a refused spawn in a plain error; the status in its message is what
+  // tells the server's no (a refusal) from an outcome in doubt.
+  const refused = JSON.parse(await sh(`bb thread spawn --project proj_nosuchproject --provider claude-code --model ${MODEL} --environment /home/node --prompt x --json 2>/dev/null`, { ok: false }));
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error.code, "error");
+  assert.match(refused.error.message, /\bHTTP 4\d\d:/);
+  const gone = JSON.parse(await sh("bb thread tell thr_nosuchthread --message-file - --mode auto --json 2>/dev/null", { input: "x", ok: false }));
+  assert.equal(gone.error.code, "thread_not_found");
+});
+
 test("T1 launch: the thread exists in a project rooted at the home, and a hook sees the settings.local.json env", async () => {
   const home = await makeHome("t1");
   const input = launchInput(home, "t1");

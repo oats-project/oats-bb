@@ -49,6 +49,16 @@ test("stop waits the whole grace the kernel gives, beyond the other verbs' time"
   assert.deepEqual(answer.result, { stopped: true });
 });
 
+test("a bb stop cut off by time has still been asked: what bb shows next decides", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, { "thread stop": { delayMs: 30_000, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] });
+  // In process, so the stop call's own time can be short: one bb call gets 10 s otherwise.
+  const { stop } = await import("../../oats-package/capabilities/oats-bb/lib/stop.mjs");
+  const { readSettings } = await import("../../oats-package/capabilities/oats-bb/lib/settings.mjs");
+  const answer = await stop({ home, endpoint, graceSeconds: 30 }, readSettings({ cli: bb.cli }), { env: { ...process.env, ...bb.env }, deadline: Date.now() + 20_000, stopCallTimeoutMs: 500 });
+  assert.deepEqual(answer, { stopped: true });
+});
+
 test("a thread still in a turn after the grace: E_SESSION_STOP_FAILED", async (t) => {
   const { answer } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("active") }, { graceSeconds: 1 });
   assert.equal(answer.ok, false);

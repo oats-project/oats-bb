@@ -174,7 +174,7 @@ arguments or a process environment:
   or its account or endpoint (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
   `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_BASE_URL`, the Bedrock, Vertex and Foundry
   switches) is refused, by name, whatever its source: `E_BACKEND_LAUNCH_ENV`. It is never
-  ignored.
+  ignored. A launch that would remove one of them is refused the same way.
 - A sandbox entry that is not one exact host or one exact absolute path:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
 

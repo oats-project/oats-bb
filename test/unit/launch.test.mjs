@@ -170,6 +170,8 @@ for (const [name, env, pattern] of [
   ["an API key, even as a plain literal", [entry("ANTHROPIC_API_KEY", "sk-not-a-real-key", { source: "launch-config" })], /ANTHROPIC_API_KEY.*account of bb's own server/],
   ["an OAuth token from a secret reference", [{ name: "CLAUDE_CODE_OAUTH_TOKEN", value: "t", source: "launch-config-reference", secret: true }], /CLAUDE_CODE_OAUTH_TOKEN.*account/],
   ["another model endpoint", [entry("ANTHROPIC_BASE_URL", "https://llm.example.net", { source: "launch-config" })], /ANTHROPIC_BASE_URL.*account or endpoint/],
+  ["an unset of the account's credential", { env: [], unset: ["ANTHROPIC_API_KEY"] }, /unsets ANTHROPIC_API_KEY.*neither choose nor remove/],
+  ["an unset of Claude's configuration", { env: [], unset: ["CLAUDE_CONFIG_DIR"] }, /unsets CLAUDE_CONFIG_DIR/],
   ["a name both set and unset", { env: [entry("BOTH", "v")], unset: ["BOTH"] }, /both sets and unsets BOTH/],
   ["an unset that is not a list of names", { env: [], unset: ["not a name"] }, /unset must be a list/],
   ["a name that is not a variable name", [entry("BAD-NAME", "v")], /BAD-NAME/],
@@ -364,7 +366,8 @@ test("a previous thread bb no longer has is no obstacle", async (t) => {
 });
 
 for (const [name, script, pattern] of [
-  ["bb refuses the spawn", { "thread spawn": { error: { code: "invalid_request", message: "HTTP 400: Unknown model" } } }, /Unknown model/],
+  // bb 0.50.1 wraps a refused spawn in a plain error that carries the server's status.
+  ["bb refuses the spawn", { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } }, /Project not found/],
   ["bb cannot list its projects", { "project list": UNREACHABLE }, /does not answer/],
   ["bb cannot list its threads", { "thread list": { stdout: "garbage" } }, /not JSON/],
   ["bb cannot create the project", { "project list": { stdout: [] }, "project create": { error: { code: "error", message: "HTTP 500: no" } } }, /project create/],
@@ -418,6 +421,7 @@ for (const [name, spawnAnswer] of [
   ["loses its connection after the request went out", { error: { code: "error", message: "fetch failed: socket hang up" } }],
   ["dies with no answer", { exit: 137 }],
   ["meets a server error", { error: { code: "http_500", message: "HTTP 500: Internal Server Error" } }],
+  ["meets a server error bb wraps", { error: { code: "error", message: "Failed to create thread: HTTP 503: Service Unavailable" } }],
 ]) {
   test(`a spawn that ${name} is in doubt: the thread it made is found and answered`, async (t) => {
     const { backend, bb, run } = await setup(t, { "thread spawn": spawnAnswer, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_made", "proj_a", "active")] }] });

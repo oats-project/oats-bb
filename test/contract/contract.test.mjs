@@ -356,7 +356,12 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   assert.equal(await landed("T5-ARCHIVED"), 0);
 });
 
-test("T5 via the kernel: after oats instance stop, session inspect answers stopped and session input is refused", { todo: "needs a kernel with the session-provider contract (spec K1), which is not merged; the provider half is the test above" }, () => {});
+// Owner of this half: the kernel's suite (spec K1, its T4: after an OATS stop the kernel
+// answers stopped and refuses input from its own stoppedAt, without calling the provider).
+// This repository adds the joint run, kernel and provider together, to this contract
+// test once the kernel's session-provider contract is merged; until then this stays a
+// todo, so the gap is visible in every run.
+test("T5 via the kernel: after oats instance stop, session inspect answers stopped and session input is refused", { todo: "owned by the kernel's suite (K1 T4); the joint kernel-and-provider run is added here once K1 merges. The provider half is the test above" }, () => {});
 
 test("T6 a second live thread in the home's project is reported by inspect, and refuses a launch", async () => {
   const { home, endpoint } = await launched("t6");

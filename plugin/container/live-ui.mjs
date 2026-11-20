@@ -5,7 +5,13 @@
 //       row, the home page (its badge shows 3), and each of the four pages render.
 //   A14 with the fake oats removed: bb's threads are listed, the "not found" line shows, and a
 //       thread opens.
-// Screenshots go to $OUT (kept as CI artefacts). No dependency: it drives the image's Chromium
+//   A16 an agent whose thread bb does not have: its soul's page says so, and Retire opens the
+//       plan dialog.
+// Each runs twice, in bb's light theme and in its dark theme (bb's own appearance choice, set as
+// bb keeps it: browser.mjs), and at every screenshot the contrast of what the plugin draws there
+// is checked in that theme (contrast.mjs says what that covers).
+// Screenshots go to $OUT (kept as CI artefacts): `<check>-<width>x<height>-<scene>.png` in the
+// light theme and `…-dark.png` in the dark one. No dependency: it drives the image's Chromium
 // over the DevTools protocol with node's own WebSocket (container/browser.mjs).
 //
 // The fixtures name threads bb does not have (`thr_release`, …). So that the join is real, this
@@ -17,6 +23,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, texts, visible } from "./browser.mjs";
+import { CONTRAST, failing } from "./contrast.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -29,6 +36,7 @@ const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800, mobile: false },
   { name: "390x800", width: 390, height: 800, mobile: true },
 ];
+const THEMES = ["light", "dark"];
 mkdirSync(OUT, { recursive: true });
 
 let failures = 0;
@@ -108,9 +116,32 @@ async function untilSnapshot(matches, seconds = 30) {
   throw new Error(`live-ui: the snapshot did not settle: ${JSON.stringify(last).slice(0, 400)}`);
 }
 
-async function a13(browser, viewport, threads) {
-  const at = `A13 ${viewport.name}`;
-  const page = await browser.page(viewport);
+/**
+ * A page of one viewport in one theme, whose screenshots carry the theme in their name and are each
+ * followed by the contrast check of what the plugin draws on the page at that moment.
+ */
+async function themedPage(browser, viewport, theme, at) {
+  const page = await browser.page(viewport, { theme });
+  const shot = page.shot;
+  page.shot = async (name) => {
+    const { theme: drawn, roots, rows } = JSON.parse(await page.evaluate(CONTRAST));
+    const bad = failing(rows);
+    const count = (kind) => rows.filter((row) => row.kind === kind).length;
+    const lowest = (kinds) => Math.min(...rows.filter((row) => kinds.includes(row.kind)).map((row) => row.ratio));
+    const dots = count("dot") === 0 ? "no state dot" : `its ${count("dot")} state dots at 3:1 or more (lowest ${lowest(["dot"])}:1)`;
+    check(
+      drawn === theme && roots.length > 0 && rows.length > 0 && bad.length === 0,
+      `${at} ${name}: bb draws its ${theme} theme, and the plugin's ${count("text") + count("placeholder")} texts read at 4.5:1 or more (lowest ${lowest(["text", "placeholder"])}:1), ${dots}`,
+      `theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}: ${[...new Set(bad.map((row) => `${row.kind} ${row.what} ${row.ratio}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))].join(" | ")}`,
+    );
+    await shot(theme === "light" ? name : `${name}-${theme}`);
+  };
+  return page;
+}
+
+async function a13(browser, viewport, threads, theme) {
+  const at = `A13 ${theme} ${viewport.name}`;
+  const page = await themedPage(browser, viewport, theme, at);
   try {
     // the sidebar with the tree
     await page.goto("/");
@@ -201,9 +232,29 @@ async function a13(browser, viewport, threads) {
   }
 }
 
-async function a14(browser, viewport, threads) {
-  const at = `A14 ${viewport.name}`;
-  const page = await browser.page(viewport);
+/** A16: an agent of the status whose thread bb does not have, on its soul's page, and its Retire. */
+async function a16(browser, viewport, theme) {
+  const at = `A16 ${theme} ${viewport.name}`;
+  const page = await themedPage(browser, viewport, theme, at);
+  try {
+    await page.goto("/plugins/oats/souls/oats-developer");
+    const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes("flaky-ci-developer") ? t : ""; })()`, 30);
+    check(Boolean(line) && /thread missing/.test(line), `${at} the soul's page says "thread missing" for the agent whose thread bb does not have`, line ?? (await page.evaluate(textOf(testId("oats-souls-page")))));
+    await page.shot(`a16-${viewport.name}-soul`);
+    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-detached-retire"))}).click()`);
+    const plan = await page.until(`(() => { const lines = document.querySelectorAll(${JSON.stringify(`${testId("oats-plan")} li`)}); return lines.length > 0 && document.querySelector(${JSON.stringify(testId("oats-plan-confirm"))})?.disabled === false ? lines.length : 0; })()`, 30);
+    check(Boolean(plan), `${at} Retire opens the plan dialog, with the kernel's plan (${plan ?? 0} lines) and Confirm`, await page.evaluate(textOf(testId("oats-modal"))));
+    await page.shot(`a16-${viewport.name}-plan`);
+    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-plan-cancel"))}).click()`);
+    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} Cancel closes the dialog`);
+  } finally {
+    await page.close();
+  }
+}
+
+async function a14(browser, viewport, threads, theme) {
+  const at = `A14 ${theme} ${viewport.name}`;
+  const page = await themedPage(browser, viewport, theme, at);
   try {
     await page.goto("/");
     check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
@@ -238,13 +289,19 @@ await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((
 
 const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {
-  for (const viewport of VIEWPORTS) await a13(browser, viewport, threads);
+  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a13(browser, viewport, threads, theme);
+
+  // A16: the same status, with one agent on a thread bb does not have (its fixture id, unmapped).
+  const detached = new Map([...threads].filter(([id]) => id !== "thr_ci"));
+  fake({ status: { stdout: statusWithRealIds(detached) } });
+  await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
+  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, theme);
 
   // A14: the fake oats is removed for the length of the check, then put back.
   renameSync(OATS, `${OATS}.away`);
   try {
     await untilSnapshot((snapshot) => snapshot.ok === false && snapshot.code === "OATS_NOT_FOUND");
-    for (const viewport of VIEWPORTS) await a14(browser, viewport, threads);
+    for (const theme of THEMES) for (const viewport of VIEWPORTS) await a14(browser, viewport, threads, theme);
   } finally {
     if (existsSync(`${OATS}.away`)) renameSync(`${OATS}.away`, OATS);
   }

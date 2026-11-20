@@ -136,7 +136,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
         Name
         <input
           data-testid="oats-spawn-name"
-          className="min-h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          className="min-h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-subtle-foreground"
           value={name}
           autoComplete="off"
           spellCheck={false}
@@ -155,7 +155,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
         <textarea
           data-testid="oats-spawn-task"
           rows={6}
-          className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+          className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-subtle-foreground"
           value={task}
           placeholder="What this agent is for."
           onChange={(event) => edit(setTask, event.target.value)}

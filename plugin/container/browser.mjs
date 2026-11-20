@@ -52,14 +52,20 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
       socket.send(JSON.stringify({ id, method, params, sessionId }));
     });
 
-  /** A page in a browser context of its own, at one viewport. */
-  async function page(viewport) {
+  /**
+   * A page in a browser context of its own, at one viewport. `theme` ("light" or "dark") is bb's
+   * own appearance choice: bb 0.50.1 keeps it in the browser's storage under `bb.theme` (what its
+   * Settings, Appearance writes: "light", "dark" or "system") and, when it loads, puts the class
+   * `dark` on the document's root for "dark". It is set before any script of bb runs.
+   */
+  async function page(viewport, { theme } = {}) {
     const { browserContextId } = await send("Target.createBrowserContext");
     const { targetId } = await send("Target.createTarget", { url: "about:blank", browserContextId });
     const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
     const cdp = (method, params) => send(method, params, sessionId);
     await cdp("Page.enable");
     await cdp("Runtime.enable");
+    if (theme !== undefined) await cdp("Page.addScriptToEvaluateOnNewDocument", { source: `if (location.protocol.startsWith("http")) localStorage.setItem("bb.theme", ${JSON.stringify(theme)});` });
     await cdp("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile });
     if (viewport.mobile) await cdp("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
 

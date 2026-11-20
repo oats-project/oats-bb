@@ -4,9 +4,11 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
 
+// bb's tokens for coloured text on a surface: they keep their contrast against it in both themes,
+// which its fill tokens (`attention`, `success`) do not in the light one.
 const DOT: Record<AgentState, string> = {
-  "needs-you": "bg-amber-500",
-  working: "bg-green-500",
+  "needs-you": "bg-warning-text",
+  working: "bg-success-foreground",
   idle: "border border-muted-foreground",
   stopped: "bg-muted-foreground",
   error: "bg-destructive",
@@ -51,7 +53,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 const BUTTON: Record<NonNullable<ButtonProps["variant"]>, string> = {
   default: "border border-border bg-card text-foreground hover:bg-accent",
   primary: "border border-transparent bg-primary text-primary-foreground hover:opacity-90",
-  destructive: "border border-transparent bg-destructive text-white hover:opacity-90",
+  destructive: "border border-transparent bg-destructive text-destructive-foreground hover:opacity-90",
   ghost: "border border-transparent text-foreground hover:bg-accent",
 };
 export function Button({ variant = "default", className = "", type = "button", ...rest }: ButtonProps) {

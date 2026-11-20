@@ -220,7 +220,7 @@ function ReplyBox({ oats }: { oats: Ready }) {
         data-testid="oats-reply-text"
         aria-label="Message"
         rows={3}
-        className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+        className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-subtle-foreground"
         placeholder="Write to the agent…"
         value={text}
         disabled={sending} // what is typed during a send would be cleared with it

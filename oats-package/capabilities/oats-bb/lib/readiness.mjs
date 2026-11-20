@@ -7,7 +7,7 @@ import { delimiter, join } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
-import { harnessRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
+import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { currentSandbox, gapList, missingRemedy, readLaunchRecord, readSandbox } from "./local-settings.mjs";
 import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
@@ -223,13 +223,17 @@ function otherTeamsWarning(mode, rows, unnamed) {
 /** What the planned launch the kernel hands the check would meet in the sandbox: the
  *  refusal a launch in that mode would answer, as a problem; optional rows, skipped
  *  capabilities and, in full mode, the gaps, as warnings. → {problems, warnings}. */
-export function plannedLaunchFindings(planned) {
+export function plannedLaunchFindings(planned, { sandboxedModes = false } = {}) {
   const problems = [], warnings = [];
   const unsupported = harnessRefusal(planned.harness);
   if (unsupported !== null) return { problems: [{ ...unsupported, status: "needs-configuration" }], warnings };
   let mode, allowances;
   try {
     mode = permissionMode(planned.args, planned.yolo);
+    // A mode the command does not launch in yet: that is the whole answer, as it is the
+    // launch's own first refusal.
+    const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
+    if (notOffered !== null) return { problems: [{ ...notOffered, status: "needs-configuration" }], warnings };
     allowances = readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;

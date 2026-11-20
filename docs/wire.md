@@ -58,6 +58,19 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
+- **A launch in a sandboxed mode is refused for now.** With `yolo` not true and no
+  `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
+  `auto` mode. The provider refuses it before it reads or starts anything
+  (`E_BACKEND_SANDBOXED_MODE`), and the check says the same of a planned launch, as its
+  only problem. The deny set of contract item 6c (D16) is not in this release; the
+  provider's next change brings it and lifts the refusal. What is written below about
+  `sandbox` describes that code, which is here and tested, and runs once the refusal is
+  lifted.
+- **The endpoint a launch answers is new.** Every launch answers a thread the home never
+  had: bb makes a new thread id for each spawn, and the provider never answers the
+  `previous` endpoint's thread again, neither from bb's answer nor as a thread that newly
+  shows in the home (such a launch stays in doubt). The kernel may tell a new session
+  from an old one by its endpoint.
 - **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
@@ -111,7 +124,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   can only say, for a home, what its last launch left on record.
 
 ## Codes
-`E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
+`E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
 `E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
 `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,

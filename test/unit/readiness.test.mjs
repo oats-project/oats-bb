@@ -37,6 +37,30 @@ test("for a soul (no home) the check takes the settings from its input", async (
   assert.deepEqual(run.doc.result.problems.map((p) => p.code), ["E_BACKEND_TRUST"]);
 });
 
+// Until the release that brings the deny rules, the command launches in bb's full mode
+// only: the check says so of a planned launch that would be sandboxed, for a soul and for
+// a home, and says nothing of one in full mode.
+test("the check of a planned launch that is not in full mode: E_BACKEND_SANDBOXED_MODE, needs-configuration; yolo is ready", async (t) => {
+  const { home, backend, bb } = await setup(t);
+  const check = (target, launch) => call("check", { ...target, launch }, { settings: backend.settings(), bb });
+  for (const target of [{ home, soul: null }, { home: null, soul: "dev", settings: { ...backend.settings(), cli: bb.cli } }]) {
+    for (const launch of [{ harness: "claude", yolo: false, args: [] }, { harness: "claude", yolo: null, args: [] }, { harness: "claude", args: ["--permission-mode", "auto"] },
+      { harness: "claude", yolo: false, args: [], sandbox: { domains: [], write: [], missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } }]) {
+      const answer = await check(target, launch);
+      assert.equal(answer.result.status, "needs-configuration");
+      assert.deepEqual(answer.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"], "the launch's own first refusal, alone");
+      assert.match(answer.result.problems[0].message, /a sandboxed mode.*does not launch in one yet.*--yolo/);
+      assert.ok(answer.result.problems[0].message.length < 500);
+    }
+    for (const launch of [{ harness: "claude", yolo: true, args: [] }, { harness: "claude", yolo: null, args: ["--permission-mode", "bypassPermissions"] }]) {
+      assert.deepEqual((await check(target, launch)).result, { status: "ready", problems: [], warnings: [] });
+    }
+    // A launch the provider would refuse for its argument or its harness says that, as before.
+    assert.deepEqual((await check(target, { harness: "claude", yolo: true, args: ["--permission-mode", "auto"] })).result.problems.map((p) => p.code), ["E_BACKEND_LAUNCH_ARG"]);
+    assert.deepEqual((await check(target, { harness: "codex", yolo: false, args: [] })).result.problems.map((p) => p.code), ["E_BACKEND_HARNESS"]);
+  }
+});
+
 test("no trust setting: E_BACKEND_TRUST, needs-configuration", async (t) => {
   const { check } = await setup(t);
   const answer = await check({ trust: undefined });

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
-import { harnessRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
+import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -33,9 +33,12 @@ function readInput(input) {
 /** → { endpoint: { server, projectId, threadId } }. Order matters: everything that can
  *  refuse runs before the first effect (archiving the previous thread, creating the
  *  project, writing Claude's local settings, spawning). */
-export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs } = {}) {
+export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
+  // Before anything else is read or started: a mode the command does not launch in yet.
+  const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
+  if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
   const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
   const unset = readUnset(input.unset, launchEnv);
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
@@ -90,7 +93,9 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;
-  if (spawned.ok && isObject(thread) && isBbId(thread.id)) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+  // The answer is always a thread this home never had: bb makes a new id for every spawn,
+  // and the previous thread's is never answered (the kernel tells a new session by it).
+  if (spawned.ok && isObject(thread) && isBbId(thread.id) && thread.id !== previousId) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
   // bb said no, or the request never reached it: nothing was created.
   if (nothingHappened(spawned)) throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
 
@@ -101,7 +106,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // its endpoint is the answer. Otherwise the launch stays in doubt, and the call ends
   // with no answer: the kernel then stops whatever runs in the home.
   const what = spawned.ok ? "bb thread spawn answered no thread id" : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
-  const known = new Set(live.map((candidate) => candidate.id));
+  const known = new Set([...live.map((candidate) => candidate.id), ...(previousId ? [previousId] : [])]);
   let found = [];
   try {
     for (let look = 0; look < SPAWN_LOOKS; look += 1) {

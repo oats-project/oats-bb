@@ -12,6 +12,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const repoRoot = resolve(here, "../..");
 export const capabilityDir = join(repoRoot, "oats-package/capabilities/oats-bb");
 export const providerBin = join(capabilityDir, "bin/oats-bb.mjs");
+// The same session commands with bb's sandboxed modes taken, which the provider's own
+// command refuses for now (test/fixtures/sandboxed-bin.mjs).
+export const sandboxedBin = join(repoRoot, "test/fixtures/sandboxed-bin.mjs");
 const fakeBb = join(here, "fake-bb.mjs");
 
 // The PATH the provider runs with in the tests: a directory holding a `bwrap` (so the
@@ -122,9 +125,9 @@ export async function deadPort(t) {
 }
 
 /** Run the provider's bin as the kernel does. → { status, stdout, stderr, doc }. */
-export function runBin(args, { stdin = "", env = {} } = {}) {
+export function runBin(args, { stdin = "", env = {}, bin = providerBin } = {}) {
   return new Promise((resolveRun, reject) => {
-    const child = spawn(process.execPath, [providerBin, ...args], { cwd: capabilityDir, env: { PATH: PATH_WITH_BWRAP, HOME: process.env.HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [bin, ...args], { cwd: capabilityDir, env: { PATH: PATH_WITH_BWRAP, HOME: process.env.HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -144,9 +147,9 @@ export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, wire
  *  OATS_SETTINGS. → the answer envelope, asserted to be the wire's: exactly one JSON
  *  document on stdout, exit 0, the five header keys echoed, then a result or a refusal of
  *  {code, message} and nothing else. */
-export async function call(verb, input, { settings = {}, bb, env = {} }) {
+export async function call(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false }) {
   const request = requestFor(verb, input);
-  const run = await runBin(["session", verb], { stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
+  const run = await runBin(["session", verb], { bin: sandboxedModes ? sandboxedBin : providerBin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
   if (run.status !== 0 || run.doc === null) throw new Error(`the provider did not answer one JSON document (exit ${run.status}): ${run.stdout}\n${run.stderr}`);
   if (run.stdout.trim().split("\n").length !== 1) throw new Error(`more than one line on stdout: ${run.stdout}`);
   const expected = ["schemaVersion", "phase", "capability", "provider", "verb", "ok", run.doc.ok === true ? "result" : "error"];

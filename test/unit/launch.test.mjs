@@ -24,9 +24,11 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "thread spawn": spawned(),
     ...(typeof script === "function" ? script(home) : script),
   });
-  const input = (extra = {}) => ({ home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: null, env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });
+  const input = (extra = {}) => ({ home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: true, env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });
   const run = (extra, settings = {}) => call("launch", input(extra), { settings: backend.settings(settings), bb });
-  return { dir, home, backend, bb, run, input };
+  // The same launch with bb's sandboxed modes taken, which the command refuses for now.
+  const runSandboxed = (extra) => call("launch", input(extra), { settings: backend.settings(), bb, sandboxedModes: true });
+  return { dir, home, backend, bb, run, runSandboxed, input };
 }
 const localSettings = (home) => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
 
@@ -37,7 +39,7 @@ test("launch spawns one thread in the home's project and answers its endpoint", 
     result: { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_new" } } });
   const spawn = bb.calls().find((c) => c.argv[1] === "spawn");
   assert.deepEqual(spawn.argv, ["thread", "spawn", "--project", "proj_a", "--provider", "claude-code", "--model", "claude-opus-5-5",
-    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "accept-edits", "--title", "dev-a", "--json"]);
+    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "full", "--title", "dev-a", "--json"]);
   assert.equal(spawn.server, backend.server);
   assert.deepEqual(effects(bb), ["thread spawn"], "the home's existing project is reused");
   assert.ok(Buffer.byteLength(JSON.stringify(answer.result.endpoint)) < 4096);
@@ -300,10 +302,22 @@ for (const [name, extra, mode] of [
   ["yolo and --permission-mode bypassPermissions, which agree", { yolo: true, args: ["--permission-mode", "bypassPermissions"] }, "full"],
   ["the same mode named twice", { yolo: null, args: ["--permission-mode", "auto", "--permission-mode=auto"] }, "auto"],
 ]) {
-  test(`${name} spawns with --permission-mode ${mode}`, async (t) => {
-    const { bb, run } = await setup(t);
+  test(`${name} is bb's ${mode} mode${mode === "full" ? ": the launch spawns with --permission-mode full" : ", a sandboxed mode: the command refuses it before anything starts"}`, async (t) => {
+    const { home, bb, run, runSandboxed } = await setup(t);
     const answer = await run(extra);
-    assert.equal(answer.ok, true);
+    if (mode === "full") {
+      assert.equal(answer.ok, true);
+    } else {
+      // Until the release that brings the deny rules, the command launches in full mode only.
+      assert.equal(answer.error.code, "E_BACKEND_SANDBOXED_MODE");
+      assert.match(answer.error.message, new RegExp(`bb's ${mode} mode, a sandboxed mode.*--yolo.*Nothing was started`));
+      assert.ok(answer.error.message.length < 500);
+      assert.deepEqual(bb.calls(), [], "bb is not asked or changed at all");
+      assert.equal(existsSync(join(home, ".claude")), false);
+      assert.equal(existsSync(join(home, ".oats-bb")), false);
+      // The mode itself is read as bb names it: with the sandboxed modes taken, that is the spawn's.
+      assert.equal((await runSandboxed(extra)).ok, true);
+    }
     const argv = bb.calls().find((c) => c.argv[1] === "spawn").argv;
     assert.equal(argv[argv.indexOf("--permission-mode") + 1], mode);
   });
@@ -474,6 +488,18 @@ test("a spawn that answers no thread id, and one new thread runs in the home: th
   const { backend, bb, run } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 })] }, { stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 }), threadRow("thr_made", "proj_a", "starting")] }] });
   const answer = await run();
   assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
+});
+
+test("a launch never answers the previous thread again: not from bb's own answer, not as a thread that newly shows", async (t) => {
+  const previous = { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_old" };
+  // bb answers the old id (it never does: every spawn makes a new one), and the old
+  // thread, archived before the launch, shows live again after it (a person unarchived it).
+  const { backend, bb, input } = await setup(t, { "thread spawn": { stdout: { id: "thr_old", projectId: "proj_a", status: "starting" } },
+    "thread list": [{ stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 })] }, { stdout: [threadRow("thr_old", "proj_a", "idle")] }] });
+  const run = await rawLaunch(bb, backend, input({ previous }));
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "", "in doubt, never the old endpoint");
+  assert.match(run.stderr, /no new thread shows/);
 });
 
 test("a spawn that answers no thread id, and no new thread shows: in doubt, no answer and a nonzero exit", async (t) => {

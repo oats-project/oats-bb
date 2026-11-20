@@ -50,6 +50,16 @@ export function harnessRefusal(harness) {
   return { code: "E_BACKEND_HARNESS", message: `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}` };
 }
 
+/** Why the provider's command does not launch in this mode yet, or null. bb's sandboxed
+ *  modes (auto, accept-edits) let the agent's tools write files of its own home that are
+ *  later run, or read as configuration, outside the sandbox. The rules that keep them off
+ *  (contract item 6c) are not in this release, so the command launches in full mode only.
+ *  → {code, message} | null (the launch and the readiness check share it). */
+export function sandboxedModeRefusal(mode) {
+  if (mode === "full") return null;
+  return { code: "E_BACKEND_SANDBOXED_MODE", message: `this launch would run in bb's ${mode} mode, a sandboxed mode, and the bb backend does not launch in one yet: the rules that keep a sandboxed agent's tools off its own home's hooks, settings and module copies come with a later release of this provider. Launch in bb's full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started` };
+}
+
 /** Why a launch in this mode cannot have the sandbox it needs, or null. A sandboxed launch
  *  that would lack a host OATS's own commands reach is refused before anything starts:
  *  the agent's messaging would be cut off inside the sandbox. Full mode has no sandbox, so

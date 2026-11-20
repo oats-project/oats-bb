@@ -1,34 +1,15 @@
 #!/usr/bin/env node
 // oats.bb: the bb session provider. `session <verb>` is the kernel's to call (JSON in on
 // stdin, one JSON document out); `retire-hook` is its retire hook; `doctor` is a person's.
-import { isAbsolute } from "node:path";
-import { inspect, inspectMany } from "../lib/inspect.mjs";
-import { sendInput } from "../lib/input.mjs";
-import { launch } from "../lib/launch.mjs";
+import { sessionHandlers } from "../lib/commands.mjs";
 import { removeLaunchSettings } from "../lib/local-settings.mjs";
-import { plannedLaunchFindings, readinessResult, sandboxWarnings } from "../lib/readiness.mjs";
+import { readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
-import { retire, stop } from "../lib/stop.mjs";
+import { retire } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
 
-const withSettings = (run) => (input, rawSettings, options) => run(input, readSettings(rawSettings), options);
-const handlers = {
-  launch: withSettings(launch),
-  inspect: withSettings(inspect),
-  inspectMany: withSettings(inspectMany),
-  input: withSettings(sendInput),
-  stop: withSettings(stop),
-  // input: {home | null, soul | null, settings?, launch?: {harness, yolo, args, sandbox}}.
-  // bb's own state depends on the settings alone. With the planned launch the kernel
-  // hands it, the check also says what that launch would meet in bb's sandbox; for a
-  // home, it lists what the provider added to the sandbox at its last launch.
-  check: async (input, rawSettings, options) => {
-    const planned = plannedLaunch(input);
-    const { result } = await readinessResult(readSettings(rawSettings), { ...options, extra: planned ? plannedLaunchFindings(planned) : undefined });
-    if (typeof input?.home === "string" && isAbsolute(input.home)) result.warnings.push(...sandboxWarnings(input.home, { planned: planned !== null }));
-    return result;
-  },
-};
+// The command takes no launch in a sandboxed mode yet (lib/commands.mjs says why).
+const handlers = sessionHandlers();
 /** doctor's arguments: `--json`, and `--soul <name>`, which the kernel reads to choose
  *  whose settings it resolves into OATS_SETTINGS and then forwards: it changes nothing
  *  here. → {json} | null for anything else. */
@@ -40,12 +21,6 @@ function doctorArgs(args) {
     else if (!/^--soul=.+/.test(args[i])) return null;
   }
   return { json };
-}
-/** The planned launch of a check: `launch: {harness, yolo, args, sandbox}`, there before
- *  every launch and absent on a plain readiness read. */
-function plannedLaunch(input) {
-  const launch = input !== null && typeof input === "object" ? input.launch : null;
-  return launch !== null && typeof launch === "object" && !Array.isArray(launch) ? launch : null;
 }
 const print = (doc) => process.stdout.write(`${JSON.stringify(doc)}\n`);
 

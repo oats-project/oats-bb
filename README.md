@@ -44,11 +44,16 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 >   wake broker without a `--backend`. With an older oats.aweb, spawning a bb home fails
 >   in its spawn hook.
 >
-> **Run bb agents in full mode (`--yolo`).** bb's sandboxed modes (`auto`, `accept-edits`)
-> are not offered for OATS agents yet. This README says what the provider does in them,
-> because the code is here; they are no security boundary until the OATS release named
-> above protects the home's instructions, hooks and settings from the agent that runs in
-> it. Until then an agent in a sandboxed mode can change what runs outside the sandbox.
+> **bb agents run in full mode (`--yolo`), and nothing else is launched yet.** A launch in
+> one of bb's sandboxed modes (`auto`, `accept-edits`; that is `--no-yolo`, or no choice)
+> is **refused** before anything starts (`E_BACKEND_SANDBOXED_MODE`), and `oats readiness`
+> says so for a soul whose launch would be one. In those modes the agent's tools can
+> write files of its own home that are later run, or read as configuration, outside the
+> sandbox; the rules that keep them off (the deny set, contract item 6c) come with the
+> provider's next change, which lifts the refusal. This README already says what the
+> provider does in a sandboxed mode, because that code is here and tested. Even then the
+> modes are no security boundary until the OATS release named above protects the home's
+> instructions, hooks and settings from the agent that runs in it.
 
 ## Install
 
@@ -86,7 +91,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    oats spawn <soul> --backend bb --harness claude --yolo --name <task>-<role>
    ```
 
-   `--yolo` is bb's full mode, the one to use for now (above).
+   `--yolo` is bb's full mode, the only one a launch is taken in for now (above).
 
 ## Settings
 
@@ -138,19 +143,19 @@ kernel may resume it with an input, which restarts the thread in its own convers
 
 **Permission mode.**
 
-| The launch | bb's mode |
-|---|---|
-| `--yolo` | `full` |
-| `--no-yolo`, or no choice | `accept-edits` |
-| a launch configuration's argument `--permission-mode auto` | `auto` |
-| `--permission-mode acceptEdits` | `accept-edits` |
-| `--permission-mode bypassPermissions` | `full` |
+| The launch | bb's mode | |
+|---|---|---|
+| `--yolo` | `full` | launched |
+| `--no-yolo`, or no choice | `accept-edits` | refused for now: `E_BACKEND_SANDBOXED_MODE` |
+| a launch configuration's argument `--permission-mode auto` | `auto` | refused for now |
+| `--permission-mode acceptEdits` | `accept-edits` | refused for now |
+| `--permission-mode bypassPermissions` | `full` | launched |
 
 Where yolo and the argument disagree (`--yolo` with a mode other than
 `bypassPermissions`; `--no-yolo` with `bypassPermissions`), the launch is refused
 (`E_BACKEND_LAUNCH_ARG`): the provider never picks one.
 
-**The sandbox.** In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to
+**The sandbox** (what a launch in a sandboxed mode does, once such a launch is taken). In bb's sandboxed modes (`auto`, `accept-edits`), bb's sandbox applies to
 the agent's commands: by itself, `aw` could not reach the aweb server and
 `oats instance attention` could not write the deployment's events file. So in those modes
 the launch adds, to the home's `.claude/settings.local.json`, exactly the entries the kernel
@@ -212,6 +217,8 @@ arguments or a process environment:
 
 - A launch argument other than `--permission-mode auto|acceptEdits|bypassPermissions` is
   refused, by name: `E_BACKEND_LAUNCH_ARG`. Nothing is dropped silently.
+- A launch that is not in bb's full mode: `E_BACKEND_SANDBOXED_MODE`, before anything is
+  read or started, until the provider's next change brings the deny set (above).
 - A launch environment entry that comes from a secret (a launch configuration's `fromEnv`
   or `fromFile`) is refused, by name: `E_BACKEND_LAUNCH_ENV`. The environment travels in
   `.claude/settings.local.json`, and no secret is written there. Give bb's server the

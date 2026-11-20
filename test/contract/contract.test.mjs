@@ -21,6 +21,7 @@ const BB_VERSION = readFileSync(resolve(repo, "bb-version"), "utf8").trim();
 const IMAGE = `oats-bb-contract:${BB_VERSION}`;
 const NAME = `oats-bb-contract-${process.pid}`;
 const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
+const SANDBOXED_ENTRY = "/repo/test/fixtures/sandboxed-bin.mjs";
 const SERVER = "http://127.0.0.1:38886";
 const MODEL = "claude-opus-5-5";
 const SETTINGS = { version: BB_VERSION, trust: "container" };
@@ -42,9 +43,12 @@ const bbJson = async (args, options) => JSON.parse(await sh(`bb ${args} --json`,
 
 /** One call on the provider's wire, inside the container, as the kernel makes it: the
  *  request on stdin, the settings in OATS_SETTINGS. → the answer envelope. */
-async function provider(verb, input, settings = SETTINGS) {
+async function provider(verb, input, settings = SETTINGS, { sandboxedModes = false } = {}) {
   const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-  const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
+  // The provider's own command launches in bb's full mode only for now. The tests that
+  // need a thread waiting on a person's permission launch in accept-edits through the
+  // test entry that takes the sandboxed modes (test/fixtures/sandboxed-bin.mjs).
+  const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${sandboxedModes ? SANDBOXED_ENTRY : PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
   const answer = JSON.parse(stdout);
   assert.deepEqual(Object.keys(answer), ["schemaVersion", "phase", "capability", "provider", "verb", "ok", answer.ok ? "result" : "error"]);
   assert.equal(answer.verb, verb);
@@ -91,9 +95,9 @@ const launchInput = (home, name, extra = {}) => ({
   env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }],
   unset: [], pathPrepend: [`${home}/.oats/bin`], args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
 });
-async function launched(name, extra) {
+async function launched(name, extra, options) {
   const home = await makeHome(name);
-  const answer = await provider("launch", launchInput(home, name, extra));
+  const answer = await provider("launch", launchInput(home, name, extra), SETTINGS, options);
   assert.equal(answer.ok, true, JSON.stringify(answer));
   return { home, endpoint: answer.result.endpoint };
 }
@@ -147,7 +151,7 @@ test("the two HTTP reads the provider makes answer what it decodes, at the pinne
   assert.doesNotMatch(doctor, /dummy-not-a-real-key/);
 });
 
-test("the launch's refusals reach no bb: a secret-sourced env entry, an argument bb cannot carry", async () => {
+test("the launch's refusals reach no bb: a secret-sourced env entry, an argument bb cannot carry, a mode that is not full", async () => {
   const home = await makeHome("refused");
   const secret = launchInput(home, "refused");
   secret.env.push({ name: "ANTHROPIC_API_KEY", value: "dummy-not-a-real-key", source: "launch-config-reference", secret: true });
@@ -156,6 +160,13 @@ test("the launch's refusals reach no bb: a secret-sourced env entry, an argument
   assert.match(envAnswer.error.message, /ANTHROPIC_API_KEY/);
   const argAnswer = await provider("launch", launchInput(home, "refused", { args: ["--channels", "plugin:aweb-channel@awebai-marketplace"] }));
   assert.equal(argAnswer.error.code, "E_BACKEND_LAUNCH_ARG");
+  // A launch that is not in bb's full mode (no yolo, or a sandboxed --permission-mode): the
+  // command launches in full mode only until the release that brings the deny rules.
+  for (const extra of [{ yolo: false }, { yolo: null }, { yolo: null, args: ["--permission-mode", "auto"] }, { yolo: false, args: ["--permission-mode", "acceptEdits"] }]) {
+    const modeAnswer = await provider("launch", launchInput(home, "refused", extra));
+    assert.equal(modeAnswer.error.code, "E_BACKEND_SANDBOXED_MODE", JSON.stringify(extra));
+    assert.match(modeAnswer.error.message, /a sandboxed mode.*--yolo.*Nothing was started/);
+  }
   assert.equal((await bbJson("project list")).some((p) => p.sources.some((s) => s.path === home)), false);
   assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
 });
@@ -279,7 +290,7 @@ const SANDBOX = {
  *  launch carries the sandbox allowances), and a scripted Bash call. */
 async function waitingOnPermission(name, ranFile) {
   await armTool(`echo RAN > ${ranFile}`);
-  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX });
+  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX }, { sandboxedModes: true });
   const pending = await waitFor("a pending interaction", async () => (await bbJson(`thread interactions list ${endpoint.threadId}`)).find((i) => i.status === "pending"));
   return { home, endpoint, pending };
 }
@@ -291,12 +302,16 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   // Claude Code at the pinned bb started with them.
   assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
     { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
-  assert.deepEqual((await provider("check", { home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  const sandboxedCheck = (input) => provider("check", input, SETTINGS, { sandboxedModes: true });
+  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
   // The check the kernel runs before a launch, with the launch it plans: a host the
   // deployment does not record refuses a sandboxed launch there, before anything starts.
-  const plannedCheck = await provider("check", { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: { ...SANDBOX, missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } } });
+  const planned = { home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: { ...SANDBOX, missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }] } } };
+  const plannedCheck = await sandboxedCheck(planned);
   assert.deepEqual(plannedCheck.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_HOST"]);
   assert.equal(plannedCheck.result.status, "needs-configuration");
+  // The provider's own command says, of that same planned launch, that it takes none in a sandboxed mode yet.
+  assert.deepEqual((await provider("check", planned)).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"]);
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });
   assert.equal(answer.ok, false);

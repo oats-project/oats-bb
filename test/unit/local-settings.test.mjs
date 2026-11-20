@@ -25,10 +25,10 @@ async function setup(t) {
     env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }], unset: [], args: [],
     promptFile: join(home, "TASK.md"), previous: null,
     sandbox: { domains: [AWEB], write: [events(dir)] }, ...extra,
-  }, { settings: backend.settings(), bb });
+  }, { settings: backend.settings(), bb, sandboxedModes: true });
   const local = () => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
   const record = () => JSON.parse(readFileSync(join(home, ".oats-bb-sandbox.json"), "utf8"));
-  const check = () => call("check", { home, soul: null }, { settings: backend.settings(), bb });
+  const check = () => call("check", { home, soul: null }, { settings: backend.settings(), bb, sandboxedModes: true });
   const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: "{}", ...extra } });
   return { dir, home, bb, launch, local, record, check, hook, settings: backend.settings() };
 }
@@ -108,7 +108,7 @@ for (const [name, sandbox, code, pattern] of [
     assert.match(answer.error.message, pattern);
     assert.equal(existsSync(join(home, ".claude")), false);
     assert.deepEqual(bb.calls(), []);
-    const planned = (yolo) => call("check", { home, soul: null, launch: { harness: "claude", yolo, args: [], sandbox } }, { settings, bb });
+    const planned = (yolo) => call("check", { home, soul: null, launch: { harness: "claude", yolo, args: [], sandbox } }, { settings, bb, sandboxedModes: true });
     assert.deepEqual((await planned(false)).result.problems.map((p) => p.code), [code], "the check says what the launch would be refused for");
     assert.deepEqual((await planned(true)).result.problems, [], "and nothing for a full-mode launch");
     const full = await launch({ sandbox, yolo: true });
@@ -330,7 +330,7 @@ test("a missing host refuses only for the agent's default team; another team's i
   assert.deepEqual(after.warnings.map((w) => w.code), ["session-provider-sandbox-team-unreachable", "session-provider-sandbox"]);
   assert.match(after.warnings[0].message, /not this agent's default: in bb's accept-edits mode every command that reaches that team's mail raises a prompt.*oats aweb setup.*Missing: oats\.aweb's setting services for team ops:acme\.aweb\.ai$/);
   // In auto the same gap reads as unreachable mail; the check of a planned launch says it before the launch.
-  const plannedAuto = await call("check", { home, soul: null, launch: { harness: "claude", yolo: null, args: ["--permission-mode", "auto"], sandbox: { domains: [AWEB], write: [], missing: [other] } } }, { settings, bb });
+  const plannedAuto = await call("check", { home, soul: null, launch: { harness: "claude", yolo: null, args: ["--permission-mode", "auto"], sandbox: { domains: [AWEB], write: [], missing: [other] } } }, { settings, bb, sandboxedModes: true });
   assert.equal(plannedAuto.result.status, "ready");
   assert.match(plannedAuto.result.warnings.find((w) => w.code === "session-provider-sandbox-team-unreachable").message, /in bb's auto mode that team's mail is unreachable for this agent/);
   // The default team's gap refuses, and names only that row.
@@ -383,7 +383,7 @@ const planned = (extra) => ({ harness: "claude", yolo: false, args: [], sandbox:
 
 test("check, with the planned launch, answers what that launch would be refused for, before any launch", async (t) => {
   const { home, bb, settings } = await setup(t);
-  const run = (input) => call("check", { home, soul: null, ...input }, { settings, bb });
+  const run = (input) => call("check", { home, soul: null, ...input }, { settings, bb, sandboxedModes: true });
   const refused = await run({ launch: planned({ sandbox: { domains: [], write: [], missing: [{ capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai", optional: false }, { capability: "oats.aweb", setting: "registryHost", team: null, optional: true }], skipped: [{ capability: "acme.other", reason: "not a slot provider of this home" }] } }) });
   assert.equal(refused.result.status, "needs-configuration");
   assert.deepEqual(refused.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_HOST"]);

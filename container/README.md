@@ -187,11 +187,10 @@ and runs that commit's acceptance with `AGENT_CHILD=bb`
 ([the workflow](../.github/workflows/container.yml)). It uses no token and no model.
 
 Run by hand on amd64, on an earlier commit of the same OATS change (`e1b23202`): both
-builds; the start (broker, then bb
-ready in about 3 seconds, then sshd and host run); `bb --version` equal to the pin; the
-ordered stop (host run first, then sshd, the broker and bb, each exiting 0); and that
-acceptance, which checks the declaration file, bb's two declared ports, that nothing but
-sshd listens beyond loopback, and the declared version.
+builds; the start (broker, then bb ready in about 3 seconds, then sshd and host run);
+`bb --version` equal to the pin; the ordered stop (host run first, then sshd, the broker
+and bb, each exiting 0); and that acceptance, which checks the declaration file, bb's two
+declared ports, that nothing but sshd listens beyond loopback, and the declared version.
 
 Run before the move, on the image and relay as they were in the OATS repository (the relay
 is unchanged): a bb restart after `kill` and after `kill -9`, each followed by a new turn

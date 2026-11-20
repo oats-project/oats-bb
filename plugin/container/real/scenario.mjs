@@ -527,6 +527,7 @@ try {
   row = await untilRow(queued, "its turn held in bb's line", (r) => r.session?.threadId === queuedThread && bbThread(queuedThread)?.status === "pending");
   say(`     ${bb("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
   show("oats status", brief(row));
+  check(inLine(queuedThread).length === 1 && bbThread(queuedThread)?.queuedWork === "waiting", "bb holds the agent's first turn in line", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
   show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status, queuedWork: bbThread(queuedThread)?.queuedWork, inLine: inLine(queuedThread).length });
   agrees(queued, row);
   const queuedPlan = act("stop plan", "stopPlan", { instance: queued });

@@ -17,7 +17,8 @@ const work = z
 /**
  * The kernel's words for a session with nothing to stop: `shell`, `stopped` and `not-launched` are
  * idle, and one that is established and not present (`absent`) is observably gone. Any other state
- * of an established session, `unknown` included, is a running harness.
+ * of an established session, `unknown` included, is a session that is there (`sessionWords` says
+ * what the plan knows of it).
  */
 const idle = (value: NonNullable<z.output<typeof session>>): boolean =>
   value.present === false || value.state === "shell" || value.state === "stopped" || value.state === "not-launched";

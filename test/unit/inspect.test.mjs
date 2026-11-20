@@ -51,6 +51,15 @@ test("a thread whose queuedWork is no word cannot be read: E_SESSION_UNAVAILABLE
   assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
 });
 
+// A mark that is no time must not read as "archived" or "deleted": the thread would look
+// gone, and a live session would read stopped.
+for (const [name, extra] of [["an archive mark that is a word", { archivedAt: "not-a-timestamp" }], ["a delete mark that is a word", { deletedAt: "yes" }], ["an archive mark that is true", { archivedAt: true }], ["a negative archive mark", { archivedAt: -1 }]]) {
+  test(`a thread row with ${name} cannot be read: E_SESSION_UNAVAILABLE, never stopped`, async (t) => {
+    const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", "idle", extra)]);
+    assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
+  });
+}
+
 test("a thread bb no longer has reads stopped, and offers nothing to open", async (t) => {
   const { answer } = await inspectWith(t, [threadRow("thr_other", "proj_other", "idle")]);
   assert.deepEqual(answer.result, { present: false, state: "stopped", running: false });

@@ -78,11 +78,27 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   one by its endpoint.
 - **stop is complete only when nothing of the thread can run.** bb's concurrency limit
   holds a turn in line (the thread is `pending`, its list row says `queuedWork`), and
-  `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So stop
-  first withdraws the thread's queue (`bb thread queue list`, `bb thread queue delete`),
-  stops, waits for the thread to settle, and reads the queue again: `stopped` only when
-  the thread is settled and its queue is empty. Inspect reads a settled thread with work
+  `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So a stop is
+  confirmed, by one rule every path uses (the stop verb, the stop with no endpoint, the
+  retire hook, a launch's cleanup): the thread's queue is withdrawn (`bb thread queue
+  list`, `bb thread queue delete`), bb acknowledges a stop, the thread shows settled, its
+  queue reads empty, and the thread shows settled once more after that. A message found
+  in line after the thread settled is withdrawn and the thread is stopped and looked at
+  again, since bb may have started it as a turn in the same instant. Anything else by the
+  end of the grace is `E_SESSION_STOP_FAILED`. Inspect reads a settled thread with work
   in line as `running: true`.
+- **A refusal means nothing was changed.** A launch reads everything it needs first (bb's
+  projects and threads, the home's archived threads), then stops what must be stopped (a
+  stop of a thread at rest changes nothing the kernel records: it releases a loaded
+  process), and only then makes its first change: archiving the previous thread, or
+  creating the home's project. A failure before that change is a refusal. After it, a
+  launch that cannot go on, and an archive or a project creation whose outcome bb did
+  not say, end with no answer and a nonzero exit, as every outcome in doubt does.
+- **Helpers stay in the command's process group.** The kernel gives each provider command
+  a process group and kills that group to end the command. The provider starts every bb
+  call inside it, never in a session or group of its own. A bb call cut off by time is
+  ended by its launcher process and its pipes are let go; what the launcher started is
+  left in the group, for the kernel.
 - **No Claude of an old thread is left in the home.** bb keeps the Claude process of an
   archived thread loaded, with the home as its working directory, and shows nothing that
   tells such a thread from one whose process is gone. `bb thread stop` releases it, and
@@ -93,7 +109,11 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (earlier ones were swept by the launch that made that thread); with no `previous`, or
   where bb does not show when it was created, it sweeps them all. A stop with
   `endpoint: null` and the retire hook are told no thread to count from, and sweep them
-  all: one bb call per archived thread of that project.
+  all: one bb call per archived thread of that project. What the provider confirms is
+  bb's acknowledgement of the stop: the process ends a moment after it, and the provider
+  does not look at processes (the kernel does, in the home, before it retires one). So
+  the old thread's Claude, already stopped, may still be exiting when the new thread's
+  starts.
 - **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
@@ -133,10 +153,12 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   - The rule's reach: a thread a person starts in the home after the failed launch was
     sent is at or after that time too, and is stopped and archived with it, whenever the
     kernel's next stop, start or retire comes. It stays in bb, archived.
-  - A limit: the stop sees what bb shows when it is called. The provider starts each bb
-    call in a session of its own, so a bb call can outlive a killed provider and create
-    its thread after this stop answered. Nothing is lost silently: the next launch refuses
-    and names that thread; but this stop did not stop it.
+  - A limit: the stop sees what bb shows when it is called. The kernel kills a provider
+    command's whole process group, and the provider's bb calls stay in that group (below),
+    so no bb call outlives a killed launch; but bb's server may still be making the thread
+    of a request it had already received, and show it only after this stop answered.
+    Nothing is lost silently: the next launch refuses and names that thread; but this
+    stop did not stop it.
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
   launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on

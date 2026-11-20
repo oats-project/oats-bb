@@ -13,7 +13,7 @@
 // and later removes exactly that. An entry a person put in the file under another name is
 // never touched; a name the launch carries is the launch's.
 import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { delimiter, isAbsolute, join, normalize } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
 import { ProviderError, fail, isObject } from "./errors.mjs";
 
@@ -285,22 +285,52 @@ const writeJson = (home, path, doc) => writeAtomic(home, path, `${JSON.stringify
 
 const READ_MAX = 1024 * 1024;
 
+/** Open the directory that holds a file the provider reads in the home, without following
+ *  a link, and hold it: the file is then opened THROUGH that handle, so a directory
+ *  swapped for a link between the two steps cannot take the read out of the home (the
+ *  home is writable by its agent, and a no-follow open covers the last name only).
+ *  → { fd, through(name) } | null where there is no such directory. Throws where the name
+ *  is something else than a directory. */
+function pinDirectory(dir, refuse, { follow = false } = {}) {
+  let fd;
+  try { fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | (follow ? 0 : constants.O_NOFOLLOW)); }
+  catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw refuse(`is in ${dir}, which is not a directory of the home (a link is not followed)`);
+  }
+  // Linux names an open directory by its handle; elsewhere the path is used, and the
+  // handle says afterwards whether the directory is still the one that was opened.
+  const through = (name) => (process.platform === "linux" ? `/proc/self/fd/${fd}/${name}` : join(dir, name));
+  const same = () => {
+    if (process.platform === "linux") return true;
+    const now = lstatSync(dir, { throwIfNoEntry: false }), held = fstatSync(fd);
+    return now?.isDirectory() === true && now.dev === held.dev && now.ino === held.ino;
+  };
+  return { fd, through, same };
+}
+
 /** Read a JSON object from a file in the home, or null when there is none. The home is
- *  writable by its agent, so the read is confined: a regular file only (a link, a
- *  directory or a pipe is refused, never followed or waited on), opened without following
- *  a link, at most 1 MiB, and nothing of its content goes into a message. */
-function readJsonObject(path, what) {
-  const stat = lstatSync(path, { throwIfNoEntry: false });
-  if (!stat) return null;
+ *  writable by its agent, so the read is confined: the file's directory is opened
+ *  without following a link and held, and the file is read through it; a regular file
+ *  only (a link, a directory or a pipe is refused, never followed or waited on), at most
+ *  1 MiB, and nothing of its content goes into a message. */
+function readJsonObject(path, what, { inHome = false } = {}) {
   const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
-  if (!stat.isFile()) throw refuse("is not a regular file (a link, a directory or a pipe is not read)");
-  if (stat.size > READ_MAX) throw refuse(`is larger than ${READ_MAX} bytes`);
+  // The home itself is the kernel's word, and may be reached through a link: only a
+  // directory inside it is opened without following one.
+  const dir = pinDirectory(dirname(path), refuse, { follow: inHome });
+  if (dir === null) return null;
   let text;
   let fd = null;
   try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const pinned = dir.through(basename(path));
+    const stat = lstatSync(pinned, { throwIfNoEntry: false });
+    if (!stat) return null;
+    if (!stat.isFile()) throw refuse("is not a regular file (a link, a directory or a pipe is not read)");
+    if (stat.size > READ_MAX) throw refuse(`is larger than ${READ_MAX} bytes`);
+    fd = openSync(pinned, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const opened = fstatSync(fd);
-    if (!opened.isFile() || opened.size > READ_MAX) throw refuse("changed while it was read");
+    if (!opened.isFile() || opened.size > READ_MAX || !dir.same()) throw refuse("changed while it was read");
     const buffer = Buffer.alloc(opened.size);
     let got = 0;
     while (got < opened.size) {
@@ -314,6 +344,7 @@ function readJsonObject(path, what) {
     throw refuse(`could not be read (${typeof error?.code === "string" ? error.code : "error"})`);
   } finally {
     if (fd !== null) closeSync(fd);
+    closeSync(dir.fd);
   }
   let doc;
   try { doc = JSON.parse(text); }
@@ -377,7 +408,7 @@ export function currentSandbox(home) {
 /** The record of the sandbox entries this provider added: the launch's list (who asked
  *  for what, for readiness to show) and exactly which entries and keys it put in. */
 export function readSandboxRecord(home) {
-  const record = readJsonObject(join(home, SANDBOX_RECORD), "the provider's sandbox record");
+  const record = readJsonObject(join(home, SANDBOX_RECORD), "the provider's sandbox record", { inHome: true });
   if (record === null) return null;
   return {
     domains: Array.isArray(record.domains) ? record.domains.filter(isObject) : [],

@@ -414,9 +414,9 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   await sh("rm -f slow-spawn-made killed-launch.out && cat > killed-launch.json", { input: JSON.stringify(request) });
   // What the kernel's receipt holds: the time the launch was sent, taken just before it.
   const launchSent = new Date().toISOString();
-  // The kill ends the provider only: it starts each bb call in a session of its own, so
-  // the bb call it was waiting on (the shim, holding bb's answer) lives on, as a real bb
-  // call would after a killed `oats spawn`.
+  // The kill takes the provider and the bb call it was waiting on (the shim, holding bb's
+  // answer): the provider keeps its bb calls in its own process group, the one the kernel
+  // kills. bb's server has made the thread by then, and nothing of OATS knows its id.
   const settings = { ...SETTINGS, cli: "/repo/test/contract/bb-slow-spawn.sh" };
   await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' setsid sh -c 'echo $$ > killed-launch.pid; exec node ${PROVIDER} session launch < killed-launch.json > killed-launch.out 2>&1' < /dev/null > /dev/null 2>&1 &`);
   await waitFor("bb to have made the thread", async () => (await sh("test -e slow-spawn-made && echo made || true")).trim() === "made", { timeoutMs: 120_000 });

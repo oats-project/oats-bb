@@ -26,7 +26,7 @@ test("a bb that is fit answers ready: {status, problems, warnings}, the shape oa
   const answer = await check();
   // Ready, with the one thing a plain readiness read always says for now: which mode the command launches in.
   assert.deepEqual({ ...answer, result: { ...answer.result, warnings: answer.result.warnings.map((w) => w.code) } }, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "check", ok: true, result: { status: "ready", problems: [], warnings: ["session-provider-full-mode-only"] } });
-  assert.match(answer.result.warnings[0].message, /full mode only for now: a spawn or start without --yolo .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
+  assert.match(answer.result.warnings[0].message, /full mode only for now: a spawn or start that does not choose it \(--yolo, or a launch configuration.s --permission-mode bypassPermissions\) .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
   assert.ok(answer.result.warnings[0].message.length < 500);
   assert.equal(bb.calls().every((c) => c.server === backend.server), true);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
@@ -180,6 +180,18 @@ test("a host daemon that serves another bb server: E_BACKEND_NOT_READY", async (
   assert.match(answer.result.problems[0].message, /serves http:\/\/127\.0\.0\.1:1/);
 });
 
+test("a host daemon that names this server's port under another scheme serves another server: the port alone does not make it the same", async (t) => {
+  const { backend, check } = await setup(t);
+  backend.state.daemonStatus = { hostId: "host_1", connected: true, serverUrl: `https://localhost:${backend.serverPort}` };
+  const answer = await check();
+  assert.equal(answer.result.status, "needs-configuration");
+  assert.deepEqual(codes(answer), ["E_BACKEND_NOT_READY"]);
+  assert.match(answer.result.problems[0].message, new RegExp(`serves https://localhost:${backend.serverPort}, not settings\\.oats\\.bb\\.server http://127`));
+  // The same scheme under another loopback name is the same server.
+  backend.state.daemonStatus = { hostId: "host_1", connected: true, serverUrl: `http://localhost:${backend.serverPort}/` };
+  assert.deepEqual(codes(await check()), []);
+});
+
 for (const [word, status] of [["unauthenticated", "authorization-required"], ["expired", "authorization-required"], ["not_installed", "needs-configuration"], ["unsupported_version", "needs-configuration"], ["unknown", "unavailable"], ["a_word_bb_adds_later", "unavailable"]]) {
   test(`bb reports claude-code as ${word}: E_BACKEND_NOT_READY naming bb's word, ${status}`, async (t) => {
     const { check, backend } = await setup(t);
@@ -246,14 +258,21 @@ test("a live thread whose project root is gone is reported as session-provider-o
   assert.doesNotMatch(warning.message, /thr_archived|thr_a\b/);
 });
 
-test("when bb's threads cannot be listed, the check says orphans were not looked for", async (t) => {
-  const { check } = await setup(t, { "thread list": UNREACHABLE });
-  const answer = await check();
-  assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphans-unchecked", "session-provider-full-mode-only"]);
-});
+// A bb whose own lists cannot be read cannot be used (a launch reads them first): not
+// ready, whatever else answered. A malformed read is never "ready".
+for (const [name, script] of [["cannot be reached for its threads", { "thread list": UNREACHABLE }], ["answers a thread row that cannot be read", { "thread list": { stdout: [{ id: "thr_x" }] } }], ["answers a project row that cannot be read", { "project list": { stdout: [null] } }], ["answers a thread whose archive mark is a word", { "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle", { archivedAt: "not-a-timestamp" })] } }]]) {
+  test(`a bb that ${name} is not ready: E_BACKEND_NOT_READY, unavailable`, async (t) => {
+    const { check } = await setup(t, script);
+    const answer = await check();
+    assert.equal(answer.result.status, "unavailable");
+    assert.deepEqual(codes(answer), ["E_BACKEND_NOT_READY"]);
+    assert.match(answer.result.problems[0].message, /could not be read, so this bb cannot be used/);
+  });
+}
+
 
 for (const [name, daemonStatus] of [["with no connected field", { hostId: "host_1" }], ["whose connected is not a boolean", { connected: "yes" }], ["that is a list", [true]],
-  ["that is connected and names no server", { hostId: "host_1", connected: true }], ["whose serverUrl is a number", { connected: true, serverUrl: 42 }], ["whose serverUrl is no URL", { connected: true, serverUrl: "over there" }]]) {
+  ["that is connected and names no server", { hostId: "host_1", connected: true }], ["whose serverUrl is a number", { connected: true, serverUrl: 42 }], ["whose serverUrl is no URL", { connected: true, serverUrl: "over there" }], ["whose serverUrl is no http address", { connected: true, serverUrl: "ftp://127.0.0.1:38886" }]]) {
   test(`a host daemon /status ${name} is not ready, never ready`, async (t) => {
     const { check } = await setup(t, {}, { daemonStatus });
     const answer = await check();

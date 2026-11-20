@@ -134,7 +134,9 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     if (bad !== -1) throw fail(fallbackCode, `${what} answered a row this provider cannot read (row ${bad + 1} of ${value.length})`);
     return value;
   };
-  const stamp = (value) => value === null || value === undefined || typeof value === "number" || typeof value === "string";
+  // A time as bb writes one: a number of milliseconds, or nothing. A word there would
+  // read as "archived" or "deleted" and make a live thread look gone.
+  const stamp = (value) => value === null || value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= 0);
   const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string"
     && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
     && (row.queuedWork === null || row.queuedWork === undefined || typeof row.queuedWork === "string")

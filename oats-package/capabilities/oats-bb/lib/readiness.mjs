@@ -116,9 +116,10 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "connected": true or false)`);
     } else if (status.value.connected !== true) {
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} is not connected to its server yet`);
-    } else if (typeof status.value.serverUrl !== "string" || !URL.canParse(status.value.serverUrl)) {
-      // Without the server the daemon names, nothing says it serves this one.
-      add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "serverUrl" that is a URL)`);
+    } else if (!usableOrigin(status.value.serverUrl)) {
+      // Without the server the daemon names, nothing says it serves this one. An address
+      // that is no http(s) origin names none.
+      add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "serverUrl" that is an http or https address)`);
     } else if (server && !sameServer(status.value.serverUrl, server)) {
       add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${new URL(status.value.serverUrl).origin}, not settings.oats.bb.server ${server}: point both settings at one bb`);
     }
@@ -147,11 +148,21 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
 /** Whether the server a daemon says it serves is the configured one. The daemon reports
  *  127.0.0.1 whatever loopback name the setting uses (localhost, ::1): between two
  *  loopback addresses, the port decides. */
+/** Whether the value is an address a bb server can have: an http or https URL with a host. */
+function usableOrigin(value) {
+  if (typeof value !== "string" || !URL.canParse(value)) return false;
+  const url = new URL(value);
+  return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+}
+
+/** The same server: the same origin, or (between loopback names, which differ only in how
+ *  this machine is called) the same scheme and port. */
 function sameServer(reported, server) {
   let url;
   try { url = new URL(reported); } catch { return false; }
   if (url.origin === server) return true;
-  return isLoopbackHost(url.hostname) && isLoopbackHost(new URL(server).hostname) && portOf(url.origin) === portOf(server);
+  const mine = new URL(server);
+  return url.protocol === mine.protocol && isLoopbackHost(url.hostname) && isLoopbackHost(mine.hostname) && portOf(url.origin) === portOf(server);
 }
 
 /** Live bb threads whose project root no longer exists: what a retire that could not
@@ -199,7 +210,9 @@ export async function readinessResult(settings, options = {}) {
     try { warnings.push(...await orphanedThreads(bb, options)); }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
-      warnings.push({ code: "session-provider-orphans-unchecked", message: `bb's threads could not be listed, so orphaned threads were not looked for (${error.message})` });
+      // bb's own lists could not be read: a bb that cannot say what runs in it is not
+      // ready, whatever else answered (a launch reads the same lists first).
+      problems.push({ code: "E_BACKEND_NOT_READY", status: "unavailable", message: `bb's projects and threads could not be read, so this bb cannot be used and orphaned threads were not looked for (${error.message})` });
     }
   }
   for (const problem of options.extra?.problems ?? []) problems.push(problem);
@@ -213,7 +226,7 @@ export async function readinessResult(settings, options = {}) {
  *  launch would run in (`oats readiness`, for a soul or a home; `oats bb doctor`): the
  *  backend launches in full mode only for now. A warning: a soul that launches with yolo is
  *  ready. */
-export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only for now: a spawn or start without --yolo (bb's accept-edits or auto mode, which are sandboxed) is refused before anything starts (E_BACKEND_SANDBOXED_MODE). The rules that keep a sandboxed agent's tools off its own home's hooks and settings come with a later release of this provider" });
+export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only for now: a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). The rules that keep a sandboxed agent's tools off its own home's hooks and settings come with a later release of this provider" });
 
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.

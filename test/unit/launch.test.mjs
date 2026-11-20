@@ -431,7 +431,7 @@ test("a host daemon that does not say which server it serves refuses the launch 
   const { home, bb, run } = await setup(t, {}, { daemonStatus: { connected: true, serverUrl: 42 } });
   const answer = await run();
   assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
-  assert.match(answer.error.message, /no "serverUrl" that is a URL/);
+  assert.match(answer.error.message, /no "serverUrl" that is an http or https address/);
   assert.deepEqual(effects(bb), []);
   assert.equal(existsSync(join(home, ".claude")), false);
 });

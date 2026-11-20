@@ -1,0 +1,45 @@
+# The bb session provider (oats-package/): its unit tests and its contract test.
+# Both read the bb-app pin from the repository's bb-version file.
+name: provider
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      # Each Node version reports for itself: one failing does not cancel the other.
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Validate manifests (the version default equals bb-version) and run the unit tests (a fake bb)
+        run: npm test
+
+  # The provider against the pinned bb-app (bb-version), in a container, with
+  # a mock Anthropic endpoint: no credential. bb's API has no login, so bb runs only
+  # inside that container and no port is published.
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Contract test against the pinned bb-app
+        run: npm run test:contract

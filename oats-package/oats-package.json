@@ -1,0 +1,11 @@
+{
+  "package": "oats.bb",
+  "version": "0.1.0",
+  "compatibility": {
+    "oats": ">=0.70.0"
+  },
+  "description": "OATS on bb: the bb session provider (an instance as one bb thread).",
+  "capabilities": [
+    "capabilities/oats-bb"
+  ]
+}

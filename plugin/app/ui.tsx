@@ -4,13 +4,19 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
 
+// bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
+// themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
+// `success` in the light theme, `destructive` in the dark one: 2.87:1 on an open row). As text they
+// hold 4.5:1 on the page's own surfaces, not on an open row (`warning-text`: 4.35:1 there in the
+// light theme): a text in a row is `text-foreground` or `text-muted-foreground`. A refusal's text,
+// on a page or in a dialog, is `text-destructive-text`, never `text-destructive`.
 const DOT: Record<AgentState, string> = {
-  "needs-you": "bg-amber-500",
-  working: "bg-green-500",
+  "needs-you": "bg-warning-text",
+  working: "bg-success-foreground",
   idle: "border border-muted-foreground",
   stopped: "bg-muted-foreground",
-  error: "bg-destructive",
-  unreachable: "bg-destructive",
+  error: "bg-destructive-text",
+  unreachable: "bg-destructive-text",
 };
 
 /**
@@ -51,7 +57,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 const BUTTON: Record<NonNullable<ButtonProps["variant"]>, string> = {
   default: "border border-border bg-card text-foreground hover:bg-accent",
   primary: "border border-transparent bg-primary text-primary-foreground hover:opacity-90",
-  destructive: "border border-transparent bg-destructive text-white hover:opacity-90",
+  destructive: "border border-transparent bg-destructive text-destructive-foreground hover:opacity-90",
   ghost: "border border-transparent text-foreground hover:bg-accent",
 };
 export function Button({ variant = "default", className = "", type = "button", ...rest }: ButtonProps) {
@@ -82,7 +88,7 @@ export function Note({ children }: { children: ReactNode }) {
 /** A kernel refusal or a failed call, printed unchanged. */
 export function ErrorLine({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive-text">
       <span className="min-w-0 whitespace-pre-wrap break-words">{children}</span>
       {onRetry === undefined ? null : <Button onClick={onRetry}>Retry</Button>}
     </div>

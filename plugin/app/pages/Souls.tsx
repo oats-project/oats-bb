@@ -51,7 +51,7 @@ function SummaryView({ summary }: { summary: Summary }) {
   return (
     <div data-testid="oats-preview" className="flex flex-col gap-2 rounded-md border border-border bg-card p-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What OATS would do</span>
-      {list("Problems", summary.problems, "text-destructive")}
+      {list("Problems", summary.problems, "text-destructive-text")}
       {list("Warnings", summary.warnings)}
       {list("Modules", summary.modules)}
       {list("Teams", summary.teams)}
@@ -136,7 +136,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
         Name
         <input
           data-testid="oats-spawn-name"
-          className="min-h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          className="min-h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-subtle-foreground"
           value={name}
           autoComplete="off"
           spellCheck={false}
@@ -145,7 +145,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
           onChange={(event) => edit(setName, event.target.value)}
         />
         {name !== "" && !nameOk ? (
-          <span className="text-destructive">
+          <span className="text-destructive-text">
             Lower-case letters, digits and dashes; starts with a letter or a digit; 63 characters at most.
           </span>
         ) : null}
@@ -155,7 +155,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
         <textarea
           data-testid="oats-spawn-task"
           rows={6}
-          className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+          className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-subtle-foreground"
           value={task}
           placeholder="What this agent is for."
           onChange={(event) => edit(setTask, event.target.value)}
@@ -269,7 +269,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         {soul.spawnable ? (
           <SpawnForm key={soul.name} soul={soul} />
         ) : (
-          <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive">
+          <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive-text">
             {clean(soul.problem ?? "This soul cannot be spawned.")}
           </p>
         )}

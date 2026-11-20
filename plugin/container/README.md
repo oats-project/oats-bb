@@ -23,7 +23,7 @@ host's home; the plugin's directory goes in through `tar` and the artefacts come
 | `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
-| `live-ui.mjs`, `browser.mjs` | in the container | the app's live checks (A13, A14) with screenshots at two widths, and the small DevTools-protocol driver of the image's Chromium they use |
+| `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked (`test/fixtures/`) and logs each call; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
@@ -41,6 +41,60 @@ The live checks of the backend:
 - **A15** `bb plugin reload oats` while a fake `oats` sleeps and holds a child of its own: neither process is left.
 - **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
 - **A15b** the same as A15 when bb itself is stopped.
+
+The live checks of the app (`live-ui.mjs`), each at 1280x800 and 390x800, in bb's light theme and
+again in its dark theme:
+
+- **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
+  that needs you (its row is the open one, with its dot and its "?"), the home (its badge
+  shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
+  page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
+  and their preview (Preview and Spawn enabled).
+- **A14** with `oats` removed: bb's threads are listed, the "not found" line shows, a thread opens.
+- **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
+  Retire opens the plan dialog with the kernel's plan. Then the tree with the two states no
+  fixture row is in: an agent the kernel cannot reach, on the open thread (its row drawn as bb
+  draws the open one), and an agent whose session fell back to a shell. With A13's rows, all six
+  states of the dot are drawn.
+
+**The theme** is bb's own appearance choice, not the browser's colour scheme. bb 0.50.1 keeps it in
+the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: what its Settings,
+Appearance writes) and puts the class `dark` on the document's root when it loads; no server
+setting and no `bb settings` key holds it. `browser.mjs` sets that key before any script of bb
+runs, and each check asserts the theme bb then draws. The screenshots are
+`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (68
+files, in `container/out/`, kept as CI artefacts).
+
+**The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
+text the plugin draws there reads at 4.5:1 or more against its effective background, and each
+state dot at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
+colours). It covers every rendered element with text of its own inside the plugin's elements
+(`data-testid="oats-…"`: the sidebar block and tree, the identity row and its chips, the home's
+cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
+and the buttons that are enabled in a scene: default, primary and destructive), what a field
+shows (the typed value of an input or a textarea, the chosen option of a select, or the
+placeholder of an empty one), and the state dots, in each of their six states. A failing scene
+prints every distinct row that fails. What it checks is
+what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
+closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted
+in some scenes that do not show them, and a line's counts can differ between two runs of one
+scene. It cannot see: hover, focus and other states the
+page is not in (a failed call's error line, the "Starting…" line, a spawn's problems: no scene
+brings them up; they use the same token as the form's refusal, which one does); a disabled
+control (skipped, as WCAG does); the options of an open select (the browser draws them); borders,
+icons and focus rings; a background that is an image or a gradient (reported and failed, never
+guessed); what a non-ancestor draws over a text; and bb's own UI. `contrast.mjs` says how it
+computes.
+
+The plugin's colours are bb's tokens only (`app/ui.tsx`). Where a state needs a colour, it is one
+of bb's tokens for coloured text on a surface (`warning-text`, `success-foreground`,
+`destructive-text`). As a dot's fill they hold 3:1 against the surface in both themes, on an open
+or hovered row too; bb's fill tokens (`attention` and `success` in the light theme, `destructive`
+in the dark one) and a fixed palette colour (`amber-500`, `green-500`) do not. As text they hold
+4.5:1 on a page or a dialog (a refusal is `destructive-text`), but not on an open row
+(`warning-text` reads 4.35:1 there in the light theme): a row's texts, the "?" of an agent that
+needs you among them, are `foreground` or `muted-foreground`. `bg-destructive` is left only as the
+fill of the destructive button, under `destructive-foreground` text.
 
 To work in a container for a while:
 

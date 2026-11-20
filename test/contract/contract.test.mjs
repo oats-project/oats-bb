@@ -636,7 +636,10 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   await run("docker", ["exec", "-d", NAME, "sh", "-c",
     "cd ~ && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates > bb-app-signed-out.out 2>&1"]);
   const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
-  await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 120_000, everyMs: 1_000 });
+  // This wait has timed out twice in some ten runs with no cause found: when it does, say
+  // what that bb printed and what its daemon answered, so the next one is read, not rerun.
+  await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 180_000, everyMs: 1_000 })
+    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await sh("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await sh("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}`); });
 
   const result = (await check(signedOut)).result;
   assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);

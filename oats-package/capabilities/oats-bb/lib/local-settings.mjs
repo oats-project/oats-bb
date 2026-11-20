@@ -110,6 +110,7 @@ export function withPathPrepend(env, pathPrepend, ambientPath) {
   return { ...env, PATH: [...pathPrepend, ...base.split(delimiter).filter((dir) => dir && !pathPrepend.includes(dir))].join(delimiter) };
 }
 
+const CAPABILITY_ID = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 // A bare host: labels of letters, digits and dashes, an optional port. No wildcard, no
 // scheme, no path, no user. An IPv4 address is such a host too.
 const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::\d{1,5})?$/;
@@ -120,9 +121,9 @@ const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:
  *  an exact absolute path) and refuses the launch otherwise (E_BACKEND_SANDBOX_HOST,
  *  E_BACKEND_SANDBOX_PATH), naming the entry. */
 export function readSandbox(sandbox) {
-  if (sandbox === undefined || sandbox === null) return { domains: [], write: [] };
+  if (sandbox === undefined || sandbox === null) return { domains: [], write: [], missing: [] };
   if (!isObject(sandbox)) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
-  for (const key of Object.keys(sandbox)) if (key !== "domains" && key !== "write") throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${key}`);
+  for (const key of Object.keys(sandbox)) if (!["domains", "write", "missing"].includes(key)) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${key}`);
   const list = (value, what) => {
     if (value === undefined || value === null) return [];
     if (!Array.isArray(value)) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox.${what} is not a list`);
@@ -143,8 +144,30 @@ export function readSandbox(sandbox) {
     }
     return { path, reason: typeof entry.reason === "string" ? entry.reason : null };
   });
-  return { domains, write };
+  // What a slot provider's line named and the deployment has no value for (a team with no
+  // recorded service): a host the sandbox would need and cannot be given.
+  const missing = list(sandbox.missing, "missing").map((entry) => {
+    const sane = readMissing(entry);
+    if (sane === null) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox.missing holds an entry that is not {capability, setting, team}");
+    return sane;
+  });
+  return { domains, write, missing };
 }
+
+const WORD = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,119}$/;
+/** One `missing` entry, checked: a capability id, and a setting and a team that are plain
+ *  words or absent. → the entry, or null. (Also read back from the home's record, which
+ *  its agent can write.) */
+function readMissing(entry) {
+  if (!isObject(entry) || typeof entry.capability !== "string" || !CAPABILITY_ID.test(entry.capability)) return null;
+  for (const key of ["setting", "team"]) {
+    if (entry[key] !== undefined && entry[key] !== null && (typeof entry[key] !== "string" || !WORD.test(entry[key]))) return null;
+  }
+  return { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
+}
+
+/** "oats.aweb's setting services for team default:acme.aweb.ai". */
+export const describeMissing = (entry) => `${entry.capability}'s ${entry.setting ? `setting ${entry.setting}` : "service"}${entry.team ? ` for team ${entry.team}` : ""}`;
 
 function realDirectory(path, what) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
@@ -187,15 +210,17 @@ export function everLaunched(home) {
   return lstatSync(join(home, STATE_DIR), { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
-/** The mode of the home's last launch and whether it was handed sandbox allowances, or
- *  null before a first launch. */
+/** The mode of the home's last launch, whether it was handed sandbox allowances, and what
+ *  the deployment lacked for them; or null before a first launch. */
 export function readLaunchRecord(home) {
   if (!everLaunched(home)) return null;
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
-  return record === null ? null : { mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true };
+  return record === null ? null : {
+    mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
+    missing: (Array.isArray(record.missing) ? record.missing : []).map(readMissing).filter(Boolean),
+  };
 }
 
-const CAPABILITY_ID = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const PRINTABLE = /^[\x20-\x7e]{1,120}$/;
 export const isExactHost = (value) => typeof value === "string" && HOST.test(value);
 export const isExactPath = (value) => typeof value === "string" && isAbsolute(value) && normalize(value) === value && value !== "/" && !/[*?\x00-\x1f\x7f]/.test(value);
@@ -306,7 +331,7 @@ function withdraw(settings, envNames, sandboxRecord) {
  *  sandbox allowances. Every other key is kept, and every entry under a name the launch
  *  does not carry; a name it carries is the launch's (a person's entry of that name is
  *  replaced). What an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, dryRun = false }) {
+export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], dryRun = false }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);
   const envRecord = everLaunched(home) ? readJsonObject(envRecordPath, "the provider's record") : null;
@@ -350,7 +375,7 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sand
   else rmSync(sandboxRecordPath, { force: true });
   // What readiness needs to say of this home's sandbox: the mode it runs in, and whether
   // the kernel handed the launch any allowances at all.
-  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true });
+  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing });
   return { path: settingsPath, names, sandbox: sandboxRecord };
 }
 

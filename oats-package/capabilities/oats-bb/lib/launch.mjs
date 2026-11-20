@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
-import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
+import { describeMissing, readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -82,11 +82,17 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // sandboxed launch wrote is removed).
   const allowances = readSandbox(input.sandbox);
   const sandbox = mode === "full" ? null : allowances;
+  // A sandboxed launch that would lack a host it needs is refused before anything starts:
+  // the agent's messaging would be cut off inside the sandbox. Full mode has no sandbox,
+  // so there the gap changes nothing (readiness still names it).
+  if (sandbox !== null && allowances.missing.length > 0) {
+    throw fail("E_BACKEND_SANDBOX_HOST", `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts OATS's own commands reach, and the deployment records none for ${allowances.missing.map(describeMissing).join("; ")}. Run \`oats aweb setup\` to record it, or launch in full mode (--yolo)`);
+  }
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
-  const settingsToWrite = { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox) };
+  const settingsToWrite = { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox), missing: allowances.missing };
   writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
   const { problems, server } = await backendProblems(settings, { deadline, env });

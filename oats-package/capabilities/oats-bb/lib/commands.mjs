@@ -3,7 +3,7 @@ import { isAbsolute } from "node:path";
 import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
-import { plannedLaunchFindings, readinessResult, sandboxWarnings } from "./readiness.mjs";
+import { FULL_MODE_ONLY, plannedLaunchFindings, readinessResult, sandboxWarnings } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
 import { stop } from "./stop.mjs";
 
@@ -39,6 +39,10 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       const planned = plannedLaunch(input);
       const { result } = await readinessResult(readSettings(rawSettings), { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes }) : undefined });
       if (typeof input?.home === "string" && isAbsolute(input.home)) result.warnings.push(...sandboxWarnings(input.home, { planned: planned !== null }));
+      // With no planned launch the check cannot know the mode a launch would run in: it
+      // says what the command launches in, so `oats readiness` does not read "ready" and
+      // the spawn that follows is then refused with nothing having said why.
+      if (planned === null && !sandboxedModes) result.warnings.push({ ...FULL_MODE_ONLY });
       return result;
     },
   };

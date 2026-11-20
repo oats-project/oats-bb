@@ -91,6 +91,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
+  const askedAt = Date.now();
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;
   // The answer is always a thread this home never had: bb makes a new id for every spawn,
@@ -105,13 +106,18 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // home, recorded nowhere. So look: a new live thread in the home is this launch's, and
   // its endpoint is the answer. Otherwise the launch stays in doubt, and the call ends
   // with no answer: the kernel then stops whatever runs in the home.
-  const what = spawned.ok ? "bb thread spawn answered no thread id" : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
+  const what = spawned.ok ? (isObject(thread) && thread.id === previousId ? "bb thread spawn answered the previous thread again" : "bb thread spawn answered no thread id") : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
+  // This launch's thread is one bb made after the spawn was asked for (bb and the provider
+  // are on one host, so on one clock): never the previous thread, nor an older one of the
+  // home that a person brought back meanwhile. A thread that does not say when it was
+  // made is not taken for this launch's.
   const known = new Set([...live.map((candidate) => candidate.id), ...(previousId ? [previousId] : [])]);
+  const made = (candidate) => !known.has(candidate.id) && typeof candidate.createdAt === "number" && candidate.createdAt >= askedAt;
   let found = [];
   try {
     for (let look = 0; look < SPAWN_LOOKS; look += 1) {
       if (look > 0) await sleep(SPAWN_LOOK_MS);
-      found = liveThreadsOfHome(await bb.threads(), home, [project.id]).filter((candidate) => !known.has(candidate.id));
+      found = liveThreadsOfHome(await bb.threads(), home, [project.id]).filter(made);
       if (found.length > 0) break;
     }
   } catch (error) {

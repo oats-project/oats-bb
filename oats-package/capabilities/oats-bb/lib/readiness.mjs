@@ -209,6 +209,12 @@ export async function readinessResult(settings, options = {}) {
   return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
 }
 
+/** What a readiness read with no planned launch says, since it cannot know the mode a
+ *  launch would run in (`oats readiness`, for a soul or a home; `oats bb doctor`): the
+ *  backend launches in full mode only for now. A warning: a soul that launches with yolo is
+ *  ready. */
+export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only for now: a spawn or start without --yolo (bb's accept-edits or auto mode, which are sandboxed) is refused before anything starts (E_BACKEND_SANDBOXED_MODE). The rules that keep a sandboxed agent's tools off its own home's hooks and settings come with a later release of this provider" });
+
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.
 const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "dev.azure.com", "git.sr.ht"]);

@@ -24,7 +24,10 @@ const codes = (answer) => answer.result.problems.map((problem) => problem.code);
 test("a bb that is fit answers ready: {status, problems, warnings}, the shape oats readiness relays", async (t) => {
   const { check, bb, backend } = await setup(t);
   const answer = await check();
-  assert.deepEqual(answer, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "check", ok: true, result: { status: "ready", problems: [], warnings: [] } });
+  // Ready, with the one thing a plain readiness read always says for now: which mode the command launches in.
+  assert.deepEqual({ ...answer, result: { ...answer.result, warnings: answer.result.warnings.map((w) => w.code) } }, { schemaVersion: 1, phase: "session", capability: "oats.bb", provider: "bb", verb: "check", ok: true, result: { status: "ready", problems: [], warnings: ["session-provider-full-mode-only"] } });
+  assert.match(answer.result.warnings[0].message, /full mode only for now: a spawn or start without --yolo .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
+  assert.ok(answer.result.warnings[0].message.length < 500);
   assert.equal(bb.calls().every((c) => c.server === backend.server), true);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
   assert.deepEqual(backend.daemonRequests, ["/status"]);
@@ -167,7 +170,7 @@ test("a host daemon not connected yet: E_BACKEND_NOT_READY, unavailable", async 
 test("a server set as localhost is the server the daemon reports as 127.0.0.1: between loopback names the port decides", async (t) => {
   const { check, backend } = await setup(t);
   const answer = await check({ server: `http://localhost:${backend.serverPort}` });
-  assert.deepEqual(answer.result, { status: "ready", problems: [], warnings: [] }, JSON.stringify(answer.result));
+  assert.deepEqual({ ...answer.result, warnings: answer.result.warnings.map((w) => w.code) }, { status: "ready", problems: [], warnings: ["session-provider-full-mode-only"] }, JSON.stringify(answer.result));
 });
 
 test("a host daemon that serves another bb server: E_BACKEND_NOT_READY", async (t) => {
@@ -235,7 +238,7 @@ test("a live thread whose project root is gone is reported as session-provider-o
   }));
   const answer = await check();
   assert.equal(answer.result.status, "ready", "a report, not a problem");
-  assert.equal(answer.result.warnings.length, 1);
+  assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphaned", "session-provider-full-mode-only"]);
   const [warning] = answer.result.warnings;
   assert.equal(warning.code, "session-provider-orphaned");
   assert.match(warning.message, /thr_left, thr_left2/);
@@ -246,7 +249,7 @@ test("a live thread whose project root is gone is reported as session-provider-o
 test("when bb's threads cannot be listed, the check says orphans were not looked for", async (t) => {
   const { check } = await setup(t, { "thread list": UNREACHABLE });
   const answer = await check();
-  assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphans-unchecked"]);
+  assert.deepEqual(answer.result.warnings.map((w) => w.code), ["session-provider-orphans-unchecked", "session-provider-full-mode-only"]);
 });
 
 for (const [name, daemonStatus] of [["with no connected field", { hostId: "host_1" }], ["whose connected is not a boolean", { connected: "yes" }], ["that is a list", [true]],
@@ -282,12 +285,12 @@ test("where bubblewrap is missing readiness warns that bb's sandboxed modes wait
   const container = await check({ trust: "container" });
   assert.equal(container.result.status, "ready");
   assert.deepEqual(container.result.problems, []);
-  assert.deepEqual(container.result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
+  assert.deepEqual(container.result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-full-mode-only"]);
   assert.match(container.result.warnings[0].message, /every command waits for a person in bb\. In a team container, spawn bb agents with --yolo \(bb full mode\): the container is the boundary/);
   const single = await check({ trust: "single-user" });
   assert.match(single.result.warnings[0].message, /Install bubblewrap, or spawn bb agents with --yolo/);
   // With bubblewrap on PATH nothing is said (every other test runs so).
-  assert.deepEqual((await call("check", { home: null, soul: "dev" }, { settings: backend.settings(), bb })).result.warnings, []);
+  assert.deepEqual((await call("check", { home: null, soul: "dev" }, { settings: backend.settings(), bb })).result.warnings.map((w) => w.code), ["session-provider-full-mode-only"]);
   assert.equal(sandboxCanStart({ platform: "darwin", path: "" }), true, "only Linux needs bubblewrap");
   assert.equal(sandboxCanStart({ platform: "linux", path: "" }), false);
 });
@@ -340,7 +343,7 @@ test("oats bb doctor prints the same findings for a person, names where the cred
   const env = (settings) => ({ ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(settings), cli: bb.cli }) });
   const ready = await runBin(["doctor"], { env: env() });
   assert.equal(ready.status, 0);
-  assert.equal(ready.stdout, "bb session provider: ready\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n");
+  assert.match(ready.stdout, /^bb session provider: ready\n  warning session-provider-full-mode-only: the bb backend launches in bb's full mode only for now: .*\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n$/);
   backend.state.provider.accountEmail = "person@example.com";
   const login = await runBin(["doctor", "--json"], { env: env() });
   assert.equal(login.doc.credential, "a Claude login of bb's user");

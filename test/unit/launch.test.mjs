@@ -8,6 +8,9 @@ import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
 import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
 import { PATH_WITH_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
+// A thread bb made after the launch asked for it: the fake's rows are written before the
+// launch runs, so "after" is a time well ahead.
+const MADE = { createdAt: Date.now() + 3_600_000 };
 const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
 const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
 const EFFECTS = new Set(["project create", "thread spawn", "thread archive", "thread stop", "thread tell"]);
@@ -485,7 +488,7 @@ for (const [name, script, pattern] of [
 const rawLaunch = (bb, backend, input) => runBin(["session", "launch"], { stdin: JSON.stringify(requestFor("launch", input)), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) } });
 
 test("a spawn that answers no thread id, and one new thread runs in the home: that thread is the launch's", async (t) => {
-  const { backend, bb, run } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 })] }, { stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 }), threadRow("thr_made", "proj_a", "starting")] }] });
+  const { backend, bb, run } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 })] }, { stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 }), threadRow("thr_made", "proj_a", "starting", MADE)] }] });
   const answer = await run();
   assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
 });
@@ -499,7 +502,18 @@ test("a launch never answers the previous thread again: not from bb's own answer
   const run = await rawLaunch(bb, backend, input({ previous }));
   assert.equal(run.status, 1);
   assert.equal(run.stdout, "", "in doubt, never the old endpoint");
-  assert.match(run.stderr, /no new thread shows/);
+  assert.match(run.stderr, /answered the previous thread again, and no new thread shows/);
+});
+
+test("a launch in doubt takes only a thread bb made after it asked: an older thread of the home that shows again, or one that does not say when it was made, is not this launch's", async (t) => {
+  const previous = { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_prev" };
+  for (const shown of [threadRow("thr_older", "proj_a", "idle", { createdAt: Date.now() - 86_400_000 }), threadRow("thr_undated", "proj_a", "idle", { createdAt: undefined }), threadRow("thr_text", "proj_a", "idle", { createdAt: "2099-01-01T00:00:00Z" })]) {
+    const { backend, bb, input } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, { stdout: [shown] }] });
+    const run = await rawLaunch(bb, backend, input({ previous }));
+    assert.equal(run.status, 1, shown.id);
+    assert.equal(run.stdout, "", "in doubt: an endpoint of an earlier launch is never answered");
+    assert.match(run.stderr, /no new thread shows/);
+  }
 });
 
 test("a spawn that answers no thread id, and no new thread shows: in doubt, no answer and a nonzero exit", async (t) => {
@@ -528,7 +542,7 @@ test("a spawn in doubt, and the home's threads cannot be read: in doubt", async 
 });
 
 test("a spawn in doubt, and a new thread of another project runs in the home: in doubt, not adopted", async (t) => {
-  const { home, backend, bb, input } = await setup(t, (h) => ({ "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_stray", "proj_z", "active", { environmentPath: h })] }] }));
+  const { home, backend, bb, input } = await setup(t, (h) => ({ "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_stray", "proj_z", "active", { environmentPath: h, ...MADE })] }] }));
   const run = await rawLaunch(bb, backend, input());
   assert.equal(run.status, 1);
   assert.match(run.stderr, /thr_stray newly runs in/);
@@ -543,7 +557,7 @@ for (const [name, spawnAnswer] of [
   ["meets a server error bb wraps", { error: { code: "error", message: "Failed to create thread: HTTP 503: Service Unavailable" } }],
 ]) {
   test(`a spawn that ${name} is in doubt: the thread it made is found and answered`, async (t) => {
-    const { backend, bb, run } = await setup(t, { "thread spawn": spawnAnswer, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_made", "proj_a", "active")] }] });
+    const { backend, bb, run } = await setup(t, { "thread spawn": spawnAnswer, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_made", "proj_a", "active", MADE)] }] });
     const answer = await run();
     assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
   });
@@ -565,7 +579,7 @@ test("a spawn bb's server never got (connection refused) is a refusal: nothing w
 });
 
 test("a spawn cut off by time that did make the thread: the launch finds it and answers its endpoint", async (t) => {
-  const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() }, "thread list": [{ stdout: [] }, { stdout: [] }, { stdout: [threadRow("thr_late", "proj_a", "starting")] }] });
+  const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() }, "thread list": [{ stdout: [] }, { stdout: [] }, { stdout: [threadRow("thr_late", "proj_a", "starting", MADE)] }] });
   // In process, so the spawn's own time can be short: the provider's cap per bb call is 10 s.
   const answer = await launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 20_000, env: { ...process.env, ...bb.env }, spawnTimeoutMs: 500 });
   assert.deepEqual(answer, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_late" } });

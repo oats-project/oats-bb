@@ -124,7 +124,7 @@ test("the image runs the pinned bb-app, and readiness reads it ready", async () 
   const ready = (await check()).result;
   assert.equal(ready.status, "ready");
   assert.deepEqual(ready.problems, []);
-  assert.deepEqual(ready.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
+  assert.deepEqual(ready.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-full-mode-only"]);
   assert.match(ready.warnings[0].message, /every command waits for a person in bb\. In a team container, spawn bb agents with --yolo/);
   assert.equal((await sh("command -v bwrap || echo none")).trim(), "none");
   // The provider's default version is this pin: with no version setting it is ready too.
@@ -147,7 +147,7 @@ test("the two HTTP reads the provider makes answer what it decodes, at the pinne
   assert.equal(JSON.parse(await sh("curl -s -m 5 http://127.0.0.1:38886/health")).ok, true);
   // And the person's report names where the credential comes from, never a value.
   const doctor = await sh(`OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} doctor`);
-  assert.match(doctor, /^bb session provider: ready\n  warning session-provider-sandbox-unsupported: .*\n  claude-code credential: no Claude login/);
+  assert.match(doctor, /^bb session provider: ready\n  warning session-provider-sandbox-unsupported: .*\n  warning session-provider-full-mode-only: .*\n  claude-code credential: no Claude login/);
   assert.doesNotMatch(doctor, /dummy-not-a-real-key/);
 });
 

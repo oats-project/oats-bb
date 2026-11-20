@@ -3,7 +3,7 @@
 // stdin, one JSON document out); `retire-hook` is its retire hook; `doctor` is a person's.
 import { sessionHandlers } from "../lib/commands.mjs";
 import { removeLaunchSettings } from "../lib/local-settings.mjs";
-import { readinessResult } from "../lib/readiness.mjs";
+import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
@@ -69,6 +69,7 @@ async function main(argv) {
   const doctor = command === "doctor" ? doctorArgs(rest) : null;
   if (doctor !== null) {
     const { result, credential } = await readinessResult(readSettings(settingsFromEnv(process.env)));
+    result.warnings.push({ ...FULL_MODE_ONLY });
     if (doctor.json) print({ ...result, credential });
     else {
       process.stdout.write(`bb session provider: ${result.status}\n`);

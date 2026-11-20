@@ -61,16 +61,21 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **A launch in a sandboxed mode is refused for now.** With `yolo` not true and no
   `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
   `auto` mode. The provider refuses it before it reads or starts anything
-  (`E_BACKEND_SANDBOXED_MODE`), and the check says the same of a planned launch, as its
-  only problem. The deny set of contract item 6c (D16) is not in this release; the
+  (`E_BACKEND_SANDBOXED_MODE`). The check says the same of a planned launch: the refusal
+  stands alone among the planned launch's findings, beside whatever is wrong with bb
+  itself. A check with no planned launch (`oats readiness`, for a soul or a home) cannot
+  know the mode, and carries the warning `session-provider-full-mode-only` instead. The deny set of contract item 6c (D16) is not in this release; the
   provider's next change brings it and lifts the refusal. What is written below about
   `sandbox` describes that code, which is here and tested, and runs once the refusal is
   lifted.
-- **The endpoint a launch answers is new.** Every launch answers a thread the home never
-  had: bb makes a new thread id for each spawn, and the provider never answers the
-  `previous` endpoint's thread again, neither from bb's answer nor as a thread that newly
-  shows in the home (such a launch stays in doubt). The kernel may tell a new session
-  from an old one by its endpoint.
+- **The endpoint a launch answers is new.** Every launch answers a thread bb made for it:
+  bb makes a new thread id for each spawn, and the provider never answers an endpoint it
+  answered before for that home. It never answers the `previous` endpoint's thread, from
+  bb's own answer or otherwise; and where the spawn's fate is unknown it takes only a
+  thread bb created after the spawn was asked for (bb's `createdAt`; bb and the provider
+  are on one host), so an older thread of the home that shows again is not answered (the
+  launch stays in doubt). The kernel may tell a new session from an old one by its
+  endpoint.
 - **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
@@ -118,10 +123,11 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
   launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on
   a plain readiness read), it also answers what that launch would be refused for (its
-  harness, its arguments, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
+  harness, its arguments, its mode, the sandbox it needs), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
   capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
-  can only say, for a home, what its last launch left on record.
+  can only say, for a home, what its last launch left on record, and, for a soul or a home,
+  which mode the command launches in (`session-provider-full-mode-only`).
 
 ## Codes
 `E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,

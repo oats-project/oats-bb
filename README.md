@@ -46,14 +46,20 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 >
 > **bb agents run in full mode (`--yolo`), and nothing else is launched yet.** A launch in
 > one of bb's sandboxed modes (`auto`, `accept-edits`; that is `--no-yolo`, or no choice)
-> is **refused** before anything starts (`E_BACKEND_SANDBOXED_MODE`), and `oats readiness`
-> says so for a soul whose launch would be one. In those modes the agent's tools can
+> is **refused** before anything starts (`E_BACKEND_SANDBOXED_MODE`). `oats readiness` and
+> `oats bb doctor` say, as a warning on every read, that the backend launches in full mode
+> only (they are not told which mode a launch would run in); the kernel's check before a
+> spawn or a start, which carries the planned launch, names the refusal itself. In those modes the agent's tools can
 > write files of its own home that are later run, or read as configuration, outside the
 > sandbox; the rules that keep them off (the deny set, contract item 6c) come with the
 > provider's next change, which lifts the refusal. This README already says what the
 > provider does in a sandboxed mode, because that code is here and tested. Even then the
 > modes are no security boundary until the OATS release named above protects the home's
 > instructions, hooks and settings from the agent that runs in it.
+>
+> **No release yet, and what its notes will say.** oats-bb is not released before a run
+> against a real OATS kernel with `--backend bb`. The first release's notes say: bb homes
+> run in bb's full mode, and claim no sandbox boundary.
 
 ## Install
 
@@ -277,6 +283,9 @@ For a home, it lists what the provider added to the sandbox (`session-provider-s
 the entries of its record that are in `settings.local.json` now. Both files are in the
 home, which its agent can write, so where they disagree readiness says so
 (`session-provider-sandbox-mismatch`) and shows only what passed its checks.
+
+On every read with no planned launch it carries the warning
+`session-provider-full-mode-only`: for now the backend launches in bb's full mode only.
 
 It also reports, as a warning that blocks nothing, `session-provider-orphaned`: live bb
 threads whose project root no longer exists, with their ids and the root. That is what a

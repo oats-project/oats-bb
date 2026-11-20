@@ -2,7 +2,8 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
-import { describeMissing, readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
+import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
+import { permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -14,45 +15,6 @@ const BB_PROVIDER = "claude-code";
 const SPAWN_LOOKS = 3;
 const SPAWN_LOOK_MS = 1_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-// Claude Code's own permission-mode words, as a launch configuration writes them.
-const PERMISSION_ARG = { auto: "auto", acceptEdits: "accept-edits", bypassPermissions: "full" };
-
-/** bb's permission mode for the launch.
- *
- *  | the launch                                   | bb           |
- *  |----------------------------------------------|--------------|
- *  | yolo true                                    | full         |
- *  | yolo false, or no choice                     | accept-edits |
- *  | --permission-mode auto (launch configuration)| auto         |
- *  | --permission-mode acceptEdits                | accept-edits |
- *  | --permission-mode bypassPermissions          | full         |
- *
- *  `--permission-mode` is the one launch argument this backend can carry; any other is
- *  refused by name (bb starts Claude itself, so an argument has nowhere to go and is never
- *  dropped). Where yolo and the argument disagree (yolo with a mode that is not full; no
- *  yolo with bypassPermissions) the launch is refused: the provider never picks one, and
- *  never runs more permissively than the same launch would on tmux Claude. */
-export function permissionMode(args, yolo) {
-  if (args !== undefined && args !== null && !Array.isArray(args)) throw fail("E_BACKEND_LAUNCH_ARG", "the launch args must be a list");
-  if (yolo !== true && yolo !== false && yolo !== null && yolo !== undefined) throw fail("E_SESSION_START_FAILED", "the launch input's yolo must be true, false or null");
-  let mode = null;
-  const list = args ?? [];
-  for (let i = 0; i < list.length; i += 1) {
-    const arg = list[i];
-    let value = null;
-    if (arg === "--permission-mode" && typeof list[i + 1] === "string") { value = list[i + 1]; i += 1; }
-    else if (typeof arg === "string" && arg.startsWith("--permission-mode=")) value = arg.slice("--permission-mode=".length);
-    else throw fail("E_BACKEND_LAUNCH_ARG", `the bb backend cannot carry the launch argument ${JSON.stringify(arg)}: bb starts Claude Code itself. Remove it from the launch configuration or the capability that adds it (the one argument carried is --permission-mode auto|acceptEdits|bypassPermissions)`);
-    if (!Object.hasOwn(PERMISSION_ARG, value)) throw fail("E_BACKEND_LAUNCH_ARG", `the bb backend cannot carry --permission-mode ${JSON.stringify(value)}: bb's modes are auto, accept-edits (acceptEdits) and full (bypassPermissions)`);
-    if (mode !== null && mode !== PERMISSION_ARG[value]) throw fail("E_BACKEND_LAUNCH_ARG", "the launch names --permission-mode twice, with different modes");
-    mode = PERMISSION_ARG[value];
-  }
-  if (mode === null) return yolo === true ? "full" : "accept-edits";
-  if (yolo === true && mode !== "full") throw fail("E_BACKEND_LAUNCH_ARG", `the launch asks for yolo and for --permission-mode ${Object.keys(PERMISSION_ARG).find((key) => PERMISSION_ARG[key] === mode)}, which disagree: drop one`);
-  if (yolo === false && mode === "full") throw fail("E_BACKEND_LAUNCH_ARG", "the launch asks for no yolo and for --permission-mode bypassPermissions, which disagree: drop one");
-  return mode;
-}
-
 function readInput(input) {
   if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
   const { home, instance, harness, model, promptFile, previous } = input;
@@ -80,15 +42,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const unset = readUnset(input.unset, launchEnv);
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
   // sandboxed launch wrote is removed).
-  const allowances = readSandbox(input.sandbox);
+  const allowances = readSandbox(input.sandbox, { sandboxed: mode !== "full" });
   const sandbox = mode === "full" ? null : allowances;
-  // A sandboxed launch that would lack a host it needs is refused before anything starts:
-  // the agent's messaging would be cut off inside the sandbox. Full mode has no sandbox,
-  // so there the gap changes nothing (readiness still names it).
-  if (sandbox !== null && allowances.missing.length + allowances.unnamed > 0) {
-    const named = [...allowances.missing.map(describeMissing), ...(allowances.unnamed > 0 ? [`${allowances.unnamed} more that the launch does not name in a form that can be shown`] : [])];
-    throw fail("E_BACKEND_SANDBOX_HOST", `this launch runs in bb's ${mode} mode, whose sandbox must be told which hosts OATS's own commands reach, and the deployment records none for ${named.join("; ")}. Run \`oats aweb setup\` to record it, or launch in full mode (--yolo)`);
-  }
+  const refusal = sandboxRefusal(mode, allowances);
+  if (refusal !== null) throw fail(refusal.code, refusal.message);
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
   // Claude's local settings must be writable as they are (a file that is not JSON, a

@@ -115,21 +115,45 @@ const CAPABILITY_ID = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 // scheme, no path, no user. An IPv4 address is such a host too.
 const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::\d{1,5})?$/;
 
-/** The launch input's `sandbox`: {domains: [{host, capability, setting}], write: [{path,
- *  reason}], missing?: [{capability, setting, team}]}, as the kernel built it from
- *  recorded configuration. → {domains, write, missing, unnamed} (`unnamed`: how many
- *  `missing` entries could not be named). The provider writes
- *  exactly this list, so it checks each entry is what the list may hold (an exact host,
- *  an exact absolute path) and refuses the launch otherwise (E_BACKEND_SANDBOX_HOST,
- *  E_BACKEND_SANDBOX_PATH), naming the entry. */
-export function readSandbox(sandbox) {
-  if (sandbox === undefined || sandbox === null) return { domains: [], write: [], missing: [], unnamed: 0 };
+// What must never reach a message: control characters (C0, C1), line and paragraph
+// separators, bidi overrides.
+const UNPRINTABLE = /[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
+const oneLine = (value, max) => typeof value === "string" && value.length > 0 && value.length <= max && !UNPRINTABLE.test(value);
+const SANDBOX_KEYS = ["domains", "write", "missing", "skipped", "unavailable"];
+
+/** The launch input's `sandbox`, as the kernel built it from recorded configuration:
+ *
+ *    {domains: [{host, capability, setting}], write: [{path, reason}],
+ *     missing: [{capability, setting, team, optional}], skipped?: [{capability, reason}]}
+ *    or {unavailable: "<cause>"} when the kernel could not resolve the configuration.
+ *
+ *  `missing`: what a slot provider's line named and the deployment has no value for (a
+ *  team with no recorded service): a host the sandbox would need and cannot be given.
+ *
+ *  → {domains, write, missing, optional, unnamed, unavailable, skipped}: `missing` the
+ *  rows that are not optional, `optional` the ones that are, `unnamed` how many rows
+ *  cannot be named in a message, `unavailable` the cause or null.
+ *
+ *  The provider writes exactly `domains` and `write`, so each entry must be what the lists
+ *  may hold (an exact host, an exact absolute path), in every mode: E_BACKEND_SANDBOX_HOST,
+ *  E_BACKEND_SANDBOX_PATH. The rest is read by `sandboxed`: a launch that will run in bb's
+ *  sandbox must understand everything it is told (an unknown key, a `missing` that is no
+ *  list refuse it); a full-mode launch writes nothing and ignores all of it, whatever it
+ *  holds. A row that cannot be named is still a gap: counted, never dropped. */
+export function readSandbox(sandbox, { sandboxed = true } = {}) {
+  const empty = { domains: [], write: [], missing: [], optional: [], unnamed: 0, unavailable: null, skipped: [] };
+  if (sandbox === undefined || sandbox === null) return empty;
   if (!isObject(sandbox)) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
-  for (const key of Object.keys(sandbox)) if (!["domains", "write", "missing"].includes(key)) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${key}`);
-  const list = (value, what) => {
+  const unknown = Object.keys(sandbox).find((key) => !SANDBOX_KEYS.includes(key));
+  if (unknown !== undefined && sandboxed) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${oneLine(unknown, 60) ? unknown : "(unprintable)"}`);
+  if (sandbox.unavailable !== undefined && sandbox.unavailable !== null) {
+    return { ...empty, unavailable: oneLine(sandbox.unavailable, 300) ? sandbox.unavailable : "no cause given" };
+  }
+  const list = (value, what, strict = true) => {
     if (value === undefined || value === null) return [];
-    if (!Array.isArray(value)) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox.${what} is not a list`);
-    return value;
+    if (Array.isArray(value)) return value;
+    if (strict) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox.${what} is not a list`);
+    return [value]; // one thing that is no row: counted as a gap that cannot be named
   };
   const domains = list(sandbox.domains, "domains").map((entry) => {
     const who = isObject(entry) && typeof entry.capability === "string" && entry.capability ? entry.capability : null;
@@ -146,22 +170,20 @@ export function readSandbox(sandbox) {
     }
     return { path, reason: typeof entry.reason === "string" ? entry.reason : null };
   });
-  // What a slot provider's line named and the deployment has no value for (a team with no
-  // recorded service): a host the sandbox would need and cannot be given.
-  // What a slot provider's line named and the deployment has no value for (a team with no
-  // recorded service): a host the sandbox would need and cannot be given. The launch input
-  // is the kernel's: an entry is taken as given, checked only for what a message can
-  // carry. One that cannot be named is still a gap: it is counted, never a reason of its
-  // own to refuse (full mode ignores `missing` whatever it holds).
-  const text = (value) => value === undefined || value === null || (typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\x00-\x1f\x7f]/.test(value));
-  const missing = [];
+  // The launch input is the kernel's: a row is taken as given, checked only for what a
+  // message can carry (the kernel's own rules decide what a team id is).
+  const word = (value) => value === undefined || value === null || oneLine(value, 256);
+  const missing = [], optional = [];
   let unnamed = 0;
-  for (const entry of list(sandbox.missing, "missing")) {
-    if (isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && text(entry.setting) && text(entry.team)) {
-      missing.push({ capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null });
-    } else unnamed += 1;
+  for (const entry of list(sandbox.missing, "missing", sandboxed)) {
+    if (isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && word(entry.setting) && word(entry.team)) {
+      (entry.optional === true ? optional : missing).push({ capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null });
+    } else if (!(isObject(entry) && entry.optional === true)) unnamed += 1;
   }
-  return { domains, write, missing, unnamed };
+  const skipped = (Array.isArray(sandbox.skipped) ? sandbox.skipped : [])
+    .filter((entry) => isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability))
+    .map((entry) => ({ capability: entry.capability, reason: oneLine(entry.reason, 200) ? entry.reason : null }));
+  return { domains, write, missing, optional, unnamed, unavailable: null, skipped };
 }
 
 // A team id as the kernel writes one, and a setting key: what a record in the home must
@@ -227,12 +249,13 @@ export function readLaunchRecord(home) {
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
   if (record === null) return null;
   const recorded = Array.isArray(record.missing) ? record.missing : [];
+  const missing = recorded.map(readRecordedMissing).filter(Boolean);
   return {
     mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
-    missing: recorded.map(readRecordedMissing).filter(Boolean),
+    missing,
     // What the record holds and cannot be shown: entries that are not a capability id with
     // a plain setting and team, and what the launch itself could not name.
-    unnamed: recorded.length - recorded.map(readRecordedMissing).filter(Boolean).length + (Number.isInteger(record.unnamed) && record.unnamed > 0 ? record.unnamed : 0),
+    unnamed: recorded.length - missing.length + (Number.isInteger(record.unnamed) && record.unnamed > 0 ? record.unnamed : 0),
   };
 }
 

@@ -150,9 +150,11 @@ lists, for a home, each host and path with who asked for it.
 Where the deployment has no value for something a provider's line names (a team whose
 aweb service was never recorded), a launch in a sandboxed mode is **refused**
 (`E_BACKEND_SANDBOX_HOST`, naming it; the remedy is `oats aweb setup`): the agent's
-messaging would be cut off inside the sandbox. In `full` mode the launch goes on, and the
-provider's readiness then names the gap as it was at that launch
-(`session-provider-sandbox-host-missing`).
+messaging would be cut off inside the sandbox. A line a provider marks optional never
+refuses; readiness names it. Where the kernel cannot resolve the deployment's
+configuration at all, a sandboxed launch is refused too (`E_BACKEND_SANDBOX_UNAVAILABLE`).
+In `full` mode the launch goes on in every one of these cases. `oats readiness` says all of
+this before a launch, from the launch the kernel plans.
 
 Three things to know:
 
@@ -189,7 +191,9 @@ arguments or a process environment:
   `CLAUDE_CODE_OAUTH_*`, `CLAUDE_CODE_SKIP_*_AUTH` and `AWS_BEARER_TOKEN_BEDROCK`. It is never ignored. A launch
   that would remove one of them is refused the same way.
 - A sandbox entry that is not one exact host or one exact absolute path:
-  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.
+  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`; in a sandboxed mode, a host the
+  deployment does not record, or a configuration the kernel could not resolve:
+  `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_UNAVAILABLE`.
 
 A variable the launch removes on purpose (one a capability declares and this launch
 leaves out) is written with an **empty value**: a settings file can set a variable but not

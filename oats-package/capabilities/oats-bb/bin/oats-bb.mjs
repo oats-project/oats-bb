@@ -6,7 +6,7 @@ import { inspect, inspectMany } from "../lib/inspect.mjs";
 import { sendInput } from "../lib/input.mjs";
 import { launch } from "../lib/launch.mjs";
 import { removeLaunchSettings } from "../lib/local-settings.mjs";
-import { readinessResult, sandboxWarnings } from "../lib/readiness.mjs";
+import { plannedLaunchFindings, readinessResult, sandboxWarnings } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire, stop } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
@@ -18,11 +18,14 @@ const handlers = {
   inspectMany: withSettings(inspectMany),
   input: withSettings(sendInput),
   stop: withSettings(stop),
-  // input: {home | null, soul | null, settings?}. bb's own state depends on the settings
-  // alone; for a home, the check also lists what the provider added to its sandbox.
+  // input: {home | null, soul | null, settings?, launch?: {harness, yolo, args, sandbox}}.
+  // bb's own state depends on the settings alone. With the planned launch the kernel
+  // hands it, the check also says what that launch would meet in bb's sandbox; for a
+  // home, it lists what the provider added to the sandbox at its last launch.
   check: async (input, rawSettings, options) => {
-    const { result } = await readinessResult(readSettings(rawSettings), options);
-    if (typeof input?.home === "string" && isAbsolute(input.home)) result.warnings.push(...sandboxWarnings(input.home));
+    const planned = plannedLaunch(input);
+    const { result } = await readinessResult(readSettings(rawSettings), { ...options, extra: planned ? plannedLaunchFindings(planned) : undefined });
+    if (typeof input?.home === "string" && isAbsolute(input.home)) result.warnings.push(...sandboxWarnings(input.home, { planned: planned !== null }));
     return result;
   },
 };
@@ -37,6 +40,13 @@ function doctorArgs(args) {
     else if (!/^--soul=.+/.test(args[i])) return null;
   }
   return { json };
+}
+/** The planned launch of a check: under `launch`, or (a kernel that sends the four values
+ *  beside home and soul) the input itself when it carries a sandbox. */
+function plannedLaunch(input) {
+  if (input === null || typeof input !== "object") return null;
+  if (input.launch !== null && typeof input.launch === "object" && !Array.isArray(input.launch)) return input.launch;
+  return input.sandbox !== undefined ? input : null;
 }
 const print = (doc) => process.stdout.write(`${JSON.stringify(doc)}\n`);
 

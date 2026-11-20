@@ -35,7 +35,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
 | stop | `{home, endpoint or null, graceSeconds}` | `{stopped: true}` |
-| check | `{home or null, soul or null, settings?}` | `{status, problems: [{code, message}], warnings: [{code, message}]}` |
+| check | `{home or null, soul or null, settings?, launch?}` | `{status, problems: [{code, message}], warnings: [{code, message}]}` |
 
 - **launch `env`** is a list of `{name, value, source, capability?, secret?}`. The provider
   writes an entry only when its `source` is `kernel`, `capability` or `launch-config` and it
@@ -51,25 +51,37 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
-- **launch `sandbox`** is `{domains: [{host, capability, setting}], write: [{path, reason}],
-  missing?: [{capability, setting, team}]}` (`missing`: what a provider's line named and the
-  deployment has no value for; a sandboxed launch with any is refused
-  `E_BACKEND_SANDBOX_HOST`, a full-mode launch ignores them, whatever they hold; an entry
-  the provider cannot name is counted, never dropped),
-  built by the kernel from recorded configuration; a kernel may not send it yet, and then
-  nothing is written (readiness says the allowances are missing). In a sandboxed mode the
-  provider writes
-  exactly those hosts and paths; an entry that is not one exact host or one exact absolute
-  path refuses the launch (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
+- **launch `sandbox`** (provisional: the kernel's change that sends it is not merged) is
+  `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
+  setting, team, optional}], skipped?: [{capability, reason}]}`, built by the kernel from
+  recorded configuration, or `{unavailable: "<cause>"}` when the kernel could not resolve
+  it. A kernel may not send the key yet, and then nothing is written (readiness says the
+  allowances are missing).
+  - In a sandboxed mode the provider writes exactly the `domains` and `write` entries. An
+    entry that is not one exact host or one exact absolute path refuses the launch in
+    every mode (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
+  - `missing` is what a provider's line named and the deployment has no value for. A
+    sandboxed launch with a row that is not `optional` is refused (`E_BACKEND_SANDBOX_HOST`,
+    naming each and `oats aweb setup`); a row the provider cannot name is counted, never
+    dropped. `unavailable` refuses a sandboxed launch (`E_BACKEND_SANDBOX_UNAVAILABLE`).
+  - A sandboxed launch must understand everything it is told: a key the provider does not
+    know, or a `missing` that is not a list, refuses it. A full-mode launch writes nothing
+    and ignores `missing`, `skipped`, `unavailable` and unknown keys, whatever they hold.
 - **stop** with `endpoint: null` stops every live thread that runs in the home (the kernel
   compensating a launch whose answer was lost).
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
-  `authorization-required` or `unavailable`; `ready` has no problems.
+  `authorization-required` or `unavailable`; `ready` has no problems. With the planned
+  launch (`launch: {harness, yolo, args, sandbox}`; the four values beside `home` and `soul`
+  are read the same), it also answers what that launch would be refused for in bb's
+  sandbox, as a problem with the launch's own code, and lists optional rows, skipped
+  capabilities and, for a full-mode launch, the gaps, as warnings. Without it, the check
+  can only say, for a home, what its last launch left on record.
 
 ## Codes
 `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
-`E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
+`E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
+`E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
 `E_SESSION_PROMPT_OPEN`, `E_SESSION_INPUT_QUEUED`, `E_SESSION_INPUT_FAILED`,
 `E_SESSION_STOP_FAILED`.
 

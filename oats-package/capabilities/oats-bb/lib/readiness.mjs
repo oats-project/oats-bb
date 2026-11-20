@@ -7,7 +7,8 @@ import { delimiter, join } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
-import { currentSandbox, describeMissing, readLaunchRecord } from "./local-settings.mjs";
+import { permissionMode, sandboxRefusal } from "./mode.mjs";
+import { currentSandbox, describeMissing, readLaunchRecord, readSandbox } from "./local-settings.mjs";
 import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -191,6 +192,8 @@ export async function readinessResult(settings, options = {}) {
       warnings.push({ code: "session-provider-orphans-unchecked", message: `bb's threads could not be listed, so orphaned threads were not looked for (${error.message})` });
     }
   }
+  for (const problem of options.extra?.problems ?? []) problems.push(problem);
+  warnings.push(...(options.extra?.warnings ?? []));
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
   return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
@@ -207,7 +210,45 @@ const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "co
  *  each entry: readiness lists it (contract item 6). → warnings; none before a first
  *  launch. In full mode nothing was added, and the one thing said is which hosts the
  *  deployment lacked at that launch. */
-export function sandboxWarnings(home) {
+/** "a; b; 3 more" for the first rows and a count of the rest, some of which have no name. */
+function gapList(missing, unnamed) {
+  const shown = missing.slice(0, MISSING_SHOWN).map(describeMissing);
+  const rest = missing.length - shown.length + unnamed;
+  if (rest === 0) return shown.join("; ");
+  if (shown.length === 0) return `${rest} entr${rest > 1 ? "ies" : "y"} that cannot be shown`;
+  return `${shown.join("; ")}; ${rest} more${unnamed > 0 ? " (not all can be shown)" : ""}`;
+}
+
+/** What the planned launch the kernel hands the check would meet in the sandbox: the
+ *  refusal a launch in that mode would answer, as a problem; optional rows, skipped
+ *  capabilities and, in full mode, the gaps, as warnings. → {problems, warnings}. */
+export function plannedLaunchFindings(planned) {
+  const problems = [], warnings = [];
+  let mode, allowances;
+  try {
+    mode = permissionMode(planned.args, planned.yolo);
+    allowances = readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
+  } catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return { problems: [{ code: error.code, message: error.message, status: "needs-configuration" }], warnings };
+  }
+  const refusal = sandboxRefusal(mode, allowances);
+  if (refusal !== null) problems.push({ ...refusal, status: refusal.code === "E_BACKEND_SANDBOX_UNAVAILABLE" ? "unavailable" : "needs-configuration" });
+  else if (allowances.unavailable !== null) {
+    warnings.push({ code: "session-provider-sandbox-unavailable", message: `the deployment's configuration could not be resolved for the sandbox (${allowances.unavailable}). The planned launch runs in full mode, which has no sandbox; a launch in auto or accept-edits would be refused` });
+  } else if (allowances.missing.length + allowances.unnamed > 0) {
+    warnings.push({ code: "session-provider-sandbox-host-missing", message: `the deployment records no host for ${gapList(allowances.missing, allowances.unnamed)}. The planned launch runs in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
+  }
+  if (allowances.optional.length > 0) {
+    warnings.push({ code: "session-provider-sandbox-host-optional", message: `the deployment records no host for ${gapList(allowances.optional, 0)}, which ${allowances.optional.length > 1 ? "are" : "is"} optional: the launch goes on, and what needs ${allowances.optional.length > 1 ? "them" : "it"} is blocked in bb's sandboxed modes` });
+  }
+  if (allowances.skipped.length > 0) {
+    warnings.push({ code: "session-provider-sandbox-skipped", message: `no sandbox host was taken for ${allowances.skipped.slice(0, MISSING_SHOWN).map((entry) => `${entry.capability}${entry.reason ? ` (${entry.reason})` : ""}`).join("; ")}${allowances.skipped.length > MISSING_SHOWN ? `; ${allowances.skipped.length - MISSING_SHOWN} more` : ""}` });
+  }
+  return { problems, warnings };
+}
+
+export function sandboxWarnings(home, { planned = false } = {}) {
   let current, launched;
   try { current = currentSandbox(home); launched = readLaunchRecord(home); }
   catch (error) {
@@ -215,17 +256,14 @@ export function sandboxWarnings(home) {
     return [{ code: "session-provider-sandbox-unread", message: "what the provider added to this home's sandbox could not be read: its record or .claude/settings.local.json in the home is not what the provider wrote. The next launch refuses or rewrites it" }];
   }
   const warnings = [];
-  if (launched && launched.mode !== null && launched.mode !== "full" && !launched.sandboxGiven) {
+  if (!planned && launched && launched.mode !== null && launched.mode !== "full" && !launched.sandboxGiven) {
     // A kernel that hands a launch no sandbox allowances: bb's sandbox then blocks OATS's
     // own commands, and nothing in the home says so but this.
     warnings.push({ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` });
   }
-  if (launched && launched.mode === "full" && launched.missing.length + launched.unnamed > 0) {
+  if (!planned && launched && launched.mode === "full" && launched.missing.length + launched.unnamed > 0) {
     // Only a full-mode launch records a gap (a sandboxed one is refused before any record).
-    const shown = launched.missing.slice(0, MISSING_SHOWN).map(describeMissing);
-    const rest = launched.missing.length - shown.length + launched.unnamed;
-    const list = [...shown, ...(rest > 0 ? [`${rest} more${launched.unnamed > 0 ? ", some of which cannot be shown" : ""}`] : [])].join("; ");
-    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for ${list}. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
+    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for ${gapList(launched.missing, launched.unnamed)}. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
   }
   if (current.domains.length > 0 || current.write.length > 0) {
     const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);

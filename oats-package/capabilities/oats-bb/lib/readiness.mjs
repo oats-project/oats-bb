@@ -196,14 +196,17 @@ export async function readinessResult(settings, options = {}) {
   return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
 }
 
+// How many missing hosts one readiness line names before it counts the rest.
+const MISSING_SHOWN = 16;
+
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.
-const MISSING_SHOWN = 16;
 const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "dev.azure.com", "git.sr.ht"]);
 
 /** What the provider added to the home's sandbox at its last launch, with who asked for
- *  each entry: readiness lists it (contract item 6). → warnings; none in full mode or
- *  before a first launch. */
+ *  each entry: readiness lists it (contract item 6). → warnings; none before a first
+ *  launch. In full mode nothing was added, and the one thing said is which hosts the
+ *  deployment lacked at that launch. */
 export function sandboxWarnings(home) {
   let current, launched;
   try { current = currentSandbox(home); launched = readLaunchRecord(home); }
@@ -217,11 +220,12 @@ export function sandboxWarnings(home) {
     // own commands, and nothing in the home says so but this.
     warnings.push({ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` });
   }
-  if (launched && launched.mode === "full" && launched.missing.length > 0) {
+  if (launched && launched.mode === "full" && launched.missing.length + launched.unnamed > 0) {
     // Only a full-mode launch records a gap (a sandboxed one is refused before any record).
-    const shown = launched.missing.slice(0, MISSING_SHOWN).map(describeMissing).join("; ");
-    const more = launched.missing.length > MISSING_SHOWN ? ` and ${launched.missing.length - MISSING_SHOWN} more` : "";
-    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for ${shown}${more}. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
+    const shown = launched.missing.slice(0, MISSING_SHOWN).map(describeMissing);
+    const rest = launched.missing.length - shown.length + launched.unnamed;
+    const list = [...shown, ...(rest > 0 ? [`${rest} more${launched.unnamed > 0 ? ", some of which cannot be shown" : ""}`] : [])].join("; ");
+    warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for ${list}. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused until \`oats aweb setup\` records it` });
   }
   if (current.domains.length > 0 || current.write.length > 0) {
     const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);

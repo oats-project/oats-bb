@@ -116,12 +116,14 @@ const CAPABILITY_ID = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::\d{1,5})?$/;
 
 /** The launch input's `sandbox`: {domains: [{host, capability, setting}], write: [{path,
- *  reason}]}, as the kernel built it from recorded configuration. The provider writes
+ *  reason}], missing?: [{capability, setting, team}]}, as the kernel built it from
+ *  recorded configuration. → {domains, write, missing, unnamed} (`unnamed`: how many
+ *  `missing` entries could not be named). The provider writes
  *  exactly this list, so it checks each entry is what the list may hold (an exact host,
  *  an exact absolute path) and refuses the launch otherwise (E_BACKEND_SANDBOX_HOST,
  *  E_BACKEND_SANDBOX_PATH), naming the entry. */
 export function readSandbox(sandbox) {
-  if (sandbox === undefined || sandbox === null) return { domains: [], write: [], missing: [] };
+  if (sandbox === undefined || sandbox === null) return { domains: [], write: [], missing: [], unnamed: 0 };
   if (!isObject(sandbox)) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
   for (const key of Object.keys(sandbox)) if (!["domains", "write", "missing"].includes(key)) throw fail("E_SESSION_START_FAILED", `the launch input's sandbox has a key this provider does not know: ${key}`);
   const list = (value, what) => {
@@ -146,16 +148,20 @@ export function readSandbox(sandbox) {
   });
   // What a slot provider's line named and the deployment has no value for (a team with no
   // recorded service): a host the sandbox would need and cannot be given.
-  const missing = list(sandbox.missing, "missing").map((entry) => {
-    // The launch input is the kernel's: each entry is taken as given, checked only for
-    // what a message can carry (the kernel's own rules decide what a team id is).
-    const text = (value) => value === undefined || value === null || (typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\x00-\x1f\x7f]/.test(value));
-    if (!isObject(entry) || typeof entry.capability !== "string" || !CAPABILITY_ID.test(entry.capability) || !text(entry.setting) || !text(entry.team)) {
-      throw fail("E_SESSION_START_FAILED", "the launch input's sandbox.missing holds an entry that is not {capability, setting, team}");
-    }
-    return { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
-  });
-  return { domains, write, missing };
+  // What a slot provider's line named and the deployment has no value for (a team with no
+  // recorded service): a host the sandbox would need and cannot be given. The launch input
+  // is the kernel's: an entry is taken as given, checked only for what a message can
+  // carry. One that cannot be named is still a gap: it is counted, never a reason of its
+  // own to refuse (full mode ignores `missing` whatever it holds).
+  const text = (value) => value === undefined || value === null || (typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\x00-\x1f\x7f]/.test(value));
+  const missing = [];
+  let unnamed = 0;
+  for (const entry of list(sandbox.missing, "missing")) {
+    if (isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && text(entry.setting) && text(entry.team)) {
+      missing.push({ capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null });
+    } else unnamed += 1;
+  }
+  return { domains, write, missing, unnamed };
 }
 
 // A team id as the kernel writes one, and a setting key: what a record in the home must
@@ -219,9 +225,14 @@ export function everLaunched(home) {
 export function readLaunchRecord(home) {
   if (!everLaunched(home)) return null;
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
-  return record === null ? null : {
+  if (record === null) return null;
+  const recorded = Array.isArray(record.missing) ? record.missing : [];
+  return {
     mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
-    missing: (Array.isArray(record.missing) ? record.missing : []).map(readRecordedMissing).filter(Boolean),
+    missing: recorded.map(readRecordedMissing).filter(Boolean),
+    // What the record holds and cannot be shown: entries that are not a capability id with
+    // a plain setting and team, and what the launch itself could not name.
+    unnamed: recorded.length - recorded.map(readRecordedMissing).filter(Boolean).length + (Number.isInteger(record.unnamed) && record.unnamed > 0 ? record.unnamed : 0),
   };
 }
 
@@ -335,7 +346,7 @@ function withdraw(settings, envNames, sandboxRecord) {
  *  sandbox allowances. Every other key is kept, and every entry under a name the launch
  *  does not carry; a name it carries is the launch's (a person's entry of that name is
  *  replaced). What an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], dryRun = false }) {
+export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], unnamed = 0, dryRun = false }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);
   const envRecord = everLaunched(home) ? readJsonObject(envRecordPath, "the provider's record") : null;
@@ -379,7 +390,7 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sand
   else rmSync(sandboxRecordPath, { force: true });
   // What readiness needs to say of this home's sandbox: the mode it runs in, and whether
   // the kernel handed the launch any allowances at all.
-  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing });
+  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing, unnamed });
   return { path: settingsPath, names, sandbox: sandboxRecord };
 }
 

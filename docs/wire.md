@@ -54,7 +54,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `sandbox`** is `{domains: [{host, capability, setting}], write: [{path, reason}],
   missing?: [{capability, setting, team}]}` (`missing`: what a provider's line named and the
   deployment has no value for; a sandboxed launch with any is refused
-  `E_BACKEND_SANDBOX_HOST`, a full-mode launch ignores them),
+  `E_BACKEND_SANDBOX_HOST`, a full-mode launch ignores them, whatever they hold; an entry
+  the provider cannot name is counted, never dropped),
   built by the kernel from recorded configuration; a kernel may not send it yet, and then
   nothing is written (readiness says the allowances are missing). In a sandboxed mode the
   provider writes

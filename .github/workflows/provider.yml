@@ -41,5 +41,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      # The second contract file runs Claude Code's sandbox inside its container, which
+      # makes user namespaces there. The runner's AppArmor policy forbids that to an
+      # unprivileged process ("nested userns is capability-restricted"); the restriction is
+      # lifted for this job's own runner, which is thrown away after it.
+      - name: Let the contract container make user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Contract test against the pinned bb-app
         run: npm run test:contract

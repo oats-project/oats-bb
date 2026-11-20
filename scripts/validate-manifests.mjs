@@ -84,8 +84,8 @@ if (isObject(pkg)) {
       checkScript(capDir, isObject(hook) ? hook.command : hook, `${at}#/hooks/${event}`);
     }
 
-    // sessionProviders (contract r7 item 1): the name is 1-40 lowercase letters, digits
-    // and dashes, `tmux` is reserved; each command names one of the manifest's commands.
+    // sessionProviders (the contract's item 1): the name is 1-40 lowercase letters, digits
+    // and dashes, three names are the kernel's; each command names one of the manifest's.
     if (manifest.sessionProviders !== undefined) {
       if (!isObject(manifest.sessionProviders)) report(`${at}#/sessionProviders`, "must be a map");
       for (const [name, provider] of Object.entries(isObject(manifest.sessionProviders) ? manifest.sessionProviders : {})) {

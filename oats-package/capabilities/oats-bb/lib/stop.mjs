@@ -4,12 +4,12 @@ import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject, recode } from "./errors.mjs";
 import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
-import { isSettled, liveThreadsOfHome, projectsOfHome, readEndpoint } from "./threads.mjs";
+import { isSettled, liveInHome, readEndpoint } from "./threads.mjs";
 
 const POLL_MS = 300;
 // The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
 // settle is the grace, and the calls around it stay inside the 20 s.
-export const MAX_GRACE_SECONDS = 300;
+const MAX_GRACE_SECONDS = 300;
 const DEFAULT_GRACE_SECONDS = 10;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -27,8 +27,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     if (input.endpoint === null || input.endpoint === undefined) {
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
       const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
-      const [projects, threads] = [await bb.projects(), await bb.threads()];
-      const live = liveThreadsOfHome(threads, input.home, projectsOfHome(projects, input.home).map((project) => project.id));
+      const { live } = await liveInHome(bb, input.home);
       for (const thread of live) await stopThread(bb, thread.id, { until, grace, now });
       return { stopped: true };
     }
@@ -40,7 +39,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
 }
 
 /** The seconds to wait for bb to settle after `bb thread stop`. */
-export function graceOf(input) {
+function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
@@ -71,8 +70,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
   try {
     const settings = readSettings();
     const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
-    const [projects, threads] = [await bb.projects(), await bb.threads()];
-    const live = liveThreadsOfHome(threads, home, projectsOfHome(projects, home).map((project) => project.id));
+    const { live } = await liveInHome(bb, home);
     if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
     const archived = [], left = [];
     for (const thread of live) {

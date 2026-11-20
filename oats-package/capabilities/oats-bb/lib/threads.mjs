@@ -22,7 +22,7 @@ export function inspectAnswer(thread) {
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
-export const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
+const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
 
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;
@@ -82,4 +82,11 @@ export function inspectHome({ home, endpoint }, threads) {
   }
   if (!recorded) return { ...MISSING };
   return { ...inspectAnswer(recorded), open: openLink(endpoint) };
+}
+
+/** What runs in a home now: its bb projects, and its live threads. Two reads of bb. */
+export async function liveInHome(bb, home) {
+  const [allProjects, threads] = [await bb.projects(), await bb.threads()];
+  const projects = projectsOfHome(allProjects, home);
+  return { projects, live: liveThreadsOfHome(threads, home, projects.map((project) => project.id)) };
 }

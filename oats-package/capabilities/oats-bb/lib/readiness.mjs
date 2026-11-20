@@ -22,7 +22,7 @@ const HTTP_MAX_BYTES = 256 * 1024;
 /** GET a JSON document from bb, read-only: a loopback address (the callers pass only
  *  origins that passed loopbackOrigin), no redirect followed, bounded in time and in size.
  *  Resolves { ok: true, value } or { ok: false, message }; never throws. */
-export async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
+async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
   try {
     const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(Math.max(1, timeoutMs)), redirect: "error", headers: { accept: "application/json" } });
     if (!response.ok) { await response.body?.cancel(); return { ok: false, message: `HTTP ${response.status}` }; }
@@ -138,7 +138,7 @@ function originOf(value) {
 
 /** Live bb threads whose project root no longer exists: what a retire that could not
  *  reach bb, or an older kernel's retire, left behind. → warnings, one per root. */
-export async function orphanedThreads(bb, { exists = existsSync } = {}) {
+async function orphanedThreads(bb, { exists = existsSync } = {}) {
   const [projects, threads] = [await bb.projects(), await bb.threads()];
   const warnings = [];
   for (const project of projects) {

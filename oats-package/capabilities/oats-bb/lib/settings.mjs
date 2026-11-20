@@ -2,9 +2,9 @@
 import { isAbsolute } from "node:path";
 import { fail, isObject } from "./errors.mjs";
 
-export const DEFAULT_SERVER = "http://127.0.0.1:38886";
-export const DEFAULT_DAEMON = "http://127.0.0.1:38887";
-export const DEFAULT_CLI = "bb";
+const DEFAULT_SERVER = "http://127.0.0.1:38886";
+const DEFAULT_DAEMON = "http://127.0.0.1:38887";
+const DEFAULT_CLI = "bb";
 export const TRUST_VALUES = Object.freeze(["single-user", "container"]);
 
 const LOOPBACK_V4 = /^127(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;

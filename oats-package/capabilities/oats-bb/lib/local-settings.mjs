@@ -17,10 +17,10 @@ import { randomBytes } from "node:crypto";
 import { fail, isObject } from "./errors.mjs";
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-export const STATE_DIR = ".oats-bb";
+const STATE_DIR = ".oats-bb";
 const ENV_RECORD = join(STATE_DIR, "launch-env.json");
 const LAUNCH_RECORD = join(STATE_DIR, "launch.json");
-export const SANDBOX_RECORD = ".oats-bb-sandbox.json";
+const SANDBOX_RECORD = ".oats-bb-sandbox.json";
 
 // Where a launch env entry may come from and still be written to a file: the kernel, a
 // capability's hook (which must not return a secret) or a launch configuration's literal.

@@ -61,7 +61,7 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
 const firstLine = (text) => String(text).split("\n").map((line) => line.trim()).find(Boolean) ?? "";
 
 /** bb says the server did not answer (the CLI's fetch failed), as opposed to answering no. */
-export function isUnreachable(answer) {
+function isUnreachable(answer) {
   return !answer.ok && (answer.timedOut === true || (answer.code === "error" && /fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|socket hang up|network/i.test(answer.message)));
 }
 

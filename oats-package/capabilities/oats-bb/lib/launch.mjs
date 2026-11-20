@@ -5,9 +5,9 @@ import { bbClient } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
-import { isBbId, isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
+import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
-export const HARNESSES = Object.freeze(["claude"]);
+const HARNESSES = Object.freeze(["claude"]);
 const BB_PROVIDER = "claude-code";
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
@@ -98,9 +98,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
 
   // One thread per home: the home's project may hold the thread this launch replaces
   // (stopped by OATS, so settled), and nothing else alive.
-  const [projects, threads] = [await bb.projects(), await bb.threads()];
-  const mine = projectsOfHome(projects, home);
-  const live = liveThreadsOfHome(threads, home, mine.map((project) => project.id));
+  const { projects: mine, live } = await liveInHome(bb, home);
   const previousId = typeof previous?.threadId === "string" ? previous.threadId : null;
   const others = live.filter((thread) => thread.id !== previousId);
   if (others.length > 0) {

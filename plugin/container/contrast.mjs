@@ -15,6 +15,9 @@
 // the document's root down, so a translucent background or text colour is composited as the page
 // composites it; an ancestor's `opacity` blends its content with what is behind it.
 //
+// It reads the page as it is when asked, whether an element is on screen or not: a sidebar that bb
+// keeps mounted in its closed drawer (at phone width, in some loads) is counted too.
+//
 // What it cannot see, and why:
 //   - a state the page is not in: hover, focus, active, a dialog that is not open, a refusal
 //     that is not shown. live-ui.mjs brings up the ones it can (a typed name the form refuses, the

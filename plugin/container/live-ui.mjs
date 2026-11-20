@@ -6,7 +6,8 @@
 //   A14 with the fake oats removed: bb's threads are listed, the "not found" line shows, and a
 //       thread opens.
 //   A16 an agent whose thread bb does not have: its soul's page says so, and Retire opens the
-//       plan dialog.
+//       plan dialog. And the two states no fixture row is in: an agent the kernel cannot reach,
+//       and one whose session fell back to a shell, the first on the open thread.
 // Each runs twice, in bb's light theme and in its dark theme (bb's own appearance choice, set as
 // bb keeps it: browser.mjs), and at every screenshot the contrast of what the plugin draws there
 // is checked in that theme (contrast.mjs says what that covers).
@@ -88,13 +89,17 @@ function threadsByFixtureId() {
   return byId;
 }
 
-/** status.json as the fake prints it for this run: the same rows, with the bb threads' real ids. */
-function statusWithRealIds(threads) {
+/**
+ * status.json as the fake prints it for this run: the same rows, with the bb threads' real ids.
+ * `changes`: by instance, fields that replace the row's own (a state no fixture row is in).
+ */
+function statusWithRealIds(threads, changes = {}) {
   const status = structuredClone(fixtureStatus);
   for (const group of status.agents) {
     for (const row of group.instances) {
       const real = row.session ? threads.get(row.session.threadId) : undefined;
       if (real !== undefined) row.session.threadId = real.id;
+      Object.assign(row, changes[row.instance] ?? {});
     }
   }
   return JSON.stringify(status);
@@ -250,8 +255,11 @@ async function a13(browser, viewport, threads, theme) {
   }
 }
 
-/** A16: an agent of the status whose thread bb does not have, on its soul's page, and its Retire. */
-async function a16(browser, viewport, theme) {
+/**
+ * A16: an agent of the status whose thread bb does not have, on its soul's page, and its Retire;
+ * then the tree with an unreachable agent on the open thread and an agent whose session is a shell.
+ */
+async function a16(browser, viewport, theme, threads) {
   const at = `A16 ${theme} ${viewport.name}`;
   const page = await themedPage(browser, viewport, theme, at);
   try {
@@ -265,6 +273,14 @@ async function a16(browser, viewport, theme) {
     await page.shot(`a16-${viewport.name}-plan`);
     await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-plan-cancel"))}).click()`);
     check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} Cancel closes the dialog`);
+
+    const digest = threads.get("thr_digest");
+    await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
+    check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+    const dot = (id, state) => `document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] [data-state="${state}"]`)}) !== null`;
+    const drawn = await page.until(`${dot(digest.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
+    check(Boolean(drawn), `${at} the tree draws the unreachable agent, on the open thread, and the agent whose session is a shell`, await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")} [data-state]`)})].map((e) => e.getAttribute("data-state")).join(",")`));
+    await page.shot(`a16-${viewport.name}-states`);
   } finally {
     await page.close();
   }
@@ -309,11 +325,16 @@ const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE }
 try {
   for (const theme of THEMES) for (const viewport of VIEWPORTS) await a13(browser, viewport, threads, theme);
 
-  // A16: the same status, with one agent on a thread bb does not have (its fixture id, unmapped).
+  // A16: the same status, with one agent on a thread bb does not have (its fixture id, unmapped),
+  // one the kernel cannot reach and one whose session fell back to a shell.
   const detached = new Map([...threads].filter(([id]) => id !== "thr_ci"));
-  fake({ status: { stdout: statusWithRealIds(detached) } });
+  const states = {
+    "weekly-digest-helper": { running: null, runtimeState: "unreachable", sessionEnd: null },
+    "harvest-knowledge-helper": { running: false, runtimeState: "shell" },
+  };
+  fake({ status: { stdout: statusWithRealIds(detached, states) } });
   await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
-  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, theme);
+  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, theme, threads);
 
   // A14: the fake oats is removed for the length of the check, then put back.
   renameSync(OATS, `${OATS}.away`);

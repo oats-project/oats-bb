@@ -51,14 +51,17 @@ again in its dark theme:
   and their preview (Preview and Spawn enabled).
 - **A14** with `oats` removed: bb's threads are listed, the "not found" line shows, a thread opens.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
-  Retire opens the plan dialog with the kernel's plan.
+  Retire opens the plan dialog with the kernel's plan. Then the tree with the two states no
+  fixture row is in: an agent the kernel cannot reach, on the open thread (its row drawn as bb
+  draws the open one), and an agent whose session fell back to a shell. With A13's rows, all six
+  states of the dot are drawn.
 
 **The theme** is bb's own appearance choice, not the browser's colour scheme. bb 0.50.1 keeps it in
 the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: what its Settings,
 Appearance writes) and puts the class `dark` on the document's root when it loads; no server
 setting and no `bb settings` key holds it. `browser.mjs` sets that key before any script of bb
 runs, and each check asserts the theme bb then draws. The screenshots are
-`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (60
+`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (64
 files, in `container/out/`, kept as CI artefacts).
 
 **The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
@@ -69,7 +72,11 @@ colours). It covers every rendered element with text of its own inside the plugi
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
-placeholder of an empty one), and the state dots. It cannot see: hover, focus and other states the
+placeholder of an empty one), and the state dots, in each of their six states. What it checks is
+what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
+closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted
+in some scenes that do not show them, and a line's counts can differ between two runs of one
+scene. It cannot see: hover, focus and other states the
 page is not in (a failed call's error line, the "Starting…" line, a spawn's problems: no scene
 brings them up; they use the same token as the form's refusal, which one does); a disabled
 control (skipped, as WCAG does); the options of an open select (the browser draws them); borders,
@@ -79,9 +86,10 @@ computes.
 
 The plugin's colours are bb's tokens only (`app/ui.tsx`). Where a state needs a colour, it is one
 of bb's tokens for coloured text on a surface (`warning-text`, `success-foreground`,
-`destructive-text`), which hold their contrast against the surface in both themes; bb's fill
-tokens (`attention`, `success`, and `destructive` as a text colour in the dark theme) and a fixed
-palette colour (`amber-500`, `green-500`) do not.
+`destructive-text`), which hold their contrast against the surface in both themes, on an open or
+hovered row too; bb's fill tokens (`attention` and `success` in the light theme, `destructive`
+in the dark one) and a fixed palette colour (`amber-500`, `green-500`) do not. `bg-destructive`
+is left only as the fill of the destructive button, under `destructive-foreground` text.
 
 To work in a container for a while:
 

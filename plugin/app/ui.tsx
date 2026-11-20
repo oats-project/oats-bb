@@ -5,15 +5,16 @@ import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
 
 // bb's tokens for coloured text on a surface: they keep their contrast against it in both themes,
-// which its fill tokens (`attention`, `success`) do not in the light one. For the same reason a
-// refusal's text is `text-destructive-text`, never `text-destructive` (3.56:1 in the dark theme).
+// on a row that is open or hovered too, which its fill tokens do not (`attention` and `success` in
+// the light theme, `destructive` in the dark one: 2.87:1 on an open row). For the same reason a
+// refusal's text is `text-destructive-text`, never `text-destructive`.
 const DOT: Record<AgentState, string> = {
   "needs-you": "bg-warning-text",
   working: "bg-success-foreground",
   idle: "border border-muted-foreground",
   stopped: "bg-muted-foreground",
-  error: "bg-destructive",
-  unreachable: "bg-destructive",
+  error: "bg-destructive-text",
+  unreachable: "bg-destructive-text",
 };
 
 /**

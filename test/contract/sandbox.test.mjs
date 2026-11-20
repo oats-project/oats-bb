@@ -23,11 +23,13 @@ const DATA = "/home/node/bbdata";
 const MOVE_TOOL = "mcp__bb-bridge__update_environment_directory";
 // What the kernel keeps outside the home and names as protected: the instances'
 // retirement directory, and in it the kernel's own copy of each home's modules
-// (<instances>/.oats-retirement/modules/<hash of the home>/<capability>/). The kernel runs
+// (today <instances>/.oats-retirement/modules/<hash>/<store>/<capability>/; the store
+// changes at every upgrade and undo, and nothing here depends on the layout: `protected`
+// names .oats-retirement whole). The kernel runs
 // hooks from that copy, hooks write paths in there for the harness to run: a sandboxed
 // agent must read and run it where it is, and never write it.
 const RETIREMENT = `${INSTANCES}/.oats-retirement`;
-const copyOf = (name) => `${RETIREMENT}/modules/hash-of-${name}/oats.core`;
+const copyOf = (name) => `${RETIREMENT}/modules/hash-of-${name}/store-1/oats.core`;
 
 const box = rig({
   name: `oats-bb-contract-sandbox-${process.pid}`,

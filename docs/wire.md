@@ -165,7 +165,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `protected`** (optional, wire 1.3): `[<absolute path>]`, the directories the
   kernel keeps outside the home that the agent must never write and must still read and
   run where they are: the instances' `.oats-retirement/`, which holds the kernel's own
-  copy of each home's modules (`modules/<hash of the home>/<capability>/`). The kernel makes each before a launch. A sandboxed launch denies
+  copy of each home's modules, somewhere below it (where exactly is the kernel's, and changes at an upgrade: the provider reads no path there). The kernel makes each before a launch. A sandboxed launch denies
   each whole (`Edit(//<path>)`, `Edit(//<path>/**)`, under its real path too); with no
   `protected`, or one that is not a list, it is refused (`E_BACKEND_SANDBOX_PROTECTED`);
   an entry that is not an exact absolute path of an existing directory, or that a rule

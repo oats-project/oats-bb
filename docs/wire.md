@@ -231,10 +231,11 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   (`OATS_BACKEND` set and not `bb`) it removes the provider's two keys (`env`, `sandbox`)
   from `.claude/settings.local.json` when `OATS_PREVIOUS_BACKEND` is `bb`, and only then:
   nothing in the home decides it. Where that variable is absent it removes nothing, and
-  warns if a `sandbox` block stands in the file. In every case it deletes, unread, what an earlier
+  warns if a `sandbox` block stands in the file. In every case it deletes, unread and best effort, what an earlier
   version of the provider kept in the home (`.oats-bb/`, `.oats-bb-sandbox.json`).
   It returns no env and no arguments.
-- `retire`: archives the home's live bb threads, after the kernel's stop. The hook is not
+- `retire`: archives the home's live bb threads, after the kernel's stop, and deletes those
+  two old names too (best effort). The hook is not
   told the home's backend, and nothing in the home proves it has no thread (its agent can
   write there, and the provider keeps nothing of its own there), so bb is asked for every
   home, and a bb that cannot be asked is a warning for every home, a tmux home too;

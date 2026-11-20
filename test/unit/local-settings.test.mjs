@@ -2,7 +2,7 @@
 // the launch hook that removes what the provider wrote when the home leaves the provider.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
@@ -351,6 +351,38 @@ test("the launch hook removes the provider's two keys only on the kernel's word 
   assert.deepEqual(readdirSync(join(home, ".claude")), ["settings.local.json"]);
   // With no sandbox block and no word from the kernel, the hook is silent.
   assert.equal((await hook("tmux")).stdout, "");
+  // On the kernel's word again, with neither key in the file: nothing to remove, nothing
+  // said, and the file is left byte for byte (not rewritten, its mode not narrowed).
+  writeFileSync(join(home, ".claude/settings.local.json"), '{"permissions":{}}', { mode: 0o644 });
+  chmodSync(join(home, ".claude/settings.local.json"), 0o644);
+  assert.equal((await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" })).stdout, "");
+  assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), '{"permissions":{}}');
+  assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o644);
+  // Nor is anything said, or made, in a home with no .claude at all.
+  rmSync(join(home, ".claude"), { recursive: true });
+  assert.equal((await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" })).stdout, "");
+  assert.equal(existsSync(join(home, ".claude")), false);
+});
+
+test("an old record nobody can delete holds nothing up: the launch answers, the hooks exit 0, and the settings are written", { skip: process.getuid?.() === 0 ? "root deletes anything" : false }, async (t) => {
+  const { home, launch, local, hook } = await setup(t);
+  mkdirSync(join(home, ".oats-bb/a/b"), { recursive: true });
+  chmodSync(join(home, ".oats-bb/a"), 0o500);
+  t.after(() => { try { chmodSync(join(home, ".oats-bb/a"), 0o700); } catch { /* the scratch directory is already gone */ } });
+  assert.equal((await launch({ yolo: true })).ok, true);
+  assert.deepEqual(local(), { env: { OATS_INSTANCE: "dev-a" } });
+  assert.equal(existsSync(join(home, ".oats-bb/a/b")), true);
+  const moved = await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" });
+  assert.equal(moved.status, 0);
+  assert.match(JSON.parse(moved.stdout).warning, /removed its two keys/);
+  assert.deepEqual(local(), {});
+  const retired = await runBin(["retire-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "/nonexistent/oats-bb-test/bb" }) } });
+  assert.equal(retired.status, 0);
+  // Once it can be deleted, the retire hook takes it too.
+  chmodSync(join(home, ".oats-bb/a"), 0o700);
+  writeFileSync(join(home, ".oats-bb-sandbox.json"), "{}");
+  await runBin(["retire-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "/nonexistent/oats-bb-test/bb" }) } });
+  assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".oats-bb")), []);
 });
 
 test("a launch rewrites its two keys from the launch input, keeps the rest, and keeps nothing of its own in the home", async (t) => {

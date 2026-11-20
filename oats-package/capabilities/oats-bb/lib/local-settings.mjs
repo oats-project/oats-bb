@@ -276,9 +276,9 @@ const READ_MAX = 1024 * 1024;
  *  home is writable by its agent, and a no-follow open covers the last name only).
  *  → { fd, through(name) } | null where there is no such directory. Throws where the name
  *  is something else than a directory. */
-function pinDirectory(dir, refuse, { follow = false } = {}) {
+function pinDirectory(dir, refuse) {
   let fd;
-  try { fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | (follow ? 0 : constants.O_NOFOLLOW)); }
+  try { fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
   catch (error) {
     if (error?.code === "ENOENT") return null;
     throw refuse(`is in ${dir}, which is not a directory of the home (a link is not followed)`);
@@ -307,11 +307,9 @@ function pinDirectory(dir, refuse, { follow = false } = {}) {
  *  without following a link and held, and the file is read through it; a regular file
  *  only (a link, a directory or a pipe is refused, never followed, waited on or taken for
  *  absent), at most 1 MiB. → { bytes, mode } | null. Throws E_SESSION_START_FAILED otherwise. */
-function readHomeBytes(path, what, { inHome = false } = {}) {
+function readHomeBytes(path, what) {
   const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
-  // The home itself is the kernel's word, and may be reached through a link: only a
-  // directory inside it is opened without following one.
-  const dir = pinDirectory(dirname(path), refuse, { follow: inHome });
+  const dir = pinDirectory(dirname(path), refuse);
   if (dir === null) return null;
   let fd = null;
   try {
@@ -342,8 +340,8 @@ function readHomeBytes(path, what, { inHome = false } = {}) {
 
 /** Read a JSON object from a file in the home, or null when there is none, by the
  *  confined read above; nothing of its content goes into a message. */
-function readJsonObject(path, what, options) {
-  const read = readHomeBytes(path, what, options);
+function readJsonObject(path, what) {
+  const read = readHomeBytes(path, what);
   if (read === null) return null;
   const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
   let doc;
@@ -359,13 +357,20 @@ export const isExactPath = (value) => typeof value === "string" && isAbsolute(va
 // What an earlier version of the provider kept in the home: a state directory and a
 // record. The provider keeps nothing of its own there now (the home is its agent's to
 // write, so a file in it must never decide what the provider writes or deletes): a launch
-// and the move-away hook delete them where they are found, unread.
+// and the hooks delete them where they are found, unread. Best effort: they decide
+// nothing, so one that cannot be deleted (the agent can plant a directory nobody may
+// empty) never fails or holds a launch, a start or a retire; the next one tries again.
+// → the names that are still there.
 const LEFTOVERS = [".oats-bb", ".oats-bb-sandbox.json"];
 export function removeLeftovers(home) {
+  const left = [];
   for (const name of LEFTOVERS) {
-    const stat = lstatSync(join(home, name), { throwIfNoEntry: false });
-    if (stat) rmSync(join(home, name), { recursive: stat.isDirectory(), force: true });
+    try {
+      const stat = lstatSync(join(home, name), { throwIfNoEntry: false });
+      if (stat) rmSync(join(home, name), { recursive: stat.isDirectory(), force: true });
+    } catch { left.push(name); }
   }
+  return left;
 }
 
 function directories(home, { create }) {
@@ -435,8 +440,8 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, dryRun = f
   const settings = readOthers(settingsPath);
   env = { ...Object.fromEntries(unset.map((name) => [name, ""])), ...env };
   own(settings, { env, sandbox: sandboxBlock(sandbox) });
-  // A dry run has done everything that can refuse (a home, a .claude or a file that is not
-  // what it should be), and writes nothing: the launch runs it before its first effect.
+  // A dry run has done every check that can refuse (a home, a .claude or a file that is
+  // not what it should be), and writes nothing: the launch runs it before its first effect.
   if (dryRun) return { path: settingsPath, names: Object.keys(env).sort() };
   writeJson(settingsPath, settings);
   removeLeftovers(home);
@@ -459,11 +464,13 @@ export function holdsSandboxKey(home) {
 /** The home ran on bb before this launch and now starts on another backend (the kernel
  *  says so, from its own record outside the home): take the provider's two keys out of
  *  settings.local.json. Nothing in the home decides this: the caller removes only on the
- *  kernel's word. */
+ *  kernel's word. A file that holds neither key is left as it is, byte for byte.
+ *  → whether a key was removed. */
 export function removeLaunchSettings(home) {
   const { settingsPath, hasClaude } = directories(home, { create: false });
-  if (hasClaude && lstatSync(settingsPath, { throwIfNoEntry: false })) {
-    writeJson(settingsPath, own(readOthers(settingsPath), { env: null, sandbox: null }));
-  }
-  removeLeftovers(home);
+  if (!hasClaude) return false;
+  const settings = readOthers(settingsPath);
+  if (settings.env === undefined && settings.sandbox === undefined) return false;
+  writeJson(settingsPath, own(settings, { env: null, sandbox: null }));
+  return true;
 }

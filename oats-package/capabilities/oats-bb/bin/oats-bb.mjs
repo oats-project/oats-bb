@@ -57,9 +57,8 @@ async function main(argv) {
     if (!home) { process.stderr.write("oats bb launch-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
     if (!backend || backend === PROVIDER || process.env.OATS_LAUNCH_PREVIEW === "1") return 0;
     // What an earlier version of the provider kept in the home goes, unread, whatever the
-    // home ran on: those names are the provider's own, and they decide nothing.
-    try { removeLeftovers(home); }
-    catch (error) { print({ warning: `the bb provider could not delete what an earlier version of it kept in the home (.oats-bb, .oats-bb-sandbox.json): ${error?.code ?? "it failed"}; delete them by hand` }); }
+    // home ran on: those names are the provider's own, and they decide nothing (best effort).
+    removeLeftovers(home);
     if (!previous) {
       // A first launch, or a kernel that does not say: nothing is removed. Where a sandbox
       // block stands in the file, it may be the provider's, left behind.
@@ -68,8 +67,7 @@ async function main(argv) {
     }
     if (previous !== PROVIDER) return 0;
     try {
-      removeLaunchSettings(home);
-      print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its two keys from .claude/settings.local.json (env and sandbox)` });
+      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its two keys from .claude/settings.local.json (env and sandbox)` });
     } catch (error) {
       print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env and sandbox there by hand` });
     }
@@ -78,6 +76,9 @@ async function main(argv) {
   if (command === "retire-hook" && rest.length === 0) {
     const home = process.env.OATS_INSTANCE_HOME;
     if (!home) { process.stderr.write("oats bb retire-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
+    // What an earlier version of the provider kept in the home goes here too (best effort):
+    // a home it launched and nothing started since is not left holding it at its retire.
+    removeLeftovers(home);
     // The settings are read inside retire: a failure to read them, or to reach bb, is a
     // warning there, never a failed retire.
     print(await retire(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));

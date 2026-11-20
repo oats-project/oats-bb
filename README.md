@@ -272,7 +272,8 @@ entry you added under `env` yourself. Put a variable of your own in the launch
 configuration instead. Every other key of the file (`permissions`, and whatever else
 Claude Code or you keep there) is left as it is. The provider keeps nothing of its own in
 the home: no record, no state directory. What an earlier version kept there (`.oats-bb/`,
-`.oats-bb-sandbox.json`) is deleted, unread, at the home's next start, on any backend.
+`.oats-bb-sandbox.json`) is deleted, unread, at the home's next start, on any backend, or
+at its retire (best effort: a name that cannot be deleted holds nothing up).
 
 **Leaving bb.** When a home that ran on bb starts on another backend (`--backend tmux`),
 the capability's launch hook removes the provider's two keys from
@@ -297,10 +298,11 @@ launch checks first:
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read | `E_BACKEND_NOT_READY` |
 
-For a home, it lists what the provider added to the sandbox (`session-provider-sandbox`):
-the entries of its record that are in `settings.local.json` now. Both files are in the
-home, which its agent can write, so where they disagree readiness says so
-(`session-provider-sandbox-mismatch`) and shows only what passed its checks.
+With the launch the kernel plans (before every launch), the check lists what a sandboxed
+launch would write into the home's sandbox, each host and path with who asked for it
+(`session-provider-sandbox`), and warns of a general forge among the hosts
+(`session-provider-sandbox-forge`). With no planned launch it says nothing of a sandbox:
+the provider reads no record of an earlier launch, and keeps none.
 
 On every read with no planned launch it carries the warning
 `session-provider-full-mode-only`: for now the backend launches in bb's full mode only.

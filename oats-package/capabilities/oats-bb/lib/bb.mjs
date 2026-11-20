@@ -11,7 +11,8 @@ const MAX_OUTPUT = 32 * 1024 * 1024;
 const CONTEXT_ENV = ["BB_THREAD_ID", "BB_PROJECT_ID", "BB_ENVIRONMENT_ID", "BB_SERVER_URL"];
 
 /** One CLI call. Resolves, never rejects:
- *  { ok: true, value } | { ok: false, code, message, timedOut?, missing? }.
+ *  { ok: true, value } | { ok: false, code, message, timedOut?, missing?, refused? }
+ *  (`refused`: bb printed its own failure envelope).
  *  `code` is bb's own error code where it gave one (thread_not_found, invalid_request…),
  *  else `error`; `timeout` and `cli_missing` are this module's. */
 export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, env = process.env, json = true } = {}) {
@@ -48,7 +49,7 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
       try { doc = JSON.parse(stdout); parsed = true; } catch { /* reported below, with the exit */ }
       if (status === 0 && parsed) return finish({ ok: true, value: doc });
       if (parsed && isObject(doc) && doc.ok === false && isObject(doc.error) && typeof doc.error.code === "string") {
-        return finish({ ok: false, code: doc.error.code, message: typeof doc.error.message === "string" ? doc.error.message : doc.error.code });
+        return finish({ ok: false, refused: true, code: doc.error.code, message: typeof doc.error.message === "string" ? doc.error.message : doc.error.code });
       }
       finish({ ok: false, code: "error", message: status === 0
         ? `bb ${args.slice(0, 2).join(" ")} answered something that is not JSON`
@@ -59,6 +60,20 @@ export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, e
 }
 
 const firstLine = (text) => String(text).split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+
+/** A failed call after which nothing can have happened in bb: the CLI could not be run,
+ *  the request never reached a server (the connection was refused), or bb's server
+ *  answered no in its own words (a 4xx with bb's error envelope, an invocation bb's CLI
+ *  rejected). Everything else is in doubt for a call that changes something: no answer
+ *  in time, a CLI that died or wrote something unreadable, a connection that dropped
+ *  after the request went out, a server error. */
+export function nothingHappened(answer) {
+  if (answer.ok) return false;
+  if (answer.missing) return true;
+  if (!answer.refused) return false;
+  if (answer.code === "error") return /ECONNREFUSED|ENOTFOUND|bad port/.test(answer.message);
+  return !/^http_5\d\d$/.test(answer.code) && !/^HTTP 5\d\d\b/.test(answer.message);
+}
 
 /** bb says the server did not answer (the CLI's fetch failed), as opposed to answering no. */
 function isUnreachable(answer) {

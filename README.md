@@ -85,6 +85,10 @@ settings:
 | `daemon` | `http://127.0.0.1:38887` | The bb host daemon. A loopback address only. |
 | `cli` | `bb` | The bb CLI: a command on `PATH`, or an absolute path. |
 
+The capability declares no host requirement for `bb`: a soul that has it may run on tmux on
+a host with no bb at all, and `cli` may point off `PATH`. Readiness is what checks the CLI
+(`E_BACKEND_VERSION` when it cannot be run).
+
 ## What the kernel gets
 
 | Call | What the provider does |

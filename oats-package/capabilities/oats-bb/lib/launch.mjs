@@ -1,7 +1,7 @@
 // launch: one OATS home becomes one bb thread (contract items 1, 4, 6).
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import { bbClient } from "./bb.mjs";
+import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
@@ -129,15 +129,16 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;
   if (spawned.ok && isObject(thread) && isBbId(thread.id)) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
-  // bb refused: nothing was created.
-  if (!spawned.ok && !spawned.timedOut) throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
+  // bb said no, or the request never reached it: nothing was created.
+  if (nothingHappened(spawned)) throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
 
-  // The spawn's fate is unknown: no answer in time, or an answer with no thread id. A
+  // The spawn's fate is unknown: no answer in time, an answer that cannot be read or has
+  // no thread id, a CLI that died, a connection that dropped after the request went out. A
   // refusal would say "nothing was started" while a thread may be running TASK.md in the
   // home, recorded nowhere. So look: a new live thread in the home is this launch's, and
   // its endpoint is the answer. Otherwise the launch stays in doubt, and the call ends
   // with no answer: the kernel then stops whatever runs in the home.
-  const what = spawned.ok ? "bb thread spawn answered no thread id" : `bb thread spawn did not answer in time (${spawned.message})`;
+  const what = spawned.ok ? "bb thread spawn answered no thread id" : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
   const known = new Set(live.map((candidate) => candidate.id));
   let found = [];
   try {

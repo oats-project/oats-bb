@@ -6,13 +6,6 @@
     "oats": ">=0.70.0"
   },
   "description": "Session provider bb: runs an instance as one bb thread (Claude Code) through bb's public CLI, at one pinned bb-app version, instead of a tmux session.",
-  "requires": [
-    {
-      "command": "bb",
-      "why": "the bb CLI of the pinned bb-app: every thread is started, read, told and stopped through it",
-      "install": "npm install -g bb-app@<the version settings.oats.bb.version pins>"
-    }
-  ],
   "commands": {
     "session-launch": "bin/oats-bb.mjs session launch",
     "session-inspect": "bin/oats-bb.mjs session inspect",

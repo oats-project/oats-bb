@@ -121,6 +121,12 @@ test("a host daemon not connected yet: E_BACKEND_NOT_READY, unavailable", async 
   assert.equal(answer.result.status, "unavailable");
 });
 
+test("a server set as localhost is the server the daemon reports as 127.0.0.1: between loopback names the port decides", async (t) => {
+  const { check, backend } = await setup(t);
+  const answer = await check({ server: `http://localhost:${backend.serverPort}` });
+  assert.deepEqual(answer.result, { status: "ready", problems: [], warnings: [] }, JSON.stringify(answer.result));
+});
+
 test("a host daemon that serves another bb server: E_BACKEND_NOT_READY", async (t) => {
   const { check } = await setup(t, {}, { daemonStatus: { hostId: "host_1", connected: true, serverUrl: "http://127.0.0.1:1" } });
   const answer = await check();

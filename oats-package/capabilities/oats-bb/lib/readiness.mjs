@@ -7,7 +7,7 @@ import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { currentSandbox, readLaunchRecord } from "./local-settings.mjs";
-import { TRUST_VALUES, loopbackOrigin, portOf } from "./settings.mjs";
+import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
 // Each read's own cap. Every read is also cut at the call's deadline (`left`), so a bb
@@ -107,7 +107,7 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "connected": true or false)`);
     } else if (status.value.connected !== true) {
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} is not connected to its server yet`);
-    } else if (server && typeof status.value.serverUrl === "string" && originOf(status.value.serverUrl) !== server) {
+    } else if (server && typeof status.value.serverUrl === "string" && !sameServer(status.value.serverUrl, server)) {
       add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${status.value.serverUrl}, not settings.oats.bb.server ${server}: point both settings at one bb`);
     }
   }
@@ -132,8 +132,14 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
   return { problems, server, daemon, bb, listable: server !== null && cliRuns, credential };
 }
 
-function originOf(value) {
-  try { return new URL(value).origin; } catch { return null; }
+/** Whether the server a daemon says it serves is the configured one. The daemon reports
+ *  127.0.0.1 whatever loopback name the setting uses (localhost, ::1): between two
+ *  loopback addresses, the port decides. */
+function sameServer(reported, server) {
+  let url;
+  try { url = new URL(reported); } catch { return false; }
+  if (url.origin === server) return true;
+  return isLoopbackHost(url.hostname) && isLoopbackHost(new URL(server).hostname) && portOf(url.origin) === portOf(server);
 }
 
 /** Live bb threads whose project root no longer exists: what a retire that could not

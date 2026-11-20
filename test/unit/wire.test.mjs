@@ -88,5 +88,5 @@ test("bb's failure envelope is read from stdout; its code and message are bb's o
   const { dir } = scratch(t);
   const bb = fakeBbIn(dir, { "thread show": { error: { code: "thread_not_found", message: "HTTP 404: Thread not found" } } });
   const answer = await runBb(bb.cli, ["thread", "show", "thr_x", "--json"], { server: SERVER, env: { ...process.env, ...bb.env } });
-  assert.deepEqual(answer, { ok: false, code: "thread_not_found", message: "HTTP 404: Thread not found" });
+  assert.deepEqual(answer, { ok: false, refused: true, code: "thread_not_found", message: "HTTP 404: Thread not found" });
 });

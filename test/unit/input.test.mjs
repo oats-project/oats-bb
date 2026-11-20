@@ -123,6 +123,27 @@ test("the tell fails with bb's refusal: E_SESSION_INPUT_FAILED, and nothing was 
   assert.match(answer.error.message, /Thread not found/);
 });
 
+for (const [name, tellAnswer] of [
+  ["exits 0 with something that is not JSON", { stdout: "sent\n" }],
+  ["loses its connection after the request went out", { error: { code: "error", message: "fetch failed: socket hang up" } }],
+  ["dies with no answer", { exit: 137 }],
+  ["meets a server error", { error: { code: "http_502", message: "HTTP 502: Bad Gateway" } }],
+]) {
+  test(`a tell that ${name} is in doubt: no answer and a nonzero exit, never "not sent"`, async (t) => {
+    const { dir, home } = scratch(t);
+    const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": tellAnswer });
+    const run = await runBin(["session", "input"], { stdin: JSON.stringify(requestFor("input", { home, endpoint, text: TEXT })), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "");
+    assert.match(run.stderr, /ended without bb's answer.*may have been delivered/);
+  });
+}
+
+test("a tell bb's server never got (connection refused) is a refusal: not sent", async (t) => {
+  const { answer } = await inputWith(t, { "thread interactions list": { stdout: [] }, "thread tell": UNREACHABLE });
+  assert.equal(answer.error.code, "E_SESSION_INPUT_FAILED");
+});
+
 test("a tell cut off by time may have landed: in doubt, never a refusal", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { delayMs: 5_000, stdout: tellSent("thr_a") } });

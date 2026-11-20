@@ -413,6 +413,34 @@ test("a spawn in doubt, and a new thread of another project runs in the home: in
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), true);
 });
 
+for (const [name, spawnAnswer] of [
+  ["exits 0 with something that is not JSON", { stdout: "Spawned thr_made\n" }],
+  ["loses its connection after the request went out", { error: { code: "error", message: "fetch failed: socket hang up" } }],
+  ["dies with no answer", { exit: 137 }],
+  ["meets a server error", { error: { code: "http_500", message: "HTTP 500: Internal Server Error" } }],
+]) {
+  test(`a spawn that ${name} is in doubt: the thread it made is found and answered`, async (t) => {
+    const { backend, bb, run } = await setup(t, { "thread spawn": spawnAnswer, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_made", "proj_a", "active")] }] });
+    const answer = await run();
+    assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
+  });
+
+  test(`a spawn that ${name}, with no thread to show: no answer and a nonzero exit, never "nothing was started"`, async (t) => {
+    const { backend, bb, input } = await setup(t, { "thread spawn": spawnAnswer });
+    const run = await rawLaunch(bb, backend, input());
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "");
+    assert.match(run.stderr, /ended without bb's answer.*one may still appear/);
+  });
+}
+
+test("a spawn bb's server never got (connection refused) is a refusal: nothing was started, and no look is needed", async (t) => {
+  const { bb, run } = await setup(t, { "thread spawn": UNREACHABLE });
+  const answer = await run();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.equal(verbs(bb).filter((verb) => verb === "thread list").length, 1);
+});
+
 test("a spawn cut off by time that did make the thread: the launch finds it and answers its endpoint", async (t) => {
   const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() }, "thread list": [{ stdout: [] }, { stdout: [] }, { stdout: [threadRow("thr_late", "proj_a", "starting")] }] });
   // In process, so the spawn's own time can be short: the provider's cap per bb call is 10 s.

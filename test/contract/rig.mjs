@@ -48,20 +48,12 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
 
   /** One call on the provider's wire, as the kernel makes it: the request on stdin, the
    *  settings in OATS_SETTINGS. → the answer envelope. */
-  async function provider(verb, input, { with: extra = {} } = {}) {
+  async function provider(verb, input) {
     const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify({ ...settings, ...extra })}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
+    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
     const answer = JSON.parse(stdout);
     assert.equal(answer.verb, verb);
     return answer;
-  }
-
-  /** The capability's hook, as the kernel runs it for a home. → {status, stdout}. */
-  async function hook(which, env) {
-    const vars = Object.entries(env).map(([key, value]) => `${key}='${value}'`).join(" ");
-    const stdout = await sh(`${vars} OATS_SETTINGS='${JSON.stringify(settings)}' node ${entry} ${which}; echo "exit=$?"`);
-    const at = stdout.lastIndexOf("exit=");
-    return { status: Number(stdout.slice(at + 5).trim()), stdout: stdout.slice(0, at).trim() };
   }
 
   /** The mock's log of model requests. */
@@ -116,5 +108,5 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
     await waitFor(`${threadId} to be idle`, async () => (await threadStatus(threadId)) === "idle", { timeoutMs: 120_000 });
   }
 
-  return { sh, bbJson, provider, hook, requests, arm, toolCall, threadStatus, pending, firstTurnOver, start, stop };
+  return { sh, bbJson, provider, requests, arm, toolCall, threadStatus, pending, firstTurnOver, start, stop };
 }

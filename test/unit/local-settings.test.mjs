@@ -422,6 +422,14 @@ test("a launch rewrites its keys from the launch input, keeps the rest, and keep
 
 test("the launch hook in a home the provider never launched does nothing", async (t) => {
   const { home, hook } = await setup(t);
+  // A person's own deny rules and switch are not the provider's mark: nothing is said,
+  // with or without the kernel's word, and nothing is touched.
+  mkdirSync(join(home, ".claude"));
+  const own = JSON.stringify({ permissions: { deny: ["Read(//etc/shadow)"], blockWritesOutsideWorkingDirectories: true } });
+  writeFileSync(join(home, ".claude/settings.local.json"), own);
+  for (const extra of [{}, { OATS_PREVIOUS_BACKEND: "tmux" }]) assert.equal((await hook("tmux", extra)).stdout, "");
+  assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), own);
+  rmSync(join(home, ".claude"), { recursive: true });
   const run = await hook("tmux");
   assert.equal(run.status, 0);
   assert.equal(run.stdout, "");

@@ -196,3 +196,49 @@ test("git's directories are covered under their real paths too, and a relative p
   assert.ok(viaLink.includes(join(relGitDir, "hooks/**")));
   assert.ok(viaLink.includes(join(root, "treelink/.git")) && viaLink.includes(join(deep, ".git")), "the pointer under both names of the tree");
 });
+
+// Git finds a pointer's and a commondir's directory through the filesystem: a link is
+// followed before a ".." step is taken. Folding the ".." first names another directory.
+test("a pointer or a commondir with a .. step after a link is resolved as git resolves it: the directory git uses is the one covered", (t) => {
+  const { root, home, rules } = layout(t);
+  // 1. A worktree's pointer names its git directory through a link; commondir is "../.." as git writes it.
+  const repoGit = join(root, "real/repo/.git"), gitDir = join(repoGit, "worktrees/w2"), tree = join(home, "trees/w2");
+  mkdirSync(gitDir, { recursive: true });
+  mkdirSync(tree, { recursive: true });
+  mkdirSync(join(root, "x"));
+  symlinkSync(gitDir, join(root, "x/wlink"));
+  writeFileSync(join(tree, ".git"), `gitdir: ${join(root, "x/wlink")}\n`);
+  writeFileSync(join(gitDir, "commondir"), "../..\n");
+  const first = paths(rules({ trees: [tree] }));
+  for (const path of [join(root, "x/wlink/config"), join(gitDir, "config"), join(repoGit, "config"), join(repoGit, "hooks/**")]) assert.ok(first.includes(path), path);
+
+  // 2. A relative pointer through a link in the tree, with a decoy where folding would land.
+  const elsewhere = join(root, "elsewhere"), tree2 = join(home, "trees/t2");
+  mkdirSync(join(elsewhere, "deep"), { recursive: true });
+  mkdirSync(join(elsewhere, "realgit"));
+  mkdirSync(join(tree2, "realgit"), { recursive: true });
+  symlinkSync(join(elsewhere, "deep"), join(tree2, "sym"));
+  writeFileSync(join(tree2, ".git"), "gitdir: sym/../realgit\n");
+  const second = paths(rules({ trees: [tree2] }));
+  assert.ok(second.includes(join(elsewhere, "realgit/config")) && second.includes(join(elsewhere, "realgit/hooks/**")), "the directory git uses");
+
+  // 3. The same through a commondir.
+  const gd = join(root, "gd"), tree3 = join(home, "trees/t3");
+  mkdirSync(join(gd, "common"), { recursive: true });
+  mkdirSync(join(elsewhere, "common"));
+  mkdirSync(tree3, { recursive: true });
+  symlinkSync(join(elsewhere, "deep"), join(gd, "sym"));
+  writeFileSync(join(tree3, ".git"), `gitdir: ${gd}\n`);
+  writeFileSync(join(gd, "commondir"), "sym/../common\n");
+  const third = paths(rules({ trees: [tree3] }));
+  assert.ok(third.includes(join(elsewhere, "common/config")) && third.includes(join(elsewhere, "common/hooks/**")), "the common directory git uses");
+});
+
+test("bb's thread storage is covered under its real path too: a storage linked from the data directory", (t) => {
+  const { root, dataDir, rules } = layout(t);
+  rmSync(join(dataDir, "thread-storage"), { recursive: true });
+  mkdirSync(join(root, "disk/storage"), { recursive: true });
+  symlinkSync(join(root, "disk/storage"), join(dataDir, "thread-storage"));
+  const got = paths(rules());
+  for (const base of [join(dataDir, "thread-storage"), join(root, "disk/storage")]) for (const entry of [".mcp.json", "CLAUDE.md", ".claude/**"]) assert.ok(got.includes(join(base, entry)), join(base, entry));
+});

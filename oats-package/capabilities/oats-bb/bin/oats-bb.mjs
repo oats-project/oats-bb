@@ -60,9 +60,12 @@ async function main(argv) {
     // home ran on: those names are the provider's own, and they decide nothing (best effort).
     removeLeftovers(home);
     if (!previous) {
-      // A first launch, or a kernel that does not say: nothing is removed. Where one of
-      // the sandbox keys stands in the file, it may be the provider's, left behind.
-      if (sandboxKeysOf(home).any) print({ warning: `this home starts on ${backend}, its .claude/settings.local.json holds sandbox keys (sandbox, permissions.deny or permissions.blockWritesOutsideWorkingDirectories), and this kernel does not say which backend the home ran on before: the bb provider removed nothing. If the home ran on bb, those keys and the env key are the provider's and may be stale: remove them by hand` });
+      // A first launch, or a kernel that does not say: nothing is removed. Where the file
+      // holds what only this provider writes there (a sandbox block, or bb's directory-move
+      // tool in the deny list), it may be the provider's, left behind. A person's own deny
+      // rules are not that: a home that never ran on bb is told nothing.
+      const keys = sandboxKeysOf(home);
+      if (keys.sandbox || keys.deny) print({ warning: `this home starts on ${backend}, its .claude/settings.local.json holds sandbox keys as the bb provider writes them (sandbox, permissions.deny, permissions.blockWritesOutsideWorkingDirectories), and this kernel does not say which backend the home ran on before: the bb provider removed nothing. If the home ran on bb, those keys and the env key are the provider's and may be stale: remove them by hand` });
       return 0;
     }
     if (previous !== PROVIDER) return 0;

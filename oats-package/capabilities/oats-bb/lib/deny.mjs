@@ -99,24 +99,38 @@ const isDirectory = (path) => statSync(path, { throwIfNoEntry: false })?.isDirec
  *  (E_BACKEND_SANDBOX_PATH): a rule silently missing is the failure that matters. */
 function gitDirsOf(tree) {
   const refuse = (what) => fail("E_BACKEND_SANDBOX_PATH", `the tree ${tree} has ${what}, so the sandbox's deny rules cannot cover the git directory that git would use there: repair the tree (git worktree repair), or launch in full mode (--yolo)`);
+  // The directory a name stands for, found as git finds it: by the filesystem, which
+  // follows a link before it takes a ".." step. (path.resolve and path.join fold ".."
+  // first, and would name another directory wherever a ".." follows a link.) The name
+  // as written, folded, is covered too, beside the real one: where it is the same
+  // directory under another name the rule is needed, and where it is not, a rule on a
+  // directory git does not use costs nothing.
+  const found = (base, named, what) => {
+    const written = isAbsolute(named) ? named : `${base}/${named}`;
+    let real;
+    // The system's own realpath: Node's (fs.realpathSync) folds ".." before it looks.
+    try { real = realpathSync.native(written); } catch { throw refuse(`${what} that names nothing (${written.slice(0, 160)})`); }
+    if (!isDirectory(real)) throw refuse(`${what} that names no directory (${written.slice(0, 160)})`);
+    return { real, names: [...new Set([real, normalize(written)])] };
+  };
   const at = join(tree, ".git");
   const stat = lstatSync(at, { throwIfNoEntry: false });
   if (!stat) return [];
-  let gitDir = at;
+  let gitDir = { real: at, names: [at] };
   if (!stat.isDirectory()) {
     const pointer = namedIn(at);
     // As git writes and reads it: "gitdir: " and the path, nothing around them.
     const named = typeof pointer === "string" && pointer.startsWith("gitdir: ") ? pointer.slice("gitdir: ".length) : "";
     if (!named || named !== named.trim()) throw refuse("a .git that is neither a directory nor a pointer file this provider reads as git does (gitdir: <path>, one line)");
-    gitDir = resolve(tree, named);
-    if (!isDirectory(gitDir)) throw refuse(`a .git pointer that names no directory (${gitDir.slice(0, 160)})`);
+    gitDir = found(tree, named, "a .git pointer");
   }
-  const common = namedIn(join(gitDir, "commondir"));
-  if (common === undefined) return [gitDir];
-  if (!common || common !== common.trim()) throw refuse(`a git directory whose commondir this provider cannot read as git does, one line naming a directory (${gitDir.slice(0, 160)})`);
-  const commonDir = resolve(gitDir, common);
-  if (!isDirectory(commonDir)) throw refuse(`a git directory whose commondir names no directory (${commonDir.slice(0, 160)})`);
-  return [gitDir, commonDir];
+  const common = namedIn(join(gitDir.real, "commondir"));
+  if (common === undefined) return gitDir.names;
+  if (!common || common !== common.trim()) throw refuse(`a git directory whose commondir this provider cannot read as git does, one line naming a directory (${gitDir.real.slice(0, 160)})`);
+  const commonDir = found(gitDir.real, common, "a git directory whose commondir is one");
+  // And the common directory as each other name of the git directory would spell it.
+  const spelled = isAbsolute(common) ? [] : gitDir.names.map((name) => normalize(`${name}/${common}`));
+  return [...new Set([...gitDir.names, ...commonDir.names, ...spelled])];
 }
 
 /** Why a sandboxed launch that names no trees cannot be taken, or null. Git runs a tree's
@@ -155,9 +169,11 @@ export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tm
     for (const root of withReal(tree)) paths.push(join(root, ".git"), ...GIT_ENTRIES.map((entry) => join(root, ".git", entry)));
     // The directories git uses for the tree, read from the tree's real path as git reads
     // them, and covered under each of their names.
-    for (const gitDir of gitDirsOf(realpathSync(tree))) for (const root of withReal(gitDir)) paths.push(...GIT_ENTRIES.map((entry) => join(root, entry)));
+    for (const gitDir of gitDirsOf(realpathSync(tree))) paths.push(...GIT_ENTRIES.map((entry) => join(gitDir, entry)));
   }
-  for (const root of withReal(dataDir)) for (const entry of CONFIG_ENTRIES) paths.push(join(root, "thread-storage", entry));
+  // bb's thread storage, under the name the setting gives and under its real path (a
+  // storage moved to another disk and linked from the data directory).
+  for (const base of withReal(dataDir)) for (const root of withReal(join(base, "thread-storage"))) for (const entry of CONFIG_ENTRIES) paths.push(join(root, entry));
   for (const root of withReal(tmp)) paths.push(join(root, PLUGIN_DIRS));
 
   const rules = [];

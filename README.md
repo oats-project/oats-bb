@@ -237,9 +237,10 @@ hooks. So a launch in a sandboxed mode also writes, into the same
   - in every directory above the home: `.mcp.json`, `CLAUDE.md` and `.claude/`;
   - the Claude configuration of the user that runs bb (`~/.claude.json`, `~/.claude/`) and
     Claude's managed settings (`/etc/claude-code/`);
-  - in `work/` and every extra tree: the `.git` pointer, and `config` and `hooks/` of its
-    git directory and of the clone behind it, with the two files there that say where
-    those directories are. A pointer or a `commondir` the provider cannot read as git
+  - in `work/` and every extra tree: the `.git` pointer, and `config`, `config.worktree`
+    and `hooks/` of its git directory and of the clone behind it, with the two files
+    there that say where those directories are (found as git finds them, through the
+    filesystem). A pointer or a `commondir` the provider cannot read as git
     would refuses the launch (`E_BACKEND_SANDBOX_PATH`): a rule silently missing is worse;
   - in bb's data directory: the thread storage's `.mcp.json`, `CLAUDE.md` and `.claude/`;
   - bb's own plugin directory for Claude, under the temporary directory

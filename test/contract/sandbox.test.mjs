@@ -182,7 +182,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
       `${home}/trees/clone/.git/config`, `${home}/trees/clone/.git/config.worktree`, `${home}/trees/clone/.git/hooks/pre-commit`, `${home}/trees/clone/.git/commondir`, `${home}/trees/clone/.git/gitdir`];
     // bb's plugin directory is where the rule says it is: an attempt on a name that
     // matches nothing would prove nothing.
-    assert.notEqual((await sh("ls -d /tmp/bb-provider-bridge-*/ 2>/dev/null | head -1")).trim(), "", "bb builds its Claude plugin directory under /tmp/bb-provider-bridge-*");
+    const pluginDir = (await sh("ls -d /tmp/bb-provider-bridge-*/ 2>/dev/null | head -1")).trim().replace(/\/$/, "");
+    assert.notEqual(pluginDir, "", "bb builds its Claude plugin directory under /tmp/bb-provider-bridge-*");
     // The attempts are a script the test puts in the agent's notes, so Claude's own look
     // at a command line (which asks a person about one it cannot read ahead) is not what
     // answers: the sandbox is.
@@ -216,7 +217,9 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
 
     // Claude's own file tools: a deny rule refuses each, with no prompt; a path outside the
     // working directories is refused by the switch, whatever it is.
-    for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${home}/.aw/signing.key`, `${home}/trees/extra/.git`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${extraGitDir}/config`, `${DATA}/thread-storage/.mcp.json`]) {
+    for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${home}/.aw/signing.key`, `${home}/trees/extra/.git`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${extraGitDir}/config`, `${DATA}/thread-storage/.mcp.json`,
+      // the one rule with a wildcard inside its path: Claude Code matches it
+      `${pluginDir}/PLANTED-HERE`]) {
       const write = await toolCall(id, { tool: "Write", input: { file_path: path, content: "PLANTED\n" } });
       assert.deepEqual(write.pending, [], path);
       // The rule's own refusal, not the switch's: these are paths a rule covers.

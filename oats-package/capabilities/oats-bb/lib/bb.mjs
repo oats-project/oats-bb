@@ -74,7 +74,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   const raw = async (args, options = {}) => {
     const timeoutMs = remaining();
     if (timeoutMs <= 0) return { ok: false, code: "timeout", timedOut: true, message: `no time left for bb ${args.slice(0, 2).join(" ")}` };
-    return runBb(cli, args, { server, env, timeoutMs, ...options });
+    return runBb(cli, args, { server, env, ...options, timeoutMs: Math.min(timeoutMs, options.timeoutMs ?? timeoutMs) });
   };
   const must = async (args, options) => {
     const answer = await raw(args, options);
@@ -119,7 +119,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
       throw refusal(answer, ["thread", "show"]);
     },
     async interactions(id) { return list(await must(["thread", "interactions", "list", id, "--json"]), "bb thread interactions list"); },
-    spawn(args) { return raw(["thread", "spawn", ...args, "--json"]); },
+    spawn(args, options) { return raw(["thread", "spawn", ...args, "--json"], options); },
     tell(id, text) { return raw(["thread", "tell", id, "--message-file", "-", "--mode", "auto", "--json"], { input: text }); },
     queueDelete(threadId, messageId) { return raw(["thread", "queue", "delete", threadId, messageId, "--json"]); },
     stop(id) { return raw(["thread", "stop", id, "--json"]); },

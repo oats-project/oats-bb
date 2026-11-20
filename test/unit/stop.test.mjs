@@ -147,6 +147,19 @@ test("retire of a home the provider never launched (a tmux home) asks bb nothing
   assert.deepEqual(calls, []);
 });
 
+test("a malformed setting does not fail a retire: a tmux home is not asked, a bb home gets the warning", async (t) => {
+  const { dir, home } = scratch(t);
+  const env = { OATS_INSTANCE_HOME: home, OATS_SETTINGS: JSON.stringify({ cli: "bin/bb" }) };
+  const tmuxHome = await runBin(["retire-hook"], { env });
+  assert.equal(tmuxHome.status, 0);
+  assert.deepEqual(JSON.parse(tmuxHome.stdout), { meta: { retired: false, reason: "nothing-to-delete" } });
+  mkdirSync(join(home, ".oats-bb"));
+  const bbHome = await runBin(["retire-hook"], { env });
+  assert.equal(bbHome.status, 0);
+  assert.match(JSON.parse(bbHome.stdout).warning, /settings\.oats\.bb\.cli/);
+  assert.equal(dir.length > 0, true);
+});
+
 test("retire with a bb that does not answer warns and does not hold the retire", async (t) => {
   const { run, last } = await retireWith(t, { "project list": UNREACHABLE });
   assert.equal(run.status, 0);

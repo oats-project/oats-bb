@@ -128,7 +128,7 @@ test("a host daemon that serves another bb server: E_BACKEND_NOT_READY", async (
   assert.match(answer.result.problems[0].message, /serves http:\/\/127\.0\.0\.1:1/);
 });
 
-for (const [word, status] of [["unauthenticated", "authorization-required"], ["expired", "authorization-required"], ["not_installed", "needs-configuration"], ["unknown", "unavailable"]]) {
+for (const [word, status] of [["unauthenticated", "authorization-required"], ["expired", "authorization-required"], ["not_installed", "needs-configuration"], ["unsupported_version", "needs-configuration"], ["unknown", "unavailable"], ["a_word_bb_adds_later", "unavailable"]]) {
   test(`bb reports claude-code as ${word}: E_BACKEND_NOT_READY naming bb's word, ${status}`, async (t) => {
     const { check, backend } = await setup(t);
     backend.state.provider.status = word;

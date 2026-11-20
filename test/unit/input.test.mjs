@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sendInput } from "../../oats-package/capabilities/oats-bb/lib/input.mjs";
 import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { NOT_FOUND, QUEUE_GONE, UNREACHABLE, call, fakeBbIn, pendingInteraction, scratch, tellQueued, tellSent } from "../fixtures/harness.mjs";
+import { NOT_FOUND, QUEUE_GONE, UNREACHABLE, call, fakeBbIn, pendingInteraction, requestFor, runBin, scratch, tellQueued, tellSent } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
 const settings = { version: "0.50.1", trust: "single-user" };
@@ -94,10 +94,15 @@ test("a queued answer with no id to withdraw by: E_SESSION_INPUT_QUEUED, unconfi
   assert.deepEqual(verbs(calls), ["thread interactions list", "thread tell"]);
 });
 
-test("a delivery word that is neither sent nor queued: E_SESSION_INPUT_FAILED, saying it may have been delivered", async (t) => {
-  const { answer } = await inputWith(t, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: { threadId: "thr_a", ok: true, delivery: "scheduled" } } });
-  assert.equal(answer.error.code, "E_SESSION_INPUT_FAILED");
-  assert.match(answer.error.message, /may have been delivered/);
+// A refusal says "not sent". Where the tell's fate is unknown the provider answers nothing
+// and exits nonzero: a failed call, which the kernel reads as uncertain.
+test("a delivery word that is neither sent nor queued is in doubt: no answer, a nonzero exit", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { stdout: { threadId: "thr_a", ok: true, delivery: "scheduled" } } });
+  const run = await runBin(["session", "input"], { stdin: JSON.stringify(requestFor("input", { home, endpoint, text: TEXT })), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "", "no envelope: neither a result nor a refusal");
+  assert.match(run.stderr, /neither sent nor queued.*may have been delivered/);
 });
 
 test("the thread is gone: E_SESSION_INPUT_FAILED, nothing sent", async (t) => {
@@ -115,16 +120,16 @@ test("bb does not answer the interactions read: E_SESSION_INPUT_FAILED, nothing 
 test("the tell fails with bb's refusal: E_SESSION_INPUT_FAILED, and nothing was delivered", async (t) => {
   const { answer } = await inputWith(t, { "thread interactions list": { stdout: [] }, "thread tell": NOT_FOUND });
   assert.equal(answer.error.code, "E_SESSION_INPUT_FAILED");
-  assert.doesNotMatch(answer.error.message, /may have been delivered/);
+  assert.match(answer.error.message, /Thread not found/);
 });
 
-test("a tell cut off by time may have landed: E_SESSION_INPUT_FAILED, saying so", async (t) => {
+test("a tell cut off by time may have landed: in doubt, never a refusal", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "thread interactions list": { stdout: [] }, "thread tell": { delayMs: 5_000, stdout: tellSent("thr_a") } });
   // In process, so the deadline can be near: the provider's own budget is 16 s.
   await assert.rejects(
     sendInput({ home, endpoint, text: TEXT }, readSettings({ cli: bb.cli }), { deadline: Date.now() + 1_200, env: { ...process.env, ...bb.env } }),
-    (error) => error.code === "E_SESSION_INPUT_FAILED" && /may have been delivered/.test(error.message),
+    (error) => error.name === "InDoubt" && error.code === undefined && /may have been delivered/.test(error.message),
   );
 });
 

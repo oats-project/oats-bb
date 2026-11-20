@@ -3,12 +3,17 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
-import { fail, isObject } from "./errors.mjs";
+import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
-import { isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
+import { isBbId, isSettled, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
 export const HARNESSES = Object.freeze(["claude"]);
 const BB_PROVIDER = "claude-code";
+// After a spawn whose fate is unknown: how often, and how far apart, the home's threads
+// are read for the thread it may have made.
+const SPAWN_LOOKS = 3;
+const SPAWN_LOOK_MS = 1_000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Claude Code's own permission-mode words, as a launch configuration writes them.
 const PERMISSION_ARG = { auto: "auto", acceptEdits: "accept-edits", bypassPermissions: "full" };
 
@@ -68,7 +73,7 @@ function readInput(input) {
 /** → { endpoint: { server, projectId, threadId } }. Order matters: everything that can
  *  refuse runs before the first effect (archiving the previous thread, creating the
  *  project, writing Claude's local settings, spawning). */
-export async function launch(input, settings, { deadline, env = process.env } = {}) {
+export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
   const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
@@ -123,13 +128,31 @@ export async function launch(input, settings, { deadline, env = process.env } = 
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
-  const spawned = await bb.spawn(args);
-  if (!spawned.ok) {
-    // A spawn whose answer was lost may still have made the thread: say so. (The kernel
-    // then stops whatever runs in the home: a stop with no endpoint.)
-    throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}${spawned.timedOut ? "; the thread may have been created" : ""}`);
+  const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
+  const thread = spawned.ok ? spawned.value : null;
+  if (spawned.ok && isObject(thread) && isBbId(thread.id)) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+  // bb refused: nothing was created.
+  if (!spawned.ok && !spawned.timedOut) throw fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
+
+  // The spawn's fate is unknown: no answer in time, or an answer with no thread id. A
+  // refusal would say "nothing was started" while a thread may be running TASK.md in the
+  // home, recorded nowhere. So look: a new live thread in the home is this launch's, and
+  // its endpoint is the answer. Otherwise the launch stays in doubt, and the call ends
+  // with no answer: the kernel then stops whatever runs in the home.
+  const what = spawned.ok ? "bb thread spawn answered no thread id" : `bb thread spawn did not answer in time (${spawned.message})`;
+  const known = new Set(live.map((candidate) => candidate.id));
+  let found = [];
+  try {
+    for (let look = 0; look < SPAWN_LOOKS; look += 1) {
+      if (look > 0) await sleep(SPAWN_LOOK_MS);
+      found = liveThreadsOfHome(await bb.threads(), home, [project.id]).filter((candidate) => !known.has(candidate.id));
+      if (found.length > 0) break;
+    }
+  } catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    throw new InDoubt(`${what}, and the home's threads could not be read (${error.message}): a thread may be running in ${home}`);
   }
-  const thread = spawned.value;
-  if (!isObject(thread) || typeof thread.id !== "string" || !thread.id) throw fail("E_SESSION_START_FAILED", "bb thread spawn answered no thread id; the thread may have been created");
-  return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+  if (found.length === 1 && isBbId(found[0].id) && found[0].projectId === project.id) return { endpoint: { server, projectId: project.id, threadId: found[0].id } };
+  if (found.length > 0) throw new InDoubt(`${what}, and ${found.map((candidate) => candidate.id).join(", ")} newly run${found.length > 1 ? "" : "s"} in ${home}: whether that is this launch's thread cannot be told`);
+  throw new InDoubt(`${what}, and no new thread shows in ${home} yet: one may still appear`);
 }

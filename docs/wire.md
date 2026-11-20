@@ -19,6 +19,11 @@ one JSON document on stdout, exit 0 for a result and for a refusal.
  "result":{"present":true,"state":"unknown","running":null,"open":{"label":"Open in bb","url":"http://127.0.0.1:38886/projects/proj_…/threads/thr_…"}}}
 ```
 A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and nothing else.
+A refusal says nothing happened. Where the provider cannot tell (a `bb thread spawn` or a
+`bb thread tell` that did not answer in time, or answered something it cannot read), it
+writes no document and exits nonzero: a failed call, whose outcome the kernel treats as
+uncertain. After such a spawn the provider first looks for the thread it may have made: a
+new live thread in the home is the launch's, and its endpoint is the answer.
 
 | verb | input | result |
 |---|---|---|

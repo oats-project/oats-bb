@@ -203,9 +203,12 @@ launch checks first:
 | `server` or `daemon` is not a loopback address; bb's port answers on an address of this host that is not loopback | `E_BACKEND_EXPOSED` |
 | a setting has the wrong shape | `E_BACKEND_SETTINGS` |
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
-| the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read | `E_BACKEND_NOT_READY` |
+| the host daemon is not connected yet, or serves another server; bb reports its claude-code provider as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read | `E_BACKEND_NOT_READY` |
 
-For a home, it lists what the provider added to the sandbox (`session-provider-sandbox`).
+For a home, it lists what the provider added to the sandbox (`session-provider-sandbox`):
+the entries of its record that are in `settings.local.json` now. Both files are in the
+home, which its agent can write, so where they disagree readiness says so
+(`session-provider-sandbox-mismatch`) and shows only what passed its checks.
 
 It also reports, as a warning that blocks nothing, `session-provider-orphaned`: live bb
 threads whose project root no longer exists, with their ids and the root. That is what a
@@ -254,7 +257,7 @@ exposed bb to the check, and is refused.
 A thread stopped in bb's own UI is not stopped for OATS: bb shows it `idle`, OATS has no
 record of the stop, and the next mail's tell restarts it. **Stop an OATS agent with OATS**
 (`oats instance stop <instance>`), which records the stop and then stops the thread. The
-OATS plugin for bb routes its stop button there.
+OATS plugin for bb will route its stop button there.
 
 An OATS agent's thread **archived** in bb is gone for OATS: bb refuses every message to an
 archived thread, so the home reads as stopped, mail to it is refused, and

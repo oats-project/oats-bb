@@ -1,6 +1,8 @@
 // The wire between the kernel and this provider (the kernel's session-provider contract):
 // one JSON request on stdin, exactly one JSON document on stdout, exit 0 for a result and
-// for a refusal alike. All of the envelope lives here.
+// for a refusal alike. A refusal says nothing happened. Where the provider cannot tell
+// (a spawn or a tell whose fate is unknown) it answers nothing and exits nonzero: a failed
+// call, which the kernel treats as uncertain. All of the envelope lives here.
 //
 //   request  { schemaVersion: 1, phase: "session", capability, provider, verb, input }
 //   answer   the same five header keys, then  ok: true,  result: { … }
@@ -8,7 +10,7 @@
 //
 // The settings are the home's recorded ones, in OATS_SETTINGS (the hook environment); the
 // readiness verb, which also runs for a soul with no home, may carry them in its input.
-import { ProviderError, isObject } from "./errors.mjs";
+import { InDoubt, ProviderError, isObject } from "./errors.mjs";
 
 export const PROVIDER = "bb";
 // What a failure the provider did not classify means, per verb (contract item 1).
@@ -52,7 +54,8 @@ function refusal(error, fallback) {
 }
 
 /** Run one call. `handlers[verb](input, rawSettings, {deadline, env})` resolves the
- *  result or throws. → the answer envelope; never throws. */
+ *  result or throws. → the answer envelope. It throws only InDoubt: an outcome that is
+ *  neither a result nor a refusal has no envelope (the caller ends the call nonzero). */
 export async function answer(verb, text, handlers, { env = process.env, now = Date.now } = {}) {
   const head = { schemaVersion: 1, phase: "session", capability: env.OATS_CAPABILITY ?? null, provider: PROVIDER, verb };
   const fallback = VERB_FAILURE[verb] ?? "E_BACKEND_REQUEST";
@@ -72,6 +75,7 @@ export async function answer(verb, text, handlers, { env = process.env, now = Da
     const result = await handlers[verb](request.input, settings, { deadline: now() + budgetMs(verb, request.input), env });
     return { ...head, ok: true, result };
   } catch (error) {
+    if (error instanceof InDoubt) throw error;
     return { ...head, ok: false, error: refusal(error, fallback) };
   }
 }

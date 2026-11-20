@@ -63,7 +63,9 @@ async function main(argv) {
   if (command === "retire-hook" && rest.length === 0) {
     const home = process.env.OATS_INSTANCE_HOME;
     if (!home) { process.stderr.write("oats bb retire-hook: OATS_INSTANCE_HOME is not set\n"); return 2; }
-    print(await retire(home, readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));
+    // The settings are read inside retire, after it has asked whether the provider ever
+    // launched this home: a tmux home's retire never depends on bb's settings.
+    print(await retire(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));
     return 0;
   }
   if (command === "doctor" && rest.every((arg) => arg === "--json")) {
@@ -82,6 +84,7 @@ async function main(argv) {
   return 2;
 }
 
+// A rejection here is an outcome in doubt (or a bug): nothing on stdout, a nonzero exit.
 main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (error) => {
   process.stderr.write(`oats bb: ${error?.message ?? error}\n`);
   process.exitCode = 1;

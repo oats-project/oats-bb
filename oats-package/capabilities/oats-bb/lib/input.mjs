@@ -1,6 +1,6 @@
 // input: one tell, and only a dispatched tell is a submission (contract item 1).
 import { bbClient } from "./bb.mjs";
-import { fail, isObject, recode } from "./errors.mjs";
+import { InDoubt, fail, isObject, recode } from "./errors.mjs";
 import { isBbId, readEndpoint } from "./threads.mjs";
 
 const failed = (error) => recode("E_SESSION_INPUT_FAILED", error);
@@ -9,7 +9,9 @@ const failed = (error) => recode("E_SESSION_INPUT_FAILED", error);
  *  1. A tell never answers a pending interaction (a permission prompt or a question):
  *     while one is open the provider refuses E_SESSION_PROMPT_OPEN and sends nothing,
  *     or a mail from anyone could stand in for a person's approval.
- *  2. bb answers "sent": dispatched into the thread: submitted.
+ *  2. bb answers "sent": dispatched into the thread: submitted. A tell whose fate is
+ *     unknown (no answer in time, an answer that is neither word) throws InDoubt: no
+ *     refusal, since a refusal says nothing was sent.
  *  3. bb answers "queued", for any reason (an interaction that opened between the read
  *     and the tell included): never a submission. The provider withdraws the queued copy
  *     (`bb thread queue delete`) and answers E_SESSION_INPUT_QUEUED whatever the delete
@@ -38,13 +40,15 @@ export async function sendInput(input, settings, { deadline, env = process.env }
 
   const told = await bb.tell(endpoint.threadId, input.text);
   if (!told.ok) {
-    // A tell cut off by time may have reached bb: the caller must not take it for unsent.
-    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell failed: ${told.message}${told.timedOut ? "; the message may have been delivered" : ""}`);
+    // A tell cut off by time may have reached the thread: that is not "not sent". The call
+    // ends in doubt, and the caller must not take the message for undelivered.
+    if (told.timedOut) throw new InDoubt(`bb thread tell did not answer in time (${told.message}): the message may have been delivered to ${endpoint.threadId}`);
+    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell failed: ${told.message}`);
   }
   const answer = told.value;
   if (isObject(answer) && answer.ok === true && answer.delivery === "sent") return { submitted: true, verified: true };
   if (!isObject(answer) || answer.ok !== true || answer.delivery !== "queued") {
-    throw fail("E_SESSION_INPUT_FAILED", `bb thread tell answered neither sent nor queued (${JSON.stringify(isObject(answer) ? answer.delivery ?? null : null)}); the message may have been delivered`);
+    throw new InDoubt(`bb thread tell answered neither sent nor queued (${JSON.stringify(isObject(answer) ? answer.delivery ?? null : null)}): the message may have been delivered to ${endpoint.threadId}`);
   }
 
   const queued = isObject(answer.queuedMessage) ? answer.queuedMessage : {};

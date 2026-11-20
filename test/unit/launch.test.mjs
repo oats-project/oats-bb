@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
 import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, scratch, threadRow } from "../fixtures/harness.mjs";
+import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
 const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
@@ -368,7 +368,6 @@ for (const [name, script, pattern] of [
   ["bb cannot list its projects", { "project list": UNREACHABLE }, /does not answer/],
   ["bb cannot list its threads", { "thread list": { stdout: "garbage" } }, /not JSON/],
   ["bb cannot create the project", { "project list": { stdout: [] }, "project create": { error: { code: "error", message: "HTTP 500: no" } } }, /project create/],
-  ["bb's spawn answers no thread id", { "thread spawn": { stdout: { status: "starting" } } }, /no thread id/],
 ]) {
   test(`${name}: the launch fails and says why`, async (t) => {
     const { run } = await setup(t, script);
@@ -379,12 +378,52 @@ for (const [name, script, pattern] of [
   });
 }
 
-test("a spawn cut off by time may have made the thread: E_SESSION_START_FAILED, saying so", async (t) => {
-  const { home, backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() } });
-  // In process, so the deadline can be near: the provider's own launch budget is 100 s.
-  await assert.rejects(
-    launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 3_000, env: { ...process.env, ...bb.env } }),
-    (error) => error.code === "E_SESSION_START_FAILED" && /may have been created/.test(error.message),
-  );
+// A spawn whose fate is unknown is never refused ("nothing was started"): the provider
+// looks for the thread it may have made.
+const rawLaunch = (bb, backend, input) => runBin(["session", "launch"], { stdin: JSON.stringify(requestFor("launch", input)), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) } });
+
+test("a spawn that answers no thread id, and one new thread runs in the home: that thread is the launch's", async (t) => {
+  const { backend, bb, run } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 })] }, { stdout: [threadRow("thr_old", "proj_a", "idle", { archivedAt: 2 }), threadRow("thr_made", "proj_a", "starting")] }] });
+  const answer = await run();
+  assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
+});
+
+test("a spawn that answers no thread id, and no new thread shows: in doubt, no answer and a nonzero exit", async (t) => {
+  const { backend, bb, input } = await setup(t, { "thread spawn": { stdout: { status: "starting" } } });
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "", "no envelope: the kernel reads a failed call, and stops whatever runs in the home");
+  assert.match(run.stderr, /answered no thread id, and no new thread shows/);
+  assert.equal(verbs(bb).filter((verb) => verb === "thread list").length, 4, "the list before the spawn, and three looks after it");
+});
+
+test("a spawn in doubt, and the home's threads cannot be read: in doubt", async (t) => {
+  const { backend, bb, input } = await setup(t, { "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, UNREACHABLE] });
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "");
+  assert.match(run.stderr, /could not be read/);
+});
+
+test("a spawn in doubt, and a new thread of another project runs in the home: in doubt, not adopted", async (t) => {
+  const { home, backend, bb, input } = await setup(t, (h) => ({ "thread spawn": { stdout: { status: "starting" } }, "thread list": [{ stdout: [] }, { stdout: [threadRow("thr_stray", "proj_z", "active", { environmentPath: h })] }] }));
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /thr_stray newly runs in/);
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), true);
+});
+
+test("a spawn cut off by time that did make the thread: the launch finds it and answers its endpoint", async (t) => {
+  const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() }, "thread list": [{ stdout: [] }, { stdout: [] }, { stdout: [threadRow("thr_late", "proj_a", "starting")] }] });
+  // In process, so the spawn's own time can be short: the provider's cap per bb call is 10 s.
+  const answer = await launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 20_000, env: { ...process.env, ...bb.env }, spawnTimeoutMs: 500 });
+  assert.deepEqual(answer, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_late" } });
+});
+
+test("a spawn cut off by time with no thread to show: in doubt, never a refusal", async (t) => {
+  const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() } });
+  await assert.rejects(
+    launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 20_000, env: { ...process.env, ...bb.env }, spawnTimeoutMs: 500 }),
+    (error) => error.name === "InDoubt" && error.code === undefined && /did not answer in time.*one may still appear/.test(error.message),
+  );
 });

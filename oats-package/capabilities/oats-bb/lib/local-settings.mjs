@@ -121,7 +121,7 @@ export function readSandbox(sandbox) {
   };
   const domains = list(sandbox.domains, "domains").map((entry) => {
     const who = isObject(entry) && typeof entry.capability === "string" && entry.capability ? entry.capability : null;
-    if (!isObject(entry) || typeof entry.host !== "string" || !HOST.test(entry.host)) {
+    if (!isObject(entry) || !isExactHost(entry.host)) {
       throw fail("E_BACKEND_SANDBOX_HOST", `the launch asks the sandbox to allow ${JSON.stringify(isObject(entry) ? entry.host ?? null : entry)}${who ? ` (for ${who})` : ""}, which is not one exact host: no wildcard, scheme or path`);
     }
     if (who === null) throw fail("E_BACKEND_SANDBOX_HOST", `the launch asks the sandbox to allow ${entry.host} without saying which capability asked`);
@@ -129,7 +129,7 @@ export function readSandbox(sandbox) {
   });
   const write = list(sandbox.write, "write").map((entry) => {
     const path = isObject(entry) ? entry.path : null;
-    if (typeof path !== "string" || !isAbsolute(path) || normalize(path) !== path || path === "/" || /[*?\0\n]/.test(path)) {
+    if (!isExactPath(path)) {
       throw fail("E_BACKEND_SANDBOX_PATH", `the launch asks the sandbox to allow writes to ${JSON.stringify(path)}, which is not one exact absolute path`);
     }
     return { path, reason: typeof entry.reason === "string" ? entry.reason : null };
@@ -183,7 +183,30 @@ export function everLaunched(home) {
 export function readLaunchRecord(home) {
   if (!everLaunched(home)) return null;
   const record = readJsonObject(join(home, LAUNCH_RECORD), "the provider's launch record");
-  return record === null ? null : { mode: typeof record.mode === "string" ? record.mode : null, sandboxGiven: record.sandboxGiven === true };
+  return record === null ? null : { mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true };
+}
+
+const CAPABILITY_ID = /^[a-z0-9][a-z0-9._-]{0,99}$/;
+const PRINTABLE = /^[\x20-\x7e]{1,120}$/;
+export const isExactHost = (value) => typeof value === "string" && HOST.test(value);
+export const isExactPath = (value) => typeof value === "string" && isAbsolute(value) && normalize(value) === value && value !== "/" && !/[*?\x00-\x1f\x7f]/.test(value);
+
+/** What the home's sandbox allowances are now, for readiness to show: the entries of the
+ *  provider's record that are well formed AND are in settings.local.json's two lists at
+ *  this moment. The record and the file sit in the home, which a sandboxed agent can
+ *  write: neither is taken at its word. `mismatch` counts what the record claims and the
+ *  file does not hold, or what is not a host, a path or a capability name at all. */
+export function currentSandbox(home) {
+  const record = readSandboxRecord(home);
+  if (record === null) return { domains: [], write: [], mismatch: 0 };
+  const settings = readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {};
+  const listAt = (keys) => { let at = settings; for (const key of keys) at = isObject(at) ? at[key] : undefined; return strings(at); };
+  const allowedDomains = listAt(DOMAINS_KEYS), allowWrite = listAt(WRITE_KEYS);
+  const domains = record.domains.filter((entry) => isExactHost(entry.host) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && allowedDomains.includes(entry.host))
+    .map((entry) => ({ host: entry.host, capability: entry.capability, setting: typeof entry.setting === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(entry.setting) ? entry.setting : null }));
+  const write = record.write.filter((entry) => isExactPath(entry.path) && allowWrite.includes(entry.path))
+    .map((entry) => ({ path: entry.path, reason: typeof entry.reason === "string" && PRINTABLE.test(entry.reason) ? entry.reason : null }));
+  return { domains, write, mismatch: record.domains.length - domains.length + record.write.length - write.length };
 }
 
 /** The record of the sandbox entries this provider added: the launch's list (who asked
@@ -334,6 +357,8 @@ function hasKey(settings, dotted) {
  *  settings.local.json exactly what the provider wrote, and drop the records. → whether
  *  anything was there to remove. */
 export function removeLaunchSettings(home) {
+  // A home the provider never wrote to has nothing of its to remove, whatever its .claude is.
+  if (!everLaunched(home) && !lstatSync(join(home, SANDBOX_RECORD), { throwIfNoEntry: false })) return false;
   const { settingsPath, envRecordPath, sandboxRecordPath, hasClaude, hasState } = directories(home, { create: false });
   const envRecord = hasState ? readJsonObject(envRecordPath, "the provider's record") : null;
   const sandboxRecord = readSandboxRecord(home);

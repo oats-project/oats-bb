@@ -64,13 +64,13 @@ async function stopThread(bb, threadId, { until, grace, now }) {
  *  never launched (nothing to archive is a complete cleanup). A bb that does not answer
  *  does not hold the retire: the thread is left, and readiness reports it
  *  (`session-provider-orphaned`) once the home is gone. */
-export async function retire(home, settings, { deadline, env = process.env } = {}) {
+export async function retire(home, readSettings, { deadline, env = process.env } = {}) {
   // The hook runs for every home that has the capability. One the provider never
   // launched (a tmux home) has nothing in bb: bb is not asked, and need not be there.
   if (!everLaunched(home)) return { meta: { retired: false, reason: "nothing-to-delete" } };
-  let bb;
   try {
-    bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
+    const settings = readSettings();
+    const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
     const [projects, threads] = [await bb.projects(), await bb.threads()];
     const live = liveThreadsOfHome(threads, home, projectsOfHome(projects, home).map((project) => project.id));
     if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };

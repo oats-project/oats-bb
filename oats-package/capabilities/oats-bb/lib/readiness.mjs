@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
-import { readLaunchRecord, readSandboxRecord } from "./local-settings.mjs";
+import { currentSandbox, readLaunchRecord } from "./local-settings.mjs";
 import { TRUST_VALUES, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -15,7 +15,7 @@ import { isLive } from "./threads.mjs";
 const HTTP_TIMEOUT_MS = 4_000;
 const PROVIDER_STATE_TIMEOUT_MS = 6_000;
 // bb's provider health words (bb plugins/provider-claude-code provider-maintenance).
-const PROVIDER_STATUS = { not_installed: "needs-configuration", unauthenticated: "authorization-required", expired: "authorization-required", unknown: "unavailable" };
+const PROVIDER_STATUS = { not_installed: "needs-configuration", unsupported_version: "needs-configuration", unauthenticated: "authorization-required", expired: "authorization-required", unknown: "unavailable" };
 
 const HTTP_MAX_BYTES = 256 * 1024;
 
@@ -178,24 +178,31 @@ const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "co
  *  each entry: readiness lists it (contract item 6). → warnings; none in full mode or
  *  before a first launch. */
 export function sandboxWarnings(home) {
-  let record, launched;
-  try { record = readSandboxRecord(home); launched = readLaunchRecord(home); }
+  let current, launched;
+  try { current = currentSandbox(home); launched = readLaunchRecord(home); }
   catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    return [{ code: "session-provider-sandbox-unread", message: error.message }];
+    return [{ code: "session-provider-sandbox-unread", message: "what the provider added to this home's sandbox could not be read: its record or .claude/settings.local.json in the home is not what the provider wrote. The next launch refuses or rewrites it" }];
   }
+  const warnings = [];
   if (launched && launched.mode !== null && launched.mode !== "full" && !launched.sandboxGiven) {
     // A kernel that hands a launch no sandbox allowances: bb's sandbox then blocks OATS's
     // own commands, and nothing in the home says so but this.
-    return [{ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` }];
+    warnings.push({ code: "session-provider-sandbox-missing", message: `this home runs in bb's ${launched.mode} mode, and its launch carried no sandbox allowances: bb's sandbox blocks the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Run it in full mode (--yolo), or on a kernel that hands the launch its allowances` });
   }
-  if (record === null || (record.domains.length === 0 && record.write.length === 0)) return [];
-  const hosts = record.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);
-  const paths = record.write.map((entry) => `${entry.path} (the kernel${entry.reason ? `: ${entry.reason}` : ""})`);
-  const warnings = [{ code: "session-provider-sandbox", message: `in bb's sandboxed modes this home's Claude may also reach ${hosts.length ? hosts.join(", ") : "no added host"} and write ${paths.length ? paths.join(", ") : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json at launch` }];
-  const forges = record.domains.filter((entry) => GENERAL_FORGES.has(String(entry.host).split(":")[0]));
-  if (forges.length > 0) {
-    warnings.push({ code: "session-provider-sandbox-forge", message: `${forges.map((entry) => `${entry.host} (${entry.capability})`).join(", ")} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
+  if (current.domains.length > 0 || current.write.length > 0) {
+    const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);
+    const paths = current.write.map((entry) => `${entry.path} (the kernel${entry.reason ? `: ${entry.reason}` : ""})`);
+    warnings.push({ code: "session-provider-sandbox", message: `in bb's sandboxed modes this home's Claude may also reach ${hosts.length ? hosts.join(", ") : "no added host"} and write ${paths.length ? paths.join(", ") : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json at launch` });
+    const forges = current.domains.filter((entry) => GENERAL_FORGES.has(entry.host.split(":")[0]));
+    if (forges.length > 0) {
+      warnings.push({ code: "session-provider-sandbox-forge", message: `${forges.map((entry) => `${entry.host} (${entry.capability})`).join(", ")} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
+    }
+  }
+  if (current.mismatch > 0) {
+    // The home is writable by its own agent: say that the two disagree, and print nothing
+    // of what either holds beyond what passed the checks above.
+    warnings.push({ code: "session-provider-sandbox-mismatch", message: `${current.mismatch} entr${current.mismatch > 1 ? "ies" : "y"} of the provider's sandbox record in this home ${current.mismatch > 1 ? "are" : "is"} not in .claude/settings.local.json, or not an exact host or path: the record or the file was changed after the launch. Read the file itself for what the sandbox allows now; the next launch rewrites both` });
   }
   return warnings;
 }

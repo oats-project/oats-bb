@@ -12,6 +12,7 @@ const POLL_MS = 300;
 const MAX_GRACE_SECONDS = 300;
 const DEFAULT_GRACE_SECONDS = 10;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
 
 const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
 
@@ -32,7 +33,9 @@ export async function stop(input, settings, { deadline = Infinity, env = process
       // at or after it is that launch's, and nobody recorded it: it is archived once
       // stopped, so the next start is not refused for it. An older thread, or any thread
       // when the time is absent or unreadable, may be a person's: stopped, never archived.
-      const sentAt = typeof input.launchSent === "string" ? Date.parse(input.launchSent) : NaN;
+      // Only the form the kernel writes (toISOString) is a time here: Date.parse alone reads
+      // "1" or "May 5" as an old date, and everything live would be archived.
+      const sentAt = typeof input.launchSent === "string" && ISO_UTC.test(input.launchSent) ? Date.parse(input.launchSent) : NaN;
       for (const thread of live) {
         await stopThread(bb, thread.id, { deadline, grace, now, stopCallTimeoutMs });
         // Best effort: where bb does not archive it, the thread is still stopped, and the

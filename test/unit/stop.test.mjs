@@ -145,7 +145,8 @@ test("a stop with no endpoint archives only the threads made at or after launchS
     return bb.calls().filter((c) => c.argv[1] === "archive").map((c) => c.argv[2]);
   };
   assert.deepEqual(await archivedBy({ launchSent: SENT }), ["thr_at", "thr_after"]);
-  for (const launchSent of [undefined, null, "", "yesterday", at, { at }]) {
+  assert.deepEqual(await archivedBy({ launchSent: "2026-11-20T10:00:00Z" }), ["thr_at", "thr_after"], "the same time without its fraction");
+  for (const launchSent of [undefined, null, "", "yesterday", at, { at }, "1", "0", "thread 5", "May 5", "2026", "2026-11-20", "2026-11-20T10:00:00", "2026-11-20T10:00:00+01:00", "2026-13-45T10:00:00Z", ` ${SENT}`]) {
     assert.deepEqual(await archivedBy({ launchSent }), [], `nothing is archived for launchSent ${JSON.stringify(launchSent)}`);
   }
 });

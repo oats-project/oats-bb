@@ -85,12 +85,18 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   compensating a launch whose answer was lost, or whose caller was killed while it ran):
   it finds the home's bb project and its live threads, and answers `stopped` also when
   there is none, `E_SESSION_STOP_FAILED` when it cannot tell.
-  - `launchSent` (an ISO 8601 time: the receipt's record that a launch was sent; the kernel
-    change that passes it is not released yet) says which threads are that launch's: one
-    bb created at or after it (bb's `createdAt`, milliseconds) is archived once stopped, so
-    the next start is not refused for a thread nobody recorded. A thread created before
-    it, and every thread when `launchSent` is absent or is no time, is stopped and not
-    archived: it may be a person's, and the next launch names it.
+  - `launchSent` (the receipt's record that a launch was sent, in the form the kernel
+    writes: an ISO 8601 UTC time ending in `Z`; the kernel change that passes it is not
+    released yet) says which threads are taken to be that launch's: one bb created at or
+    after it (bb's `createdAt`, milliseconds) is archived once stopped, so the next start
+    is not refused for a thread nobody recorded. The archive is best effort: where bb does
+    not archive it, the stop still answers `stopped` and the next launch names the thread.
+    A thread created before it, and every thread when `launchSent` is absent or is not in
+    that form, is stopped and not archived: it may be a person's, and the next launch
+    names it.
+  - The rule's reach: a thread a person starts in the home after the failed launch was
+    sent is at or after that time too, and is stopped and archived with it, whenever the
+    kernel's next stop, start or retire comes. It stays in bb, archived.
   - A limit: the stop sees what bb shows when it is called. The provider starts each bb
     call in a session of its own, so a bb call can outlive a killed provider and create
     its thread after this stop answered. Nothing is lost silently: the next launch refuses

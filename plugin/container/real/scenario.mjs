@@ -112,7 +112,8 @@ const brief = (row) =>
     : `backend ${row.backend}, session ${JSON.stringify(row.session)}, running ${row.running}, runtimeState ${row.runtimeState}${row.sessionEnd ? `, sessionEnd ${row.sessionEnd}` : ""}${row.runtimeError ? `, runtimeError ${row.runtimeError}` : ""}${row.waitingOnYou ? `, waitingOnYou ${JSON.stringify(row.waitingOnYou)}` : ""}`;
 /**
  * The agent's first turn in its thread is over: bb shows the thread idle. A thread bb has not
- * started yet ("pending") also reads `running: null` in the kernel's row, and is not that.
+ * started yet ("pending") with nothing in line also reads `running: null` in the kernel's row,
+ * and is not that.
  */
 const settled = (row) => bbThread(row.session?.threadId)?.status === "idle";
 const untilRow = (instance, what, matches, seconds = 60) =>

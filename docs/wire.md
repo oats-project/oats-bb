@@ -58,9 +58,9 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
-- **launch `sandbox`** (provisional: the kernel's change that sends it is not merged) is
+- **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
-  setting, team, optional}]}`, built by the kernel from recorded configuration, or
+  setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
   `{unavailable: "<cause>"}` when the kernel could not resolve it (`false` or an empty
   string there mean it was resolved). A `skipped: [{capability, reason}]` is read and
   listed by the check if it comes; the kernel does not send it today. A kernel may not send the key yet, and then nothing is written (readiness says the
@@ -69,8 +69,10 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     entry that is not one exact host or one exact absolute path refuses the launch in
     every mode (`E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`).
   - `missing` is what a provider's line named and the deployment has no value for. A
-    sandboxed launch with a row that is not `optional` is refused (`E_BACKEND_SANDBOX_HOST`,
-    naming each and `oats aweb setup`); a row the provider cannot name is counted, never
+    sandboxed launch is refused (`E_BACKEND_SANDBOX_HOST`, naming each and the remedy) for
+    a row that is neither `optional: true` nor another team's (`defaultTeam: false`): the
+    soul's default team, or a setting with no value at all. Another team's row goes to
+    readiness (`session-provider-sandbox-team-unreachable`); a row the provider cannot name is counted, never
     dropped. `unavailable` refuses a sandboxed launch (`E_BACKEND_SANDBOX_UNAVAILABLE`).
   - Beside `unavailable` nothing else of the object is read: there are no lists to write.
   - A sandboxed launch must understand everything it is told: a key the provider does not

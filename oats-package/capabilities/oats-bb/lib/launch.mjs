@@ -48,7 +48,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
-  const settingsToWrite = { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox), missing: allowances.missing, unnamed: allowances.unnamed };
+  const settingsToWrite = { env: launchEnv, unset, sandbox, mode, sandboxGiven: isObject(input.sandbox), missing: allowances.missing, unnamed: allowances.unnamed, otherTeams: allowances.otherTeams };
   writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
   const { problems, server } = await backendProblems(settings, { deadline, env });

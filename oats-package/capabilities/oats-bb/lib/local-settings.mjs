@@ -129,17 +129,18 @@ const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).repla
 /** The launch input's `sandbox`, as the kernel built it from recorded configuration:
  *
  *    {domains: [{host, capability, setting}], write: [{path, reason}],
- *     missing: [{capability, setting, team, optional}]}
+ *     missing: [{capability, setting, team, optional, defaultTeam}]}
  *    or {unavailable: "<cause>"} when the kernel could not resolve the configuration.
  *  (`skipped: [{capability, reason}]` is read if it comes; the kernel does not send it.)
  *
  *  `missing`: what a slot provider's line named and the deployment has no value for (a
  *  team with no recorded service): a host the sandbox would need and cannot be given.
  *
- *  → {domains, write, missing, optional, skipped, unavailable, unnamed, unnamedOptional,
- *  unnamedSkipped}: `missing` the rows that are not optional, `optional` the ones that
- *  are, `unavailable` the cause or null, and the three counts of rows that cannot be named
- *  in a message (counted, so that none is dropped).
+ *  → {domains, write, missing, otherTeams, optional, skipped, unavailable, unnamed,
+ *  unnamedOptional, unnamedSkipped}: `missing` the rows a sandboxed launch is refused for
+ *  (the soul's default team, or a setting with no value at all), `otherTeams` the rows of
+ *  its other teams, `optional` the optional ones, `unavailable` the cause or null, and the
+ *  three counts of rows that cannot be named in a message (counted, so none is dropped).
  *
  *  The provider writes exactly `domains` and `write`, so each entry must be what the lists
  *  may hold (an exact host, an exact absolute path), in every mode: E_BACKEND_SANDBOX_HOST,
@@ -148,7 +149,7 @@ const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).repla
  *  list refuse it); a full-mode launch writes nothing and ignores all of it, whatever it
  *  holds. A row that cannot be named is still a gap: counted, never dropped. */
 export function readSandbox(sandbox, { sandboxed = true } = {}) {
-  const empty = { domains: [], write: [], missing: [], optional: [], unnamed: 0, unnamedOptional: 0, unavailable: null, skipped: [], unnamedSkipped: 0 };
+  const empty = { domains: [], write: [], missing: [], otherTeams: [], optional: [], unnamed: 0, unnamedOptional: 0, unavailable: null, skipped: [], unnamedSkipped: 0 };
   if (sandbox === undefined || sandbox === null) return empty;
   if (!isObject(sandbox)) throw fail("E_SESSION_START_FAILED", "the launch input's sandbox is not an object");
   // An unresolved configuration comes first: beside it nothing else is read (there are no
@@ -187,12 +188,16 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
   // The launch input is the kernel's: a row is taken as given, checked only for what a
   // message can carry (the kernel's own rules decide what a team id is).
   const word = (value) => value === undefined || value === null || oneLine(value, 256);
-  const missing = [], optional = [], skipped = [];
+  // Three kinds of row. Optional: the session works without that host. Another team's
+  // (`defaultTeam: false`): the agent's own team is served, that team's mail is not. Every
+  // other row, one without the mark included, is what a sandboxed launch cannot go without.
+  const missing = [], otherTeams = [], optional = [], skipped = [];
   let unnamed = 0, unnamedOptional = 0, unnamedSkipped = 0;
   for (const entry of list(sandbox.missing, "missing", sandboxed)) {
     const isOptional = isObject(entry) && entry.optional === true;
     if (isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && word(entry.setting) && word(entry.team)) {
-      (isOptional ? optional : missing).push({ capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null });
+      const row = { capability: entry.capability, setting: entry.setting ?? null, team: entry.team ?? null };
+      (isOptional ? optional : entry.defaultTeam === false && row.team !== null ? otherTeams : missing).push(row);
     } else if (isOptional) unnamedOptional += 1;
     else unnamed += 1;
   }
@@ -201,7 +206,7 @@ export function readSandbox(sandbox, { sandboxed = true } = {}) {
     if (isObject(entry) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability)) skipped.push({ capability: entry.capability, reason: oneLine(entry.reason, 200) ? entry.reason : null });
     else unnamedSkipped += 1;
   }
-  return { domains, write, missing, optional, unnamed, unnamedOptional, unavailable: null, skipped, unnamedSkipped };
+  return { domains, write, missing, otherTeams, optional, unnamed, unnamedOptional, unavailable: null, skipped, unnamedSkipped };
 }
 
 // A team id as the kernel writes one, and a setting key: what a record in the home must
@@ -299,12 +304,15 @@ export function readLaunchRecord(home) {
   if (record === null) return null;
   const recorded = Array.isArray(record.missing) ? record.missing : [];
   const missing = recorded.map(readRecordedMissing).filter(Boolean);
+  const recordedTeams = Array.isArray(record.otherTeams) ? record.otherTeams : [];
+  const otherTeams = recordedTeams.map(readRecordedMissing).filter(Boolean);
   return {
     mode: ["auto", "accept-edits", "full"].includes(record.mode) ? record.mode : null, sandboxGiven: record.sandboxGiven === true,
     missing,
     // What the record holds and cannot be shown: entries that are not a capability id with
     // a plain setting and team, and what the launch itself could not name.
     unnamed: recorded.length - missing.length + (Number.isInteger(record.unnamed) && record.unnamed > 0 ? record.unnamed : 0),
+    otherTeams, unnamedOtherTeams: recordedTeams.length - otherTeams.length,
   };
 }
 
@@ -418,7 +426,7 @@ function withdraw(settings, envNames, sandboxRecord) {
  *  sandbox allowances. Every other key is kept, and every entry under a name the launch
  *  does not carry; a name it carries is the launch's (a person's entry of that name is
  *  replaced). What an earlier launch wrote and this one does not carry is removed. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], unnamed = 0, dryRun = false }) {
+export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, missing = [], unnamed = 0, otherTeams = [], dryRun = false }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);
   const envRecord = everLaunched(home) ? readJsonObject(envRecordPath, "the provider's record") : null;
@@ -462,7 +470,7 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sand
   else rmSync(sandboxRecordPath, { force: true });
   // What readiness needs to say of this home's sandbox: the mode it runs in, and whether
   // the kernel handed the launch any allowances at all.
-  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing, unnamed });
+  writeJson(home, join(home, LAUNCH_RECORD), { mode: mode ?? null, sandboxGiven: sandboxGiven === true, missing, unnamed, otherTeams });
   return { path: settingsPath, names, sandbox: sandboxRecord };
 }
 

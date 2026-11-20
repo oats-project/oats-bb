@@ -203,6 +203,13 @@ export async function readinessResult(settings, options = {}) {
 // allows the whole forge, not only that base.
 const GENERAL_FORGES = new Set(["github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "dev.azure.com", "git.sr.ht"]);
 
+/** A team of the agent's, other than its default, whose service the deployment does not
+ *  record: the launch goes on, and this says plainly what the agent then cannot do. */
+function otherTeamsWarning(mode, rows, unnamed) {
+  const cannot = mode === "auto" ? "in bb's auto mode that team's mail is unreachable for this agent" : "in bb's accept-edits mode every command that reaches that team's mail raises a prompt for a person in bb";
+  return { code: "session-provider-sandbox-team-unreachable", message: `the deployment records no host for a team that is not this agent's default: ${cannot}. ${missingRemedy(rows)}. Missing: ${gapList(rows, unnamed)}` };
+}
+
 /** What the planned launch the kernel hands the check would meet in the sandbox: the
  *  refusal a launch in that mode would answer, as a problem; optional rows, skipped
  *  capabilities and, in full mode, the gaps, as warnings. → {problems, warnings}. */
@@ -230,6 +237,7 @@ export function plannedLaunchFindings(planned) {
     // sandbox then blocks OATS's own commands.
     warnings.push({ code: "session-provider-sandbox-missing", message: `the planned launch runs in bb's ${mode} mode and carries no sandbox allowances: bb's sandbox will block the agent's aw (no network to the messaging server) and oats instance attention (no write to the deployment's events). Launch in full mode (--yolo), or on a kernel that hands the launch its allowances` });
   }
+  if (mode !== "full" && allowances.otherTeams.length > 0) warnings.push(otherTeamsWarning(mode, allowances.otherTeams, 0));
   const optionalCount = allowances.optional.length + allowances.unnamedOptional;
   if (optionalCount > 0) {
     warnings.push({ code: "session-provider-sandbox-host-optional", message: `the deployment records no host for ${gapList(allowances.optional, allowances.unnamedOptional)}, which ${optionalCount > 1 ? "are" : "is"} optional: the launch goes on, and what needs ${optionalCount > 1 ? "them" : "it"} is blocked in bb's sandboxed modes` });
@@ -261,6 +269,9 @@ export function sandboxWarnings(home, { planned = false } = {}) {
   if (!planned && launched && launched.mode === "full" && launched.missing.length + launched.unnamed > 0) {
     // Only a full-mode launch records a gap (a sandboxed one is refused before any record).
     warnings.push({ code: "session-provider-sandbox-host-missing", message: `at this home's last launch the deployment recorded no host for some of what a sandbox would need. That launch ran in full mode, which has no sandbox; a launch in auto or accept-edits is refused. ${missingRemedy(launched.missing)}. Missing: ${gapList(launched.missing, launched.unnamed)}` });
+  }
+  if (!planned && launched && (launched.mode === "auto" || launched.mode === "accept-edits") && launched.otherTeams.length + launched.unnamedOtherTeams > 0) {
+    warnings.push(otherTeamsWarning(launched.mode, launched.otherTeams, launched.unnamedOtherTeams));
   }
   if (current.domains.length > 0 || current.write.length > 0) {
     const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);

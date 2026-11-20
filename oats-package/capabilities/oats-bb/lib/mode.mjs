@@ -54,7 +54,8 @@ export function harnessRefusal(harness) {
  *  that would lack a host OATS's own commands reach is refused before anything starts:
  *  the agent's messaging would be cut off inside the sandbox. Full mode has no sandbox, so
  *  there neither a gap nor an unresolved configuration changes anything. Optional rows
- *  never refuse. → {code, message} | null (the launch and the readiness check share it). */
+ *  never refuse, and neither does a team other than the soul's default: the agent's own
+ *  team is served, and readiness says what it cannot do for the other. → {code, message} | null (the launch and the readiness check share it). */
 export function sandboxRefusal(mode, allowances) {
   if (mode === "full") return null;
   if (allowances.unavailable !== null) {

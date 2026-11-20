@@ -32,15 +32,21 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 - There is no terminal. `oats session attach` refuses with a link, and a client shows
   **Open in bb**.
 
-> Status: built ahead of the kernel's session-provider contract. It needs an OATS kernel
-> that lists the feature `session-providers` in `oats version --json`. The manifests'
-> `compatibility.oats` floor will be the first OATS release whose kernel speaks this
-> provider's wire (version 1.3, see [docs/wire.md](docs/wire.md)); `>=0.70.0` is a
-> placeholder until the release lane names that version.
+> **What it needs.** Nothing here is released yet.
 >
-> It also needs the oats.aweb release that registers a provider home with the host wake
-> broker without a `--backend` (the release carrying awebai/oats-aweb#293; its version is
-> not known yet): with an older oats.aweb, spawning a bb home fails in its spawn hook.
+> - An OATS kernel that speaks this provider's wire, version 1.3 (see
+>   [docs/wire.md](docs/wire.md)), and that protects a provider home's own files from its
+>   agent. The manifests' `compatibility.oats` floor will be the first OATS release that
+>   carries both; `>=0.70.0` is a placeholder until the release lane names that version.
+> - oats.aweb 1.45.0 or later: the release that registers a provider home with the host
+>   wake broker without a `--backend`. With an older oats.aweb, spawning a bb home fails
+>   in its spawn hook.
+>
+> **Run bb agents in full mode (`--yolo`).** bb's sandboxed modes (`auto`, `accept-edits`)
+> are not offered for OATS agents yet. This README says what the provider does in them,
+> because the code is here; they are no security boundary until the OATS release named
+> above protects the home's instructions, hooks and settings from the agent that runs in
+> it. Until then an agent in a sandboxed mode can change what runs outside the sandbox.
 
 ## Install
 
@@ -158,11 +164,14 @@ longer carries them. In `full` mode there is no sandbox and it writes none. `oat
 lists, for a home, each host and path with who asked for it.
 
 Where the deployment has no value for something a provider's line names (a team whose
-aweb service was never recorded), a launch in a sandboxed mode is **refused**
+aweb service was never recorded, for the agent's default team), a launch in a sandboxed mode is **refused**
 (`E_BACKEND_SANDBOX_HOST`, naming it; for oats.aweb the remedy is `oats aweb setup`): the agent's
 messaging would be cut off inside the sandbox. A line a provider marks optional never
 refuses; the kernel's check before the launch names it (the provider keeps no record of it
-after the launch). Where the kernel cannot resolve the deployment's
+after the launch). A missing host of a team that is not the agent's default does not
+refuse either: the agent's own team is served, and readiness says what it then cannot do
+for the other (`session-provider-sandbox-team-unreachable`: that team's mail is
+unreachable in `auto`, and raises a prompt in `accept-edits`). Where the kernel cannot resolve the deployment's
 configuration at all, a sandboxed launch is refused too (`E_BACKEND_SANDBOX_UNAVAILABLE`).
 In `full` mode the launch goes on in every one of these cases. The kernel asks the provider
 before every launch (a spawn, a start, and a restart before it stops anything), handing it

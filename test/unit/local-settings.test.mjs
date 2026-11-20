@@ -277,6 +277,33 @@ test("an optional missing row never refuses: the sandboxed launch goes on with w
   assert.doesNotMatch(refused.error.message, /registryHost/);
 });
 
+test("a missing host refuses only for the agent's default team; another team's is a readiness item that says what the agent cannot do", async (t) => {
+  const { home, bb, settings, launch, check } = await setup(t);
+  const other = { capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai", defaultTeam: false };
+  const own = { capability: "oats.aweb", setting: "services", team: "default:acme.aweb.ai", defaultTeam: true };
+  // Another team's gap: the sandboxed launch goes on.
+  assert.equal((await launch({ yolo: false, sandbox: { domains: [AWEB], write: [], missing: [other] } })).ok, true);
+  const after = (await check()).result;
+  assert.equal(after.status, "ready");
+  assert.deepEqual(after.warnings.map((w) => w.code), ["session-provider-sandbox-team-unreachable", "session-provider-sandbox"]);
+  assert.match(after.warnings[0].message, /not this agent's default: in bb's accept-edits mode every command that reaches that team's mail raises a prompt.*oats aweb setup.*Missing: oats\.aweb's setting services for team ops:acme\.aweb\.ai$/);
+  // In auto the same gap reads as unreachable mail; the check of a planned launch says it before the launch.
+  const plannedAuto = await call("check", { home, soul: null, launch: { harness: "claude", yolo: null, args: ["--permission-mode", "auto"], sandbox: { domains: [AWEB], write: [], missing: [other] } } }, { settings, bb });
+  assert.equal(plannedAuto.result.status, "ready");
+  assert.match(plannedAuto.result.warnings.find((w) => w.code === "session-provider-sandbox-team-unreachable").message, /in bb's auto mode that team's mail is unreachable for this agent/);
+  // The default team's gap refuses, and names only that row.
+  const refused = await launch({ yolo: false, sandbox: { missing: [other, own] } });
+  assert.equal(refused.error.code, "E_BACKEND_SANDBOX_HOST");
+  assert.match(refused.error.message, /Missing: oats\.aweb's setting services for team default:acme\.aweb\.ai$/);
+  // A setting with no value at all (team null) refuses whatever the mark says; a row without the mark refuses.
+  for (const row of [{ capability: "oats.aweb", setting: "services", team: null, defaultTeam: false }, { capability: "oats.aweb", setting: "services", team: "ops:acme.aweb.ai" }]) {
+    assert.equal((await launch({ yolo: false, sandbox: { missing: [row] } })).error.code, "E_BACKEND_SANDBOX_HOST");
+  }
+  // In full mode none of it matters, and nothing is said of the other team.
+  assert.equal((await launch({ yolo: true, sandbox: { missing: [other] } })).ok, true);
+  assert.deepEqual((await check()).result.warnings, []);
+});
+
 test("a configuration the kernel could not resolve refuses a launch that would be sandboxed, naming the cause; full mode launches", async (t) => {
   const { home, bb, launch, local } = await setup(t);
   const sandbox = { unavailable: "the workspace repository could not be read" };

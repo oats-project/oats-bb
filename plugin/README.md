@@ -16,7 +16,8 @@ this plugin's dependencies are installed and run only in containers (see [Develo
 ## Install
 
 ```sh
-# from the repository, at a tag, a branch or a commit; bb builds it and loads it; the plugin id is "oats"
+# from the repository, at a tag, a branch or a commit; bb asks once, then builds it and loads it
+# (add --yes where nobody can answer); the plugin id is "oats"
 bb plugin install git:https://github.com/oats-project/oats-bb.git@<ref> --subdirectory plugin
 # or from a checkout whose dependencies are installed (`npm ci` in plugin/, in a container: see
 # Developing); a path install builds from what is there and installs nothing itself

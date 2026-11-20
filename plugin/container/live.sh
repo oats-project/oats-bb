@@ -67,6 +67,9 @@ if [ ! -f "$LIVE/app.tsx" ]; then
   say "note: app.tsx is not in this tree; installing the backend alone (bb.app removed from the copy's manifest)"
   node -e 'const fs=require("fs"),f=process.argv[1],p=JSON.parse(fs.readFileSync(f));delete p.bb.app;fs.writeFileSync(f,JSON.stringify(p,null,2))' "$LIVE/package.json"
 fi
+# A run before this one in the same container (the loop of container/README.md) ended with the
+# plugin installed from git (G1): bb refuses a path install over it, so it goes first.
+bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
 bb plugin list | grep -q '^oats@.* running' && pass "the plugin is installed and running" || { fail "the plugin is not running"; bb plugin list; }
 

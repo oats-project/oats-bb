@@ -9,6 +9,9 @@ import { loopbackOrigin } from "./settings.mjs";
 const TURN_IN_PROGRESS = new Set(["starting", "active", "stopping"]);
 const SETTLED = new Set(["pending", "idle"]);
 
+// What a home with no session reads as: a thread that is gone, and a lost one.
+const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
+
 /** The inspect answer for one existing bb thread: only what bb shows, nothing inferred.
  *  A status word this provider does not know is an error, never a guess. */
 export function inspectAnswer(thread) {
@@ -18,11 +21,10 @@ export function inspectAnswer(thread) {
   // A thread in error is a lost session: bb never resumes an interrupted turn. It reads as
   // the kernel reads any lost session (not "shell", which on a tmux home means the harness
   // ended and a shell remains), so the kernel may resume it with an input.
-  if (status === "error") return { present: false, state: "stopped", running: false };
+  if (status === "error") return { ...MISSING };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
-const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
 
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;

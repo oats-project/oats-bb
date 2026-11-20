@@ -52,11 +52,12 @@ export function scratch(t) {
 export function fakeBbIn(dir, script) {
   const scriptFile = join(dir, "bb-script.json"), log = join(dir, "bb-calls.jsonl");
   writeFileSync(scriptFile, JSON.stringify(script));
+  const entries = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
   return {
     cli: fakeBb,
     env: { FAKE_BB_SCRIPT: scriptFile, FAKE_BB_LOG: log },
-    calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => entry.argv) : []),
-    childPids: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => entry.childPid).map((entry) => entry.childPid) : []),
+    calls: () => entries().filter((entry) => entry.argv),
+    childPids: () => entries().filter((entry) => entry.childPid).map((entry) => entry.childPid),
     setScript: (next) => writeFileSync(scriptFile, JSON.stringify(next)),
   };
 }

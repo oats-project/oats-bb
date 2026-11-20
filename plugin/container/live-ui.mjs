@@ -128,18 +128,22 @@ async function untilSnapshot(matches, seconds = 30) {
 async function themedPage(browser, viewport, theme, at) {
   const page = await browser.page(viewport, { theme });
   const shot = page.shot;
-  page.shot = async (name) => {
+  // `plugin: false`: a scene in which the plugin may draw nothing (a thread while OATS cannot be read).
+  page.shot = async (name, { plugin = true } = {}) => {
     const { theme: drawn, roots, rows } = JSON.parse(await page.evaluate(CONTRAST));
     const bad = failing(rows);
     const count = (kind) => rows.filter((row) => row.kind === kind).length;
     const lowest = (kinds) => shown(Math.min(...rows.filter((row) => kinds.includes(row.kind)).map((row) => row.ratio)));
     const TEXTS = ["text", "value", "placeholder"];
+    const texts = rows.filter((row) => TEXTS.includes(row.kind)).length;
     const dots = count("dot") === 0 ? "no state dot" : `its ${count("dot")} state dots at 3:1 or more (lowest ${lowest(["dot"])}:1)`;
-    check(
-      drawn === theme && roots.length > 0 && rows.length > 0 && bad.length === 0,
-      `${at} ${name}: bb draws its ${theme} theme, and the plugin's ${rows.filter((row) => TEXTS.includes(row.kind)).length} texts read at 4.5:1 or more (lowest ${lowest(TEXTS)}:1), ${dots}`,
-      `theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}: ${[...new Set(bad.map((row) => `${row.kind} ${row.what} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))].join(" | ")}`,
-    );
+    const ok = drawn === theme && (rows.length > 0 || !plugin) && bad.length === 0;
+    check(ok, `${at} ${name}: bb draws its ${theme} theme, and ${rows.length === 0 ? "nothing of the plugin is in the page" : `the plugin's ${texts} texts read at 4.5:1 or more (lowest ${lowest(TEXTS)}:1), ${dots}`}`);
+    // Every distinct failing row, whole: one run names all there is to fix in the scene.
+    if (!ok) {
+      console.log(`     theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}`);
+      for (const line of new Set(bad.map((row) => `${row.kind} ${row.what} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))) console.log(`     ${line}`);
+    }
     await shot(theme === "light" ? name : `${name}-${theme}`);
   };
   return page;
@@ -192,6 +196,16 @@ async function a13(browser, viewport, threads, theme) {
     const rowHeight = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect().height ?? -1`);
     check(rowHeight > 0 && rowHeight < 50, `${at} the row is one line (${Math.round(rowHeight)} px)`);
     await page.shot(`a13-${viewport.name}-thread`);
+
+    // the thread of an agent that needs you: its row is the open one, with its dot and its "?"
+    const release = threads.get("thr_release");
+    await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
+    check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+    const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
+    const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-state="needs-you"]') && row.querySelector('[aria-hidden="true"][title="needs you"]')?.innerText.trim() === "?" ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
+    const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
+    check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its dot and its "?", on the open row's background`, `${marked} against ${resting}`);
+    await page.shot(`a13-${viewport.name}-thread-needs`);
 
     // a thread that is no agent has no row
     const plain = threads.get("thr_plain");
@@ -259,7 +273,7 @@ async function a13(browser, viewport, threads, theme) {
  * A16: an agent of the status whose thread bb does not have, on its soul's page, and its Retire;
  * then the tree with an unreachable agent on the open thread and an agent whose session is a shell.
  */
-async function a16(browser, viewport, theme, threads) {
+async function a16(browser, viewport, threads, theme) {
   const at = `A16 ${theme} ${viewport.name}`;
   const page = await themedPage(browser, viewport, theme, at);
   try {
@@ -305,7 +319,8 @@ async function a14(browser, viewport, threads, theme) {
     check(Boolean(opened), `${at} a thread opens from the list`, await page.evaluate("location.pathname"));
     await sleep(2500);
     check(!(await page.evaluate(visible(testId("oats-identity-row")))), `${at} the open thread has no OATS row while OATS cannot be read`);
-    await page.shot(`a14-${viewport.name}-thread`);
+    // The one scene the plugin may draw nothing in: no row, and at phone width the list is in bb's closed drawer.
+    await page.shot(`a14-${viewport.name}-thread`, { plugin: false });
   } finally {
     await page.close();
   }
@@ -334,7 +349,7 @@ try {
   };
   fake({ status: { stdout: statusWithRealIds(detached, states) } });
   await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
-  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, theme, threads);
+  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, threads, theme);
 
   // A14: the fake oats is removed for the length of the check, then put back.
   renameSync(OATS, `${OATS}.away`);

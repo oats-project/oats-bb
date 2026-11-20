@@ -4,10 +4,12 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
 
-// bb's tokens for coloured text on a surface: they keep their contrast against it in both themes,
-// on a row that is open or hovered too, which its fill tokens do not (`attention` and `success` in
-// the light theme, `destructive` in the dark one: 2.87:1 on an open row). For the same reason a
-// refusal's text is `text-destructive-text`, never `text-destructive`.
+// bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
+// themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
+// `success` in the light theme, `destructive` in the dark one: 2.87:1 on an open row). As text they
+// hold 4.5:1 on the page's own surfaces, not on an open row (`warning-text`: 4.35:1 there in the
+// light theme): a text in a row is `text-foreground` or `text-muted-foreground`. A refusal's text,
+// on a page or in a dialog, is `text-destructive-text`, never `text-destructive`.
 const DOT: Record<AgentState, string> = {
   "needs-you": "bg-warning-text",
   working: "bg-success-foreground",

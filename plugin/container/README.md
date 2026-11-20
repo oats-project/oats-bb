@@ -45,7 +45,8 @@ The live checks of the backend:
 The live checks of the app (`live-ui.mjs`), each at 1280x800 and 390x800, in bb's light theme and
 again in its dark theme:
 
-- **A13** the sidebar with the tree, an agent's thread with its header row, the home (its badge
+- **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
+  that needs you (its row is the open one, with its dot and its "?"), the home (its badge
   shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
   and their preview (Preview and Spawn enabled).
@@ -61,7 +62,7 @@ the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: wha
 Appearance writes) and puts the class `dark` on the document's root when it loads; no server
 setting and no `bb settings` key holds it. `browser.mjs` sets that key before any script of bb
 runs, and each check asserts the theme bb then draws. The screenshots are
-`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (64
+`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (68
 files, in `container/out/`, kept as CI artefacts).
 
 **The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
@@ -72,7 +73,8 @@ colours). It covers every rendered element with text of its own inside the plugi
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
-placeholder of an empty one), and the state dots, in each of their six states. What it checks is
+placeholder of an empty one), and the state dots, in each of their six states. A failing scene
+prints every distinct row that fails. What it checks is
 what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
 closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted
 in some scenes that do not show them, and a line's counts can differ between two runs of one
@@ -86,10 +88,13 @@ computes.
 
 The plugin's colours are bb's tokens only (`app/ui.tsx`). Where a state needs a colour, it is one
 of bb's tokens for coloured text on a surface (`warning-text`, `success-foreground`,
-`destructive-text`), which hold their contrast against the surface in both themes, on an open or
-hovered row too; bb's fill tokens (`attention` and `success` in the light theme, `destructive`
-in the dark one) and a fixed palette colour (`amber-500`, `green-500`) do not. `bg-destructive`
-is left only as the fill of the destructive button, under `destructive-foreground` text.
+`destructive-text`). As a dot's fill they hold 3:1 against the surface in both themes, on an open
+or hovered row too; bb's fill tokens (`attention` and `success` in the light theme, `destructive`
+in the dark one) and a fixed palette colour (`amber-500`, `green-500`) do not. As text they hold
+4.5:1 on a page or a dialog (a refusal is `destructive-text`), but not on an open row
+(`warning-text` reads 4.35:1 there in the light theme): a row's texts, the "?" of an agent that
+needs you among them, are `foreground` or `muted-foreground`. `bg-destructive` is left only as the
+fill of the destructive button, under `destructive-foreground` text.
 
 To work in a container for a while:
 

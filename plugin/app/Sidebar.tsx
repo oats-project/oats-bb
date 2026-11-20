@@ -110,7 +110,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
               </span>
             </span>
             {node.state === "needs-you" ? (
-              <span className="shrink-0 font-semibold text-warning-text" title="needs you" aria-hidden="true">
+              <span className="shrink-0 font-semibold text-foreground" title="needs you" aria-hidden="true">
                 ?
               </span>
             ) : thread.isUnread ? (

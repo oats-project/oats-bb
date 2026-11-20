@@ -303,7 +303,7 @@ const SANDBOX = {
  *  launch carries the sandbox allowances), and a scripted Bash call. */
 async function waitingOnPermission(name, ranFile) {
   await armTool(`echo RAN > ${ranFile}`);
-  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX, trees: [`/home/node/homes/${name}/work`] }, { sandboxedModes: true });
+  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX, trees: [`/home/node/homes/${name}/work`], protected: [] }, { sandboxedModes: true });
   const pending = await waitFor("a pending interaction", async () => (await bbJson(`thread interactions list ${endpoint.threadId}`)).find((i) => i.status === "pending"));
   return { home, endpoint, pending };
 }

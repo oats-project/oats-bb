@@ -11,14 +11,14 @@
 // sandbox, and an unsandboxed command writes past them (the README says so).
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { dirname, isAbsolute, join, normalize } from "node:path";
 import { fail } from "./errors.mjs";
 
 // In the home: OATS's module copies and its record of the instance, Claude's project
 // configuration, the skills, the MCP servers, the messaging identity (the key stays
 // readable: aw signs with it), the instructions OATS composes and the kernel's task, the
 // memory file Claude loads at every launch. (The provider keeps nothing of its own in the home.)
-const HOME_ENTRIES = [".oats/**", "instance.json", ".claude/**", ".agents/**", ".mcp.json", ".aw/signing.key", ".aw/workspace.yaml",
+const HOME_ENTRIES = [".git", ".git/**", ".oats/**", "instance.json", ".claude/**", ".agents/**", ".mcp.json", ".aw/signing.key", ".aw/workspace.yaml",
   "AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", "TASK.md"];
 // What Claude loads as configuration from a directory: denied in every directory above
 // the home (Claude loads it from a parent of its project), and in bb's thread storage
@@ -51,21 +51,40 @@ function ancestors(dir) {
   }
 }
 
+// A path as a refusal shows it: short, whatever it holds.
+const shown = (path) => JSON.stringify(String(path).length > 120 ? `${String(path).slice(0, 117)}...` : String(path));
+
+/** Why the deny rules cannot be written for this launch. The remedy stands first: the
+ *  wire cuts a message at 480 characters, and a path can be long. */
+const unwritable = (why) => fail("E_BACKEND_SANDBOX_PATH", `the sandbox's deny rules cannot be written for this launch. Launch in full mode (--yolo), or fix this: ${why}`);
+
+/** The real path of `path`, as the system resolves it (Node's fs.realpathSync folds ".."
+ *  before it looks, and would name another directory wherever a ".." follows a link).
+ *  → the path; null where there is no such path. Throws where the real path cannot be
+ *  written as text exactly (bytes that are not UTF-8): a rule built from it would name
+ *  another path, a look-alike, and leave the real one uncovered. */
+function realOf(path) {
+  let bytes;
+  try { bytes = realpathSync.native(path, { encoding: "buffer" }); } catch { return null; }
+  const text = bytes.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(bytes)) throw unwritable(`the real path of ${shown(path)} holds bytes that are not UTF-8, which a rule cannot name`);
+  return text;
+}
+
 /** The path and, where it differs, the path it resolves to: a home reached through a link
- *  is protected under both names. */
+ *  is protected under both names. A path that is not there yet has its own name only. */
 function withReal(path) {
-  try {
-    const real = realpathSync(path);
-    return real === path ? [path] : [path, real];
-  } catch { return [path]; }
+  const real = realOf(path);
+  return real === null || real === path ? [path] : [path, real];
 }
 
 /** What a small regular file names, read as git reads a `.git` pointer and a
  *  `commondir`: the whole content, less the line ends at its end. Never follows a link,
  *  never waits, reads at most 4 KiB.
  *  → the text; undefined where there is no such name; null where the name is there and
- *  this is not what git would take from it for certain: not a small regular file, or text
- *  with a line break inside it or a blank at either end (the caller refuses). */
+ *  this is not what git would take from it for certain: not a small regular file, bytes
+ *  that are not UTF-8, or text with a line break inside it (the caller refuses, as it
+ *  does for a blank at either end). */
 function namedIn(path) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return undefined;
@@ -77,7 +96,8 @@ function namedIn(path) {
     const buffer = Buffer.alloc(4097);
     const got = readSync(fd, buffer, 0, 4097, 0);
     if (got > 4096) return null;
-    const text = buffer.subarray(0, got).toString("utf8").replace(/[\r\n]+$/, "");
+    // Exactly the bytes git reads: text that is not UTF-8 would be decoded to a look-alike.
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, got)).replace(/[\r\n]+$/, "");
     return /[\r\n\0]/.test(text) ? null : text;
   } catch { return null; } finally { if (fd !== null) closeSync(fd); }
 }
@@ -98,7 +118,7 @@ const isDirectory = (path) => statSync(path, { throwIfNoEntry: false })?.isDirec
  *  cannot be read, for certain, as git reads it, naming a directory, refuses the launch
  *  (E_BACKEND_SANDBOX_PATH): a rule silently missing is the failure that matters. */
 function gitDirsOf(tree) {
-  const refuse = (what) => fail("E_BACKEND_SANDBOX_PATH", `the tree ${tree} has ${what}, so the sandbox's deny rules cannot cover the git directory that git would use there: repair the tree (git worktree repair), or launch in full mode (--yolo)`);
+  const refuse = (what) => unwritable(`repair the tree (git worktree repair). The tree ${shown(tree)} has ${what}, so no rule can cover the git directory that git would use there`);
   // The directory a name stands for, found as git finds it: by the filesystem, which
   // follows a link before it takes a ".." step. (path.resolve and path.join fold ".."
   // first, and would name another directory wherever a ".." follows a link.) The name
@@ -107,10 +127,9 @@ function gitDirsOf(tree) {
   // directory git does not use costs nothing.
   const found = (base, named, what) => {
     const written = isAbsolute(named) ? named : `${base}/${named}`;
-    let real;
-    // The system's own realpath: Node's (fs.realpathSync) folds ".." before it looks.
-    try { real = realpathSync.native(written); } catch { throw refuse(`${what} that names nothing (${written.slice(0, 160)})`); }
-    if (!isDirectory(real)) throw refuse(`${what} that names no directory (${written.slice(0, 160)})`);
+    const real = realOf(written);
+    if (real === null) throw refuse(`${what} that names nothing (${shown(written)})`);
+    if (!isDirectory(real)) throw refuse(`${what} that names no directory (${shown(written)})`);
     return { real, names: [...new Set([real, normalize(written)])] };
   };
   const at = join(tree, ".git");
@@ -126,7 +145,7 @@ function gitDirsOf(tree) {
   }
   const common = namedIn(join(gitDir.real, "commondir"));
   if (common === undefined) return gitDir.names;
-  if (!common || common !== common.trim()) throw refuse(`a git directory whose commondir this provider cannot read as git does, one line naming a directory (${gitDir.real.slice(0, 160)})`);
+  if (!common || common !== common.trim()) throw refuse(`a git directory whose commondir this provider cannot read as git does, one line naming a directory (${shown(gitDir.real)})`);
   const commonDir = found(gitDir.real, common, "a git directory whose commondir is one");
   // And the common directory as each other name of the git directory would spell it.
   const spelled = isAbsolute(common) ? [] : gitDir.names.map((name) => normalize(`${name}/${common}`));
@@ -142,13 +161,26 @@ export function treesRefusal(trees) {
   return { code: "E_BACKEND_SANDBOX_TREES", message: `this launch would run in one of bb's sandboxed modes and its input has no "trees" (the list of the home's work tree and extra trees), so the deny rules could not cover git's config and hooks there, which git runs outside the sandbox. An OATS kernel that protects a provider home's files sends it: upgrade OATS to the release this provider names as its floor, or launch in full mode (--yolo)` };
 }
 
+/** Why a sandboxed launch that names no protected paths cannot be taken, or null. The
+ *  kernel keeps what it runs for a provider home outside the home (its own copy of the
+ *  home's modules) and names it, with the retirement directory, in the launch input: a
+ *  launch that does not would leave them writable by the agent's file tools.
+ *  → {code, message} | null. */
+export function protectedRefusal(protectedPaths) {
+  if (Array.isArray(protectedPaths)) return null;
+  return { code: "E_BACKEND_SANDBOX_PROTECTED", message: `this launch would run in one of bb's sandboxed modes and its input has no "protected" (the directories the kernel keeps outside the home that the agent must never write: its own copy of the home's modules, the retirement directory), so the deny rules could not cover them. An OATS kernel that protects a provider home's files sends it: upgrade OATS to the release this provider names as its floor, or launch in full mode (--yolo)` };
+}
+
 /** The `permissions.deny` rules of a sandboxed launch, in a stable order, each once.
  *  `trees` is the home's work tree and extra trees, as the kernel names them: a launch
  *  that names none is refused (treesRefusal).
  *  A path a rule cannot carry refuses the launch (E_BACKEND_SANDBOX_PATH): a rule that is
  *  silently missing would leave that path writable. → [rule]. */
-export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tmpdir() }) {
+export function denyRules({ home, trees, protected: protectedPaths, dataDir, userHome = homedir(), tmp = tmpdir() }) {
   const paths = [];
+  // The home is the kernel's word; a rule still needs it plain (a ".." step after a link
+  // would put the rules on another directory than the home is).
+  if (!carriable(home)) throw unwritable(`the home ${shown(home)} is not one exact absolute path with no wildcard, parenthesis, backslash or control character`);
   for (const root of withReal(home)) {
     for (const entry of HOME_ENTRIES) paths.push(join(root, entry));
     for (const above of ancestors(root)) for (const entry of CONFIG_ENTRIES) paths.push(join(above, entry));
@@ -161,15 +193,27 @@ export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tm
   const missing = treesRefusal(trees);
   if (missing !== null) throw fail(missing.code, missing.message);
   for (const tree of trees) {
-    if (!carriable(tree)) throw fail("E_BACKEND_SANDBOX_PATH", `the launch names a tree the sandbox's deny rules cannot carry (${JSON.stringify(typeof tree === "string" ? tree.slice(0, 120) : null)}): one exact absolute path, with no wildcard or parenthesis`);
+    if (!carriable(tree)) throw unwritable(`the launch names a tree that is not one exact absolute path with no wildcard, parenthesis, backslash or control character (${shown(tree)})`);
     // Named, it must be there: a tree that is no directory is refused, never skipped.
-    if (!statSync(tree, { throwIfNoEntry: false })?.isDirectory()) throw fail("E_BACKEND_SANDBOX_PATH", `the launch names a tree that is not a directory (${tree}): the sandbox's deny rules cover each tree the kernel names, and this one cannot be read`);
+    const real = isDirectory(tree) ? realOf(tree) : null;
+    if (real === null) throw unwritable(`the launch names a tree that is not a directory (${shown(tree)}): the rules cover each tree the kernel names, and this one cannot be read`);
     // The `.git` name itself, under each name of the tree: a worktree's pointer, or a
     // clone's directory (and what git runs there, for a `.git` that is made later).
-    for (const root of withReal(tree)) paths.push(join(root, ".git"), ...GIT_ENTRIES.map((entry) => join(root, ".git", entry)));
+    for (const root of new Set([tree, real])) paths.push(join(root, ".git"), ...GIT_ENTRIES.map((entry) => join(root, ".git", entry)));
     // The directories git uses for the tree, read from the tree's real path as git reads
     // them, and covered under each of their names.
-    for (const gitDir of gitDirsOf(realpathSync(tree))) paths.push(...GIT_ENTRIES.map((entry) => join(gitDir, entry)));
+    for (const gitDir of gitDirsOf(real)) paths.push(...GIT_ENTRIES.map((entry) => join(gitDir, entry)));
+  }
+  // What the kernel keeps outside the home and the agent must never write, though it reads
+  // and runs it: the kernel's own copy of the home's modules, the retirement directory.
+  // The kernel makes each before the launch, so one that is no directory is a fault.
+  const unnamed = protectedRefusal(protectedPaths);
+  if (unnamed !== null) throw fail(unnamed.code, unnamed.message);
+  for (const entry of protectedPaths) {
+    if (!carriable(entry)) throw unwritable(`the launch names a protected path that is not one exact absolute path with no wildcard, parenthesis, backslash or control character (${shown(entry)})`);
+    const real = isDirectory(entry) ? realOf(entry) : null;
+    if (real === null) throw unwritable(`the launch names a protected path that is not a directory (${shown(entry)}): the kernel makes each before a launch`);
+    for (const root of new Set([entry, real])) paths.push(root, join(root, "**"));
   }
   // bb's thread storage, under the name the setting gives and under its real path (a
   // storage moved to another disk and linked from the data directory).
@@ -181,7 +225,7 @@ export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tm
     // The wildcards are this module's own, at the end of a path it built; what stands
     // before them must be a plain path.
     const base = path.replace(/\/(\*\*|bb-provider-bridge-\*\/\*\*)$/, "");
-    if (!carriable(base)) throw fail("E_BACKEND_SANDBOX_PATH", `a path the sandbox's deny rules must cover cannot be written as a rule (${JSON.stringify(base.slice(0, 160))}): it holds a wildcard, a parenthesis or a control character. Run this home in full mode (--yolo), or move it to a path without them`);
+    if (!carriable(base)) throw unwritable(`a path the rules must cover holds a wildcard, a parenthesis, a backslash or a control character (${shown(base)}); move it to a path without them`);
     const text = rule(path);
     if (!rules.includes(text)) rules.push(text);
   }
@@ -192,9 +236,9 @@ export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tm
  *  need first: bb's data directory must be the one bb uses, or its thread storage would go
  *  uncovered. The launch and the check of a planned launch share it. → rules. Throws
  *  E_BACKEND_SETTINGS, E_BACKEND_SANDBOX_TREES, E_BACKEND_SANDBOX_PATH. */
-export function sandboxDeny({ mode, home, trees, dataDir }) {
+export function sandboxDeny({ mode, home, trees, protected: protectedPaths, dataDir }) {
   checkDataDir(mode, dataDir);
-  return denyRules({ home, trees, dataDir });
+  return denyRules({ home, trees, protected: protectedPaths, dataDir });
 }
 
 /** bb does not say where its data directory is: a wrong setting would leave bb's thread

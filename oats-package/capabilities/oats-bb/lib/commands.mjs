@@ -9,7 +9,7 @@ import { stop } from "./stop.mjs";
 
 const withSettings = (run) => (input, rawSettings, options) => run(input, readSettings(rawSettings), options);
 
-/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox, trees?}`, there before
+/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox, trees?, protected?}`, there before
  *  every launch and absent on a plain readiness read. */
 function plannedLaunch(input) {
   const planned = input !== null && typeof input === "object" ? input.launch : null;

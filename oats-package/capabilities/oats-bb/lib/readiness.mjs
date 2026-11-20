@@ -285,11 +285,12 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
   }
   if (mode !== "full" && settings !== null) {
     // The deny rules of a sandboxed launch (contract item 6c): what the launch would refuse
-    // for, said before it. The home's trees are the kernel's to name: where the planned
-    // launch carries them the whole set is built, as the launch builds it; where it does
-    // not, only this host's part is checked, and the launch itself refuses a missing list.
+    // for, said before it. The home's trees and what the kernel keeps outside the home are
+    // the kernel's to name: where the planned launch carries either, the whole set is
+    // built, as the launch builds it; where it carries neither, only this host's part is
+    // checked, and the launch itself refuses a missing list.
     try {
-      if (planned.trees !== undefined && typeof home === "string" && isAbsolute(home)) sandboxDeny({ mode, home, trees: planned.trees, dataDir: settings.dataDir });
+      if ((planned.trees !== undefined || planned.protected !== undefined) && typeof home === "string" && isAbsolute(home)) sandboxDeny({ mode, home, trees: planned.trees, protected: planned.protected, dataDir: settings.dataDir });
       else checkDataDir(mode, settings.dataDir);
     } catch (error) {
       if (!(error instanceof ProviderError)) throw error;

@@ -56,9 +56,9 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
   // A sandboxed launch also writes the deny rules that keep the agent's tools off what is
   // run, or read as configuration, outside its sandbox (D16 rule 1). They are built from
-  // what the kernel says (the home, its trees) and from this host (the user's Claude
+  // what the kernel says (the home, its trees, what it keeps outside the home) and from this host (the user's Claude
   // configuration, bb's data directory): never from anything the home holds.
-  const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, dataDir: settings.dataDir });
+  const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, protected: input.protected, dataDir: settings.dataDir });
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
   const settingsToWrite = { env: launchEnv, unset, sandbox, deny };

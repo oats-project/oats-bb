@@ -21,6 +21,11 @@ const INSTANCES = `${DEPLOYMENT}/agents/soul/instances`;
 const CLONE = `${DEPLOYMENT}/repo`;
 const DATA = "/home/node/bbdata";
 const MOVE_TOOL = "mcp__bb-bridge__update_environment_directory";
+// What the kernel keeps outside the home and names as protected: its own copy of a home's
+// modules (it runs hooks from there, and the harness runs what they name), and the
+// retirement directory. (The paths are this test's; the kernel names its own.)
+const COPIES = `${DEPLOYMENT}/.oats/kernel-modules`;
+const RETIREMENT = `${INSTANCES}/.oats-retirement`;
 
 const box = rig({
   name: `oats-bb-contract-sandbox-${process.pid}`,
@@ -47,6 +52,7 @@ async function makeHome(name) {
     // And a tree that is a clone of its own: its .git is a directory, in the home.
     `git init -q ${home}/trees/clone && git -C ${home}/trees/clone -c user.name=t -c user.email=t@example.org commit -q --allow-empty -m first`,
     `printf '#!/bin/sh\\necho hook\\n' > ${home}/.oats/modules/hook.sh`,
+    `mkdir -p ${COPIES}/${name}/hooks ${RETIREMENT} && printf '#!/bin/sh\\necho ran-from-the-kernel-copy\\n' > ${COPIES}/${name}/hooks/hook.sh && chmod 755 ${COPIES}/${name}/hooks/hook.sh`,
     `echo '{"name":"${name}"}' > ${home}/instance.json`,
     `echo '{}' > ${home}/.claude/settings.json`,
     `echo skill > ${home}/.agents/skills/a/SKILL.md`,
@@ -62,7 +68,7 @@ const SANDBOX = { domains: [{ host: "app.aweb.ai", capability: "oats.aweb", sett
 const launchInput = (home, name, extra = {}) => ({
   home, instance: name, harness: "claude", model: MODEL, yolo: false,
   env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }], unset: [], args: [],
-  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`, `${home}/trees/extra`, `${home}/trees/clone`], ...extra,
+  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`, `${home}/trees/extra`, `${home}/trees/clone`], protected: [`${COPIES}/${name}`, RETIREMENT], ...extra,
 });
 const started = [];
 async function launched(name, extra) {
@@ -79,7 +85,8 @@ const settingsOf = async (home) => JSON.parse(await sh(`cat ${home}/.claude/sett
 /** What a sandboxed agent must not be able to change, for one home (rule 1). Each is
  *  written to if it can be; `PLANTED` in any of them afterwards is a failure. */
 const protectedPaths = (home) => [
-  // the home
+  // the home (its own .git too: git walks up to it from a directory that has none)
+  `${home}/.git/config`, `${home}/.git/hooks/pre-commit`,
   `${home}/.oats/modules/hook.sh`, `${home}/.oats/modules/new.sh`, `${home}/instance.json`, `${home}/.claude/settings.json`, `${home}/.claude/commands/x.md`,
   `${home}/.agents/skills/a/SKILL.md`, `${home}/.mcp.json`, `${home}/.aw/signing.key`, `${home}/.aw/workspace.yaml`,
   `${home}/AGENTS.md`, `${home}/CLAUDE.md`, `${home}/CLAUDE.local.md`, `${home}/TASK.md`,
@@ -130,8 +137,6 @@ test("bb pre-allows exactly one MCP tool for its Claude, the one that moves a th
  *  argument of every process in the container, with the argument after it where the value
  *  is not joined by "=". → {argv, allowed}. */
 async function preAllowed() {
-  // Every argument of every process in the container that pre-allows tools, with the
-  // argument after it where the value is not joined by "=".
   const argv = (await sh("for p in /proc/[0-9]*; do tr '\\0' '\\n' < $p/cmdline 2>/dev/null | grep -A1 -e '^--allowedTools' -e '^--allowed-tools' | grep -v '^--$'; done; true")).split("\n").filter(Boolean);
   const allowed = new Set();
   argv.forEach((arg, at) => {
@@ -166,7 +171,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     assert.equal(settings.permissions.deny.at(-1), MOVE_TOOL);
     for (const path of [`${home}/.oats/**`, `${home}/TASK.md`, `${INSTANCES}/.mcp.json`, "/home/node/.claude.json", "/home/node/.claude/**", "/etc/claude-code/**",
       `${home}/work/.git`, `${gitDir}/config`, `${gitDir}/hooks/**`, `${gitDir}/commondir`, `${gitDir}/gitdir`,
-      `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**"]) {
+      `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/**`, `${home}/.git/**`,
+      `${COPIES}/${name}/**`, `${RETIREMENT}/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**"]) {
       assert.ok(settings.permissions.deny.includes(`Edit(/${path})`), path);
     }
     // Readiness reports the home sandboxed: the block and both additions stand in its settings.
@@ -178,6 +184,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     // home, sandboxed Bash is refused with or without a rule: there the rules are shown by
     // the file tools below. Inside the home, only the rule stands in the way.)
     const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`, `${gitDir}/commondir`, `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/pre-commit`,
+      // what the kernel keeps outside the home
+      `${COPIES}/${name}/hooks/hook.sh`, `${COPIES}/${name}/hooks/new.sh`, `${RETIREMENT}/planted`,
       // the clone tree: what git runs or follows in its .git directory
       `${home}/trees/clone/.git/config`, `${home}/trees/clone/.git/config.worktree`, `${home}/trees/clone/.git/hooks/pre-commit`, `${home}/trees/clone/.git/commondir`, `${home}/trees/clone/.git/gitdir`];
     // bb's plugin directory is where the rule says it is: an attempt on a name that
@@ -194,6 +202,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
       // A denied file whose directory carries no rule: rename the directory away, make it anew, write the file.
       `mv ${home}/.aw ${home}/.aw-old 2>/dev/null; mkdir ${home}/.aw 2>/dev/null; (echo PLANTED > ${home}/.aw/workspace.yaml) 2>/dev/null; (echo PLANTED > ${home}/.aw/signing.key) 2>/dev/null`,
       `mv ${home}/work ${home}/work-old 2>/dev/null; mkdir ${home}/work 2>/dev/null; (echo PLANTED > ${home}/work/.git) 2>/dev/null`,
+      // The kernel's copy: renamed away with its parent, and run from where it is.
+      `mv ${COPIES}/${name} ${COPIES}/${name}-old 2>/dev/null; mv ${COPIES} ${COPIES}-old 2>/dev/null; ${COPIES}/${name}/hooks/hook.sh`,
       // In the clone tree, what the agent works with: a note in .git/info, a file staged.
       `(echo FREE >> ${home}/trees/clone/.git/info/exclude) 2>/dev/null; echo FREE > ${home}/trees/clone/new.txt; git -C ${home}/trees/clone add new.txt 2>/dev/null`,
       `echo FREE > ${home}/notes/bash.txt; echo FREE > ${home}/work/file.txt; echo FREE > ${EVENTS}/bash.jsonl; echo attempted`,
@@ -202,6 +212,11 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     const bash = await toolCall(id, `sh ${home}/notes/attempt.sh`);
     assert.deepEqual(bash.pending, [], "no prompt: the sandbox refuses, nobody is asked");
     assert.match(bash.result, /attempted/);
+    // Never writable, and still read and run at the same path, from inside the sandbox.
+    assert.match(bash.result, /ran-from-the-kernel-copy/);
+    assert.equal((await sh(`ls -d ${COPIES}-old ${COPIES}/${name}-old 2>/dev/null | wc -l`)).trim(), "0");
+    assert.equal((await sh(`cat ${COPIES}/${name}/hooks/hook.sh | wc -l`)).trim(), "2");
+    assert.equal((await sh(`ls -A ${home}/.git 2>/dev/null | wc -l`)).trim(), "0", "no .git was made in the home");
     assert.deepEqual(await planted(paths), [], "Bash changed a path the deny rules cover");
     assert.equal((await sh(`cat ${home}/TASK.md ${home}/AGENTS.md ${home}/instance.json ${home}/.oats/modules/hook.sh | wc -l`)).trim(), "5", "nothing was moved or removed");
     assert.equal((await sh(`ls -d ${home}/.aw-old ${home}/work-old 2>/dev/null | wc -l`)).trim(), "0", "a directory that holds a denied file cannot be renamed away");
@@ -218,6 +233,7 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     // Claude's own file tools: a deny rule refuses each, with no prompt; a path outside the
     // working directories is refused by the switch, whatever it is.
     for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${home}/.aw/signing.key`, `${home}/trees/extra/.git`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${extraGitDir}/config`, `${DATA}/thread-storage/.mcp.json`,
+      `${COPIES}/${name}/hooks/hook.sh`, `${RETIREMENT}/planted`, `${home}/.git/config`,
       // the one rule with a wildcard inside its path: Claude Code matches it
       `${pluginDir}/PLANTED-HERE`]) {
       const write = await toolCall(id, { tool: "Write", input: { file_path: path, content: "PLANTED\n" } });

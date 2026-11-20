@@ -231,7 +231,8 @@ hooks. So a launch in a sandboxed mode also writes, into the same
 
 - `permissions.deny`: one rule per path below. Claude refuses its Edit and Write tools
   there, and makes the same paths read-only for sandboxed commands:
-  - in the home: `.oats/`, `instance.json`, `.claude/`, `.agents/`, `.mcp.json`,
+  - in the home: `.git` (the home is no tree, and git walks up to it from a directory
+    that has none), `.oats/`, `instance.json`, `.claude/`, `.agents/`, `.mcp.json`,
     `.aw/signing.key`, `.aw/workspace.yaml`, and the instructions `AGENTS.md`,
     `CLAUDE.md`, `CLAUDE.local.md` and `TASK.md`;
   - in every directory above the home: `.mcp.json`, `CLAUDE.md` and `.claude/`;
@@ -260,14 +261,21 @@ Claude keeps a person's "don't ask again", and the rest) is left as it is. No ot
 capability writes those four keys in that file; one that wanted to would be a change to
 the contract between OATS and this provider.
 
-Two things the launch must be told, and is refused without:
+Three things the launch must be told, and is refused without:
 
 - **The home's trees** (`trees` in the launch input: `work/` and every extra tree). Only the
   kernel knows them, from Git's own worktree list; the home's record of them is its agent's
   to write. A sandboxed launch with no `trees` is refused (`E_BACKEND_SANDBOX_TREES`): it
   needs an OATS kernel that sends them. A tree that is not an existing directory, or a
-  path a rule cannot carry (a wildcard, a parenthesis, a line break, in the tree's path or
+  path a rule cannot carry (a wildcard, a parenthesis, a backslash, a line break, bytes
+  that are not UTF-8, a `..` step, in the tree's path or
   the home's), is refused too (`E_BACKEND_SANDBOX_PATH`), never skipped.
+- **What the kernel keeps outside the home** (`protected` in the launch input: its own
+  copy of the home's modules, which it runs hooks from, and the retirement directory).
+  The agent must read and run them where they are, and never write them: each gets a
+  rule for the whole directory. A sandboxed launch with no `protected` is refused
+  (`E_BACKEND_SANDBOX_PROTECTED`); an entry that is not an existing directory (the kernel
+  makes each before a launch) is refused too (`E_BACKEND_SANDBOX_PATH`).
 - **bb's data directory** (`settings.oats.bb.dataDir`). bb does not say where it is; the
   default is `.bb` in the home of the user that runs bb. A directory that holds no
   `thread-storage` refuses a sandboxed launch (`E_BACKEND_SETTINGS`).
@@ -365,7 +373,7 @@ that the home ran on bb before (`OATS_PREVIOUS_BACKEND=bb` in the hook's environ
 nothing in the home decides it, so a home that never ran on bb keeps its own `env`. A
 kernel that does not say removes nothing: the launch environment of the home's last bb
 launch then stays in the file, to be removed by hand, and the hook says the keys may be
-stale only where one of the three sandbox keys stands there.
+stale only where a `sandbox` block, or the deny of bb's directory-move tool, stands there.
 
 ## Readiness
 

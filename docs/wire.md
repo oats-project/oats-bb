@@ -162,6 +162,17 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   directory, or that a rule cannot carry, refuses it too (`E_BACKEND_SANDBOX_PATH`), never
   skipped. A full-mode launch does not read it. The check reads `launch.trees` the same
   way where the planned launch carries it, and says nothing of trees where it does not.
+- **launch `protected`** (optional, wire 1.3): `[<absolute path>]`, the directories the
+  kernel keeps outside the home that the agent must never write and must still read and
+  run where they are: its own copy of the home's modules, and the instances'
+  `.oats-retirement/`. The kernel makes each before a launch. A sandboxed launch denies
+  each whole (`Edit(//<path>)`, `Edit(//<path>/**)`, under its real path too); with no
+  `protected`, or one that is not a list, it is refused (`E_BACKEND_SANDBOX_PROTECTED`);
+  an entry that is not an exact absolute path of an existing directory, or that a rule
+  cannot carry, refuses it too (`E_BACKEND_SANDBOX_PATH`). A full-mode launch does not
+  read it. The check reads `launch.protected` the same way: a planned launch that
+  carries `trees` or `protected` has the whole set built, and one that carries neither
+  has nothing said of either.
 - **what a sandboxed launch writes** into `<home>/.claude/settings.local.json`, each key
   whole and from the launch input alone: `sandbox` (the allowances), `permissions.deny`
   (one `Edit(//<path>)` rule per path of contract item 6c, then
@@ -194,7 +205,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     stop did not stop it.
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
-  launch (`launch: {harness, yolo, args, sandbox, trees?}`, there before every launch and absent on
+  launch (`launch: {harness, yolo, args, sandbox, trees?, protected?}`, there before every launch and absent on
   a plain readiness read), it also answers what that launch would be refused for (its
   harness, its arguments, its mode, the sandbox it needs, its trees where it carries them, bb's data directory), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
@@ -213,7 +224,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 `E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
 `E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
 `E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
-`E_BACKEND_SANDBOX_TREES`, `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
+`E_BACKEND_SANDBOX_TREES`, `E_BACKEND_SANDBOX_PROTECTED`, `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
 `E_SESSION_PROMPT_OPEN`, `E_SESSION_INPUT_QUEUED`, `E_SESSION_INPUT_FAILED`,
 `E_SESSION_STOP_FAILED`.
 
@@ -256,7 +267,7 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   `permissions.deny`, `permissions.blockWritesOutsideWorkingDirectories`)
   from `.claude/settings.local.json` when `OATS_PREVIOUS_BACKEND` is `bb`, and only then:
   nothing in the home decides it. Where that variable is absent it removes nothing, and
-  warns that they may be stale if one of the three sandbox keys stands in the file. In every case it deletes, unread and best effort, what an earlier
+  warns that they may be stale if a `sandbox` block, or the deny of bb's directory-move tool, stands in the file. In every case it deletes, unread and best effort, what an earlier
   version of the provider kept in the home (`.oats-bb/`, `.oats-bb-sandbox.json`).
   It returns no env and no arguments.
 - `retire`: archives the home's live bb threads, after the kernel's stop, and deletes those

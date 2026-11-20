@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { denyRules, treesRefusal } from "../../oats-package/capabilities/oats-bb/lib/deny.mjs";
+import { denyRules, protectedRefusal, treesRefusal } from "../../oats-package/capabilities/oats-bb/lib/deny.mjs";
 
 /** /…/deploy/agents/dev/instances/dev-a as a home, a user home, a bb data directory and a
  *  temporary directory, all under one scratch directory. */
@@ -15,14 +15,14 @@ function layout(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, "deploy/agents/dev/instances/dev-a"), userHome = join(root, "user"), dataDir = join(root, "user/.bb"), tmp = join(root, "tmp");
   for (const dir of [join(home, "work"), userHome, join(dataDir, "thread-storage"), tmp]) mkdirSync(dir, { recursive: true });
-  return { root, home, userHome, dataDir, tmp, rules: (extra = {}) => denyRules({ home, dataDir, userHome, tmp, trees: [], ...extra }) };
+  return { root, home, userHome, dataDir, tmp, rules: (extra = {}) => denyRules({ home, dataDir, userHome, tmp, trees: [], protected: [], ...extra }) };
 }
 const paths = (rules) => rules.map((rule) => { assert.match(rule, /^Edit\(\/\/.*\)$/); return rule.slice("Edit(/".length, -1); });
 
 test("the home: OATS's copies and record, Claude's project configuration, the skills, the MCP servers, the messaging identity and the instructions", (t) => {
   const { home, rules } = layout(t);
   const got = paths(rules());
-  for (const entry of [".oats/**", "instance.json", ".claude/**", ".agents/**", ".mcp.json", ".aw/signing.key", ".aw/workspace.yaml", "AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", "TASK.md"]) {
+  for (const entry of [".git", ".git/**", ".oats/**", "instance.json", ".claude/**", ".agents/**", ".mcp.json", ".aw/signing.key", ".aw/workspace.yaml", "AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", "TASK.md"]) {
     assert.ok(got.includes(join(home, entry)), entry);
   }
   // What the agent works in stays its own: its notes, its state, the work tree's files.
@@ -69,7 +69,7 @@ test("the trees the kernel names: a clone's own .git, and a worktree's pointer w
     assert.ok(got.includes(path), path);
   }
   // No tree named: none is covered, the home's work/ included (the kernel said so).
-  assert.equal(paths(rules({ trees: [] })).some((path) => path.includes("/.git")), false);
+  assert.deepEqual(paths(rules({ trees: [] })).filter((path) => path.includes("/.git")), [join(home, ".git"), join(home, ".git/**")], "only the home's own .git, which no tree is");
   assert.ok(got.includes(join(gitDir, "commondir")) && got.includes(join(gitDir, "gitdir")), "the two files that say where git's directories are");
   // A tree with no .git at all (a home in directory work mode) has no git directory to cover.
   mkdirSync(join(home, "plain"));
@@ -83,7 +83,7 @@ test("a .git pointer or a commondir that is there and cannot be read as one shor
   const clone = join(root, "deploy/repo"), tree = join(home, "trees/fix"), gitDir = join(clone, ".git/worktrees/fix");
   mkdirSync(gitDir, { recursive: true });
   mkdirSync(tree, { recursive: true });
-  const refused = (what) => assert.throws(() => rules({ trees: [tree] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /git worktree repair.*--yolo/.test(error.message) && error.message.length < 600, what);
+  const refused = (what) => assert.throws(() => rules({ trees: [tree] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /^the sandbox.s deny rules cannot be written for this launch\. Launch in full mode \(--yolo\), or fix this: repair the tree \(git worktree repair\)/.test(error.message) && error.message.length < 480, what);
   const pointer = (text) => { rmSync(join(tree, ".git"), { force: true }); writeFileSync(join(tree, ".git"), text); };
   // Git takes the whole content less its last line ends: a second line is part of the name.
   mkdirSync(join(root, "decoy"));
@@ -143,7 +143,7 @@ for (const [name, at] of [["a parenthesis", "dev (old)"], ["a wildcard", "dev*"]
     const { root, dataDir, userHome, tmp } = layout(t);
     const home = join(root, at, "home");
     mkdirSync(home, { recursive: true });
-    assert.throws(() => denyRules({ home, dataDir, userHome, tmp, trees: [] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /full mode \(--yolo\)/.test(error.message));
+    assert.throws(() => denyRules({ home, dataDir, userHome, tmp, trees: [], protected: [] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /full mode \(--yolo\)/.test(error.message));
   });
 }
 
@@ -241,4 +241,72 @@ test("bb's thread storage is covered under its real path too: a storage linked f
   symlinkSync(join(root, "disk/storage"), join(dataDir, "thread-storage"));
   const got = paths(rules());
   for (const base of [join(dataDir, "thread-storage"), join(root, "disk/storage")]) for (const entry of [".mcp.json", "CLAUDE.md", ".claude/**"]) assert.ok(got.includes(join(base, entry)), join(base, entry));
+});
+
+// A rule is text. A path whose bytes are not UTF-8 would be written as a look-alike
+// (each bad byte a replacement character), and the rule would name another path.
+test("a pointer, a commondir or a tree's real path with bytes that are not UTF-8 refuses the launch: a rule cannot name it, and a look-alike must not stand in", (t) => {
+  const { root, home, rules } = layout(t);
+  const bytes = (...parts) => Buffer.concat(parts.map((part) => (typeof part === "string" ? Buffer.from(part) : part)));
+  const refused = (trees, what) => assert.throws(() => rules({ trees }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && error.message.length < 480, what);
+  // 1. The pointer names <root>/g\xff; a look-alike <root>/g\uFFFD stands beside it.
+  const tree = join(home, "trees/a");
+  mkdirSync(tree, { recursive: true });
+  mkdirSync(bytes(root, "/g", Buffer.from([0xff])));
+  mkdirSync(join(root, "g\uFFFD"));
+  writeFileSync(join(tree, ".git"), bytes("gitdir: ", root, "/g", Buffer.from([0xff]), "\n"));
+  refused([tree], "pointer");
+  // 2. The same in a commondir.
+  const tree2 = join(home, "trees/b"), gitDir = join(root, "gd2");
+  mkdirSync(tree2, { recursive: true });
+  mkdirSync(gitDir);
+  mkdirSync(bytes(root, "/c", Buffer.from([0xfe])));
+  mkdirSync(join(root, "c\uFFFD"));
+  writeFileSync(join(tree2, ".git"), `gitdir: ${gitDir}\n`);
+  writeFileSync(join(gitDir, "commondir"), bytes(root, "/c", Buffer.from([0xfe]), "\n"));
+  refused([tree2], "commondir");
+  // 3. The tree the kernel names is a link to a directory with such a name, with and without a look-alike.
+  mkdirSync(bytes(root, "/t", Buffer.from([0xff])));
+  symlinkSync(bytes(root, "/t", Buffer.from([0xff])), join(home, "trees/c"));
+  refused([join(home, "trees/c")], "tree, no look-alike");
+  mkdirSync(join(root, "t\uFFFD"));
+  refused([join(home, "trees/c")], "tree, with a look-alike");
+});
+
+test("a home that is not one plain path refuses the launch, and every refusal keeps its remedy within what the wire carries", (t) => {
+  const { root, home, dataDir, userHome, tmp, rules } = layout(t);
+  mkdirSync(join(root, "else/deep"), { recursive: true });
+  mkdirSync(join(root, "else/home3"));
+  mkdirSync(join(root, "r"));
+  symlinkSync(join(root, "else/deep"), join(root, "r/link"));
+  for (const at of [`${root}/r/link/../home3`, `${home}/./`, "relative/home"]) {
+    assert.throws(() => denyRules({ home: at, dataDir, userHome, tmp, trees: [], protected: [] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /Launch in full mode \(--yolo\)/.test(error.message), at);
+  }
+  // A long path does not push the remedy past the cut.
+  const long = join(home, "trees", "x".repeat(200), "y".repeat(200));
+  mkdirSync(long, { recursive: true });
+  writeFileSync(join(long, ".git"), "gitdir: /nowhere/at/all\n");
+  for (const trees of [[long], [join(long, "missing")]]) {
+    assert.throws(() => rules({ trees }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && error.message.length < 480 && error.message.indexOf("--yolo") < 120, JSON.stringify(trees).slice(0, 40));
+  }
+});
+
+test("what the kernel keeps outside the home and names as protected is never writable: each a directory, covered whole under both its names; none named refuses", (t) => {
+  const { root, home, rules } = layout(t);
+  const copy = join(root, "deploy/.oats/provider-modules/dev-a"), retirement = join(root, "deploy/agents/dev/instances/.oats-retirement");
+  mkdirSync(copy, { recursive: true });
+  mkdirSync(retirement);
+  mkdirSync(join(root, "disk/copies"), { recursive: true });
+  symlinkSync(join(root, "disk/copies"), join(root, "linked-copy"));
+  const got = paths(rules({ protected: [copy, retirement, join(root, "linked-copy")] }));
+  for (const base of [copy, retirement, join(root, "linked-copy"), join(root, "disk/copies")]) assert.ok(got.includes(base) && got.includes(join(base, "**")), base);
+  for (const absent of [undefined, null, copy, { 0: copy }]) {
+    assert.throws(() => rules({ protected: absent }), (error) => error.code === "E_BACKEND_SANDBOX_PROTECTED" && /no "protected".*upgrade OATS.*--yolo/.test(error.message) && error.message.length < 480, String(absent));
+  }
+  assert.deepEqual(protectedRefusal([]), null);
+  writeFileSync(join(root, "a-file"), "");
+  for (const entry of [join(root, "nowhere"), join(root, "a-file"), "relative", `${copy}/../x`, join(root, "a*"), 7]) {
+    assert.throws(() => rules({ protected: [copy, entry] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH", String(entry));
+  }
+  assert.ok(home.length > 0);
 });

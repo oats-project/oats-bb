@@ -24,11 +24,11 @@ async function setup(t) {
     home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false,
     env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }], unset: [], args: [],
     promptFile: join(home, "TASK.md"), previous: null,
-    sandbox: { domains: [AWEB], write: [events(dir)] }, trees: [join(home, "work")], ...extra,
+    sandbox: { domains: [AWEB], write: [events(dir)] }, trees: [join(home, "work")], protected: [], ...extra,
   }, { settings: backend.settings(), bb, sandboxedModes: true });
   const local = () => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
   // The check as the kernel makes it before a launch: with the launch it plans.
-  const check = (launch) => call("check", { home, soul: null, ...(launch ? { launch: { harness: "claude", yolo: false, args: [], trees: [join(home, "work")], ...launch } } : {}) }, { settings: backend.settings(), bb, sandboxedModes: true });
+  const check = (launch) => call("check", { home, soul: null, ...(launch ? { launch: { harness: "claude", yolo: false, args: [], trees: [join(home, "work")], protected: [], ...launch } } : {}) }, { settings: backend.settings(), bb, sandboxedModes: true });
   const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: "{}", ...extra } });
   return { dir, home, bb, backend, launch, local, check, hook, settings: backend.settings() };
 }
@@ -453,10 +453,21 @@ test("a sandboxed launch that names no trees, or a tree that is none, is refused
   // The check of the planned launch: with the trees, the same refusal, as a problem.
   const bad = (await check({ trees: [join(home, "nowhere")] })).result;
   assert.deepEqual([bad.status, bad.problems.map((p) => p.code)], ["needs-configuration", ["E_BACKEND_SANDBOX_PATH"]]);
-  // With none in the planned launch, the check cannot know them: it says nothing, and the launch refuses.
-  assert.deepEqual((await check({ trees: undefined })).result.problems, []);
-  // Full mode writes no deny rule and needs no trees.
-  assert.equal((await launch({ yolo: true, trees: undefined })).ok, true);
+  // A planned launch that carries one of the kernel's two lists and not the other: the missing one is named.
+  assert.deepEqual((await check({ trees: undefined })).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_TREES"]);
+  // What the kernel keeps outside the home: the same, under its own code.
+  const unnamed = await launch({ protected: undefined });
+  assert.equal(unnamed.error.code, "E_BACKEND_SANDBOX_PROTECTED");
+  assert.match(unnamed.error.message, /no "protected".*upgrade OATS.*or launch in full mode \(--yolo\)/);
+  assert.equal((await launch({ protected: [join(home, "nowhere")] })).error.code, "E_BACKEND_SANDBOX_PATH");
+  assert.deepEqual((await check({ protected: undefined })).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_PROTECTED"]);
+  assert.deepEqual((await check({ trees: undefined, protected: undefined })).result.problems, [], "a planned launch that carries neither list");
+  mkdirSync(join(dir, "kernel-copy"));
+  assert.equal((await launch({ protected: [join(dir, "kernel-copy")] })).ok, true);
+  assert.ok(local().permissions.deny.includes(`Edit(/${join(dir, "kernel-copy")}/**)`));
+  assert.deepEqual(bb.calls().filter((call) => call.argv[0] === "thread" && call.argv[1] === "spawn").length, 1, "only the launch that was taken reached bb's spawn");
+  // Full mode writes no deny rule and needs neither list.
+  assert.equal((await launch({ yolo: true, trees: undefined, protected: undefined })).ok, true);
   assert.equal(local().permissions, undefined);
 });
 
@@ -464,7 +475,7 @@ test("a data directory that is not bb's refuses a sandboxed launch and its check
   const { home, bb, backend } = await setup(t);
   const settings = backend.settings({ dataDir: join(home, "notes") });
   mkdirSync(join(home, "notes"));
-  const input = { home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false, env: [], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, sandbox: { domains: [AWEB], write: [] }, trees: [join(home, "work")] };
+  const input = { home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: false, env: [], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, sandbox: { domains: [AWEB], write: [] }, trees: [join(home, "work")], protected: [] };
   const answer = await call("launch", input, { settings, bb, sandboxedModes: true });
   assert.equal(answer.error.code, "E_BACKEND_SETTINGS");
   assert.match(answer.error.message, /settings\.oats\.bb\.dataDir .* holds no thread-storage directory/);

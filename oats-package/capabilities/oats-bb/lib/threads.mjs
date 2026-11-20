@@ -25,7 +25,6 @@ export function inspectAnswer(thread) {
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
-
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;
 

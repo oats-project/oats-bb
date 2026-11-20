@@ -173,9 +173,9 @@ arguments or a process environment:
 - A launch environment entry that would choose Claude's configuration (`CLAUDE_CONFIG_DIR`)
   or its account or endpoint is refused, by name, whatever its source:
   `E_BACKEND_LAUNCH_ENV`. That is every `ANTHROPIC_*` variable except the ones that only
-  pick a model (`ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`,
-  `ANTHROPIC_CUSTOM_MODEL_OPTION`), `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_API_*`,
-  `CLAUDE_CODE_OAUTH_TOKEN` and `AWS_BEARER_TOKEN_BEDROCK`. It is never ignored. A launch
+  pick a model (`ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL*`, `ANTHROPIC_DEFAULT_*_MODEL*`,
+  `ANTHROPIC_CUSTOM_MODEL_OPTION*`), `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_API_*`,
+  `CLAUDE_CODE_OAUTH_*`, `CLAUDE_CODE_SKIP_*_AUTH` and `AWS_BEARER_TOKEN_BEDROCK`. It is never ignored. A launch
   that would remove one of them is refused the same way.
 - A sandbox entry that is not one exact host or one exact absolute path:
   `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`.

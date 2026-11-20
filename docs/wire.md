@@ -46,8 +46,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - **launch `pathPrepend`** (the home's kernel shim directory) is carried as the env file's
   `PATH`: those directories, then the launch's own `PATH` entry if it has one, else the
   `PATH` the provider was called with. An entry that cannot go on a PATH refuses the launch.
-- A launch never resumes: a bb thread is resumed by an input into its own conversation. (An
-  input that carried a `resume` request would be refused.)
+- A launch never resumes: a bb thread is resumed by an input into its own conversation. (A
+  launch input that carried a `resume` key would be refused.)
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).

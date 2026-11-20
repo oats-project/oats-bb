@@ -189,7 +189,7 @@ for (const [name, env, pattern] of [
   ["another model endpoint", [entry("ANTHROPIC_BASE_URL", "https://llm.example.net", { source: "launch-config" })], /ANTHROPIC_BASE_URL.*account or endpoint/],
   ["an unset of the account's credential", { env: [], unset: ["ANTHROPIC_API_KEY"] }, /unsets ANTHROPIC_API_KEY.*neither choose nor remove/],
   ["an unset of Claude's configuration", { env: [], unset: ["CLAUDE_CONFIG_DIR"] }, /unsets CLAUDE_CONFIG_DIR/],
-  ...["ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "ANTHROPIC_IDENTITY_TOKEN_FILE", "CLAUDE_CODE_API_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_SOMETHING_NEW"]
+  ...["ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_AWS_API_KEY", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "ANTHROPIC_IDENTITY_TOKEN_FILE", "CLAUDE_CODE_API_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "AWS_BEARER_TOKEN_BEDROCK", "ANTHROPIC_SOMETHING_NEW", "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_SKIP_BEDROCK_AUTH", "CLAUDE_CODE_SKIP_VERTEX_AUTH"]
     .map((name) => [`${name}, which would choose the account or endpoint`, [entry(name, "v", { source: "launch-config" })], new RegExp(`${name}.*account or endpoint`)]),
   ["an unset of a cloud's key", { env: [], unset: ["ANTHROPIC_FOUNDRY_API_KEY"] }, /unsets ANTHROPIC_FOUNDRY_API_KEY/],
   ["__proto__ as a name: refused, never dropped", [entry("__proto__", "x"), entry("A", "1")], /"__proto__".*cannot|"__proto__".*can carry/],

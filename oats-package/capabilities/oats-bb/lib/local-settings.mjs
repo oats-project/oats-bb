@@ -10,7 +10,8 @@
 //   Claude Code adds them to bb's own sandbox settings; they never replace a restriction.
 //
 // The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
-// and later removes exactly that: an entry a person put in the file is never touched.
+// and later removes exactly that. An entry a person put in the file under another name is
+// never touched; a name the launch carries is the launch's.
 import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -36,7 +37,7 @@ const CONFIGURATION_NAMES = new Set(["CLAUDE_CONFIG_DIR"]);
 // (keys and tokens per cloud, base URLs, headers, sockets): so by pattern, not by name.
 // Every ANTHROPIC_* variable does, but the ones that only pick a model.
 const MODEL_NAMES = /^ANTHROPIC_(MODEL|SMALL_FAST_MODEL.*|DEFAULT_.*_MODEL.*|CUSTOM_MODEL_OPTION.*)$/;
-const ACCOUNT_NAMES = /^(ANTHROPIC_.*|CLAUDE_CODE_USE_.*|CLAUDE_CODE_API_.*|CLAUDE_CODE_OAUTH_TOKEN|AWS_BEARER_TOKEN_BEDROCK)$/;
+const ACCOUNT_NAMES = /^(ANTHROPIC_.*|CLAUDE_CODE_USE_.*|CLAUDE_CODE_API_.*|CLAUDE_CODE_OAUTH_.*|CLAUDE_CODE_SKIP_.*_AUTH|AWS_BEARER_TOKEN_BEDROCK)$/;
 const choosesAccount = (name) => ACCOUNT_NAMES.test(name) && !MODEL_NAMES.test(name);
 // A name a JSON map cannot carry as a plain entry.
 const UNCARRIABLE = new Set(["__proto__"]);
@@ -302,8 +303,9 @@ function withdraw(settings, envNames, sandboxRecord) {
 
 /** Write a launch's settings into `<home>/.claude/settings.local.json` (0600): the env
  *  (minus `unset`), and, unless `sandbox` is null (bb's full mode has no sandbox), the
- *  sandbox allowances. Every other key, and every entry the provider did not write, is
- *  kept; what an earlier launch wrote and this one does not carry is removed. */
+ *  sandbox allowances. Every other key is kept, and every entry under a name the launch
+ *  does not carry; a name it carries is the launch's (a person's entry of that name is
+ *  replaced). What an earlier launch wrote and this one does not carry is removed. */
 export function writeLaunchSettings(home, { env, unset = [], sandbox, mode, sandboxGiven, dryRun = false }) {
   const { settingsPath, envRecordPath, sandboxRecordPath } = directories(home, { create: !dryRun });
   const settings = readSettingsFile(settingsPath);

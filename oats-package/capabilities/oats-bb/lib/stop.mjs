@@ -4,7 +4,7 @@ import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject, recode } from "./errors.mjs";
 import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
-import { isSettled, liveInHome, readEndpoint } from "./threads.mjs";
+import { isSettled, liveInHome, readEndpoint, sweepArchived } from "./threads.mjs";
 
 const POLL_MS = 300;
 // The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
@@ -28,7 +28,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     if (input.endpoint === null || input.endpoint === undefined) {
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
       const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
-      const { live } = await liveInHome(bb, input.home);
+      const { projects, live } = await liveInHome(bb, input.home);
       // The time the kernel's receipt says the failed launch was sent. Only a thread made
       // at or after it is that launch's, and nobody recorded it: it is archived once
       // stopped, so the next start is not refused for it. An older thread, or any thread
@@ -42,6 +42,9 @@ export async function stop(input, settings, { deadline = Infinity, env = process
         // next launch names it.
         if (Number.isFinite(sentAt) && typeof thread.createdAt === "number" && thread.createdAt >= sentAt) await bb.archive(thread.id);
       }
+      // And the home's archived threads: bb keeps an archived thread's Claude loaded, in
+      // the home. All of them: this call is told no thread to count from.
+      await sweepArchived(bb, projects.map((project) => project.id));
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
@@ -56,7 +59,23 @@ export function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
+/** Take out of bb's line everything it holds for the thread: a turn its concurrency limit
+ *  has not started, a message behind a pending interaction. `bb thread stop` leaves those
+ *  where they are, and bb starts a held turn by itself when a slot frees. → how many are
+ *  still there after the deletes (0 when bb has no such thread). */
+async function withdrawQueue(bb, threadId) {
+  const held = await bb.queue(threadId);
+  if (held.length === 0) return 0;
+  for (const message of held) await bb.queueDelete(threadId, message.id);
+  return (await bb.queue(threadId)).length;
+}
+
+/** Stop one thread: nothing of it running, and nothing of it waiting to run. Returns once
+ *  bb shows the thread settled (or gone) AND its queue empty; throws otherwise. An
+ *  archived thread is stopped like any other: bb keeps its process until it is. */
 async function stopThread(bb, threadId, { deadline, grace, now, stopCallTimeoutMs }) {
+  // First what waits in line, so that nothing can start while the thread is being stopped.
+  await withdrawQueue(bb, threadId);
   const asked = await bb.stop(threadId, stopCallTimeoutMs === undefined ? {} : { timeoutMs: stopCallTimeoutMs });
   if (!asked.ok && asked.code === "thread_not_found") return;
   // bb's stop may wait for the thread to settle, longer than one bb call gets here: a
@@ -68,7 +87,13 @@ async function stopThread(bb, threadId, { deadline, grace, now, stopCallTimeoutM
   let last = null;
   for (;;) {
     const thread = await bb.thread(threadId);
-    if (thread === null || thread.deletedAt || isSettled(thread)) return;
+    if (thread === null || thread.deletedAt) return;
+    if (isSettled(thread)) {
+      // Settled is not yet stopped: a message that reached the queue meanwhile would run.
+      const left = await withdrawQueue(bb, threadId);
+      if (left === 0) return;
+      throw fail("E_SESSION_STOP_FAILED", `bb thread ${threadId} is ${thread.status}, and bb still holds ${left} message${left > 1 ? "s" : ""} in line for it that could not be withdrawn: a held turn starts by itself when bb has a free slot. Remove ${left > 1 ? "them" : "it"} in bb (bb thread queue list ${threadId}), then stop again`);
+    }
     last = thread.status;
     if (now() + POLL_MS >= until) break;
     await sleep(POLL_MS);
@@ -92,14 +117,20 @@ export async function retire(home, readSettings, { deadline, env = process.env }
   try {
     const settings = readSettings();
     const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
-    const { live } = await liveInHome(bb, home);
-    if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
+    const { projects, live } = await liveInHome(bb, home);
     const archived = [], left = [];
     for (const thread of live) {
-      if (!isSettled(thread)) await bb.stop(thread.id);
+      // Nothing waiting to run, and no process left behind: bb keeps an archived thread's
+      // Claude loaded, in the home, unless it is stopped first.
+      await withdrawQueue(bb, thread.id);
+      await bb.stop(thread.id);
       const answer = await bb.archive(thread.id);
       (answer.ok || answer.code === "thread_not_found" ? archived : left).push(thread.id);
     }
+    // The home's threads archived before now (in bb's UI, or by an earlier start) may
+    // hold a process too: all are stopped. The hook is told no thread to count from.
+    await sweepArchived(bb, projects.map((project) => project.id));
+    if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
     if (left.length === 0) return { meta: { retired: true, archived } };
     return { meta: { archived, left }, warning: `bb thread${left.length > 1 ? "s" : ""} ${left.join(", ")} could not be archived: archive ${left.length > 1 ? "them" : "it"} in bb (bb thread archive <id>)` };
   } catch (error) {

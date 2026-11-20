@@ -24,9 +24,19 @@ appendFileSync(process.env.FAKE_BB_LOG, `${JSON.stringify({ argv, stdin, server:
 
 const words = argv[0] === "--version" ? ["--version"] : argv.filter((arg) => !arg.startsWith("-"));
 let key = null;
-for (let n = Math.min(words.length, 3); n > 0 && key === null; n -= 1) {
+// The archived threads of a project are another read than the server's threads: keyed
+// apart, so a test's list of "thread list" answers stays the plain read's.
+const archivedRead = argv[0] === "thread" && argv[1] === "list" && argv.includes("--archived");
+if (archivedRead) key = Object.hasOwn(script, "thread list --archived") ? "thread list --archived" : null;
+for (let n = Math.min(words.length, 3); n > 0 && key === null && !archivedRead; n -= 1) {
   const candidate = words.slice(0, n).join(" ");
   if (Object.hasOwn(script, candidate)) key = candidate;
+}
+// Two reads every stop and launch make have an answer when a test scripts none: a project
+// with no archived thread, a thread with nothing held in line.
+if (key === null && (archivedRead || words.slice(0, 3).join(" ") === "thread queue list")) {
+  process.stdout.write("[]\n");
+  process.exit(0);
 }
 if (key === null) {
   process.stderr.write(`fake bb: no scripted answer for ${JSON.stringify(argv)}\n`);

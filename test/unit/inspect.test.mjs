@@ -36,6 +36,21 @@ for (const [status, expected] of [
   });
 }
 
+// A turn bb's concurrency limit holds in line starts by itself when a slot frees: a thread
+// that is settled with work in line is busy, not at rest. (bb's list row says so in
+// `queuedWork`: "none" when nothing waits.)
+for (const [status, queuedWork, running] of [["pending", "waiting", true], ["idle", "waiting", true], ["idle", "scheduled", true], ["pending", "none", null], ["idle", undefined, null], ["idle", null, null], ["active", "waiting", true]]) {
+  test(`a bb thread that is ${status} with queuedWork ${JSON.stringify(queuedWork)} reads running ${running}`, async (t) => {
+    const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", status, { queuedWork })]);
+    assert.deepEqual(answer.result, { present: true, state: "unknown", running, open: OPEN });
+  });
+}
+
+test("a thread whose queuedWork is no word cannot be read: E_SESSION_UNAVAILABLE, never at rest", async (t) => {
+  const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", "pending", { queuedWork: 3 })]);
+  assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
+});
+
 test("a thread bb no longer has reads stopped, and offers nothing to open", async (t) => {
   const { answer } = await inspectWith(t, [threadRow("thr_other", "proj_other", "idle")]);
   assert.deepEqual(answer.result, { present: false, state: "stopped", running: false });

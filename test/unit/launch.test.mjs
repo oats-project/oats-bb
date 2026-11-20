@@ -14,7 +14,8 @@ const MADE = { createdAt: Date.now() + 3_600_000 };
 const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
 const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
 const EFFECTS = new Set(["project create", "thread spawn", "thread archive", "thread stop", "thread tell"]);
-const verbs = (bb) => bb.calls().map((c) => (c.argv[0] === "--version" ? "--version" : c.argv.slice(0, 2).join(" ")));
+// The calls by name; the read of a project's archived threads is named apart from the plain list.
+const verbs = (bb) => bb.calls().map((c) => (c.argv[0] === "--version" ? "--version" : c.argv[1] === "list" && c.argv.includes("--archived") ? "thread list --archived" : c.argv.slice(0, 2).join(" ")));
 const effects = (bb) => verbs(bb).filter((verb) => EFFECTS.has(verb));
 
 async function setup(t, script = {}, backendOverrides = {}) {
@@ -24,6 +25,7 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "--version": { stdout: `${VERSION}\n` },
     "project list": { stdout: [projectRow("proj_a", home)] },
     "thread list": { stdout: [] },
+    "thread stop": { stdout: { ok: true } },
     "thread spawn": spawned(),
     ...(typeof script === "function" ? script(home) : script),
   });
@@ -51,7 +53,7 @@ test("launch spawns one thread in the home's project and answers its endpoint", 
 test("launch runs the readiness checks before it reads or changes anything in bb", async (t) => {
   const { backend, bb, run } = await setup(t);
   await run();
-  assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread spawn"]);
+  assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread list --archived", "thread spawn"]);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
   assert.deepEqual(backend.daemonRequests, ["/status"]);
 });
@@ -441,7 +443,7 @@ test("a start after an OATS stop archives the previous thread, then spawns in th
   });
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.result.endpoint.threadId, "thr_new");
-  assert.deepEqual(effects(bb), ["thread archive", "thread spawn"]);
+  assert.deepEqual(effects(bb), ["thread stop", "thread archive", "thread spawn"], "stopped before it is archived: bb keeps an archived thread's process otherwise");
   assert.deepEqual(bb.calls().find((c) => c.argv[1] === "archive").argv, ["thread", "archive", "thr_prev", "--json"]);
 });
 
@@ -453,11 +455,79 @@ test("a previous thread still in a turn refuses the launch; it is not archived u
   assert.deepEqual(effects(bb), []);
 });
 
+test("a previous thread with a turn bb holds in line refuses the launch: the turn would start beside the new thread", async (t) => {
+  const { backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "pending", { queuedWork: "waiting" })] } });
+  const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /thr_prev is still pending with a turn bb holds in line: stop it \(oats instance stop dev-a\)/);
+  assert.deepEqual(effects(bb), []);
+});
+
+// Two Claudes in one home: bb keeps the process of an archived thread loaded and shows
+// nothing that says so. So a launch stops the home's archived threads before it spawns:
+// those archived since the previous thread was made, or all where that is not known.
+const ARCHIVED = [threadRow("thr_long_ago", "proj_a", "idle", { archivedAt: 1_000 }), threadRow("thr_in_ui", "proj_a", "idle", { archivedAt: 5_000 }), threadRow("thr_gone", "proj_a", "idle", { archivedAt: 6_000, deletedAt: 7_000 })];
+const stops = (bb) => bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]);
+
+test("a launch stops the home's threads archived since its previous thread was made, then spawns: the previous one live", async (t) => {
+  const { backend, bb, run } = await setup(t, {
+    "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle", { createdAt: 4_000 })] }, "thread list --archived": { stdout: ARCHIVED },
+    "thread archive": { stdout: { ok: true } },
+  });
+  const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  assert.deepEqual(stops(bb), ["thr_prev", "thr_in_ui"], "the previous thread before its archive, and the one archived after it was made; an older one was stopped by the launch that made the previous thread");
+  assert.deepEqual(verbs(bb).slice(-4), ["thread archive", "thread list --archived", "thread stop", "thread spawn"], "all of it before the spawn");
+});
+
+test("the previous thread already archived (in bb's UI): its creation time is read, and it is stopped with what was archived since", async (t) => {
+  const { backend, bb, run } = await setup(t, {
+    "thread list --archived": { stdout: [...ARCHIVED, threadRow("thr_prev", "proj_a", "idle", { createdAt: 4_000, archivedAt: 5_500 })] },
+    "thread show": { stdout: { thread: threadRow("thr_prev", "proj_a", "idle", { createdAt: 4_000, archivedAt: 5_500 }), environment: null, pendingTodos: null } },
+  });
+  assert.equal((await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } })).ok, true);
+  assert.deepEqual(stops(bb), ["thr_in_ui", "thr_prev"]);
+});
+
+for (const [name, extra, script] of [
+  ["no previous thread", {}, {}],
+  ["a previous thread bb no longer shows", { previous: { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_prev" } }, { "thread show": { error: { code: "thread_not_found", message: "HTTP 404: Thread not found" } } }],
+  ["a previous thread bb cannot be asked about", { previous: { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_prev" } }, { "thread show": { exit: 3, stderr: "boom\n" } }],
+  ["a previous thread that does not say when it was made", { previous: { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_prev" } }, { "thread show": { stdout: { thread: threadRow("thr_prev", "proj_a", "idle", { createdAt: "yesterday", archivedAt: 9 }), environment: null, pendingTodos: null } } }],
+]) {
+  test(`with ${name}, a launch stops every archived thread of the home's project`, async (t) => {
+    const { bb, run } = await setup(t, { "thread list --archived": { stdout: ARCHIVED }, ...script });
+    assert.equal((await run(extra)).ok, true);
+    assert.deepEqual(stops(bb), ["thr_long_ago", "thr_in_ui"], "a deleted thread is not stopped");
+  });
+}
+
+for (const [name, script, pattern, code = "E_SESSION_START_FAILED"] of [
+  ["cannot be listed", { "thread list --archived": UNREACHABLE }, /does not answer/, "E_BACKEND_UNREACHABLE"],
+  ["hold a row that cannot be read", { "thread list --archived": { stdout: [null] } }, /a row this provider cannot read/],
+  ["hold one bb will not stop", { "thread list --archived": { stdout: ARCHIVED }, "thread stop": { error: { code: "error", message: "HTTP 500: boom" } } }, /bb thread stop failed/],
+]) {
+  test(`a launch whose home's archived threads ${name} is refused before the spawn: a Claude may be left in the home`, async (t) => {
+    const { home, bb, run } = await setup(t, script);
+    const answer = await run();
+    assert.equal(answer.error.code, code);
+    assert.match(answer.error.message, pattern);
+    assert.equal(effects(bb).includes("thread spawn"), false);
+    assert.equal(existsSync(join(home, ".claude")), false);
+  });
+}
+
+test("a home with no bb project yet has no archived thread to stop: none is asked for", async (t) => {
+  const { bb, run } = await setup(t, (home) => ({ "project list": { stdout: [] }, "project create": { stdout: projectRow("proj_new", home) } }));
+  assert.equal((await run()).ok, true);
+  assert.equal(verbs(bb).includes("thread list --archived"), false);
+});
+
 test("a previous thread that cannot be archived refuses the launch before the spawn", async (t) => {
   const { backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "error")] }, "thread archive": { error: { code: "error", message: "HTTP 500: no" } } });
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
-  assert.deepEqual(effects(bb), ["thread archive"]);
+  assert.deepEqual(effects(bb), ["thread stop", "thread archive"]);
 });
 
 test("a previous thread bb no longer has is no obstacle", async (t) => {

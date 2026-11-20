@@ -17,7 +17,9 @@ const MISSING = Object.freeze({ present: false, state: "stopped", running: false
 export function inspectAnswer(thread) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
-  if (SETTLED.has(status)) return { present: true, state: "unknown", running: null };
+  // A settled thread with work bb holds in line (a turn its concurrency limit has not
+  // started yet) is busy: the turn starts by itself when a slot frees.
+  if (SETTLED.has(status)) return { present: true, state: "unknown", running: hasQueuedWork(thread) ? true : null };
   // A thread in error is a lost session: bb never resumes an interrupted turn. It reads as
   // the kernel reads any lost session (not "shell", which on a tmux home means the harness
   // ended and a shell remains), so the kernel may resume it with an input.
@@ -26,6 +28,9 @@ export function inspectAnswer(thread) {
 }
 
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
+/** Whether bb's list row says the thread has work held in line (`queuedWork`, "none" when
+ *  there is none). `bb thread show` does not carry the field: only a list row is asked. */
+export const hasQueuedWork = (thread) => typeof thread.queuedWork === "string" && thread.queuedWork !== "none";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;
 
 /** One of bb's ids (thr_…, proj_…, qmsg_…). An id is an argument to bb: it must never
@@ -90,4 +95,26 @@ export async function liveInHome(bb, home) {
   const [allProjects, threads] = [await bb.projects(), await bb.threads()];
   const projects = projectsOfHome(allProjects, home);
   return { projects, live: liveThreadsOfHome(threads, home, projects.map((project) => project.id)) };
+}
+
+/** Stop every archived thread of the projects given (the home's). bb keeps the Claude
+ *  process of an archived thread loaded, with the home as its working directory, and shows
+ *  nothing that tells such a thread from one whose process is gone; `bb thread stop`
+ *  releases it, and on a thread with nothing loaded it changes nothing. An archived thread
+ *  takes no input, so nothing is lost. What bb still holds in line for it is withdrawn.
+ *  `since` (a time in milliseconds, or null): only threads archived at or after it; null
+ *  sweeps them all. → the ids stopped. Throws the client's refusal when bb says no. */
+export async function sweepArchived(bb, projectIds, { since = null } = {}) {
+  const stopped = [];
+  for (const projectId of projectIds) {
+    for (const thread of await bb.archivedThreads(projectId)) {
+      if (thread.deletedAt) continue;
+      if (since !== null && typeof thread.archivedAt === "number" && thread.archivedAt < since) continue;
+      if (hasQueuedWork(thread)) for (const message of await bb.queue(thread.id)) await bb.queueDelete(thread.id, message.id);
+      const asked = await bb.stop(thread.id);
+      if (!asked.ok && asked.code !== "thread_not_found") throw bb.refusal(asked, ["thread", "stop"]);
+      stopped.push(thread.id);
+    }
+  }
+  return stopped;
 }

@@ -60,7 +60,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (`E_BACKEND_LAUNCH_ARG`).
 - **A launch in a sandboxed mode is refused for now.** With `yolo` not true and no
   `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
-  `auto` mode. The provider refuses it before it reads or starts anything
+  `auto` mode. The provider refuses it before any effect, right after the launch input's own checks
   (`E_BACKEND_SANDBOXED_MODE`). The check says the same of a planned launch: the refusal
   stands alone among the planned launch's findings, beside whatever is wrong with bb
   itself. A check with no planned launch (`oats readiness`, for a soul or a home) cannot
@@ -68,21 +68,39 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   provider's next change brings it and lifts the refusal. What is written below about
   `sandbox` describes that code, which is here and tested, and runs once the refusal is
   lifted.
-- **The endpoint a launch answers is new.** Every launch answers a thread bb made for it:
-  bb makes a new thread id for each spawn, and the provider never answers an endpoint it
-  answered before for that home. It never answers the `previous` endpoint's thread, from
-  bb's own answer or otherwise; and where the spawn's fate is unknown it takes only a
-  thread bb created after the spawn was asked for (bb's `createdAt`; bb and the provider
-  are on one host), so an older thread of the home that shows again is not answered (the
-  launch stays in doubt). The kernel may tell a new session from an old one by its
-  endpoint.
+- **The endpoint a launch answers is new.** Every launch answers a thread bb made for it.
+  The provider relies on bb making a new thread id for each spawn, and guards the two
+  places where an old thread could come back: it never answers the `previous` endpoint's
+  thread, from bb's own answer or otherwise; and where the spawn's fate is unknown it
+  takes only a thread bb created after the spawn was asked for (bb's `createdAt`; bb and
+  the provider are on one host), so an older thread of the home that shows again is not
+  answered (the launch stays in doubt). The kernel may tell a new session from an old
+  one by its endpoint.
+- **stop is complete only when nothing of the thread can run.** bb's concurrency limit
+  holds a turn in line (the thread is `pending`, its list row says `queuedWork`), and
+  `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So stop
+  first withdraws the thread's queue (`bb thread queue list`, `bb thread queue delete`),
+  stops, waits for the thread to settle, and reads the queue again: `stopped` only when
+  the thread is settled and its queue is empty. Inspect reads a settled thread with work
+  in line as `running: true`.
+- **No Claude of an old thread is left in the home.** bb keeps the Claude process of an
+  archived thread loaded, with the home as its working directory, and shows nothing that
+  tells such a thread from one whose process is gone. `bb thread stop` releases it, and
+  changes nothing where nothing is loaded. So the provider stops a thread before every
+  archive it makes, and sweeps the archived threads of the home's bb project (stops each
+  one): a launch before it spawns, a stop with `endpoint: null`, and the retire hook. A
+  launch sweeps the threads archived at or after its `previous` thread was created
+  (earlier ones were swept by the launch that made that thread); with no `previous`, or
+  where bb does not show when it was created, it sweeps them all. A stop with
+  `endpoint: null` and the retire hook are told no thread to count from, and sweep them
+  all: one bb call per archived thread of that project.
 - **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or
   `{unavailable: "<cause>"}` when the kernel could not resolve it (`false` or an empty
   string there mean it was resolved). A `skipped: [{capability, reason}]` is read and
   listed by the check if it comes; the kernel does not send it today. The shape is the
-  one decided in the contract (r12); the kernel change that sends it is not released yet,
+  one decided in the contract; the kernel change that sends it is not released yet,
   and a kernel that sends no `sandbox` key gets nothing written (readiness says the
   allowances are missing).
   - In a sandboxed mode the provider writes exactly the `domains` and `write` entries, and
@@ -151,9 +169,12 @@ nothing on stdout.
 ## The bb surface used
 At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
-  `archivedAt`, `deletedAt` and `environmentPath` included),
+  `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn`, `bb thread tell`, `bb thread interactions list`,
-  `bb thread queue delete`, `bb thread stop`, `bb thread archive`. A list is read row by
+  `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
+  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. The
+  contract test also sets bb's limit (`bb concurrency-limit global`), to pin what a held
+  turn looks like and that a stop withdraws it. A list is read row by
   row: a project needs an `id` and its `sources`, a thread an `id` and a `status` (and a
   `projectId`, `archivedAt`, `deletedAt`, `environmentPath` of the kind bb writes), an
   interaction an `id` and a `status`. One row that is not that, and the whole read is an

@@ -132,10 +132,12 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   const stamp = (value) => value === null || value === undefined || typeof value === "number" || typeof value === "string";
   const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string"
     && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
+    && (row.queuedWork === null || row.queuedWork === undefined || typeof row.queuedWork === "string")
     && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string");
   const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources)
     && row.sources.every((source) => isObject(source) && (source.path === null || source.path === undefined || typeof source.path === "string"));
   const interactionRow = (row) => isObject(row) && typeof row.id === "string" && typeof row.status === "string";
+  const queuedRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "";
   return {
     server, raw, refusal,
     async version() {
@@ -152,6 +154,17 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     /** Every unarchived thread of the server, hidden ones included: one read. (Archived
      *  threads are nobody's session; each start archives one, so they only grow.) */
     async threads() { return list(await must(["thread", "list", "--include-hidden", "--json"]), "bb thread list", threadRow); },
+    /** The archived threads of one project. bb keeps an archived thread's Claude process
+     *  loaded, and no row says whether it does: these are what a sweep stops. */
+    async archivedThreads(projectId) { return list(await must(["thread", "list", "--project", projectId, "--archived", "--include-hidden", "--json"]), "bb thread list --archived", threadRow); },
+    /** The messages bb holds in line for the thread (a turn its concurrency limit has not
+     *  started, a message behind a pending interaction), or [] when bb has no such thread. */
+    async queue(id) {
+      const answer = await raw(["thread", "queue", "list", id, "--json"]);
+      if (answer.ok) return list(answer.value, "bb thread queue list", queuedRow);
+      if (answer.code === "thread_not_found") return [];
+      throw refusal(answer, ["thread", "queue"]);
+    },
     /** The thread, or null when bb has none by that id. */
     async thread(id) {
       const answer = await raw(["thread", "show", id, "--json"]);

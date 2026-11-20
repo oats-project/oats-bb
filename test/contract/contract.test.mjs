@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { after, before, test } from "node:test";
+import { after, afterEach, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -98,9 +98,22 @@ const launchInput = (home, name, extra = {}) => ({
 async function launched(name, extra, options) {
   const home = await makeHome(name);
   const answer = await provider("launch", launchInput(home, name, extra), SETTINGS, options);
+  if (answer.ok) started.push(answer.result.endpoint.threadId);
   assert.equal(answer.ok, true, JSON.stringify(answer));
   return { home, endpoint: answer.result.endpoint };
 }
+
+/** How many processes work in the home (their cwd is in it), and how many of them are Claude. */
+const processesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim());
+const claudesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do case "$(readlink $p/cwd 2>/dev/null)" in ${home}*) tr '\\0' ' ' < $p/cmdline | grep -c 'bin/claude ' ;; esac; done | grep -c 1 || true`)).trim());
+
+// The threads the tests launched, stopped after each test: bb keeps a thread's Claude
+// loaded while it is idle, and a dozen of them starve the bb servers that later tests
+// start in this container (two CPUs, 4 GB).
+const started = [];
+afterEach(async () => {
+  for (const id of started.splice(0)) await sh(`bb thread stop ${id} --json >/dev/null 2>&1 || true`);
+});
 
 before(async () => {
   execFileSync("docker", ["build", "-q", "--build-arg", `BB_APP_VERSION=${BB_VERSION}`, "-t", IMAGE, here], { stdio: ["ignore", "ignore", "inherit"] });
@@ -454,6 +467,93 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
 // test once the kernel's session-provider contract is merged; until then this stays a
 // todo, so the gap is visible in every run.
 test("T5 via the kernel: after oats instance stop, session inspect answers stopped and session input is refused", { todo: "owned by the kernel's suite (K1 T4); the joint kernel-and-provider run is added here once K1 merges. The provider half is the test above" }, () => {});
+
+// What bb's concurrency limit holds in line is not stopped by `bb thread stop`: bb starts
+// the held turn by itself when a slot frees. Found in a real run: an agent OATS had
+// stopped ran its task afterwards.
+test("a turn bb holds in line: inspect reads the thread running, and a stop withdraws the turn so it never runs", async () => {
+  await sh("bb concurrency-limit global 1 --json");
+  try {
+    // One home busy in its only slot.
+    const busy = await launched("queue-busy");
+    await waitStatus(busy.endpoint.threadId, "idle");
+    await armTool("node -e \"setTimeout(()=>console.log('QUEUE-SLEPT'),60000)\"");
+    assert.equal((await provider("input", { home: busy.home, endpoint: busy.endpoint, text: "QUEUE-BUSY run the tool" })).ok, true);
+    await waitStatus(busy.endpoint.threadId, "active");
+    await waitFor("the tool to be running", async () => (await sh("cat mock-next-cmd 2>/dev/null || true")) === "");
+
+    // A second home is launched behind it: bb makes the thread and holds its first turn.
+    const held = await launched("queue-held");
+    const row = async () => (await bbJson("thread list --include-hidden")).find((thread) => thread.id === held.endpoint.threadId);
+    await waitFor("bb to hold the second home's turn in line", async () => (await row()).queuedWork === "waiting");
+    assert.equal((await row()).status, "pending");
+    const queue = await bbJson(`thread queue list ${held.endpoint.threadId}`);
+    assert.equal(queue.length, 1);
+    assert.equal(queue[0].waitingOn.pluginId, "concurrency-limit");
+    const inspect = (await provider("inspect", { home: held.home, endpoint: held.endpoint })).result;
+    assert.deepEqual({ present: inspect.present, state: inspect.state, running: inspect.running }, { present: true, state: "unknown", running: true }, "a held turn is work that will run: not a thread at rest");
+
+    // OATS stops it: nothing of it is left to run.
+    assert.deepEqual((await provider("stop", { home: held.home, endpoint: held.endpoint, graceSeconds: 10 })).result, { stopped: true });
+    assert.deepEqual(await bbJson(`thread queue list ${held.endpoint.threadId}`), [], "the held turn was withdrawn");
+    assert.equal((await row()).queuedWork, "none");
+
+    // The slot frees, and the limit goes: the stopped home's task never reaches the model.
+    assert.deepEqual((await provider("stop", { home: busy.home, endpoint: busy.endpoint, graceSeconds: 10 })).result, { stopped: true });
+    await sh("bb concurrency-limit global unlimited --json");
+    await sleep(8_000);
+    assert.equal(await landed("TASK-queue-held"), 0, "a stopped agent ran its task");
+    assert.equal(await processesIn(held.home), 0);
+  } finally {
+    await sh("bb concurrency-limit global unlimited --json");
+  }
+});
+
+// A thread archived in bb keeps its Claude process, in the home, and bb shows nothing that
+// says so. Found in a real run: a start then made a second Claude in the home, and a
+// retire was refused for the process that worked there.
+test("a thread archived in bb keeps its Claude: a start, a stop and a retire each leave none of it in the home", async () => {
+  const first = await launched("archived");
+  const home = first.home;
+  await waitStatus(first.endpoint.threadId, "idle");
+  // A person archives it in bb. The process stays (this is bb's behaviour, pinned here).
+  await sh(`bb thread archive ${first.endpoint.threadId} --json`);
+  await sleep(2_000);
+  assert.equal(await claudesIn(home), 1, "bb released an archived thread's Claude by itself: the sweep may no longer be needed");
+  assert.deepEqual((await provider("inspect", { home, endpoint: first.endpoint })).result, { present: false, state: "stopped", running: false });
+
+  // A start: the archived thread is stopped before the new one is made. One Claude, not two.
+  const second = await provider("launch", launchInput(home, "archived", { previous: first.endpoint }));
+  assert.equal(second.ok, true, JSON.stringify(second));
+  started.push(second.result.endpoint.threadId);
+  await waitStatus(second.result.endpoint.threadId, "idle");
+  // The old thread's process ends a moment after bb is asked: then one Claude, not two.
+  await waitFor("one Claude in the home, not two", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
+
+  // A stop of a thread that was archived in bb, by its endpoint: its process goes.
+  await sh(`bb thread archive ${second.result.endpoint.threadId} --json`);
+  await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
+  assert.deepEqual((await provider("stop", { home, endpoint: second.result.endpoint, graceSeconds: 10 })).result, { stopped: true });
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+
+  // And a stop with no endpoint, and the retire hook, find the home's archived threads themselves.
+  const third = await provider("launch", launchInput(home, "archived", { previous: second.result.endpoint }));
+  assert.equal(third.ok, true, JSON.stringify(third));
+  started.push(third.result.endpoint.threadId);
+  await waitStatus(third.result.endpoint.threadId, "idle");
+  await sh(`bb thread archive ${third.result.endpoint.threadId} --json`);
+  await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  const fourth = await provider("launch", launchInput(home, "archived", { previous: third.result.endpoint }));
+  assert.equal(fourth.ok, true, JSON.stringify(fourth));
+  await waitStatus(fourth.result.endpoint.threadId, "idle");
+  await sh(`bb thread archive ${fourth.result.endpoint.threadId} --json`);
+  await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
+  const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+  assert.deepEqual(retired, { meta: { retired: false, reason: "nothing-to-delete" } }, "nothing live to archive");
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+});
 
 test("T6 a second live thread in the home's project is reported by inspect, and refuses a launch", async () => {
   const { home, endpoint } = await launched("t6");

@@ -6,7 +6,7 @@ import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSett
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
-import { isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
+import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, sweepArchived } from "./threads.mjs";
 
 const BB_PROVIDER = "claude-code";
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
@@ -70,12 +70,34 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     throw fail("E_SESSION_START_FAILED", `a live bb thread already runs in ${home}: ${others.map((thread) => `${thread.id} (${thread.status})`).join(", ")}. One home is one thread: stop and archive ${others.length > 1 ? "them" : "it"} in bb, then start again`);
   }
   const replaced = live.find((thread) => thread.id === previousId) ?? null;
-  if (replaced && !isSettled(replaced)) {
-    throw fail("E_SESSION_START_FAILED", `the home's bb thread ${replaced.id} is still ${replaced.status}: stop it (oats instance stop ${instance}) before starting again`);
+  if (replaced && (!isSettled(replaced) || hasQueuedWork(replaced))) {
+    throw fail("E_SESSION_START_FAILED", `the home's bb thread ${replaced.id} is still ${isSettled(replaced) ? `${replaced.status} with a turn bb holds in line` : replaced.status}: stop it (oats instance stop ${instance}) before starting again`);
   }
+  // No Claude of an earlier thread may be left in the home beside the new one. bb keeps
+  // the process of an archived thread loaded and shows nothing that says so, so the
+  // previous thread is stopped before it is archived, and the home's archived threads are
+  // stopped: those archived since the previous thread was made (in bb's UI, by a person),
+  // or all of them where that time is not known. Earlier ones were stopped by the launch
+  // that made the previous thread.
   if (replaced) {
+    const released = await bb.stop(replaced.id);
+    if (!released.ok && released.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be stopped before it is archived (${released.message})`);
     const archived = await bb.archive(replaced.id);
     if (!archived.ok && archived.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
+  }
+  if (mine.length > 0) {
+    let since = null;
+    if (replaced && typeof replaced.createdAt === "number") since = replaced.createdAt;
+    else if (previousId && isBbId(previousId) && !replaced) {
+      // Only a bound on the sweep: where bb does not show the previous thread, all are swept.
+      try {
+        const before = await bb.thread(previousId);
+        if (before !== null && typeof before.createdAt === "number") since = before.createdAt;
+      } catch (error) {
+        if (!(error instanceof ProviderError)) throw error;
+      }
+    }
+    await sweepArchived(bb, mine.map((candidate) => candidate.id), { since });
   }
 
   let project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;

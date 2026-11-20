@@ -128,17 +128,18 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 
 | Call | What the provider does |
 |---|---|
-| launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Archives the home's previous thread (a start after a stop is a fresh conversation). Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
+| launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600). Runs `bb thread spawn --provider claude-code --environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
-| stop | `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Still in a turn after it: `E_SESSION_STOP_FAILED`. |
-| retire (hook) | Archives the home's live threads. It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
-| stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so the next start launches (if bb does not archive it, the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
+| stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. |
+| retire (hook) | Withdraws what bb holds in line for each of the home's live threads, stops it and archives it, and stops the home's threads that were archived before. It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
+| stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home, and its archived threads: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so the next start launches (if bb does not archive it, the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
 
 | bb thread | present | state | running |
 |---|---|---|---|
 | starting, active, stopping | true | unknown | true |
 | pending, idle | true | unknown | null |
+| pending or idle, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
 | error | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |
 
@@ -223,8 +224,8 @@ arguments or a process environment:
 
 - A launch argument other than `--permission-mode auto|acceptEdits|bypassPermissions` is
   refused, by name: `E_BACKEND_LAUNCH_ARG`. Nothing is dropped silently.
-- A launch that is not in bb's full mode: `E_BACKEND_SANDBOXED_MODE`, before anything is
-  read or started, until the provider's next change brings the deny set (above).
+- A launch that is not in bb's full mode: `E_BACKEND_SANDBOXED_MODE`, before any effect
+  (after the launch input's own checks), until the provider's next change brings the deny set (above).
 - A launch environment entry that comes from a secret (a launch configuration's `fromEnv`
   or `fromFile`) is refused, by name: `E_BACKEND_LAUNCH_ENV`. The environment travels in
   `.claude/settings.local.json`, and no secret is written there. Give bb's server the
@@ -359,8 +360,9 @@ this); it is never a launch environment entry.
 
 In a team container (`trust: container`), spawn bb agents with `--yolo` (bb `full` mode):
 the container is the boundary, as it is for tmux agents there. bb's sandboxed modes need
-bubblewrap, which the hardened image doesn't carry; without it every command waits for a
-person in bb. Readiness says so wherever bubblewrap is missing
+bubblewrap, which the hardened image doesn't carry; without it every command would wait
+for a person in bb (for now a launch without `--yolo` is refused altogether, above).
+Readiness says so wherever bubblewrap is missing
 (`session-provider-sandbox-unsupported`, a warning: it refuses nothing).
 
 ## A trial against an unreleased kernel

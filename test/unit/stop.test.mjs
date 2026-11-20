@@ -127,6 +127,41 @@ test("a stop with no endpoint stops every live thread that runs in the home (a l
   assert.deepEqual(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv), [["thread", "stop", "thr_new", "--json"]]);
 });
 
+test("a stop with no endpoint archives only the threads made at or after launchSent: the failed launch's, never a person's", async (t) => {
+  const SENT = "2026-11-20T10:00:00.000Z", at = Date.parse(SENT);
+  const rows = (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_before", "proj_a", "idle", { createdAt: at - 1 }), threadRow("thr_at", "proj_a", "active", { createdAt: at }), threadRow("thr_after", "proj_a", "idle", { createdAt: at + 5000 }), threadRow("thr_undated", "proj_a", "idle", { createdAt: "2026-11-20T10:00:01Z" })] },
+    "thread stop": { stdout: { ok: true } },
+    "thread show": show("idle"),
+    "thread archive": { stdout: { ok: true } },
+  });
+  const archivedBy = async (extra) => {
+    const { dir, home } = scratch(t);
+    const bb = fakeBbIn(dir, rows(home));
+    const answer = await call("stop", { home, endpoint: null, graceSeconds: 5, ...extra }, { settings, bb });
+    assert.deepEqual(answer.result, { stopped: true });
+    assert.equal(bb.calls().filter((c) => c.argv[1] === "stop").length, 4, "every live thread is stopped");
+    return bb.calls().filter((c) => c.argv[1] === "archive").map((c) => c.argv[2]);
+  };
+  assert.deepEqual(await archivedBy({ launchSent: SENT }), ["thr_at", "thr_after"]);
+  for (const launchSent of [undefined, null, "", "yesterday", at, { at }]) {
+    assert.deepEqual(await archivedBy({ launchSent }), [], `nothing is archived for launchSent ${JSON.stringify(launchSent)}`);
+  }
+});
+
+test("a stop with no endpoint whose archive bb refuses is still stopped; a stop with an endpoint never archives", async (t) => {
+  const { dir, home } = scratch(t);
+  const bb = fakeBbIn(dir, {
+    "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle", { createdAt: 2 })] },
+    "thread stop": { stdout: { ok: true } }, "thread show": show("idle"), "thread archive": UNREACHABLE,
+  });
+  assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5, launchSent: "1970-01-01T00:00:00.001Z" }, { settings, bb })).result, { stopped: true });
+  assert.equal(bb.calls().filter((c) => c.argv[1] === "archive").length, 1);
+  const withEndpoint = await stopWith(t, { "thread stop": { stdout: { ok: true } }, "thread show": show("idle"), "thread archive": { stdout: { ok: true } } }, { launchSent: "1970-01-01T00:00:00.001Z" });
+  assert.deepEqual(verbs(withEndpoint.calls), ["thread stop", "thread show"]);
+});
+
 test("a stop with no endpoint and nothing live in the home is stopped, and stops nothing", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "project list": { stdout: [] }, "thread list": { stdout: [threadRow("thr_z", "proj_z", "active")] } });

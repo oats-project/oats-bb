@@ -18,7 +18,8 @@ const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
 /** → { stopped: true } once bb shows the thread settled (idle, pending or error) or gone;
  *  E_SESSION_STOP_FAILED when it is still in a turn after the grace.
  *  With no endpoint (the kernel compensating a launch whose answer was lost): stop
- *  whatever live thread runs in the home; `stopped: true` also when there is none. */
+ *  whatever live thread runs in the home, and archive those made since `launchSent`;
+ *  `stopped: true` also when there is none. */
 export async function stop(input, settings, { deadline = Infinity, env = process.env, now = Date.now, stopCallTimeoutMs } = {}) {
   try {
     if (!isObject(input)) throw fail("E_SESSION_STOP_FAILED", "the stop input is not an object");
@@ -27,7 +28,17 @@ export async function stop(input, settings, { deadline = Infinity, env = process
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
       const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
       const { live } = await liveInHome(bb, input.home);
-      for (const thread of live) await stopThread(bb, thread.id, { deadline, grace, now, stopCallTimeoutMs });
+      // The time the kernel's receipt says the failed launch was sent. Only a thread made
+      // at or after it is that launch's, and nobody recorded it: it is archived once
+      // stopped, so the next start is not refused for it. An older thread, or any thread
+      // when the time is absent or unreadable, may be a person's: stopped, never archived.
+      const sentAt = typeof input.launchSent === "string" ? Date.parse(input.launchSent) : NaN;
+      for (const thread of live) {
+        await stopThread(bb, thread.id, { deadline, grace, now, stopCallTimeoutMs });
+        // Best effort: where bb does not archive it, the thread is still stopped, and the
+        // next launch names it.
+        if (Number.isFinite(sentAt) && typeof thread.createdAt === "number" && thread.createdAt >= sentAt) await bb.archive(thread.id);
+      }
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");

@@ -41,7 +41,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
-| stop | `{home, endpoint or null, graceSeconds}` | `{stopped: true}` |
+| stop | `{home, endpoint or null, graceSeconds, launchSent?}` | `{stopped: true}` |
 | check | `{home or null, soul or null, settings?, launch?}` | `{status, problems: [{code, message}], warnings: [{code, message}]}` |
 
 - **launch `env`** is a list of `{name, value, source, capability?, secret?}`. The provider
@@ -82,7 +82,19 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     know, or a `missing` that is not a list, refuses it. A full-mode launch writes nothing
     and ignores `missing`, `skipped`, `unavailable` and unknown keys, whatever they hold.
 - **stop** with `endpoint: null` stops every live thread that runs in the home (the kernel
-  compensating a launch whose answer was lost).
+  compensating a launch whose answer was lost, or whose caller was killed while it ran):
+  it finds the home's bb project and its live threads, and answers `stopped` also when
+  there is none, `E_SESSION_STOP_FAILED` when it cannot tell.
+  - `launchSent` (an ISO 8601 time: the receipt's record that a launch was sent; the kernel
+    change that passes it is not released yet) says which threads are that launch's: one
+    bb created at or after it (bb's `createdAt`, milliseconds) is archived once stopped, so
+    the next start is not refused for a thread nobody recorded. A thread created before
+    it, and every thread when `launchSent` is absent or is no time, is stopped and not
+    archived: it may be a person's, and the next launch names it.
+  - A limit: the stop sees what bb shows when it is called. The provider starts each bb
+    call in a session of its own, so a bb call can outlive a killed provider and create
+    its thread after this stop answered. Nothing is lost silently: the next launch refuses
+    and names that thread; but this stop did not stop it.
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
   launch (`launch: {harness, yolo, args, sandbox}`, there before every launch and absent on

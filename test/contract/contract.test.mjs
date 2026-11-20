@@ -380,12 +380,15 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
 // What the kernel relies on after a spawn that died while the launch ran: its receipt says
 // a launch was sent and holds no endpoint, so its stop, start and retire first call stop
 // with `endpoint: null`: "stop whatever live session is rooted at this home".
-test("a launch whose caller is killed mid-launch: stop with no endpoint finds the home's thread and stops it", async () => {
+test("a launch whose caller is killed mid-launch: stop with no endpoint finds the home's thread, stops it, and archives it when told when the launch was sent", async () => {
   const home = await makeHome("killed");
   const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb: "launch", input: launchInput(home, "killed") };
   await sh("rm -f slow-spawn-made killed-launch.out && cat > killed-launch.json", { input: JSON.stringify(request) });
-  // The launch runs in a session of its own, so the kill takes the provider and the bb
-  // call it waits on together, as a killed `oats spawn` takes its children.
+  // What the kernel's receipt holds: the time the launch was sent, taken just before it.
+  const launchSent = new Date().toISOString();
+  // The kill ends the provider only: it starts each bb call in a session of its own, so
+  // the bb call it was waiting on (the shim, holding bb's answer) lives on, as a real bb
+  // call would after a killed `oats spawn`.
   const settings = { ...SETTINGS, cli: "/repo/test/contract/bb-slow-spawn.sh" };
   await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' setsid sh -c 'echo $$ > killed-launch.pid; exec node ${PROVIDER} session launch < killed-launch.json > killed-launch.out 2>&1' < /dev/null > /dev/null 2>&1 &`);
   await waitFor("bb to have made the thread", async () => (await sh("test -e slow-spawn-made && echo made || true")).trim() === "made", { timeoutMs: 120_000 });
@@ -407,13 +410,26 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   // The same call again, and for a home bb never saw: stopped, with nothing to stop.
   assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
   assert.deepEqual((await provider("stop", { home: "/home/node/homes/never-launched", endpoint: null, graceSeconds: 10 })).result, { stopped: true });
-  // A start may then launch again: the settled thread nobody recorded is in the way, and
-  // the launch says so (one home, one thread) until the retire hook, or a person, archives it.
+  // With no time of the failed launch (a kernel that sends none), the thread is stopped and
+  // stays: it may be a person's. A start then says it is in the way (one home, one thread).
   const again = await provider("launch", launchInput(home, "killed"));
   assert.equal(again.error.code, "E_SESSION_START_FAILED");
   assert.match(again.error.message, new RegExp(thread.id));
+  // With that time, a thread made at or after it is the failed launch's: stopped and
+  // archived. bb's createdAt is a number of milliseconds, which is what is compared.
+  assert.equal(typeof thread.createdAt, "number");
+  assert.ok(thread.createdAt >= Date.parse(launchSent) && thread.createdAt < Date.now(), `bb's createdAt ${thread.createdAt} is a time in milliseconds since ${launchSent}`);
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10, launchSent: new Date().toISOString() })).result, { stopped: true });
+  assert.equal((await live()).length, 1, "a thread older than the time given is not archived");
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10, launchSent })).result, { stopped: true });
+  assert.deepEqual(await live(), []);
+  assert.notEqual((await bbJson(`thread show ${thread.id}`)).thread.archivedAt, null);
+  // So the start that follows launches, and the home has its one thread.
+  const started = await provider("launch", launchInput(home, "killed"));
+  assert.equal(started.ok, true, JSON.stringify(started));
+  await waitStatus(started.result.endpoint.threadId, "idle");
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: true, archived: [thread.id] } });
+  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId] } });
   assert.deepEqual(await live(), []);
 });
 

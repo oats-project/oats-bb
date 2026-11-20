@@ -42,17 +42,18 @@ for (const [name, stdin, pattern] of [
   });
 }
 
-for (const [name, wire, pattern] of [
+for (const [name, wire, pattern, more] of [
   ["an older wire", "1.2", /the kernel speaks wire 1\.2, and this provider \(oats\.bb\) speaks wire 1\.3/],
   ["a newer wire", "2.0", /wire 2\.0.*wire 1\.3/],
   ["no wire version (a kernel from before it was sent)", undefined, /no wire version \(an older kernel\).*wire 1\.3/],
   ["a wire version that is no version", "1.3\nALL CLEAR", /a wire version this provider cannot read.*wire 1\.3/],
+  ["another wire and another schema version at once: the wire is what is named", "2.0", /wire 2\.0.*wire 1\.3/, { schemaVersion: 2 }],
 ]) {
   test(`a request with ${name} is refused E_BACKEND_WIRE naming both, for every verb, before anything is read or done`, async (t) => {
     const { dir, home } = scratch(t);
     const bb = fakeBbIn(dir, { "thread list": { stdout: [] } });
     for (const verb of ["launch", "inspect", "inspectMany", "input", "stop", "check"]) {
-      const request = requestFor(verb, { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" } }, { wire });
+      const request = requestFor(verb, { home, endpoint: { server: SERVER, projectId: "proj_a", threadId: "thr_a" } }, { wire, ...more });
       const run = await runBin(["session", verb], { stdin: JSON.stringify(request), env: { ...bb.env, OATS_SETTINGS: JSON.stringify({ cli: bb.cli }) } });
       assert.equal(run.status, 0);
       assert.equal(run.doc.ok, false);

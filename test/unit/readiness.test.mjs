@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { accepts, exposedListeners, nonLoopbackAddresses } from "../../oats-package/capabilities/oats-bb/lib/exposure.mjs";
 import { sandboxCanStart } from "../../oats-package/capabilities/oats-bb/lib/readiness.mjs";
 import { isLoopbackHost, loopbackOrigin, readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, closedPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, deadPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 
 async function setup(t, script = {}, backendOverrides = {}) {
@@ -98,7 +98,7 @@ for (const bad of ["not a url", "ftp://127.0.0.1:38886", "http://user:pw@127.0.0
 
 test("bb's server down: E_BACKEND_UNREACHABLE, unavailable (not a configuration verdict)", async (t) => {
   const { check } = await setup(t);
-  const answer = await check({ server: `http://127.0.0.1:${await closedPort()}` });
+  const answer = await check({ server: `http://127.0.0.1:${await deadPort(t)}` });
   assert.deepEqual(codes(answer), ["E_BACKEND_UNREACHABLE"]);
   assert.equal(answer.result.status, "unavailable");
 });
@@ -110,7 +110,7 @@ test("a /health that is not ok: E_BACKEND_UNREACHABLE", async (t) => {
 
 test("the server answers but the host daemon is down: E_BACKEND_UNREACHABLE naming the daemon", async (t) => {
   const { check } = await setup(t);
-  const answer = await check({ daemon: `http://127.0.0.1:${await closedPort()}` });
+  const answer = await check({ daemon: `http://127.0.0.1:${await deadPort(t)}` });
   assert.deepEqual(codes(answer), ["E_BACKEND_UNREACHABLE"]);
   assert.match(answer.result.problems[0].message, /host daemon/);
 });
@@ -310,7 +310,8 @@ test("a real listener: accepts() is true where something listens, false where no
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
   t.after(() => new Promise((done) => server.close(done)));
   assert.equal(await accepts("127.0.0.1", server.address().port, 4), true);
-  assert.equal(await accepts("127.0.0.1", await closedPort(), 4), false);
+  // Port 1 (tcpmux) needs root to listen on and nothing does: a connection there is refused.
+  assert.equal(await accepts("127.0.0.1", 1, 4), false);
 });
 
 const offLoopback = nonLoopbackAddresses(networkInterfaces()).find((a) => a.family === 4);

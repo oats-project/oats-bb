@@ -27,6 +27,7 @@ A refusal is `"ok": false, "error": {"code": "E_…", "message": "…"}`, and no
 own. Every request carries the kernel's version in `wire`; the provider refuses a request
 whose `wire` is absent or another value with `E_BACKEND_WIRE`, naming both, before it reads
 or does anything. The answer's header does not echo `wire`.
+
 A refusal says nothing happened: bb's server said no (its own error code, or a 4xx status
 in the CLI's message), or the request never reached it. Where the provider cannot tell (a `bb thread spawn` or a `bb thread tell`
 that did not answer in time, answered something it cannot read, died, lost its connection

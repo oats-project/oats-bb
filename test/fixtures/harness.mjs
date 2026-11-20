@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
+import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -110,13 +111,14 @@ export async function fakeBackend(t, overrides = {}) {
   return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", ...extra }) };
 }
 
-/** A loopback port nothing listens on. */
-export async function closedPort() {
-  const server = createServer();
+/** A loopback port where nothing answers, held for the whole test: a listener that drops
+ *  every connection at once. (Picking a free port and closing it would leave a window in
+ *  which another process, a second run of this suite for one, takes the port and answers.) */
+export async function deadPort(t) {
+  const server = createTcpServer((socket) => socket.destroy());
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
-  const { port } = server.address();
-  await new Promise((done) => server.close(done));
-  return port;
+  t.after(() => new Promise((done) => server.close(done)));
+  return server.address().port;
 }
 
 /** Run the provider's bin as the kernel does. → { status, stdout, stderr, doc }. */

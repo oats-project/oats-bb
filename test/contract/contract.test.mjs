@@ -192,6 +192,7 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   // --yolo is bb's full mode: the thread was started in it (bb's own record of the turn),
   // and the launch wrote no sandbox entry, since full mode has no sandbox.
   const started = (await bbJson(`thread log ${endpoint.threadId} --limit 5`)).find((event) => event.type === "client/turn/requested");
+  assert.ok(started, "bb's log of the thread begins with the turn the spawn requested");
   assert.equal(started.data.execution.permissionMode, "full");
 
   // The env file: only what the launch carried, owner-only.

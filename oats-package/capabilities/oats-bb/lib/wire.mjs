@@ -71,11 +71,11 @@ export async function answer(verb, text, handlers, { env = process.env, now = Da
     if (!isObject(request)) throw new ProviderError(fallback, "the request is not a JSON object");
     if (typeof request.capability === "string") head.capability = request.capability;
     if (typeof request.provider === "string") head.provider = request.provider;
-    if (request.schemaVersion !== 1) throw new ProviderError(fallback, `the request's schemaVersion is ${JSON.stringify(request.schemaVersion)}; this provider speaks 1`);
     if (request.wire !== WIRE) {
       const theirs = typeof request.wire === "string" && /^\d{1,3}\.\d{1,3}$/.test(request.wire) ? `wire ${request.wire}` : request.wire === undefined ? "no wire version (an older kernel)" : "a wire version this provider cannot read";
       throw new ProviderError("E_BACKEND_WIRE", `the kernel speaks ${theirs}, and this provider (oats.bb) speaks wire ${WIRE}: use an OATS and an oats.bb release that agree`);
     }
+    if (request.schemaVersion !== 1) throw new ProviderError(fallback, `the request's schemaVersion is ${JSON.stringify(request.schemaVersion)}; this provider speaks 1`);
     if (request.phase !== "session") throw new ProviderError(fallback, `the request's phase is ${JSON.stringify(request.phase)}, not "session"`);
     if (request.verb !== verb) throw new ProviderError(fallback, `the request's verb is ${JSON.stringify(request.verb)}, and the command run is ${verb}`);
     if (request.provider !== PROVIDER) throw new ProviderError(fallback, `the request names the session provider ${JSON.stringify(request.provider)}; this one is ${PROVIDER}`);

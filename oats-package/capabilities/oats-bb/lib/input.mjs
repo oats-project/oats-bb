@@ -32,7 +32,9 @@ export async function sendInput(input, settings, { deadline, env = process.env }
   let interactions;
   try { interactions = await bb.interactions(endpoint.threadId); }
   catch (error) { throw failed(error); }
-  const open = interactions.filter((interaction) => isObject(interaction) && interaction.status === "pending");
+  // Open: waiting on a person, or being answered right now. (The words are checked where
+  // the list is read: one this provider does not know makes the read fail.)
+  const open = interactions.filter((interaction) => interaction.status === "pending" || interaction.status === "resolving");
   if (open.length > 0) {
     const kinds = [...new Set(open.map((interaction) => (isObject(interaction.payload) && typeof interaction.payload.kind === "string" ? interaction.payload.kind : "interaction")))];
     throw fail("E_SESSION_PROMPT_OPEN", `bb thread ${endpoint.threadId} waits on a person (${open.length} pending ${kinds.join(", ")}: ${open.map((interaction) => interaction.id).filter((id) => typeof id === "string").join(", ")}): nothing was sent. Answer it in bb`);

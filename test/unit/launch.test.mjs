@@ -1,7 +1,7 @@
 // launch: one home, one bb project, one bb thread; every refusal before the first effect.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
@@ -11,7 +11,7 @@ import { PATH_WITH_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, pro
 // A thread bb made after the launch asked for it: the fake's rows are written before the
 // launch runs, so "after" is a time well ahead.
 const MADE = { createdAt: Date.now() + 3_600_000 };
-const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
+const spawned = (id = "thr_new", projectId = "proj_a") => ({ stdout: { id, projectId, environmentId: null, providerId: "claude-code", status: "starting" } });
 const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
 const EFFECTS = new Set(["project create", "thread spawn", "thread archive", "thread stop", "thread tell"]);
 // The calls by name; the read of a project's archived threads is named apart from the plain list.
@@ -374,7 +374,7 @@ test("with no model the spawn names none (bb's own default)", async (t) => {
 });
 
 test("a home with no bb project gets one, rooted at the home and named after the instance", async (t) => {
-  const { home, bb, run } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_other", "/another/home")] }, "project create": { stdout: projectRow("proj_made", h) } }));
+  const { home, bb, run } = await setup(t, (h) => ({ "project list": { stdout: [projectRow("proj_other", "/another/home")] }, "project create": { stdout: projectRow("proj_made", h) }, "thread spawn": spawned("thr_new", "proj_made") }));
   const answer = await run();
   assert.equal(answer.result.endpoint.projectId, "proj_made");
   assert.deepEqual(bb.calls().find((c) => c.argv[1] === "create").argv, ["project", "create", "--name", "dev-a", "--root", home, "--json"]);
@@ -602,7 +602,7 @@ for (const [name, script, pattern, code = "E_SESSION_START_FAILED"] of [
 }
 
 test("a home with no bb project yet has no archived thread to stop: none is asked for", async (t) => {
-  const { bb, run } = await setup(t, (home) => ({ "project list": { stdout: [] }, "project create": { stdout: projectRow("proj_new", home) } }));
+  const { bb, run } = await setup(t, (home) => ({ "project list": { stdout: [] }, "project create": { stdout: projectRow("proj_new", home) }, "thread spawn": spawned("thr_new", "proj_new") }));
   assert.equal((await run()).ok, true);
   assert.equal(verbs(bb).includes("thread list --archived"), false);
 });
@@ -657,6 +657,69 @@ test("a spawn that answers no thread id, and one new thread runs in the home: th
   const answer = await run();
   assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_made" } });
 });
+
+// bb's answer to a spawn is taken for the new thread only when it names one bb did not
+// have before: not the previous thread, not an older one of the home (live or archived),
+// not one of another project.
+for (const [name, answer, lists] of [
+  ["an older archived thread of the home", { id: "thr_older", projectId: "proj_a", status: "idle" }, { "thread list --archived": { stdout: [threadRow("thr_older", "proj_a", "idle", { archivedAt: 1_000 })] } }],
+  ["a thread of another project", { id: "thr_elsewhere", projectId: "proj_z", status: "starting" }, {}],
+]) {
+  test(`a spawn that answers ${name} is not taken for the launch's thread: in doubt, never that endpoint`, async (t) => {
+    const previous = { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_prev" };
+    const { backend, bb, input } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle", { createdAt: 4_000 })] }, "thread archive": { stdout: { ok: true } }, "thread spawn": { stdout: answer }, ...lists });
+    const run = await rawLaunch(bb, backend, input({ previous }));
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "");
+    assert.match(run.stderr, /answered a thread bb already had, or one of another project/);
+  });
+}
+
+// What fails after the launch changed bb, whatever it is (the disk too), is in doubt.
+test("a settings write the disk refuses after the previous thread was archived is in doubt, never a refusal", { skip: process.getuid?.() === 0 ? "root writes anywhere" : false }, async (t) => {
+  const { home, backend, bb, input } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } } });
+  // The file the launch must replace cannot be replaced: its directory takes no new entry.
+  mkdirSync(join(home, ".claude"));
+  mkdirSync(join(home, ".oats-bb"));
+  chmodSync(join(home, ".claude"), 0o500);
+  t.after(() => { try { chmodSync(join(home, ".claude"), 0o700); } catch { /* the scratch directory is already gone */ } });
+  const run = await rawLaunch(bb, backend, input({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } }));
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "", "the previous thread is archived: not a refusal");
+  assert.match(run.stderr, /previous thread thr_prev is archived.*not a refusal/);
+  assert.deepEqual(effects(bb), ["thread stop", "thread archive"]);
+});
+
+test("the same failure with nothing changed in bb is a refusal, and the home is left as it was", { skip: process.getuid?.() === 0 ? "root writes anywhere" : false }, async (t) => {
+  const { home, bb, run } = await setup(t);
+  mkdirSync(join(home, ".claude"));
+  mkdirSync(join(home, ".oats-bb"));
+  chmodSync(join(home, ".claude"), 0o500);
+  t.after(() => { try { chmodSync(join(home, ".claude"), 0o700); } catch { /* the scratch directory is already gone */ } });
+  const answer = await run();
+  assert.equal(answer.ok, false);
+  assert.equal(effects(bb).includes("thread spawn"), false);
+  assert.deepEqual(readdirSync(join(home, ".oats-bb")), [], "no record of a launch that did not happen");
+});
+
+// The launch's files in the home are read by the confined read before anything is changed.
+for (const [name, plant] of [
+  ["a record that is a directory", (home) => mkdirSync(join(home, ".oats-bb/launch.json"), { recursive: true })],
+  ["a record larger than the provider reads", (home) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(home, ".oats-bb/launch.json"), "x".repeat(1024 * 1024 + 1)); }],
+  ["a record that is a link out of the home", (home, dir) => { mkdirSync(join(home, ".oats-bb")); writeFileSync(join(dir, "outside"), "{}"); symlinkSync(join(dir, "outside"), join(home, ".oats-bb/launch-env.json")); }],
+  ["a record that is a pipe", (home) => { mkdirSync(join(home, ".oats-bb")); execFileSync("mkfifo", [join(home, ".oats-bb/launch.json")]); }],
+]) {
+  test(`${name} refuses the launch before bb is changed: it is not read whole, followed or waited on`, async (t) => {
+    const { dir, home, backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } } });
+    plant(home, dir);
+    const started = Date.now();
+    const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
+    assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+    assert.match(answer.error.message, /is not a regular file|is larger than 1048576 bytes/);
+    assert.deepEqual(effects(bb), [], "nothing was stopped or archived");
+    assert.ok(Date.now() - started < 8000);
+  });
+}
 
 test("a launch never answers the previous thread again: not from bb's own answer, not as a thread that newly shows", async (t) => {
   const previous = { server: "http://127.0.0.1:38886", projectId: "proj_a", threadId: "thr_old" };

@@ -5,7 +5,7 @@
 import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, bounded, isObject } from "./errors.mjs";
+import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { currentSandbox, gapList, missingRemedy, readLaunchRecord, readSandbox } from "./local-settings.mjs";
@@ -176,7 +176,7 @@ async function orphanedThreads(bb, { exists = existsSync } = {}) {
     if (roots.length === 0 || roots.some((root) => exists(root))) continue;
     const ids = threads.filter((thread) => isLive(thread) && thread.projectId === project.id).map((thread) => thread.id);
     if (ids.length === 0) continue;
-    warnings.push({ code: "session-provider-orphaned", message: `bb thread${ids.length > 1 ? "s" : ""} ${ids.join(", ")} of project ${project.id} ${ids.length > 1 ? "have" : "has"} no home: the project root ${roots.join(", ")} no longer exists. Archive ${ids.length > 1 ? "them" : "it"} in bb (bb thread archive <id>)` });
+    warnings.push({ code: "session-provider-orphaned", message: `${ids.length} bb thread${ids.length > 1 ? "s" : ""} of project ${project.id} ${ids.length > 1 ? "have" : "has"} no home: the project root no longer exists. Archive ${ids.length > 1 ? "them" : "it"} in bb (bb thread archive <id>). Thread${ids.length > 1 ? "s" : ""}: ${someOf(ids)}. Root: ${someOf(roots, 1)}` });
   }
   return warnings;
 }

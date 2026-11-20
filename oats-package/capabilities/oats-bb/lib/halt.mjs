@@ -112,7 +112,9 @@ export async function stopArchived(bb, threads, relist, options = {}) {
   for (const id of asked) {
     const row = now.find((thread) => thread.id === id);
     if (row === undefined || row.deletedAt) continue;
-    if (isSettled(row) && !hasQueuedWork(row)) continue;
+    // At rest by what bb says now, in one row: settled, and its queue said to be empty in
+    // so many words. A row that does not say (no `queuedWork`) proves nothing.
+    if (isSettled(row) && row.queuedWork === "none") continue;
     await confirmStop(bb, id, options);
   }
 }

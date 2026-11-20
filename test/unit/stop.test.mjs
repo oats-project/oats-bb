@@ -182,6 +182,21 @@ test("an archived thread that is not at rest after its stop is not taken for sto
   assert.deepEqual(verbs(quiet.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list"]);
 });
 
+test("an archived thread whose row does not say its queue is empty is not taken for stopped on that row: its queue is read, by the whole rule", async (t) => {
+  const { dir, home } = scratch(t);
+  const silent = threadRow("thr_arch", "proj_a", "idle", { archivedAt: 5 });
+  delete silent.queuedWork;
+  const bb = fakeBbIn(dir, {
+    "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] },
+    "thread list --archived": { stdout: [silent] },
+    "thread queue list": [{ stdout: [{ id: "qmsg_held", state: "waiting" }] }, { stdout: [] }], "thread queue delete": { stdout: { ok: true } },
+    "thread stop": { stdout: { ok: true } }, "thread show": show("idle", { archivedAt: 5 }),
+  });
+  assert.deepEqual((await call("stop", { home, endpoint: null, graceSeconds: 5 }, { settings, bb })).result, { stopped: true });
+  assert.deepEqual(verbs(bb.calls()), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list",
+    "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"], "the held turn it could not see in the row was found and withdrawn");
+});
+
 test("a project list whose source does not say what it is cannot show the home has no thread: a stop with no endpoint is E_SESSION_STOP_FAILED, never stopped", async (t) => {
   const { dir, home } = scratch(t);
   const bb = fakeBbIn(dir, { "project list": { stdout: [{ id: "proj_a", sources: [{}] }] }, "thread list": { stdout: [threadRow("thr_a", "proj_a", "active")] }, "thread stop": { stdout: { ok: true } } });
@@ -363,7 +378,7 @@ test("retire archives only a thread it has seen stopped: one that will not stop 
   }));
   assert.equal(run.status, 0);
   assert.deepEqual(last.meta, { archived: [], left: ["thr_a"] });
-  assert.match(last.warning, /^1 bb thread of this home could not be stopped and archived \(thr_a\): stop and archive it in bb/);
+  assert.match(last.warning, /^1 bb thread of this home could not be stopped and archived: stop and archive it in bb \(bb thread stop <id>, bb thread archive <id>\)\. It is thr_a$/);
   assert.equal(verbs(calls).includes("thread archive"), false, "an archived thread would keep its Claude: it is not archived unstopped");
 });
 
@@ -378,7 +393,7 @@ test("retire's warnings stay inside what the kernel relays, however many threads
   assert.equal(last.meta.left.length, 40);
   assert.equal(last.meta.unswept, true);
   assert.ok(last.warning.length <= 480, String(last.warning.length));
-  assert.match(last.warning, /^40 bb threads of this home could not be stopped and archived \(thr_000_x+, .* and 34 more\): stop and archive them in bb/);
+  assert.match(last.warning, /^40 bb threads of this home could not be stopped and archived: stop and archive them in bb \(bb thread stop <id>, bb thread archive <id>\)\. They are thr_000_x+, /);
   assert.doesNotMatch(last.warning, /boom|noise/);
   const unreachable = await retireWith(t, { "project list": { error: { code: "error", message: `fetch failed: ${"very long ".repeat(300)}` } } });
   assert.ok(unreachable.last.warning.length <= 480);

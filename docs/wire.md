@@ -69,13 +69,14 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   `sandbox` describes that code, which is here and tested, and runs once the refusal is
   lifted.
 - **The endpoint a launch answers is new.** Every launch answers a thread bb made for it.
-  The provider relies on bb making a new thread id for each spawn, and guards the two
-  places where an old thread could come back: it never answers the `previous` endpoint's
-  thread, from bb's own answer or otherwise; and where the spawn's fate is unknown it
-  takes only a thread bb created after the spawn was asked for (bb's `createdAt`; bb and
-  the provider are on one host), so an older thread of the home that shows again is not
-  answered (the launch stays in doubt). The kernel may tell a new session from an old
-  one by its endpoint.
+  bb makes a new thread id for each spawn, and the provider does not take that on trust:
+  bb's answer to the spawn is the launch's thread only when it names a thread bb did not
+  have before the spawn (not the `previous` endpoint's, not another thread of the home's
+  project, live or archived) and, where it names a project, the home's. Any other answer,
+  like a spawn whose fate is unknown, makes the launch look: it then takes only a thread
+  bb created after the spawn was asked for (bb's `createdAt`; bb and the provider are on
+  one host), so an older thread of the home that shows again is not answered (the launch
+  stays in doubt). The kernel may tell a new session from an old one by its endpoint.
 - **stop is complete only when nothing of the thread can run.** bb's concurrency limit
   holds a turn in line (the thread is `pending`, its list row says `queuedWork`), and
   `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So a stop is
@@ -88,11 +89,11 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   end of the grace is `E_SESSION_STOP_FAILED`. Inspect reads a settled thread with work
   in line as `running: true`.
 - **A refusal means nothing was changed.** A launch reads everything it needs first (bb's
-  projects and threads, the home's archived threads). From the first call that may have
+  projects and threads, the home's archived threads, its own files in the home). From the first call that may have
   changed something, it no longer answers a refusal: a stop of an earlier thread of the
   home (a loaded process may have been released, a held message withdrawn), the archive
   of the previous thread, the creation of the home's project, each also when its answer
-  was lost. What cannot be completed after that ends with no answer and a nonzero exit,
+  was lost. Whatever fails after that, in bb or on this machine, ends with no answer and a nonzero exit,
   as every outcome in doubt does, and the kernel keeps its record that a launch was sent.
   Two failures stay refusals, because they are known to have changed nothing: bb's own no
   to creating the home's project, when nothing came before it; and bb's own no to the
@@ -116,7 +117,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   all: one bb call per archived thread of that project, and one more read of the lists.
   An archived thread is confirmed stopped by the same rule as a live one, with the reads
   shared: bb acknowledges each stop, the lists are read again, and every thread stopped
-  must show settled with nothing in line; one that does not goes through the rule above
+  must show, in its one row, settled and `queuedWork: "none"`; one whose row says anything
+  else, or does not say, goes through the rule above
   by itself. Never by the row it was found in. What none of this can show is the
   process: it ends a moment after bb's acknowledgement, and the provider does not look at
   processes (the kernel does, in the home, before it retires one). So the old thread's
@@ -204,9 +206,12 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   thread), `bb thread archive`, and `bb thread list --project <id> --archived`. The
   contract test also sets bb's limit (`bb concurrency-limit global`), to pin what a held
   turn looks like and that a stop withdraws it. A list is read row by
-  row: a project needs an `id` and its `sources`, a thread an `id` and a `status` (and a
-  `projectId`, `archivedAt`, `deletedAt`, `environmentPath` of the kind bb writes), an
-  interaction an `id` and a `status`. One row that is not that, and the whole read is an
+  row: a project needs an `id` and its `sources` (each with its `type`, and a local one
+  its `path`), a thread an `id` and a `status` that is one of bb's words (`pending`,
+  `idle`, `starting`, `active`, `stopping`, `error`), with a `projectId`, `archivedAt`,
+  `deletedAt`, `environmentPath` of the kind bb writes (times are numbers), an
+  interaction an `id` and a `status` that is one of bb's (`pending`, `resolving`,
+  `resolved`, `interrupted`; the first two hold input). One row that is not that, and the whole read is an
   error: only a list the provider can read says a thread, or a prompt, is not there.
 - HTTP, loopback only, read-only, bounded in size and time, strictly decoded:
   `GET <server>/health`, `GET <daemon>/status` (`connected`, and a `serverUrl` that is this

@@ -93,7 +93,7 @@ test("a status word the provider does not know is an error, never a guess", asyn
   const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", "hibernating")]);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
-  assert.match(answer.error.message, /"hibernating"/);
+  assert.match(answer.error.message, /a row this provider cannot read/);
 });
 
 test("a second live thread in the home's project is E_SESSION_UNAVAILABLE naming both ids", async (t) => {

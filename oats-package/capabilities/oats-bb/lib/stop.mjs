@@ -1,7 +1,7 @@
 // stop, and the retire hook's archive (contract item 3).
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, bounded, fail, isObject, recode } from "./errors.mjs";
+import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
@@ -71,10 +71,6 @@ export function graceOf(input) {
   return isObject(input) && Number.isFinite(input.graceSeconds) && input.graceSeconds >= 0 ? Math.min(input.graceSeconds, MAX_GRACE_SECONDS) : DEFAULT_GRACE_SECONDS;
 }
 
-/** "thr_a, thr_b and 3 more": ids for a warning, inside what the kernel relays. */
-function someIds(ids, max = 6) {
-  return ids.length <= max ? ids.join(", ") : `${ids.slice(0, max).join(", ")} and ${ids.length - max} more`;
-}
 
 // How long the hook waits for one thread to settle: it runs after the kernel's own stop.
 const RETIRE_GRACE_SECONDS = 5;
@@ -120,7 +116,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
       unswept = error.code;
     }
     const warnings = [];
-    if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived (${someIds(left)}): stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>)`);
+    if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
     if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped (${unswept}): a Claude process of one may still be loaded; stop them in bb (bb thread list --archived, bb thread stop <id>)`);
     if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}) }, warning: bounded(warnings.join(". ")) };
     if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };

@@ -125,6 +125,15 @@ test("full mode ignores a sandbox that is no object at all; a sandboxed launch r
   assert.equal(local().sandbox, undefined);
 });
 
+test("every line of a check's answer fits what the kernel relays: a home's sandbox line with long paths is cut, not relayed whole", async (t) => {
+  const { dir, launch, check } = await setup(t);
+  const long = (n) => ({ path: join(dir, `${n}-${"p".repeat(190)}`), reason: "instance events" });
+  assert.equal((await launch({ sandbox: { domains: [AWEB], write: [long(1), long(2)] } })).ok, true);
+  const { result } = await check();
+  assert.ok(result.warnings.length > 0);
+  for (const warning of result.warnings) assert.ok(warning.message.length <= 480, `${warning.code}: ${warning.message.length}`);
+});
+
 test("readiness never reads Claude's settings through a .claude that is a link out of the home", async (t) => {
   const { dir, home, launch, check } = await setup(t);
   await launch();

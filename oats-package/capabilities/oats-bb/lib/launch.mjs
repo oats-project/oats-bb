@@ -4,7 +4,7 @@ import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
-import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
+import { InDoubt, ProviderError, fail, isObject, someOf } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
@@ -71,7 +71,8 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const previousId = typeof previous?.threadId === "string" ? previous.threadId : null;
   const others = live.filter((thread) => thread.id !== previousId);
   if (others.length > 0) {
-    throw fail("E_SESSION_START_FAILED", `a live bb thread already runs in ${home}: ${others.map((thread) => `${thread.id} (${thread.status})`).join(", ")}. One home is one thread: stop and archive ${others.length > 1 ? "them" : "it"} in bb, then start again`);
+    // The remedy and the count before the list, which may be long.
+    throw fail("E_SESSION_START_FAILED", `${others.length > 1 ? `${others.length} live bb threads already run` : "a live bb thread already runs"} in ${home}. One home is one thread: stop and archive ${others.length > 1 ? "them" : "it"} in bb, then start again. Running there: ${someOf(others.map((thread) => `${thread.id} (${thread.status})`))}`);
   }
   const replaced = live.find((thread) => thread.id === previousId) ?? null;
   if (replaced && (!isSettled(replaced) || hasQueuedWork(replaced))) {
@@ -96,7 +97,14 @@ export async function launch(input, settings, { deadline, env = process.env, spa
       if (!(error instanceof ProviderError)) throw error;
     }
   }
-  const toSweep = mine.length > 0 ? await archivedOf(bb, mine.map((candidate) => candidate.id), { since }) : [];
+  // Every thread of the home's project that bb has now, live or archived: none of them is
+  // the thread this launch makes.
+  const archivedNow = mine.length > 0 ? await archivedOf(bb, mine.map((candidate) => candidate.id)) : [];
+  const toSweep = archivedNow.filter((thread) => since === null || typeof thread.archivedAt !== "number" || thread.archivedAt >= since);
+  const known = new Set([...live.map((candidate) => candidate.id), ...archivedNow.map((candidate) => candidate.id), ...(previousId ? [previousId] : [])]);
+  // And the launch's own files in the home as they stand, to put back should it end in a
+  // refusal: read here, by the confined read, before anything is changed.
+  const restoreSettings = snapshotLaunchSettings(home);
 
   // Then the changes, and from the first one that MAY have happened a failure is no longer
   // a refusal: the kernel reads a refusal as "nothing happened" and may drop its record
@@ -107,9 +115,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // own no to creating the home's project when nothing came before it, and bb's own no to
   // the spawn when the only change was the launch's own settings file, which is put back.
   let effect = null;
-  const inDoubtAfter = (error) => (effect !== null && error instanceof ProviderError
-    ? new InDoubt(`${error.message}. The launch may already have changed bb or the home (${effect}), so this is not a refusal`) : error);
-  let project, restoreSettings;
+  // Whatever fails after that, of bb's or of this machine's (a write the disk refuses): no answer.
+  const inDoubtAfter = (error) => (effect !== null && !(error instanceof InDoubt)
+    ? new InDoubt(`${error?.message ?? error}. The launch may already have changed bb or the home (${effect}), so this is not a refusal`) : error);
+  let project;
   try {
     if (replaced || toSweep.length > 0) {
       effect = "it asked bb to stop earlier threads of this home";
@@ -138,12 +147,15 @@ export async function launch(input, settings, { deadline, env = process.env, spa
         throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
       }
     }
-    // The launch's own files in the home: put back as they were where the write, or a
-    // spawn bb refuses, leaves the launch with nothing else changed.
-    restoreSettings = snapshotLaunchSettings(home);
+    // The launch's own files in the home. Where the write fails with nothing else
+    // changed, they are put back as they were and the failure is a refusal; where they
+    // cannot be put back, the home was changed, and it is not one.
     try { writeLaunchSettings(home, settingsToWrite); }
     catch (error) {
-      if (effect === null) restoreSettings();
+      if (effect === null) {
+        try { restoreSettings(); }
+        catch (failed) { throw new InDoubt(`${error?.message ?? error}. The launch's files in the home could not be put back as they were (${failed?.code ?? failed?.message ?? failed}), so this is not a refusal`); }
+      }
       throw error;
     }
 
@@ -154,9 +166,13 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const askedAt = Date.now();
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;
-  // The answer is always a thread this home never had: bb makes a new id for every spawn,
-  // and the previous thread's is never answered (the kernel tells a new session by it).
-  if (spawned.ok && isObject(thread) && isBbId(thread.id) && thread.id !== previousId) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+  // The answer is always a thread this home never had. bb makes a new id for every spawn;
+  // an answer that names a thread bb already had before the spawn (the previous one, or an
+  // older one, live or archived), or one of another project, is not taken for it: the
+  // launch then looks, as for any spawn whose fate it cannot tell.
+  const fresh = spawned.ok && isObject(thread) && isBbId(thread.id) && !known.has(thread.id)
+    && (thread.projectId === undefined || thread.projectId === null || thread.projectId === project.id);
+  if (fresh) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
   // bb said no, or the request never reached it: no thread was created. With nothing else
   // changed, the launch's own settings file is put back as it was, and this is a refusal.
   if (nothingHappened(spawned)) {
@@ -175,12 +191,11 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // home, recorded nowhere. So look: a new live thread in the home is this launch's, and
   // its endpoint is the answer. Otherwise the launch stays in doubt, and the call ends
   // with no answer: the kernel then stops whatever runs in the home.
-  const what = spawned.ok ? (isObject(thread) && thread.id === previousId ? "bb thread spawn answered the previous thread again" : "bb thread spawn answered no thread id") : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
+  const what = spawned.ok ? (isObject(thread) && isBbId(thread.id) ? (thread.id === previousId ? "bb thread spawn answered the previous thread again" : "bb thread spawn answered a thread bb already had, or one of another project") : "bb thread spawn answered no thread id") : spawned.timedOut ? `bb thread spawn did not answer in time (${spawned.message})` : `bb thread spawn ended without bb's answer (${spawned.message})`;
   // This launch's thread is one bb made after the spawn was asked for (bb and the provider
   // are on one host, so on one clock): never the previous thread, nor an older one of the
   // home that a person brought back meanwhile. A thread that does not say when it was
   // made is not taken for this launch's.
-  const known = new Set([...live.map((candidate) => candidate.id), ...(previousId ? [previousId] : [])]);
   const made = (candidate) => !known.has(candidate.id) && typeof candidate.createdAt === "number" && candidate.createdAt >= askedAt;
   let found = [];
   try {

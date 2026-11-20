@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
+import { bounded } from "./errors.mjs";
 import { FULL_MODE_ONLY, plannedLaunchFindings, readinessResult, sandboxWarnings } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
 import { stop } from "./stop.mjs";
@@ -43,6 +44,8 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       // says what the command launches in, so `oats readiness` does not read "ready" and
       // the spawn that follows is then refused with nothing having said why.
       if (planned === null && !sandboxedModes) result.warnings.push({ ...FULL_MODE_ONLY });
+      // The last word on every line of the answer: cut to what the kernel relays.
+      result.warnings = result.warnings.map(({ code, message }) => ({ code, message: bounded(message) }));
       return result;
     },
   };

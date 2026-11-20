@@ -2,6 +2,7 @@
 // oats.bb: the bb session provider. `session <verb>` is the kernel's to call (JSON in on
 // stdin, one JSON document out); `retire-hook` is its retire hook; `doctor` is a person's.
 import { sessionHandlers } from "../lib/commands.mjs";
+import { bounded } from "../lib/errors.mjs";
 import { removeLaunchSettings } from "../lib/local-settings.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
@@ -22,7 +23,8 @@ function doctorArgs(args) {
   }
   return { json };
 }
-const print = (doc) => process.stdout.write(`${JSON.stringify(doc)}\n`);
+// Every line a hook prints: a warning is cut to what the kernel relays.
+const print = (doc) => process.stdout.write(`${JSON.stringify(typeof doc?.warning === "string" ? { ...doc, warning: bounded(doc.warning) } : doc)}\n`);
 
 const USAGE = `oats bb: the bb session provider (oats.bb)
 

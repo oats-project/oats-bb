@@ -102,6 +102,12 @@ function isUnreachable(answer) {
   return !answer.ok && (answer.timedOut === true || (answer.code === "error" && /fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|socket hang up|network/i.test(answer.message)));
 }
 
+// The words bb-app uses at the pinned version (its own enums): a thread's status and an
+// interaction's. A row whose word is not one of them cannot be read: "not pending" or
+// "not running" must never be taken from a word this provider does not know.
+const THREAD_STATUSES = new Set(["pending", "idle", "starting", "active", "stopping", "error"]);
+const INTERACTION_STATUSES = new Set(["pending", "resolving", "resolved", "interrupted"]);
+
 /** The bb commands this provider uses, each against one server, under one deadline.
  *  A failure throws a ProviderError carrying `fallbackCode` (the caller's phase code),
  *  or E_BACKEND_UNREACHABLE when bb's server did not answer; `bb` on the error is the
@@ -137,7 +143,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   // A time as bb writes one: a number of milliseconds, or nothing. A word there would
   // read as "archived" or "deleted" and make a live thread look gone.
   const stamp = (value) => value === null || value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= 0);
-  const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string"
+  const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && THREAD_STATUSES.has(row.status)
     && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
     && (row.queuedWork === null || row.queuedWork === undefined || typeof row.queuedWork === "string")
     && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string");
@@ -147,7 +153,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   const sourceRow = (source) => isObject(source) && typeof source.type === "string" && source.type !== ""
     && (source.type === "local_path" ? typeof source.path === "string" && source.path !== "" : source.path === null || source.path === undefined || typeof source.path === "string");
   const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources) && row.sources.every(sourceRow);
-  const interactionRow = (row) => isObject(row) && typeof row.id === "string" && typeof row.status === "string";
+  const interactionRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && INTERACTION_STATUSES.has(row.status);
   const queuedRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "";
   return {
     server, raw, refusal,

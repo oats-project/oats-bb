@@ -471,7 +471,7 @@ test("T5 via the kernel: after oats instance stop, session inspect answers stopp
 // What bb's concurrency limit holds in line is not stopped by `bb thread stop`: bb starts
 // the held turn by itself when a slot frees. Found in a real run: an agent OATS had
 // stopped ran its task afterwards.
-test("a turn bb holds in line: inspect reads the thread running, and a stop withdraws the turn so it never runs", async () => {
+test("a turn bb holds in line: inspect reads the thread running, and a stop or a retire withdraws the turn so it never runs", async () => {
   await sh("bb concurrency-limit global 1 --json");
   try {
     // One home busy in its only slot.
@@ -498,12 +498,24 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop with
     assert.deepEqual(await bbJson(`thread queue list ${held.endpoint.threadId}`), [], "the held turn was withdrawn");
     assert.equal((await row()).queuedWork, "none");
 
-    // The slot frees, and the limit goes: the stopped home's task never reaches the model.
+    // A third home, held the same way, is retired instead of stopped: the retire hook
+    // withdraws its held turn before it archives the thread.
+    const retiring = await launched("queue-retired");
+    const retiringRow = async () => (await bbJson("thread list --include-hidden --include-archived")).find((thread) => thread.id === retiring.endpoint.threadId);
+    await waitFor("bb to hold the third home's turn in line", async () => (await retiringRow()).queuedWork === "waiting");
+    const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${retiring.home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+    assert.deepEqual(retired, { meta: { retired: true, archived: [retiring.endpoint.threadId] } });
+    assert.deepEqual(await bbJson(`thread queue list ${retiring.endpoint.threadId}`), [], "the held turn was withdrawn before the archive");
+    assert.notEqual((await retiringRow()).archivedAt, null);
+
+    // The slot frees, and the limit goes: neither home's task ever reaches the model.
     assert.deepEqual((await provider("stop", { home: busy.home, endpoint: busy.endpoint, graceSeconds: 10 })).result, { stopped: true });
     await sh("bb concurrency-limit global unlimited --json");
     await sleep(8_000);
     assert.equal(await landed("TASK-queue-held"), 0, "a stopped agent ran its task");
+    assert.equal(await landed("TASK-queue-retired"), 0, "a retired agent ran its task");
     assert.equal(await processesIn(held.home), 0);
+    assert.equal(await processesIn(retiring.home), 0);
   } finally {
     await sh("bb concurrency-limit global unlimited --json");
   }

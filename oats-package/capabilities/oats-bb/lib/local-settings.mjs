@@ -12,7 +12,7 @@
 // The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
 // and later removes exactly that. An entry a person put in the file under another name is
 // never touched; a name the launch carries is the launch's.
-import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
 import { ProviderError, fail, isObject } from "./errors.mjs";
@@ -314,18 +314,17 @@ function pinDirectory(dir, refuse, { follow = false } = {}) {
   return { fd, through, same };
 }
 
-/** Read a JSON object from a file in the home, or null when there is none. The home is
- *  writable by its agent, so the read is confined: the file's directory is opened
+/** The bytes of a file in the home, or null when there is none. The home is writable by
+ *  its agent, so every read of it goes through here: the file's directory is opened
  *  without following a link and held, and the file is read through it; a regular file
- *  only (a link, a directory or a pipe is refused, never followed or waited on), at most
- *  1 MiB, and nothing of its content goes into a message. */
-function readJsonObject(path, what, { inHome = false } = {}) {
+ *  only (a link, a directory or a pipe is refused, never followed, waited on or taken for
+ *  absent), at most 1 MiB. → { bytes, mode } | null. Throws E_SESSION_START_FAILED otherwise. */
+function readHomeBytes(path, what, { inHome = false } = {}) {
   const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
   // The home itself is the kernel's word, and may be reached through a link: only a
   // directory inside it is opened without following one.
   const dir = pinDirectory(dirname(path), refuse, { follow: inHome });
   if (dir === null) return null;
-  let text;
   let fd = null;
   try {
     const pinned = dir.through(basename(path));
@@ -343,7 +342,7 @@ function readJsonObject(path, what, { inHome = false } = {}) {
       if (n === 0) break;
       got += n;
     }
-    text = buffer.subarray(0, got).toString("utf8");
+    return { bytes: buffer.subarray(0, got), mode: opened.mode & 0o777 };
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     throw refuse(`could not be read (${typeof error?.code === "string" ? error.code : "error"})`);
@@ -351,8 +350,16 @@ function readJsonObject(path, what, { inHome = false } = {}) {
     if (fd !== null) closeSync(fd);
     closeSync(dir.fd);
   }
+}
+
+/** Read a JSON object from a file in the home, or null when there is none, by the
+ *  confined read above; nothing of its content goes into a message. */
+function readJsonObject(path, what, options) {
+  const read = readHomeBytes(path, what, options);
+  if (read === null) return null;
+  const refuse = (why) => fail("E_SESSION_START_FAILED", `${what} ${path} ${why}: fix or remove it; the provider does not overwrite it`);
   let doc;
-  try { doc = JSON.parse(text); }
+  try { doc = JSON.parse(read.bytes.toString("utf8")); }
   catch { throw refuse("is not JSON"); }
   if (!isObject(doc)) throw refuse("is not a JSON object");
   return doc;
@@ -494,20 +501,23 @@ function withdraw(settings, envNames, sandboxRecord) {
 }
 
 /** What a launch writes in the home, as it stands now: Claude's local settings and the
- *  provider's records. → restore(): puts every one of them back as it was (its bytes, or
- *  its absence), and removes a directory the launch made. For a launch that ends in a
- *  refusal after it wrote them: a refusal means nothing was changed. */
+ *  provider's records, read by the confined read (a name that is no regular file, or a
+ *  file too large, refuses here, before anything is changed). → restore(): puts every one
+ *  of them back as it was (its bytes and mode, or its absence), and removes a directory
+ *  the launch made. For a launch that ends in a refusal after it wrote them: a refusal
+ *  means nothing was changed. Taken before the launch changes anything in bb. */
 export function snapshotLaunchSettings(home) {
-  const files = [join(".claude", "settings.local.json"), ENV_RECORD, LAUNCH_RECORD, SANDBOX_RECORD].map((name) => join(home, name));
-  const dirs = [join(home, ".claude"), join(home, STATE_DIR)].map((dir) => ({ dir, was: lstatSync(dir, { throwIfNoEntry: false }) !== undefined }));
-  const before = files.map((path) => {
-    const stat = lstatSync(path, { throwIfNoEntry: false });
-    return { path, bytes: stat?.isFile() ? readFileSync(path) : null, mode: stat?.isFile() ? stat.mode & 0o777 : null };
-  });
+  const dirs = [join(home, ".claude"), join(home, STATE_DIR)].map((dir) => ({ dir, was: realDirectory(dir, "the launch's directory") }));
+  const before = [
+    [join(home, ".claude", "settings.local.json"), "Claude's local settings", {}],
+    [join(home, ENV_RECORD), "the provider's record", {}],
+    [join(home, LAUNCH_RECORD), "the provider's launch record", {}],
+    [join(home, SANDBOX_RECORD), "the provider's sandbox record", { inHome: true }],
+  ].map(([path, what, options]) => ({ path, was: readHomeBytes(path, what, options) }));
   return () => {
-    for (const { path, bytes, mode } of before) {
-      if (bytes === null) rmSync(path, { force: true });
-      else { writeFileSync(path, bytes, { mode }); chmodSync(path, mode); }
+    for (const { path, was } of before) {
+      if (was === null) rmSync(path, { force: true });
+      else { writeFileSync(path, was.bytes, { mode: was.mode }); chmodSync(path, was.mode); }
     }
     for (const { dir, was } of dirs) {
       if (was) continue;

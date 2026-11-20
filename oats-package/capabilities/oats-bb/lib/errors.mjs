@@ -31,6 +31,8 @@ export const isObject = (value) => value !== null && typeof value === "object" &
 // counts before its list.
 const MESSAGE_MAX = 480;
 export const bounded = (text) => { const line = String(text); return line.length > MESSAGE_MAX ? `${line.slice(0, MESSAGE_MAX - 1).replace(/[\ud800-\udbff]$/, "")}…` : line; };
+/** "a, b and 3 more": the first names of a list, with a count of the rest. */
+export const someOf = (names, max = 6) => (names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} and ${names.length - max} more`);
 
 /** A verb's refusals carry that verb's own code: any other ProviderError is recoded to
  *  it, keeping its message. Anything that is not a ProviderError is a bug, and rethrown. */

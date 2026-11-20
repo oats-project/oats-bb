@@ -35,7 +35,8 @@ test("a resolved interaction does not hold input", async (t) => {
   assert.deepEqual(answer.result, { submitted: true, verified: true });
 });
 
-for (const [name, rows] of [["a row that is no object", [null]], ["a row with no status", [{ id: "pint_1" }]], ["a row with no id", [{ status: "pending" }]]]) {
+for (const [name, rows] of [["a row that is no object", [null]], ["a row with no status", [{ id: "pint_1" }]], ["a row with no id", [{ status: "pending" }]],
+  ["a row whose status is empty", [{ id: "pint_1", status: "" }]], ["a row whose status is a word bb does not use", [{ id: "pint_1", status: "awaiting" }]], ["a row whose status is no word", [{ id: "pint_1", status: 1 }]]]) {
   test(`an interactions list holding ${name} proves no prompt is closed: E_SESSION_INPUT_FAILED, and nothing is sent`, async (t) => {
     const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: rows }, "thread tell": { stdout: tellSent("thr_a") } });
     assert.equal(answer.error.code, "E_SESSION_INPUT_FAILED");
@@ -43,6 +44,14 @@ for (const [name, rows] of [["a row that is no object", [null]], ["a row with no
     assert.deepEqual(verbs(calls), ["thread interactions list"], "no tell");
   });
 }
+
+test("an interaction bb is resolving right now still holds input; one resolved or interrupted does not", async (t) => {
+  const during = await inputWith(t, { "thread interactions list": { stdout: [{ ...pendingInteraction("thr_a"), status: "resolving" }] }, "thread tell": { stdout: tellSent("thr_a") } });
+  assert.equal(during.answer.error.code, "E_SESSION_PROMPT_OPEN");
+  assert.deepEqual(verbs(during.calls), ["thread interactions list"]);
+  const after = await inputWith(t, { "thread interactions list": { stdout: [{ ...pendingInteraction("thr_a"), status: "interrupted" }] }, "thread tell": { stdout: tellSent("thr_a") } });
+  assert.deepEqual(after.answer.result, { submitted: true, verified: true });
+});
 
 test("a pending interaction: E_SESSION_PROMPT_OPEN, and nothing is sent", async (t) => {
   const { answer, calls } = await inputWith(t, { "thread interactions list": { stdout: [pendingInteraction("thr_a")] }, "thread tell": { stdout: tellSent("thr_a") } });

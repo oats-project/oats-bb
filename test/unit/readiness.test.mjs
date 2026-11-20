@@ -6,8 +6,9 @@ import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { accepts, exposedListeners, nonLoopbackAddresses } from "../../oats-package/capabilities/oats-bb/lib/exposure.mjs";
+import { sandboxCanStart } from "../../oats-package/capabilities/oats-bb/lib/readiness.mjs";
 import { isLoopbackHost, loopbackOrigin, readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { UNREACHABLE, VERSION, call, closedPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, closedPort, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 
 async function setup(t, script = {}, backendOverrides = {}) {
@@ -230,6 +231,37 @@ test("settings that are not a map are refused on the wire", async (t) => {
   const answer = await call("check", { home: null, soul: "dev" }, { settings: { version: 50 }, bb });
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_BACKEND_SETTINGS");
+});
+
+test("where bubblewrap is missing readiness warns that bb's sandboxed modes wait for a person: a warning, never a refusal", async (t) => {
+  const { backend, bb } = await setup(t);
+  const check = (settings) => call("check", { home: null, soul: "dev" }, { settings: backend.settings(settings), bb, env: { PATH: PATH_WITHOUT_BWRAP } });
+  const container = await check({ trust: "container" });
+  assert.equal(container.result.status, "ready");
+  assert.deepEqual(container.result.problems, []);
+  assert.deepEqual(container.result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
+  assert.match(container.result.warnings[0].message, /every command waits for a person in bb\. In a team container, spawn bb agents with --yolo \(bb full mode\): the container is the boundary/);
+  const single = await check({ trust: "single-user" });
+  assert.match(single.result.warnings[0].message, /Install bubblewrap, or spawn bb agents with --yolo/);
+  // With bubblewrap on PATH nothing is said (every other test runs so).
+  assert.deepEqual((await call("check", { home: null, soul: "dev" }, { settings: backend.settings(), bb })).result.warnings, []);
+  assert.equal(sandboxCanStart({ platform: "darwin", path: "" }), true, "only Linux needs bubblewrap");
+  assert.equal(sandboxCanStart({ platform: "linux", path: "" }), false);
+});
+
+test("oats bb doctor takes the kernel's own selectors, which change nothing here: --soul and --dir", async (t) => {
+  const { backend, bb } = await setup(t);
+  const env = { ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(), cli: bb.cli }) };
+  for (const args of [["--soul", "dev"], ["--soul=acme/dev", "--json"], ["--json", "--dir", "/srv/acme", "--soul", "dev"]]) {
+    const run = await runBin(["doctor", ...args], { env });
+    assert.equal(run.status, 0, `${args.join(" ")}: ${run.stderr}`);
+    assert.match(run.stdout, args.includes("--json") ? /^\{"status":"ready"/ : /^bb session provider: ready/);
+  }
+  for (const args of [["--soul"], ["--verbose"], ["--soul", "--json"], ["extra"]]) {
+    const run = await runBin(["doctor", ...args], { env });
+    assert.equal(run.status, 2, args.join(" "));
+    assert.match(run.stderr, /unknown command/);
+  }
 });
 
 test("oats bb doctor prints the same findings for a person, names where the credential comes from, never a value", async (t) => {

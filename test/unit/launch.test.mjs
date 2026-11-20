@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
 import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITH_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const spawned = (id = "thr_new") => ({ stdout: { id, projectId: "proj_a", environmentId: null, providerId: "claude-code", status: "starting" } });
 const entry = (name, value, extra = {}) => ({ name, value, source: "kernel", ...extra });
@@ -122,7 +122,7 @@ test("pathPrepend is carried as the env file's PATH: the shim directory first, t
   assert.equal((await run({ pathPrepend: [shim] })).ok, true);
   const dirs = localSettings(home).env.PATH.split(":");
   assert.equal(dirs[0], shim);
-  assert.deepEqual(dirs.slice(1), process.env.PATH.split(":").filter((dir) => dir && dir !== shim), "the rest is the caller's PATH, in order");
+  assert.deepEqual(dirs.slice(1), PATH_WITH_BWRAP.split(":").filter((dir) => dir && dir !== shim), "the rest is the caller's PATH, in order");
   // A launch that names its own PATH: the directories go before that one.
   await run({ pathPrepend: [shim], env: [entry("PATH", "/usr/bin:/bin", { source: "launch-config" })] });
   assert.equal(localSettings(home).env.PATH, `${shim}:/usr/bin:/bin`);

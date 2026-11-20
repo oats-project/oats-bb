@@ -26,12 +26,27 @@ const handlers = {
     return result;
   },
 };
+/** doctor's arguments: `--json`, and the kernel's own selectors, which it forwards
+ *  (`--soul <name>`, `--dir <path>`: the kernel has already resolved the settings of that
+ *  soul and deployment into OATS_SETTINGS, so they change nothing here). → {json} | null
+ *  for anything else. */
+function doctorArgs(args) {
+  let json = false;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--json") json = true;
+    else if ((args[i] === "--soul" || args[i] === "--dir") && typeof args[i + 1] === "string" && !args[i + 1].startsWith("--")) i += 1;
+    else if (!/^--(soul|dir)=.+/.test(args[i])) return null;
+  }
+  return { json };
+}
 const print = (doc) => process.stdout.write(`${JSON.stringify(doc)}\n`);
 
 const USAGE = `oats bb: the bb session provider (oats.bb)
 
-  oats bb doctor [--json]    check this deployment's bb: server, host daemon, version,
+  oats bb doctor [--json] [--soul <name>]
+                             check this deployment's bb: server, host daemon, version,
                              exposure, trust, bb's claude-code provider, orphaned threads
+                             (--soul: whose settings to read; the kernel resolves them)
 
 Called by the kernel (JSON on stdin, one JSON document on stdout):
   session launch | inspect | inspectMany | input | stop | check
@@ -68,9 +83,9 @@ async function main(argv) {
     print(await retire(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 40_000 }));
     return 0;
   }
-  if (command === "doctor" && rest.every((arg) => arg === "--json")) {
+  if (command === "doctor" && doctorArgs(rest) !== null) {
     const { result, credential } = await readinessResult(readSettings(settingsFromEnv(process.env)));
-    if (rest.includes("--json")) print({ ...result, credential });
+    if (doctorArgs(rest).json) print({ ...result, credential });
     else {
       process.stdout.write(`bb session provider: ${result.status}\n`);
       for (const problem of result.problems) process.stdout.write(`  problem ${problem.code}: ${problem.message}\n`);

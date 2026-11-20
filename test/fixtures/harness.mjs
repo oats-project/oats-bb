@@ -1,7 +1,7 @@
 // What the unit tests share: a fake bb on disk, a fake bb server and host daemon on
 // loopback, and the provider run as the kernel runs it (a process, JSON in, JSON out).
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -12,6 +12,18 @@ export const repoRoot = resolve(here, "../..");
 export const capabilityDir = join(repoRoot, "oats-package/capabilities/oats-bb");
 export const providerBin = join(capabilityDir, "bin/oats-bb.mjs");
 const fakeBb = join(here, "fake-bb.mjs");
+
+// The PATH the provider runs with in the tests: a directory holding a `bwrap` (so the
+// answer does not depend on whether this machine has bubblewrap), then the machine's own.
+// `PATH_WITHOUT_BWRAP` holds node alone, for the tests of a host without it.
+const toolDirs = mkdtempSync(join(tmpdir(), "oats-bb-path-"));
+process.on("exit", () => rmSync(toolDirs, { recursive: true, force: true }));
+mkdirSync(join(toolDirs, "with"));
+mkdirSync(join(toolDirs, "without"));
+writeFileSync(join(toolDirs, "with/bwrap"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+symlinkSync(process.execPath, join(toolDirs, "without/node"));
+export const PATH_WITH_BWRAP = `${join(toolDirs, "with")}:${process.env.PATH}`;
+export const PATH_WITHOUT_BWRAP = join(toolDirs, "without");
 
 export const VERSION = "0.50.1";
 
@@ -110,7 +122,7 @@ export async function closedPort() {
 /** Run the provider's bin as the kernel does. → { status, stdout, stderr, doc }. */
 export function runBin(args, { stdin = "", env = {} } = {}) {
   return new Promise((resolveRun, reject) => {
-    const child = spawn(process.execPath, [providerBin, ...args], { cwd: capabilityDir, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [providerBin, ...args], { cwd: capabilityDir, env: { PATH: PATH_WITH_BWRAP, HOME: process.env.HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });

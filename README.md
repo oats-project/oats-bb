@@ -60,7 +60,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 4. Check it, then spawn:
 
    ```sh
-   oats bb doctor                       # or: oats readiness --soul <soul>
+   oats bb doctor --soul <soul>         # or: oats readiness --soul <soul>
    oats spawn <soul> --backend bb --harness claude --name <task>-<role>
    ```
 
@@ -287,6 +287,23 @@ that keeps them so: move the image's pin together with the provider release (or 
 `version` setting). In the container, set `trust: container`,
 and give Claude's token to the bb server's own environment (the image's supervisor does
 this); it is never a launch environment entry.
+
+In a team container (`trust: container`), spawn bb agents with `--yolo` (bb `full` mode):
+the container is the boundary, as it is for tmux agents there. bb's sandboxed modes need
+bubblewrap, which the hardened image doesn't carry; without it every command waits for a
+person in bb. Readiness says so wherever bubblewrap is missing
+(`session-provider-sandbox-unsupported`, a warning: it refuses nothing).
+
+## A trial against an unreleased kernel
+
+The manifests' floor (`compatibility.oats`, `>=0.70.0`) names the OATS release that will
+list `session-providers`; the release lane sets the real number. A kernel built from an
+unmerged branch reports an older version and refuses the capability
+(`E_CAPABILITY_INCOMPATIBLE`). For a trial only: make a local commit on top of the commit
+you are trying that sets `compatibility.oats` in `oats-package/oats-package.json` and
+`oats-package/capabilities/oats-bb/oats.json` to your kernel's version, and pin that commit
+(`oats.bb: git:<repository>@<that commit>`). Never ship or push that commit: the floor in
+the repository stays.
 
 ## Development
 

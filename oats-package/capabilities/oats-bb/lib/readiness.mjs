@@ -2,7 +2,8 @@
 // `oats readiness` (the provider's check command) and run by every launch before it
 // touches anything. Each finding is {code, message, status}; `status` is the readiness
 // wire's word for it (needs-configuration, authorization-required or unavailable).
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
@@ -158,12 +159,31 @@ async function orphanedThreads(bb, { exists = existsSync } = {}) {
   return warnings;
 }
 
+/** Whether Claude Code's sandbox can start here. On Linux it runs commands under
+ *  bubblewrap (`bwrap`); without it bb's sandboxed modes cannot auto-allow anything, and
+ *  every command waits for a person in bb. Other platforms bring their own. */
+export function sandboxCanStart({ platform = process.platform, path = process.env.PATH ?? "" } = {}) {
+  if (platform !== "linux") return true;
+  return path.split(delimiter).filter(Boolean).some((dir) => {
+    try { accessSync(join(dir, "bwrap"), constants.X_OK); return true; } catch { return false; }
+  });
+}
+
+/** What to say where the sandbox cannot start: a warning, never a refusal. */
+function sandboxRuntimeWarning(settings, env) {
+  if (sandboxCanStart({ path: env.PATH ?? "" })) return [];
+  const then = settings.trust === "container"
+    ? "In a team container, spawn bb agents with --yolo (bb full mode): the container is the boundary, as it is for tmux agents there"
+    : "Install bubblewrap, or spawn bb agents with --yolo (bb full mode)";
+  return [{ code: "session-provider-sandbox-unsupported", message: `bubblewrap (bwrap) is not on this host's PATH, so Claude's sandbox cannot start: in bb's sandboxed modes (auto, accept-edits) every command waits for a person in bb. ${then}` }];
+}
+
 /** The readiness result: {status, problems, warnings}, the shape `oats readiness` relays
  *  as a providers item. `status` is ready (no problem), needs-configuration,
  *  authorization-required or unavailable. `credential` is for a person's report only. */
 export async function readinessResult(settings, options = {}) {
   const { problems, bb, listable, credential } = await backendProblems(settings, options);
-  const warnings = [];
+  const warnings = sandboxRuntimeWarning(settings, options.env ?? process.env);
   if (listable) {
     try { warnings.push(...await orphanedThreads(bb, options)); }
     catch (error) {

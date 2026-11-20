@@ -8,16 +8,20 @@ bb, takes the screenshots, and records what the kernel printed: that recording i
 fixtures marked "recorded" in `test/fixtures/README.md` come from.
 
 ```sh
-KERNEL_REPO=<a clone of the OATS repository> PROVIDER_REPO=<a clone of oats-bb with the provider> \
-  plugin/container/real/run.sh
+KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
 ```
+
+The recording in `test/fixtures/` is of 2026-11-20: the plugin of this checkout against the kernel
+of awebai/oats `main` at `da296359e97eb435f6de561947ef2fdda92c927c` (oats-project/oats#2040 merged: OATS 0.69.24, session-provider wire
+1.3) and the bb session provider of this repository's `main` at `92fecf735475a363c1d55158d6ff078acf017bb7` (oats-bb#3 merged), bb-app at
+the root `bb-version` (0.50.1), Claude Code on a mock model, no aweb. The provider's floor
+(`compatibility.oats: >=0.70.0`) is above that kernel's version, so the run lowered it **inside
+the container only**, with a trial-only commit that is never pushed (below, "The provider").
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `KERNEL_REPO` | none, required | a clone of the OATS repository that holds `KERNEL_REF`; only read (`git archive`) |
-| `KERNEL_REF` | `5a9db77014443607131f1ed5def0867dd1597dc0` | the kernel commit (oats-project/oats#1991, OATS 0.69.21 with the feature `session-providers`) |
-| `PROVIDER_REPO` | none, required | a clone of oats-bb that holds `PROVIDER_REF`; only read |
-| `PROVIDER_REF` | `37e9abaf83157cf0cdcfc09022ea0a701dee2a78` | the provider commit (branch `provider`, wire 1.3) |
+| `KERNEL_REF` | `da296359e97eb435f6de561947ef2fdda92c927c` | the kernel commit (awebai/oats `main`, oats-project/oats#2040 merged: OATS 0.69.24, wire 1.3) |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
 | `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` | as `container/ci.sh` | keep the container, name it, the image, extra `docker run` arguments (`--dns 1.1.1.1`) |
 
@@ -34,16 +38,12 @@ takes six to eight minutes.
 
 ## Why CI does not run it
 
-`container/ci.sh all` does not call `run.sh`, and the workflow does not either. The kernel it needs
-is an unmerged pull request of another repository (oats-project/oats#1991), and the provider is
-not on this repository's `main` yet: a CI runner has neither tree. It can join CI when both of
-these hold:
-
-1. an OATS release that lists `session-providers` is on npm: `setup.sh` then installs
-   `@awebai/oats@<that version>` instead of packing a tree, and `KERNEL_REPO` goes away;
-2. the provider is in this repository (`oats-package/`), with its `compatibility.oats` floor at
-   that release: `workspace.sh` then pins the checkout's own tree, the trial-only commit that
-   lowers the floor goes away, and so does `PROVIDER_REPO`.
+`container/ci.sh all` does not call `run.sh`, and the workflow does not either. The provider is this
+checkout's own (`oats-package/`), but the kernel it needs is on no npm release yet: it is a commit
+of another repository, and a CI runner has no clone of it. The run can join CI when an OATS release
+that the provider's floor admits (`compatibility.oats`, `>=0.70.0`) is on npm: `setup.sh` then
+installs `@awebai/oats@<that version>` instead of packing a tree, `KERNEL_REPO` goes away, and
+`workspace.sh` makes no trial-only commit (it makes one only where the floor refuses the kernel).
 
 Until then a person or an agent runs it by hand when the kernel, the provider or the plugin's
 `kernel/` changes, and with `UPDATE_FIXTURES=1` when the answers are to be recorded again.
@@ -52,7 +52,7 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
 
 | File | Runs | Does |
 |---|---|---|
-| `run.sh` | on the host | starts the container, copies in the plugin, the kernel's tree and the provider's tree, runs the two scripts below, copies the artefacts back to `real/out/` |
+| `run.sh` | on the host | starts the container, copies in the plugin, the kernel's tree and the provider's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
 | `mock-anthropic.mjs` | in the container | the mock model |
@@ -61,16 +61,20 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
-  (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit for the
-  host is set to 8: the automatic one is one running thread per processor (2 in this container),
-  and the run keeps two turns open while a third agent takes its own.
+  (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays
+  the automatic one: one running thread per processor, 2 in this container. The run is written for
+  that limit (part B).
 - **The kernel**: `npm pack --ignore-scripts` in the tree, then `npm install -g` of the tarball.
   `setup.sh` stops unless `oats version --json` lists `session-providers`.
-- **The provider**: its tree becomes a local git repository with one **trial-only commit** on top
-  that sets `compatibility.oats` to `>=<the packed kernel's version>` in both manifests (the
-  provider's README, "A trial against an unreleased kernel": its real floor, `>=0.70.0`, refuses a
-  kernel built from an unmerged branch). That commit exists only inside the container. The
-  workspace pins the package by it: `oats.bb: git:file://…/oats-bb.git@<commit>`.
+- **The provider**: this checkout's `oats-package/` becomes a local git repository in the
+  container. Where the provider's floor refuses the kernel under test, and only then, one
+  **trial-only commit** goes on top that sets `compatibility.oats` to `>=<the packed kernel's
+  version>` in both manifests (the provider's README, "A trial against an unreleased kernel").
+  That commit exists only inside the container and is never pushed: the floor in the repository
+  stays `>=0.70.0`. It was needed for this recording (the kernel is 0.69.24); without it the
+  kernel answers `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=0.70.0; this kernel is …`.
+  The workspace pins the package by the container's commit:
+  `oats.bb: git:file://…/oats-bb.git@<commit>`; `setup.sh` prints which floor was used.
 - **The workspace**: one member repository with five souls named as the fixtures name them
   (`oats-developer`, `oats-product-expert`, `oats-desktop-developer`, `knowledge-harvester`,
   `oats-expert`), each with `oats.core` and `oats.bb` and **no messaging capability**
@@ -112,8 +116,12 @@ once its thread is deleted in bb.
 
 **Part B, the scenes the fixtures describe**: a lead with two children (`redesign-ui-lead`; the
 children are spawned with `oats spawn --parent` on the command line, since the plugin's spawn names
-no parent): its stop plan, a stale apply after one child was stopped by itself, the stop of all
-three. Then an agent on a worktree with a child and one untracked file (`weekly-digest-helper`):
+no parent; the idle child first and, once its turn is over, the one that keeps its turn open, so
+that bb's limit of two holds neither in line): its stop plan, a stale apply after one child was
+stopped by itself, the stop of all three. Between them (B1b), with those two turns open, one more
+agent whose first turn bb holds in line: it is stopped through the plugin, and once bb has room
+again the run checks that the turn never ran (bb holds nothing in line for the thread, no model
+request, the thread not active). Then an agent on a worktree with a child and one untracked file (`weekly-digest-helper`):
 start, restart, the retire plan and the retire. Last, two servers registered with
 `oats server add` (names under `.invalid`: no host is behind them) for the Machines page.
 
@@ -121,23 +129,14 @@ start, restart, the retire plan and the retire. Last, two servers registered wit
 
 Each is the kernel's or the provider's to decide; the plugin shows what they say.
 
-- **A thread archived in bb keeps its Claude running in the home.** bb's archive ends no process.
-  After a Start (a new thread) the old Claude is still there, and a later retire is refused:
-  `E_RUNTIME_QUIESCE_FAILED: … a process works in its home (pid … node, pid … claude)`. The plugin
-  shows the refusal unchanged. `bb thread stop <the archived thread>` ends the process, and the
-  retire then goes through: the run does that, in its container only, and says so (step A14).
-- **An agent stopped by OATS while bb held its turn in line ran its turn afterwards.** With bb's
-  automatic limit (2 here) and two threads in a turn, a third agent's first turn waits in bb's
-  line; its row reads `running: null`, like an idle one. `oats instance stop` of that agent
-  answered ok and its row read `stopped`; when the other two stopped, bb started the waiting turn,
-  and the agent did its task while OATS still called it stopped. Seen in an earlier run of this
-  script, before the limit was set (the kernel's `stopped` event at 11:07:33, the model request
-  of the turn at 11:07:39).
-- **A stop plan calls an idle bb agent running, in the middle of a task.** For a bb session the
-  kernel's plan says `session: {state: "unknown", present: true}` and `midTask: true` whether the
-  thread is in a turn or idle (bb cannot tell a live idle agent from a settled one), so the
-  plugin's confirmation reads "running, in the middle of a task" for an agent whose row says
-  `running: null`.
+- **A stop plan cannot say whether an idle bb agent works.** For a bb session whose thread is
+  idle, the kernel's plan says `session: {state: "unknown", present: true}` and
+  `midTask: "unknown"` (bb cannot tell an agent that waits from one that is done); for a thread in
+  a turn, or one whose turn bb holds in line, `midTask: true`. The plugin's confirmation says
+  "its session is open; bb cannot tell whether it is working" for the first and "running, in the
+  middle of a task" for the second.
+- **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
+  in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the
   deployment. The plugin does not draw it.
 - **A waiting claim set by `oats instance attention` has `producer: "agent"`.**

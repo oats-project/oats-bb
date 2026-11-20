@@ -60,11 +60,7 @@ if ! bb machine list > /dev/null 2>&1; then
   wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -q connected' || { echo "setup: no machine connected"; exit 1; }
 fi
 
-# bb holds a new turn in line once as many threads run as the host has processors: 2 here. The run
-# keeps two turns open while a third agent takes its own, so the host's limit is set, not automatic.
-HOST_ID=$(bb machine list --json | node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{const j=JSON.parse(s);const rows=Array.isArray(j)?j:(j.machines??j.hosts??j.items??[]);console.log(rows[0]?.id??"")})')
-[ -n "$HOST_ID" ] || { echo "setup: bb lists no machine" >&2; exit 1; }
-bb concurrency-limit host "$HOST_ID" 8 > /dev/null
+# bb's own limit stays: one running thread per processor (2 here); the run uses it (scenario.mjs, B1).
 bb concurrency-limit status
 
 echo "== the provider, the workspace and the deployment"

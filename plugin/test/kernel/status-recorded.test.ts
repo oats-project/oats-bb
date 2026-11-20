@@ -56,38 +56,38 @@ describe("a real kernel's status, read by the parser", () => {
   });
 
   it("working: running true, state unknown, on its bb thread", () => {
-    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_pd7qyrq3p6", running: true, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: true, runtimeState: "unknown", waiting: null }]);
   });
 
   it("idle: running null, state unknown, the same thread", () => {
-    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_pd7qyrq3p6", running: null, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: null, runtimeState: "unknown", waiting: null }]);
   });
 
   it("waiting for a person: the claim of `oats instance attention`, with the agent's message", () => {
     expect(agentsOf("needsYou")).toEqual([
       {
         ...one,
-        threadId: "thr_pd7qyrq3p6",
+        threadId: "thr_zcfuxuf3cg",
         running: null,
         runtimeState: "unknown",
-        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-20T11:20:17.911Z" },
+        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-20T19:51:31.639Z" },
       },
     ]);
   });
 
   it("stopped by OATS: running false, state stopped, the thread kept", () => {
-    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_pd7qyrq3p6", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("its thread deleted in bb: running false, state stopped, still naming the thread that is gone", () => {
-    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_yxnaejgyhu", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_4j4yyhn8x7", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("a parent with two children: each child names its parent, in the kernel's order", () => {
     expect(agentsOf("parentWithTwoChildren").map((agent) => [agent.instance, agent.soul, agent.parent, agent.running, agent.threadId])).toEqual([
-      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_rh4sshdfni"],
-      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_vtp8m27ik4"],
-      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_xhx2vfsmki"],
+      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_vudvwsxhnf"],
+      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_xajbky4bdn"],
+      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_yma9pyxmpu"],
     ]);
   });
 });
@@ -105,7 +105,7 @@ describe("a real kernel's status, joined to bb's threads by the model", () => {
     ["stoppedByOats", "stopped"],
   ] as const)("%s is drawn in the tree as %s", (recordedState, drawnState) => {
     const result = drawn(recordedState);
-    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_pd7qyrq3p6", drawnState]]);
+    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_zcfuxuf3cg", drawnState]]);
     expect(result.detached).toEqual([]);
     expect(result.elsewhere).toEqual([]);
   });

@@ -1,10 +1,10 @@
 #!/bin/sh
 # Runs inside the container (setup.sh calls it): a throwaway OATS workspace and deployment for the
 # real run, in $REAL (default /home/node/real).
-#   - the provider (oats.bb) as a local git repository made from the tree in $REAL/provider, with one
-#     trial-only commit on top that lowers its `compatibility.oats` floor to the packed kernel's
-#     version (the provider's README, "A trial against an unreleased kernel"). That commit exists
-#     only in this container.
+#   - the provider (oats.bb) as a local git repository made from the tree in $REAL/provider. Only
+#     where its `compatibility.oats` floor refuses the kernel under test, one trial-only commit goes
+#     on top that lowers the floor to the packed kernel's version (the provider's README, "A trial
+#     against an unreleased kernel"). That commit exists only in this container.
 #   - a workspace repository with souls that have NO messaging capability: oats.core and oats.bb
 #     only. Their names are the ones the plugin's fixtures use.
 #   - the deployment $REAL/deploy, onboarded into that workspace, with the host's facts for bb
@@ -23,18 +23,26 @@ commit() {
 }
 WORKSPACE=$REAL/src/oats-real
 
-# ---- the provider, with the trial-only floor
+# ---- the provider, with the trial-only floor where its own refuses the kernel
 cd "$REAL/provider"
 if [ ! -d .git ]; then
   git init -q -b main
   git add -A
   commit -m "the provider's tree under test"
-  for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
-    node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
-  done
-  git add -A
-  commit -m "TRIAL ONLY, never pushed: compatibility.oats >=$KERNEL_VERSION (an unreleased kernel)"
+  # The trial-only floor, only where the provider's own floor refuses the kernel under test.
+  FLOOR=$(node -pe 'JSON.parse(require("fs").readFileSync("oats-package/oats-package.json", "utf8")).compatibility.oats')
+  if node -e 'const [floor,version]=process.argv.slice(1),m=/^>=(\d+)\.(\d+)\.(\d+)$/.exec(floor);if(!m)process.exit(1);const v=version.split(/[.-]/).map(Number);for(let i=0;i<3;i++){if(v[i]>+m[i+1])process.exit(0);if(v[i]<+m[i+1])process.exit(1)}' "$FLOOR" "$KERNEL_VERSION"; then
+    TRIAL="its own floor ($FLOOR)"
+  else
+    for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
+      node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
+    done
+    git add -A
+    commit -m "TRIAL ONLY, never pushed: compatibility.oats >=$KERNEL_VERSION (an unreleased kernel)"
+    TRIAL="trial floor >=$KERNEL_VERSION in place of $FLOOR"
+  fi
 fi
+TRIAL=${TRIAL:-$(git log -1 --format=%s)}
 PROVIDER_OID=$(git rev-parse HEAD)
 rm -rf "$REAL/oats-bb.git"
 git clone -q --bare "$REAL/provider" "$REAL/oats-bb.git"
@@ -104,4 +112,4 @@ Y
 # The soul whose work is a worktree needs a clone of its member repository.
 git clone -q "$WORKSPACE" "$REAL/deploy/oats-real"
 oats sync --dir "$REAL/deploy"
-echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID (trial floor), bb $BB_VERSION"
+echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID ($TRIAL), bb $BB_VERSION"

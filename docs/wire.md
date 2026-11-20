@@ -47,7 +47,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   `PATH`: those directories, then the launch's own `PATH` entry if it has one, else the
   `PATH` the provider was called with. An entry that cannot go on a PATH refuses the launch.
 - A launch never resumes: a bb thread is resumed by an input into its own conversation. (A
-  launch input that carried a `resume` key would be refused.)
+  launch input that carried a non-null `resume` would be refused, `E_SESSION_START_FAILED`.)
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
   The provider carries one, `--permission-mode`; any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).

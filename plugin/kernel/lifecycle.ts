@@ -17,14 +17,21 @@ const work = z
 /**
  * The kernel's words for a session with nothing to stop: `shell`, `stopped` and `not-launched` are
  * idle, and one that is established and not present (`absent`) is observably gone. Any other state
- * of an established session, `unknown` included, is a running harness.
+ * of an established session, `unknown` included, is a session that is there (`sessionWords` says
+ * what the plan knows of it).
  */
 const idle = (value: NonNullable<z.output<typeof session>>): boolean =>
   value.present === false || value.state === "shell" || value.state === "stopped" || value.state === "not-launched";
 
-function sessionWords(value: z.output<typeof session>): string {
+/**
+ * What the plan knows of a target's session. `midTask` is the kernel's `true`, `false` or
+ * `"unknown"`: for a session that is there, `"unknown"` means its provider reports no activity (bb
+ * cannot tell an agent that waits from one that is done), so the line does not call it running.
+ */
+function sessionWords(value: z.output<typeof session>, midTask: unknown): string {
   if (!value || value.established === false) return "whether it runs is not known";
-  return idle(value) ? "not running" : "running";
+  if (idle(value)) return "not running";
+  return midTask === "unknown" ? "its session is open; bb cannot tell whether it is working" : "running";
 }
 
 function workWords(value: z.output<typeof work>): string | null {
@@ -67,7 +74,7 @@ export function parseStopPlan(document: unknown): Result<Plan> {
   const lines: string[] = [];
   // The kernel lists the descendants first; a person reads the agent they asked about first.
   for (const target of [...plan.targets].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))) {
-    const facts = [sessionWords(target.session), target.midTask === true ? "in the middle of a task" : null, workWords(target.work)];
+    const facts = [sessionWords(target.session, target.midTask), target.midTask === true ? "in the middle of a task" : null, workWords(target.work)];
     const who = (target.depth ?? 0) === 0 ? `Stop ${target.instance}` : `Stop its child ${target.instance}`;
     lines.push(`${who}${target.agent ? ` (${target.agent})` : ""}: ${facts.filter((fact) => fact !== null).join(", ")}`);
   }

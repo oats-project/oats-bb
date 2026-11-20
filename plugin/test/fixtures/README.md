@@ -14,8 +14,10 @@ Pinned by the spec.
 The other files are one answer per other `oats` verb, as the kernel prints it (an envelope, except
 `retire-apply.json`: a first guarded retire prints the receipt itself).
 - **Recorded from the real run** (`container/real/`, its README says how): bb-app 0.50.1, the OATS
-  kernel of oats-project/oats#1991 at 5a9db77014443607131f1ed5def0867dd1597dc0 (0.69.21), the bb
-  session provider at 37e9abaf83157cf0cdcfc09022ea0a701dee2a78 (wire 1.3), on 2026-11-20. Each is
+  kernel of awebai/oats `main` at da296359e97eb435f6de561947ef2fdda92c927c (oats-project/oats#2040 merged, 0.69.24), the bb
+  session provider of this repository's `main` at 92fecf735475a363c1d55158d6ff078acf017bb7 (wire 1.3; its
+  floor lowered to that kernel's version by a trial-only commit inside the container), on
+  2026-11-20. Each is
   what the kernel printed for a call the plugin made through its own RPC, whole, printed with one
   space of indentation. One substitution and no other edit: the paths (the deployment is
   `/abs/deployment`, the run's directory `/abs/real`, the container user's home `/abs/home`). The
@@ -43,5 +45,6 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   agents, and `research-expert` and the unspawnable `oats.okf/knowledge-maintainer` are shaped rows.
 - Shaped as docs/desktop-cli-api.md documents the answer: `retire-incomplete.json` (a receipt with
   `rollbackIncomplete`, which the kernel prints with exit 1), and what `stop-plan.json` holds
-  around its recorded targets.
+  around its recorded targets. In it, the idle child's `midTask` is `"unknown"`, as the kernel of
+  the real run prints it for a bb agent whose thread is idle (`real/out/answers/stop-plan.json`).
 `container/fake-oats.mjs` prints them; the unit and live tests run the plugin against it.

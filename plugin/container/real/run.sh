@@ -2,28 +2,30 @@
 # The real run: the plugin against a real OATS kernel and the bb session provider, in one container.
 # Runs on the host and does everything else in the container (README.md beside this file):
 #
-#   KERNEL_REPO=<a clone of the OATS repository> PROVIDER_REPO=<a clone of oats-bb with the provider> \
-#     plugin/container/real/run.sh
+#   KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
 #
-#   KERNEL_REF, PROVIDER_REF   the commits to run (defaults below: the ones the fixtures were recorded at)
+#   KERNEL_REF                 the kernel commit to run (default below: the one the fixtures were recorded at)
 #   UPDATE_FIXTURES=1          copy the recorded answers over plugin/test/fixtures/ afterwards
 #   KEEP=1, NAME, IMAGE, DOCKER_RUN_ARGS   as container/ci.sh
 #
-# Both clones are only read (`git archive`): the trees go into the container through tar. The
+# The provider is this checkout's own (oats-package/, as committed at HEAD). The kernel's clone and
+# this checkout are only read (`git archive`): the trees go into the container through tar. The
 # container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's home.
-# Not part of `ci.sh all`: CI has neither clone at these commits (README.md, "Why CI does not run it").
+# Not part of `ci.sh all`: CI has no kernel with session providers (README.md, "Why CI does not run it").
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
-KERNEL_REF=${KERNEL_REF:-5a9db77014443607131f1ed5def0867dd1597dc0}
-PROVIDER_REF=${PROVIDER_REF:-37e9abaf83157cf0cdcfc09022ea0a701dee2a78}
+REPOSITORY=$(dirname "$PLUGIN")
+KERNEL_REF=${KERNEL_REF:-da296359e97eb435f6de561947ef2fdda92c927c}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
 OUT=$HERE/out
 : "${KERNEL_REPO:?set KERNEL_REPO to a clone of the OATS repository that holds $KERNEL_REF}"
-: "${PROVIDER_REPO:?set PROVIDER_REPO to a clone of oats-bb that holds $PROVIDER_REF}"
 KERNEL_OID=$(git -C "$KERNEL_REPO" rev-parse --verify "$KERNEL_REF^{commit}")
-PROVIDER_OID=$(git -C "$PROVIDER_REPO" rev-parse --verify "$PROVIDER_REF^{commit}")
+# The provider under test is the committed one: its commit is the last that changed oats-package/.
+[ -z "$(git -C "$REPOSITORY" status --porcelain -- oats-package)" ] || { echo "real: oats-package/ has uncommitted changes: commit them, the run takes the provider from HEAD" >&2; exit 2; }
+PROVIDER_OID=$(git -C "$REPOSITORY" log -1 --format=%H HEAD -- oats-package)
+[ -n "$PROVIDER_OID" ] || { echo "real: this checkout has no committed oats-package/" >&2; exit 2; }
 
 docker build -q -t "$IMAGE" "$PLUGIN/container" > /dev/null
 # shellcheck disable=SC2086 # DOCKER_RUN_ARGS is a list of arguments
@@ -45,7 +47,7 @@ run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel
-git -C "$PROVIDER_REPO" archive "$PROVIDER_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
+git -C "$REPOSITORY" archive HEAD oats-package | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
 printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docker exec -i -u node "$NAME" sh -c 'cat > /home/node/real/refs.json'
 
 run bash container/real/setup.sh

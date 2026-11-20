@@ -11,21 +11,31 @@
   "launchConfig": "claude-full",
   "yolo": true,
   "target": null,
+  "sandbox": {
+   "domains": [],
+   "write": [
+    {
+     "path": "/abs/deployment/.agents/events",
+     "reason": "oats events"
+    }
+   ],
+   "missing": []
+  },
   "session": {
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_rdbmn8dtge",
-    "threadId": "thr_etz89sc25g"
+    "projectId": "proj_acid8acnwb",
+    "threadId": "thr_ax7hbx4x8t"
    }
   },
-  "startedAt": "2026-11-20T11:24:44.186Z",
+  "startedAt": "2026-11-20T19:55:33.586Z",
   "restartCount": 2,
   "reused": "new",
   "warnings": [],
   "stop": {
    "stopped": true,
-   "waitedMs": 1750
+   "waitedMs": 1774
   }
  }
 }

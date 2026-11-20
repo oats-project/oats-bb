@@ -81,6 +81,11 @@ const archivedInBb = (id) => {
   return thread !== undefined && thread.archivedAt != null;
 };
 const threadsNow = () => JSON.stringify(bbThreads().map((thread) => [thread.id, thread.status, thread.archivedAt]));
+/** What bb holds in line for a thread: the turns its concurrency limit has not started. */
+const inLine = (id) => {
+  const answer = bbJson("thread", "queue", "list", id);
+  return Array.isArray(answer) ? answer : (Object.values(answer ?? {}).find(Array.isArray) ?? []);
+};
 const bbProjects = () => {
   const answer = bbJson("project", "list");
   return Array.isArray(answer) ? answer : (answer.projects ?? answer.items ?? []);
@@ -107,7 +112,8 @@ const brief = (row) =>
     : `backend ${row.backend}, session ${JSON.stringify(row.session)}, running ${row.running}, runtimeState ${row.runtimeState}${row.sessionEnd ? `, sessionEnd ${row.sessionEnd}` : ""}${row.runtimeError ? `, runtimeError ${row.runtimeError}` : ""}${row.waitingOnYou ? `, waitingOnYou ${JSON.stringify(row.waitingOnYou)}` : ""}`;
 /**
  * The agent's first turn in its thread is over: bb shows the thread idle. A thread bb has not
- * started yet ("pending") also reads `running: null` in the kernel's row, and is not that.
+ * started yet ("pending") with nothing in line also reads `running: null` in the kernel's row,
+ * and is not that.
  */
 const settled = (row) => bbThread(row.session?.threadId)?.status === "idle";
 const untilRow = (instance, what, matches, seconds = 60) =>
@@ -120,6 +126,11 @@ const untilRow = (instance, what, matches, seconds = 60) =>
 const hold = (name) => writeFileSync(join(HOLDS, name), "");
 const release = (name) => rmSync(join(HOLDS, name), { force: true });
 const taskOf = (name, text) => `${text}\nMOCK-HOLD:${name}\n`;
+/** The mock's log: one line per model request, with the holds its conversation names. */
+const modelRequests = () => {
+  const file = join(REAL, "mock", "requests.jsonl");
+  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+};
 
 // ---- the plugin's RPC, and what the kernel printed for it
 
@@ -398,6 +409,10 @@ try {
   const stale = act("a stop plan, read and kept aside", "stopPlan", { instance: A.instance });
   const plan = act("stop plan", "stopPlan", { instance: A.instance });
   check(plan?.lines[0]?.startsWith(`Stop ${A.instance} (${A.soul}): `), "the plan names the agent", JSON.stringify(plan));
+  // What the kernel's plan says of an agent whose thread is idle in bb (README, "What the run found").
+  const idlePlan = recorded(["instance", "stop", A.instance], ["--plan"]);
+  evidence.keep("stop-plan-idle.json", idlePlan.stdout);
+  show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
@@ -464,35 +479,21 @@ try {
   step("A14 retire: the plan, then the apply");
   const retirePlan = act("retire plan", "retirePlan", { instance: A.instance });
   check(retirePlan?.lines[0]?.startsWith(`Removed: the home of ${A.instance} (${home}).`), "the plan says what is removed", JSON.stringify(retirePlan));
-  let retire = rpc("retireApply", { instance: A.instance, revision: retirePlan.revision, key: "retire-0a1b2c3d4e5f" });
-  if (!retire.ok && /E_RUNTIME_QUIESCE_FAILED/.test(retire.message)) {
-    // What this run found (README, "What the run found"): bb's archive does not end a thread's
-    // Claude, so the thread archived in A12 still works in the home, and the kernel refuses.
-    note("the kernel refuses the retire: the Claude of the thread archived in bb (A12) still works in the home");
-    show("plugin", retire.message);
-    const kernel = JSON.parse(recorded(["retire", A.instance], ["retire-0a1b2c3d4e5f"]).stdout).error;
-    check(retire.message.endsWith(`${kernel.code}: ${kernel.message}`), "the plugin shows that refusal unchanged");
-    note(`worked around in this container only: bb thread stop ${archived}`);
-    say(`     ${bb("thread", "stop", archived).trim()}`);
-    await sleep(3000);
-    const fresh = act("retire plan, again", "retirePlan", { instance: A.instance });
-    retire = rpc("retireApply", { instance: A.instance, revision: fresh.revision, key: "retire-1a2b3c4d5e6f" });
-  }
-  check(retire.ok, "retire apply", retire.message);
-  show("answer", retire.value);
+  // The thread archived by hand in A12 is the home's too: the provider's stop ends its Claude, so nothing works in the home.
+  act("retire apply", "retireApply", { instance: A.instance, revision: retirePlan.revision, key: "retire-0a1b2c3d4e5f" });
   check(rowOf(A.instance) === undefined && !existsSync(home), "oats status: no row is left, and the home is removed");
   const left = bbThreads().filter((t) => t.projectId === thread.projectId);
   check(left.length > 0 && left.every((t) => t.archivedAt != null), "bb: every thread the home still has is archived", threadsNow());
   check(snapshotRow(A.instance) === undefined, "the plugin's snapshot no longer has the agent");
 
   // ======================================================================= part B
-  /** A child, spawned as its parent would: on the command line, since the plugin's spawn names no parent. */
+  /** A child, spawned as its parent would: on the command line, since the plugin's spawn names no parent. With no parent, an agent of its own. */
   function child(soul, name, parent, text) {
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, text);
-    const run = oats("spawn", soul, "--backend", "bb", "--name", name, "--parent", parent, "--task-file", file, "--json");
+    const run = oats("spawn", soul, "--backend", "bb", "--name", name, ...(parent ? ["--parent", parent] : []), "--task-file", file, "--json");
     const answer = run.exit === 0 ? JSON.parse(run.stdout).result : undefined;
-    check(answer?.session?.endpoint?.threadId !== undefined, `oats spawn ${soul} --name ${name} --parent ${parent}`, run.stdout || run.stderr);
+    check(answer?.session?.endpoint?.threadId !== undefined, `oats spawn ${soul} --name ${name}${parent ? ` --parent ${parent}` : ""}`, run.stdout || run.stderr);
     return answer;
   }
 
@@ -501,11 +502,13 @@ try {
   hold(lead);
   hold("desktop-mockups-developer");
   const leadSpawn = act("spawn the lead", "spawn", { soul: "oats-product-expert", name: lead, task: taskOf(lead, "Redesign the UI."), key: "spawn-3c2e9d7a" });
-  const mockups = child("oats-desktop-developer", "desktop-mockups-developer", lead, taskOf("desktop-mockups-developer", "Draw the Desktop mockups."));
-  const harvest = child("knowledge-harvester", "harvest-knowledge-helper", lead, "Harvest what the redesign learned.\n");
   await untilRow(lead, "working", (r) => r.running === true);
-  await untilRow("desktop-mockups-developer", "working", (r) => r.running === true);
+  // bb runs as many threads at once as the container has processors (2): the second child is
+  // spawned once the first one's turn is over, so that both get their turn.
+  const harvest = child("knowledge-harvester", "harvest-knowledge-helper", lead, "Harvest what the redesign learned.\n");
   await untilRow("harvest-knowledge-helper", "idle", (r) => r.running === null && r.runtimeState === "unknown" && settled(r));
+  const mockups = child("oats-desktop-developer", "desktop-mockups-developer", lead, taskOf("desktop-mockups-developer", "Draw the Desktop mockups."));
+  await untilRow("desktop-mockups-developer", "working", (r) => r.running === true);
   for (const name of [lead, "desktop-mockups-developer", "harvest-knowledge-helper"]) show(name, brief(rowOf(name)));
   check(rowOf("desktop-mockups-developer")?.parentInstance === lead && rowOf("harvest-knowledge-helper")?.parentInstance === lead, "oats status: both children name the lead as their parent");
   keepStatus("parentWithTwoChildren", {
@@ -513,6 +516,28 @@ try {
     "desktop-mockups-developer": (r) => r.running === true && r.parentInstance === lead,
     "harvest-knowledge-helper": (r) => r.running === null && r.runtimeState === "unknown" && r.parentInstance === lead,
   });
+
+  step("B1b an agent whose turn bb holds in line, stopped: the turn never runs");
+  // Two turns are open, which is bb's limit here: bb holds the first turn of one more agent (not
+  // the lead's) in line. Its task names a hold that is never set, so the mock's log shows whether
+  // that turn ever asked the model.
+  const queued = "queued-turn-helper";
+  const queuedSpawn = child("knowledge-harvester", queued, null, taskOf(queued, "Wait in bb's line."));
+  const queuedThread = queuedSpawn?.session?.endpoint?.threadId;
+  row = await untilRow(queued, "its turn held in bb's line", (r) => r.session?.threadId === queuedThread && bbThread(queuedThread)?.status === "pending");
+  say(`     ${bb("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
+  show("oats status", brief(row));
+  check(inLine(queuedThread).length === 1 && bbThread(queuedThread)?.queuedWork === "waiting", "bb holds the agent's first turn in line", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
+  show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status, queuedWork: bbThread(queuedThread)?.queuedWork, inLine: inLine(queuedThread).length });
+  agrees(queued, row);
+  const queuedPlan = act("stop plan", "stopPlan", { instance: queued });
+  act("stop apply", "stopApply", { instance: queued, revision: queuedPlan.revision, key: "stop-9d8c7b6a5f4e" });
+  row = await untilRow(queued, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
+  show("oats status", brief(row));
+  // Not a matter of how long bb takes to start a held turn: the stop left nothing in bb's line for the thread.
+  check(inLine(queuedThread).length === 0 && bbThread(queuedThread)?.queuedWork === "none", "bb holds nothing in line for the stopped agent's thread", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
+
+  step("B1c the lead's stop, and a stale plan");
   const leadPlan = act("stop plan of the lead", "stopPlan", { instance: lead });
   evidence.keep("stop-plan.json", recorded(["instance", "stop", lead], ["--plan"]).stdout);
   check(leadPlan?.lines.length >= 4 && leadPlan.lines[1].startsWith("Stop its child "), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
@@ -533,6 +558,15 @@ try {
   }
   release(lead);
   release("desktop-mockups-developer");
+  // bb has room again: the turn it held in line for the agent stopped in B1b must not run.
+  await sleep(10_000);
+  const turns = modelRequests().filter((request) => request.holds?.includes(queued));
+  const held = bbThread(queuedThread);
+  check(turns.length === 0 && !["active", "starting"].includes(held?.status), "the agent stopped while bb held its turn in line never ran that turn: no model request, and its thread is not active", JSON.stringify({ turns, thread: held }));
+  show("bb thread", { id: queuedThread, status: held?.status, archivedAt: held?.archivedAt });
+  const retireQueued = act("retire plan", "retirePlan", { instance: queued });
+  act("retire apply", "retireApply", { instance: queued, revision: retireQueued.revision, key: "retire-3c4d5e6f7a8b" });
+  check(rowOf(queued) === undefined, "oats status: no row is left");
 
   step("B2 an agent on a worktree, with a child: start, restart, retire");
   const digest = "weekly-digest-helper";

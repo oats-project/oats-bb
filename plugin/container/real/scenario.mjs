@@ -81,6 +81,11 @@ const archivedInBb = (id) => {
   return thread !== undefined && thread.archivedAt != null;
 };
 const threadsNow = () => JSON.stringify(bbThreads().map((thread) => [thread.id, thread.status, thread.archivedAt]));
+/** What bb holds in line for a thread: the turns its concurrency limit has not started. */
+const inLine = (id) => {
+  const answer = bbJson("thread", "queue", "list", id);
+  return Array.isArray(answer) ? answer : (Object.values(answer ?? {}).find(Array.isArray) ?? []);
+};
 const bbProjects = () => {
   const answer = bbJson("project", "list");
   return Array.isArray(answer) ? answer : (answer.projects ?? answer.items ?? []);
@@ -521,12 +526,14 @@ try {
   row = await untilRow(queued, "its turn held in bb's line", (r) => r.session?.threadId === queuedThread && bbThread(queuedThread)?.status === "pending");
   say(`     ${bb("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
   show("oats status", brief(row));
-  show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status });
+  show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status, queuedWork: bbThread(queuedThread)?.queuedWork, inLine: inLine(queuedThread).length });
   agrees(queued, row);
   const queuedPlan = act("stop plan", "stopPlan", { instance: queued });
   act("stop apply", "stopApply", { instance: queued, revision: queuedPlan.revision, key: "stop-9d8c7b6a5f4e" });
   row = await untilRow(queued, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
   show("oats status", brief(row));
+  // Not a matter of how long bb takes to start a held turn: the stop left nothing in bb's line for the thread.
+  check(inLine(queuedThread).length === 0 && bbThread(queuedThread)?.queuedWork === "none", "bb holds nothing in line for the stopped agent's thread", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
 
   step("B1c the lead's stop, and a stale plan");
   const leadPlan = act("stop plan of the lead", "stopPlan", { instance: lead });

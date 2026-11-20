@@ -1,10 +1,10 @@
 #!/bin/sh
 # Runs inside the container (setup.sh calls it): a throwaway OATS workspace and deployment for the
 # real run, in $REAL (default /home/node/real).
-#   - the provider (oats.bb) as a local git repository made from the tree in $REAL/provider, with one
-#     trial-only commit on top that lowers its `compatibility.oats` floor to the packed kernel's
-#     version (the provider's README, "A trial against an unreleased kernel"). That commit exists
-#     only in this container.
+#   - the provider (oats.bb) as a local git repository made from the tree in $REAL/provider. Only
+#     where its `compatibility.oats` floor refuses the kernel under test, one trial-only commit goes
+#     on top that lowers the floor to the packed kernel's version (the provider's README, "A trial
+#     against an unreleased kernel"). That commit exists only in this container.
 #   - a workspace repository with souls that have NO messaging capability: oats.core and oats.bb
 #     only. Their names are the ones the plugin's fixtures use.
 #   - the deployment $REAL/deploy, onboarded into that workspace, with the host's facts for bb
@@ -23,7 +23,7 @@ commit() {
 }
 WORKSPACE=$REAL/src/oats-real
 
-# ---- the provider, with the trial-only floor
+# ---- the provider, with the trial-only floor where its own refuses the kernel
 cd "$REAL/provider"
 if [ ! -d .git ]; then
   git init -q -b main

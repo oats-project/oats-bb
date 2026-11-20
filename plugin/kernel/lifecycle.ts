@@ -30,8 +30,7 @@ const idle = (value: NonNullable<z.output<typeof session>>): boolean =>
 function sessionWords(value: z.output<typeof session>, midTask: unknown): string {
   if (!value || value.established === false) return "whether it runs is not known";
   if (idle(value)) return "not running";
-  if (midTask === "unknown") return "its session is open; bb cannot tell whether it is working";
-  return midTask === true ? "running, in the middle of a task" : "running";
+  return midTask === "unknown" ? "its session is open; bb cannot tell whether it is working" : "running";
 }
 
 function workWords(value: z.output<typeof work>): string | null {
@@ -74,7 +73,7 @@ export function parseStopPlan(document: unknown): Result<Plan> {
   const lines: string[] = [];
   // The kernel lists the descendants first; a person reads the agent they asked about first.
   for (const target of [...plan.targets].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))) {
-    const facts = [sessionWords(target.session, target.midTask), workWords(target.work)];
+    const facts = [sessionWords(target.session, target.midTask), target.midTask === true ? "in the middle of a task" : null, workWords(target.work)];
     const who = (target.depth ?? 0) === 0 ? `Stop ${target.instance}` : `Stop its child ${target.instance}`;
     lines.push(`${who}${target.agent ? ` (${target.agent})` : ""}: ${facts.filter((fact) => fact !== null).join(", ")}`);
   }

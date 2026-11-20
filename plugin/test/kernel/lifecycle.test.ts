@@ -54,7 +54,11 @@ describe("stop", () => {
     expect(await line(there, false)).toBe(`${who}: running`);
     // A session that is not there has nothing to stop, whatever midTask says.
     expect(await line({ state: "stopped", present: false, backend: "bb", established: true }, "unknown")).toBe(`${who}: not running`);
-    expect(await line({ state: "unestablished", present: null, backend: null, established: false, reason: "E_SESSION_UNAVAILABLE" }, "unknown")).toBe(`${who}: whether it runs is not known`);
+    const unestablished = { state: "unestablished", present: null, backend: null, established: false, reason: "E_SESSION_UNAVAILABLE" };
+    expect(await line(unestablished, "unknown")).toBe(`${who}: whether it runs is not known`);
+    // The kernel says midTask true for work with changes, whatever the session: the line keeps it.
+    expect(await line({ state: "stopped", present: false, backend: "bb", established: true }, true)).toBe(`${who}: not running, in the middle of a task`);
+    expect(await line(unestablished, true)).toBe(`${who}: whether it runs is not known, in the middle of a task`);
   });
 
   it("applies with the plan's revision and the idempotency key", async () => {

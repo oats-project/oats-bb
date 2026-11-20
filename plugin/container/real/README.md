@@ -120,17 +120,14 @@ no parent; the idle child first and, once its turn is over, the one that keeps i
 that bb's limit of two holds neither in line): its stop plan, a stale apply after one child was
 stopped by itself, the stop of all three. Between them (B1b), with those two turns open, one more
 agent whose first turn bb holds in line: it is stopped through the plugin, and once bb has room
-again the run checks that the turn never ran (no model request, the thread not active). Then an agent on a worktree with a child and one untracked file (`weekly-digest-helper`):
+again the run checks that the turn never ran (bb holds nothing in line for the thread, no model
+request, the thread not active). Then an agent on a worktree with a child and one untracked file (`weekly-digest-helper`):
 start, restart, the retire plan and the retire. Last, two servers registered with
 `oats server add` (names under `.invalid`: no host is behind them) for the Machines page.
 
 ## What the run found
 
-Each is the kernel's or the provider's to decide; the plugin shows what they say. Two findings of
-the first recording (2026-11-20, an unmerged kernel) are fixed in the merged provider, and the run
-now checks both: a thread archived in bb no longer leaves a Claude in the home that refuses the
-retire (A12 to A14), and an agent stopped while bb held its turn in line no longer runs that turn
-afterwards (B1b).
+Each is the kernel's or the provider's to decide; the plugin shows what they say.
 
 - **A stop plan cannot say whether an idle bb agent works.** For a bb session whose thread is
   idle, the kernel's plan says `session: {state: "unknown", present: true}` and

@@ -1,8 +1,8 @@
 // stop, and the retire hook's archive (contract item 3).
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, fail, isObject, recode } from "./errors.mjs";
-import { archivedOf, confirmStop, stopArchived } from "./halt.mjs";
+import { ProviderError, bounded, fail, isObject, recode } from "./errors.mjs";
+import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { everLaunched } from "./local-settings.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { liveInHome, readEndpoint } from "./threads.mjs";
@@ -11,8 +11,6 @@ import { liveInHome, readEndpoint } from "./threads.mjs";
 // settle is the grace, and the calls around it stay inside the 20 s.
 const MAX_GRACE_SECONDS = 300;
 const DEFAULT_GRACE_SECONDS = 10;
-// What the kernel relays of a message, and a hook's warning with it.
-const MESSAGE_MAX = 480;
 const ISO_UTC = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,9})?Z$/;
 
 const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
@@ -57,7 +55,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
         // next launch names it.
         if (Number.isFinite(sentAt) && typeof thread.createdAt === "number" && thread.createdAt >= sentAt) await bb.archive(thread.id);
       }
-      await stopArchived(bb, archived, options);
+      await stopArchived(bb, archived, relistOf(bb, projects.map((project) => project.id)), options);
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
@@ -77,7 +75,6 @@ export function graceOf(input) {
 function someIds(ids, max = 6) {
   return ids.length <= max ? ids.join(", ") : `${ids.slice(0, max).join(", ")} and ${ids.length - max} more`;
 }
-const bounded = (text) => (text.length > MESSAGE_MAX ? `${text.slice(0, MESSAGE_MAX - 1)}…` : text);
 
 // How long the hook waits for one thread to settle: it runs after the kernel's own stop.
 const RETIRE_GRACE_SECONDS = 5;
@@ -117,7 +114,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     // The home's threads archived before now (in bb's UI, or by an earlier start) may
     // hold a process too: all are stopped. The hook is told no thread to count from.
     let unswept = null;
-    try { await stopArchived(bb, await archivedOf(bb, projects.map((project) => project.id)), options); }
+    try { const ids = projects.map((project) => project.id); await stopArchived(bb, await archivedOf(bb, ids), relistOf(bb, ids), options); }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
       unswept = error.code;

@@ -26,6 +26,12 @@ export function fail(code, message) {
 
 export const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
+// The kernel relays 500 characters of a message. Every message that leaves the provider is
+// cut to fit, at this one place; a message that may be long puts its remedy and its
+// counts before its list.
+const MESSAGE_MAX = 480;
+export const bounded = (text) => { const line = String(text); return line.length > MESSAGE_MAX ? `${line.slice(0, MESSAGE_MAX - 1).replace(/[\ud800-\udbff]$/, "")}…` : line; };
+
 /** A verb's refusals carry that verb's own code: any other ProviderError is recoded to
  *  it, keeping its message. Anything that is not a ProviderError is a bug, and rethrown. */
 export function recode(code, error) {

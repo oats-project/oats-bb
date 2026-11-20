@@ -81,17 +81,38 @@ export async function archivedOf(bb, projectIds, { since = null } = {}) {
   return found;
 }
 
-/** Stop each archived thread given, so that no Claude of it is left in the home. An
- *  archived thread takes no input (bb refuses a tell to it), so nothing new reaches its
- *  queue: where its row shows nothing in line, bb's acknowledgement of the stop is the
- *  confirmation; where it shows work in line, the thread is stopped by the full rule.
- *  Throws on the first thread that cannot be confirmed. */
-export async function stopArchived(bb, threads, options = {}) {
+/** How the threads of those projects read now, archived and live: for stopArchived. */
+export const relistOf = (bb, projectIds) => async () => {
+  const rows = [];
+  for (const projectId of projectIds) rows.push(...await bb.archivedThreads(projectId));
+  rows.push(...await bb.threads());
+  return rows;
+};
+
+/** Stop each archived thread given, so that no Claude of it is left in the home, and
+ *  confirm it by what bb shows AFTER the stops, never by the rows they were found in: bb
+ *  acknowledges each stop, then the lists are read once more, and every thread stopped
+ *  here must show settled with nothing in line (or be gone). One that does not, or that
+ *  had work in line to begin with, goes through the whole rule (confirmStop). So the rule
+ *  is the same as for a live thread; only the reads are shared between the threads, since
+ *  a home's archived threads can be many. `relist()` → the threads to look in (archived
+ *  and live). Throws on the first thread that cannot be confirmed. */
+export async function stopArchived(bb, threads, relist, options = {}) {
+  const asked = [];
   for (const thread of threads) {
     if (hasQueuedWork(thread)) { await confirmStop(bb, thread.id, options); continue; }
-    const asked = await bb.stop(thread.id);
-    if (asked.ok || asked.code === "thread_not_found") continue;
-    if (asked.timedOut) throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of archived thread ${thread.id} in time: its Claude process may still be loaded in the home`);
-    throw bb.refusal(asked, ["thread", "stop"]);
+    const answer = await bb.stop(thread.id);
+    if (answer.code === "thread_not_found") continue;
+    if (!answer.ok && answer.timedOut) throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of archived thread ${thread.id} in time: its Claude process may still be loaded in the home`);
+    if (!answer.ok) throw bb.refusal(answer, ["thread", "stop"]);
+    asked.push(thread.id);
+  }
+  if (asked.length === 0) return;
+  const now = await relist();
+  for (const id of asked) {
+    const row = now.find((thread) => thread.id === id);
+    if (row === undefined || row.deletedAt) continue;
+    if (isSettled(row) && !hasQueuedWork(row)) continue;
+    await confirmStop(bb, id, options);
   }
 }

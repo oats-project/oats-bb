@@ -194,7 +194,7 @@ test("readiness lists what the provider added to the home's sandbox, with who as
   assert.equal(result.status, "ready");
   assert.deepEqual(result.warnings.map((w) => w.code), ["session-provider-sandbox", "session-provider-sandbox-forge"]);
   assert.match(result.warnings[0].message, /app\.aweb\.ai \(oats\.aweb, its setting server\), github\.com \(oats\.okf, its setting bases\)/);
-  assert.match(result.warnings[0].message, new RegExp(`${events(dir).path} \\(the kernel: instance events\\)`));
+  assert.match(result.warnings[0].message, new RegExp(`${events(dir).path} \\(the kernel\\)`));
   assert.match(result.warnings[1].message, /github\.com \(oats\.okf\) is a general forge.*every repository/);
   await launch({ yolo: true });
   assert.deepEqual((await check()).result.warnings, [], "nothing in full mode");

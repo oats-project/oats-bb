@@ -1,7 +1,7 @@
 // launch: one home, one bb project, one bb thread; every refusal before the first effect.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
@@ -149,6 +149,18 @@ for (const [name, script, pattern] of [
     assert.match(answer.error.message, pattern);
     assert.deepEqual(effects(bb), []);
     assert.equal(existsSync(join(home, ".claude")), false);
+  });
+}
+
+// A project source that does not say what it is cannot show that a project is NOT this
+// home's: the list is unreadable, never "the home has no project".
+for (const [name, sources] of [["a source that says nothing", [{}]], ["a local source with no path", [{ type: "local_path" }]], ["a local source whose path is empty", [{ type: "local_path", path: "" }]], ["a source with no kind", [{ path: "/srv/x" }]]]) {
+  test(`a project list holding ${name} refuses the launch before any effect`, async (t) => {
+    const { bb, run } = await setup(t, { "project list": { stdout: [{ id: "proj_a", sources }] } });
+    const answer = await run();
+    assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+    assert.match(answer.error.message, /bb project list answered a row this provider cannot read/);
+    assert.deepEqual(effects(bb), []);
   });
 }
 
@@ -394,8 +406,8 @@ test("what a launch must read is read before it changes anything: a list that ca
 
 for (const [name, script, pattern] of [
   ["bb refuses the spawn", { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } }, /bb thread spawn failed.*previous thread thr_prev is archived.*not a refusal/],
-  ["whether bb archived it is not known", { "thread archive": { error: { code: "error", message: "HTTP 500: boom" } } }, /whether bb archived the home's previous thread thr_prev is not known/],
-  ["the archive call is cut off", { "thread archive": { exit: 3, stderr: "killed\n" } }, /whether bb archived the home's previous thread thr_prev is not known/],
+  ["whether bb archived it is not known", { "thread archive": { error: { code: "error", message: "HTTP 500: boom" } } }, /could not be archived.*may already have changed bb or the home.*not a refusal/],
+  ["the archive call is cut off", { "thread archive": { exit: 3, stderr: "killed\n" } }, /could not be archived.*may already have changed bb or the home.*not a refusal/],
 ]) {
   test(`after the previous thread is archived, a launch that cannot go on is in doubt, never a refusal: ${name}`, async (t) => {
     const { backend, bb, input } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread archive": { stdout: { ok: true } }, ...script });
@@ -406,12 +418,42 @@ for (const [name, script, pattern] of [
   });
 }
 
+test("a project bb answers for with no id (an answer that cannot be read) leaves the launch in doubt: bb may have made it", async (t) => {
+  const { backend, bb, input } = await setup(t, { "project list": { stdout: [] }, "project create": { stdout: {} } });
+  const run = await rawLaunch(bb, backend, input());
+  assert.equal(run.status, 1);
+  assert.equal(run.stdout, "");
+  assert.match(run.stderr, /it asked bb to create the home's project.*not a refusal/);
+});
+
+// A spawn bb refuses in its own words made no thread. Where nothing else was changed, the
+// launch's own files in the home are put back exactly as they were, and it is a refusal.
+test("bb's own no to the spawn, with nothing else changed, is a refusal that leaves the home as it was: no settings file, no directory of the provider", async (t) => {
+  const { home, bb, run } = await setup(t, { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } });
+  const answer = await run();
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /Project not found/);
+  assert.deepEqual(readdirSync(home).sort(), ["TASK.md"], "nothing the launch wrote is left");
+  assert.deepEqual(effects(bb), ["thread spawn"]);
+});
+
+test("bb's own no to the spawn puts a settings file that was there back byte for byte, with its mode", async (t) => {
+  const { home, run } = await setup(t, { "thread spawn": { error: { code: "error", message: "Failed to create thread: HTTP 404: Project not found" } } });
+  mkdirSync(join(home, ".claude"));
+  const before = '{ "permissions": {"allow": ["Bash(ls)"]},\n  "env": {"MINE": "1"} }\n';
+  writeFileSync(join(home, ".claude/settings.local.json"), before, { mode: 0o640 });
+  assert.equal((await run()).error.code, "E_SESSION_START_FAILED");
+  assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
+  assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o640);
+  assert.deepEqual(readdirSync(home).sort(), [".claude", "TASK.md"]);
+});
+
 test("a project bb may or may not have created (a server error) leaves the launch in doubt; bb's own no is a refusal", async (t) => {
   const unknown = await setup(t, { "project list": { stdout: [] }, "project create": { error: { code: "error", message: "HTTP 500: no" } } });
   const run = await rawLaunch(unknown.bb, unknown.backend, unknown.input());
   assert.equal(run.status, 1);
   assert.equal(run.stdout, "");
-  assert.match(run.stderr, /whether bb created the home's project is not known/);
+  assert.match(run.stderr, /bb project create failed.*may already have changed bb or the home \(it asked bb to create the home.s project\).*not a refusal/);
   const refused = await setup(t, { "project list": { stdout: [] }, "project create": { error: { code: "invalid_request", message: "HTTP 400: bad root" } } });
   const answer = await refused.run();
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
@@ -548,7 +590,6 @@ for (const [name, extra, script] of [
 for (const [name, script, pattern, code = "E_SESSION_START_FAILED"] of [
   ["cannot be listed", { "thread list --archived": UNREACHABLE }, /does not answer/, "E_BACKEND_UNREACHABLE"],
   ["hold a row that cannot be read", { "thread list --archived": { stdout: [null] } }, /a row this provider cannot read/],
-  ["hold one bb will not stop", { "thread list --archived": { stdout: ARCHIVED }, "thread stop": { error: { code: "error", message: "HTTP 500: boom" } } }, /bb thread stop failed/],
 ]) {
   test(`a launch whose home's archived threads ${name} is refused before the spawn: a Claude may be left in the home`, async (t) => {
     const { home, bb, run } = await setup(t, script);
@@ -566,12 +607,23 @@ test("a home with no bb project yet has no archived thread to stop: none is aske
   assert.equal(verbs(bb).includes("thread list --archived"), false);
 });
 
-test("a previous thread bb says it will not archive refuses the launch before the spawn: nothing was changed", async (t) => {
-  const { backend, bb, run } = await setup(t, { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "error")] }, "thread archive": { error: { code: "invalid_request", message: "HTTP 409: no" } } });
-  const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
-  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
-  assert.deepEqual(effects(bb), ["thread stop", "thread archive"]);
-});
+// A stop of a thread at rest may already have released its process or withdrawn a held
+// message: from the first stop the launch asks for, a failure is in doubt, not a refusal.
+for (const [name, script, pattern] of [
+  ["bb says it will not archive the previous thread", { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "error")] }, "thread archive": { error: { code: "invalid_request", message: "HTTP 409: no" } } }, /could not be archived.*it asked bb to stop earlier threads of this home.*not a refusal/],
+  ["the stop of the previous thread loses its answer", { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread stop": { exit: 3, stderr: "killed\n" } }, /bb thread stop.*not a refusal/],
+  ["an archived thread of the home will not stop", { "thread list --archived": { stdout: ARCHIVED }, "thread stop": { error: { code: "error", message: "HTTP 500: boom" } } }, /bb thread stop failed.*not a refusal/],
+  ["a look at the previous thread fails after its stop", { "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle")] }, "thread show": { exit: 3, stderr: "boom\n" } }, /not a refusal/],
+]) {
+  test(`once a launch has asked bb to stop an earlier thread of the home, it never answers a refusal: ${name}`, async (t) => {
+    const { backend, bb, input } = await setup(t, script);
+    const run = await rawLaunch(bb, backend, input({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } }));
+    assert.equal(run.status, 1);
+    assert.equal(run.stdout, "", "no envelope: the kernel keeps its record that a launch was sent");
+    assert.match(run.stderr, pattern);
+    assert.equal(effects(bb).includes("thread spawn"), false);
+  });
+}
 
 test("a previous thread bb no longer has is no obstacle", async (t) => {
   const { backend, bb, run } = await setup(t);

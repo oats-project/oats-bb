@@ -12,7 +12,7 @@
 // The provider records what it wrote (`.oats-bb/launch-env.json`, `.oats-bb-sandbox.json`)
 // and later removes exactly that. An entry a person put in the file under another name is
 // never touched; a name the launch carries is the launch's.
-import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute, join, normalize } from "node:path";
 import { randomBytes } from "node:crypto";
 import { ProviderError, fail, isObject } from "./errors.mjs";
@@ -298,13 +298,18 @@ function pinDirectory(dir, refuse, { follow = false } = {}) {
     if (error?.code === "ENOENT") return null;
     throw refuse(`is in ${dir}, which is not a directory of the home (a link is not followed)`);
   }
-  // Linux names an open directory by its handle; elsewhere the path is used, and the
-  // handle says afterwards whether the directory is still the one that was opened.
+  // Linux names an open directory by its handle, so the file is opened through the very
+  // directory that was checked. Other systems give Node no such open: there the path is
+  // used, and afterwards the handles say whether the directory is still the one that was
+  // opened and whether the file that was read is the one now in it. That check cannot
+  // see a directory swapped and put back in between, so it is weaker; what it protects is
+  // also less than it looks, since the agent that could do the swap runs as the same
+  // user as the provider and can read whatever the provider can.
   const through = (name) => (process.platform === "linux" ? `/proc/self/fd/${fd}/${name}` : join(dir, name));
-  const same = () => {
+  const same = (name, opened) => {
     if (process.platform === "linux") return true;
-    const now = lstatSync(dir, { throwIfNoEntry: false }), held = fstatSync(fd);
-    return now?.isDirectory() === true && now.dev === held.dev && now.ino === held.ino;
+    const now = lstatSync(dir, { throwIfNoEntry: false }), held = fstatSync(fd), file = lstatSync(join(dir, name), { throwIfNoEntry: false });
+    return now?.isDirectory() === true && now.dev === held.dev && now.ino === held.ino && file?.isFile() === true && file.dev === opened.dev && file.ino === opened.ino;
   };
   return { fd, through, same };
 }
@@ -330,7 +335,7 @@ function readJsonObject(path, what, { inHome = false } = {}) {
     if (stat.size > READ_MAX) throw refuse(`is larger than ${READ_MAX} bytes`);
     fd = openSync(pinned, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const opened = fstatSync(fd);
-    if (!opened.isFile() || opened.size > READ_MAX || !dir.same()) throw refuse("changed while it was read");
+    if (!opened.isFile() || opened.size > READ_MAX || !dir.same(basename(path), opened)) throw refuse("changed while it was read");
     const buffer = Buffer.alloc(opened.size);
     let got = 0;
     while (got < opened.size) {
@@ -381,7 +386,6 @@ export function readLaunchRecord(home) {
   };
 }
 
-const PRINTABLE = /^[\x20-\x7e]{1,120}$/;
 export const isExactHost = (value) => typeof value === "string" && HOST.test(value);
 export const isExactPath = (value) => typeof value === "string" && isAbsolute(value) && normalize(value) === value && value !== "/" && !/[*?\x00-\x1f\x7f]/.test(value);
 
@@ -401,7 +405,8 @@ export function currentSandbox(home) {
   const domains = record.domains.filter((entry) => isExactHost(entry.host) && typeof entry.capability === "string" && CAPABILITY_ID.test(entry.capability) && allowedDomains.includes(entry.host))
     .map((entry) => ({ host: entry.host, capability: entry.capability, setting: typeof entry.setting === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(entry.setting) ? entry.setting : null }));
   const write = record.write.filter((entry) => isExactPath(entry.path) && allowWrite.includes(entry.path))
-    .map((entry) => ({ path: entry.path, reason: typeof entry.reason === "string" && PRINTABLE.test(entry.reason) ? entry.reason : null }));
+    // The reason beside a path is free text from a file in the home: never relayed.
+    .map((entry) => ({ path: entry.path }));
   return { domains, write, mismatch: record.domains.length - domains.length + record.write.length - write.length };
 }
 
@@ -486,6 +491,29 @@ function withdraw(settings, envNames, sandboxRecord) {
     removeFrom(settings, DOMAINS_KEYS, sandboxRecord.added.domains, sandboxRecord.added.keys);
     removeFrom(settings, WRITE_KEYS, sandboxRecord.added.write, sandboxRecord.added.keys);
   }
+}
+
+/** What a launch writes in the home, as it stands now: Claude's local settings and the
+ *  provider's records. → restore(): puts every one of them back as it was (its bytes, or
+ *  its absence), and removes a directory the launch made. For a launch that ends in a
+ *  refusal after it wrote them: a refusal means nothing was changed. */
+export function snapshotLaunchSettings(home) {
+  const files = [join(".claude", "settings.local.json"), ENV_RECORD, LAUNCH_RECORD, SANDBOX_RECORD].map((name) => join(home, name));
+  const dirs = [join(home, ".claude"), join(home, STATE_DIR)].map((dir) => ({ dir, was: lstatSync(dir, { throwIfNoEntry: false }) !== undefined }));
+  const before = files.map((path) => {
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    return { path, bytes: stat?.isFile() ? readFileSync(path) : null, mode: stat?.isFile() ? stat.mode & 0o777 : null };
+  });
+  return () => {
+    for (const { path, bytes, mode } of before) {
+      if (bytes === null) rmSync(path, { force: true });
+      else { writeFileSync(path, bytes, { mode }); chmodSync(path, mode); }
+    }
+    for (const { dir, was } of dirs) {
+      if (was) continue;
+      try { rmdirSync(dir); } catch { /* not empty, or not there: left as it is */ }
+    }
+  };
 }
 
 /** Write a launch's settings into `<home>/.claude/settings.local.json` (0600): the env

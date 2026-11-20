@@ -10,7 +10,7 @@
 //
 // The settings are the home's recorded ones, in OATS_SETTINGS (the hook environment); the
 // readiness verb, which also runs for a soul with no home, may carry them in its input.
-import { InDoubt, ProviderError, isObject } from "./errors.mjs";
+import { InDoubt, ProviderError, bounded, isObject } from "./errors.mjs";
 import { graceOf } from "./stop.mjs";
 
 export const PROVIDER = "bb";
@@ -53,9 +53,9 @@ export function settingsFromEnv(env) {
 }
 
 function refusal(error, fallback) {
-  if (error instanceof ProviderError) return { code: error.code, message: error.message };
+  if (error instanceof ProviderError) return { code: error.code, message: bounded(error.message) };
   // A bug of ours, or of the platform: the verb's own failure, with the text.
-  return { code: fallback, message: `the bb provider failed: ${error?.message ?? String(error)}` };
+  return { code: fallback, message: bounded(`the bb provider failed: ${error?.message ?? String(error)}`) };
 }
 
 /** Run one call. `handlers[verb](input, rawSettings, {deadline, env})` resolves the

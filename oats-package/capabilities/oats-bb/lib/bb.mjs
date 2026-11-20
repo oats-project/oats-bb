@@ -141,8 +141,12 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
     && (row.queuedWork === null || row.queuedWork === undefined || typeof row.queuedWork === "string")
     && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string");
-  const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources)
-    && row.sources.every((source) => isObject(source) && (source.path === null || source.path === undefined || typeof source.path === "string"));
+  // A source row as bb writes one: its kind, and for a directory on a machine its path. A
+  // source that does not say what it is cannot show that a project is NOT rooted at a
+  // home: such a list is unreadable, never "no project here".
+  const sourceRow = (source) => isObject(source) && typeof source.type === "string" && source.type !== ""
+    && (source.type === "local_path" ? typeof source.path === "string" && source.path !== "" : source.path === null || source.path === undefined || typeof source.path === "string");
+  const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources) && row.sources.every(sourceRow);
   const interactionRow = (row) => isObject(row) && typeof row.id === "string" && typeof row.status === "string";
   const queuedRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "";
   return {

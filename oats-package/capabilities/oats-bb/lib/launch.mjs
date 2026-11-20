@@ -2,11 +2,11 @@
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { bbClient, nothingHappened } from "./bb.mjs";
-import { readLaunchEnv, readSandbox, readUnset, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
+import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject } from "./errors.mjs";
 import { backendProblems } from "./readiness.mjs";
-import { archivedOf, confirmStop, stopArchived } from "./halt.mjs";
+import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
 const BB_PROVIDER = "claude-code";
@@ -98,47 +98,56 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   }
   const toSweep = mine.length > 0 ? await archivedOf(bb, mine.map((candidate) => candidate.id), { since }) : [];
 
-  // Then the stops. A stop of a thread that is at rest (settled, or archived) changes
-  // nothing the kernel's records know: it releases a loaded Claude. So a failure here is
-  // still a refusal: no conversation was archived, no project made, nothing started.
+  // Then the changes, and from the first one that MAY have happened a failure is no longer
+  // a refusal: the kernel reads a refusal as "nothing happened" and may drop its record
+  // that a launch was sent. A stop of a thread at rest counts (a loaded process may have
+  // been released, a held message withdrawn), and so does a call whose answer was lost.
+  // What cannot be completed after that ends with no answer, as every outcome in doubt
+  // does. Two things stay refusals, because they are known to have changed nothing: bb's
+  // own no to creating the home's project when nothing came before it, and bb's own no to
+  // the spawn when the only change was the launch's own settings file, which is put back.
+  let effect = null;
+  const inDoubtAfter = (error) => (effect !== null && error instanceof ProviderError
+    ? new InDoubt(`${error.message}. The launch may already have changed bb or the home (${effect}), so this is not a refusal`) : error);
+  let project, restoreSettings;
   try {
-    if (replaced) await confirmStop(bb, replaced.id, { deadline, grace: CLEANUP_GRACE_SECONDS });
-    await stopArchived(bb, toSweep, { deadline, grace: CLEANUP_GRACE_SECONDS });
-  } catch (error) {
-    if (!(error instanceof ProviderError) || error.code !== "E_SESSION_STOP_FAILED") throw error;
-    throw fail("E_SESSION_START_FAILED", `an earlier bb thread of this home could not be stopped before the launch, so its Claude may still be loaded there: ${error.message}`);
-  }
-
-  // From the first change on (the previous thread archived, a project made), a failure is
-  // no longer a refusal: the kernel reads a refusal as "nothing happened". What cannot be
-  // completed then ends with no answer, as every outcome in doubt does.
-  let changed = null;
-  const noLongerARefusal = (error) => (changed !== null && error instanceof ProviderError
-    ? new InDoubt(`${error.message}. The launch had already changed bb (${changed}), so this is not a refusal`) : error);
-  let project;
-  try {
+    if (replaced || toSweep.length > 0) {
+      effect = "it asked bb to stop earlier threads of this home";
+      if (replaced) await confirmStop(bb, replaced.id, { deadline, grace: CLEANUP_GRACE_SECONDS });
+      await stopArchived(bb, toSweep, relistOf(bb, mine.map((candidate) => candidate.id)), { deadline, grace: CLEANUP_GRACE_SECONDS });
+    }
     if (replaced) {
       const archived = await bb.archive(replaced.id);
-      if (archived.ok || archived.code === "thread_not_found") changed = `the home's previous thread ${replaced.id} is archived`;
-      else if (nothingHappened(archived)) throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
-      else throw new InDoubt(`whether bb archived the home's previous thread ${replaced.id} is not known (${archived.message}): the launch stopped there`);
+      if (!archived.ok && archived.code !== "thread_not_found") throw fail("E_SESSION_START_FAILED", `the previous bb thread ${replaced.id} could not be archived (${archived.message})`);
+      effect = `the home's previous thread ${replaced.id} is archived`;
     }
     project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;
     if (project === null) {
+      const before = effect;
+      effect = "it asked bb to create the home's project";
       try { project = await bb.createProject(instance, home); }
       catch (error) {
-        if (error instanceof ProviderError && isObject(error.bb) && !nothingHappened(error.bb)) throw new InDoubt(`whether bb created the home's project is not known (${error.message}): the launch stopped there`);
+        // bb's own no, with nothing before it: no project was made, and nothing else was changed.
+        if (before === null && error instanceof ProviderError && isObject(error.bb) && nothingHappened(error.bb)) effect = null;
         throw error;
       }
-      changed = `bb project ${project.id} was created`;
+      effect = `bb project ${project.id} was created`;
       // The project must be rooted exactly at the home: that is what makes the home's own
       // .claude, CLAUDE.md and hooks the thread's, and one home one project.
       if (projectsOfHome([project], home).length === 0) {
         throw fail("E_SESSION_START_FAILED", `bb created project ${project.id} with another root than the home ${home} (${JSON.stringify((project.sources ?? []).map((source) => source?.path))}): no thread was started. Remove that project in bb`);
       }
     }
-    writeLaunchSettings(home, settingsToWrite);
-  } catch (error) { throw noLongerARefusal(error); }
+    // The launch's own files in the home: put back as they were where the write, or a
+    // spawn bb refuses, leaves the launch with nothing else changed.
+    restoreSettings = snapshotLaunchSettings(home);
+    try { writeLaunchSettings(home, settingsToWrite); }
+    catch (error) {
+      if (effect === null) restoreSettings();
+      throw error;
+    }
+
+  } catch (error) { throw inDoubtAfter(error); }
 
   const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
@@ -148,8 +157,17 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // The answer is always a thread this home never had: bb makes a new id for every spawn,
   // and the previous thread's is never answered (the kernel tells a new session by it).
   if (spawned.ok && isObject(thread) && isBbId(thread.id) && thread.id !== previousId) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
-  // bb said no, or the request never reached it: nothing was created.
-  if (nothingHappened(spawned)) throw noLongerARefusal(fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`));
+  // bb said no, or the request never reached it: no thread was created. With nothing else
+  // changed, the launch's own settings file is put back as it was, and this is a refusal.
+  if (nothingHappened(spawned)) {
+    const refused = fail("E_SESSION_START_FAILED", `bb thread spawn failed: ${spawned.message}`);
+    if (effect === null) {
+      try { restoreSettings(); }
+      catch (error) { throw new InDoubt(`${refused.message}. The launch's settings file could not be put back as it was (${error?.code ?? error?.message ?? error}), so this is not a refusal`); }
+      throw refused;
+    }
+    throw inDoubtAfter(refused);
+  }
 
   // The spawn's fate is unknown: no answer in time, an answer that cannot be read or has
   // no thread id, a CLI that died, a connection that dropped after the request went out. A

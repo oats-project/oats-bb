@@ -60,6 +60,18 @@ for (const [name, extra] of [["an archive mark that is a word", { archivedAt: "n
   });
 }
 
+// The kernel relays 500 characters of a message: every message is cut to fit, and one that
+// may be long says its remedy and its count before its list.
+test("with sixty other live threads in the home, the refusal still fits and says what to do first", async (t) => {
+  const others = Array.from({ length: 60 }, (_, i) => threadRow(`thr_other_${String(i).padStart(2, "0")}_${"x".repeat(8)}`, "proj_a", "idle"));
+  const { answer, bb, home } = await inspectWith(t, [threadRow("thr_a", "proj_a", "idle"), ...others]);
+  assert.equal(answer.error.code, "E_SESSION_UNAVAILABLE");
+  assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
+  assert.match(answer.error.message, /One home is one thread: archive the 60 others in bb\. The recorded thread is thr_a; the others: thr_other_00_x+, .* and 54 more$/);
+  const many = await call("inspectMany", { homes: [{ home, endpoint }] }, { settings, bb });
+  assert.ok(many.result.results[0].error.message.length <= 480);
+});
+
 test("a thread bb no longer has reads stopped, and offers nothing to open", async (t) => {
   const { answer } = await inspectWith(t, [threadRow("thr_other", "proj_other", "idle")]);
   assert.deepEqual(answer.result, { present: false, state: "stopped", running: false });

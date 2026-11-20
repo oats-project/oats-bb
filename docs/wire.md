@@ -88,12 +88,16 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   end of the grace is `E_SESSION_STOP_FAILED`. Inspect reads a settled thread with work
   in line as `running: true`.
 - **A refusal means nothing was changed.** A launch reads everything it needs first (bb's
-  projects and threads, the home's archived threads), then stops what must be stopped (a
-  stop of a thread at rest changes nothing the kernel records: it releases a loaded
-  process), and only then makes its first change: archiving the previous thread, or
-  creating the home's project. A failure before that change is a refusal. After it, a
-  launch that cannot go on, and an archive or a project creation whose outcome bb did
-  not say, end with no answer and a nonzero exit, as every outcome in doubt does.
+  projects and threads, the home's archived threads). From the first call that may have
+  changed something, it no longer answers a refusal: a stop of an earlier thread of the
+  home (a loaded process may have been released, a held message withdrawn), the archive
+  of the previous thread, the creation of the home's project, each also when its answer
+  was lost. What cannot be completed after that ends with no answer and a nonzero exit,
+  as every outcome in doubt does, and the kernel keeps its record that a launch was sent.
+  Two failures stay refusals, because they are known to have changed nothing: bb's own no
+  to creating the home's project, when nothing came before it; and bb's own no to the
+  spawn, when the launch's only change was its own files in the home, which it then puts
+  back as they were (their bytes and modes, or their absence).
 - **Helpers stay in the command's process group.** The kernel gives each provider command
   a process group and kills that group to end the command. The provider starts every bb
   call inside it, never in a session or group of its own. A bb call cut off by time is
@@ -109,11 +113,14 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (earlier ones were swept by the launch that made that thread); with no `previous`, or
   where bb does not show when it was created, it sweeps them all. A stop with
   `endpoint: null` and the retire hook are told no thread to count from, and sweep them
-  all: one bb call per archived thread of that project. What the provider confirms is
-  bb's acknowledgement of the stop: the process ends a moment after it, and the provider
-  does not look at processes (the kernel does, in the home, before it retires one). So
-  the old thread's Claude, already stopped, may still be exiting when the new thread's
-  starts.
+  all: one bb call per archived thread of that project, and one more read of the lists.
+  An archived thread is confirmed stopped by the same rule as a live one, with the reads
+  shared: bb acknowledges each stop, the lists are read again, and every thread stopped
+  must show settled with nothing in line; one that does not goes through the rule above
+  by itself. Never by the row it was found in. What none of this can show is the
+  process: it ends a moment after bb's acknowledgement, and the provider does not look at
+  processes (the kernel does, in the home, before it retires one). So the old thread's
+  Claude, already stopped, may still be exiting when the new thread's starts.
 - **launch `sandbox`** is
   `{domains: [{host, capability, setting}], write: [{path, reason}], missing: [{capability,
   setting, team, optional, defaultTeam}]}`, built by the kernel from recorded configuration, or

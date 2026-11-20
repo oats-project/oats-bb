@@ -1,7 +1,7 @@
 // inspect and inspectMany: what bb shows of a home's thread, from one `bb thread list`.
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { fail, isObject, recode } from "./errors.mjs";
+import { bounded, fail, isObject, recode } from "./errors.mjs";
 import { inspectHome, readEndpoint } from "./threads.mjs";
 
 function readHome(entry) {
@@ -39,7 +39,7 @@ export async function inspectMany(input, settings, { deadline, env = process.env
       return inspectHome(subject, read.threads);
     } catch (error) {
       const refused = unavailable(error);
-      return { error: { code: refused.code, message: refused.message } };
+      return { error: { code: refused.code, message: bounded(refused.message) } };
     }
   }));
   return { results };

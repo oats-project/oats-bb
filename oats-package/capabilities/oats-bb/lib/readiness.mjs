@@ -5,7 +5,7 @@
 import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { bbClient } from "./bb.mjs";
-import { ProviderError, isObject } from "./errors.mjs";
+import { ProviderError, bounded, isObject } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
 import { currentSandbox, gapList, missingRemedy, readLaunchRecord, readSandbox } from "./local-settings.mjs";
@@ -219,7 +219,8 @@ export async function readinessResult(settings, options = {}) {
   warnings.push(...(options.extra?.warnings ?? []));
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
-  return { result: { status, problems: problems.map(({ code, message }) => ({ code, message })), warnings }, credential };
+  // Every line is cut to what the kernel relays.
+  return { result: { status, problems: problems.map(({ code, message }) => ({ code, message: bounded(message) })), warnings: warnings.map(({ code, message }) => ({ code, message: bounded(message) })) }, credential };
 }
 
 /** What a readiness read with no planned launch says, since it cannot know the mode a
@@ -308,7 +309,7 @@ export function sandboxWarnings(home, { planned = false } = {}) {
   }
   if (current.domains.length > 0 || current.write.length > 0) {
     const hosts = current.domains.map((entry) => `${entry.host} (${entry.capability}${entry.setting ? `, its setting ${entry.setting}` : ""})`);
-    const paths = current.write.map((entry) => `${entry.path} (the kernel${entry.reason ? `: ${entry.reason}` : ""})`);
+    const paths = current.write.map((entry) => `${entry.path} (the kernel)`);
     warnings.push({ code: "session-provider-sandbox", message: `in bb's sandboxed modes this home's Claude may also reach ${hosts.length ? hosts.join(", ") : "no added host"} and write ${paths.length ? paths.join(", ") : "no added path"}: what OATS's own operation needs, written by the provider into the home's .claude/settings.local.json at launch` });
     const forges = current.domains.filter((entry) => GENERAL_FORGES.has(entry.host.split(":")[0]));
     if (forges.length > 0) {

@@ -84,7 +84,10 @@ export function inspectHome({ home, endpoint }, threads) {
   const recorded = threads.find((thread) => isObject(thread) && thread.id === endpoint.threadId && isLive(thread)) ?? null;
   const others = liveThreadsOfHome(threads, home, [endpoint.projectId]).filter((thread) => thread.id !== endpoint.threadId);
   if (others.length > 0) {
-    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}: the recorded ${endpoint.threadId}${recorded ? "" : " (missing or archived)"} and ${others.map((thread) => thread.id).join(", ")}. One home is one thread: archive the others in bb`);
+    // The remedy and the count first: the list may be long, and a message is cut at 500.
+    const ids = others.map((thread) => thread.id);
+    const named = ids.length <= 6 ? ids.join(", ") : `${ids.slice(0, 6).join(", ")} and ${ids.length - 6} more`;
+    throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}. One home is one thread: archive the ${ids.length > 1 ? `${ids.length} others` : "other"} in bb. The recorded thread is ${endpoint.threadId}${recorded ? "" : " (missing or archived)"}; the other${ids.length > 1 ? "s" : ""}: ${named}`);
   }
   if (!recorded) return { ...MISSING };
   return { ...inspectAnswer(recorded), open: openLink(endpoint) };

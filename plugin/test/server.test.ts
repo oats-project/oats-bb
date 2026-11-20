@@ -227,7 +227,7 @@ describe("the pages", () => {
 describe("acts", () => {
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
-    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zte8wn34p7" });
+    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pd7qyrq3p6" });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
@@ -254,7 +254,7 @@ describe("acts", () => {
     const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
-    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zte8wn34p7" });
+    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pd7qyrq3p6" });
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn --preview", "spawn"]);
     expect(calls[3]!.argv[calls[3]!.argv.indexOf("--expect-decision") + 1]).toBe("aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -307,8 +307,8 @@ describe("acts", () => {
     await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
     expect(await verbs()).toEqual(["status"]);
 
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_yp26z4d5ac" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_bxr8mrr972" });
+    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_s2f4z7rkcd" });
+    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_etz89sc25g" });
     const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
     expect(sessions.map((call) => call.argv)).toEqual([
       ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],

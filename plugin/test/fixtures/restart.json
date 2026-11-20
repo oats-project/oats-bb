@@ -15,17 +15,17 @@
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_7rgdzp727e",
-    "threadId": "thr_bxr8mrr972"
+    "projectId": "proj_rdbmn8dtge",
+    "threadId": "thr_etz89sc25g"
    }
   },
-  "startedAt": "2026-11-20T10:11:16.476Z",
+  "startedAt": "2026-11-20T11:24:44.186Z",
   "restartCount": 2,
   "reused": "new",
   "warnings": [],
   "stop": {
    "stopped": true,
-   "waitedMs": 1153
+   "waitedMs": 1750
   }
  }
 }

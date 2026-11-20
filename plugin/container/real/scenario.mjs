@@ -70,6 +70,17 @@ const bbJson = (...args) => JSON.parse(bb(...args, "--json"));
 /** bb's threads, archived ones included; a deleted thread is not among them. */
 const bbThreads = () => bbJson("thread", "list", "--include-archived");
 const bbThread = (id) => bbThreads().find((thread) => thread.id === id);
+/** bb has the thread, and it is not archived. */
+const live = (id) => {
+  const thread = bbThread(id);
+  return thread !== undefined && thread.archivedAt == null;
+};
+/** bb has the thread, archived. */
+const archivedInBb = (id) => {
+  const thread = bbThread(id);
+  return thread !== undefined && thread.archivedAt != null;
+};
+const threadsNow = () => JSON.stringify(bbThreads().map((thread) => [thread.id, thread.status, thread.archivedAt]));
 const bbProjects = () => {
   const answer = bbJson("project", "list");
   return Array.isArray(answer) ? answer : (answer.projects ?? answer.items ?? []);
@@ -94,6 +105,11 @@ const brief = (row) =>
   row === undefined
     ? "no row"
     : `backend ${row.backend}, session ${JSON.stringify(row.session)}, running ${row.running}, runtimeState ${row.runtimeState}${row.sessionEnd ? `, sessionEnd ${row.sessionEnd}` : ""}${row.runtimeError ? `, runtimeError ${row.runtimeError}` : ""}${row.waitingOnYou ? `, waitingOnYou ${JSON.stringify(row.waitingOnYou)}` : ""}`;
+/**
+ * The agent's first turn in its thread is over: bb shows the thread idle. A thread bb has not
+ * started yet ("pending") also reads `running: null` in the kernel's row, and is not that.
+ */
+const settled = (row) => bbThread(row.session?.threadId)?.status === "idle";
 const untilRow = (instance, what, matches, seconds = 60) =>
   until(`${instance} to read ${what} in oats status`, () => {
     const row = rowOf(instance);
@@ -149,10 +165,12 @@ function recorded(words, having = []) {
   return last;
 }
 /**
- * A refusal the plugin must show unchanged: the RPC is refused, and its message ends with the
- * kernel's own code and message, read from what the kernel printed for that call.
+ * A refusal the plugin must show unchanged: the RPC is refused, the kernel's code is `code`, and the
+ * plugin's message ends with the kernel's own code and message, read from what the kernel printed
+ * for that call. Another refusal (a kernel busy with something else) fails the check and answers
+ * undefined, so that it is never kept as a fixture.
  */
-function refused(what, method, input, words, having = []) {
+function refused(what, code, method, input, words, having = []) {
   const answer = rpc(method, input);
   if (answer.ok) {
     fail(`${what}: expected the kernel's refusal, and the call went through`, JSON.stringify(answer.value));
@@ -169,10 +187,38 @@ function refused(what, method, input, words, having = []) {
     fail(`${what}: the kernel printed no refusal for ${record.argv.join(" ")}`, record.stdout || record.stderr);
     return undefined;
   }
-  check(answer.message.endsWith(`${kernel.code}: ${kernel.message}`), `${what}: the plugin shows the kernel's refusal unchanged (${kernel.code})`, answer.message);
   show("kernel", `${kernel.code}: ${kernel.message}`);
   show("plugin", answer.message);
+  if (kernel.code !== code) {
+    fail(`${what}: expected the kernel's ${code}, and it refused with ${kernel.code}`);
+    return undefined;
+  }
+  check(answer.message.endsWith(`${kernel.code}: ${kernel.message}`), `${what}: the plugin shows the kernel's refusal unchanged (${kernel.code})`, answer.message);
   return { kernel, record };
+}
+/**
+ * Keeps, as the member `key` of status-recorded.json, the `oats status --json` the kernel printed
+ * for the plugin's own read: a refresh makes the plugin read now, and the wrapper's record of that
+ * call is what is kept, once every row named in `expected` reads as its check says.
+ */
+function keepStatus(key, expected) {
+  const before = records().length;
+  rpc("refresh");
+  const fresh = records().slice(before).filter((record) => record.argv[0] === "status" && record.exit === 0);
+  const record = fresh[fresh.length - 1];
+  if (record === undefined) {
+    fail(`status-recorded.json ${key}: the plugin's refresh ran no oats status`);
+    return;
+  }
+  const rows = new Map();
+  for (const group of JSON.parse(record.stdout).agents) for (const row of group.instances) rows.set(row.instance, row);
+  const wrong = Object.entries(expected).filter(([instance, matches]) => !(rows.has(instance) && matches(rows.get(instance))));
+  if (wrong.length > 0 || rows.size !== Object.keys(expected).length) {
+    fail(`status-recorded.json ${key}: the status the plugin read is not the state to record`, JSON.stringify([...rows.values()].map((row) => [row.instance, brief(row)])));
+    return;
+  }
+  fixtures.keepIn("status-recorded.json", key, record.stdout);
+  pass(`status-recorded.json ${key}: kept from the plugin's own oats status (${[...rows.keys()].join(", ")})`);
 }
 /** The plugin's own snapshot, read again now; the row of one instance in it. */
 function snapshotRow(instance) {
@@ -284,28 +330,32 @@ try {
   let row = await untilRow(A.instance, "working (running true)", (r) => r.running === true);
   check(row?.backend === "bb" && row.session?.provider === "oats.bb" && row.session.threadId === threadId && row.runtimeState === "unknown" && typeof row.open?.url === "string", "oats status: on bb, the same thread, running true / unknown, with a link to open it", brief(row));
   show("oats status", brief(row));
-  let thread = bbThread(threadId);
+  // bb shows a thread "starting" before its first turn is "active"; the kernel calls both running.
+  let thread = await until("bb to show the thread in its turn", () => {
+    const now = bbThread(threadId);
+    return now?.status === "active" ? now : undefined;
+  }, 30);
   const project = bbProjects().find((candidate) => candidate.id === thread?.projectId);
   check(thread?.status === "active" && JSON.stringify(project ?? {}).includes(home), "bb: the thread is active, in a project rooted at the agent's home", JSON.stringify({ thread, project }));
   show("bb thread", { id: thread?.id, status: thread?.status, projectId: thread?.projectId, title: thread?.title });
   agrees(A.instance, row);
-  fixtures.keepIn("status-recorded.json", "working", status().text);
+  keepStatus("working", { [A.instance]: (r) => r.running === true && r.runtimeState === "unknown" && r.session?.threadId === threadId });
   await shots("real-working", { ...A, threadId, state: "working" });
 
   step("A3 edge: a second spawn with the same name");
-  refused("a second spawn of the same name", "spawn", { soul: A.soul, name: A.instance, task: "again", key: "spawn-2b1d8c6f" }, ["spawn", A.soul]);
+  refused("a second spawn of the same name", "E_INSTANCE_NAME_TAKEN", "spawn", { soul: A.soul, name: A.instance, task: "again", key: "spawn-2b1d8c6f" }, ["spawn", A.soul]);
 
   step("A4 edge: start on a running agent");
-  refused("start on a running agent", "start", { instance: A.instance }, ["session", "start"]);
+  refused("start on a running agent", "E_SESSION_RUNNING", "start", { instance: A.instance }, ["session", "start"]);
 
   step("A5 the turn ends: idle");
   release(A.instance);
-  row = await untilRow(A.instance, "idle (running null)", (r) => r.running === null && r.runtimeState === "unknown");
+  row = await untilRow(A.instance, "idle (running null)", (r) => r.running === null && r.runtimeState === "unknown" && settled(r));
   show("oats status", brief(row));
   thread = bbThread(threadId);
   check(thread?.status === "idle", "bb: the thread is idle", JSON.stringify(thread));
   agrees(A.instance, row);
-  fixtures.keepIn("status-recorded.json", "idle", status().text);
+  keepStatus("idle", { [A.instance]: (r) => r.running === null && r.runtimeState === "unknown" && r.waitingOnYou == null && r.session?.threadId === threadId });
   await shots("real-idle", { ...A, threadId, state: "idle" });
 
   step("A5b the agent asks for a person (a waiting claim): needs you");
@@ -317,7 +367,7 @@ try {
   show("oats status", brief(row));
   const waiting = snapshotRow(A.instance)?.waiting;
   check(waiting?.reason === row?.waitingOnYou?.reason && waiting?.message === "Keep the retry, or fail the job?", "the plugin's snapshot has the claim, with the kernel's reason and the agent's message", JSON.stringify(waiting));
-  fixtures.keepIn("status-recorded.json", "needsYou", status().text);
+  keepStatus("needsYou", { [A.instance]: (r) => r.running === null && r.waitingOnYou?.message === "Keep the retry, or fail the job?" });
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
@@ -356,11 +406,11 @@ try {
   check(thread !== undefined && thread.status !== "active" && thread.archivedAt == null, "bb: the thread is kept, and no longer active", JSON.stringify(thread));
   show("bb thread", { id: thread?.id, status: thread?.status, archivedAt: thread?.archivedAt });
   agrees(A.instance, row);
-  fixtures.keepIn("status-recorded.json", "stoppedByOats", status().text);
+  keepStatus("stoppedByOats", { [A.instance]: (r) => r.running === false && r.runtimeState === "stopped" && r.sessionEnd === "stopped" && r.session?.threadId === threadId });
   await shots("real-stopped", { ...A, threadId, state: "stopped" });
 
   step("A8 edge: a stale stop plan (apply after another stop)");
-  refused("the apply of the plan read before the stop", "stopApply", { instance: A.instance, revision: stale.revision, key: "stop-0f0e0d0c0b0a" }, ["instance", "stop"], ["--apply", "stop-0f0e0d0c0b0a"]);
+  refused("the apply of the plan read before the stop", "E_PLAN_STALE", "stopApply", { instance: A.instance, revision: stale.revision, key: "stop-0f0e0d0c0b0a" }, ["instance", "stop"], ["--apply", "stop-0f0e0d0c0b0a"]);
 
   step("A9 edge: stop on a stopped agent");
   const again = act("stop plan of a stopped agent", "stopPlan", { instance: A.instance });
@@ -373,18 +423,18 @@ try {
   step("A10 start");
   const started = act("start", "start", { instance: A.instance });
   check(/^thr_/.test(started?.threadId ?? "") && started.threadId !== threadId, "start answers a new thread");
-  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === started.threadId && r.running === null);
+  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === started.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
-  check(bbThread(threadId)?.archivedAt != null && bbThread(started.threadId)?.archivedAt == null, "bb: the previous thread is archived, the new one is live", JSON.stringify(bbThreads().map((t) => [t.id, t.status, t.archivedAt])));
+  check(archivedInBb(threadId) && live(started.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
   threadId = started.threadId;
 
   step("A11 restart");
   const restarted = act("restart", "restart", { instance: A.instance });
   check(/^thr_/.test(restarted?.threadId ?? "") && restarted.threadId !== threadId, "restart answers a new thread");
-  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === restarted.threadId && r.running === null);
+  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === restarted.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
-  check(bbThread(threadId)?.archivedAt != null && bbThread(restarted.threadId)?.archivedAt == null, "bb: the previous thread is archived, the new one is live", JSON.stringify(bbThreads().map((t) => [t.id, t.status, t.archivedAt])));
+  check(archivedInBb(threadId) && live(restarted.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
   threadId = restarted.threadId;
 
@@ -395,8 +445,10 @@ try {
   show("oats status", brief(row));
   agrees(A.instance, row);
   const resumed = act("start, after the archive", "start", { instance: A.instance });
-  row = await untilRow(A.instance, "its new thread", (r) => r.session?.threadId === resumed?.threadId && r.running === null);
+  check(/^thr_/.test(resumed?.threadId ?? "") && resumed.threadId !== archived, "start answers a new thread");
+  row = await untilRow(A.instance, "its new thread", (r) => r.session?.threadId === resumed?.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
+  check(archivedInBb(archived) && live(resumed.threadId), "bb: the thread archived by hand is still archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
   threadId = resumed.threadId;
 
@@ -406,7 +458,7 @@ try {
   check(bbThread(threadId) === undefined, "bb: the thread is gone");
   show("oats status", brief(row));
   agrees(A.instance, row);
-  fixtures.keepIn("status-recorded.json", "threadDeleted", status().text);
+  keepStatus("threadDeleted", { [A.instance]: (r) => r.running === false && r.runtimeState === "stopped" && r.session?.threadId === threadId });
   await missingShots("real-missing", A);
 
   step("A14 retire: the plan, then the apply");
@@ -429,7 +481,8 @@ try {
   check(retire.ok, "retire apply", retire.message);
   show("answer", retire.value);
   check(rowOf(A.instance) === undefined && !existsSync(home), "oats status: no row is left, and the home is removed");
-  check(bbThreads().filter((t) => t.projectId === thread.projectId).every((t) => t.archivedAt != null), "bb: every thread of the home is archived", JSON.stringify(bbThreads().map((t) => [t.id, t.status, t.archivedAt])));
+  const left = bbThreads().filter((t) => t.projectId === thread.projectId);
+  check(left.length > 0 && left.every((t) => t.archivedAt != null), "bb: every thread the home still has is archived", threadsNow());
   check(snapshotRow(A.instance) === undefined, "the plugin's snapshot no longer has the agent");
 
   // ======================================================================= part B
@@ -452,10 +505,14 @@ try {
   const harvest = child("knowledge-harvester", "harvest-knowledge-helper", lead, "Harvest what the redesign learned.\n");
   await untilRow(lead, "working", (r) => r.running === true);
   await untilRow("desktop-mockups-developer", "working", (r) => r.running === true);
-  await untilRow("harvest-knowledge-helper", "idle", (r) => r.running === null && r.runtimeState === "unknown");
+  await untilRow("harvest-knowledge-helper", "idle", (r) => r.running === null && r.runtimeState === "unknown" && settled(r));
   for (const name of [lead, "desktop-mockups-developer", "harvest-knowledge-helper"]) show(name, brief(rowOf(name)));
   check(rowOf("desktop-mockups-developer")?.parentInstance === lead && rowOf("harvest-knowledge-helper")?.parentInstance === lead, "oats status: both children name the lead as their parent");
-  fixtures.keepIn("status-recorded.json", "parentWithTwoChildren", status().text);
+  keepStatus("parentWithTwoChildren", {
+    [lead]: (r) => r.running === true && r.parentInstance == null,
+    "desktop-mockups-developer": (r) => r.running === true && r.parentInstance === lead,
+    "harvest-knowledge-helper": (r) => r.running === null && r.runtimeState === "unknown" && r.parentInstance === lead,
+  });
   const leadPlan = act("stop plan of the lead", "stopPlan", { instance: lead });
   evidence.keep("stop-plan.json", recorded(["instance", "stop", lead], ["--plan"]).stdout);
   check(leadPlan?.lines.length >= 4 && leadPlan.lines[1].startsWith("Stop its child "), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
@@ -463,7 +520,7 @@ try {
   const one = act("stop plan of one child", "stopPlan", { instance: "harvest-knowledge-helper" });
   act("stop apply of that child", "stopApply", { instance: "harvest-knowledge-helper", revision: one.revision, key: "stop-5e6f7a8b9c0d" });
   await untilRow("harvest-knowledge-helper", "stopped", (r) => r.runtimeState === "stopped");
-  const staleLead = refused("the apply of the lead's plan read before that stop", "stopApply", { instance: lead, revision: leadPlan.revision, key: "stop-0000aaaa1111" }, ["instance", "stop", lead], ["--apply", "stop-0000aaaa1111"]);
+  const staleLead = refused("the apply of the lead's plan read before that stop", "E_PLAN_STALE", "stopApply", { instance: lead, revision: leadPlan.revision, key: "stop-0000aaaa1111" }, ["instance", "stop", lead], ["--apply", "stop-0000aaaa1111"]);
   if (staleLead) fixtures.keep("stop-apply-stale.json", staleLead.record.stdout);
   const freshLead = act("stop plan of the lead, read again", "stopPlan", { instance: lead });
   act("stop apply of the lead", "stopApply", { instance: lead, revision: freshLead.revision, key: "stop-7f3a9c2e41b8" });
@@ -471,7 +528,8 @@ try {
   for (const name of [lead, "desktop-mockups-developer", "harvest-knowledge-helper"]) {
     const stopped = await untilRow(name, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
     show(name, brief(stopped));
-    check(bbThread(stopped?.session?.threadId)?.status !== "active", `bb: the thread of ${name} is no longer active`);
+    const its = bbThread(stopped?.session?.threadId);
+    check(its !== undefined && its.status !== "active" && its.archivedAt == null, `bb: the thread of ${name} is kept, and no longer active`, JSON.stringify(its));
   }
   release(lead);
   release("desktop-mockups-developer");
@@ -480,7 +538,8 @@ try {
   const digest = "weekly-digest-helper";
   const digestSpawn = act("spawn the agent", "spawn", { soul: "oats-expert", name: digest, task: "Write the weekly digest.\n", key: "spawn-4d5e6f7a" });
   const links = child("oats-expert", "digest-links-helper", digest, "Check the digest's links.\n");
-  await untilRow(digest, "idle", (r) => r.running === null && r.runtimeState === "unknown");
+  await untilRow("digest-links-helper", "idle", (r) => r.running === null && r.runtimeState === "unknown" && settled(r));
+  await untilRow(digest, "idle", (r) => r.running === null && r.runtimeState === "unknown" && settled(r));
   const digestHome = rowOf(digest).home;
   writeFileSync(join(digestHome, "work", "digest-draft.md"), "a draft the agent has not committed\n");
   const digestStop = act("stop plan", "stopPlan", { instance: digest });
@@ -488,12 +547,14 @@ try {
   await untilRow(digest, "stopped", (r) => r.runtimeState === "stopped");
   const digestStart = act("start", "start", { instance: digest });
   fixtures.keep("start.json", recorded(["session", "start", "--home", digestHome]).stdout);
-  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestStart.threadId && r.running === null);
+  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestStart.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
+  check(archivedInBb(digestSpawn.threadId) && live(digestStart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   const digestRestart = act("restart", "restart", { instance: digest });
   fixtures.keep("restart.json", recorded(["session", "restart", "--home", digestHome]).stdout);
-  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestRestart.threadId && r.running === null);
+  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestRestart.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
+  check(archivedInBb(digestStart.threadId) && live(digestRestart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   const digestStop2 = act("stop plan, before the retire", "stopPlan", { instance: digest });
   act("stop apply", "stopApply", { instance: digest, revision: digestStop2.revision, key: "stop-8c9d0e1f2a3b" });
   await untilRow(digest, "stopped", (r) => r.runtimeState === "stopped");
@@ -502,7 +563,12 @@ try {
   act("retire apply", "retireApply", { instance: digest, revision: digestRetire.revision, key: "retire-2b9d4e6f8a1c" });
   fixtures.keep("retire-apply.json", recorded(["retire", digest], ["retire-2b9d4e6f8a1c"]).stdout);
   check(rowOf(digest) === undefined && !existsSync(digestHome), "oats status: no row is left, and the home is removed");
-  show("digest-links-helper", brief(rowOf("digest-links-helper")));
+  check(archivedInBb(digestRestart.threadId), "bb: the retire archived the agent's current thread", threadsNow());
+  const receipt = JSON.parse(recorded(["retire", digest], ["retire-2b9d4e6f8a1c"]).stdout);
+  check(receipt.retention?.worktree === "retained" && existsSync(join(receipt.retention.movedTo, "digest-draft.md")), "the work tree is kept, moved out of the home, with the untracked file", JSON.stringify(receipt.retention));
+  const kept = rowOf("digest-links-helper");
+  check(kept !== undefined && existsSync(kept.home) && kept.running === false && kept.runtimeState === "stopped" && bbThread(kept.session?.threadId) !== undefined, "the child is kept: its row, its home and its bb thread, stopped", brief(kept));
+  show("digest-links-helper", brief(kept));
 
   step("B3 the machines page: two registered servers (no host behind them)");
   for (const [id, ssh, workspace, label] of [["devbox-oats", "devbox.invalid", "/srv/oats", "devbox"], ["build", "build.invalid", "/home/ci/oats", null]]) {
@@ -519,6 +585,9 @@ try {
   await browser.close();
   wrapper({});
 }
+
+// The mock's own log of the model requests, beside the other artefacts.
+if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
 
 step("the recorded answers");
 // status.json stays the design's sample; its bb rows take the session-side fields the kernel printed.

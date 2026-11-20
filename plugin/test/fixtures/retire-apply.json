@@ -2,7 +2,7 @@
  "retired": "weekly-digest-helper",
  "agent": "oats-expert",
  "workRecovery": {
-  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-ojDCG6",
+  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-l9glae",
   "classes": [
    "changed instance-home bytes",
    "untracked or ignored worktree bytes"
@@ -102,7 +102,7 @@
   "oats.bb": {
    "retired": true,
    "archived": [
-    "thr_bxr8mrr972"
+    "thr_etz89sc25g"
    ]
   }
  },

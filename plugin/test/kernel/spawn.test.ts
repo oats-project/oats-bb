@@ -50,7 +50,7 @@ describe("A5 spawn", () => {
     expect(preview.ok).toBe(true);
     if (!preview.ok) return;
     const spawned = await oats.spawn({ soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", key: "spawn-1f0c9a7e", revision: preview.value.revision }, context());
-    expect(spawned).toEqual({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_zte8wn34p7" } });
+    expect(spawned).toEqual({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_pd7qyrq3p6" } });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn"]);
     const apply = calls[1]!;

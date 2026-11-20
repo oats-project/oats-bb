@@ -29,8 +29,8 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   - `start.json`, `restart.json`, `retire-plan.json`, `retire-apply.json`: `weekly-digest-helper`,
     an agent on a worktree with one untracked file and one child.
   - `servers.json`: two servers registered with `oats server add` (no host is behind them).
-  - `status-recorded.json`: the whole `oats status --json` (asked on the command line at that
-    moment, not by the plugin), one document per state under a key of this file: `working`,
+  - `status-recorded.json`: the whole `oats status --json` the kernel printed for the plugin's own
+    read, one document per state under a key of this file: `working`,
     `idle`, `needsYou` (a claim set with `oats instance attention`), `stoppedByOats`,
     `threadDeleted` (the agent's thread deleted in bb), `parentWithTwoChildren`. The souls of the
     run have no messaging capability, so no row has an identity.

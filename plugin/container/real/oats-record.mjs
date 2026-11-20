@@ -24,14 +24,15 @@ function run() {
   const env = { ...process.env, ...(config.path ? { PATH: config.path } : {}) };
   // Same process group as this wrapper: the plugin stops a call by signalling the group.
   const child = spawn(config.oats, argv, { cwd: process.cwd(), env, stdio: ["inherit", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
+  // Kept as bytes and decoded once at the end: a chunk can end in the middle of a character.
+  const stdout = [];
+  const stderr = [];
   child.stdout.on("data", (chunk) => {
-    stdout += chunk;
+    stdout.push(chunk);
     process.stdout.write(chunk);
   });
   child.stderr.on("data", (chunk) => {
-    stderr += chunk;
+    stderr.push(chunk);
     process.stderr.write(chunk);
   });
   child.on("error", (error) => {
@@ -42,7 +43,7 @@ function run() {
     mkdirSync(config.records, { recursive: true });
     const n = String(readdirSync(config.records).length + 1).padStart(4, "0");
     const words = argv.filter((word) => /^[a-z-]+$/.test(word)).slice(0, 3).join("-") || "none";
-    const record = { at: startedAt.toISOString(), ms: Date.now() - startedAt.getTime(), delayMs, argv, cwd: process.cwd(), exit: code, signal, stdout, stderr };
+    const record = { at: startedAt.toISOString(), ms: Date.now() - startedAt.getTime(), delayMs, argv, cwd: process.cwd(), exit: code, signal, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
     writeFileSync(join(config.records, `${n}-${process.pid}-${words}.json`), `${JSON.stringify(record, null, 1)}\n`);
     // Let the pipes drain before leaving with the kernel's own exit code.
     process.stdout.write("", () => process.exit(code ?? 1));

@@ -22,7 +22,14 @@ echo "== bb-app and the plugin's dependencies"
 sh "$PLUGIN/container/setup.sh"
 
 echo "== Claude Code $CLAUDE_CODE_VERSION"
-[ "$(claude --version 2>/dev/null | cut -d' ' -f1)" = "$CLAUDE_CODE_VERSION" ] || npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+# Its install downloads a native binary; where that download fails, `claude` is there and cannot
+# run. So the version it prints is the check, and the install is tried again.
+claude_ready() { [ "$(claude --version 2>/dev/null | cut -d' ' -f1)" = "$CLAUDE_CODE_VERSION" ]; }
+for attempt in 1 2 3; do
+  claude_ready && break
+  npm install -g --force --no-audit --no-fund "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" || true
+done
+claude_ready || { echo "setup: Claude Code $CLAUDE_CODE_VERSION could not be installed" >&2; exit 1; }
 # The mock model, for every Claude this user starts: the user settings of the Claude configuration
 # bb's server runs with.
 printf '{ "env": { "ANTHROPIC_BASE_URL": "http://127.0.0.1:%s" } }\n' "$MOCK_PORT" > "$HOME/.claude/settings.json"
@@ -52,6 +59,13 @@ if ! bb machine list > /dev/null 2>&1; then
   wait_until 120 bb machine list --json > /dev/null 2>&1 || { echo "setup: bb did not start"; tail -20 "$OUT/bb.out"; exit 1; }
   wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -q connected' || { echo "setup: no machine connected"; exit 1; }
 fi
+
+# bb holds a new turn in line once as many threads run as the host has processors: 2 here. The run
+# keeps two turns open while a third agent takes its own, so the host's limit is set, not automatic.
+HOST_ID=$(bb machine list --json | node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{const j=JSON.parse(s);const rows=Array.isArray(j)?j:(j.machines??j.hosts??j.items??[]);console.log(rows[0]?.id??"")})')
+[ -n "$HOST_ID" ] || { echo "setup: bb lists no machine" >&2; exit 1; }
+bb concurrency-limit host "$HOST_ID" 8 > /dev/null
+bb concurrency-limit status
 
 echo "== the provider, the workspace and the deployment"
 REAL="$REAL" BB_VERSION="$(bb --version)" sh "$PLUGIN/container/real/workspace.sh"

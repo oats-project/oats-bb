@@ -23,7 +23,8 @@ KERNEL_REPO=<a clone of the OATS repository> PROVIDER_REPO=<a clone of oats-bb w
 
 The container is the one of the other tests (`container/Dockerfile`): `--cpus 2 --memory 6g`, no
 mount, no port, no Docker socket, nothing of the host's home. The trees go in through `tar` and the
-artefacts come out to `plugin/container/out/real/` (ignored by git): the run's log is what `run.sh`
+artefacts come out to `plugin/container/real/out/` (ignored by git, and its own directory: the other
+tests' `container/out/` is emptied at each of their runs): the run's log is what `run.sh`
 prints, and beside it are the screenshots, `fixtures/` (the recorded answers), `answers/` (two more
 kernel answers kept as evidence), `doctor.txt`, `bb.out` and `mock.out`. It needs the network for
 npm and for the `oats.framework` package (github.com); nothing else leaves the container. A run
@@ -49,7 +50,7 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
 
 | File | Runs | Does |
 |---|---|---|
-| `run.sh` | on the host | starts the container, copies in the plugin, the kernel's tree and the provider's tree, runs the two scripts below, copies `out/real/` back |
+| `run.sh` | on the host | starts the container, copies in the plugin, the kernel's tree and the provider's tree, runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
 | `mock-anthropic.mjs` | in the container | the mock model |
@@ -58,7 +59,9 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
-  (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`).
+  (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit for the
+  host is set to 8: the automatic one is one running thread per processor (2 in this container),
+  and the run keeps two turns open while a third agent takes its own.
 - **The kernel**: `npm pack --ignore-scripts` in the tree, then `npm install -g` of the tarball.
   `setup.sh` stops unless `oats version --json` lists `session-providers`.
 - **The provider**: its tree becomes a local git repository with one **trial-only commit** on top
@@ -92,6 +95,7 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
 Everything the plugin can do, it does through the plugin: `bb plugin rpc call oats <method>`, the
 calls its UI makes. After each act the script reads `oats status --json` (the real `oats`, in the
 deployment) and bb (`bb thread list`), and compares the plugin's own snapshot with the kernel's row.
+A refusal counts only when it is the kernel's expected code, shown unchanged.
 
 **Part A, one agent** (`flaky-ci-2-developer` of `oats-developer`): the spawn preview; the spawn,
 which answers the new thread's id; a waiting claim set as the agent's session sets it
@@ -120,6 +124,13 @@ Each is the kernel's or the provider's to decide; the plugin shows what they say
   `E_RUNTIME_QUIESCE_FAILED: … a process works in its home (pid … node, pid … claude)`. The plugin
   shows the refusal unchanged. `bb thread stop <the archived thread>` ends the process, and the
   retire then goes through: the run does that, in its container only, and says so (step A14).
+- **An agent stopped by OATS while bb held its turn in line ran its turn afterwards.** With bb's
+  automatic limit (2 here) and two threads in a turn, a third agent's first turn waits in bb's
+  line; its row reads `running: null`, like an idle one. `oats instance stop` of that agent
+  answered ok and its row read `stopped`; when the other two stopped, bb started the waiting turn,
+  and the agent did its task while OATS still called it stopped. Seen in an earlier run of this
+  script, before the limit was set (the kernel's `stopped` event at 11:07:33, the model request
+  of the turn at 11:07:39).
 - **A stop plan calls an idle bb agent running, in the middle of a task.** For a bb session the
   kernel's plan says `session: {state: "unknown", present: true}` and `midTask: true` whether the
   thread is in a turn or idle (bb cannot tell a live idle agent from a settled one), so the

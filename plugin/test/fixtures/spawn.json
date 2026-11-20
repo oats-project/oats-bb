@@ -12,8 +12,8 @@
   "warnings": [],
   "launchPrompts": {
    "status": "not-engaged",
-   "startId": "5357d5d3-1c92-4f2b-8f3c-33a09e656c39",
-   "at": "2026-11-20T10:07:23.922Z"
+   "startId": "23cec547-21f7-468d-baa0-e90df8fba8d8",
+   "at": "2026-11-20T11:19:32.824Z"
   },
   "tmux": null,
   "backend": "bb",
@@ -21,8 +21,8 @@
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_6vehnms87j",
-    "threadId": "thr_zte8wn34p7"
+    "projectId": "proj_dr8gxp8csq",
+    "threadId": "thr_pd7qyrq3p6"
    }
   },
   "repo": "/abs/deployment",

@@ -19,7 +19,7 @@ KERNEL_REF=${KERNEL_REF:-5a9db77014443607131f1ed5def0867dd1597dc0}
 PROVIDER_REF=${PROVIDER_REF:-37e9abaf83157cf0cdcfc09022ea0a701dee2a78}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
-OUT=$PLUGIN/container/out/real
+OUT=$HERE/out
 : "${KERNEL_REPO:?set KERNEL_REPO to a clone of the OATS repository that holds $KERNEL_REF}"
 : "${PROVIDER_REPO:?set PROVIDER_REPO to a clone of oats-bb that holds $PROVIDER_REF}"
 KERNEL_OID=$(git -C "$KERNEL_REPO" rev-parse --verify "$KERNEL_REF^{commit}")
@@ -43,7 +43,7 @@ BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel
 git -C "$PROVIDER_REPO" archive "$PROVIDER_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
 printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docker exec -i -u node "$NAME" sh -c 'cat > /home/node/real/refs.json'

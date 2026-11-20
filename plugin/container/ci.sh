@@ -36,7 +36,7 @@ if [ -f "$PLUGIN/../bb-version" ]; then
   [ -n "$BB_VERSION" ] || { echo "ci: $PLUGIN/../bb-version is empty" >&2; exit 2; }
 fi
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

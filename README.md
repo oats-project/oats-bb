@@ -270,8 +270,9 @@ Three things the launch must be told, and is refused without:
   path a rule cannot carry (a wildcard, a parenthesis, a backslash, a line break, bytes
   that are not UTF-8, a `..` step, in the tree's path or
   the home's), is refused too (`E_BACKEND_SANDBOX_PATH`), never skipped.
-- **What the kernel keeps outside the home** (`protected` in the launch input: its own
-  copy of the home's modules, which it runs hooks from, and the retirement directory).
+- **What the kernel keeps outside the home** (`protected` in the launch input: the
+  instances' `.oats-retirement/`, which holds the kernel's own copy of the home's modules,
+  the one it runs hooks from).
   The agent must read and run them where they are, and never write them: each gets a
   rule for the whole directory. A sandboxed launch with no `protected` is refused
   (`E_BACKEND_SANDBOX_PROTECTED`); an entry that is not an existing directory (the kernel

@@ -6,7 +6,7 @@
 //   `bb thread stop` leaves it there, and bb starts it by itself when a slot frees;
 // - bb keeps the Claude process of an archived thread loaded, in the home, until the
 //   thread is stopped, and shows nothing that tells such a thread from one without.
-import { fail } from "./errors.mjs";
+import { fail, someOf } from "./errors.mjs";
 import { hasQueuedWork, isSettled } from "./threads.mjs";
 
 const POLL_MS = 300;
@@ -89,10 +89,12 @@ export const relistOf = (bb, projectIds) => async () => {
   return rows;
 };
 
-// How many acknowledgement stops of archived threads run at once. One bb call takes a
-// quarter of a second, a home's archived threads only grow (every start archives one, and
-// a new home at the same path inherits them), and the sweep starts over at every call:
-// one after the other, a few hundred would never fit a stop's time.
+// How many acknowledgement stops of archived threads run at once. A home's archived
+// threads only grow (every start archives one, and a new home at the same path inherits
+// them), and the sweep starts over at every call. Most of a bb call's cost is the CLI's own
+// start, which is processor time: several at once fit about twice as many threads in a
+// stop's time on two processors, up to four times on eight (measured at 0.50.1: 0.39 s a
+// call alone, 0.23 s on two processors, 0.10 s on eight). Past that, the stop says so.
 const SWEEP_AT_ONCE = 8;
 
 /** Stop each archived thread given, so that no Claude of it is left in the home, and
@@ -112,7 +114,8 @@ export async function stopArchived(bb, threads, relist, options = {}) {
     if (hasQueuedWork(thread)) await confirmStop(bb, thread.id, options);
     else plain.push(thread.id);
   }
-  let next = 0, outOfTime = 0, refused = null;
+  let next = 0, refused = null;
+  const slow = [], unreached = [];
   const worker = async () => {
     while (next < plain.length && refused === null) {
       const id = plain[next];
@@ -120,15 +123,23 @@ export async function stopArchived(bb, threads, relist, options = {}) {
       const answer = await bb.stop(id);
       if (answer.ok) asked.push(id);
       else if (answer.code === "thread_not_found") continue;
-      else if (answer.timedOut) outOfTime += 1;
+      // Two different ends: the command had no time left to ask at all, or bb was asked
+      // and did not answer one call in that call's own time.
+      else if (answer.timedOut) (/^no time left/.test(answer.message) ? unreached : slow).push(id);
       else refused ??= bb.refusal(answer, ["thread", "stop"]);
     }
   };
   await Promise.all(Array.from({ length: Math.min(SWEEP_AT_ONCE, plain.length) }, worker));
   if (refused !== null) throw refused;
-  if (outOfTime > 0) {
-    // The count and the remedy first: the kernel relays 500 characters.
-    throw fail("E_SESSION_STOP_FAILED", `this home's bb project holds ${threads.length} archived threads, and ${outOfTime} of them could not be stopped in the time this command has (${asked.length} were): a Claude process of one may still be loaded in the home. Delete old archived threads of that project in bb (bb thread list --project <id> --archived, then bb thread delete <id>), and try again`);
+  if (unreached.length > 0) {
+    // Too many for the command's time. The count and the remedy first: the kernel relays
+    // 500 characters. (Stop before delete: whether bb releases a deleted thread's process
+    // is not known, and a deleted thread is out of this sweep's sight.)
+    const stopped = threads.length - slow.length - unreached.length;
+    throw fail("E_SESSION_STOP_FAILED", `this home's bb project holds ${threads.length} archived threads, and ${slow.length + unreached.length} of them could not be stopped in the time this command has (${stopped} were): a Claude process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again`);
+  }
+  if (slow.length > 0) {
+    throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of ${slow.length} archived thread${slow.length > 1 ? "s" : ""} of this home in time, so ${slow.length > 1 ? "their Claude processes" : "its Claude process"} may still be loaded there. Try again; if it repeats, look at ${slow.length > 1 ? "them" : "it"} in bb: ${someOf(slow)}`);
   }
   if (asked.length === 0) return;
   const now = await relist();

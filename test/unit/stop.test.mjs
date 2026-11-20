@@ -199,8 +199,9 @@ test("an archived thread whose row does not say its queue is empty is not taken 
 
 // A home's archived threads only grow (every start archives one, and a home made again at
 // the same path inherits them), and the sweep starts over at every call: its stops run
-// several at a time, so that a few hundred fit a stop's time.
-test("three hundred archived threads, each stop taking a tenth of a second, are swept inside a stop's time", async (t) => {
+// several at a time. (The fake's delay is a sleep, so here eight at once is eight times
+// as fast; a real bb call is mostly the CLI's own start, and gains two to four times.)
+test("the stops of a home's archived threads run several at a time: three hundred, a tenth of a second each, are swept inside a stop's time", async (t) => {
   const { dir, home } = scratch(t);
   const rows = Array.from({ length: 300 }, (_, i) => threadRow(`thr_arch_${String(i).padStart(3, "0")}`, "proj_a", "idle", { archivedAt: 5 + i }));
   const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 100, stdout: { ok: true } } });
@@ -216,8 +217,22 @@ test("where the time runs out on a home's archived threads, the stop says how ma
   const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 30_000, stdout: { ok: true } } });
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 1 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.match(answer.error.message, /^this home's bb project holds 40 archived threads, and \d+ of them could not be stopped in the time this command has \(\d+ were\).*Delete old archived threads of that project in bb \(bb thread list --project <id> --archived, then bb thread delete <id>\), and try again$/);
+  assert.equal(answer.error.message, "this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has (0 were): a Claude process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again");
   assert.ok(answer.error.message.length <= 480);
+});
+
+// Two different ends, two different remedies: a bb that did not answer one call, with time
+// left, is not "too many threads".
+test("one archived thread whose stop bb does not answer in the call's own time is named, with time left: try again, not 'delete old threads'", async (t) => {
+  const { dir, home } = scratch(t);
+  const rows = ["thr_slow", "thr_b", "thr_c"].map((id, i) => threadRow(id, "proj_a", "idle", { archivedAt: 5 + i }));
+  const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": [{ delayMs: 30_000, stdout: { ok: true } }, { stdout: { ok: true } }] });
+  const started = Date.now();
+  const answer = await call("stop", { home, endpoint: null, graceSeconds: 120 }, { settings, bb });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.match(answer.error.message, /^bb did not acknowledge the stop of 1 archived thread of this home in time, so its Claude process may still be loaded there\. Try again; if it repeats, look at it in bb: thr_/);
+  assert.doesNotMatch(answer.error.message, /delete/);
+  assert.ok(Date.now() - started < 20_000, "at the call's own limit, not the command's");
 });
 
 test("a project list whose source does not say what it is cannot show the home has no thread: a stop with no endpoint is E_SESSION_STOP_FAILED, never stopped", async (t) => {

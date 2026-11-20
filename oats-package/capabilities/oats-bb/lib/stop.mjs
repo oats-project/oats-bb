@@ -113,11 +113,12 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     try { const ids = projects.map((project) => project.id); await stopArchived(bb, await archivedOf(bb, ids), relistOf(bb, ids), options); }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
-      unswept = error.code;
+      unswept = error.message;
     }
     const warnings = [];
     if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
-    if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped (${unswept}): a Claude process of one may still be loaded; stop them in bb (bb thread list --archived, bb thread stop <id>)`);
+    // The sweep's own words: they begin with the count and the remedy.
+    if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped: ${unswept}`);
     if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}) }, warning: bounded(warnings.join(". ")) };
     if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
     return { meta: { retired: true, archived } };

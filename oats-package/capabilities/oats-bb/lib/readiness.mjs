@@ -316,7 +316,7 @@ export function sandboxWarnings(home, { planned = false } = {}) {
   if (current.mismatch > 0) {
     // The home is writable by its own agent: say that the two disagree, and print nothing
     // of what either holds beyond what passed the checks above.
-    warnings.push({ code: "session-provider-sandbox-mismatch", message: `${current.mismatch} entr${current.mismatch > 1 ? "ies" : "y"} of the provider's sandbox record in this home ${current.mismatch > 1 ? "are" : "is"} not in .claude/settings.local.json, or not an exact host or path: the record or the file was changed after the launch. Read the file itself for what the sandbox allows now; the next launch rewrites both` });
+    warnings.push({ code: "session-provider-sandbox-mismatch", message: `${current.mismatch} entr${current.mismatch > 1 ? "ies" : "y"} of the provider's sandbox record in this home ${current.mismatch > 1 ? "are" : "is"} not in .claude/settings.local.json, or not an exact host or a path this check shows (letters, digits and . _ - @ + between slashes): the record or the file was changed after the launch, or the launch was handed such a path. Read the file itself for what the sandbox allows now; the next launch rewrites both` });
   }
   return warnings;
 }

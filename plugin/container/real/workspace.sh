@@ -29,12 +29,20 @@ if [ ! -d .git ]; then
   git init -q -b main
   git add -A
   commit -m "the provider's tree under test"
-  for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
-    node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
-  done
-  git add -A
-  commit -m "TRIAL ONLY, never pushed: compatibility.oats >=$KERNEL_VERSION (an unreleased kernel)"
+  # The trial-only floor, only where the provider's own floor refuses the kernel under test.
+  FLOOR=$(node -pe 'JSON.parse(require("fs").readFileSync("oats-package/oats-package.json", "utf8")).compatibility.oats')
+  if node -e 'const [floor,version]=process.argv.slice(1),m=/^>=(\d+)\.(\d+)\.(\d+)$/.exec(floor);if(!m)process.exit(1);const v=version.split(/[.-]/).map(Number);for(let i=0;i<3;i++){if(v[i]>+m[i+1])process.exit(0);if(v[i]<+m[i+1])process.exit(1)}' "$FLOOR" "$KERNEL_VERSION"; then
+    TRIAL="its own floor ($FLOOR)"
+  else
+    for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
+      node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
+    done
+    git add -A
+    commit -m "TRIAL ONLY, never pushed: compatibility.oats >=$KERNEL_VERSION (an unreleased kernel)"
+    TRIAL="trial floor >=$KERNEL_VERSION in place of $FLOOR"
+  fi
 fi
+TRIAL=${TRIAL:-$(git log -1 --format=%s)}
 PROVIDER_OID=$(git rev-parse HEAD)
 rm -rf "$REAL/oats-bb.git"
 git clone -q --bare "$REAL/provider" "$REAL/oats-bb.git"
@@ -104,4 +112,4 @@ Y
 # The soul whose work is a worktree needs a clone of its member repository.
 git clone -q "$WORKSPACE" "$REAL/deploy/oats-real"
 oats sync --dir "$REAL/deploy"
-echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID (trial floor), bb $BB_VERSION"
+echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID ($TRIAL), bb $BB_VERSION"

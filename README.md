@@ -30,7 +30,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 >
 > It also needs the oats.aweb release that registers a provider home with the host wake
 > broker without a `--backend` (the release carrying awebai/oats-aweb#293; its version is
-> not known yet): with an older oats.aweb, a bb home's messaging identity is not set up.
+> not known yet): with an older oats.aweb, spawning a bb home fails in its spawn hook.
 
 ## Install
 

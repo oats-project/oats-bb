@@ -264,7 +264,9 @@ async function a13(browser, viewport, threads) {
       `${at} the row's chips: soul, instance, alias, parent, home, OATS`,
       chips,
     );
-    // by its place, not by what is on top: the whole chip lies inside the row and inside the viewport
+    // By its place: the whole chip lies inside the row and inside the viewport, which is what the
+    // pin is for. This does not see a chip covered by something drawn over it: `visible()` would,
+    // but its probe point can land on the row beside a chip that has scrolled away, and pass.
     const chipInRow = await page.evaluate(
       `(() => { const chip = document.querySelector(${JSON.stringify(testId("oats-chip-oats"))})?.getBoundingClientRect(); const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect(); return Boolean(chip && row && chip.width > 0 && chip.left >= row.left && chip.right <= Math.min(row.right, innerWidth)); })()`,
     );

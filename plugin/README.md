@@ -1,8 +1,6 @@
-# bb-plugin-oats (staging)
+# bb-plugin-oats
 
-The OATS plugin for bb. This directory is a **staging copy**: it lives on a branch of the oats
-repository only until the bb package repository exists, where it becomes `plugin/` with its
-history. It is never merged into oats and no pull request is opened for it here.
+The OATS plugin for bb, in `plugin/` of the `oats-bb` repository.
 
 Your OATS agents in bb: who each one is (soul, instance, aweb alias, parent, children), which ones
 need you, and the workspace they come from (souls, capabilities, teams, machines). From bb you can
@@ -18,7 +16,10 @@ this plugin's dependencies are installed and run only in containers (see [Develo
 ## Install
 
 ```sh
-bb plugin install <path to this directory> --yes     # builds it and loads it; the plugin id is "oats"
+# from the repository, at a tag, a branch or a commit; bb builds it and loads it; the plugin id is "oats"
+bb plugin install git:https://github.com/oats-project/oats-bb.git@<ref> --subdirectory plugin
+# or from a checkout
+bb plugin install <path to the checkout>/plugin --yes
 bb plugin list                                       # oats … running
 ```
 
@@ -154,16 +155,23 @@ Not experimental, but bb's to change: the thread rows' `data-sidebar-thread-shor
 Everything runs in a container (`--cpus 2 --memory 6g`, no mounts, no Docker socket, no host home;
 bb sovereign: no account, `BB_TELEMETRY=false`, loopback). Never `npm install` on the host.
 
+From the repository's root (the scripts find the plugin by their own place, so any directory works):
+
 ```sh
-container/ci.sh            # the image, the installs, typecheck, unit tests, build, live tests
-container/ci.sh unit       # typecheck, unit tests and the build
-container/ci.sh live       # the live tests only (bb-app, the plugin installed, a fake oats)
+plugin/container/ci.sh            # the image, the installs, typecheck, unit tests, build, live tests
+plugin/container/ci.sh unit       # typecheck, unit tests and the build
+plugin/container/ci.sh live       # the live tests only (bb-app, the plugin installed, a fake oats)
 ```
 
-`container/README.md` says what each script does and how to keep a container for a session of
-work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
+`plugin/container/README.md` says what each script does and how to keep a container for a session
+of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
+CI runs the same command: `.github/workflows/plugin.yml`.
+
+The bb version the tests run is the repository's pin: the one line of `bb-version` at the
+repository's root where that file exists, else `devDependencies["bb-app"]` in `package.json`. The
+two are kept equal, and `engines.bb` contains it.
 
 `contract.ts`, `model/types.ts` and `test/fixtures/status.json` and `threads.json` are pinned by the
 spec: a change to them is agreed with the spec's author first.

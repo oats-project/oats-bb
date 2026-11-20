@@ -113,8 +113,8 @@ export default definePluginApp((app) => {
       "Start agent (OATS)",
       ICON.start,
       // A stopped agent can always be started, also one that still holds a claim and so counts as
-      // needing you rather than as stopped.
-      (state, agent) => state === "stopped" || state === "error" || agent.runtimeState === "stopped",
+      // needing you rather than as stopped: the kernel's word, not the drawn state.
+      (state, agent) => state === "error" || agent.runtimeState === "stopped",
       (instance, { data, navigate }) => run("start", instance, data.rpc, navigate),
     ),
   );

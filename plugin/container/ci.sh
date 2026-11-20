@@ -7,6 +7,8 @@
 #   KEEP=1            leave the container running afterwards, to work in it (docker exec -it …)
 #   NAME=<name>       the container's name (default: bb-plugin-oats-ci-<pid>)
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
+# The bb version is the repository's pin: the one line of bb-version at the repository's root when
+# that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
 set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -28,7 +30,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-run() { docker exec -u node -e BB_TELEMETRY=false -w /home/node/plugin "$NAME" "$@"; }
+BB_VERSION=
+if [ -f "$PLUGIN/../bb-version" ]; then
+  BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
+  [ -n "$BB_VERSION" ] || { echo "ci: $PLUGIN/../bb-version is empty" >&2; exit 2; }
+fi
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh

@@ -85,7 +85,9 @@ test("a .git pointer or a commondir that is there and cannot be read as one shor
   mkdirSync(tree, { recursive: true });
   const refused = (what) => assert.throws(() => rules({ trees: [tree] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /git worktree repair.*--yolo/.test(error.message) && error.message.length < 600, what);
   const pointer = (text) => { rmSync(join(tree, ".git"), { force: true }); writeFileSync(join(tree, ".git"), text); };
-  for (const text of ["", "not a pointer", "gitdir:", `gitdir: ${"x".repeat(5000)}`, `gitdir: ${join(root, "nowhere")}\n`, `gitdir: ${gitDir}\n${"\n".repeat(5000)}`]) {
+  // Git takes the whole content less its last line ends: a second line is part of the name.
+  mkdirSync(join(root, "decoy"));
+  for (const text of [`gitdir: ${join(root, "decoy")}\nx\n`, `gitdir:${gitDir}\n`, `gitdir:  ${gitDir}\n`, `gitdir: ${gitDir} \n`, "", "not a pointer", "gitdir:", `gitdir: ${"x".repeat(5000)}`, `gitdir: ${join(root, "nowhere")}\n`, `gitdir: ${gitDir}\n${"\n".repeat(5000)}`]) {
     pointer(text);
     refused(`pointer ${JSON.stringify(text.slice(0, 30))}`);
   }
@@ -136,7 +138,7 @@ test("the rules are the same for the same input, each once, and none is a path t
   for (const rule of first) assert.doesNotMatch(rule.slice("Edit(".length, -1), /[()\n]/);
 });
 
-for (const [name, at] of [["a parenthesis", "dev (old)"], ["a wildcard", "dev*"], ["a line break", "dev\nx"], ["a bracket", "dev[1]"]]) {
+for (const [name, at] of [["a parenthesis", "dev (old)"], ["a wildcard", "dev*"], ["a line break", "dev\nx"], ["a bracket", "dev[1]"], ["a backslash", "dev\\b"]]) {
   test(`a home whose path holds ${name} refuses a sandboxed launch: a rule that could not be written would leave a path writable`, (t) => {
     const { root, dataDir, userHome, tmp } = layout(t);
     const home = join(root, at, "home");
@@ -151,4 +153,46 @@ test("a tree the kernel names that is no exact absolute path, or no directory, r
   for (const tree of ["work", "/srv/../etc", "/srv/tree*", "/", 7, null, join(root, "not-there"), join(root, "a-file"), `${root}/nul\0byte`]) {
     assert.throws(() => rules({ trees: [tree] }), { code: "E_BACKEND_SANDBOX_PATH" }, String(tree));
   }
+});
+
+test("a tree that is a clone: its .git directory is covered as a git directory, and a commondir in it is followed as git follows it", (t) => {
+  const { root, home, rules } = layout(t);
+  const clone = join(home, "trees/clone");
+  mkdirSync(join(clone, ".git"), { recursive: true });
+  const got = paths(rules({ trees: [clone] }));
+  for (const entry of [".git", ".git/config", ".git/config.worktree", ".git/hooks/**", ".git/commondir", ".git/gitdir"]) assert.ok(got.includes(join(clone, entry)), entry);
+  // What the agent works with in a clone has no rule: the index, the objects, the refs.
+  for (const entry of [".git/index", ".git/objects/**", ".git/refs/**", ".git/info/exclude"]) assert.equal(got.includes(join(clone, entry)), false, entry);
+  // A commondir in a clone's .git: git reads config and hooks from the directory it names.
+  mkdirSync(join(root, "elsewhere/git"), { recursive: true });
+  writeFileSync(join(clone, ".git/commondir"), `${join(root, "elsewhere/git")}\n`);
+  const followed = paths(rules({ trees: [clone] }));
+  for (const entry of ["config", "config.worktree", "hooks/**"]) assert.ok(followed.includes(join(root, "elsewhere/git", entry)), entry);
+  writeFileSync(join(clone, ".git/commondir"), "../nowhere\n");
+  assert.throws(() => rules({ trees: [clone] }), (error) => error.code === "E_BACKEND_SANDBOX_PATH");
+});
+
+test("git's directories are covered under their real paths too, and a relative pointer is read from the tree's real path, as git reads it", (t) => {
+  const { root, home, rules } = layout(t);
+  // The clone is reached through a link in the pointer.
+  const real = join(root, "realrepo"), gitDir = join(real, ".git/worktrees/w"), tree = join(home, "trees/w");
+  mkdirSync(gitDir, { recursive: true });
+  mkdirSync(tree, { recursive: true });
+  symlinkSync(real, join(root, "linkrepo"));
+  writeFileSync(join(tree, ".git"), `gitdir: ${join(root, "linkrepo/.git/worktrees/w")}\n`);
+  writeFileSync(join(gitDir, "commondir"), "../..\n");
+  const got = paths(rules({ trees: [tree] }));
+  for (const base of [join(root, "linkrepo"), real]) {
+    for (const entry of [".git/worktrees/w/config", ".git/worktrees/w/hooks/**", ".git/config", ".git/hooks/**"]) assert.ok(got.includes(join(base, entry)), join(base, entry));
+  }
+  // A tree named through a link, with a relative pointer (git 2.48 writes them): resolved
+  // from where the tree really is, not from the link's own directory.
+  const deep = join(root, "deep/a/b/tree"), relGitDir = join(root, "deep/a/b/gd");
+  mkdirSync(deep, { recursive: true });
+  mkdirSync(relGitDir);
+  writeFileSync(join(deep, ".git"), "gitdir: ../gd\n");
+  symlinkSync(deep, join(root, "treelink"));
+  const viaLink = paths(rules({ trees: [join(root, "treelink")] }));
+  assert.ok(viaLink.includes(join(relGitDir, "hooks/**")));
+  assert.ok(viaLink.includes(join(root, "treelink/.git")) && viaLink.includes(join(deep, ".git")), "the pointer under both names of the tree");
 });

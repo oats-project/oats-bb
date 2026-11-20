@@ -341,7 +341,7 @@ test("the launch hook removes the provider's keys only on the kernel's word that
   assert.equal(other.stdout, "");
   assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
 
-  // It ran on bb before: the two keys go, every other key stays, and so do the leftovers.
+  // It ran on bb before: the provider's keys go, every other key stays, and so do the leftovers.
   const moved = await hook("tmux", { OATS_PREVIOUS_BACKEND: "bb" });
   assert.equal(moved.status, 0);
   assert.match(JSON.parse(moved.stdout).warning, /starts on tmux, no longer on bb.*removed its keys/);

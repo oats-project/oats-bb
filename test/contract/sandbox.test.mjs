@@ -44,6 +44,8 @@ async function makeHome(name) {
     `test -d ${CLONE} || (git init -q ${CLONE} && git -C ${CLONE} -c user.name=t -c user.email=t@example.org commit -q --allow-empty -m first)`,
     `git -C ${CLONE} worktree add -q ${home}/work -b agents/${name}`,
     `git -C ${CLONE} worktree add -q ${home}/trees/extra -b agents/${name}-extra`,
+    // And a tree that is a clone of its own: its .git is a directory, in the home.
+    `git init -q ${home}/trees/clone && git -C ${home}/trees/clone -c user.name=t -c user.email=t@example.org commit -q --allow-empty -m first`,
     `printf '#!/bin/sh\\necho hook\\n' > ${home}/.oats/modules/hook.sh`,
     `echo '{"name":"${name}"}' > ${home}/instance.json`,
     `echo '{}' > ${home}/.claude/settings.json`,
@@ -60,7 +62,7 @@ const SANDBOX = { domains: [{ host: "app.aweb.ai", capability: "oats.aweb", sett
 const launchInput = (home, name, extra = {}) => ({
   home, instance: name, harness: "claude", model: MODEL, yolo: false,
   env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }], unset: [], args: [],
-  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`, `${home}/trees/extra`], ...extra,
+  promptFile: `${home}/TASK.md`, previous: null, sandbox: SANDBOX, trees: [`${home}/work`, `${home}/trees/extra`, `${home}/trees/clone`], ...extra,
 });
 const started = [];
 async function launched(name, extra) {
@@ -102,10 +104,11 @@ after(() => box.stop());
 test("the image can start Claude Code's sandbox, and readiness says nothing against it", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
   await sh("command -v bwrap && command -v socat && command -v rg");
-  // The sandbox makes a user namespace inside this container. A host that forbids it
-  // (an AppArmor policy on unprivileged user namespaces, a container with too few rights)
-  // fails here, by name, before the tests that need the sandbox fail one by one.
-  const userns = await sh("bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc --dev /dev true 2>&1 && echo userns-ok || true");
+  // The sandbox makes a user namespace inside this container, and another inside that
+  // one (Claude Code's seccomp helper). A host that forbids either (an AppArmor policy on
+  // unprivileged user namespaces, a container with too few rights) fails here, by name,
+  // before the tests that need the sandbox fail one by one.
+  const userns = await sh("bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc --dev /dev bwrap --unshare-user --ro-bind / / --dev /dev true 2>&1 && echo userns-ok || true");
   assert.match(userns, /userns-ok/, `this host does not let the container make user namespaces, so Claude Code's sandbox cannot start: ${userns.trim().slice(0, 300)}`);
   const { result } = await provider("check", { home: null, soul: null });
   assert.equal(result.status, "ready");
@@ -116,6 +119,17 @@ test("bb pre-allows exactly one MCP tool for its Claude, the one that moves a th
   // Rule 1 denies what bb pre-allows by name. A bb that pre-allows a tool this test does
   // not name is a bb whose sandboxed modes have not been looked at: stop, and look.
   const { endpoint } = await launched("preallowed", { yolo: true, sandbox: undefined });
+  const { argv, allowed } = await preAllowed();
+  assert.deepEqual([...allowed], [MOVE_TOOL], `bb's Claude runs with --allowedTools ${JSON.stringify(argv)}`);
+  // In full mode nothing is denied: the tool is there for the model to call.
+  assert.equal((await settingsOf(`${INSTANCES}/preallowed`)).permissions, undefined);
+  assert.ok(endpoint.threadId);
+});
+
+/** The tools bb pre-allows for the Claude processes that run now: every `--allowedTools`
+ *  argument of every process in the container, with the argument after it where the value
+ *  is not joined by "=". → {argv, allowed}. */
+async function preAllowed() {
   // Every argument of every process in the container that pre-allows tools, with the
   // argument after it where the value is not joined by "=".
   const argv = (await sh("for p in /proc/[0-9]*; do tr '\\0' '\\n' < $p/cmdline 2>/dev/null | grep -A1 -e '^--allowedTools' -e '^--allowed-tools' | grep -v '^--$'; done; true")).split("\n").filter(Boolean);
@@ -126,17 +140,17 @@ test("bb pre-allows exactly one MCP tool for its Claude, the one that moves a th
     for (const tool of value.split(/[, ]+/)) if (tool) allowed.add(tool);
   });
   assert.ok(argv.length > 0, "bb's Claude is running");
-  assert.deepEqual([...allowed], [MOVE_TOOL], `bb's Claude runs with --allowedTools ${JSON.stringify(argv)}`);
-  // In full mode nothing is denied: the tool is there for the model to call.
-  assert.equal((await settingsOf(`${INSTANCES}/preallowed`)).permissions, undefined);
-  assert.ok(endpoint.threadId);
-});
+  return { argv, allowed };
+}
 
 for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: ["--permission-mode", "auto"] }]]) {
   test(`${mode}: a sandboxed launch writes the four keys, and neither Bash nor the file tools change what runs outside the sandbox`, async () => {
     const name = `deny-${mode}`;
     const { home, endpoint } = await launched(name, extra);
     const id = endpoint.threadId;
+
+    // What bb pre-allows for a Claude of this mode: the same one tool, which rule 1 denies.
+    assert.deepEqual([...(await preAllowed()).allowed], [MOVE_TOOL]);
 
     // The four keys the provider owns, as it wrote them.
     const settings = await settingsOf(home);
@@ -163,7 +177,9 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     // works in stays writable, and so does what OATS needs. (For the paths outside the
     // home, sandboxed Bash is refused with or without a rule: there the rules are shown by
     // the file tools below. Inside the home, only the rule stands in the way.)
-    const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`, `${gitDir}/commondir`, `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/pre-commit`];
+    const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`, `${gitDir}/commondir`, `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/pre-commit`,
+      // the clone tree: what git runs or follows in its .git directory
+      `${home}/trees/clone/.git/config`, `${home}/trees/clone/.git/config.worktree`, `${home}/trees/clone/.git/hooks/pre-commit`, `${home}/trees/clone/.git/commondir`, `${home}/trees/clone/.git/gitdir`];
     // bb's plugin directory is where the rule says it is: an attempt on a name that
     // matches nothing would prove nothing.
     assert.notEqual((await sh("ls -d /tmp/bb-provider-bridge-*/ 2>/dev/null | head -1")).trim(), "", "bb builds its Claude plugin directory under /tmp/bb-provider-bridge-*");
@@ -177,6 +193,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
       // A denied file whose directory carries no rule: rename the directory away, make it anew, write the file.
       `mv ${home}/.aw ${home}/.aw-old 2>/dev/null; mkdir ${home}/.aw 2>/dev/null; (echo PLANTED > ${home}/.aw/workspace.yaml) 2>/dev/null; (echo PLANTED > ${home}/.aw/signing.key) 2>/dev/null`,
       `mv ${home}/work ${home}/work-old 2>/dev/null; mkdir ${home}/work 2>/dev/null; (echo PLANTED > ${home}/work/.git) 2>/dev/null`,
+      // In the clone tree, what the agent works with: a note in .git/info, a file staged.
+      `(echo FREE >> ${home}/trees/clone/.git/info/exclude) 2>/dev/null; echo FREE > ${home}/trees/clone/new.txt; git -C ${home}/trees/clone add new.txt 2>/dev/null`,
       `echo FREE > ${home}/notes/bash.txt; echo FREE > ${home}/work/file.txt; echo FREE > ${EVENTS}/bash.jsonl; echo attempted`,
     ].join("\n");
     await sh(`cat > ${home}/notes/attempt.sh`, { input: attempt });
@@ -189,6 +207,12 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     assert.equal((await sh(`cat ${home}/.aw/signing.key ${home}/.aw/workspace.yaml`)).trim(), "key\nteam");
     assert.equal(await gitDirOf(`${home}/work`), gitDir, "the worktree's pointer still names its git directory");
     assert.equal((await sh(`cat ${home}/notes/bash.txt ${home}/work/file.txt ${EVENTS}/bash.jsonl | tr '\\n' ' '`)).trim(), "FREE FREE FREE");
+    // A tree that is a clone: the rule on its .git makes the whole git directory read-only
+    // for sandboxed commands, not only what git runs there. So the agent edits the tree's
+    // files and can neither stage nor commit (the README says so): pinned, because a Claude
+    // Code that read the rule as the name alone would leave .git/commondir to the agent.
+    assert.equal((await sh(`grep -c FREE ${home}/trees/clone/.git/info/exclude || true`)).trim(), "0");
+    assert.equal((await sh(`git -C ${home}/trees/clone status --porcelain`)).trim(), "?? new.txt", "the file is written, and not staged");
 
     // Claude's own file tools: a deny rule refuses each, with no prompt; a path outside the
     // working directories is refused by the switch, whatever it is.

@@ -24,6 +24,10 @@ const HOME_ENTRIES = [".oats/**", "instance.json", ".claude/**", ".agents/**", "
 // the home (Claude loads it from a parent of its project), and in bb's thread storage
 // (bb passes it to Claude as an added directory; not loaded today, denied so it never is).
 const CONFIG_ENTRIES = [".mcp.json", "CLAUDE.md", ".claude/**"];
+// In a git directory: what git runs or reads as configuration (its config, a worktree's
+// own config, its hooks), and the two files that say where git's directories are (git
+// follows them; rewritten, it would use another directory's config and hooks).
+const GIT_ENTRIES = ["config", "config.worktree", "hooks/**", "commondir", "gitdir"];
 // Claude's managed settings: root-owned, so the system already refuses; the rule costs nothing.
 const MANAGED = "/etc/claude-code/**";
 // bb builds its Claude plugin directory under the system's temporary directory: taken
@@ -31,8 +35,9 @@ const MANAGED = "/etc/claude-code/**";
 const PLUGIN_DIRS = "bb-provider-bridge-*/**";
 
 // A path a rule can carry: absolute, normal, and free of what the rule's own syntax uses
-// (parentheses, a line break) or would widen (a wildcard in a path that is not ours to widen).
-const CARRIABLE = /^\/[^()\x00-\x1f\x7f*?[\]{}]*$/;
+// (parentheses, a line break), would widen (a wildcard in a path that is not ours to
+// widen) or would change which path it names (a backslash escapes the next character).
+const CARRIABLE = /^\/[^()\x00-\x1f\x7f*?[\]{}\\]*$/;
 const carriable = (path) => typeof path === "string" && isAbsolute(path) && normalize(path) === path && path !== "/" && CARRIABLE.test(path);
 
 const rule = (path) => `Edit(/${path})`;
@@ -55,11 +60,13 @@ function withReal(path) {
   } catch { return [path]; }
 }
 
-/** The first line of a small regular file: a tree's `.git` pointer and a git
- *  directory's `commondir`. Never follows a link, never waits, reads at most 4 KiB.
- *  → the line, undefined where there is no such name, null where the name is there and is
- *  not a small regular file that can be read (git may still read it: the caller refuses). */
-function firstLine(path) {
+/** What a small regular file names, read as git reads a `.git` pointer and a
+ *  `commondir`: the whole content, less the line ends at its end. Never follows a link,
+ *  never waits, reads at most 4 KiB.
+ *  → the text; undefined where there is no such name; null where the name is there and
+ *  this is not what git would take from it for certain: not a small regular file, or text
+ *  with a line break inside it or a blank at either end (the caller refuses). */
+function namedIn(path) {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return undefined;
   if (!stat.isFile() || stat.size > 4096) return null;
@@ -67,37 +74,46 @@ function firstLine(path) {
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     if (!fstatSync(fd).isFile()) return null;
-    const buffer = Buffer.alloc(4096);
-    const got = readSync(fd, buffer, 0, 4096, 0);
-    return buffer.subarray(0, got).toString("utf8").split("\n")[0].trim();
+    const buffer = Buffer.alloc(4097);
+    const got = readSync(fd, buffer, 0, 4097, 0);
+    if (got > 4096) return null;
+    const text = buffer.subarray(0, got).toString("utf8").replace(/[\r\n]+$/, "");
+    return /[\r\n\0]/.test(text) ? null : text;
   } catch { return null; } finally { if (fd !== null) closeSync(fd); }
 }
 
 const isDirectory = (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() === true;
 
-/** The git directories behind a tree whose `.git` is not a directory (a linked worktree):
- *  the directory its pointer names, and that one's common directory (the clone's `.git`,
- *  whose config and hooks git runs for every worktree). → [] where the tree has no `.git`
- *  or its `.git` is a directory (covered by the tree's own rules).
+/** The git directories git uses for a tree: the tree's own `.git` where that is a
+ *  directory (a clone), or the directory its pointer file names (a linked worktree); and,
+ *  where that directory holds a `commondir`, the directory it names (the clone's `.git`,
+ *  whose config and hooks git runs for every worktree; git honours a `commondir` in a
+ *  plain clone's `.git` too). → [] where the tree has no `.git`.
+ *
+ *  `tree` is the tree's real path: git resolves a relative pointer against it.
  *
  *  Git reads a pointer and a `commondir` this module may not be able to (a link to one,
- *  a file padded past 4 KiB), and then runs the config and hooks of a directory no rule
- *  covers. So a `.git` or a `commondir` that is there and cannot be read as a small
- *  regular file naming a directory refuses the launch (E_BACKEND_SANDBOX_PATH): a rule
- *  silently missing is the failure that matters. */
+ *  a file padded past 4 KiB, a name with a line break in it), and then runs the config and
+ *  hooks of a directory no rule covers. So a `.git` or a `commondir` that is there and
+ *  cannot be read, for certain, as git reads it, naming a directory, refuses the launch
+ *  (E_BACKEND_SANDBOX_PATH): a rule silently missing is the failure that matters. */
 function gitDirsOf(tree) {
   const refuse = (what) => fail("E_BACKEND_SANDBOX_PATH", `the tree ${tree} has ${what}, so the sandbox's deny rules cannot cover the git directory that git would use there: repair the tree (git worktree repair), or launch in full mode (--yolo)`);
   const at = join(tree, ".git");
   const stat = lstatSync(at, { throwIfNoEntry: false });
-  if (!stat || stat.isDirectory()) return [];
-  const pointer = firstLine(at);
-  const named = typeof pointer === "string" && pointer.startsWith("gitdir:") ? pointer.slice("gitdir:".length).trim() : "";
-  if (!named) throw refuse("a .git that is neither a directory nor a readable pointer file (gitdir: <path>)");
-  const gitDir = resolve(tree, named);
-  if (!isDirectory(gitDir)) throw refuse(`a .git pointer that names no directory (${gitDir.slice(0, 160)})`);
-  const common = firstLine(join(gitDir, "commondir"));
+  if (!stat) return [];
+  let gitDir = at;
+  if (!stat.isDirectory()) {
+    const pointer = namedIn(at);
+    // As git writes and reads it: "gitdir: " and the path, nothing around them.
+    const named = typeof pointer === "string" && pointer.startsWith("gitdir: ") ? pointer.slice("gitdir: ".length) : "";
+    if (!named || named !== named.trim()) throw refuse("a .git that is neither a directory nor a pointer file this provider reads as git does (gitdir: <path>, one line)");
+    gitDir = resolve(tree, named);
+    if (!isDirectory(gitDir)) throw refuse(`a .git pointer that names no directory (${gitDir.slice(0, 160)})`);
+  }
+  const common = namedIn(join(gitDir, "commondir"));
   if (common === undefined) return [gitDir];
-  if (!common) throw refuse(`a git directory whose commondir cannot be read as one short line (${gitDir.slice(0, 160)})`);
+  if (!common || common !== common.trim()) throw refuse(`a git directory whose commondir this provider cannot read as git does, one line naming a directory (${gitDir.slice(0, 160)})`);
   const commonDir = resolve(gitDir, common);
   if (!isDirectory(commonDir)) throw refuse(`a git directory whose commondir names no directory (${commonDir.slice(0, 160)})`);
   return [gitDir, commonDir];
@@ -134,13 +150,12 @@ export function denyRules({ home, trees, dataDir, userHome = homedir(), tmp = tm
     if (!carriable(tree)) throw fail("E_BACKEND_SANDBOX_PATH", `the launch names a tree the sandbox's deny rules cannot carry (${JSON.stringify(typeof tree === "string" ? tree.slice(0, 120) : null)}): one exact absolute path, with no wildcard or parenthesis`);
     // Named, it must be there: a tree that is no directory is refused, never skipped.
     if (!statSync(tree, { throwIfNoEntry: false })?.isDirectory()) throw fail("E_BACKEND_SANDBOX_PATH", `the launch names a tree that is not a directory (${tree}): the sandbox's deny rules cover each tree the kernel names, and this one cannot be read`);
-    for (const root of withReal(tree)) {
-      // The pointer (or the directory's own config and hooks), whatever is there now.
-      paths.push(join(root, ".git"), join(root, ".git/config"), join(root, ".git/hooks/**"));
-      // Behind a worktree's pointer: config and hooks of both directories, and the two
-      // files that say where they are (git follows them; rewritten, it would use another).
-      for (const gitDir of gitDirsOf(root)) paths.push(join(gitDir, "config"), join(gitDir, "hooks/**"), join(gitDir, "commondir"), join(gitDir, "gitdir"));
-    }
+    // The `.git` name itself, under each name of the tree: a worktree's pointer, or a
+    // clone's directory (and what git runs there, for a `.git` that is made later).
+    for (const root of withReal(tree)) paths.push(join(root, ".git"), ...GIT_ENTRIES.map((entry) => join(root, ".git", entry)));
+    // The directories git uses for the tree, read from the tree's real path as git reads
+    // them, and covered under each of their names.
+    for (const gitDir of gitDirsOf(realpathSync(tree))) for (const root of withReal(gitDir)) paths.push(...GIT_ENTRIES.map((entry) => join(root, entry)));
   }
   for (const root of withReal(dataDir)) for (const entry of CONFIG_ENTRIES) paths.push(join(root, "thread-storage", entry));
   for (const root of withReal(tmp)) paths.push(join(root, PLUGIN_DIRS));

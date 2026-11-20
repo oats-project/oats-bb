@@ -13,7 +13,7 @@ export const repoRoot = resolve(here, "../..");
 export const capabilityDir = join(repoRoot, "oats-package/capabilities/oats-bb");
 export const providerBin = join(capabilityDir, "bin/oats-bb.mjs");
 // The same session commands with bb's sandboxed modes taken, which the provider's own
-// command refuses for now (test/fixtures/sandboxed-bin.mjs).
+// command refuses, as they are not offered (test/fixtures/sandboxed-bin.mjs).
 export const sandboxedBin = join(repoRoot, "test/fixtures/sandboxed-bin.mjs");
 const fakeBb = join(here, "fake-bb.mjs");
 

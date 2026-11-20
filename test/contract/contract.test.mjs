@@ -45,7 +45,7 @@ const bbJson = async (args, options) => JSON.parse(await sh(`bb ${args} --json`,
  *  request on stdin, the settings in OATS_SETTINGS. → the answer envelope. */
 async function provider(verb, input, settings = SETTINGS, { sandboxedModes = false } = {}) {
   const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-  // The provider's own command launches in bb's full mode only for now. The tests that
+  // The provider's own command launches in bb's full mode only (sandboxed modes are not offered). The tests that
   // need a thread waiting on a person's permission launch in accept-edits through the
   // test entry that takes the sandboxed modes (test/fixtures/sandboxed-bin.mjs).
   const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${sandboxedModes ? SANDBOXED_ENTRY : PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
@@ -328,7 +328,7 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   const plannedCheck = await sandboxedCheck(planned);
   assert.deepEqual(plannedCheck.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_HOST"]);
   assert.equal(plannedCheck.result.status, "needs-configuration");
-  // The provider's own command says, of that same planned launch, that it takes none in a sandboxed mode yet.
+  // The provider's own command says, of that same planned launch, that it takes none in a sandboxed mode.
   assert.deepEqual((await provider("check", planned)).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"]);
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });

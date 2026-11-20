@@ -110,7 +110,7 @@ container: `trust: container`, and `version` equal to `bb-version` (its default)
 described in the provider's README: [Settings](../README.md#settings) and
 [A team image: two pins](../README.md#a-team-image-two-pins).
 
-**Spawn bb agents with `--yolo`** in a team container. That is bb's `full` mode, and the only one the provider launches (sandboxed modes are not offered): a launch without it is refused (`E_BACKEND_SANDBOXED_MODE`). The container is the boundary, as it is for the other agents there. bb's sandboxed modes are not offered for OATS agents yet, and in this image they could not work unattended anyway: they need bubblewrap, which the image does not carry.
+**Spawn bb agents with `--yolo`** in a team container. That is bb's `full` mode, and the only one the provider launches (sandboxed modes are not offered): a launch without it is refused (`E_BACKEND_SANDBOXED_MODE`). The container is the boundary, as it is for the other agents there. bb's sandboxed modes are not offered for OATS agents, and in this image they could not work unattended anyway: they need bubblewrap, which the image does not carry.
 
 ## Trust
 

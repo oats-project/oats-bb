@@ -282,9 +282,16 @@ runs outside it writes past every rule above. What then happens differs by mode:
   flag runs outside the sandbox.
 
 A property of the sandboxed modes, if they are offered: a sandboxed agent can read and edit
-its work tree, but cannot commit in a linked worktree. Git writes its objects and refs in
-the clone, outside the home, and the provider adds no write path there (the allowances
-are the kernel's to send). An agent that commits runs in `full` mode.
+the files of its trees, but can neither stage nor commit. In a linked worktree, git writes
+its index, objects and refs in the clone, outside the home, and the provider adds no
+write path there (the allowances are the kernel's to send). In a tree that is a clone of
+its own, the rule on its `.git` makes that whole directory read-only for the agent's
+commands. An agent that commits runs in `full` mode.
+
+And a limit of the rules: they cover the hooks git runs from a git directory. A
+repository whose own configuration points `core.hooksPath` into the tree (a `.husky`
+directory) keeps those hooks writable by the agent; the provider does not read git's
+configuration. The same holds for a submodule's git directory.
 
 Also by design: the agent's messaging key (`.aw/signing.key`) stays readable, since `aw`
 signs with it. A sandboxed agent can read, and so use, its own key; it cannot replace it.

@@ -1,30 +1,11 @@
-// The panel's own small parts, on bb's theme tokens only: what the patterns of app/ui.tsx (the UX
-// standard, section 3) have no component for. Everything else the panel draws is one of those.
+// The panel's one part of its own: what the patterns of app/ui.tsx (the UX standard, section 3)
+// have no component for. Everything else the panel draws is one of those.
 import { Fragment } from "react";
 import type { ReactNode } from "react";
-import { CopyButton, TARGET } from "../ui";
-import { shown } from "../ui/text";
+import { CopyButton } from "../ui";
 
-/** A fact of the kernel's inside a sentence: the code face, breaking inside only where it cannot fit a line. */
-export function Code({ children }: { children: string }) {
-  return (
-    <span title={children} className="break-words font-mono text-xs text-foreground">
-      {shown(children)}
-    </span>
-  );
-}
-
-/** A small neutral tag with what it means in its title and its accessible name. */
-export function Tag({ children, title }: { children: string; title: string }) {
-  return (
-    <span role="note" title={title} aria-label={`${children}: ${title}`} className="w-fit shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-/** A path, whole (it breaks rather than hide its end), then its Copy, named for what it copies. */
-export function PathLine({ path, copyLabel, tag, testId }: { path: string; copyLabel: string; tag?: ReactNode; testId: string }) {
+/** A path, whole (a long one breaks between its segments), then what belongs to it and its Copy, named for what it copies. */
+export function PathLine({ path, copyName, tag, testId }: { path: string; copyName: string; tag?: ReactNode; testId: string }) {
   return (
     <span className="flex min-w-0 flex-col items-start gap-1.5">
       <span data-testid={testId} className="min-w-0 break-words font-mono text-xs text-foreground">
@@ -41,22 +22,7 @@ export function PathLine({ path, copyLabel, tag, testId }: { path: string; copyL
         ))}
       </span>
       {tag}
-      <CopyButton text={path} label={copyLabel} />
+      <CopyButton text={path} name={copyName} />
     </span>
-  );
-}
-
-/** A fold: its summary is as high as any control, and what it holds shows when it is open. */
-export function Fold({ summary, children, testId, className = "" }: { summary: ReactNode; children: ReactNode; testId: string; className?: string }) {
-  return (
-    <details data-testid={testId} className={`group min-w-0 ${className}`}>
-      <summary className={`${TARGET} flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground`}>
-        <span aria-hidden="true" className="inline-block text-muted-foreground group-open:rotate-90">
-          ▸
-        </span>
-        {summary}
-      </summary>
-      {children}
-    </details>
   );
 }

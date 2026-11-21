@@ -12,12 +12,12 @@ import type { Oats } from "../oats";
 import { agentStatus } from "../roster/status";
 import { onWindowReset } from "../store";
 import type { Read, Result } from "../store";
-import { Button, Card, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
 import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
 import { openSoul } from "../workspace/pages";
-import { Code, Fold, PathLine, Tag } from "./parts";
+import { PathLine } from "./parts";
 import { useInstanceRead, useNow } from "./read";
 import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "./words";
 
@@ -96,28 +96,24 @@ function Pages({ oats, agent, node, tab }: { oats: Ready; agent: Agent; node: No
   );
 }
 
-/** A refusal as the server words it, `<code>: <message>`: the code apart, to be drawn after the words. */
-function refusalParts(error: string): { code: string | null; message: string } {
-  const lead = /^([A-Z][A-Z0-9_]*): ([\s\S]*)$/.exec(error);
-  return lead === null ? { code: null, message: error } : { code: lead[1]!, message: lead[2]! };
+/** The code that leads a refusal as the server words it, `<code>: <message>`: drawn after the words. */
+function refusalParts(error: string): { code: string | null } {
+  const lead = /^([A-Z][A-Z0-9_]*): /.exec(error);
+  return { code: lead === null ? null : lead[1]! };
 }
 
 /** What a read that is not there yet, or failed, says in a tab: nothing when the read is there and current. */
 function ReadState({ read, now }: { read: InstanceRead; now: number }) {
   if (read.status === "loading") return <Loading>Reading this instance…</Loading>;
   if (read.status !== "error") return null;
-  const { code, message } = refusalParts(read.error);
+  const { code } = refusalParts(read.error);
   const retry = <Button onClick={read.retry}>Retry</Button>;
   // A failed reread keeps what was read, and says how old it is.
   if (read.data !== undefined) {
     return <Stale age={readAge(read.data.at, now)} refreshing={read.fetching} held={`It could not be read again${code === null ? "" : ` (${code})`}.`} action={retry} />;
   }
   return (
-    <Notice title="This instance could not be read" tone="error" code={code} actions={retry}>
-      <Fold summary="Details" testId="oats-panel-refusal">
-        <p className="m-0 break-words text-muted-foreground">{shown(message)}</p>
-      </Fold>
-    </Notice>
+    <Notice title="This instance could not be read" tone="error" code={code} details={read.error} actions={retry} />
   );
 }
 
@@ -140,7 +136,8 @@ function InstancePage({ oats, agent, node, read, now }: { oats: Ready; agent: Ag
           {instanceDisplayName(shown(agent.instance))}
         </h2>
         <div data-testid="oats-panel-state" title={agent.running === true && facts?.startedAt ? `started ${facts.startedAt}` : undefined}>
-          <StatusLine state={state} since={since} />
+          {/* The Desktop's words where the kernel says the agent runs or is stopped; else the state's own word. */}
+          <StatusLine state={state} word={state === "needs-you" ? undefined : agent.running === true ? "Running" : agent.running === false ? "Stopped" : undefined} since={since} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
@@ -149,13 +146,13 @@ function InstancePage({ oats, agent, node, read, now }: { oats: Ready; agent: Ag
           </button>
         </div>
         {drift === null ? null : (
-          <Fold summary={<span className="rounded border border-border px-1.5 py-0.5 text-xs">older build</span>} testId="oats-panel-drift">
-            <div className="flex flex-col gap-0.5 pb-1 text-muted-foreground">
-              {drift.map((line, index) => (
-                <span key={index}>{shown(line)}</span>
-              ))}
-            </div>
-          </Fold>
+          <Disclosure summary="older build" testId="oats-panel-drift">
+            {drift.map((line, index) => (
+              <span key={index} className="text-muted-foreground">
+                {shown(line)}
+              </span>
+            ))}
+          </Disclosure>
         )}
       </header>
 
@@ -209,27 +206,35 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
     <>
       {sentence === null ? null : (
         <Section title="Work" testId="oats-panel-work">
-          <Card testId="oats-panel-work-card">
-            <p data-testid="oats-panel-work-sentence" className="m-0 leading-relaxed">
-              {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{part.code}</Code>))}
-            </p>
-            <Fold summary="Paths" testId="oats-panel-paths" className="border-t border-border pt-1">
-              <div className="pb-1">
+          <Card
+            testId="oats-panel-work-card"
+            footer={
+              <Disclosure summary="Paths" testId="oats-panel-paths">
                 <Facts>
                   <Fact label="Folder">
                     <PathLine
                       path={workFolder(facts.home)}
-                      copyLabel="Copy folder path"
+                      copyName="Copy folder path"
                       testId="oats-panel-folder"
-                      tag={sharedWork(facts.work) ? <Tag title={SHARED_TITLE}>shared</Tag> : undefined}
+                      tag={
+                        sharedWork(facts.work) ? (
+                          <Chip tone="muted" title={SHARED_TITLE}>
+                            shared
+                          </Chip>
+                        ) : undefined
+                      }
                     />
                   </Fact>
                   <Fact label="Home">
-                    <PathLine path={facts.home} copyLabel="Copy home path" testId="oats-panel-home" />
+                    <PathLine path={facts.home} copyName="Copy home path" testId="oats-panel-home" />
                   </Fact>
                 </Facts>
-              </div>
-            </Fold>
+              </Disclosure>
+            }
+          >
+            <p data-testid="oats-panel-work-sentence" className="m-0 leading-relaxed">
+              {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{part.code}</Code>))}
+            </p>
           </Card>
         </Section>
       )}
@@ -279,7 +284,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
         <Section title="Messaging & Teams" testId="oats-panel-messaging">
           <Facts>
             <Fact label="Messaging ID">
-              <PathLine path={facts.messagingId} copyLabel="Copy messaging ID" testId="oats-panel-messaging-id" />
+              <PathLine path={facts.messagingId} copyName="Copy messaging ID" testId="oats-panel-messaging-id" />
             </Fact>
           </Facts>
         </Section>
@@ -321,13 +326,13 @@ function SoulPage({ oats, agent, read, now }: { oats: Ready; agent: Agent; read:
       </header>
       <ReadState read={read} now={now} />
       {answer === undefined || answer.agentsRoot === null ? null : (
-        <Fold summary="Details" testId="oats-panel-details" className="border-t border-border pt-1">
+        <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>
             <Fact label="Agents root">
-              <PathLine path={answer.agentsRoot} copyLabel="Copy agents root path" testId="oats-panel-agents-root" />
+              <PathLine path={answer.agentsRoot} copyName="Copy agents root path" testId="oats-panel-agents-root" />
             </Fact>
           </Facts>
-        </Fold>
+        </Disclosure>
       )}
       <div className="mt-auto flex flex-wrap items-center gap-2">
         <Button

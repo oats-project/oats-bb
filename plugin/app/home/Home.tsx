@@ -16,6 +16,7 @@ import { forgetAgent, forgetAgents, getAgentTab, rememberAgent, rememberedAgent 
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
+import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -276,19 +277,6 @@ function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
       </ul>
     </section>
   );
-}
-
-/**
- * The clock, read again every half minute while the view is open: an agent that waits while
- * nothing else changes in OATS causes no new snapshot, and its age must still grow.
- */
-function useNow(everyMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), everyMs);
-    return () => clearInterval(timer);
-  }, [everyMs]);
-  return now;
 }
 
 function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {

@@ -141,7 +141,7 @@ test("while no snapshot has loaded: one line, and every thread is listed", async
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const { slot } = await sidebar({ snapshot: async () => (await held, handlers().snapshot(null)) });
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Reading OATS…");
+  expect(slot.getByRole("status").textContent).toBe("Reading your agents…");
   expect(ids(slot.getAllByTestId("oats-other-row"))).toEqual(fixtureThreads().map((thread) => thread.id));
   expect(slot.queryByText("Other threads")).toBeNull();
   expect(slot.queryByTestId("oats-workspace-line")).toBeNull();
@@ -157,8 +157,13 @@ test("with a failed snapshot: every thread is listed, the error's first line sho
         ? { ok: false, at: "2026-11-19T12:30:00.000Z", code: "NO_DEPLOYMENT", message: "No OATS deployment found.\nSet one in the plugin's settings." }
         : handlers().snapshot(null),
   });
-  await waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toContain("No OATS deployment found."));
-  expect(slot.getByTestId("oats-status-line").textContent).not.toContain("Set one in");
+  // A titled notice in a person's words, with Retry and the way to the settings; the raw message is under Details.
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("No OATS deployment found on this machine");
+  expect(notice.textContent).toContain("Open a bb project inside the deployment, or set its directory in the plugin's settings.");
+  expect(slot.getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/settings/plugins/test-plugin");
+  expect((slot.getByTestId("oats-notice-details") as HTMLDetailsElement).open).toBe(false);
+  expect(Array.from(slot.getByTestId("oats-notice-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["No OATS deployment found.", "Set one in the plugin's settings."]);
   expect(ids(slot.getAllByTestId("oats-other-row"))).toEqual(fixtureThreads().map((thread) => thread.id));
   expect(slot.queryByTestId("oats-tree")).toBeNull();
 
@@ -179,8 +184,10 @@ test("when the plugin's server does not answer at all, the threads are listed wi
       throw new Error("plugin oats is not running");
     },
   });
-  // the message as it is: no code before it, since nothing here is the kernel's word
-  await waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe("plugin oats is not runningRetry"));
+  // In a person's words, with the plugin's own message under Details: nothing here is the kernel's word.
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS could not be read");
+  expect(slot.getByTestId("oats-notice-details").textContent).toContain("plugin oats is not running");
   expect(slot.getAllByTestId("oats-other-row")).toHaveLength(8);
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
@@ -224,19 +231,25 @@ test("a row's soul is the matching soul's key once the souls are read, else the 
   expect(row("thr_release").textContent).toContain("oats-maintainer");
 });
 
-test("several machines and none chosen: the line links to the plugin's settings", async () => {
+test("several machines and none chosen: the notice says so and links to the plugin's settings; Retry would not help", async () => {
   const { slot } = await sidebar({
     snapshot: () => ({ ok: false, at: "t", code: "CHOOSE_HOST", message: "This bb server has 2 machines: choose the one that holds the OATS homes." }),
   });
-  const link = await slot.findByRole("link", { name: "Choose a machine" });
+  const link = await slot.findByRole("link", { name: "Open settings" });
   expect(link.getAttribute("href")).toBe("/settings/plugins/test-plugin");
+  expect(slot.getByRole("alert").querySelector("h3")!.textContent).toBe("Choose the machine that holds your agents");
+  expect(slot.queryByRole("button", { name: "Retry" })).toBeNull();
 });
 
-test("a kernel refusal of oats status shows the kernel's code and the first line of its message", async () => {
+test("a kernel refusal of oats status: what happened in words, the kernel's first line after who says it, its code after the words", async () => {
   const { slot } = await sidebar({
     snapshot: () => ({ ok: false, at: "t", code: "E_WORKSPACE_INVALID", message: "oats-workspace.yaml: unknown key `foo`\nsee docs/workspace.md" }),
   });
-  await waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe("E_WORKSPACE_INVALID: oats-workspace.yaml: unknown key `foo`Retry"));
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS could not read this deployment");
+  expect(notice.textContent).toContain("OATS says: oats-workspace.yaml: unknown key `foo`");
+  expect(slot.getByTestId("oats-unreadable").getAttribute("data-code")).toBe("E_WORKSPACE_INVALID");
+  expect(Array.from(slot.getByTestId("oats-notice-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["oats-workspace.yaml: unknown key `foo`", "see docs/workspace.md"]);
 });
 
 test("while bb is still listing its threads nothing is joined: no agent is said to be missing or quiet", async () => {
@@ -248,7 +261,7 @@ test("while bb is still listing its threads nothing is joined: no agent is said 
   );
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Reading OATS…");
+  expect(slot.getByRole("status").textContent).toBe("Reading your agents…");
   expect(slot.queryByTestId("oats-needs-line")).toBeNull();
   expect(slot.queryByText("No OATS agents run in bb yet.")).toBeNull();
 });
@@ -260,9 +273,10 @@ test("when bb cannot list its threads the line says so, with Retry", async () =>
     { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => {}, searchQuery: "" },
     { rpc: handlers(), sidebarThreads: { status: "error", threads: [] } },
   );
-  await waitFor(() =>
-    expect(slot.getByTestId("oats-status-line").textContent).toBe("bb could not list its threads, so the OATS agents cannot be matched to them.Retry"),
-  );
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("bb could not list its threads");
+  expect(notice.textContent).toContain("So the OATS agents cannot be matched to them.");
+  expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
   expect(slot.queryByTestId("oats-tree")).toBeNull();
 });
 
@@ -294,4 +308,17 @@ test("a feature's own page is a row under the four pages, with its mark while it
   const { slot } = await sidebar();
   await slot.findByTestId("oats-page-link-souls");
   expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
+});
+
+test("while OATS cannot be read after it was, the tree stays as last read, under the notice and its age: never bb's flat list", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const { slot } = await sidebar({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) });
+  const rows = await slot.findAllByTestId("oats-agent-row");
+  expect(rows).toHaveLength(7); // the same seven agents, joined to their threads
+  const notice = slot.getByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
+  expect(notice.textContent).toContain("Showing what was read 2 min ago.");
+  expect(slot.getByTestId("oats-last-observation").textContent).toBe("Last observation — 2 min ago");
+  expect(slot.getByTestId("oats-needs-line").textContent).toBe("3 need you");
+  expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });

@@ -102,25 +102,28 @@ export default [
   },
   {
     stage: "no-oats",
-    name: "bb's threads, the line that says what is missing, a thread opens",
+    name: "stale: OATS cannot be read after it was: the notice, the last observation, the tree as last read",
     run: async ({ page, at, viewport, threads, check, sleep }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
-      const line = await page.until(`(() => { const t = ${textOf(testId("oats-status-line"))}; return /not found/i.test(t) ? t : ""; })()`, 30);
-      check(Boolean(line), `${at} the "not found" line shows: ${line ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
-      const listed = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-other-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
-      check([...threads.values()].every((thread) => listed.includes(thread.id)), `${at} bb's threads are all listed (${listed.length})`, JSON.stringify(listed));
-      check(!(await page.evaluate(visible(testId("oats-tree")))), `${at} no tree is drawn from a stale answer`);
+      // A titled notice in a person's words, with the age of what is still shown and Retry.
+      const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return /^OATS is not installed on /.test(t) ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
+      const said = notice ? JSON.parse(notice) : null;
+      check(said !== null && said.code === "OATS_NOT_FOUND" && /Showing what was read /.test(said.text) && said.retry && said.settings, `${at} the notice says what is missing in a person's words, how old what is shown is, with Retry and Open settings: ${said?.title ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
+      const observed = await page.evaluate(textOf(testId("oats-last-observation")));
+      check(/^Last observation — /.test(observed), `${at} the roster is marked as the last observation (${observed})`);
+      // The roster stays: the agents as last read, joined to their threads, never bb's flat list.
+      const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
+      check(rows.length >= 6 && rows.includes(threads.get("thr_release").id), `${at} the tree is still drawn, as last read (${rows.length} agents)`, JSON.stringify(rows));
       await page.shot(`a14-${viewport.name}-sidebar`);
 
       const target = threads.get("thr_redesign");
-      await page.evaluate(`document.querySelector('${testId("oats-other-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
+      await page.evaluate(`document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
       const opened = await page.until(`location.pathname.endsWith("/threads/${target.id}")`, 15);
-      check(Boolean(opened), `${at} a thread opens from the list`, await page.evaluate("location.pathname"));
-      await sleep(2500);
-      check(!(await page.evaluate(visible(testId("oats-identity-row")))), `${at} the open thread has no OATS row while OATS cannot be read`);
-      // The one scene the plugin may draw nothing in: no row, and at phone width the list is in bb's closed drawer.
-      await page.shot(`a14-${viewport.name}-thread`, { plugin: false });
+      check(Boolean(opened), `${at} a thread opens from the tree`, await page.evaluate("location.pathname"));
+      await sleep(1500);
+      check(Boolean(await page.until(visible(testId("oats-identity-row")), 15)), `${at} the open thread keeps its OATS row, from the last roster`);
+      await page.shot(`a14-${viewport.name}-thread`);
     },
   },
 ];

@@ -6,7 +6,6 @@ import {
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
   experimental_resolveThreadStatus as resolveThreadStatus,
-  experimental_usePluginId as usePluginId,
   useBbNavigate,
   useSidebarThreadDraftIds,
   useSidebarThreadRowStatuses,
@@ -16,14 +15,16 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import { codes } from "../../kernel/result";
 import type { Node } from "../../model/types";
 import { count, needsYouLabel } from "../format";
-import { failureLine, useOats } from "../oats";
-import { Button, Dot, Mark, plainClick, TARGET } from "../ui";
+import { useOats } from "../oats";
+import { Dot, Loading, Mark, plainClick, TARGET } from "../ui";
 import { pageLinks } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
-import { refusalLines, shown } from "../ui/text";
+import { shown } from "../ui/text";
+import { readAge } from "../ui/words";
+import { Unreadable } from "./unreadable";
+import { useNow } from "./now";
 
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
@@ -67,8 +68,8 @@ function PageRow({ page, onOpen }: { page: PageLink; onOpen: () => void }) {
 
 export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
+  const now = useNow();
   const navigate = useBbNavigate();
-  const pluginId = usePluginId();
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
 
@@ -158,29 +159,21 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   };
 
   if (oats.phase !== "ready") {
-    // bb stays fully usable: one line saying what is missing, and bb's threads as usual.
+    // No roster to draw (none was ever read, or the first read is in flight): bb stays fully
+    // usable. What is missing is said in a person's words, and bb's threads are listed as bb has them.
     const listed = oats.threads
       .filter((thread) => !thread.isArchived && !thread.isHidden)
       .sort((a, b) => b.updatedAt - a.updatedAt);
     return (
-      <div data-testid="oats-sidebar" className="flex flex-col p-1">
+      <div data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">
         {oats.phase === "loading" ? (
-          <p data-testid="oats-status-line" className="px-2 py-1.5 text-xs text-muted-foreground">
-            Reading OATS…
-          </p>
-        ) : (
-          <div data-testid="oats-status-line" role="alert" className="flex flex-col items-start gap-1 px-2 py-1.5 text-xs">
-            <span className="break-words text-muted-foreground">{refusalLines(failureLine(oats)).join(" ")}</span>
-            <span className="flex flex-wrap items-center gap-2">
-              <Button onClick={oats.retry}>Retry</Button>
-              {oats.code === codes.chooseHost ? (
-                <a className="underline" href={`/settings/plugins/${encodeURIComponent(pluginId)}`}>
-                  Choose a machine
-                </a>
-              ) : null}
-            </span>
+          <div className="px-2">
+            <Loading>Reading your agents…</Loading>
           </div>
+        ) : (
+          <Unreadable failure={oats} machine={null} onRetry={oats.retry} />
         )}
+        <h2 className={HEADING}>Threads</h2>
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>
       </div>
     );
@@ -190,6 +183,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const needs = view.needsYou.length;
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
+      {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
+      {oats.stale === null ? null : (
+        <>
+          <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+          <p data-testid="oats-last-observation" className="px-2 pt-2 text-xs text-muted-foreground">{`Last observation — ${readAge(oats.stale.at, now) ?? "its time is not known"}`}</p>
+        </>
+      )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
         {` · ${shown(deployment.machine)} · ${count(agents.length, "agent")}`}

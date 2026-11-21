@@ -4,7 +4,7 @@
 // says how old that roster is.
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
-import { firstLine } from "../oats";
+import { firstLine, THREADS_FAILED } from "../oats";
 import { Button, LINK, Notice } from "../ui";
 import { shown } from "../ui/text";
 import { readAge } from "../ui/words";
@@ -33,6 +33,8 @@ export function failureWords(failure: Failure, machine: string | null): { title:
       return { title: `Couldn't reach ${on}`, sentence: null, settings: false, retry: true };
     case codes.timeout:
       return { title: `OATS did not answer on ${on}`, sentence: "It took more than 20 s.", settings: false, retry: true };
+    case THREADS_FAILED:
+      return { title: "bb could not list its threads", sentence: "So the OATS agents cannot be matched to them.", settings: false, retry: true };
     default:
       if (isKernelCode(failure.code)) return { title: "OATS could not read this deployment", sentence: `OATS says: ${shown(firstLine(failure.message))}`, settings: false, retry: true };
       return { title: "OATS could not be read", sentence: null, settings: false, retry: true };

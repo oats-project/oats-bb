@@ -297,7 +297,28 @@ export const rpc = defineRpcContract({
   },
   /** One trigger's recorded state. The id must be a trigger of the current list. */
   triggerStatus: { input: z.object({ id: z.string().regex(TRIGGER_ID) }).strict(), output: triggerStatus },
+
+  // ---- the acts on a row of the current list; an id it does not name starts no process ----
+  /** On or off on this computer: a local item's own switch, a workspace item's entry in this host's opt-outs. */
+  automationEnable: { input: z.object({ kind: automationKind, id: automationId, enabled: z.boolean() }).strict(), output: z.object({ row: automationRow }) },
+  /** Run a schedule now. A launch can take as long as a spawn. */
+  scheduleRun: { input: z.object({ id: automationId }).strict(), output: scheduleRunReceipt },
+  /**
+   * Test one: it runs nothing, except that `runSource: true` (a person's confirmed press, a
+   * capability source's trigger only) lets the kernel run that source's command once.
+   */
+  automationTest: { input: z.object({ kind: automationKind, id: automationId, runSource: z.literal(true).optional() }).strict(), output: automationTest },
+  /** The summary of a local item: one line of up to 200 characters; empty removes it. */
+  automationDescribe: { input: z.object({ kind: automationKind, id: automationId, description: z.string().max(800) }).strict(), output: z.object({ row: automationRow }) },
+  /** Delete a local schedule. */
+  scheduleRemove: { input: z.object({ id: automationId }).strict(), output: z.object({ removed: z.string() }) },
+  /** Check a run whose state is unknown. */
+  scheduleReconcile: { input: z.object({ id: automationId }).strict(), output: scheduleReconciled },
+  /** Install the host timer for this deployment (a systemd user timer, or a launchd agent, of the account bb's machine runs as). */
+  schedulerEnable: { input: z.null(), output: z.object({ scheduler: automationScheduler, warnings: z.array(z.string()) }) },
 });
+
+const hostAutomation = z.object({ ...hostBase, id: automationId }).strict();
 
 /** server -> host: one method per `oats` command the feature runs. */
 export const host = defineRpcContract({
@@ -309,4 +330,15 @@ export const host = defineRpcContract({
     input: z.object({ ...hostBase, id: automationId, source: z.string().nullable() }).strict(),
     output: answer(triggerStatus),
   },
+  // The acts: never retried by bb. `id` is the qualified id the list named.
+  automationEnable: { input: z.object({ ...hostBase, kind: automationKind, id: automationId, enabled: z.boolean() }).strict(), output: answer(z.object({ row: automationRow })) },
+  scheduleRun: { input: hostAutomation, output: answer(scheduleRunReceipt) },
+  automationTest: {
+    input: z.object({ ...hostBase, kind: automationKind, id: automationId, source: z.string().nullable(), runSource: z.boolean() }).strict(),
+    output: answer(automationTest),
+  },
+  automationDescribe: { input: z.object({ ...hostBase, kind: automationKind, id: automationId, description: z.string().max(800) }).strict(), output: answer(z.object({ row: automationRow })) },
+  scheduleRemove: { input: hostAutomation, output: answer(z.object({ removed: z.string() })) },
+  scheduleReconcile: { input: hostAutomation, output: answer(scheduleReconciled) },
+  schedulerEnable: { input: hostRead, output: answer(z.object({ scheduler: automationScheduler, warnings: z.array(z.string()) })) },
 });

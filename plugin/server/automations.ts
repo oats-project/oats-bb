@@ -5,7 +5,8 @@
 // reaches the host.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import { NO_AUTOMATIONS, type automationListAnswer, type rpc } from "../contract/automations.js";
+import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc } from "../contract/automations.js";
+import { PULL_REQUEST } from "../model/automations.js";
 import { codes, isKernelCode } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusedWith, type Core } from "./core.js";
 
@@ -80,12 +81,62 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     return value;
   };
 
+  /** The row of the current list an act names: by its qualified id, or a bare local one. An id the list does not name reaches no process. */
+  const rowOf = async (kind: AutomationKind, id: string): Promise<AutomationRow> => {
+    const answer = (await lists())[kind];
+    const row = answer.ok ? answer.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`) : undefined;
+    if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`);
+    return row;
+  };
+  /** After an act: the lists are read again for the next client, and so is the roster (a run launches an agent). */
+  const changed = () => {
+    held = null;
+    core.rereadSoon();
+  };
+  /** An act is not ended by its caller going away: only by the plugin's own end. */
+  const act = async <Value>(run: () => Promise<Value>): Promise<Value> => {
+    try {
+      return await run();
+    } finally {
+      changed();
+    }
+  };
+
   return {
     automations: () => lists(),
+
+    async automationEnable({ kind, id, enabled }) {
+      const row = await rowOf(kind, id);
+      return act(() => core.call("automationEnable", { kind, id: row.id, enabled }, HOST_TIMEOUT.act, core.lifetime.signal));
+    },
+    async scheduleRun({ id }) {
+      const row = await rowOf("schedule", id);
+      return act(() => core.call("scheduleRun", { id: row.id }, HOST_TIMEOUT.long, core.lifetime.signal));
+    },
+    async automationTest({ kind, id, runSource }, context) {
+      const row = await rowOf(kind, id);
+      const source = row.on?.source ?? null;
+      // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
+      if (runSource === true && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
+      // A test changes nothing: it is ended with its caller.
+      return core.call("automationTest", { kind, id: row.id, source, runSource: runSource === true }, HOST_TIMEOUT.preview, context.experimental_signal);
+    },
+    async automationDescribe({ kind, id, description }) {
+      const row = await rowOf(kind, id);
+      return act(() => core.call("automationDescribe", { kind, id: row.id, description }, HOST_TIMEOUT.act, core.lifetime.signal));
+    },
+    async scheduleRemove({ id }) {
+      const row = await rowOf("schedule", id);
+      return act(() => core.call("scheduleRemove", { id: row.id }, HOST_TIMEOUT.act, core.lifetime.signal));
+    },
+    async scheduleReconcile({ id }) {
+      const row = await rowOf("schedule", id);
+      return act(() => core.call("scheduleReconcile", { id: row.id }, HOST_TIMEOUT.act, core.lifetime.signal));
+    },
+    schedulerEnable: () => act(() => core.call("schedulerEnable", {}, HOST_TIMEOUT.act, core.lifetime.signal)),
+
     async triggerStatus({ id }, context) {
-      const { trigger } = await lists();
-      const row = trigger.ok ? trigger.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`) : undefined;
-      if (row === undefined) throw invalid(`"${id}" is not a trigger of this OATS deployment's current list`);
+      const row = await rowOf("trigger", id);
       return core.call("triggerStatus", { id: row.id, source: row.on?.source ?? null }, HOST_TIMEOUT.read, context.experimental_signal);
     },
   };

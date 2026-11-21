@@ -11,6 +11,7 @@ import { automationRowOf, checkAutomationId, counted, eventLabel, list, record, 
 import { displayLine } from "../app/ui/text.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
 
 const idArgv = (kind: AutomationKind, words: string[], id: string, tail: string[] = []): Result<string[]> => {
   const checked = checkAutomationId(kind, id);
@@ -170,3 +171,19 @@ export function parseHostInstall(document: unknown): Result<{ scheduler: Automat
     warnings: (warnings ?? []).map((warning) => (typeof warning === "string" ? warning : record(warning) ? (text(warning.message) ?? text(warning.code)) : null)).filter((warning): warning is string => warning !== null),
   });
 }
+
+/** The acts' commands. */
+export const verbs = (oats: Runner) => ({
+  automationEnable: (kind: AutomationKind, id: string, enabled: boolean, signal?: AbortSignal): Promise<Result<{ row: AutomationRow }>> =>
+    oats.run(enableArgv(kind, id, enabled), (document) => parseRowAnswer(document, kind, `oats ${kind} ${enabled ? "enable" : "disable"}`), oats.timeouts.act, signal),
+  /** A run launches what the schedule launches: a spawn's own hooks can take minutes. */
+  scheduleRun: (id: string, signal?: AbortSignal): Promise<Result<ScheduleRunReceipt>> => oats.run(scheduleRunArgv(id), parseScheduleRun, oats.timeouts.long, signal),
+  /** The kernel gives a test's own checks a preview's time; a capability source's command gets 30 s of it. */
+  automationTest: (kind: AutomationKind, id: string, options: { source: string | null; runSource: boolean }, signal?: AbortSignal): Promise<Result<AutomationTest>> =>
+    oats.run(testArgv(kind, id, { runSource: options.runSource }), (document) => parseTest(document, kind, options.source), oats.timeouts.preview, signal),
+  automationDescribe: (kind: AutomationKind, id: string, description: string, signal?: AbortSignal): Promise<Result<{ row: AutomationRow }>> =>
+    oats.run(describeArgv(kind, id, description), (document) => parseRowAnswer(document, kind, `oats ${kind} update`), oats.timeouts.act, signal),
+  scheduleRemove: (id: string, signal?: AbortSignal): Promise<Result<{ removed: string }>> => oats.run(scheduleRemoveArgv(id), parseScheduleRemove, oats.timeouts.act, signal),
+  scheduleReconcile: (id: string, signal?: AbortSignal): Promise<Result<ScheduleReconciled>> => oats.run(scheduleReconcileArgv(id), parseScheduleReconcile, oats.timeouts.act, signal),
+  schedulerEnable: (signal?: AbortSignal): Promise<Result<{ scheduler: AutomationScheduler; warnings: string[] }>> => oats.run(hostInstallArgv(), parseHostInstall, oats.timeouts.act, signal),
+});

@@ -197,9 +197,15 @@ export function Menu({ label, items, children = "⋯" }: { label: string; items:
           aria-label={label}
           className="absolute right-0 top-full z-40 mt-1 flex min-w-44 flex-col rounded-md border border-border bg-background p-1 text-sm text-foreground shadow-lg"
           onKeyDown={(event) => {
-            if (event.key === "Escape" || event.key === "Tab") {
-              if (event.key === "Escape") event.preventDefault();
-              event.stopPropagation();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation(); // the menu's Escape is not the dialog's it may sit in
+              close(true);
+              return;
+            }
+            if (event.key === "Tab") {
+              // The menu closes and the focus is on its button; where it goes from there is the page's
+              // own Tab, or the dialog's the menu sits in (the key is left to it).
               close(true);
               return;
             }
@@ -234,9 +240,9 @@ export function Menu({ label, items, children = "⋯" }: { label: string; items:
   );
 }
 
-/** Copies `text`: the button says what it copies, then "Copied" (or that it could not) for two seconds, announced. */
+/** Copies `text`: the button says what it copies, then "Copied" or "Copy failed" (the Desktop's words) for two seconds, announced. */
 export function CopyButton({ text, label = "Copy", name }: { text: string; label?: string; /** the accessible name, where the label alone does not say what is copied: "Copy home path" */ name?: string }) {
-  const [said, setSaid] = useState<"Copied" | "Couldn't copy" | null>(null);
+  const [said, setSaid] = useState<"Copied" | "Copy failed" | null>(null);
   useEffect(() => {
     if (said === null) return;
     const timer = setTimeout(() => setSaid(null), 2_000);
@@ -255,7 +261,7 @@ export function CopyButton({ text, label = "Copy", name }: { text: string; label
           .then(() => navigator.clipboard.writeText(text))
           .then(
             () => setSaid("Copied"),
-            () => setSaid("Couldn't copy"),
+            () => setSaid("Copy failed"),
           );
       }}
     >

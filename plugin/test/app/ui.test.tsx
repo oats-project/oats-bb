@@ -59,7 +59,10 @@ describe("the words", () => {
     expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("waiting 27 min (since 14:03)");
     expect(waitingSince(null, now)).toBeNull();
     expect(waitingSince("not a date", now)).toBeNull();
-    expect([readAge(now - 5_000, now), readAge(ago(2 * 60_000), now), readAge(ago(3 * 3_600_000), now), readAge(ago(49 * 3_600_000), now)]).toEqual(["just now", "2 min ago", "3 h ago", "2 d ago"]);
+    // The age of a read, as the Desktop says it: seconds, rounded minutes, then the local time.
+    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["just now", "45s ago", "3 min ago", "59 min ago"]);
+    expect(readAge(new Date(2026, 10, 21, 11, 5).getTime(), now)).toBe("at 11:05");
+    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual(["just now", "just now"]);
   });
 });
 
@@ -290,6 +293,64 @@ describe("what the panel's header and a refusal's details need", () => {
   });
 });
 
+describe("the focus in a dialog that holds more than buttons", () => {
+  const base: ConfirmProps = {
+    title: "Retire Weekly digest?",
+    about: "weekly-digest-helper",
+    shownFor: "weekly-digest-helper",
+    happens: ["Its home is removed."],
+    confirmLabel: "Retire",
+    destructive: true,
+    phase: { kind: "ready" },
+    onConfirm: () => undefined,
+    onClose: () => undefined,
+  };
+
+  test("a disclosure in a confirmation is a stop: Tab reaches it, and from it Shift+Tab goes round inside the dialog", () => {
+    render(
+      <Confirm {...base}>
+        <Disclosure summary="Details">
+          <p>the kernel's own words</p>
+        </Disclosure>
+      </Confirm>,
+    );
+    const summary = screen.getByText("Details").closest("summary")!;
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const retire = screen.getByRole("button", { name: "Retire" });
+    expect(document.activeElement).toBe(cancel);
+    // The summary is the dialog's first stop: Shift+Tab on it wraps to the last, and Tab on the last wraps to it.
+    summary.focus();
+    expect(fireEvent.keyDown(summary, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(retire);
+    expect(fireEvent.keyDown(retire, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    // Between two stops the key is the browser's own.
+    expect(fireEvent.keyDown(summary, { key: "Tab" })).toBe(true);
+  });
+
+  test("a field that is off is no stop, and a menu's Tab is the dialog's to decide", () => {
+    render(
+      <Confirm {...base} destructive={false} confirmLabel="Save">
+        <input aria-label="off" disabled />
+        <Menu label="More" items={[{ id: "one", label: "One", onSelect: () => undefined }]} />
+      </Confirm>,
+    );
+    const more = screen.getByRole("button", { name: "More" });
+    const save = screen.getByRole("button", { name: "Save" });
+    // The first stop is the menu's button, not the field that is off.
+    save.focus();
+    expect(fireEvent.keyDown(save, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(more);
+    // Tab in the open menu closes it, puts the focus on its button, and the dialog's own handler hears the key.
+    fireEvent.click(more);
+    const item = screen.getByRole("menuitem", { name: "One" });
+    expect(document.activeElement).toBe(item);
+    fireEvent.keyDown(item, { key: "Tab", shiftKey: true });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(save); // Shift+Tab from the first stop (the button) wraps to the last
+  });
+});
+
 describe("the controls", () => {
   function TabsHarness() {
     const [value, setValue] = useState<"schedules" | "triggers" | "history">("schedules");
@@ -436,7 +497,7 @@ describe("the controls", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(button.textContent).toBe("Couldn't copy");
+      expect(button.textContent).toBe("Copy failed");
     } finally {
       vi.useRealTimers();
     }

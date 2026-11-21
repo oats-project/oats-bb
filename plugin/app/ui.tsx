@@ -3,7 +3,7 @@ import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
-import { TARGET } from "./ui/patterns";
+import { FILL, TARGET } from "./ui/patterns";
 import { refusalLines } from "./ui/text";
 
 // The patterns and the controls every screen is drawn with (the UX standard, section 3): one each.
@@ -19,14 +19,7 @@ export { Card, Code, DisabledReason, Disclosure, Empty, Fact, Facts, Field, INPU
 // hold 4.5:1 on the page's own surfaces, not on an open row (`warning-text`: 4.35:1 there in the
 // light theme): a text in a row is `text-foreground` or `text-muted-foreground`. A refusal's text,
 // on a page or in a dialog, is `text-destructive-text`, never `text-destructive`.
-const DOT: Record<AgentState, string> = {
-  "needs-you": "bg-warning-text",
-  working: "bg-success-foreground",
-  idle: "border border-muted-foreground",
-  stopped: "bg-muted-foreground",
-  error: "bg-destructive-text",
-  unreachable: "bg-destructive-text",
-};
+const DOT: Record<AgentState, string> = { ...FILL, "needs-you": "bg-warning-text" };
 
 /**
  * A click the plugin should handle itself. A modified click (new tab, new window) is left to the
@@ -143,6 +136,9 @@ export function Page({ children, testId }: { children: ReactNode; testId: string
   );
 }
 
+/** What Tab stops on inside a dialog, in the page's order: every control that is not off, a disclosure's summary, and what a tabindex puts in the order. */
+const TABBABLE = 'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
 /**
  * A modal dialog drawn by the plugin: a centred card on a dimmed page, a sheet at the bottom of a
  * phone. Escape and a click on the dimmed page cancel; focus moves into it and stays in it.
@@ -200,7 +196,7 @@ export function Modal({
           }
           if (event.key !== "Tab") return;
           // keep Tab inside the dialog
-          const stops = card.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input, textarea, select");
+          const stops = card.current?.querySelectorAll<HTMLElement>(TABBABLE);
           if (stops === undefined || stops.length === 0) {
             // Nothing to stop on (an act in progress: its buttons are off): the focus stays on the dialog.
             event.preventDefault();

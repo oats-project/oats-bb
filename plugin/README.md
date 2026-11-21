@@ -194,6 +194,9 @@ looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `
 one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
 refusal's code and gives each line of the kernel's message a line of its own. The filter is for
 display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
+One named exception: `shownBlock(text)` draws a person's own definition text whole, in one block
+that keeps its lines (a schedule's or a trigger's Prompt and Wake message, as the Desktop draws
+them, and nothing else): no cut, nothing withheld, and only what is no text replaced by U+FFFD.
 
 - **Why the host entry runs `oats`.** Only it sees the user's login-shell PATH, and only it can
   target the machine that holds the homes.
@@ -227,7 +230,8 @@ display only: what goes back to OATS (an instance, a soul, a revision) is what t
   watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
   the last one took to answer, whichever is longer (after a read that failed, 1 s), 20 s limit. A status that hangs is ended at its limit before the
   next starts: under any burst of events one `oats status` is alive at a time. So a change the watch reports is on screen
-  within 3 s on a kernel that answers in under a second, and a slow kernel spends at most half its
+  within 3 s on a kernel that answers well under a second (a change that lands just after a read
+  started waits that read, the pause and the next read), and a slow kernel spends at most half its
   time on status (the first spec's "never within 5 s of the last" gave way to this). Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is

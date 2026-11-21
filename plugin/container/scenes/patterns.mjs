@@ -46,11 +46,40 @@ export default [
       );
       const stale = await page.evaluate(texts(testId("oats-stale")));
       check(stale[0].startsWith("Showing what was read 2 min ago.") && stale[1] === "Refreshing… showing what was read just now.", `${at} the stale line says the age of what is shown, and a re-read in flight`, JSON.stringify(stale));
+      const empty = await page.evaluate(textOf(testId("oats-empty")));
+      const loading = JSON.parse(await page.evaluate(`JSON.stringify({ role: document.querySelector('${testId("oats-loading")}').getAttribute("role"), words: ${textOf(testId("oats-loading"))} })`));
+      check(empty === "No agents yet. New agent" && loading.role === "status" && loading.words === "Reading your agents…", `${at} the empty state says its sentence with the act that fills it, and the loading state is announced with its words`, JSON.stringify([empty, loading]));
+      // The kernel's own message is one press away, under Details.
+      const details = JSON.parse(await page.evaluate(`JSON.stringify({ open: document.querySelector('${testId("oats-notice-details")}').open, summary: ${textOf(`${testId("oats-notice-details")} summary`)} })`));
+      check(details.open === false && /^▸\s?Details$/.test(details.summary), `${at} a notice keeps the kernel's message under Details, closed`, JSON.stringify(details));
       await page.shot(`patterns-${viewport.name}-notices`, { targets: true });
       await page.evaluate(`document.querySelectorAll('${testId("oats-result")}')[1].scrollIntoView({ block: "center" })`);
       const results = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll('${testId("oats-result")}')].map((e) => [e.getAttribute("data-tone"), e.getAttribute("role")]))`));
       check(JSON.stringify(results) === JSON.stringify([["done", "status"], ["failed", "alert"], ["unknown", "alert"]]), `${at} the three results: done, failed, not known`, JSON.stringify(results));
       await page.shot(`patterns-${viewport.name}-results`, { targets: true });
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "a section, cards, tags, a disclosure open, code, switches off and disabled",
+    run: async ({ page, at, viewport, check }) => {
+      await page.evaluate(into("oats-patterns-blocks"));
+      const blocks = JSON.parse(
+        await page.evaluate(
+          `JSON.stringify({ heading: ${textOf(`${testId("oats-section")} h2`)}, cards: [...document.querySelectorAll('${testId("oats-patterns-blocks")} section[aria-label]')].map((e) => e.getAttribute("aria-label")), tags: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [data-tone]')].map((e) => e.getAttribute("data-tone") + ":" + e.innerText), code: document.querySelector('${testId("oats-patterns-blocks")} code').innerText, switches: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [role="switch"]')].map((e) => [e.getAttribute("aria-checked"), e.disabled, e.getAttribute("aria-label")]) })`,
+        ),
+      );
+      check(
+        /^runs 2$/i.test(blocks.heading) && JSON.stringify(blocks.cards) === JSON.stringify(["Weekly digest", "Nightly sweep"]) && JSON.stringify(blocks.tags) === JSON.stringify(["plain:default", "muted:workspace", "warn:wrong account"]) && blocks.code === "oats schedule run weekly-digest" && JSON.stringify(blocks.switches) === JSON.stringify([["false", false, null], ["true", true, "workspace/sweep enabled on this computer"]]),
+        `${at} a section with its count, two titled cards (one that needs a look), the three tags, a kernel's word as code, a switch that is off and one that is disabled and named for its row`,
+        JSON.stringify(blocks),
+      );
+      // The disclosure in the card's second part opens with the keyboard.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-blocks")} summary').focus()`);
+      await page.press("Enter");
+      const open = await page.evaluate(`document.querySelector('${testId("oats-patterns-blocks")} details').open`);
+      check(open === true, `${at} Enter on a disclosure's summary opens it`);
+      await page.shot(`patterns-${viewport.name}-blocks`, { targets: true });
     },
   },
   {
@@ -149,6 +178,13 @@ export default [
       await page.until(`document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase") === "failed"`, 10);
       const refused = JSON.parse(await dialog());
       check(refused.phase === "failed" && refused.body.includes("Weekly digest helper could not be retired.") && refused.body.includes("E_CHILDREN_RUNNING: a child would not stop") && refused.body.includes("Review again"), `${at} a refusal: what happened in words, the kernel's code and message after, the next step`, JSON.stringify(refused));
+      // The refused dialog's stops, in order: the next step, Details, Close, and round again.
+      const walked = [];
+      for (let stop = 0; stop < 4; stop += 1) {
+        await page.press("Tab");
+        walked.push(await page.evaluate(`document.activeElement?.tagName === "SUMMARY" ? "Details" : ${FOCUSED}`));
+      }
+      check(JSON.stringify(walked) === JSON.stringify(["Review again", "Details", "oats-confirm-close", "Review again"]), `${at} Tab in the refused dialog walks Review again, Details, Close and round again: a disclosure is a stop, and the focus stays in the dialog`, JSON.stringify(walked));
       await page.shot(`patterns-${viewport.name}-confirm-refused`, { targets: true });
       await page.evaluate(click("oats-confirm-close"));
       // Another agent's plan is never shown under this agent's name.
@@ -159,6 +195,22 @@ export default [
       check(other.body.includes("This is not the plan for this agent.") && !/what will happen/i.test(other.body) && off === true, `${at} a plan that is another agent's is not shown, and cannot be confirmed`, JSON.stringify(other));
       await page.shot(`patterns-${viewport.name}-confirm-other-agent`, { targets: true });
       await page.press("Escape");
+      // The other states of a confirmation: the plan being read, blocked with its reason, a plan that names no agent, and one that is not destructive.
+      for (const [opener, name, holds] of [
+        ["oats-patterns-open-reading", "reading", (d) => d.phase === "reading" && d.body.includes("Reading the plan from OATS…") && d.off === true],
+        ["oats-patterns-open-blocked", "blocked", (d) => d.phase === "ready" && d.reason === "Tick the box to discard its work." && d.off === true],
+        ["oats-patterns-open-unnamed", "unnamed", (d) => d.phase === "ready" && d.reason === "OATS did not say which agent this plan is for." && d.off === true],
+        ["oats-patterns-open-stop", "stop", (d) => d.title === "Stop Weekly digest helper?" && d.phase === "ready" && d.off === false && d.focus === "oats-confirm-act"],
+      ]) {
+        await page.evaluate(`document.querySelector('${testId(opener)}').focus()`);
+        await page.press("Enter");
+        await page.until(visible(testId("oats-confirm")), 10);
+        const state = JSON.parse(await page.evaluate(`JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, phase: document.querySelector('${testId("oats-confirm")}').getAttribute("data-phase"), body: ${textOf(testId("oats-confirm"))}, reason: document.querySelector('${testId("oats-confirm-blocked")}')?.innerText ?? null, off: document.querySelector('${testId("oats-confirm-act")}').disabled, focus: ${FOCUSED} })`));
+        check(holds(state), `${at} a confirmation, ${name}: ${name === "stop" ? "not destructive, the focus starts on the act" : "it cannot be confirmed, and says why"}`, JSON.stringify(state));
+        await page.shot(`patterns-${viewport.name}-confirm-${name}`, { targets: true });
+        await page.press("Escape");
+        await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
+      }
     },
   },
 ];

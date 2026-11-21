@@ -12,7 +12,7 @@ export const TARGET = "min-h-11 md:min-h-8";
 
 // bb's tokens for coloured text on a surface hold 3:1 as a mark's fill on a row, open or hovered,
 // in both themes; its fill tokens do not (ui.tsx says which).
-const FILL: Record<Exclude<AgentState, "needs-you">, string> = {
+export const FILL: Record<Exclude<AgentState, "needs-you">, string> = {
   working: "bg-success-foreground",
   idle: "border border-muted-foreground",
   stopped: "bg-muted-foreground",

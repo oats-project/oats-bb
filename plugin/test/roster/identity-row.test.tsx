@@ -11,12 +11,18 @@ import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract } from "../helpers/render";
 
 afterEach(() => {
+  agentPage = null;
   resetApp();
   vi.unstubAllGlobals();
 });
 
+// The page of one agent, as these tests name it: none, unless a test gives one. Named after the
+// app is loaded, since a feature that has such a page names its own in its `register`.
+let agentPage: Parameters<typeof setAgentPage>[0] = null;
+
 async function row(threadId: string, options: RenderSlotOptions<Contract> = {}) {
   const app = await loadApp();
+  setAgentPage(agentPage);
   expect(app.threadHeaderRows.map((registration) => registration.id)).toEqual(["identity"]);
   const calls: string[] = [];
   const rpc = handlers();
@@ -136,16 +142,12 @@ test("on a compact viewport OATS navigates to the home page and never asks for t
 test("on a compact viewport, where a feature gives agents a page of their own, OATS opens this agent's page", async () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 767px)" }));
   const opened: string[] = [];
-  setAgentPage((_navigate, instance) => void opened.push(instance));
-  try {
-    const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
-    fireEvent.click(await slot.findByTestId("oats-chip-oats"));
-    expect(opened).toEqual(["desktop-mockups-developer"]);
-    expect(slot.inspection.navigateCalls).toEqual([]);
-    expect(slot.inspection.experimental_panelCalls).toEqual([]);
-  } finally {
-    setAgentPage(null);
-  }
+  agentPage = (_navigate, instance) => void opened.push(instance);
+  const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
+  fireEvent.click(await slot.findByTestId("oats-chip-oats"));
+  expect(opened).toEqual(["desktop-mockups-developer"]);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  expect(slot.inspection.experimental_panelCalls).toEqual([]);
 });
 
 test("the chips are one line that scrolls sideways and never wraps", async () => {

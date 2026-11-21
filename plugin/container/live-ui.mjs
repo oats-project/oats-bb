@@ -25,6 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
+import { sameImages } from "./images.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -284,6 +285,9 @@ try {
   const unknown = scenes.filter((scene) => !(scene.stage in BUILT_IN) && !(scene.stage in stages));
   check(unknown.length === 0, "every scene names a stage that exists", unknown.map((scene) => `${scene.feature}: "${scene.name}" in "${scene.stage}"`).join(" | "));
   check(browser.errors.length === 0, "no uncaught exception in the page", browser.errors.slice(0, 3).join(" | "));
+  // Every image here is of another screen or another state: none equals another.
+  const same = sameImages(OUT);
+  check(same.length === 0, "no two images of this run are the same image", same.map((names) => names.join(" = ")).join(" | "));
 } finally {
   await browser.close();
   fake(); // the fixtures as they are, for the checks that follow in live.sh

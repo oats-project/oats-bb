@@ -130,7 +130,7 @@ fi
 sleep 1
 [ "$(field agents.length <<<"$(rpc snapshot)")" = 0 ] && pass "L2 the cached snapshot is the new roster" || fail "L2 the snapshot is not the new roster"
 fake
-sleep 5.5 # past the floor between two reads
+sleep 5.5 # well past the pause between two reads (1 s after a quick or a failed one)
 rpc refresh > /dev/null
 
 # ---- L3: a status slower than the kernel's 20 s limit. bb sends a retryable host call again at half

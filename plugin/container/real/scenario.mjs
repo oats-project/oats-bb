@@ -21,6 +21,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, visible } from "../browser.mjs";
+import { sameImages } from "../images.mjs";
 import { Fixtures, sampleStatus } from "./fixtures.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -264,7 +265,8 @@ function snapshotRow(instance) {
 /**
  * Freshness (the UX standard, section 6): how long after the kernel recorded a change the plugin's
  * own snapshot has it, read as a client reads it (no refresh asked: the watch on the event log must
- * bring it). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
+ * bring it). `recordedAt` is taken before the command that makes the change, so the delay holds the
+ * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
  * own time is measured and said beside the delay, and a slower kernel is given twice that time and
  * the pause, so a slow kernel is told apart from a slow plugin.
  */
@@ -430,8 +432,8 @@ try {
   step("A5b the agent asks for a person (a waiting claim): needs you");
   // As the agent's own session does it: `oats instance attention` in the home, with the session's environment.
   const asInstance = (...args) => spawnSync(OATS, args, { cwd: home, encoding: "utf8", env: { ...process.env, OATS_INSTANCE: A.instance, OATS_INSTANCE_HOME: home } });
+  const askedAt = Date.now(); // before the command: the delay then counts the command's own run too, never less than the truth
   const asked = asInstance("instance", "attention", "--message", "Keep the retry, or fail the job?");
-  const askedAt = Date.now();
   check(asked.status === 0, "oats instance attention, run in the agent's home", asked.stdout + asked.stderr);
   await fresh("the claim", A.instance, (agent) => agent.waiting !== null, askedAt);
   row = await untilRow(A.instance, "a waiting claim", (r) => r.waitingOnYou != null);
@@ -440,8 +442,9 @@ try {
   check(waiting?.reason === row?.waitingOnYou?.reason && waiting?.message === "Keep the retry, or fail the job?", "the plugin's snapshot has the claim, with the kernel's reason and the agent's message", JSON.stringify(waiting));
   keepStatus("needsYou", { [A.instance]: (r) => r.running === null && r.waitingOnYou?.message === "Keep the retry, or fail the job?" });
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
+  const clearedAt = Date.now();
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
-  await fresh("the claim cleared", A.instance, (agent) => agent.waiting === null, Date.now());
+  await fresh("the claim cleared", A.instance, (agent) => agent.waiting === null, clearedAt);
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
@@ -502,7 +505,7 @@ try {
   let slowPlan = rpc("stopPlan", { instance: A.instance });
   check(slowPlan.ok && slowPlan.ms >= 4000, `and a stop plan is read (${slowPlan.ms} ms)`, JSON.stringify(slowPlan));
   wrapper({ delays: { status: 600_000 } });
-  await sleep(5500); // the floor between two reads
+  await sleep(5500); // well past the pause between two reads (1 s after a quick or a failed one)
   slow = rpc("refresh");
   snapshot = rpc("snapshot");
   // 20 s is the plugin's limit for a status. The refresh can wait behind one read the 15 s poll
@@ -525,7 +528,8 @@ try {
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
-  await fresh("the agent stopped", A.instance, (agent) => agent.runtimeState === "stopped", Date.now());
+  // The stop is the plugin's own act: it rereads by itself afterwards, so this one holds that an act's result is on hand at once, not the watch.
+  await fresh("the agent stopped (the plugin's own act, counted from its answer)", A.instance, (agent) => agent.runtimeState === "stopped", Date.now());
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
   show("oats status", brief(row));
@@ -749,6 +753,21 @@ try {
 
 // The mock's own log of the model requests, beside the other artefacts.
 if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
+
+step("the images");
+// Two scenes of different states never produce the same image. The state each scene is in:
+const STATE_OF = { "real-working": "working", "real-idle": "idle", "real-answered": "idle", "real-needs-you": "needs-you", "real-question": "needs-you", "real-stopped": "stopped", "real-missing": "missing" };
+const sceneOf = (name) => Object.keys(STATE_OF).find((scene) => name.startsWith(`${scene}-`));
+// A KNOWN GAP (D-113 / S1): at 390 px the thread's view says nothing of the agent's state (the tree
+// is in bb's drawer, and the identity row carries no state), so the thread images of two states can
+// be one image there. The status line of the identity row ends it; this list is then emptied.
+const knownGap = (names) => names.every((name) => /-390x800-thread(-dark)?\.png$/.test(name));
+for (const names of sameImages(OUT)) {
+  const states = new Set(names.map((name) => STATE_OF[sceneOf(name)] ?? name));
+  if (states.size === 1) continue; // the same state, read twice (idle, and idle again after an answer)
+  if (knownGap(names)) note(`the same image for different states, a known gap (D-113 / S1: no state in the thread's view at 390 px): ${names.join(" = ")}`);
+  else fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
+}
 
 step("the recorded answers");
 // The kernel's version, as it prints it in the deployment: the one answer here that no RPC of the plugin asks for yet.

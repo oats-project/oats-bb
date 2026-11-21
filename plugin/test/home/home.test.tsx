@@ -444,6 +444,19 @@ test("while the roster cannot be read the tab keeps the view of the agent it sho
     expect(later.queryByTestId("agent-view")).not.toBeNull();
     expect(later.queryByRole("alert")).toBeNull();
     later.unmount();
+    // Once a roster is read that names no agent on that thread (it was retired), the tab forgets it:
+    // the next failed read shows the home there, not the retired agent's view.
+    failing = false;
+    const without = { ...fixtureSnapshot(fixtureAgents().filter((agent) => agent.instance !== "flaky-ci-developer")), at: "2026-11-19T12:40:00.000Z" };
+    const retired = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc: handlers({ snapshot: () => without }), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    await retired.findByTestId("oats-home-needs");
+    expect(retired.queryByTestId("agent-view")).toBeNull();
+    retired.unmount();
+    failing = true;
+    const afterwards = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    expect((await afterwards.findByRole("alert")).textContent).toContain("oats did not answer");
+    expect(afterwards.queryByTestId("agent-view")).toBeNull();
+    afterwards.unmount();
     // A thread the tab never showed an agent on gets the home, with its failure said.
     const other = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_research", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
     expect((await other.findByRole("alert")).textContent).toContain("oats did not answer");

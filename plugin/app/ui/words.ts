@@ -50,8 +50,12 @@ export const waitingDetail = (claim: Claim | null): string | null => claim?.mess
 
 /** How long it has waited (floor): "under a minute", "N min", "N h", "N d". A future instant (clock skew) reads "under a minute". */
 export function waitedText(since: string, now: number = Date.now()): string {
-  const ms = now - Date.parse(since);
-  if (!Number.isFinite(ms) || ms < 60_000) return "under a minute";
+  return span(now - Date.parse(since)) ?? "under a minute";
+}
+
+/** A length of time in its largest whole unit, "N min", "N h" or "N d"; null under a minute, or when it cannot be read. */
+function span(ms: number): string | null {
+  if (!Number.isFinite(ms) || ms < 60_000) return null;
   const min = Math.floor(ms / 60_000);
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
@@ -85,11 +89,6 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
 
 /** How old a read is, for a place that shows what it read earlier: "just now", "2 min ago", "3 h ago", "2 d ago". */
 export function readAge(at: string | number, now: number = Date.now()): string {
-  const ms = now - (typeof at === "number" ? at : Date.parse(at));
-  if (!Number.isFinite(ms) || ms < 60_000) return "just now";
-  const min = Math.floor(ms / 60_000);
-  if (min < 60) return `${min} min ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.floor(h / 24)} d ago`;
+  const length = span(now - (typeof at === "number" ? at : Date.parse(at)));
+  return length === null ? "just now" : `${length} ago`;
 }

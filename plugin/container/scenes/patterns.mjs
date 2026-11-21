@@ -1,7 +1,7 @@
 // The patterns' live scenes (the UX standard, sections 3 and 5): the pattern book
 // (/plugins/oats/patterns) draws every pattern of app/ui.tsx in each of its states. Each scene
 // asserts in the page what its image's name says, and the contrast and the target sizes are
-// checked at every image.
+// checked at every image (`targets: true` on each shot).
 import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 
 const click = (id) => `document.querySelector(${JSON.stringify(testId(id))}).click()`;
@@ -80,8 +80,21 @@ export default [
       const closed = await page.evaluate(`JSON.stringify({ menu: document.querySelector('[role="menu"]') === null, focus: ${FOCUSED} })`);
       check(closed === JSON.stringify({ menu: true, focus: "Actions for Weekly digest helper" }), `${at} Escape closes the menu and the focus is back on its button`, closed);
       await page.evaluate(into("oats-patterns-form"));
-      const form = await page.evaluate(texts(testId("oats-field")));
-      check(form[0].startsWith("Opening instruction · optional") && form[1].includes("Lower-case letters, digits and dashes") && (await page.evaluate(textOf(testId("oats-disabled-reason")))) === "Reading what will be created…", `${at} the form: optional fields say so, a refusal is under its field, a button that is off has its reason beside it`, JSON.stringify(form));
+      // Each control's accessible name is its label's own words; the hint and the refusal describe it.
+      const form = JSON.parse(
+        await page.evaluate(
+          `JSON.stringify([...document.querySelectorAll('${testId("oats-field")}')].map((field) => { const control = field.querySelector("input, textarea, select"); const said = (control.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.innerText ?? ""); return { name: control.labels[0]?.innerText, described: said, invalid: control.getAttribute("aria-invalid") }; }))`,
+        ),
+      );
+      check(
+        JSON.stringify(form) ===
+          JSON.stringify([
+            { name: "Opening instruction · optional", described: ["What this agent is for."], invalid: null },
+            { name: "Name · optional", described: ["Lower-case letters, digits and dashes; starts with a letter or a digit; 63 characters at most."], invalid: "true" },
+          ]) && (await page.evaluate(textOf(testId("oats-disabled-reason")))) === "Reading what will be created…",
+        `${at} the form: each control is named by its label alone ("· optional" where it is), described by its hint or its refusal, invalid with a refusal; a button that is off has its reason beside it`,
+        JSON.stringify(form),
+      );
       await page.shot(`patterns-${viewport.name}-form`, { targets: true });
     },
   },
@@ -113,19 +126,27 @@ export default [
       await page.press("Escape");
       const still = JSON.parse(await dialog());
       check(running.phase === "running" && running.body.includes("Retiring…") && still.phase === "running", `${at} the act in progress: the dialog says so, and Escape does not close it`, JSON.stringify([running, still]));
-      await page.shot(`patterns-${viewport.name}-confirm-running`);
-      await page.evaluate(click("oats-patterns-finish"));
+      // Nothing in the dialog can be pressed while the act runs: Tab and Shift+Tab leave the focus on the dialog.
+      await page.press("Tab");
+      const tabbed = await page.evaluate(`document.activeElement?.getAttribute("role")`);
+      await page.press("Shift+Tab");
+      const back = await page.evaluate(`document.activeElement?.getAttribute("role")`);
+      check(tabbed === "dialog" && back === "dialog", `${at} while the act runs Tab and Shift+Tab keep the focus on the dialog`, JSON.stringify([tabbed, back]));
+      await page.shot(`patterns-${viewport.name}-confirm-running`, { targets: true });
+      await page.evaluate(`window.dispatchEvent(new CustomEvent("oats-patterns", { detail: "done" }))`);
+      await page.until(`document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase") === "done"`, 10);
       const done = JSON.parse(await dialog());
-      check(done.phase === "done" && done.body.includes("Weekly digest helper was retired.") && done.focus === "oats-confirm-close", `${at} after the act: the result, in the dialog, and the focus on Close`, JSON.stringify(done));
+      check(done.phase === "done" && done.body.includes("Weekly digest helper was retired.") && !/what will happen/i.test(done.body) && done.focus === "oats-confirm-close", `${at} after the act: the result in the plan's place, and the focus on Close`, JSON.stringify(done));
       await page.shot(`patterns-${viewport.name}-confirm-done`, { targets: true });
       await page.evaluate(click("oats-confirm-close"));
-      const back = await page.until(`document.querySelector('${testId("oats-modal")}') === null && ${FOCUSED}`, 10);
-      check(back === "oats-patterns-open-retire", `${at} Close returns the focus to the button that opened the dialog`, String(back));
+      const opener = await page.until(`document.querySelector('${testId("oats-modal")}') === null && ${FOCUSED}`, 10);
+      check(opener === "oats-patterns-open-retire", `${at} Close returns the focus to the button that opened the dialog`, String(opener));
       // A refusal: a person's words, then the kernel's code and message, each line whole.
       await page.press("Enter");
       await page.until(visible(testId("oats-confirm")), 10);
       await page.evaluate(click("oats-confirm-act"));
-      await page.evaluate(click("oats-patterns-refuse"));
+      await page.evaluate(`window.dispatchEvent(new CustomEvent("oats-patterns", { detail: "failed" }))`);
+      await page.until(`document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase") === "failed"`, 10);
       const refused = JSON.parse(await dialog());
       check(refused.phase === "failed" && refused.body.includes("Weekly digest helper could not be retired.") && refused.body.includes("E_CHILDREN_RUNNING: a child would not stop") && refused.body.includes("Review again"), `${at} a refusal: what happened in words, the kernel's code and message after, the next step`, JSON.stringify(refused));
       await page.shot(`patterns-${viewport.name}-confirm-refused`, { targets: true });
@@ -136,7 +157,7 @@ export default [
       const other = JSON.parse(await dialog());
       const off = await page.evaluate(`document.querySelector('${testId("oats-confirm-act")}').disabled`);
       check(other.body.includes("This is not the plan for this agent.") && !/what will happen/i.test(other.body) && off === true, `${at} a plan that is another agent's is not shown, and cannot be confirmed`, JSON.stringify(other));
-      await page.shot(`patterns-${viewport.name}-confirm-other-agent`);
+      await page.shot(`patterns-${viewport.name}-confirm-other-agent`, { targets: true });
       await page.press("Escape");
     },
   },

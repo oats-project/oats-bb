@@ -12,7 +12,7 @@ import type { ExperimentalBadge, ExperimentalThreadTabProps, PluginSidebarThread
 import type { Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { needsYouLabel } from "../format";
-import { forgetAgents, getAgentTab, rememberAgent, rememberedAgent } from "./agent-tab";
+import { forgetAgent, forgetAgents, getAgentTab, rememberAgent, rememberedAgent } from "./agent-tab";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
@@ -353,6 +353,9 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
         rememberAgent(threadId, node.agent);
         return <AgentTab agent={node.agent} threadId={threadId} />;
       }
+      // The roster was read and names no agent on this thread (it was retired, or the deployment
+      // changed): what the tab remembered of it is forgotten.
+      forgetAgent(threadId);
     } else {
       // The roster cannot be read now: the agent this thread was keeps its view (agent-tab.ts).
       const last = rememberedAgent(threadId);

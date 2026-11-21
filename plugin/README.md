@@ -151,6 +151,28 @@ What the features share, beyond the entries:
 - **A server test of a feature's verbs** starts the whole backend with `startBackend()`
   (`test/support/backend.ts`): bb's fake plugin host, the real host entry, the fake `oats`.
 
+### The patterns: one component each
+
+Every screen of every feature is drawn with the components of `app/ui.tsx` (the UX standard,
+section 3); a feature draws no other of its own, and asks for what one lacks. Their words are the
+Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
+
+| For | Component | What it holds |
+|---|---|---|
+| a state | `State`, `StateMark` | the mark AND the word (`STATE` in `app/ui/words.ts`); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
+| where an agent is | `StatusLine` | the state, since when, the question or the reason, the act that applies |
+| a fact | `Facts`, `Fact` | `label · value`, the label muted, the value whole; `LINK` is a link's look |
+| failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help |
+| nothing to list; a read in flight | `Empty`, `Loading` | the Desktop's sentence and the act that fills it; "Reading …", announced |
+| content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |
+| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog; it shows no plan that is another agent's |
+| what happened | `Result` | done, failed or not known, in words, with the code after and the next step |
+| a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
+| tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
+| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
+
+A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
+
 ### Text from OATS or an agent
 
 Everything the plugin draws that OATS or an agent wrote (a name, a description, a message, a

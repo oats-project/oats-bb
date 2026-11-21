@@ -1,8 +1,9 @@
 // The instance panel: who an agent is and how it runs, in tabs, as the OATS Desktop's instance
 // panel (packages/desktop/renderer/context-panel.mjs). It reads one instance by its name and never
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
+import type { AgentTabProps } from "../home/agent-tab";
 import type { Agent, AgentState, Node } from "../../model/types";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { STATE_WORD } from "../format";
@@ -13,6 +14,7 @@ import { onWindowReset } from "../store";
 import type { Read, Result } from "../store";
 import { Button, Dot, ErrorLine, Note, plainClick } from "../ui";
 import { shown } from "../ui/text";
+import { openSoul } from "../workspace/pages";
 import { Card, Code, CopyButton, Facts, PathLine, Section, Tabs, Tag } from "./parts";
 import type { TabId } from "./parts";
 import { useInstanceRead, useNow } from "./read";
@@ -23,11 +25,26 @@ import {
 type InstanceAnswer = Result<"panelInstance">;
 type Ready = Extract<Oats, { phase: "ready" }>;
 
-/** The tab a person left the panel on, for the length of the app window: another agent opens on it too. */
-let lastTab: TabId = "instance";
-onWindowReset(() => {
-  lastTab = "instance";
-});
+// The tab a person left the panel on, for the length of the app window: another agent opens on it too.
+let shownTab: TabId = "instance";
+const listeners = new Set<() => void>();
+/** Shows one of the panel's tabs, from anywhere: an open panel turns to it, and the next one opens on it. */
+export function showPanelTab(tab: TabId): void {
+  if (shownTab === tab) return;
+  shownTab = tab;
+  for (const listener of listeners) listener();
+}
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+};
+const useShownTab = (): TabId => useSyncExternalStore(subscribe, () => shownTab, () => shownTab);
+onWindowReset(() => showPanelTab("instance"));
+
+/** The panel as the plugin's fixed thread tab shows it on an agent's own thread. */
+export function AgentTab({ threadId }: AgentTabProps) {
+  return <InstancePanel threadId={threadId} />;
+}
 
 /** The state to draw for an agent with no bb thread: the kernel's word alone. */
 function stateWithoutThread(agent: Agent): AgentState {
@@ -44,20 +61,16 @@ function stateWithoutThread(agent: Agent): AgentState {
  */
 export function InstancePanel({ threadId, instance }: { threadId?: string; instance?: string }) {
   const oats = useOats();
-  const [tab, setTab] = useState<TabId>(lastTab);
+  const tab = useShownTab();
   if (oats.phase !== "ready") return null;
   const node = threadId !== undefined ? oats.nodeByThread.get(threadId) : instance !== undefined ? oats.nodeByInstance.get(instance) : undefined;
   const agent = node?.agent ?? (instance === undefined ? undefined : oats.agents.find((candidate) => candidate.instance === instance));
   if (agent === undefined) return null;
-  const select = (next: TabId) => {
-    lastTab = next;
-    setTab(next);
-  };
   return (
     <div data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
-      <Tabs selected={tab} onSelect={select} />
+      <Tabs selected={tab} onSelect={showPanelTab} />
       {/* One instance at a time: another agent starts from its own read. */}
-      <Pages key={agent.instance} oats={oats} agent={agent} node={node} tab={tab} onSelect={select} />
+      <Pages key={agent.instance} oats={oats} agent={agent} node={node} tab={tab} onSelect={showPanelTab} />
     </div>
   );
 }
@@ -121,7 +134,7 @@ function InstancePage({
             type="button"
             data-testid="oats-panel-soul-link"
             title={`${shown(oats.soulOf(agent))}: show the Soul tab`}
-            className="min-w-0 truncate text-foreground underline"
+            className="inline-flex min-h-11 min-w-0 items-center truncate text-foreground underline md:min-h-8"
             onClick={() => onSelect("soul")}
           >
             {shown(oats.soulOf(agent))}
@@ -129,7 +142,9 @@ function InstancePage({
         </div>
         {drift === null ? null : (
           <details data-testid="oats-panel-drift" className="text-sm">
-            <summary className="w-fit cursor-pointer rounded border border-border px-1.5 text-xs font-semibold text-foreground">older build</summary>
+            <summary className="w-fit cursor-pointer py-3 text-xs font-semibold text-foreground md:py-1.5">
+              <span className="rounded border border-border px-1.5 py-0.5">older build</span>
+            </summary>
             <div className="mt-1 flex flex-col gap-0.5 text-muted-foreground">
               {drift.map((line, index) => (
                 <span key={index}>{shown(line)}</span>
@@ -192,9 +207,9 @@ function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent;
             <p data-testid="oats-panel-work-sentence" className="m-0 px-3 py-2.5 leading-relaxed">
               {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{shown(part.code)}</Code>))}
             </p>
-            <details data-testid="oats-panel-paths" className="border-t border-border px-3 py-2">
-              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Paths</summary>
-              <div className="mt-2">
+            <details data-testid="oats-panel-paths" className="border-t border-border px-3">
+              <summary className="cursor-pointer py-3 text-xs font-semibold text-muted-foreground md:py-1.5">Paths</summary>
+              <div className="pb-2.5">
                 <Facts
                   rows={[
                     {
@@ -306,8 +321,8 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
         )}
       </header>
       {answer === undefined || answer.agentsRoot === null ? null : (
-        <details data-testid="oats-panel-details" className="border-t border-border pt-3">
-          <summary className="cursor-pointer text-sm font-semibold text-foreground">Details</summary>
+        <details data-testid="oats-panel-details" className="border-t border-border pt-1">
+          <summary className="cursor-pointer py-3 text-sm font-semibold text-foreground md:py-1.5">Details</summary>
           <div className="mt-2 flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agents root</span>
             <PathLine path={answer.agentsRoot} copyLabel="Copy agents root path" testId="oats-panel-agents-root" />
@@ -320,7 +335,7 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
           disabled={key === null}
           title={key === null ? "OATS lists no soul of this name here: there is no soul page to open." : "Open this instance's soul on the Souls page"}
           onClick={() => {
-            if (key !== null) navigate.toPluginPanel("souls", { subPath: key });
+            if (key !== null) openSoul(navigate, key);
           }}
         >
           Open soul page

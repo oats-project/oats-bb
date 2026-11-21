@@ -11,7 +11,7 @@ import type { Agent } from "../../model/types";
 import { fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 
 type Roster = { root: string; agents: { description?: string; instances: Record<string, unknown>[] }[] };
-const roster = (name: string): Roster => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/panel", name), "utf8")) as Roster;
+const roster = (name: string): Roster => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures", name.includes("/") ? "" : "panel", name), "utf8")) as Roster;
 
 /** The facts of one instance of a recorded roster, and its soul's description from the roster's agent row. */
 export function recordedFacts(instance: string, file = "status.json"): { facts: PanelInstance; description: string | null; root: string } {
@@ -34,8 +34,15 @@ export function instanceAnswer(instance: string, change: (facts: PanelInstance) 
   return { at: PANEL_AT, facts: change(facts), agentsRoot: root, soul: { key: facts.soul, description } };
 }
 
+/** The pinned sample roster the other features' slot tests draw (test/fixtures/roster/status.json). */
+const SAMPLE = "roster/status.json";
+
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
-  panelInstance: ({ instance }) => instanceAnswer(instance),
+  // An agent of the panel's recorded roster, else one of the pinned sample: whichever a slot test's snapshot holds.
+  panelInstance: ({ instance }) => {
+    const recorded = roster("status.json").agents.some((agent) => agent.instances.some((row) => row.instance === instance));
+    return instanceAnswer(instance, undefined, recorded ? undefined : SAMPLE);
+  },
 });
 
 // ---- For the panel's slot tests: the recorded roster as the app's snapshot, and bb threads for its rows.

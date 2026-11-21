@@ -1,5 +1,6 @@
 // The panel's small drawing parts, on bb's theme tokens only (app/ui.tsx says which tokens hold
-// their contrast where).
+// their contrast where). A control is at least 32 px high, and 44 px in bb's compact layout (under
+// 768 px wide), where it is pressed with a finger.
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { shown } from "../ui/text";
@@ -73,7 +74,7 @@ export function CopyButton({ value, label, testId }: { value: string; label: str
       aria-label={said ?? label}
       title={said ?? label}
       onClick={copy}
-      className="inline-flex min-h-6 shrink-0 items-center rounded-md border border-border bg-card px-2 text-xs text-foreground hover:bg-accent"
+      className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-border bg-card px-2 text-xs text-foreground hover:bg-accent md:min-h-8"
     >
       <span aria-live="polite">{said ?? "Copy"}</span>
     </button>
@@ -148,7 +149,7 @@ export function Tabs({ selected, onSelect }: { selected: TabId; onSelect: (tab: 
           tabIndex={selected === tab.id ? 0 : -1}
           onClick={() => onSelect(tab.id)}
           onKeyDown={(event) => move(event, index)}
-          className={`min-h-9 border-b-2 text-sm ${selected === tab.id ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className={`min-h-11 border-b-2 text-sm md:min-h-9 ${selected === tab.id ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
         >
           {tab.label}
         </button>

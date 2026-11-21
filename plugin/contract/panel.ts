@@ -11,11 +11,11 @@ export const instanceFacts = z.object({
   at: z.string(),
   /** the instance's own row of `oats status --json` */
   facts: panelInstance,
-  /** the roster's `root`, `<deployment>/agents`; null when the status read does not hand it */
+  /** the roster's `root`: `<deployment>/agents` */
   agentsRoot: z.string().nullable(),
-  /** the instance's soul, as `oats souls` lists it; each null when that list does not hold it */
+  /** the instance's soul, from the roster's row of its agent group; each null when that row does not say */
   soul: z.object({
-    /** the soul key: what the Souls page opens by, and what `oats readiness --soul` takes */
+    /** the soul key (`<package>/<soul>` for a package soul): what the Souls page opens by, and what `oats readiness --soul` takes */
     key: z.string().nullable(),
     description: z.string().nullable(),
   }),

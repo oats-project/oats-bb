@@ -13,26 +13,20 @@ afterEach(async () => {
 const recorded = { status: { file: "panel/status.json" } };
 
 describe("panelInstance", () => {
-  it("answers the row's facts from the one status read, and the soul from `oats souls`", async () => {
+  it("answers the row's facts, the roster's root and the soul of its agent row, from the one status read", async () => {
     backend = await startBackend({ verbs: recorded });
-    const answer = await backend.rpc<{ at: string; facts: Record<string, unknown>; soul: unknown }>("panelInstance", { instance: "panel-worktree-helper" });
+    const answer = await backend.rpc<{ at: string; facts: Record<string, unknown>; agentsRoot: unknown; soul: unknown }>("panelInstance", { instance: "panel-worktree-helper" });
     expect(answer.facts).toMatchObject({
       instance: "panel-worktree-helper", soul: "oats-expert", work: "worktree", repo: "oats-real", branch: "agents/panel-worktree-helper", parent: "redesign-ui-lead",
       harness: "claude", model: "claude-opus-5-5", modelFrom: "soul", backend: "bb", threadId: "thr_gx4sgexjgw", running: null, startedAt: "2026-11-21T18:13:36.478Z",
     });
-    expect(answer.soul).toEqual({ key: "oats-expert", description: expect.stringContaining("OATS expert") });
+    expect(answer.soul).toEqual({ key: "oats-expert", description: "OATS expert: answers questions about OATS." });
+    expect(answer.agentsRoot).toBe("/abs/deployment/agents");
     expect(answer.at).toBe((await backend.rpc<{ at: string }>("snapshot")).at);
-    // One status for everybody, and the souls list the pages share: no process of the panel's own.
-    expect(await backend.verbs()).toEqual(["status", "souls"]);
+    // One status for everybody: no process of the panel's own.
+    expect(await backend.verbs()).toEqual(["status"]);
     await backend.rpc("panelInstance", { instance: "redesign-ui-lead" });
-    expect(await backend.verbs()).toEqual(["status", "souls"]);
-  });
-
-  it("the row's facts stand when the souls cannot be listed", async () => {
-    backend = await startBackend({ verbs: { ...recorded, souls: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_WORKSPACE_UNREACHABLE", message: "the workspace could not be read" } }), exit: 1 } } });
-    const answer = await backend.rpc<{ facts: { instance: string }; soul: unknown }>("panelInstance", { instance: "panel-worktree-helper" });
-    expect(answer.facts.instance).toBe("panel-worktree-helper");
-    expect(answer.soul).toEqual({ key: null, description: null });
+    expect(await backend.verbs()).toEqual(["status"]);
   });
 
   it("refuses an instance the snapshot does not hold, and a name that is none, before anything runs", async () => {

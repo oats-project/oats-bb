@@ -11,9 +11,10 @@ export type ConfirmProps = {
   /** The act and who it is about: "Retire Weekly digest?". */
   title: string;
   /**
-   * The instance the dialog is about, and the instance what it shows is for (the plan's own). When
-   * they differ the dialog shows no plan and cannot be confirmed: it never asks about one agent
-   * with another's facts.
+   * The instance the dialog is about, and the instance what it shows is for (the plan's own, as
+   * the kernel named it; null while none is read). When they differ the dialog shows no plan and
+   * cannot be confirmed: it never asks about one agent with another's facts. A plan that is ready
+   * and names no agent cannot be confirmed either. Once the act is done the plan gives way to the result.
    */
   about: string;
   shownFor: string | null;
@@ -45,7 +46,10 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
-  const off = phase.kind !== "ready" || mismatch || blocked !== null;
+  // A plan that names no agent proves nothing about whose it is: it cannot be confirmed either.
+  const unnamed = phase.kind === "ready" && shownFor === null;
+  const off = phase.kind !== "ready" || mismatch || unnamed || blocked !== null;
+  const why = unnamed ? "OATS did not say which agent this plan is for." : blocked;
   const close = () => {
     if (!running) onClose();
   };
@@ -85,9 +89,9 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
           </Button>
         ) : (
           <>
-            {blocked === null || phase.kind !== "ready" ? null : (
+            {why === null || phase.kind !== "ready" ? null : (
               <span data-testid="oats-confirm-blocked" className="mr-auto self-center text-xs text-muted-foreground">
-                {blocked}
+                {why}
               </span>
             )}
             <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>
@@ -107,7 +111,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
           </Result>
         ) : phase.kind === "reading" ? (
           <Loading>Reading the plan from OATS…</Loading>
-        ) : (
+        ) : phase.kind === "done" ? null : (
           <>
             {sentences("What will happen", happens)}
             {sentences("What is kept", kept)}

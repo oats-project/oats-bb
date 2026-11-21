@@ -9,9 +9,13 @@ import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
-afterEach(resetApp);
+afterEach(() => {
+  agentPage = null;
+  resetApp();
+});
 
-/** The agent page a test names: named after `loadApp()`, whose features name their own (temporary: agents/bb-plugin-ui carries its own form of this). */
+// The page of one agent, as these tests name it: none, unless a test gives one. Named after the
+// app is loaded, since a feature that has such a page names its own in its `register`.
 let agentPage: Parameters<typeof setAgentPage>[0] = null;
 
 async function souls(subPath: string, over: Partial<Handlers> = {}, agents?: Agent[], threads = fixtureThreads()) {
@@ -227,6 +231,7 @@ test("a soul key with characters bb percent-encodes is decoded segment by segmen
 
 test("while bb is still listing its threads a soul's agents are not shown as missing", async () => {
   const app = await loadApp();
+  setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
   const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "oats-developer" }, { rpc: handlers(), sidebarThreads: { status: "loading", threads: [] } });
   await slot.findByTestId("oats-soul-detail");
@@ -284,11 +289,7 @@ test("an agent with no bb thread opens its own page, where a feature gives agent
   expect(plain.queryByTestId("oats-soul-agent-open")).toBeNull(); // no feature has a page: nothing to press
   plain.unmount();
   agentPage = (_navigate, instance) => void opened.push(instance);
-  try {
-    const slot = await souls("oats-developer");
-    fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
-    expect(opened).toEqual(["kernel-fix-developer"]);
-  } finally {
-    agentPage = null;
-  }
+  const slot = await souls("oats-developer");
+  fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
+  expect(opened).toEqual(["kernel-fix-developer"]);
 });

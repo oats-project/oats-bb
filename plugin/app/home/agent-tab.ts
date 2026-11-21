@@ -44,5 +44,6 @@ export const hasAgentPage = (): boolean => agentPage !== null;
 const known = new Map<string, Agent>();
 export const rememberAgent = (threadId: string, agent: Agent): void => void known.set(threadId, agent);
 export const rememberedAgent = (threadId: string): Agent | undefined => known.get(threadId);
+export const forgetAgent = (threadId: string): void => void known.delete(threadId);
 /** For tests: a new app window has shown no agent. */
 export const forgetAgents = (): void => known.clear();

@@ -1,0 +1,14 @@
+{
+ "from": "awebai/oats, packages/client/display-text.mjs",
+ "revision": "95c7b43b3",
+ "NOT_NOTE_TEXT": {
+  "source": "[\\p{Cc}\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069\\u200B\\u2060\\uFEFF\\u{E0000}-\\u{E007F}]",
+  "flags": "u"
+ },
+ "UNSAFE": {
+  "source": "[\\x00-\\x08\\x0b-\\x1f\\x7f]|:\\/\\/(?<=[a-z][a-z0-9+.-]*:\\/\\/)[^\\s/]*@|(?:token|authorization|password|secret|api[_ -]?key)\\s*[:=]\\s*\\S+|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}",
+  "flags": "i"
+ },
+ "DETAIL_WITHHELD": "[withheld]",
+ "MAX_DISPLAY_LINE": 2048
+}

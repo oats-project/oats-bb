@@ -1,5 +1,5 @@
 // Every pattern of app/ui.tsx in each of its states (index.ts says what the page is for).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AgentState } from "../../model/types";
 import { Button, Card, Confirm, CopyButton, DisabledReason, Empty, Fact, Facts, Field, Heading, INPUT, LINK, Loading, Menu, Notice, Page, Result, SearchField, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../ui";
 import type { ConfirmProps } from "../ui";
@@ -28,6 +28,14 @@ export function PatternBook() {
   const [on, setOn] = useState(true);
   const [picked, setPicked] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ destructive: boolean; phase: string } | null>(null);
+  useEffect(() => {
+    const end = (event: Event) => {
+      const phase = (event as CustomEvent<unknown>).detail;
+      if (phase === "done" || phase === "failed") setDialog((now) => (now !== null && now.phase === "running" ? { ...now, phase } : now));
+    };
+    window.addEventListener("oats-patterns", end);
+    return () => window.removeEventListener("oats-patterns", end);
+  }, []);
   return (
     <Page testId="oats-patterns-page">
       <section data-testid="oats-patterns-states" className="flex flex-col gap-2">
@@ -161,21 +169,12 @@ export function PatternBook() {
           confirmLabel={dialog.destructive ? "Retire" : "Stop"}
           destructive={dialog.destructive}
           phase={PHASES[dialog.phase] ?? PHASES.ready!}
-          // The book walks the phases a real act goes through: each press of the act shows the next.
+          // The book walks the phases a real act goes through. The act starts on its button; how it
+          // ends is told from outside the dialog (a real one has nothing to press while it runs):
+          // window.dispatchEvent(new CustomEvent("oats-patterns", { detail: "done" | "failed" })).
           onConfirm={() => setDialog({ ...dialog, phase: "running" })}
           onClose={() => setDialog(null)}
-        >
-          {dialog.phase === "running" ? (
-            <div className="flex flex-wrap gap-2">
-              <Button data-testid="oats-patterns-finish" onClick={() => setDialog({ ...dialog, phase: "done" })}>
-                (book) finish
-              </Button>
-              <Button data-testid="oats-patterns-refuse" onClick={() => setDialog({ ...dialog, phase: "failed" })}>
-                (book) refuse
-              </Button>
-            </div>
-          ) : null}
-        </Confirm>
+        />
       )}
     </Page>
   );

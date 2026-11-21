@@ -201,7 +201,12 @@ export function Modal({
           if (event.key !== "Tab") return;
           // keep Tab inside the dialog
           const stops = card.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input, textarea, select");
-          if (stops === undefined || stops.length === 0) return;
+          if (stops === undefined || stops.length === 0) {
+            // Nothing to stop on (an act in progress: its buttons are off): the focus stays on the dialog.
+            event.preventDefault();
+            card.current?.focus();
+            return;
+          }
           const first = stops[0]!;
           const last = stops[stops.length - 1]!;
           if (event.shiftKey && (document.activeElement === first || document.activeElement === card.current)) {

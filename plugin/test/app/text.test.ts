@@ -142,6 +142,33 @@ describe("the Desktop's display filter", () => {
   });
 });
 
+describe("the copy follows the Desktop's file", () => {
+  // test/fixtures/desktop/display-text.json is what packages/client/display-text.mjs of awebai/oats
+  // exports at the revision it names, recorded by importing that file. The plugin's copy must equal
+  // it: a change on either side (the Desktop's file moves and this recording is made again, or the
+  // copy is edited) shows here.
+  const recorded = JSON.parse(readFileSync(join(FIXTURES, "desktop", "display-text.json"), "utf8")) as {
+    from: string;
+    revision: string;
+    NOT_NOTE_TEXT: { source: string; flags: string };
+    UNSAFE: { source: string; flags: string };
+    DETAIL_WITHHELD: string;
+    MAX_DISPLAY_LINE: number;
+  };
+
+  test("the two expressions, the withheld marker and the line's limit are the Desktop's at the recorded revision", () => {
+    expect([recorded.from, recorded.revision]).toEqual(["awebai/oats, packages/client/display-text.mjs", "95c7b43b3"]);
+    expect({ source: NOT_NOTE_TEXT.source, flags: NOT_NOTE_TEXT.flags }).toEqual(recorded.NOT_NOTE_TEXT);
+    expect({ source: UNSAFE.source, flags: UNSAFE.flags }).toEqual(recorded.UNSAFE);
+    expect(DETAIL_WITHHELD).toBe(recorded.DETAIL_WITHHELD);
+    expect(MAX_DISPLAY_LINE).toBe(recorded.MAX_DISPLAY_LINE);
+  });
+
+  test("the file that holds the copy names the same revision", () => {
+    expect(readFileSync(join(FIXTURES, "..", "..", "app", "ui", "text.ts"), "utf8")).toContain(`read at ${recorded.revision}`);
+  });
+});
+
 describe("what the plugin adds", () => {
   test("shown: the display line, or the empty string where there is nothing to show", () => {
     expect(shown("redesign-ui-lead")).toBe("redesign-ui-lead");

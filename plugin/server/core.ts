@@ -16,7 +16,7 @@ export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly
 export const POLL_MS = 15_000;
 /**
  * The pause between the end of one `oats status` and the start of the next: this, or as long as
- * the last status took, whichever is longer. So a change the watch reports reaches the screen
+ * the last status took to answer, whichever is longer (a read that failed is followed by this floor). So a change the watch reports reaches the screen
  * within 3 s on a kernel that answers in under a second (the UX standard, section 6), and a slow
  * kernel spends at most half its time on status, however many events arrive. (The first spec's
  * "never within 5 s of the last" gave way to this on 2026-11-21.)
@@ -240,14 +240,17 @@ export function createCore(bb: BbPluginApi) {
     rawRows = rows === null ? null : { root, rows };
     comparable = key;
     lastEnd = Date.now();
-    lastTook = lastEnd - lastStart;
+    // Only a status that answered lengthens the pause: the guard is for a kernel that answers
+    // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
+    // waits the floor, so Retry and the watch are not held back by the failure's own length.
+    lastTook = next.ok ? lastEnd - lastStart : 0;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
   }
 
   /**
    * The next read that starts from now on: after the one in flight, and never sooner after the
-   * last one ended than MIN_INTERVAL_MS or the time that one took, whichever is longer. Callers
+   * last one ended than MIN_INTERVAL_MS or the time that one took to answer, whichever is longer. Callers
    * asking meanwhile share it.
    */
   function reread(): Promise<Snapshot> {

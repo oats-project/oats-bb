@@ -186,9 +186,22 @@ describe("facts, notices and the states of a list", () => {
         <DisabledReason>Reading the preview…</DisabledReason>
       </>,
     );
-    expect(screen.getByLabelText(/^Name · optional/)).toBe(screen.getByRole("textbox"));
+    // The control's name is its label's words alone; the hint and the refusal describe it, and the refusal marks it invalid.
+    const control = screen.getByRole("textbox", { name: "Name · optional" });
+    expect((control as HTMLInputElement).labels![0]!.textContent).toBe("Name · optional");
+    expect(control.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!.textContent)).toEqual(["OATS numbers it when you leave it empty.", "Lower-case letters, digits and dashes."]);
+    expect(control.getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByRole("alert").textContent).toBe("Lower-case letters, digits and dashes.");
     expect(screen.getByTestId("oats-disabled-reason").textContent).toBe("Reading the preview…");
+    cleanup();
+    // With neither, the control is described by nothing and is not invalid.
+    render(
+      <Field label="Name">
+        <input />
+      </Field>,
+    );
+    const plain = screen.getByRole("textbox", { name: "Name" });
+    expect([plain.getAttribute("aria-describedby"), plain.getAttribute("aria-invalid")]).toEqual([null, null]);
   });
 });
 
@@ -235,7 +248,7 @@ describe("what the panel's header and a refusal's details need", () => {
     );
     const details = screen.getByTestId("oats-notice-details") as HTMLDetailsElement;
     expect(details.open).toBe(false);
-    expect(details.querySelector("summary")!.textContent).toBe("Details");
+    expect(details.querySelector("summary")!.textContent).toBe("▸Details"); // its mark, hidden from a screen reader, and its word
     expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["E_SESSION_START_FAILED: bb thread spawn failed", "the provider is not signed in"]);
     cleanup();
     render(<Notice title="Nothing more to say" details="" />);
@@ -519,6 +532,12 @@ describe("a confirmation", () => {
     expect(screen.queryAllByRole("listitem")).toEqual([]); // the other agent's plan is not shown
     fireEvent.click(act());
     expect(confirm).not.toHaveBeenCalled();
+    // A plan that is ready and names no agent proves nothing about whose it is.
+    rerender(<Confirm {...base} onConfirm={confirm} shownFor={null} />);
+    expect(act().disabled).toBe(true);
+    expect(screen.getByTestId("oats-confirm-blocked").textContent).toBe("OATS did not say which agent this plan is for.");
+    fireEvent.click(act());
+    expect(confirm).not.toHaveBeenCalled();
     rerender(<Confirm {...base} onConfirm={confirm} />);
     fireEvent.click(act());
     expect(confirm).toHaveBeenCalledTimes(1);
@@ -531,11 +550,16 @@ describe("a confirmation", () => {
     expect((screen.getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retiring…");
     expect(document.activeElement).toBe(screen.getByRole("dialog")); // both buttons are off: the focus stays in the dialog
+    // And Tab does not take it out: with nothing to stop on, the key is held and the dialog keeps the focus.
+    expect(fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" })).toBe(false);
+    expect(fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("dialog"));
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.mouseDown(screen.getByTestId("oats-modal"));
     expect(close).not.toHaveBeenCalled();
     rerender(<Confirm {...base} onClose={close} phase={{ kind: "done", title: "Weekly digest was retired.", lines: ["Its work tree is kept at /abs/kept."] }} />);
     expect(screen.getByTestId("oats-result").textContent).toBe("Weekly digest was retired.Its work tree is kept at /abs/kept.");
+    expect(screen.queryAllByRole("listitem")).toEqual([]); // the plan gave way to the result
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Close"]);
     expect(document.activeElement).toBe(screen.getByTestId("oats-confirm-close")); // the focus follows the result
     rerender(<Confirm {...base} onClose={close} phase={{ kind: "failed", title: "Weekly digest could not be retired.", refusal: "E_CHILDREN_RUNNING: a child would not stop\nstop it first", actions: <Button>Review again</Button> }} />);

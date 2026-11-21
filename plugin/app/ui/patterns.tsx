@@ -1,7 +1,8 @@
 // The plugin's patterns (the UX standard, section 3): one component each for a state, a status
 // line, a labelled fact, a notice, the empty, loading and stale states, a result and a form's field.
 // Every screen of every feature draws these; none draws another of its own. bb's tokens only.
-import type { ReactNode } from "react";
+import { cloneElement, useId } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { AgentState } from "../../model/types";
 import { refusalLines, shown } from "./text";
 import { STATE } from "./words";
@@ -125,12 +126,18 @@ export const LINK = "underline underline-offset-2 hover:opacity-80";
 
 /**
  * Something a person opens to read more ("Details", "Paths"): closed until pressed, its summary as
- * high as a control. Uncontrolled, or controlled with `open` and `onToggle`.
+ * high as a control, with a mark that turns when it is open. Uncontrolled, or controlled with `open` and `onToggle`.
  */
 export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
   return (
-    <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
-      <summary className={`${TARGET} inline-flex cursor-pointer items-center text-xs text-muted-foreground hover:text-foreground`}>{summary}</summary>
+    <details data-testid={testId} className="group min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+      <summary className={`${TARGET} inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground hover:text-foreground`}>
+        {/* The mark that says it opens, turned when it is open (the summary's own triangle is lost with its flex layout). */}
+        <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">
+          ▸
+        </span>
+        {summary}
+      </summary>
       <div className="flex min-w-0 flex-col gap-1 break-words pt-1">{children}</div>
     </details>
   );
@@ -279,23 +286,29 @@ export const INPUT = `${TARGET} w-full rounded-md border border-border bg-backgr
 
 /**
  * A form's field: its label (with "· optional" where it is), the control, a hint under it, and its
- * refusal. The control is the label's child, so the label names it; `error` is announced.
+ * refusal. The label names the control with its own words only; the hint and the refusal describe
+ * it (`aria-describedby`), and a refusal marks it invalid and is announced. `children` is the one
+ * control (an input, a textarea, a select): the field gives it its id.
  */
-export function Field({ label, optional = false, hint, error, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; children: ReactNode }) {
+export function Field({ label, optional = false, hint, error, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
+  const id = useId();
+  const hasHint = hint !== undefined && hint !== null;
+  const hasError = error !== undefined && error !== null;
+  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? `${id}-error` : null].filter((part) => part !== null).join(" ");
   return (
-    <label data-testid="oats-field" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
-      <span>
+    <div data-testid="oats-field" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+      <label htmlFor={id}>
         {label}
         {optional ? " · optional" : ""}
-      </span>
-      {children}
-      {hint === undefined || hint === null ? null : <span>{hint}</span>}
-      {error === undefined || error === null ? null : (
-        <span role="alert" className="text-destructive-text">
+      </label>
+      {cloneElement(children, { id, ...(describedBy === "" ? {} : { "aria-describedby": describedBy }), ...(hasError ? { "aria-invalid": true } : {}) })}
+      {hasHint ? <span id={`${id}-hint`}>{hint}</span> : null}
+      {hasError ? (
+        <span id={`${id}-error`} role="alert" className="text-destructive-text">
           {error}
         </span>
-      )}
-    </label>
+      ) : null}
+    </div>
   );
 }
 

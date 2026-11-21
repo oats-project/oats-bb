@@ -29,6 +29,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
 | `scenes/<feature>.mjs` | by `live-ui.mjs` | each feature's live scenes: what a page is asked and where its screenshots are taken (below) |
 | `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
+| `images.mjs` | by `live-ui.mjs` and the real run | finds the images of a run that are the same image: none may be, but two of one state |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked and logs each call; the verbs it knows and their files are each feature's `test/fixtures/<feature>/verbs.json`; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
@@ -41,7 +42,7 @@ The live checks of the backend:
 
 - **L1** the installed plugin reads the deployment through the host entry (`bb plugin rpc call oats snapshot`).
 - **L2** with the poll off (no RPC for 50 s), one line appended to `<deployment>/.agents/events/` makes the server run `oats status`: the host watch, the `changed` signal, the reread. The proof is the fake's call log.
-- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (the check allows the 5 s floor before it): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended.
+- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (the check allows the pause between two reads, and one read of the poll, before it): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended.
 - **A14** (the backend's part) with `oats` removed, the snapshot says what is missing and bb's own lists answer; with `oats` back, the snapshot is back.
 - **A15** `bb plugin reload oats` while a fake `oats` sleeps and holds a child of its own: neither process is left.
 - **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
@@ -57,6 +58,28 @@ viewport, one page runs that stage's scenes, feature by feature. A feature whose
 another state exports `stages` beside its list (`live-ui.mjs` says how). A new screen or state of
 the app gets its scene in its feature's file in the same change: the contrast check only sees what
 a scene draws.
+
+What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full):
+
+- **Healthy threads.** `live.sh` gives bb a provider it can run: Claude Code, at the real run's
+  version, on the real run's mock model (`real/mock-anthropic.mjs`; no login, nothing spent). The
+  fixture threads are made on it, and the run checks that each one's turn was answered and bb
+  shows it idle before any image is taken: an image of a thread shows a healthy one.
+- **`page.press(key)`** sends a real key ("Tab", "Shift+Tab", "Enter", "Escape", an arrow): it
+  moves the focus and closes a dialog as a person's key does. `FOCUSED` names what holds the focus.
+  So a scene can open a menu, walk a dialog's focus order, and take the image of a dialog before
+  its act, while it runs, after it and refused.
+- **`page.shot(name, { targets: true })`** also checks that every control of the plugin in the
+  page is at least 32 px high, 44 at the phone's width (a link inside a sentence is text, not a
+  control).
+- **`record(changes)`** makes a change as the kernel records one (the fake's status with
+  `changes` by instance, and a line in the deployment's event log) and answers when: the freshness
+  scenes time from it to the row or the count on screen, 3 s at most.
+- **No two images of a run are the same image** (`images.mjs`), checked at the end.
+
+Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plugins/oats/patterns`,
+`../README.md`, "The patterns: one component each"): every pattern in each of its states, the menu
+open, a confirmation before its act, in progress, done, refused and with another agent's plan.
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
   that needs you (its row is the open one, with its dot and its "?"), the home (its badge

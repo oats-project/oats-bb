@@ -221,7 +221,10 @@ display only: what goes back to OATS (an instance, a soul, a revision) is what t
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client
-  watches the snapshot: never two reads at once, never within 5 s of the last, 20 s limit. Each
+  watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
+  the last one took, whichever is longer, 20 s limit. So a change the watch reports is on screen
+  within 3 s on a kernel that answers in under a second, and a slow kernel spends at most half its
+  time on status (the first spec's "never within 5 s of the last" gave way to this). Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read

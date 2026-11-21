@@ -261,6 +261,31 @@ function snapshotRow(instance) {
   const snapshot = rpc("snapshot");
   return snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((agent) => agent.instance === instance) : undefined;
 }
+/**
+ * Freshness (the UX standard, section 6): how long after the kernel recorded a change the plugin's
+ * own snapshot has it, read as a client reads it (no refresh asked: the watch on the event log must
+ * bring it). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
+ * own time is measured and said beside the delay, and a slower kernel is given twice that time and
+ * the pause, so a slow kernel is told apart from a slow plugin.
+ */
+async function fresh(what, instance, matches, recordedAt) {
+  let seen = null;
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const snapshot = rpc("snapshot");
+    const agent = snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((candidate) => candidate.instance === instance) : undefined;
+    if (agent !== undefined && matches(agent)) {
+      seen = Date.now() - recordedAt;
+      break;
+    }
+    await sleep(100);
+  }
+  const before = Date.now();
+  oats("status", "--json");
+  const statusMs = Date.now() - before;
+  const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
+  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
+}
 /** The plugin's snapshot agrees with the kernel's row: the thread, and the kernel's words for whether it runs. */
 function agrees(instance, row) {
   const mine = snapshotRow(instance);
@@ -406,7 +431,9 @@ try {
   // As the agent's own session does it: `oats instance attention` in the home, with the session's environment.
   const asInstance = (...args) => spawnSync(OATS, args, { cwd: home, encoding: "utf8", env: { ...process.env, OATS_INSTANCE: A.instance, OATS_INSTANCE_HOME: home } });
   const asked = asInstance("instance", "attention", "--message", "Keep the retry, or fail the job?");
+  const askedAt = Date.now();
   check(asked.status === 0, "oats instance attention, run in the agent's home", asked.stdout + asked.stderr);
+  await fresh("the claim", A.instance, (agent) => agent.waiting !== null, askedAt);
   row = await untilRow(A.instance, "a waiting claim", (r) => r.waitingOnYou != null);
   show("oats status", brief(row));
   const waiting = snapshotRow(A.instance)?.waiting;
@@ -414,6 +441,7 @@ try {
   keepStatus("needsYou", { [A.instance]: (r) => r.running === null && r.waitingOnYou?.message === "Keep the retry, or fail the job?" });
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
+  await fresh("the claim cleared", A.instance, (agent) => agent.waiting === null, Date.now());
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
@@ -497,6 +525,7 @@ try {
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  await fresh("the agent stopped", A.instance, (agent) => agent.runtimeState === "stopped", Date.now());
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
   show("oats status", brief(row));

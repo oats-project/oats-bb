@@ -2,31 +2,42 @@
 # The real run: the plugin against a real OATS kernel and the bb session provider, in one container.
 # Runs on the host and does everything else in the container (README.md beside this file):
 #
-#   KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
+#   plugin/container/real/run.sh
 #
-#   KERNEL_REF                 the kernel commit to run (default below: the one the fixtures were recorded at)
-#   KERNEL_NPM=<version>       install the kernel from npm (@awebai/oats@<version>) instead; KERNEL_REPO is not read
-#   REQUIRE_REAL_FLOOR=1       fail instead of lowering the provider's floor for the kernel under test
+#   KERNEL_NPM                 the OATS release to install from npm (default below: the one the
+#                              fixtures were recorded at); KERNEL_INTEGRITY is its tarball's
+#                              integrity, checked before the install (another version: set it too,
+#                              or empty for no check)
+#   KERNEL_NPM= KERNEL_REPO=<a clone of the OATS repository> KERNEL_REF=<commit>
+#                              an unreleased kernel instead: the commit's tree, packed in the container
+#   REQUIRE_REAL_FLOOR=0       let the run lower the provider's floor for the kernel under test,
+#                              inside the container (a trial); by default such a run fails
 #   UPDATE_FIXTURES=1          copy the recorded answers over plugin/test/fixtures/ afterwards
 #   KEEP=1, NAME, IMAGE, DOCKER_RUN_ARGS   as container/ci.sh
 #
-# The provider is this checkout's own (oats-package/, as committed at HEAD). The kernel's clone and
-# this checkout are only read (`git archive`): the trees go into the container through tar. The
-# container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's home.
-# Not part of `ci.sh all`: CI has no kernel with session providers (README.md, "Why CI does not run it").
+# The provider is this checkout's own (oats-package/, as committed at HEAD). This checkout (and the
+# kernel's clone, where one is named) is only read (`git archive`): the trees go into the container
+# through tar. The container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing
+# of the host's home. `ci.sh all` runs it after the unit and live tests (`ci.sh real` alone).
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
 REPOSITORY=$(dirname "$PLUGIN")
-KERNEL_REF=${KERNEL_REF:-da296359e97eb435f6de561947ef2fdda92c927c}
+# Unset: the release the fixtures were recorded at. Set and empty: a tree from KERNEL_REPO.
+KERNEL_NPM=${KERNEL_NPM-0.70.0}
+if [ "$KERNEL_NPM" = 0.70.0 ]; then
+  KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-DeVGFZi1ev2ClxF3p/UV0OBc4XwAWuLjEckJ56rz7UVCg8deavPAOHPjeIuyIvg5l4g52rzRBtoe3aVsxQrxrQ==}
+fi
+KERNEL_INTEGRITY=${KERNEL_INTEGRITY:-}
+REQUIRE_REAL_FLOOR=${REQUIRE_REAL_FLOOR:-1}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
 OUT=$HERE/out
-KERNEL_NPM=${KERNEL_NPM:-}
 if [ -n "$KERNEL_NPM" ]; then
   KERNEL_OID="npm:@awebai/oats@$KERNEL_NPM"
 else
-  : "${KERNEL_REPO:?set KERNEL_NPM to an OATS release on npm, or KERNEL_REPO to a clone of the OATS repository that holds $KERNEL_REF}"
+  : "${KERNEL_REPO:?KERNEL_NPM is empty: set KERNEL_REPO to a clone of the OATS repository, and KERNEL_REF to the commit to run}"
+  : "${KERNEL_REF:?KERNEL_NPM is empty: set KERNEL_REF to the kernel commit to run}"
   KERNEL_OID=$(git -C "$KERNEL_REPO" rev-parse --verify "$KERNEL_REF^{commit}")
 fi
 # The provider under test is the committed one: its commit is the last that changed oats-package/.
@@ -50,7 +61,7 @@ trap cleanup EXIT
 
 BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "REQUIRE_REAL_FLOOR=${REQUIRE_REAL_FLOOR:-0}" -w /home/node/plugin "$NAME" "$@"; }
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 [ -n "$KERNEL_NPM" ] || git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel

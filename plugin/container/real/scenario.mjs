@@ -8,7 +8,8 @@
 //   part A  one agent, flaky-ci-2-developer: spawn preview, spawn, stop (plan, apply), start,
 //           restart, retire (plan, apply), with the edge cases between them, and the plugin's tree
 //           and header row at 1280x800 and 390x800 for an agent that is working, idle, waiting for
-//           a person, stopped by OATS, and whose thread was deleted in bb.
+//           a person, stopped by OATS, and whose thread was deleted in bb; and a question Claude
+//           Code asks (oats.core's claim), answered on the home's card.
 //   part B  the scenes the plugin's fixtures describe: a lead with two children (stop, and a stale
 //           stop plan), and an agent on a worktree with a child (start, restart, retire).
 // What the kernel printed for the plugin's calls is written to $OUT/fixtures/, with the paths and the
@@ -416,7 +417,6 @@ try {
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
       const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
       check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));
-      show("bb interaction", bbJson("thread", "interactions", "list", threadId).find((interaction) => interaction.id === pendingQuestion?.id));
     } finally {
       await page.close();
     }
@@ -426,8 +426,10 @@ try {
   show("oats status", brief(row));
   const afterAnswer = snapshotRow(A.instance);
   check(afterAnswer !== undefined && afterAnswer.waiting === null && bbThread(threadId)?.hasPendingInteraction !== true, "the plugin's snapshot has no claim left, and bb no pending interaction: the agent no longer needs you", JSON.stringify(afterAnswer));
+  // The answer reached Claude Code: the model was asked again in that conversation, with the tool's result.
   const asks = modelRequests().filter((request) => request.event === "asked-a-question");
-  check(asks.length === 1, "the mock asked the question once", JSON.stringify(asks));
+  const after = modelRequests().filter((request) => request.event === "answered" && request.n > asks[0]?.n && request.messages > asks[0]?.messages);
+  check(asks.length === 1 && after.length >= 1, "the mock asked the question once, and was asked again with its answer", JSON.stringify({ asks, after }));
 
   step("A6 edge: oats taking seconds");
   wrapper({ delayMs: 4000 });

@@ -68,32 +68,38 @@ test("the check of a planned launch that is not in full mode: E_BACKEND_SANDBOXE
 // A spawn's preview asks the check before anything of the home exists (OATS 0.70.1: the kernel
 // hands the home's PLANNED path, its one planned tree and the kernel's directory by name, none
 // of them made). An absent home is absent, never an error: the answer is the one a home that
-// exists gets, so a preview says what the spawn will.
-test("the check of a planned launch for a home that does not exist yet: refused by its mode, or ready, and nothing is said of the missing home", async (t) => {
-  const { dir, backend, bb } = await setup(t);
+// exists gets, whole (status, problems and warnings), so a preview says what the spawn will.
+test("the check of a planned launch for a home that does not exist yet answers as for a home that exists: refused by its mode, or ready, with no problem and no warning from the missing home", async (t) => {
+  const { dir, home, backend, bb } = await setup(t);
   const planned = join(dir, "agents", "dev", "instances", "not-spawned-yet");
-  const trees = [join(planned, "work")], kept = [join(dir, "agents", "dev", "instances", ".oats-retirement")];
-  for (const path of [planned, ...trees, ...kept]) assert.equal(existsSync(path), false, `${path} is not there`);
+  const kept = [join(dir, "agents", "dev", "instances", ".oats-retirement")];
+  const absent = [planned, join(planned, "work"), ...kept];
+  for (const path of absent) assert.equal(existsSync(path), false, `${path} is not there`);
   const sandbox = { domains: [{ host: "app.example.org", capability: "oats.aweb", setting: "server" }], write: [{ path: join(dir, ".agents", "events"), reason: "the deployment's events" }], missing: [] };
-  const check = (launch, sandboxedModes = false) => call("check", { home: planned, soul: null, launch: { ...launch, sandbox, trees, protected: kept } }, { settings: backend.settings(), bb, sandboxedModes });
-
-  // Full mode: ready, exactly as for a home that exists.
-  for (const launch of [{ harness: "claude", yolo: true, args: [] }, { harness: "claude", yolo: null, args: ["--permission-mode", "bypassPermissions"] }]) {
-    assert.deepEqual((await check(launch)).result, { status: "ready", problems: [], warnings: [] });
+  // The input as the kernel hands it: the settings in it too (and in OATS_SETTINGS, as the harness sets them).
+  const check = (target, launch) => call("check", { home: target, soul: null, settings: { ...backend.settings(), cli: bb.cli }, launch: { ...launch, sandbox, trees: [join(target, "work")], protected: kept } }, { settings: backend.settings(), bb });
+  const expected = [
+    // Full mode: ready.
+    [{ harness: "claude", yolo: true, args: [] }, "ready", []],
+    [{ harness: "claude", yolo: null, args: ["--permission-mode", "bypassPermissions"] }, "ready", []],
+    // A sandboxed mode: the launch's own first refusal, alone.
+    [{ harness: "claude", yolo: false, args: [] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    [{ harness: "claude", yolo: null, args: [] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    [{ harness: "claude", yolo: null, args: ["--permission-mode", "auto"] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    // Every other refusal of a planned launch.
+    [{ harness: "codex", yolo: true, args: [] }, "needs-configuration", ["E_BACKEND_HARNESS"]],
+    [{ harness: "claude", yolo: true, args: ["--permission-mode", "auto"] }, "needs-configuration", ["E_BACKEND_LAUNCH_ARG"]],
+  ];
+  for (const [launch, status, problems] of expected) {
+    const answer = (await check(planned, launch)).result;
+    assert.deepEqual([answer.status, codes({ result: answer })], [status, problems], JSON.stringify(launch));
+    // Whole, it is the answer of a home that exists: no problem and no warning is added for the
+    // missing home, its tree or the kernel's directory.
+    assert.deepEqual(answer, (await check(home, launch)).result, JSON.stringify(launch));
   }
-  // A sandboxed mode: the launch's own first refusal, alone. The missing home adds no problem.
-  for (const launch of [{ harness: "claude", yolo: false, args: [] }, { harness: "claude", yolo: null, args: [] }, { harness: "claude", yolo: null, args: ["--permission-mode", "auto"] }]) {
-    const answer = await check(launch);
-    assert.equal(answer.ok, true);
-    assert.equal(answer.result.status, "needs-configuration");
-    assert.deepEqual(answer.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"]);
-    assert.doesNotMatch(JSON.stringify(answer.result), /ENOENT|no such file|does not exist/i);
-  }
-  // Every other refusal of a planned launch is the same too.
-  assert.deepEqual(codes(await check({ harness: "codex", yolo: true, args: [] })), ["E_BACKEND_HARNESS"]);
-  assert.deepEqual(codes(await check({ harness: "claude", yolo: true, args: ["--permission-mode", "auto"] })), ["E_BACKEND_LAUNCH_ARG"]);
-  // The check read the service and never the home: nothing was made where the home will be.
-  for (const path of [planned, ...trees, ...kept]) assert.equal(existsSync(path), false, `${path} was not made`);
+  assert.deepEqual((await check(planned, expected[0][0])).result, { status: "ready", problems: [], warnings: [] });
+  // Nothing was made where the home will be.
+  for (const path of absent) assert.equal(existsSync(path), false, `${path} was not made`);
 });
 
 test("no trust setting: E_BACKEND_TRUST, needs-configuration", async (t) => {

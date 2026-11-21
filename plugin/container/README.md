@@ -4,9 +4,10 @@ bb, its npm packages and this plugin's dependencies are installed and run only i
 never `npm install` on the host. One command does everything:
 
 ```sh
-plugin/container/ci.sh            # image, installs, typecheck, unit tests, build, live tests
+plugin/container/ci.sh            # image, installs, typecheck, unit tests, build, live tests, the real run
 plugin/container/ci.sh unit       # typecheck, unit tests and the build
 plugin/container/ci.sh live       # the live tests
+plugin/container/ci.sh real       # the run against a real OATS kernel and the bb session provider
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
@@ -14,7 +15,9 @@ they run from any directory. CI runs the first line (`.github/workflows/plugin.y
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
-`plugin/container/out/` (ignored by git). bb runs sovereign: no account, `BB_TELEMETRY=false`, bound to loopback.
+`plugin/container/out/` (ignored by git). The real run (`real/`, its own README) has a container
+of its own with the same limits, started after the first is gone, and its artefacts are in
+`plugin/container/real/out/`. bb runs sovereign: no account, `BB_TELEMETRY=false`, bound to loopback.
 
 | File | Runs | Does |
 |---|---|---|
@@ -24,6 +27,7 @@ host's home; the plugin's directory goes in through `tar` and the artefacts come
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
+| `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked (`test/fixtures/`) and logs each call; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
@@ -112,11 +116,11 @@ docker rm -f bb-plugin-dev
 
 `real/` holds the other run: the plugin against a real OATS kernel and the bb session provider,
 with Claude Code on a mock model, in the same image. It is where the recorded fixtures come from.
-It is run by hand and is not part of `ci.sh all`: `real/README.md` says why, and what will let it
-join.
+It is the last stage of `ci.sh all`, in a container of its own; `real/README.md` says what it
+does, which kernel it runs and how to run another.
 
 ```sh
-KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
+plugin/container/ci.sh real       # or: plugin/container/real/run.sh
 ```
 
 Where the host's Docker DNS forwarder is unreliable, pass a resolver:

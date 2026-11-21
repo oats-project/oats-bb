@@ -21,21 +21,26 @@
    ],
    "missing": []
   },
+  "moduleCopy": {
+   "runs": "kernel-copy",
+   "homeCopy": "same",
+   "differs": []
+  },
   "session": {
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_acid8acnwb",
-    "threadId": "thr_ax7hbx4x8t"
+    "projectId": "proj_ahb83tbpid",
+    "threadId": "thr_guaerjwvwg"
    }
   },
-  "startedAt": "2026-11-20T19:55:33.586Z",
+  "startedAt": "2026-11-21T05:56:17.136Z",
   "restartCount": 2,
   "reused": "new",
   "warnings": [],
   "stop": {
    "stopped": true,
-   "waitedMs": 1774
+   "waitedMs": 1800
   }
  }
 }

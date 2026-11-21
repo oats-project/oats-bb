@@ -1,17 +1,20 @@
 # The plugin's CI job: typecheck, unit tests (A1 to A12), build, then bb-app at the pinned version
-# with the plugin installed and a fake oats (A13 to A15), all inside one container
-# (plugin/container/ci.sh; plugin/container/README.md).
+# with the plugin installed and a fake oats (A13 to A15), all inside one container, then the run
+# against a real OATS kernel from npm and the bb session provider of this checkout, in a second
+# container (plugin/container/ci.sh; plugin/container/README.md; plugin/container/real/README.md).
 name: plugin
 on:
   pull_request:
     paths:
       - "plugin/**"
+      - "oats-package/**"
       - "bb-version"
       - ".github/workflows/plugin.yml"
   push:
     branches: [main]
     paths:
       - "plugin/**"
+      - "oats-package/**"
       - "bb-version"
       - ".github/workflows/plugin.yml"
 permissions:
@@ -19,7 +22,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -29,4 +32,6 @@ jobs:
         if: always()
         with:
           name: plugin-live
-          path: plugin/container/out/
+          path: |
+            plugin/container/out/
+            plugin/container/real/out/

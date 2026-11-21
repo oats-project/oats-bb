@@ -6,7 +6,7 @@
   "action": "retire",
   "instance": "weekly-digest-helper",
   "home": "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper",
-  "at": "2026-11-20T19:55:43.598Z",
+  "at": "2026-11-21T05:56:27.405Z",
   "facts": {
    "session": {
     "state": "stopped",
@@ -16,7 +16,7 @@
    },
    "work": {
     "observed": true,
-    "revision": "d452b292e736f1a510eac18c8796f6098546a367",
+    "revision": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
     "branch": "agents/weekly-digest-helper",
     "detached": false,
     "drift": false,
@@ -64,7 +64,7 @@
    "stopChildren": true,
    "retainChildren": true
   },
-  "planRevision": "905ceb6c159d7b87e8035721",
+  "planRevision": "ef5028f1e6cb517560247307",
   "notes": [
    "0 changed and 1 untracked file(s) would be retained with the worktree",
    "1 recorded child instance(s) are stopped first (bounded SIGTERM, never escalated) and retained (their homes are not removed); a child still running after the grace refuses the retirement",

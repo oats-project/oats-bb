@@ -21,15 +21,20 @@
    ],
    "missing": []
   },
+  "moduleCopy": {
+   "runs": "kernel-copy",
+   "homeCopy": "same",
+   "differs": []
+  },
   "session": {
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_acid8acnwb",
-    "threadId": "thr_ucvykiyd2s"
+    "projectId": "proj_ahb83tbpid",
+    "threadId": "thr_3ufx45khmp"
    }
   },
-  "startedAt": "2026-11-20T19:55:25.388Z",
+  "startedAt": "2026-11-21T05:56:08.681Z",
   "restartCount": 1,
   "reused": "new",
   "warnings": []

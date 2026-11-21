@@ -13,11 +13,11 @@ Pinned by the spec.
 
 The other files are one answer per other `oats` verb, as the kernel prints it (an envelope, except
 `retire-apply.json`: a first guarded retire prints the receipt itself).
-- **Recorded from the real run** (`container/real/`, its README says how): bb-app 0.50.1, the OATS
-  kernel of awebai/oats `main` at da296359e97eb435f6de561947ef2fdda92c927c (oats-project/oats#2040 merged, 0.69.24), the bb
-  session provider of this repository's `main` at 92fecf735475a363c1d55158d6ff078acf017bb7 (wire 1.3; its
-  floor lowered to that kernel's version by a trial-only commit inside the container), on
-  2026-11-20. Each is
+- **Recorded from the real run** (`container/real/`, its README says how): bb-app 0.50.1, OATS
+  0.70.0 from npm (`@awebai/oats@0.70.0`, gitHead 7512163012876511088da79168c74540f9523c66), the bb
+  session provider of this repository's `main` at 134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5 (wire 1.3), with
+  the provider's own floor (`compatibility.oats: >=0.70.0`) and no trial commit, on
+  2026-11-21. Each is
   what the kernel printed for a call the plugin made through its own RPC, whole, printed with one
   space of indentation. One substitution and no other edit: the paths (the deployment is
   `/abs/deployment`, the run's directory `/abs/real`, the container user's home `/abs/home`). The
@@ -34,7 +34,8 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   - `servers.json`: two servers registered with `oats server add` (no host is behind them).
   - `status-recorded.json`: the whole `oats status --json` the kernel printed for the plugin's own
     read, one document per state under a key of this file: `working`,
-    `idle`, `needsYou` (a claim set with `oats instance attention`), `stoppedByOats`,
+    `idle`, `needsYou` (a claim set with `oats instance attention`), `question` (the claim
+    oats.core's hooks set when Claude Code asks a question), `stoppedByOats`,
     `threadDeleted` (the agent's thread deleted in bb), `parentWithTwoChildren`. The souls of the
     run have no messaging capability, so no row has an identity.
 - Recorded from an earlier real kernel (OATS 0.69.20, `--json`), reduced and with the machine's paths

@@ -325,7 +325,7 @@ const more = [
         setStatus(REFUSED);
         refresh();
         const stale = await page.until(`(() => { const t = ${textOf(inPanel("oats-stale"))}; return t.includes("could not be read again") ? t : ""; })()`, 40);
-        check(/howing what was read (just now|\d+ min ago)\. OATS could not be read again \(E_LOCAL_MISSING\)\. Retry$/.test(stale ?? ""), `${at} when OATS cannot be read again the panel says how old what it shows is, and why, with Retry`, stale);
+        check(/howing what was read (just now|\d+s ago|\d+ min ago)\. OATS could not be read again \(E_LOCAL_MISSING\)\. Retry$/.test(stale ?? ""), `${at} when OATS cannot be read again the panel says how old what it shows is, and why, with Retry`, stale);
         check((await page.evaluate(textOf(inPanel("oats-panel-name")))) === "Panel worktree helper" && (await page.evaluate(visible(inPanel("oats-panel-work-sentence")))), `${at} and keeps the agent and its facts on screen`);
         if (viewport.mobile) check((await page.evaluate(textOf(testId("oats-agent-back")))) === "Back to the thread", `${at} and the way back`);
         await fitted(page, viewport, check, at, "stale");

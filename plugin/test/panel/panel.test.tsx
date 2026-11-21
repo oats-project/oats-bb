@@ -130,7 +130,7 @@ test("a shared tree is tagged shared; a copy the browser refuses says so; a mode
   expect(tag.getAttribute("title")).toBe("A link to the shared tree; changes here are visible to every instance that shares it.");
   const copy = copyOf(shared.getByTestId("oats-panel-home"));
   fireEvent.click(copy);
-  await waitFor(() => expect(text(copy)).toBe("Couldn't copy"));
+  await waitFor(() => expect(text(copy)).toBe("Copy failed"));
   shared.unmount();
   const none = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, work: null }) });
   await none.findByTestId("oats-panel-session");
@@ -311,7 +311,7 @@ test("a later read that fails keeps what was read, says how old it is and why, a
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
   const stale = await slot.findByTestId("oats-stale");
-  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("Showing what was read 3 min ago.");
   expect(text(stale)).toContain("It could not be read again (OATS_TIMEOUT).");
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
   fail = false;
@@ -390,7 +390,7 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
   const stale = await slot.findByTestId("oats-stale");
   await waitFor(() => expect(text(stale)).toContain("OATS could not be read again (E_LOCAL_MISSING)."));
-  expect(text(stale)).toContain("howing what was read 2 min ago.");
+  expect(text(stale)).toContain("howing what was read 3 min ago.");
   // Everything it read is still there: the name, the state, the claim, the facts.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();

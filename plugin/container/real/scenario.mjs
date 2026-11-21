@@ -36,6 +36,23 @@ const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800, mobile: false },
   { name: "390x800", width: 390, height: 800, mobile: true },
 ];
+// Every image is taken in bb's light theme and again in its dark theme (bb's own appearance
+// choice, set as bb keeps it: ../browser.mjs); a dark one's file name ends in "-dark".
+const VIEWS = ["light", "dark"].flatMap((theme) => VIEWPORTS.map((viewport) => ({ viewport, theme, suffix: theme === "light" ? "" : "-dark" })));
+/** A page of one view, with the theme bb draws checked once it has loaded something. */
+async function viewPage(browser, { viewport, theme }, at) {
+  const page = await browser.page(viewport, { theme });
+  const goto = page.goto;
+  let checked = false;
+  page.goto = async (path) => {
+    await goto(path);
+    if (checked) return;
+    checked = true;
+    const drawn = await page.until(`document.readyState === "complete" && (document.documentElement.classList.contains("dark") ? "dark" : "light")`, 15);
+    check(drawn === theme, `${at}: bb draws its ${theme} theme`, String(drawn));
+  };
+  return page;
+}
 mkdirSync(OUT, { recursive: true });
 
 // ---- what the run says
@@ -260,9 +277,10 @@ let browser;
 /** At both widths: the tree's row of the agent, joined to its bb thread, and the thread's header row. */
 async function shots(scene, { instance, soul, threadId, state }) {
   const thread = bbThread(threadId);
-  for (const viewport of VIEWPORTS) {
-    const at = `${scene} ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `${scene} ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
@@ -270,14 +288,14 @@ async function shots(scene, { instance, soul, threadId, state }) {
       const drawn = await page.until(`document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`, 30);
       check(Boolean(drawn), `${at}: the tree has ${instance}, joined to its bb thread ${threadId}, drawn as ${state}`, await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.outerHTML.slice(0, 600) ?? "no such row: " + ${textOf(testId("oats-sidebar"))}`));
       show("row", await page.evaluate(textOf(row)));
-      await page.shot(`${scene}-${viewport.name}-sidebar`);
+      await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
 
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
       const chips = await page.evaluate(textOf(testId("oats-identity-row")));
       check([soul, instance, `home · …/instances/${instance}`, "OATS"].every((chip) => chips.includes(chip)), `${at}: the row's chips: soul, instance, home, OATS`, chips);
       show("header row", chips);
-      await page.shot(`${scene}-${viewport.name}-thread`);
+      await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
       await page.close();
     }
@@ -285,21 +303,22 @@ async function shots(scene, { instance, soul, threadId, state }) {
 }
 /** At both widths: the agent is not in the tree, and its soul's page says "thread missing", with Start and Retire. */
 async function missingShots(scene, { instance, soul }) {
-  for (const viewport of VIEWPORTS) {
-    const at = `${scene} ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `${scene} ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
       const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes(${JSON.stringify(instance)}) ? t : ""; })()`, 30);
       check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
-      await page.shot(`${scene}-${viewport.name}-soul`);
+      await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
       await sleep(1500);
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`);
       check(!rows.some((text) => text.includes(instance)), `${at}: ${instance} is not in the tree`, JSON.stringify(rows));
-      await page.shot(`${scene}-${viewport.name}-sidebar`);
+      await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {
       await page.close();
     }
@@ -418,15 +437,16 @@ try {
   await shots("real-question", { ...A, threadId, state: "needs-you" });
   // The home's card: the question and one button per option; the last width answers it, as a person does.
   const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.innerText.includes(${JSON.stringify(QUESTION)}))`;
-  for (const viewport of VIEWPORTS) {
-    const at = `real-question ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `real-question ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto("/plugins/oats/home");
       const choices = await page.until(`(() => { const c = ${card}; const b = c ? [...c.querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].map((e) => e.innerText.trim()) : []; return b.length > 0 ? JSON.stringify({ question: c.querySelector(${JSON.stringify(testId("oats-needs-question"))})?.innerText.trim(), choices: b }) : ""; })()`, 30);
       check(choices === JSON.stringify({ question: QUESTION, choices: ["Retry", "Mark failed"] }), `${at}: the home's card shows the question and its two choices`, choices ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
-      await page.shot(`real-question-${viewport.name}-home`);
-      if (viewport !== VIEWPORTS[VIEWPORTS.length - 1]) continue;
+      await page.shot(`real-question-${viewport.name}-home${suffix}`);
+      if (view !== VIEWS[VIEWS.length - 1]) continue;
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
       const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
       check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));

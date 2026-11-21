@@ -47,6 +47,34 @@ export function State({ state }: { state: AgentState }) {
   );
 }
 
+const TONED = { ok: "bg-success-foreground", warn: "bg-warning-text", bad: "bg-destructive-text", muted: "bg-muted-foreground" } as const;
+
+/**
+ * A state that is not an agent's (where a schedule runs, whether a machine answers): a dot AND its
+ * words, like `State`. The dot is hidden from assistive technology: the words say it.
+ */
+export function Toned({ tone, children }: { tone: keyof typeof TONED; children: ReactNode }) {
+  return (
+    <span data-testid="oats-toned" data-tone={tone} className="inline-flex min-w-0 items-center gap-1.5">
+      <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${TONED[tone]}`} />
+      <span className="min-w-0 break-words">{children}</span>
+    </span>
+  );
+}
+
+/** A titled block of a page: its heading (with a count, where it lists things) and what is under it. */
+export function Section({ title, n, children, testId = "oats-section" }: { title: string; n?: number; children: ReactNode; testId?: string }) {
+  return (
+    <section data-testid={testId} className="flex min-w-0 flex-col gap-2">
+      <h2 className="flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span>{title}</span>
+        {n === undefined ? null : <span className="font-normal normal-case">{n}</span>}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 /**
  * Where an agent is, in one line: the state's word, since when, for an agent that needs a person
  * the question or the reason, and the act that applies, as a button. The thread's identity row,
@@ -71,13 +99,17 @@ export function StatusLine({ state, since, detail, action }: { state: AgentState
 /**
  * A labelled fact, `label · value`: the label muted, the value whole (it wraps, it is never cut).
  * A value that opens something is given as a link or a button by the caller and looks like one;
- * a bare value does not. Inside `Facts`.
+ * a bare value does not. A fact with no value (null, undefined, the empty string) is left out, as
+ * the Desktop leaves it out. Inside `Facts`.
  */
-export function Fact({ label, children }: { label: string; children: ReactNode }) {
+export function Fact({ label, title, children }: { label: string; /** the whole of a value drawn short (a full commit id behind its seven characters) */ title?: string; children: ReactNode }) {
+  if (children === null || children === undefined || children === "") return null;
   return (
     <div data-testid="oats-fact" className="flex min-w-0 flex-col gap-0.5 md:flex-row md:gap-3">
       <dt className="shrink-0 text-muted-foreground md:w-40">{label}</dt>
-      <dd className="min-w-0 break-words text-foreground">{children}</dd>
+      <dd title={title} className="min-w-0 break-words text-foreground">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -127,10 +159,14 @@ export function Notice({
   );
 }
 
-/** An empty list or page: the Desktop's sentence for it, and the act that fills it. In the place the content will be. */
-export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+/**
+ * An empty list or page: the Desktop's words for it (a title where the Desktop has two lines, and
+ * its sentence), and the act that fills it. In the place the content will be.
+ */
+export function Empty({ title, children, action }: { title?: string; children: ReactNode; action?: ReactNode }) {
   return (
     <div data-testid="oats-empty" className="flex flex-col items-start gap-2 py-2 text-sm text-muted-foreground">
+      {title === undefined ? null : <p className="font-semibold text-foreground">{title}</p>}
       <p>{children}</p>
       {action === undefined || action === null ? null : <div className="flex flex-wrap items-center gap-2">{action}</div>}
     </div>
@@ -181,12 +217,24 @@ export function Result({ title, tone = "done", children, code, actions }: { titl
   );
 }
 
-/** A card: one thing of a list that has parts (a team, a schedule, a question). */
-export function Card({ children, testId = "oats-card" }: { children: ReactNode; testId?: string }) {
+/**
+ * A card: one thing of a list that has parts (a team, a schedule, a question). With a `title` it is
+ * a section named by it; `tone="warn"` frames one that needs a look. Its acts go last in `children`.
+ */
+export function Card({ title, tone, children, testId = "oats-card" }: { title?: string; tone?: "warn"; children: ReactNode; testId?: string }) {
+  const frame = `flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${tone === "warn" ? "border-warning-text" : "border-border"}`;
+  if (title === undefined) {
+    return (
+      <div data-testid={testId} className={frame}>
+        {children}
+      </div>
+    );
+  }
   return (
-    <div data-testid={testId} className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
+    <section data-testid={testId} aria-label={title} className={frame}>
+      <h3 className="break-words font-semibold">{title}</h3>
       {children}
-    </div>
+    </section>
   );
 }
 

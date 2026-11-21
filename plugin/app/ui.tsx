@@ -11,7 +11,7 @@ export { Confirm } from "./ui/confirm";
 export type { ConfirmProps } from "./ui/confirm";
 export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
 export type { MenuItem, TabItem } from "./ui/controls";
-export { Card, DisabledReason, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Stale, State, StateMark, StatusLine, TARGET } from "./ui/patterns";
+export { Card, DisabledReason, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";
 
 // bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
 // themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
@@ -57,11 +57,13 @@ export function Mark({ label }: { label: string }) {
   return <span role="img" aria-label={label} title={label} data-testid="oats-mark" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
 }
 
-export function Chip({ children, title }: { children: ReactNode; title?: string }) {
+/** A tag: one word about a thing ("default", "workspace"). `tone` mutes it, or frames one that needs a look. Never a fact: a fact has its label (`Fact`). */
+export function Chip({ children, title, tone = "plain" }: { children: ReactNode; title?: string; tone?: "plain" | "muted" | "warn" }) {
   return (
     <span
       title={title}
-      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-border bg-card px-2 py-0.5 text-xs text-foreground"
+      data-tone={tone}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border bg-card px-2 py-0.5 text-xs ${tone === "warn" ? "border-warning-text text-foreground" : tone === "muted" ? "border-border text-muted-foreground" : "border-border text-foreground"}`}
     >
       {children}
     </span>

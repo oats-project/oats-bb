@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
-import { Button, Confirm, CopyButton, DisabledReason, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs } from "../../app/ui";
+import { Button, Confirm, CopyButton, DisabledReason, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import type { AgentState } from "../../model/types";
 import { instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
@@ -116,8 +116,11 @@ describe("facts, notices and the states of a list", () => {
         <Fact label="Soul">
           <a href="/plugins/oats/souls/oats-developer">oats-developer</a>
         </Fact>
+        <Fact label="Model">{null}</Fact>
+        <Fact label="Harness">{""}</Fact>
       </Facts>,
     );
+    // A fact with no value is left out, label and all.
     expect(screen.getAllByRole("term").map((term) => term.textContent)).toEqual(["Branch", "Soul"]);
     expect(screen.getAllByRole("definition").map((value) => value.textContent)).toEqual(["agents/flaky-ci", "oats-developer"]);
     expect(screen.getByRole("link", { name: "oats-developer" })).toBeTruthy();
@@ -186,6 +189,26 @@ describe("facts, notices and the states of a list", () => {
     expect(screen.getByLabelText(/^Name · optional/)).toBe(screen.getByRole("textbox"));
     expect(screen.getByRole("alert").textContent).toBe("Lower-case letters, digits and dashes.");
     expect(screen.getByTestId("oats-disabled-reason").textContent).toBe("Reading the preview…");
+  });
+});
+
+describe("a state that is not an agent's, and a page's section", () => {
+  test("a toned state is a dot and its words; the dot is hidden from a screen reader", () => {
+    render(<Toned tone="warn">Wrong account here</Toned>);
+    const toned = screen.getByTestId("oats-toned");
+    expect([toned.getAttribute("data-tone"), toned.textContent]).toEqual(["warn", "Wrong account here"]);
+    expect(toned.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(toned.querySelector('[role="img"]')).toBeNull();
+  });
+
+  test("a section is a heading, with its count where it lists things, and what is under it", () => {
+    render(
+      <Section title="Runs" n={3}>
+        <p>the runs</p>
+      </Section>,
+    );
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Runs3");
+    expect(screen.getByTestId("oats-section").textContent).toBe("Runs3the runs");
   });
 });
 

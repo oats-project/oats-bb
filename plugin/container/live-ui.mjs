@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFile
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchBrowser } from "./browser.mjs";
+import { launchBrowser, lowTargets } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,9 +75,8 @@ function threadsByFixtureId() {
   let existing = list();
   for (const wanted of fixtureThreads) {
     if (existing.some((thread) => thread.title === wanted.title)) continue;
-    // No provider is installed in the container: the thread exists and ends in bb's "error"
-    // status, which is all the join and the slots need.
-    bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "pi", "--model", "mock/echo", "--title", wanted.title, "--prompt", "hello", "--json");
+    // A healthy thread: Claude Code on the mock model (live.sh) answers its one turn.
+    bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", wanted.title, "--prompt", "hello", "--json");
   }
   existing = list();
   const byId = new Map();
@@ -129,7 +128,13 @@ async function themedPage(browser, viewport, theme, at) {
   const page = await browser.page(viewport, { theme });
   const shot = page.shot;
   // `plugin: false`: a scene in which the plugin may draw nothing (a thread while OATS cannot be read).
-  page.shot = async (name, { plugin = true } = {}) => {
+  // `targets: true`: every control of the plugin in the page is as high as a person can press (32 px, 44 at phone width).
+  page.shot = async (name, { plugin = true, targets = false } = {}) => {
+    if (targets) {
+      const min = viewport.mobile ? 44 : 32;
+      const low = JSON.parse(await page.evaluate(lowTargets(min)));
+      check(low.length === 0, `${at} ${name}: every control is at least ${min} px high`, low.join(" | "));
+    }
     const { theme: drawn, roots, rows } = JSON.parse(await page.evaluate(CONTRAST));
     const bad = failing(rows);
     const count = (kind) => rows.filter((row) => row.kind === kind).length;
@@ -166,7 +171,7 @@ async function themedPage(browser, viewport, theme, at) {
 // `enter({ fake, statusWithRealIds, threads, untilSnapshot })` sets the fake and waits for the
 // snapshot it makes; its stages run after these three.
 
-const FEATURES = ["roster", "home", "workspace", "spawn", "lifecycle"];
+const FEATURES = ["roster", "home", "workspace", "spawn", "lifecycle", "automations", "panel", "patterns"];
 const SCENES = join(PLUGIN, "container", "scenes");
 
 async function loadScenes() {
@@ -194,17 +199,19 @@ const BUILT_IN = {
     },
   },
   // The same status, with one agent on a thread bb does not have (its fixture id, unmapped), one
-  // the kernel cannot reach and one whose session fell back to a shell.
+  // the kernel cannot reach and one whose session fell back to a shell. The agent with no thread is
+  // the one whose retire plan was recorded (lifecycle/retire-plan.json): the plan the fake answers
+  // is the plan of the agent asked about.
   detached: {
     label: "A16",
     enter: async ({ threads }) => {
-      const detached = new Map([...threads].filter(([id]) => id !== "thr_ci"));
+      const detached = new Map([...threads].filter(([id]) => id !== "thr_digest"));
       const states = {
-        "weekly-digest-helper": { running: null, runtimeState: "unreachable", sessionEnd: null },
+        "desktop-mockups-developer": { running: null, runtimeState: "unreachable", sessionEnd: null },
         "harvest-knowledge-helper": { running: false, runtimeState: "shell" },
       };
       fake({ status: { stdout: statusWithRealIds(detached, states) } });
-      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
   // The fake oats is removed for the length of the stage, then put back.
@@ -227,6 +234,14 @@ const BUILT_IN = {
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
 const threads = threadsByFixtureId();
+// Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
+{
+  const mine = new Set([...threads.values()].map((thread) => thread.id));
+  const statuses = () => listOf(bbJson("thread", "list"), "threads").filter((thread) => mine.has(thread.id)).map((thread) => thread.status);
+  const deadline = Date.now() + 240_000;
+  while (Date.now() < deadline && !statuses().every((status) => status === "idle")) await sleep(2000);
+  check(statuses().every((status) => status === "idle"), `the ${mine.size} fixture threads are healthy: each one's turn was answered and bb shows it idle`, JSON.stringify(statuses()));
+}
 const { scenes, stages } = await loadScenes();
 const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {

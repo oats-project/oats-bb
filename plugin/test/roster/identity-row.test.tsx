@@ -15,8 +15,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The agent page a test names: named after `loadApp()`, whose features name their own (temporary: agents/bb-plugin-ui carries its own form of this). */
+let agentPage: Parameters<typeof setAgentPage>[0] = null;
+
 async function row(threadId: string, options: RenderSlotOptions<Contract> = {}) {
   const app = await loadApp();
+  setAgentPage(agentPage);
   expect(app.threadHeaderRows.map((registration) => registration.id)).toEqual(["identity"]);
   const calls: string[] = [];
   const rpc = handlers();
@@ -136,7 +140,7 @@ test("on a compact viewport OATS navigates to the home page and never asks for t
 test("on a compact viewport, where a feature gives agents a page of their own, OATS opens this agent's page", async () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 767px)" }));
   const opened: string[] = [];
-  setAgentPage((_navigate, instance) => void opened.push(instance));
+  agentPage = (_navigate, instance) => void opened.push(instance);
   try {
     const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
     fireEvent.click(await slot.findByTestId("oats-chip-oats"));
@@ -144,7 +148,7 @@ test("on a compact viewport, where a feature gives agents a page of their own, O
     expect(slot.inspection.navigateCalls).toEqual([]);
     expect(slot.inspection.experimental_panelCalls).toEqual([]);
   } finally {
-    setAgentPage(null);
+    agentPage = null;
   }
 });
 

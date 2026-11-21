@@ -11,8 +11,12 @@ import type { Agent } from "../../model/types";
 
 afterEach(resetApp);
 
+/** The agent page a test names: named after `loadApp()`, whose features name their own (temporary: agents/bb-plugin-ui carries its own form of this). */
+let agentPage: Parameters<typeof setAgentPage>[0] = null;
+
 async function souls(subPath: string, over: Partial<Handlers> = {}, agents?: Agent[], threads = fixtureThreads()) {
   const app = await loadApp();
+  setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
   expect(panel.experimental_hideFromNavigation).toBe(true);
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over, agents), sidebarThreads: { status: "ready", threads } });
@@ -279,12 +283,12 @@ test("an agent with no bb thread opens its own page, where a feature gives agent
   await plain.findByTestId("oats-soul-agent-elsewhere");
   expect(plain.queryByTestId("oats-soul-agent-open")).toBeNull(); // no feature has a page: nothing to press
   plain.unmount();
-  setAgentPage((_navigate, instance) => void opened.push(instance));
+  agentPage = (_navigate, instance) => void opened.push(instance);
   try {
     const slot = await souls("oats-developer");
     fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
     expect(opened).toEqual(["kernel-fix-developer"]);
   } finally {
-    setAgentPage(null);
+    agentPage = null;
   }
 });

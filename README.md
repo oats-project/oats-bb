@@ -4,8 +4,8 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-Nothing has been released yet. The work arrives as reviewed pull requests, and it follows the
-OATS session-provider contract as decided on the OATS side. The lane map
+The first release is 0.1.0 ([CHANGELOG.md](CHANGELOG.md)). The work arrives as reviewed pull
+requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
 The repository holds the three parts of the integration, at one pinned bb-app version (the
@@ -34,15 +34,17 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 - There is no terminal. `oats session attach` refuses with a link, and a client shows
   **Open in bb**.
 
-> **What it needs.** Nothing here is released yet.
+> **What it needs.**
 >
-> - An OATS kernel that speaks this provider's wire, version 1.3 (see
->   [docs/wire.md](docs/wire.md)), and that protects a provider home's own files from its
->   agent. The manifests' `compatibility.oats` floor will be the first OATS release that
->   carries both; `>=0.70.0` is a placeholder until the release lane names that version.
-> - oats.aweb 1.45.0 or later: the release that registers a provider home with the host
->   wake broker without a `--backend`. With an older oats.aweb, spawning a bb home fails
->   in its spawn hook.
+> - OATS 0.70.0 or later (the manifests' `compatibility.oats` floor): the first OATS
+>   release that speaks this provider's wire, version 1.3 (see [docs/wire.md](docs/wire.md)),
+>   and that protects a provider home's own files from its agent.
+> - For a bb home with aweb messaging, oats.aweb 1.48.0 or later. That release requires
+>   the channel packages of `tmux` launches only, holds an installed `aweb-channel` or
+>   `@awebai/pi` to versions that don't open their own stream beside the wake broker's on a
+>   provider launch, and removes a provider home's broker registration at retire. 1.45.0
+>   is the first version whose spawn hook runs for a bb home at all (an older oats.aweb
+>   fails there), and 1.45.0 to 1.47.0 leave those gaps.
 >
 > **bb agents run in full mode (`--yolo`), and nothing else is launched.** A launch in
 > one of bb's sandboxed modes (`auto`, `accept-edits`; that is `--no-yolo`, or no choice)
@@ -58,9 +60,9 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 > and tested against the pinned bb; it runs for no launch until OATS decides to offer
 > those modes.
 >
-> **No release yet, and what its notes will say.** oats-bb is not released before a run
-> against a real OATS kernel with `--backend bb`. The first release's notes say: bb homes
-> run in bb's full mode, and claim no sandbox boundary.
+> **Released after a real run.** 0.1.0 was released after a run against OATS 0.70.0 from
+> npm with `--backend bb` (the plugin's real run, in CI). bb homes run in bb's full mode, and
+> claim no sandbox boundary.
 
 ## Install
 
@@ -81,7 +83,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/<org>/oats-bb@v0.1.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.1.0
    defaults:
      capabilities:
        oats.bb: { from: package }
@@ -485,10 +487,9 @@ Readiness says so wherever bubblewrap is missing
 
 ## A trial against an unreleased kernel
 
-The manifests' floor (`compatibility.oats`, `>=0.70.0`) is a placeholder for the first
-OATS release that carries both the session-provider wire 1.3 and the kernel's protection
-of a provider home's files ([What it needs](#what-it-needs)); the release lane sets the
-real number. A kernel built from an
+The manifests' floor (`compatibility.oats`, `>=0.70.0`) is OATS 0.70.0, the first OATS
+release that carries both the session-provider wire 1.3 and the kernel's protection of a
+provider home's files ([What it needs](#the-session-provider)). A kernel built from an
 unmerged branch reports an older version and refuses the capability
 (`E_CAPABILITY_INCOMPATIBLE`). A kernel that has session providers but not yet wire 1.3
 refuses this manifest for its `wire` key (`E_BACKEND_UNKNOWN`): that is intended, the two

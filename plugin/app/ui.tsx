@@ -3,7 +3,15 @@ import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
+import { TARGET } from "./ui/patterns";
 import { refusalLines } from "./ui/text";
+
+// The patterns and the controls every screen is drawn with (the UX standard, section 3): one each.
+export { Confirm } from "./ui/confirm";
+export type { ConfirmProps } from "./ui/confirm";
+export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
+export type { MenuItem, TabItem } from "./ui/controls";
+export { Card, DisabledReason, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Stale, State, StateMark, StatusLine, TARGET } from "./ui/patterns";
 
 // bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
 // themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
@@ -73,7 +81,7 @@ export function Button({ variant = "default", className = "", type = "button", .
   return (
     <button
       type={type}
-      className={`inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON[variant]} ${className}`}
+      className={`inline-flex ${TARGET} shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON[variant]} ${className}`}
       {...rest}
     />
   );
@@ -142,19 +150,29 @@ export function Modal({
   children,
   footer,
   onCancel,
+  returnFocus,
 }: {
   title: string;
   children: ReactNode;
   footer: ReactNode;
   onCancel: () => void;
+  /** Where the focus goes when the dialog closes and the control that opened it is gone (a retired agent's row): its neighbour. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const titleId = useId();
   const card = useRef<HTMLDivElement>(null);
+  const after = useRef(returnFocus);
+  after.current = returnFocus;
   useEffect(() => {
     const previous = document.activeElement;
-    card.current?.focus();
+    // The focus starts on the control the dialog marks (`data-autofocus`: Cancel for a destructive
+    // act, a form's first field), else on the dialog itself.
+    (card.current?.querySelector<HTMLElement>("[data-autofocus]") ?? card.current)?.focus();
     return () => {
-      if (previous instanceof HTMLElement) previous.focus();
+      // What opened it, when it is still there and held the focus (a click focuses no button in some browsers).
+      const opener = previous instanceof HTMLElement && previous.isConnected && previous !== document.body ? previous : null;
+      const back = opener ?? after.current?.() ?? null;
+      back?.focus();
     };
   }, []);
   return (

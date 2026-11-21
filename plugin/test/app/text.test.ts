@@ -179,7 +179,7 @@ describe("what the plugin adds", () => {
     expect(refusalLines("NOTE: nothing to do")).toEqual(["NOTE: nothing to do"]);
   });
 
-  test("the recorded fixtures hold no text the filter changes, but the task a spawn preview echoes", () => {
+  test("the fixtures the live scenes of the roster, the pages, spawn and the lifecycle draw from hold no text the filter changes, but the task a spawn preview echoes", () => {
     const changed: string[] = [];
     const walk = (value: unknown, where: string) => {
       if (typeof value === "string") {
@@ -188,10 +188,10 @@ describe("what the plugin adds", () => {
         for (const [key, inner] of Object.entries(value)) walk(inner, `${where}.${key}`);
       }
     };
-    for (const feature of readdirSync(FIXTURES, { withFileTypes: true })) {
-      if (!feature.isDirectory()) continue;
-      for (const file of readdirSync(join(FIXTURES, feature.name))) {
-        if (file.endsWith(".json")) walk(JSON.parse(readFileSync(join(FIXTURES, feature.name, file), "utf8")), `${feature.name}/${file}`);
+    // Another feature's recordings may hold text the filter is meant to change (a prompt of several lines): its own tests say which.
+    for (const feature of ["roster", "workspace", "spawn", "lifecycle"]) {
+      for (const file of readdirSync(join(FIXTURES, feature))) {
+        if (file.endsWith(".json")) walk(JSON.parse(readFileSync(join(FIXTURES, feature, file), "utf8")), `${feature}/${file}`);
       }
     }
     // The task ends in a line feed, as the form sent it; nothing draws it.

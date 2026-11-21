@@ -16,9 +16,10 @@ async function page(id: string, over: Partial<Handlers> = {}) {
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
 }
 
-test("the plugin registers the home and the four pages, in that order", async () => {
+test("the plugin registers the home and the four pages first, in that order", async () => {
   const app = await loadApp();
-  expect(app.navPanels.map((panel) => panel.path)).toEqual(["home", "souls", "capabilities", "teams", "machines"]);
+  // Another feature's page comes after these (its own test holds it).
+  expect(app.navPanels.map((panel) => panel.path).slice(0, 5)).toEqual(["home", "souls", "capabilities", "teams", "machines"]);
 });
 
 test("Capabilities: id, description, origin and the number of souls", async () => {

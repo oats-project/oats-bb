@@ -1,0 +1,15 @@
+# Words
+
+The plugin uses the OATS Desktop's words for every act, state, label, notice and refusal (the UX
+standard, section 2). This file holds each place where bb's nature, or the plugin's, changes a word:
+what the Desktop says, what the plugin says, and why. Nothing else is reworded.
+
+The tables the plugin copies from the Desktop whole are named in the header of the file that holds
+them: `app/ui/text.ts` (the display filter), `app/ui/words.ts` (the needs-input words and times, an
+instance's name as words).
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| The state of an agent, as a word beside its mark | no word: the dot alone, named "running", "stopped" or "status unknown" for a screen reader | **Working**, **Idle**, **Needs you**, **Stopped**, **Failed**, **Unreachable**, each beside its mark | The standard: a state is always a mark and its word. bb's kernel rows say more than running or not: a session that fell back to a shell (Failed) and one the kernel cannot reach (Unreachable). |
+| The accessible name of a state's mark that stands alone | "running", "stopped", "status unknown", "Needs input" | the same four; "failed" and "unreachable" for the two states the Desktop does not draw | The Desktop's names where it has one. |
+| An agent the kernel does not call running | "status unknown" (a grey bullseye) | **Idle** (named "status unknown") | On bb the kernel reports an agent that waits between turns as neither running nor stopped: it is there and not working, which a person reads as idle. |

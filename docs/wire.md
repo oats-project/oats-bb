@@ -245,8 +245,9 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   value of an env entry. They go into the env of the home's bb project (`bb machine env
   set <NAME> --project <id>`, the value on stdin, never an argument), which bb keeps in
   its database. Every other entry is not carried: one of source `kernel` or `capability`
-  is left out; one of source `launch-config`, of a secret source or mark, or of a source
-  the provider does not know refuses the launch by name (`E_BACKEND_LAUNCH_ENV`). A
+  is left out, a secret mark on it included; one of a launch configuration (its literal,
+  `launch-config`, or its secret reference), or of a source the provider does not know,
+  refuses the launch by name (`E_BACKEND_LAUNCH_ENV`). A
   `PATH` with no executable `pi` on it, or with pi and not the program pi's script asks
   `env` for, refuses the launch too, naming which is missing.
 - **The project's env is the provider's, whole.** A pi launch reads the names bb holds
@@ -269,7 +270,10 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   whose `providerId` is `pi`) or `claude` (`claude-code`), by its process name or the
   first word of its command line (the second, behind `node`, `bun` or `deno`). bb gives
   the variable to what the harness starts too: a command the agent left running carries
-  it, is not the harness, and alone does not count. A live harness makes the thread present, `state: unknown`, `running: null`; none makes it a
+  it, is not the harness, and alone does not count (a `pi` or `claude` the agent itself
+  started and left running does: the harness is known by its name). A lost session
+  with a process still working in the home is the kernel's to refuse to resume, naming
+  it (its own rule): end that process, or `oats session start`. A live harness makes the thread present, `state: unknown`, `running: null`; none makes it a
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be

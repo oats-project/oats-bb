@@ -329,7 +329,7 @@ test("a home that leaves bb has its project's env removed by the launch hook, on
   const moved = await hook({ OATS_PREVIOUS_BACKEND: "bb" });
   assert.equal(moved.status, 0);
   assert.equal(moved.stdout.trim().split("\n").length, 1, "one line: the kernel relays the last one's warning");
-  assert.match(lastLine(moved).warning, /this home starts on tmux, no longer on bb: the bb provider removed the launch env it kept in the home's bb project \(2 variables\)/);
+  assert.match(lastLine(moved).warning, /^this home starts on tmux, no longer on bb: the bb provider removed the launch env it kept in the home's bb project \(2 variables\)$/);
   assert.deepEqual(envCalls(bb), [["list --project proj_a --json", ""], ["unset OATS_INSTANCE --project proj_a --json", ""], ["unset PATH --project proj_a --json", ""]]);
 });
 
@@ -353,5 +353,13 @@ test("a home that leaves bb with a bb that cannot be asked starts all the same, 
   const { warning } = lastLine(moved);
   assert.match(warning, /removed its keys from \.claude\/settings\.local\.json/);
   assert.match(warning, /what a pi launch may have written into the env of this home's bb project could not be removed \(E_BACKEND_UNREACHABLE\)/);
+  const REMEDY = "remove it in bb (bb machine env unset <NAME> --project <id>, for OATS_INSTANCE, OATS_INSTANCE_HOME and PATH)";
+  assert.ok(warning.endsWith(REMEDY), `the env's remedy is whole: ${warning}`);
   assert.ok(warning.length <= 480, String(warning.length));
+  // Both things fail (a settings file that is not JSON, and no bb): both remedies arrive, whole.
+  writeFileSync(join(home, ".claude/settings.local.json"), "{ not json");
+  const both = lastLine(await runBin(["launch-hook"], { env: hookEnv(home, bb, backend, { OATS_BACKEND: "tmux", OATS_PREVIOUS_BACKEND: "bb" }) })).warning;
+  assert.match(both, /^this home starts on tmux, no longer on bb: the bb provider's keys could not be removed from \.claude\/settings\.local\.json: remove env, sandbox, permissions\.deny and permissions\.blockWritesOutsideWorkingDirectories there by hand\. what a pi launch may have written/);
+  assert.ok(both.includes(`${REMEDY}. Why`), `both remedies are whole, before the cause, which is what a cut takes: ${both}`);
+  assert.ok(both.length <= 480, String(both.length));
 });

@@ -176,7 +176,13 @@ thread's id (bb gives a thread's harness, and what it starts, `BB_THREAD_ID`) an
 named `pi`, for a thread of bb's pi provider, or `claude`, for one of its claude-code
 provider. A command the agent started and left running (a dev server, a `sleep`)
 carries the id too and is not the harness: alone, it does not keep the thread there, so
-every input to a thread whose harness died is a resume the kernel counts. What failed is the harness's to report (a "Turn failed"
+every input to a thread whose harness died is a resume the kernel counts. Two limits.
+The harness is known by its name: a `pi` or a `claude` that the agent itself started and
+left running, with the id it inherited, counts as the thread's harness. And the kernel
+has a rule of its own: it resumes no lost session while any process still works in the
+home, and names the process. So a command the agent left running whose working
+directory is in the home keeps the home from being resumed: end that process, or start
+the home again (`oats session start`). What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
 a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess; to get such

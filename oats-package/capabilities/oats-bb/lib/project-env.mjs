@@ -183,6 +183,6 @@ export async function clearHomeProjectEnv(home, readSettings, { deadline, env = 
     return { removed, warning: null };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    return { removed, warning: `what a pi launch may have written into the env of this home's bb project could not be removed (${error.code}): it stays in bb's database (OATS_INSTANCE, OATS_INSTANCE_HOME and PATH: no secret). Remove it in bb (bb machine env list --project <id>, bb machine env unset <NAME> --project <id>)${removed.length ? `. Removed: ${someOf(removed)}` : ""}` };
+    return { removed, warning: `what a pi launch may have written into the env of this home's bb project could not be removed (${error.code}): remove it in bb (bb machine env unset <NAME> --project <id>, for OATS_INSTANCE, OATS_INSTANCE_HOME and PATH)${removed.length ? `. Removed: ${someOf(removed)}` : ""}` };
   }
 }

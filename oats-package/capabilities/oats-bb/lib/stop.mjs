@@ -112,7 +112,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
       // The sweep's own account (how many, the remedy) is carried; bb's raw words are not.
-      unswept = error.code === "E_SESSION_STOP_FAILED" ? error.message : `bb could not be asked (${error.code}): a Claude process of one may still be loaded; look at them in bb (bb thread list --project <id> --archived)`;
+      unswept = error.code === "E_SESSION_STOP_FAILED" ? error.message : `bb could not be asked (${error.code}): an agent process of one may still be loaded; look at them in bb (bb thread list --project <id> --archived)`;
     }
     // What a pi launch wrote into the env of the home's bb project goes with the home: the
     // project stays in bb (its archived threads are its history), its env does not.

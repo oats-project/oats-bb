@@ -14,6 +14,9 @@ import { join } from "node:path";
 import { fail } from "./errors.mjs";
 
 const VARIABLE = "BB_THREAD_ID=";
+// What a person does where the look cannot be made: it is asked only of a thread in `error`,
+// and a message to such a thread in bb starts a turn and brings it back to idle.
+const REMEDY = "To get a thread in error back, send it a message in bb (bb thread tell <thread id> <text>): bb starts a turn, and the thread is idle again";
 
 /** The ids of the bb threads that have a live process on this host. Throws
  *  E_SESSION_UNAVAILABLE where processes cannot be looked at (no /proc: not Linux): the
@@ -21,10 +24,10 @@ const VARIABLE = "BB_THREAD_ID=";
 export function threadsWithProcess({ proc = "/proc" } = {}) {
   let entries;
   try { entries = readdirSync(proc); }
-  catch (error) { throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc}: ${error.code ?? error.message}): the provider reads it from Linux's /proc`); }
+  catch (error) { throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc}: ${error.code ?? error.message}): the provider reads it from Linux's /proc. ${REMEDY}`); }
   const pids = entries.filter((name) => /^[0-9]+$/.test(name));
   // A /proc that lists no process at all is not one.
-  if (pids.length === 0) throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc} lists no process)`);
+  if (pids.length === 0) throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc} lists no process). ${REMEDY}`);
   const ids = new Set();
   for (const pid of pids) {
     let environ;

@@ -217,7 +217,7 @@ test("where the time runs out on a home's archived threads, the stop says how ma
   const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 30_000, stdout: { ok: true } } });
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 1 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.equal(answer.error.message, "this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has (0 were): a Claude process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again");
+  assert.equal(answer.error.message, "this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has (0 were): an agent process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again");
   assert.ok(answer.error.message.length <= 480);
 });
 
@@ -230,7 +230,7 @@ test("one archived thread whose stop bb does not answer in the call's own time i
   const started = Date.now();
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 120 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.equal(answer.error.message, "bb did not acknowledge the stop of 1 archived thread of this home in time, so its Claude process may still be loaded there. Try again; if it repeats, look at it in bb: thr_slow");
+  assert.equal(answer.error.message, "bb did not acknowledge the stop of 1 archived thread of this home in time, so its agent process may still be loaded there. Try again; if it repeats, look at it in bb: thr_slow");
   assert.doesNotMatch(answer.error.message, /delete/);
   assert.ok(Date.now() - started < 20_000, "at the call's own limit, not the command's");
 });

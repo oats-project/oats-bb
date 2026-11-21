@@ -81,14 +81,15 @@ export const PI_AGENT_DIR_SHAPE = Object.freeze({ code: "E_BACKEND_SETTINGS", st
  *  [{code, status, message}] in the order a person would fix them. */
 export async function piConfigurationProblems(agentDir, globalEnvNames) {
   if (!absolutePath(agentDir)) return [{ ...PI_AGENT_DIR_SHAPE }];
-  const where = `the pi configuration bb's server runs with (settings.oats.bb.piAgentDir: ${agentDir})`;
+  // In each message: what is wrong, the remedy, and last the file that was read, which may be
+  // long: the kernel relays 500 characters, and a cut must take the path, never the remedy.
   const found = readPiPackages(agentDir);
   if (found.unreadable !== undefined) {
-    return [{ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `${where} cannot be checked: its settings.json is there and ${found.unreadable}. A pi launch needs ${PI_BRIDGE} listed there and ${PI_AWEB_EXTENSION} not: fix the file, or point the setting at the directory bb's server uses` }];
+    return [{ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi configuration cannot be checked: its settings.json is there and ${found.unreadable}. A pi launch needs ${PI_BRIDGE} listed there and ${PI_AWEB_EXTENSION} not: fix the file, or point settings.oats.bb.piAgentDir at the directory bb's server uses. Read: ${join(agentDir, "settings.json")}` }];
   }
   const problems = [];
   if (!found.bridge) {
-    problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `${where} does not list ${PI_BRIDGE}: without it a bb thread's pi loads none of the home's skills, and nothing says so. Install it there (PI_CODING_AGENT_DIR=${agentDir} pi install npm:${PI_BRIDGE}), or point the setting at the directory bb's server uses` });
+    problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi would load none of the home's skills, and nothing would say so: ${PI_BRIDGE} is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:${PI_BRIDGE}), or point settings.oats.bb.piAgentDir at the directory bb's server uses. Read: ${join(agentDir, "settings.json")}` });
   }
   if (found.listener && !(await globalEnvNames()).includes(DELIVERY_VARIABLE)) {
     // The remedy before the path, which may be long: the kernel relays 500 characters.

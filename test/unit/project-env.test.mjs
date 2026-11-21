@@ -319,6 +319,16 @@ test("a home that leaves bb has its project's env removed by the launch hook, on
   assert.deepEqual(envCalls(bb), [["list --project proj_a --json", ""], ["unset OATS_INSTANCE --project proj_a --json", ""], ["unset PATH --project proj_a --json", ""]]);
 });
 
+test("a project that is also rooted elsewhere is not the home's alone: the retire hook and the move away remove the three names a pi launch writes, and leave what a person keeps there", async (t) => {
+  const shared = (home) => ({ ...projectRow("proj_a", home), sources: [{ id: "src_1", projectId: "proj_a", type: "local_path", hostId: "host_1", path: home, isDefault: true }, { id: "src_2", projectId: "proj_a", type: "local_path", hostId: "host_1", path: "/a/persons/repo", isDefault: false }] });
+  for (const [which, extra] of [["retire-hook", {}], ["launch-hook", { OATS_BACKEND: "tmux", OATS_PREVIOUS_BACKEND: "bb" }]]) {
+    const { home, bb, backend } = await setup(t, (h) => ({ "project list": { stdout: [shared(h)] }, "machine env list": { stdout: envList(["A_PERSONS_API_KEY", "OATS_INSTANCE_HOME", "PATH"]) } }));
+    const run = await runBin([which], { env: hookEnv(home, bb, backend, extra) });
+    assert.equal(run.status, 0, which);
+    assert.deepEqual(envCalls(bb), [["list --project proj_a --json", ""], ["unset OATS_INSTANCE_HOME --project proj_a --json", ""], ["unset PATH --project proj_a --json", ""]], which);
+  }
+});
+
 test("a home that leaves bb with a bb that cannot be asked starts all the same, with one warning for both things left", async (t) => {
   const { home, bb, backend } = await setup(t, { "project list": UNREACHABLE });
   mkdirSync(join(home, ".claude"));

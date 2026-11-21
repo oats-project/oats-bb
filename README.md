@@ -178,7 +178,9 @@ thread still reads as there, and an input to it is told (bb starts the agent aga
 without the kernel counting a resume. What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
-a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess.
+a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess; to get such
+a thread back, send it a message in bb (`bb thread tell <thread id> <text>`), which
+starts a turn and brings it back to `idle`.
 
 **An input to a thread in `error` whose process is gone is told, like any other**
 (contract r23, A14): bb answers sent, starts the harness again in the same conversation
@@ -462,7 +464,9 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   and so does the launch hook of a home that leaves bb, on the kernel's word that it ran
   on bb before (`OATS_PREVIOUS_BACKEND`), as for the `settings.local.json` keys. A
   project that is also rooted at another directory is refused by a pi launch
-  (`E_SESSION_START_FAILED`): its env would reach whatever runs there. A Claude launch
+  (`E_SESSION_START_FAILED`): its env would reach whatever runs there. Such a project is
+  not the home's alone, so the retire hook and a move away remove only those three names
+  from it, and leave what a person keeps there. A Claude launch
   owns no project env: it only removes those three names where a pi launch of the same
   home left them (bb gives a project's env to every thread of it, and starts `claude` by
   a project `PATH`, which a pi launch composed for pi), and leaves any other name alone. bb shows no value of its env back, and no record of it

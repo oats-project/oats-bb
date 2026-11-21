@@ -267,7 +267,8 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be
-  made, that thread's answer is `E_SESSION_UNAVAILABLE`.
+  made, that thread's answer is `E_SESSION_UNAVAILABLE`, whose message says how to get
+  the thread back (a message to it in bb).
 - **input, to a thread in `error`** (contract r23, A14): told like any other thread, with
   no look at processes and no refusal. Where the thread's process is gone, bb answers
   sent, starts the harness again in the same conversation and runs the turn once (pinned
@@ -287,7 +288,8 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   `not_installed` or reports no pi provider. A `piAgentDir` that is not an absolute path
   is `E_BACKEND_SETTINGS` for every launch and every check, whatever the harness.
 - **Hooks.** The retire hook unsets every name of the env of each bb project rooted at
-  the home (`meta.env` is how many), after its threads are archived. The launch hook
+  the home (`meta.env` is how many), after its threads are archived; from a project that
+  is also rooted elsewhere, only the three names a pi launch writes. The launch hook
   does the same when the home starts on another backend and `OATS_PREVIOUS_BACKEND` is
   `bb`, and only then. A bb that cannot be asked is a warning in both, in the hook's one
   last line.

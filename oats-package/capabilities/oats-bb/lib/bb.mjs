@@ -158,6 +158,12 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   // A variable of bb's env, by its name: a name is an argument to bb, and must never read
   // as an option. bb shows no value (`value: null, secret: true`), and none is read.
   const envRow = (row) => isObject(row) && typeof row.name === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(row.name);
+  /** The names of an env of bb's: the machine's, or with `--project <id>` one project's. */
+  const envNames = async (scope) => {
+    const doc = await must(["machine", "env", "list", ...scope, "--json"]);
+    if (!isObject(doc)) throw fail(fallbackCode, "bb machine env list answered something that is not an object");
+    return list(doc.variables, "bb machine env list", envRow).map((row) => row.name);
+  };
   return {
     server, raw, refusal,
     async version() {
@@ -198,18 +204,10 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     async interactions(id) { return list(await must(["thread", "interactions", "list", id, "--json"]), "bb thread interactions list", interactionRow); },
     /** The names of the variables bb holds for one project (its own, not those it inherits
      *  from the machine's). */
-    async projectEnvNames(projectId) {
-      const doc = await must(["machine", "env", "list", "--project", projectId, "--json"]);
-      if (!isObject(doc)) throw fail(fallbackCode, "bb machine env list answered something that is not an object");
-      return list(doc.variables, "bb machine env list", envRow).map((row) => row.name);
-    },
+    projectEnvNames(projectId) { return envNames(["--project", projectId]); },
     /** The names of the variables bb sets for every process it runs on this machine (its
      *  machine env, with no project). */
-    async machineEnvNames() {
-      const doc = await must(["machine", "env", "list", "--json"]);
-      if (!isObject(doc)) throw fail(fallbackCode, "bb machine env list answered something that is not an object");
-      return list(doc.variables, "bb machine env list", envRow).map((row) => row.name);
-    },
+    machineEnvNames() { return envNames([]); },
     /** Set one variable of a project's env. The value goes on stdin, never in an argument. */
     envSet(projectId, name, value) { return raw(["machine", "env", "set", name, "--project", projectId, "--json"], { input: value }); },
     envUnset(projectId, name) { return raw(["machine", "env", "unset", name, "--project", projectId, "--json"]); },

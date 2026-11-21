@@ -65,9 +65,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   }
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
   // sandboxed launch wrote is removed).
-  const allowances = readSandbox(input.sandbox, { sandboxed: mode !== "full" });
+  // (Not read for pi: bb's pi has no sandbox, and its one mode is full.)
+  const allowances = pi ? null : readSandbox(input.sandbox, { sandboxed: mode !== "full" });
   const sandbox = mode === "full" ? null : allowances;
-  const refusal = sandboxRefusal(mode, allowances);
+  const refusal = pi ? null : sandboxRefusal(mode, allowances);
   if (refusal !== null) throw fail(refusal.code, refusal.message);
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);

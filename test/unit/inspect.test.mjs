@@ -96,7 +96,7 @@ test("where the processes cannot be looked at, a thread in error is an error: ne
   const { dir } = scratch(t);
   const row = threadRow("thr_a", "proj_a", "error");
   for (const proc of [join(dir, "no-such-proc"), dir]) {
-    assert.throws(() => inspectAnswer(row, processLook({ proc })), (error) => error.code === "E_SESSION_UNAVAILABLE" && /cannot be read on this host/.test(error.message), proc);
+    assert.throws(() => inspectAnswer(row, processLook({ proc })), (error) => error.code === "E_SESSION_UNAVAILABLE" && /cannot be read on this host/.test(error.message) && /To get a thread in error back, send it a message in bb \(bb thread tell <thread id> <text>\)/.test(error.message), proc);
   }
   // A thread that is not in error asks nothing of the processes.
   assert.deepEqual(inspectAnswer(threadRow("thr_a", "proj_a", "idle"), processLook({ proc: join(dir, "no-such-proc") })), { present: true, state: "unknown", running: null });

@@ -149,10 +149,12 @@ export async function removePiEnv(bb, projectId) {
   }
 }
 
-/** Remove everything bb holds as the project's env. Each name removed is added to
- *  `removed` as it goes, so a caller knows what went before a failure. */
-async function clearProjectEnv(bb, projectId, removed) {
+/** Remove what bb holds as the project's env: every name, or `only` those given. Each
+ *  name removed is added to `removed` as it goes, so a caller knows what went before a
+ *  failure. */
+async function clearProjectEnv(bb, projectId, removed, only = null) {
   for (const name of await bb.projectEnvNames(projectId)) {
+    if (only !== null && !only.includes(name)) continue;
     const answer = await bb.envUnset(projectId, name);
     if (!answer.ok) throw bb.refusal(answer, ["machine", "env"]);
     removed.push(name);
@@ -160,8 +162,11 @@ async function clearProjectEnv(bb, projectId, removed) {
 }
 
 /** Remove the env of every bb project rooted at the home: what a pi launch wrote there.
- *  For the retire hook and for a home that moves to another backend. It never throws for
- *  bb's sake: → { removed: [names], warning: <text> | null }. */
+ *  For the retire hook and for a home that moves to another backend. A project that is the
+ *  home's alone is the provider's, env and all: every name goes. One that is also rooted
+ *  elsewhere is not (a pi launch refuses it, a Claude launch takes it): only the three
+ *  names a pi launch writes go, and what a person keeps there for the other root stays.
+ *  It never throws for bb's sake: → { removed: [names], warning: <text> | null }. */
 export async function clearHomeProjectEnv(home, readSettings, { deadline, env = process.env, bb = null, projects = null } = {}) {
   const removed = [];
   try {
@@ -171,7 +176,7 @@ export async function clearHomeProjectEnv(home, readSettings, { deadline, env = 
       client = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
     }
     const mine = projects ?? projectsOfHome(await client.projects(), home);
-    for (const project of mine) await clearProjectEnv(client, project.id, removed);
+    for (const project of mine) await clearProjectEnv(client, project.id, removed, sharedProjectRefusal(project, home) === null ? null : PI_ENV_NAMES);
     return { removed, warning: null };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;

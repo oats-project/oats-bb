@@ -196,9 +196,8 @@ async function piWarnings(settings, { server, bb, http = getJson, deadline = Dat
   if (provider === null || provider.status === "not_installed") return [];
   const found = [...(problem !== null ? [problem] : []), ...await piConfiguration(settings, bb)];
   if (found.length === 0) return [];
-  const [first, ...rest] = found;
   // Short, and before the finding's own words: those end with the path that was read, which is what a cut may take.
-  return [{ code: "session-provider-pi-not-ready", message: `a pi launch would be refused here (${[first, ...rest].map((entry) => entry.code).join(", ")}); Claude launches are not held up. ${first.message}` }];
+  return [{ code: "session-provider-pi-not-ready", message: `a pi launch would be refused here (${found.map((entry) => entry.code).join(", ")}); Claude launches are not held up. ${found[0].message}` }];
 }
 
 /** Whether the value is an address a bb server can have: an http or https URL with a host. */
@@ -329,11 +328,14 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
     // that is the whole answer, as it is the launch's own first refusal.
     const notOffered = modeRefusal(mode, planned.harness, { sandboxedModes });
     if (notOffered !== null) return { problems: [{ ...notOffered, status: "needs-configuration" }], warnings };
-    allowances = readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
+    allowances = planned.harness === "pi" ? null : readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     return { problems: [{ code: error.code, message: error.message, status: "needs-configuration" }], warnings };
   }
+  // A planned pi launch that got here runs in full mode, and bb's pi has no sandbox: nothing
+  // of the allowances, the deny rules or the gaps is said of it.
+  if (planned.harness === "pi") return { problems, warnings };
   const refusal = sandboxRefusal(mode, allowances);
   if (refusal !== null) problems.push({ ...refusal, status: refusal.code === "E_BACKEND_SANDBOX_UNAVAILABLE" ? "unavailable" : "needs-configuration" });
   else if (allowances.unavailable !== null) {

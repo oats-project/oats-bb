@@ -74,6 +74,27 @@ test("with a long piAgentDir the remedy is still whole, in the refusal and in th
   // And with the team image's own directory the whole warning fits, the file it read included.
   const beforeThePath = warning.message.indexOf("Read: ") + "Read: ".length;
   assert.ok(beforeThePath + "/state/home/.bb-pi/settings.json".length <= 480, String(beforeThePath));
+  // The other two findings of that directory are written the same way: the remedy whole, the path last.
+  writeFileSync(join(long, "settings.json"), JSON.stringify({ packages: [] }));
+  const noBridge = await launch({}, { piAgentDir: long });
+  assert.equal(noBridge.error.code, "E_BACKEND_NOT_READY");
+  assert.match(noBridge.error.message, /Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
+  writeFileSync(join(long, "settings.json"), "{ not json");
+  const unreadable = await launch({}, { piAgentDir: long });
+  assert.equal(unreadable.error.code, "E_BACKEND_NOT_READY");
+  assert.match(unreadable.error.message, /fix the file, or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
+  for (const answer of [noBridge, unreadable]) assert.ok(answer.error.message.length <= 480);
+});
+
+test("nothing of Claude's sandbox is read for pi: a pi launch and its check take whatever `sandbox` holds, and say nothing of it", async (t) => {
+  const { launch, check } = await setup(t);
+  const garbage = { domains: "not a list", write: 7, missing: [{ capability: "oats.aweb", setting: "services" }], somethingNew: true };
+  const planned = (await check({ ...PI_LAUNCH, sandbox: garbage })).result;
+  assert.equal(planned.status, "ready");
+  assert.deepEqual(planned.warnings, []);
+  assert.equal((await launch({ sandbox: garbage, trees: "nor this", protected: 7 })).ok, true);
+  // The same planned launch for Claude is told of the gap, as before.
+  assert.deepEqual((await check({ harness: "claude", yolo: true, args: [], sandbox: { domains: [], write: [], missing: [{ capability: "oats.aweb", setting: "services" }] } })).result.warnings.map((warning) => warning.code), ["session-provider-sandbox-host-missing"]);
 });
 
 test("AWEB_DELIVERY in bb's machine env stands for an @awebai/pi that is listed: it silences the extension in the processes bb runs", async (t) => {
@@ -115,8 +136,8 @@ for (const [name, write] of [
     write(backend);
     const answer = await launch();
     assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
-    assert.match(answer.error.message, /does not list @awebai\/oats-pi: without it a bb thread's pi loads none of the home's skills, and nothing says so/);
-    assert.ok(answer.error.message.includes(`PI_CODING_AGENT_DIR=${backend.piAgentDir} pi install npm:@awebai/oats-pi`));
+    assert.match(answer.error.message, /^bb's pi would load none of the home's skills, and nothing would say so: @awebai\/oats-pi is not in bb's pi configuration\. Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
+    assert.ok(answer.error.message.endsWith(`Read: ${join(backend.piAgentDir, "settings.json")}`), "the file read is named, last");
     assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
     assert.equal(spawned(bb), false);
     assert.deepEqual((await check(PI_LAUNCH)).result.problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"]);
@@ -144,7 +165,8 @@ for (const [name, write, why] of [
     write(backend);
     const answer = await launch();
     assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
-    assert.match(answer.error.message, /cannot be checked: its settings\.json is there and/);
+    assert.match(answer.error.message, /^bb's pi configuration cannot be checked: its settings\.json is there and/);
+    assert.match(answer.error.message, /fix the file, or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
     assert.match(answer.error.message, why);
     assert.doesNotMatch(answer.error.message, /not json|xxxx/);
     assert.equal(spawned(bb), false);

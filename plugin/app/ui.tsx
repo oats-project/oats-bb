@@ -36,6 +36,7 @@ export function Dot({ state }: { state: AgentState }) {
       role="img"
       aria-label={STATE_WORD[state]}
       title={STATE_WORD[state]}
+      data-mark=""
       data-state={state}
       className={`inline-block size-2 shrink-0 rounded-full ${DOT[state]}`}
     />
@@ -47,7 +48,7 @@ export function Dot({ state }: { state: AgentState }) {
  * which holds 3:1 on a row in both themes. Its accessible name is the label.
  */
 export function Mark({ label }: { label: string }) {
-  return <span role="img" aria-label={label} title={label} data-testid="oats-mark" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
+  return <span role="img" aria-label={label} title={label} data-testid="oats-mark" data-mark="" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
 }
 
 /** A tag: one word about a thing ("default", "workspace"). `tone` mutes it, or frames one that needs a look. Never a fact: a fact has its label (`Fact`). */

@@ -44,6 +44,8 @@ test("an agent that waits says since when and what about; the others say only wh
   // A claim with no instant; a question that is bb's own, with no claim.
   expect(agentStatus({ ...waiting, waiting: { ...claim, since: null } }, thread, now).since).toBeNull();
   expect(agentStatus({ ...waiting, waiting: null }, { ...thread, hasPendingInteraction: true }, now)).toEqual({ state: "needs-you", word: "Needs you", since: null, detail: "bb shows its question in this thread" });
+  // The gate: a row the kernel calls stopped shows no claim, whatever it still carries.
+  expect(agentStatus({ ...waiting, running: false, runtimeState: "stopped", waiting: claim }, { ...thread, hasPendingInteraction: false }, now)).toEqual({ state: "stopped", word: "Stopped", since: null, detail: null });
   const working = agents.find((agent) => agent.running === true && agent.waiting === null)!;
   const quiet = { ...of(working.instance).thread, hasPendingInteraction: false };
   expect(agentStatus(working, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null });

@@ -180,10 +180,25 @@ describe("A2 state(): first match wins", () => {
   test("a pending interaction with no claim is needs-you", () => {
     expect(state(agent("a"), thread("t", { hasPendingInteraction: true }))).toBe("needs-you");
   });
-  test("a claim wins over stopped, unreachable and error", () => {
-    for (const runtimeState of ["stopped", "unreachable", "shell"]) {
+  // The gate is the Desktop's: awebai/oats packages/client/waiting-on-you.mjs `waitingClaim`, at 95c7b43b3.
+  // This test held "a claim wins over stopped" until 2026-11-21, when the spec's author changed A2:
+  // one rule for the tree and the panel. The kernel prints no claim on a stopped row today, so the
+  // stopped case is a rule for the type, unseen in a real run.
+  test("a claim wins over unreachable and error; a row the kernel calls stopped shows no claim, unless bb holds a question on its thread", () => {
+    for (const runtimeState of ["unreachable", "shell"]) {
       expect(state(agent("a", { waiting: claim, runtimeState, running: false }), t)).toBe("needs-you");
     }
+    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), t)).toBe("stopped");
+    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), thread("t", { hasPendingInteraction: true }))).toBe("needs-you");
+  });
+  test("a tmux row shows its claim only while the kernel says it runs", () => {
+    const tmux = (over: Partial<Agent>) => state(agent("a", { backend: "tmux", waiting: claim, ...over }), null);
+    expect(tmux({ running: true, runtimeState: null })).toBe("needs-you");
+    expect(tmux({ running: true, runtimeState: "running" })).toBe("needs-you");
+    expect(tmux({ running: true, runtimeState: "shell" })).toBe("error");
+    expect(tmux({ running: null, runtimeState: "unreachable" })).toBe("unreachable");
+    expect(tmux({ running: null, runtimeState: null })).toBe("idle");
+    expect(tmux({ running: false, runtimeState: "stopped" })).toBe("stopped");
   });
   test("the fixtures: three need you, two work, one is stopped, one is idle and unread", () => {
     const v = view(fixtureAgents(), fixtureThreads());

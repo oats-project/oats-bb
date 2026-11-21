@@ -2,12 +2,30 @@
 import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
+ * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
+ * waiting-on-you.mjs `waitingClaim`, read at 95c7b43b3), so that the tree, the thread's row and
+ * the instance panel say one thing.
+ * - A row on a session provider (bb): the claim the kernel's row carries, unless the kernel calls
+ *   the row stopped (`running === false`, its session not one that failed or that it cannot
+ *   reach): a home OATS stopped shows none, whatever it still carries.
+ * - A tmux row: only while the kernel says it runs (`running === true`, and no `runtimeState`
+ *   other than "running").
+ * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
+ */
+export function claimOf(agent: Agent): Agent["waiting"] {
+  if (agent.waiting === null) return null;
+  if (agent.backend === "tmux") return agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") ? agent.waiting : null;
+  const stopped = agent.running === false && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
+  return stopped ? null : agent.waiting;
+}
+
+/**
  * The state of one agent on its thread. First match wins. Activity is the kernel's word
  * (`running`), never inferred: bb cannot tell a live idle agent from a settled one, so anything
  * the kernel does not call running is "idle", an unknown `runtimeState` word included.
  */
 export function state(agent: Agent, thread: BbThread | null): AgentState {
-  if (agent.waiting !== null || thread?.hasPendingInteraction === true) return "needs-you";
+  if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";

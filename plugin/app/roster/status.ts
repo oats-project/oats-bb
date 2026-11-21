@@ -2,7 +2,7 @@
 // the line under a thread's header, the home and the instance panel print what this answers
 // (through `State` and `StatusLine`, app/ui.tsx), so they say the same thing. Pure.
 import type { Agent, AgentState, BbThread } from "../../model/types";
-import { state } from "../../model/view";
+import { claimOf, state } from "../../model/view";
 import { STATE, waitingDetail, waitingSince } from "../ui/words";
 
 export type AgentStatus = {
@@ -26,8 +26,8 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
   const base = { state: drawn, word: STATE[drawn].word };
   switch (drawn) {
     case "needs-you": {
-      // The kernel's claim; with none, the question is bb's own.
-      const claim = agent.waiting;
+      // The kernel's claim, through the one gate; with none, the question is bb's own.
+      const claim = claimOf(agent);
       if (claim === null) return { ...base, since: null, detail: "bb shows its question in this thread" };
       return { ...base, since: waitingSince(claim.since, now), detail: waitingDetail(claim) };
     }

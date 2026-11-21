@@ -92,13 +92,9 @@ test("each action shows only in the states it applies to", async () => {
   const with_ = (change: Partial<Agent>) => fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, ...change } : agent));
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
-  // stopped while it holds a claim: it needs you, and it can still be started
-  expect(await by("thr_harvest", with_({ runtimeState: "stopped", running: false, waiting: { reason: "question", message: "ok?", since: null } }))).toEqual([
-    "stop",
-    "start",
-    "restart",
-    "retire",
-  ]);
+  // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
+  // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.
+  expect(await by("thr_harvest", with_({ runtimeState: "stopped", running: false, waiting: { reason: "question", message: "ok?", since: null } }))).toEqual(["start", "retire"]);
 });
 
 test("with no roster ever read, every thread's menu has one entry, off, that says OATS can't be read and why: never only bb's own acts", async () => {

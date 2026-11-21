@@ -104,8 +104,10 @@ test("the declaration is valid under the base supervisor's grammar and declares 
   assert.deepEqual(admitForBuild(committed, switchName), {
     name: "bb",
     // bb's data stays in its default directory, /state/home/.bb: no --data-dir.
-    command: ["/usr/local/bin/bb-app", "--no-in-app-updates", "--server-bind-host", "127.0.0.1"],
-    env: { BB_TELEMETRY: "false" },
+    // bb-server gives bb's pi its own configuration, then runs bb-app with these arguments.
+    command: ["/usr/local/bin/bb-server", "--no-in-app-updates", "--server-bind-host", "127.0.0.1"],
+    // bb's pi configuration: on the state volume (pi writes there), never the agents' own ~/.pi/agent.
+    env: { BB_TELEMETRY: "false", PI_CODING_AGENT_DIR: "/state/home/.bb-pi" },
     envFromFile: { CLAUDE_CODE_OAUTH_TOKEN: "/etc/agent-login/claude-token" },
     ready: { url: "http://127.0.0.1:38887/status", field: "connected" },
     listen: [38886, 38887],

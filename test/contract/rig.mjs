@@ -30,8 +30,12 @@ export async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } 
 
 /** One container of `image` (built from `dockerfileDir` at the pinned bb), named `name`.
  *  `runArgs`: more `docker run` arguments. `entry`: the provider's command in the
- *  container. `settings`: the provider's settings for every call. */
-export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs", settings }) {
+ *  container. `settings`: the provider's settings for every call. `mock`: the model endpoint's
+ *  script in this directory, or several. `bbEnv`: what bb's server gets in its environment (the mock
+ *  Anthropic endpoint and a dummy key, for Claude threads). `ready`: what the start waits
+ *  for (a check that answers ready, with no planned launch). */
+export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs", settings,
+  mock = "mock-anthropic.mjs", bbEnv = { ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" }, ready = null }) {
   /** Run a shell line in the container. → stdout. `ok: false` tolerates a nonzero exit. */
   function sh(line, { input, ok = true } = {}) {
     return new Promise((done, reject) => {
@@ -48,9 +52,9 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
 
   /** One call on the provider's wire, as the kernel makes it: the request on stdin, the
    *  settings in OATS_SETTINGS. → the answer envelope. */
-  async function provider(verb, input) {
+  async function provider(verb, input, overrides = {}) {
     const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
+    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify({ ...settings, ...overrides })}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
     const answer = JSON.parse(stdout);
     assert.equal(answer.verb, verb);
     return answer;
@@ -89,10 +93,10 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
   async function start() {
     execFileSync("docker", ["build", "-q", "--build-arg", `BB_APP_VERSION=${BB_VERSION}`, "-t", image, dockerfileDir], { stdio: ["ignore", "ignore", "inherit"] });
     execFileSync("docker", ["run", "-d", "--name", name, "--init", "--cpus", "2", "--memory", "4g", ...runArgs, "-v", `${repo}:/repo:ro`, image], { stdio: ["ignore", "ignore", "inherit"] });
-    await run("docker", ["exec", "-d", name, "sh", "-c", "cd ~ && node /repo/test/contract/mock-anthropic.mjs > mock.out 2>&1"]);
-    await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", name, "sh", "-c",
+    for (const script of [mock].flat()) await run("docker", ["exec", "-d", name, "sh", "-c", `cd ~ && node /repo/test/contract/${script} > ${script}.out 2>&1`]);
+    await run("docker", ["exec", "-d", ...Object.entries(bbEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]), name, "sh", "-c",
       "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates > bb-app.out 2>&1"]);
-    await waitFor("bb to be ready", async () => (await provider("check", { home: null, soul: null })).result?.status === "ready", { timeoutMs: 180_000, everyMs: 1_000 });
+    await waitFor("bb to be ready", ready ?? (async () => (await provider("check", { home: null, soul: null })).result?.status === "ready"), { timeoutMs: 180_000, everyMs: 1_000 });
   }
 
   async function stop() {

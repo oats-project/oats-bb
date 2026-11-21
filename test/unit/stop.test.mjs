@@ -217,7 +217,7 @@ test("where the time runs out on a home's archived threads, the stop says how ma
   const bb = fakeBbIn(dir, { "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 30_000, stdout: { ok: true } } });
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 1 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.equal(answer.error.message, "this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has (0 were): a Claude process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again");
+  assert.equal(answer.error.message, "this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has (0 were): an agent process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again");
   assert.ok(answer.error.message.length <= 480);
 });
 
@@ -230,7 +230,7 @@ test("one archived thread whose stop bb does not answer in the call's own time i
   const started = Date.now();
   const answer = await call("stop", { home, endpoint: null, graceSeconds: 120 }, { settings, bb });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
-  assert.equal(answer.error.message, "bb did not acknowledge the stop of 1 archived thread of this home in time, so its Claude process may still be loaded there. Try again; if it repeats, look at it in bb: thr_slow");
+  assert.equal(answer.error.message, "bb did not acknowledge the stop of 1 archived thread of this home in time, so its agent process may still be loaded there. Try again; if it repeats, look at it in bb: thr_slow");
   assert.doesNotMatch(answer.error.message, /delete/);
   assert.ok(Date.now() - started < 20_000, "at the call's own limit, not the command's");
 });
@@ -360,6 +360,8 @@ async function retireWith(t, script, { launched = true } = {}) {
   const lines = run.stdout.trim().split("\n");
   return { run, last: JSON.parse(lines[lines.length - 1]), calls: bb.calls(), home };
 }
+// The retire's last read: the env bb holds for the home's project (what a pi launch wrote), to remove it.
+const ENV_READ = "machine env";
 // A stop that is confirmed: what waits in line, the stop, settled, nothing in line, settled.
 const CONFIRMED = ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show"];
 const archived = (id) => ({ stdout: { ok: true, threadId: id, alreadyArchived: false, archivedAt: 9, archivedThreadIds: [id] } });
@@ -383,7 +385,7 @@ test("retire stops a thread still in a turn before archiving it", async (t) => {
     "thread archive": archived("thr_a"),
   }));
   assert.deepEqual(last.meta, { retired: true, archived: ["thr_a"] });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived"]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived", ENV_READ]);
 });
 
 test("retire withdraws what bb holds in line for a thread, stops it and archives it; and stops the home's threads archived before", async (t) => {
@@ -395,7 +397,7 @@ test("retire withdraws what bb holds in line for a thread, stops it and archives
     "thread stop": { stdout: { ok: true } }, "thread archive": archived("thr_a"),
   }));
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop", "thread list --archived", "thread list"]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
   assert.deepEqual(calls.filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_a", "thr_arch"]);
 });
 
@@ -405,7 +407,7 @@ test("retire with nothing live still stops the home's archived threads, and is a
     "thread list --archived": { stdout: [threadRow("thr_arch", "proj_a", "idle", { archivedAt: 5 })] }, "thread stop": { stdout: { ok: true } },
   }));
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list"]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
 });
 
 test("retire archives only a thread it has seen stopped: one that will not stop is left, named, and the retire goes on", async (t) => {
@@ -473,7 +475,7 @@ test("retire asks bb for every home, whatever the home holds: nothing in it says
     "thread archive": archived("thr_a"),
   }), { launched: false });
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived"], "a settled thread is stopped too: bb keeps an archived thread's process otherwise");
+  assert.deepEqual(verbs(calls), ["project list", "thread list", ...CONFIRMED, "thread archive", "thread list --archived", ENV_READ], "a settled thread is stopped too: bb keeps an archived thread's process otherwise");
 });
 
 test("retire of any home (a tmux home too) warns when bb cannot be asked, and says nothing when bb holds nothing of it", async (t) => {

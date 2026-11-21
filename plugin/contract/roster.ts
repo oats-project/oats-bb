@@ -54,7 +54,10 @@ export const host = defineRpcContract({
   status: {
     experimental_retryable: true,
     input: hostRead,
-    output: answer(z.object({ root: z.string(), workspace: z.string().nullable(), agents: z.array(agent) })),
+    /** `rows[n]` is the kernel's own row of `agents[n]`, whole: the server keeps it for the features (server/core.ts). */
+    output: answer(
+      z.object({ root: z.string(), workspace: z.string().nullable(), agents: z.array(agent), rows: z.array(z.record(z.string(), z.unknown())) }),
+    ),
   },
   /** Watches the deployment's event log; each batch is one `changed` signal. Null: nothing to watch yet. */
   watch: {

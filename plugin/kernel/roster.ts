@@ -41,7 +41,12 @@ function threadIdOf(source: z.output<typeof row>): string | null {
 
 const identityMeta = z.looseObject({ alias: text, team: text });
 
-export type Status = { root: string; workspace: string | null; agents: Agent[] };
+/**
+ * `rows[n]` is the kernel's own row of `agents[n]`, whole, as `oats status --json` printed it: a
+ * feature that draws more of a row than `Agent` holds reads it there with a schema of its own
+ * (the server keeps the rows beside the snapshot), so nobody runs a second `oats status`.
+ */
+export type Status = { root: string; workspace: string | null; agents: Agent[]; rows: Record<string, unknown>[] };
 
 function toAgent(group: { name: string }, source: z.output<typeof row>): Agent {
   // The messaging identity: the row's own `identity`, else what a messaging capability recorded.
@@ -90,8 +95,14 @@ export function parseStatus(document: unknown): Result<Status> {
   const parsed = shaped(roster, document, "oats status");
   if (!parsed.ok) return parsed;
   const agents: Agent[] = [];
-  for (const group of parsed.value.agents) for (const source of group.instances) agents.push(toAgent(group, source));
-  return ok({ root: parsed.value.root, workspace: parsed.value.workspace?.key ?? null, agents });
+  const rows: Record<string, unknown>[] = [];
+  for (const group of parsed.value.agents) {
+    for (const source of group.instances) {
+      agents.push(toAgent(group, source));
+      rows.push(source);
+    }
+  }
+  return ok({ root: parsed.value.root, workspace: parsed.value.workspace?.key ?? null, agents, rows });
 }
 
 /** The roster's command. */

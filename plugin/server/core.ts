@@ -101,6 +101,8 @@ export function createCore(bb: BbPluginApi) {
   let settingsGeneration = 0;
   let watchAsserted = false;
   let cached: Snapshot | null = null;
+  /** The kernel's own rows behind `cached`, by instance; null when `cached` is not a roster. */
+  let rawRows: ReadonlyMap<string, Readonly<Record<string, unknown>>> | null = null;
   let comparable = "";
   let lastStart = 0;
   let running: Promise<Snapshot> | null = null;
@@ -185,6 +187,7 @@ export function createCore(bb: BbPluginApi) {
     lastStart = Date.now();
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
+    let rows: Map<string, Readonly<Record<string, unknown>>> | null = null;
     try {
       const where = await base(lifetime.signal);
       if ("ok" in where) {
@@ -194,6 +197,12 @@ export function createCore(bb: BbPluginApi) {
         if (answer.ok) {
           const workspace = answer.value.workspace ? lastSegment(answer.value.workspace) : lastSegment(where.target.deployment);
           next = { ok: true, at, deployment: { root: where.target.deployment, workspace, machine: where.target.machine }, agents: answer.value.agents };
+          rows = new Map();
+          // By instance, the first row of a name: the row `agentOf` finds.
+          answer.value.agents.forEach((agent, index) => {
+            const row = answer.value.rows[index];
+            if (row !== undefined && !rows!.has(agent.instance)) rows!.set(agent.instance, row);
+          });
           void assertWatch(where.target);
         } else {
           const message =
@@ -209,9 +218,12 @@ export function createCore(bb: BbPluginApi) {
       next = { ok: false, at, code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error).message)}` };
       target = null;
     }
-    const key = JSON.stringify({ ...next, at: null });
+    // A change is a change of anything the kernel printed: a feature may draw a field of a raw row
+    // that the snapshot's agents do not hold.
+    const key = JSON.stringify({ ...next, at: null, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
+    rawRows = rows;
     comparable = key;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
@@ -276,6 +288,28 @@ export function createCore(bb: BbPluginApi) {
     if (answer === null) throw refusal({ code: codes.hostUnreachable, message: "The machine that runs oats did not answer." });
     if (!answer.ok) throw refusal(answer.error);
     return answer.value as Value<Method>;
+  }
+
+  /**
+   * The kernel's own rows of the current snapshot, by instance, whole, as `oats status --json`
+   * printed them, with the snapshot's `at`. For a feature that draws more of a row than `Agent`
+   * holds: it reads the row with a schema of its own, and nobody runs a second `oats status`.
+   * A snapshot that is no roster is refused, as for `agentOf`.
+   */
+  async function rowsOf(): Promise<{ at: string; rows: ReadonlyMap<string, Readonly<Record<string, unknown>>> }> {
+    const now = await current();
+    if (!now.ok) throw refusal({ code: now.code, message: now.message });
+    // `rawRows` is set with `cached`, in one step: it is this snapshot's unless a newer read landed, and then both are newer.
+    const held = cached !== null && cached.ok && rawRows !== null ? { at: cached.at, rows: rawRows } : null;
+    if (held === null) throw refusal({ code: codes.hostUnreachable, message: "The OATS roster is being read again: try once more." });
+    return held;
+  }
+  /** The kernel's own row of one instance of the current snapshot; an instance it does not name is refused. */
+  async function rowOf(instance: string): Promise<{ at: string; row: Readonly<Record<string, unknown>> }> {
+    const { at, rows } = await rowsOf();
+    const row = rows.get(instance);
+    if (row === undefined) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
+    return { at, row };
   }
 
   /** One answer per page for all clients, reused for PAGE_TTL_MS; a failed read is not kept. */
@@ -372,6 +406,8 @@ export function createCore(bb: BbPluginApi) {
     reread,
     rereadSoon,
     agentOf,
+    rowOf,
+    rowsOf,
     threadOf,
     clientSnapshot,
     clientRefresh,

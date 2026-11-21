@@ -20,8 +20,9 @@ import { codes } from "../../kernel/result";
 import type { Node } from "../../model/types";
 import { count, needsYouLabel } from "../format";
 import { failureLine, useOats } from "../oats";
-import { Button, Dot, plainClick } from "../ui";
-import { PAGES } from "../workspace/pages";
+import { Button, Dot, Mark, plainClick } from "../ui";
+import { pageLinks } from "../workspace/pages";
+import type { PageLink } from "../workspace/pages";
 import { refusalLines, shown } from "../ui/text";
 
 
@@ -46,6 +47,22 @@ function target(thread: PluginSidebarThread): PluginThreadActionTarget {
 const INDENT = ["pl-2", "pl-6", "pl-10"] as const;
 const ROW = "flex min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent";
 const HEADING = "px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+const noMark = () => null;
+
+/** One row of the "oats" block: a page of the plugin, and the mark its feature gives it, if any. */
+function PageRow({ page, onOpen }: { page: PageLink; onOpen: () => void }) {
+  // The same hook at every render of this row: a row is keyed by its page.
+  const mark = (page.useMark ?? noMark)();
+  return (
+    <li>
+      <button type="button" data-testid={`oats-page-link-${page.path}`} className={`${ROW} w-full pl-6 text-left`} onClick={onOpen}>
+        {page.title}
+        {mark === null ? null : <Mark label={mark.label} />}
+      </button>
+    </li>
+  );
+}
 
 export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
@@ -177,17 +194,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         {` · ${shown(deployment.machine)} · ${count(agents.length, "agent")}`}
       </p>
       <ul className="flex flex-col">
-        {PAGES.map((page) => (
-          <li key={page.path}>
-            <button
-              type="button"
-              data-testid={`oats-page-link-${page.path}`}
-              className={`${ROW} w-full pl-6 text-left`}
-              onClick={() => openPage(page.path)}
-            >
-              {page.title}
-            </button>
-          </li>
+        {pageLinks().map((page) => (
+          <PageRow key={page.path} page={page} onOpen={() => openPage(page.path)} />
         ))}
       </ul>
       <button

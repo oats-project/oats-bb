@@ -4,6 +4,7 @@ import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { addPageLink } from "../../app/workspace/pages";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
@@ -259,4 +260,31 @@ test("when bb cannot list its threads the line says so, with Retry", async () =>
     expect(slot.getByTestId("oats-status-line").textContent).toBe("bb could not list its threads, so the OATS agents cannot be matched to them.Retry"),
   );
   expect(slot.queryByTestId("oats-tree")).toBeNull();
+});
+
+test("a feature's own page is a row under the four pages, with its mark while its hook gives one", async () => {
+  let failed = true;
+  const remove = addPageLink({ path: "automations", title: "Automations", useMark: () => (failed ? { label: "Automations, a run failed" } : null) });
+  try {
+    const { slot } = await sidebar();
+    const row = await slot.findByTestId("oats-page-link-automations");
+    expect(Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent)).toEqual(["Souls", "Capabilities", "Teams", "Machines", "Automations"]);
+    const mark = row.querySelector('[data-testid="oats-mark"]')!;
+    expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Automations, a run failed"]);
+    // The four pages have no mark.
+    expect(slot.getByTestId("oats-page-link-souls").querySelector('[data-testid="oats-mark"]')).toBeNull();
+    fireEvent.click(row);
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations" }]);
+    slot.unmount();
+    failed = false;
+    const calm = (await sidebar()).slot;
+    expect((await calm.findByTestId("oats-page-link-automations")).querySelector('[data-testid="oats-mark"]')).toBeNull();
+    calm.unmount();
+  } finally {
+    remove();
+  }
+  // Taken away: the block is the four pages again.
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-page-link-souls");
+  expect(slot.queryByTestId("oats-page-link-automations")).toBeNull();
 });

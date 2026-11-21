@@ -9,6 +9,25 @@ import { startBackend, type Backend } from "../support/backend.js";
 import { FIXTURES, installFakeOats } from "../support/fake-oats.js";
 
 const recorded = async () => JSON.parse(await readFile(join(FIXTURES, "roster/version.json"), "utf8")) as { version: string; desktopApi: number; features: string[] };
+/** The `<name>Api` numbers OATS 0.70.0 prints. */
+const APIS = {
+  desktopApi: 1,
+  automationsApi: 1,
+  workspaceApi: 2,
+  instanceGitApi: 1,
+  spawnApplyApi: 1,
+  soulsApi: 2,
+  lifecycleApi: 1,
+  readinessApi: 2,
+  spawnPreviewApi: 2,
+  eventsApi: 2,
+  scheduleHistoryApi: 3,
+  scheduleApi: 2,
+  operationsApi: 2,
+  capabilityShowApi: 1,
+  readerApi: 1,
+  boardApi: 1,
+};
 
 describe("the kernel's version", () => {
   it("is read with `oats version --json` in the deployment: the release, the JSON answers' version, the features", async () => {
@@ -17,7 +36,7 @@ describe("the kernel's version", () => {
     try {
       const version = await createOats({ bin: fake.bin, cwd: fake.deployment, processes }).version();
       const printed = await recorded();
-      expect(version).toEqual({ ok: true, value: { version: "0.70.0", desktopApi: 1, features: printed.features } });
+      expect(version).toEqual({ ok: true, value: { version: "0.70.0", desktopApi: 1, features: printed.features, apis: APIS } });
       expect(printed.features).toContain("session-providers");
       const [call] = await fake.calls();
       expect(call?.argv).toEqual(["version", "--json"]);
@@ -29,7 +48,7 @@ describe("the kernel's version", () => {
   });
 
   it("a kernel that lists no features, or names no JSON version, is read as having none", () => {
-    expect(parseVersion({ version: "0.41.0" })).toEqual({ ok: true, value: { version: "0.41.0", desktopApi: null, features: [] } });
+    expect(parseVersion({ version: "0.41.0", sessionViewer: { prefixScroll: false }, someApi: "2" })).toEqual({ ok: true, value: { version: "0.41.0", desktopApi: null, features: [], apis: {} } });
   });
 
   it("an answer with no version is the typed error of a document the plugin cannot read", () => {
@@ -48,7 +67,7 @@ describe("the server's one read of it", () => {
     backend = await startBackend({ load: (bb) => void (core = createCore(bb)) });
     const [one, two] = await Promise.all([core.versionOf(), core.versionOf()]);
     const again = await core.versionOf();
-    expect(one).toEqual({ version: "0.70.0", desktopApi: 1, features: (await recorded()).features });
+    expect(one).toEqual({ version: "0.70.0", desktopApi: 1, features: (await recorded()).features, apis: APIS });
     expect(two).toBe(one);
     expect(again).toBe(one);
     expect(await backend.verbs()).toEqual(["version"]);

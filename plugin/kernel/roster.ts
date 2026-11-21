@@ -117,14 +117,20 @@ const versionDocument = z.looseObject({
   features: z.array(z.string()).nullish(),
 });
 
-/** The kernel on this machine: its release, the version of its JSON answers, and what it says it can do. */
-export type Version = { version: string; desktopApi: number | null; features: string[] };
+/**
+ * The kernel on this machine: its release, the version of its JSON answers, what it says it can do
+ * (`features`), and the version of each of its answers that has one (`apis`: every `<name>Api`
+ * number it prints, `desktopApi` and `automationsApi` among them).
+ */
+export type Version = { version: string; desktopApi: number | null; features: string[]; apis: Record<string, number> };
 
 export function parseVersion(document: unknown): Result<Version> {
   const parsed = shaped(versionDocument, document, "oats version");
   if (!parsed.ok) return parsed;
+  const apis: Record<string, number> = {};
+  for (const [name, value] of Object.entries(parsed.value)) if (name.endsWith("Api") && typeof value === "number") apis[name] = value;
   // A kernel that lists no features has none the plugin may rely on.
-  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [] });
+  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [], apis });
 }
 
 /** The roster's commands, and the one read of the kernel's version that every feature shares. */

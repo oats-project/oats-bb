@@ -106,8 +106,8 @@ describe("stop", () => {
 describe("start and restart", () => {
   const home = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
   it("starts the home the kernel named and answers the new thread, and names no mode (no --yolo): the home's recorded choice stands", async () => {
-    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_3ufx45khmp" } });
-    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_guaerjwvwg" } });
+    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_7nx8uibthg" } });
+    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_d5zug5fnva" } });
     expect((await fake.calls()).map((call) => call.argv)).toEqual([
       ["session", "start", "--home", home, "--json"],
       ["session", "restart", "--home", home, "--json"],

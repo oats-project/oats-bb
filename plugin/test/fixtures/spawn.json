@@ -12,8 +12,8 @@
   "warnings": [],
   "launchPrompts": {
    "status": "not-engaged",
-   "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-   "at": "2026-11-21T05:50:46.851Z"
+   "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+   "at": "2026-11-21T15:45:01.128Z"
   },
   "tmux": null,
   "backend": "bb",
@@ -21,8 +21,8 @@
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_q2nv2zr9tp",
-    "threadId": "thr_pkixkg8mvn"
+    "projectId": "proj_tuunszxkgj",
+    "threadId": "thr_ad488edeab"
    }
   },
   "repo": "/abs/deployment",
@@ -45,7 +45,7 @@
     "work": "directory",
     "harness": "claude",
     "model": "claude-opus-5-5",
-    "launchConfig": "claude-full",
+    "launchConfig": null,
     "yolo": true,
     "backend": "bb",
     "childSpawns": true,
@@ -62,7 +62,7 @@
     }
    },
    "resolution": "3b3439a1ed840f0405bb7a70",
-   "revision": "de041a9a3b24b071f9ebecaf"
+   "revision": "e222b049bbbc3fcc2552a0c1"
   },
   "replayed": false,
   "wake": {
@@ -70,13 +70,12 @@
    "saved": null,
    "error": null
   },
-  "launchConfig": "claude-full",
+  "launchConfig": null,
   "launch": {
    "version": 2,
    "harness": "claude",
-   "launchConfig": "claude-full",
-   "launchConfigSource": "/abs/deployment",
-   "launchConfigDefault": true,
+   "launchConfig": null,
+   "launchConfigSource": null,
    "executable": null,
    "executableDeclared": null,
    "executableResolvedFrom": "session provider bb",

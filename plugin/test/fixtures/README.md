@@ -17,7 +17,8 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   0.70.0 from npm (`@awebai/oats@0.70.0`, gitHead 7512163012876511088da79168c74540f9523c66), the bb
   session provider of this repository's `main` at 134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5 (wire 1.3), with
   the provider's own floor (`compatibility.oats: >=0.70.0`) and no trial commit, on
-  2026-11-21. Each is
+  2026-11-21, on a deployment with no launch configuration: every agent was spawned with `--yolo`
+  (the plugin's own, on every spawn), so the answers have `yolo: true` and `launchConfig: null`. Each is
   what the kernel printed for a call the plugin made through its own RPC, whole, printed with one
   space of indentation. One substitution and no other edit: the paths (the deployment is
   `/abs/deployment`, the run's directory `/abs/real`, the container user's home `/abs/home`). The

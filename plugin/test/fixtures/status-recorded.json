@@ -54,7 +54,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -71,7 +71,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -345,14 +345,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_pkixkg8mvn"
+       "threadId": "thr_ad488edeab"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -370,7 +369,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -438,25 +437,25 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+      "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-       "at": "2026-11-21T05:50:46.851Z"
+       "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+       "at": "2026-11-21T15:45:01.128Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:50:45.411Z",
+      "startedAt": "2026-11-21T15:44:59.291Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_q2nv2zr9tp/threads/thr_pkixkg8mvn"
+       "url": "http://127.0.0.1:38886/projects/proj_tuunszxkgj/threads/thr_ad488edeab"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -654,7 +653,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -671,7 +670,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -945,14 +944,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_pkixkg8mvn"
+       "threadId": "thr_ad488edeab"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -970,7 +968,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -1038,25 +1036,25 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+      "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-       "at": "2026-11-21T05:50:46.851Z"
+       "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+       "at": "2026-11-21T15:45:01.128Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:50:45.411Z",
+      "startedAt": "2026-11-21T15:44:59.291Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_q2nv2zr9tp/threads/thr_pkixkg8mvn"
+       "url": "http://127.0.0.1:38886/projects/proj_tuunszxkgj/threads/thr_ad488edeab"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -1254,7 +1252,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -1271,7 +1269,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -1545,14 +1543,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_pkixkg8mvn"
+       "threadId": "thr_ad488edeab"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -1570,7 +1567,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -1638,25 +1635,25 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+      "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-       "at": "2026-11-21T05:50:46.851Z"
+       "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+       "at": "2026-11-21T15:45:01.128Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:50:45.411Z",
+      "startedAt": "2026-11-21T15:44:59.291Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_q2nv2zr9tp/threads/thr_pkixkg8mvn"
+       "url": "http://127.0.0.1:38886/projects/proj_tuunszxkgj/threads/thr_ad488edeab"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -1666,7 +1663,7 @@
       "running": null,
       "runtimeState": "unknown",
       "waitingOnYou": {
-       "since": "2026-11-21T05:51:26.629Z",
+       "since": "2026-11-21T15:45:46.677Z",
        "producer": "agent",
        "reason": "attention",
        "message": "Keep the retry, or fail the job?"
@@ -1859,7 +1856,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -1876,7 +1873,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -2150,14 +2147,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_pkixkg8mvn"
+       "threadId": "thr_ad488edeab"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -2175,7 +2171,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -2243,25 +2239,25 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+      "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-       "at": "2026-11-21T05:50:46.851Z"
+       "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+       "at": "2026-11-21T15:45:01.128Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:50:45.411Z",
+      "startedAt": "2026-11-21T15:44:59.291Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_q2nv2zr9tp/threads/thr_pkixkg8mvn"
+       "url": "http://127.0.0.1:38886/projects/proj_tuunszxkgj/threads/thr_ad488edeab"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -2271,7 +2267,7 @@
       "running": true,
       "runtimeState": "unknown",
       "waitingOnYou": {
-       "since": "2026-11-21T05:51:48.937Z",
+       "since": "2026-11-21T15:46:10.438Z",
        "producer": "oats.core",
        "reason": "question",
        "message": "Retry the flaky job once more, or mark it as failed?"
@@ -2464,7 +2460,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -2481,7 +2477,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -2755,14 +2751,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_pkixkg8mvn"
+       "threadId": "thr_ad488edeab"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -2780,7 +2775,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -2848,18 +2843,18 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+      "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
-       "at": "2026-11-21T05:50:46.851Z"
+       "startId": "3be38fa2-da08-460c-99b3-62195e77f769",
+       "at": "2026-11-21T15:45:01.128Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:50:45.411Z",
+      "startedAt": "2026-11-21T15:44:59.291Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
@@ -3062,7 +3057,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -3079,7 +3074,7 @@
         }
        },
        "resolution": "3b3439a1ed840f0405bb7a70",
-       "revision": "de041a9a3b24b071f9ebecaf"
+       "revision": "e222b049bbbc3fcc2552a0c1"
       },
       "spawnIdempotencyKey": "spawn-1f0c9a7e",
       "spawnCompleted": true,
@@ -3285,14 +3280,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_piw73uvy5i"
+       "threadId": "thr_4m85rand5n"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -3366,7 +3360,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:50:45.411Z",
+      "createdAt": "2026-11-21T15:44:59.291Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -3424,11 +3418,11 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "5da11a7a-6e0f-439f-88c2-3752b7761674",
+      "startId": "051e2199-e197-4032-b94b-e9b3d44c4261",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "5da11a7a-6e0f-439f-88c2-3752b7761674",
-       "at": "2026-11-21T05:54:19.026Z"
+       "startId": "051e2199-e197-4032-b94b-e9b3d44c4261",
+       "at": "2026-11-21T15:49:12.237Z"
       },
       "wake": {
        "requested": false,
@@ -3437,17 +3431,17 @@
       },
       "restarts": [
        {
-        "startedAt": "2026-11-21T05:53:43.364Z",
+        "startedAt": "2026-11-21T15:48:34.237Z",
         "model": "claude-opus-5-5",
         "reused": "new"
        },
        {
-        "startedAt": "2026-11-21T05:53:56.683Z",
+        "startedAt": "2026-11-21T15:48:48.551Z",
         "model": "claude-opus-5-5",
         "reused": "new"
        },
        {
-        "startedAt": "2026-11-21T05:54:14.725Z",
+        "startedAt": "2026-11-21T15:49:07.053Z",
         "model": "claude-opus-5-5",
         "reused": "new"
        }
@@ -3487,8 +3481,8 @@
          }
         },
         "hooks": {
-         "launch": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/bddb350644a3/oats.bb/bin/oats-bb.mjs' launch-hook",
-         "retire": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/bddb350644a3/oats.bb/bin/oats-bb.mjs' retire-hook"
+         "launch": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/0cff7bf039cf/oats.bb/bin/oats-bb.mjs' launch-hook",
+         "retire": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/0cff7bf039cf/oats.bb/bin/oats-bb.mjs' retire-hook"
         },
         "requiredHooks": [],
         "environment": [],
@@ -3506,9 +3500,9 @@
         "settings": {},
         "settingsOrigins": {},
         "hooks": {
-         "spawn": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/bddb350644a3/oats.core/bin/oats-core.mjs' spawn",
-         "launch": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/bddb350644a3/oats.core/bin/oats-core.mjs' launch",
-         "upgrade": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/bddb350644a3/oats.core/bin/oats-core.mjs' upgrade"
+         "spawn": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/0cff7bf039cf/oats.core/bin/oats-core.mjs' spawn",
+         "launch": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/0cff7bf039cf/oats.core/bin/oats-core.mjs' launch",
+         "upgrade": "node '/abs/deployment/agents/oats-developer/instances/.oats-retirement/modules/1ec00ecf92414ef70ce5c0921b9ca99ef9f0eff6e57b2aec4db134abde4d4b03/0cff7bf039cf/oats.core/bin/oats-core.mjs' upgrade"
         },
         "requiredHooks": [],
         "environment": [],
@@ -3531,7 +3525,7 @@
        },
        "oats.core": {}
       },
-      "startedAt": "2026-11-21T05:54:14.725Z",
+      "startedAt": "2026-11-21T15:49:07.053Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
@@ -3997,14 +3991,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_trijn6gyv6"
+       "threadId": "thr_2tmxyug2qs"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -4022,7 +4015,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:54:57.072Z",
+      "createdAt": "2026-11-21T15:50:01.497Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -4090,20 +4083,20 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "1a689b07-cee0-42e7-8c45-ac3e8a60ed35",
+      "startId": "3b8230d6-5037-4cdb-841e-df20c2ea0869",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "1a689b07-cee0-42e7-8c45-ac3e8a60ed35",
-       "at": "2026-11-21T05:54:58.432Z"
+       "startId": "3b8230d6-5037-4cdb-841e-df20c2ea0869",
+       "at": "2026-11-21T15:50:03.171Z"
       },
-      "startedAt": "2026-11-21T05:54:57.072Z",
+      "startedAt": "2026-11-21T15:50:01.497Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_2353yf4k9v/threads/thr_trijn6gyv6"
+       "url": "http://127.0.0.1:38886/projects/proj_cx3faxtszk/threads/thr_2tmxyug2qs"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -4446,14 +4439,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_9rz67f2pnh"
+       "threadId": "thr_z3u3qec7bs"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -4471,7 +4463,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:55:01.274Z",
+      "createdAt": "2026-11-21T15:50:08.438Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -4539,20 +4531,20 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "ff0321ed-76ce-4c12-a36a-b862a097534f",
+      "startId": "0ee0b0bc-1977-4d0d-86d3-d9cfb92daffa",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "ff0321ed-76ce-4c12-a36a-b862a097534f",
-       "at": "2026-11-21T05:55:02.516Z"
+       "startId": "0ee0b0bc-1977-4d0d-86d3-d9cfb92daffa",
+       "at": "2026-11-21T15:50:10.256Z"
       },
-      "startedAt": "2026-11-21T05:55:01.274Z",
+      "startedAt": "2026-11-21T15:50:08.438Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_i6p4n8smae/threads/thr_9rz67f2pnh"
+       "url": "http://127.0.0.1:38886/projects/proj_3dgbb384je/threads/thr_z3u3qec7bs"
       },
       "moduleCopy": {
        "runs": "kernel-copy",
@@ -4654,7 +4646,7 @@
         "work": "directory",
         "harness": "claude",
         "model": "claude-opus-5-5",
-        "launchConfig": "claude-full",
+        "launchConfig": null,
         "yolo": true,
         "backend": "bb",
         "childSpawns": true,
@@ -4671,7 +4663,7 @@
         }
        },
        "resolution": "e910f32241a6d2aac12d6a08",
-       "revision": "273b2574102c69adfc5eb29e"
+       "revision": "195fd2686968bbedb6a26611"
       },
       "spawnIdempotencyKey": "spawn-3c2e9d7a",
       "spawnCompleted": true,
@@ -4945,14 +4937,13 @@
       "backend": "bb",
       "session": {
        "provider": "oats.bb",
-       "threadId": "thr_wqeixc6256"
+       "threadId": "thr_py96mk7bwc"
       },
       "launch": {
        "version": 2,
        "harness": "claude",
-       "launchConfig": "claude-full",
-       "launchConfigSource": "/abs/deployment",
-       "launchConfigDefault": true,
+       "launchConfig": null,
+       "launchConfigSource": null,
        "executable": null,
        "executableDeclared": null,
        "executableResolvedFrom": "session provider bb",
@@ -4970,7 +4961,7 @@
         "file": "TASK.md"
        }
       },
-      "createdAt": "2026-11-21T05:54:54.183Z",
+      "createdAt": "2026-11-21T15:49:56.671Z",
       "modules": [
        {
         "name": "oats.bb",
@@ -5038,25 +5029,25 @@
       "teams": [],
       "defaultTeam": null,
       "launched": true,
-      "startId": "a7804793-056a-411c-9e3e-68f392e7ee1a",
+      "startId": "de2d6980-2904-4df5-b4ce-2ef4973b0646",
       "launchPrompts": {
        "status": "not-engaged",
-       "startId": "a7804793-056a-411c-9e3e-68f392e7ee1a",
-       "at": "2026-11-21T05:54:55.393Z"
+       "startId": "de2d6980-2904-4df5-b4ce-2ef4973b0646",
+       "at": "2026-11-21T15:49:58.255Z"
       },
       "wake": {
        "requested": false,
        "saved": null,
        "error": null
       },
-      "startedAt": "2026-11-21T05:54:54.183Z",
+      "startedAt": "2026-11-21T15:49:56.671Z",
       "identityAddress": null,
       "attributedHuman": null,
       "color": null,
       "tmux": null,
       "open": {
        "label": "Open in bb",
-       "url": "http://127.0.0.1:38886/projects/proj_82m8qefkdp/threads/thr_wqeixc6256"
+       "url": "http://127.0.0.1:38886/projects/proj_tjzpgm7ec4/threads/thr_py96mk7bwc"
       },
       "moduleCopy": {
        "runs": "kernel-copy",

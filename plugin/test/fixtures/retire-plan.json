@@ -6,7 +6,7 @@
   "action": "retire",
   "instance": "weekly-digest-helper",
   "home": "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper",
-  "at": "2026-11-21T05:56:27.405Z",
+  "at": "2026-11-21T15:52:01.652Z",
   "facts": {
    "session": {
     "state": "stopped",

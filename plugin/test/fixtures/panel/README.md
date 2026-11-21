@@ -32,3 +32,7 @@ sets the waiting claim of producer `oats.board`.
 |---|---|---|
 | `status.json` | `oats status --json` | `panel-worktree-helper` idle in bb (`running: null`), on its branch, child of `redesign-ui-lead`, its board and the board's claim in its row |
 | `status-soul-moved.json` | `oats status --json` | the same, after one commit to `souls/oats-expert/AGENTS.md` in the workspace's member repository: the row's `soul.status` is `moved` |
+| `inspect-home.json` | `oats inspect --home <home of panel-worktree-helper> --json` | the instance as spawned: no core slot filled (the run's workspace has no knowledge, messaging or tasks capability), `oats.bb` and `oats.core` from packages |
+| `events.json` | `oats instance events panel-worktree-helper --home <its home> --limit 100 --json` | after `oats session restart`, a stop (`oats instance stop`, plan and apply), `oats session start` and one more board question: 8 rows, the board's claim live |
+| `readiness-home.json` | `oats readiness --home <its home> --policy --json` | ready; the provider's own answer has two warnings; read after the commit to the member repository, so its `member` item names that commit |
+| `readiness-soul.json` | `oats readiness --soul oats-expert --policy --json` | ready |

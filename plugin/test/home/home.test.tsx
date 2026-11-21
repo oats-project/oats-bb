@@ -270,7 +270,7 @@ test("the fixed thread tab shows the same three sections, with Workspace counts 
   expect([tab.id, tab.context.kind, tab.availability]).toEqual(["home", "thread", "fixed"]);
   const slot = renderSlot<ExperimentalThreadTabProps, Contract>(
     tab as { component: ComponentType<ExperimentalThreadTabProps> },
-    { threadId: "thr_ci", environment: null },
+    { threadId: "thr_plain", environment: null } /* a thread that is no agent's: an agent's own thread shows the view a feature names for it */,
     { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS },
   );
   expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you3");
@@ -287,7 +287,7 @@ test("a hidden tab does not read the four pages", async () => {
   const app = await loadApp();
   const slot = renderSlot<ExperimentalThreadTabProps, Contract>(
     app.tabs[0]! as { component: ComponentType<ExperimentalThreadTabProps> },
-    { threadId: "thr_ci", environment: null },
+    { threadId: "thr_plain", environment: null } /* a thread that is no agent's: an agent's own thread shows the view a feature names for it */,
     { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS, tabVisible: false },
   );
   await slot.findByTestId("oats-home-needs");

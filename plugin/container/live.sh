@@ -38,9 +38,36 @@ wait_until() { # wait_until <seconds> <command...>
   local deadline=$((SECONDS + $1)); shift
   until "$@"; do [ $SECONDS -lt $deadline ] || return 1; sleep 0.25; done
 }
+# So that the threads the app's checks draw are healthy ones (a turn asked and answered), bb has a
+# provider it can run: Claude Code on the real run's mock model (real/mock-anthropic.mjs): no login,
+# nothing spent. The version is the real run's (real/setup.sh).
+CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION:-2.1.328}
+MOCK_PORT=9999
+claude_ready() { [ "$(claude --version 2>/dev/null | cut -d' ' -f1)" = "$CLAUDE_CODE_VERSION" ]; }
+model_provider() {
+  # Its install downloads a native binary; where that download fails, `claude` is there and cannot
+  # run. So the version it prints is the check, and the install is tried again.
+  local attempt
+  for attempt in 1 2 3; do
+    claude_ready && break
+    npm install -g --force --no-audit --no-fund "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" > "$OUT/claude-install.txt" 2>&1 || true
+  done
+  claude_ready || { say "Claude Code $CLAUDE_CODE_VERSION could not be installed"; tail -5 "$OUT/claude-install.txt"; exit 1; }
+  # bb's daemon finds it as it finds `oats`: on the login shell's PATH.
+  mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.claude" "$HOME_DIR/mock"
+  ln -sf "$(command -v claude)" "$HOME_DIR/.local/bin/claude"
+  printf '{ "env": { "ANTHROPIC_BASE_URL": "http://127.0.0.1:%s" } }\n' "$MOCK_PORT" > "$HOME_DIR/.claude/settings.json"
+  if ! [ -f "$OUT/mock.pid" ] || ! kill -0 "$(cat "$OUT/mock.pid")" 2> /dev/null; then
+    setsid node "$PLUGIN/container/real/mock-anthropic.mjs" "$HOME_DIR/mock" "$MOCK_PORT" > "$OUT/mock.out" 2>&1 < /dev/null &
+    echo $! > "$OUT/mock.pid"
+  fi
+}
 start_bb() {
   # The way a service with a bare PATH would start it: no user PATH, no account, loopback only.
+  # The key is a placeholder: bb reports its claude-code provider ready only when it has a
+  # credential, and the mock asks for none.
   env -i HOME=$HOME_DIR USER=node BB_TELEMETRY=false PATH=/usr/local/bin:/usr/bin:/bin \
+    ANTHROPIC_BASE_URL="http://127.0.0.1:$MOCK_PORT" ANTHROPIC_API_KEY=placeholder-not-a-key \
     setsid "$HOME_DIR/.npm-global/bin/bb-app" --data-dir "$HOME_DIR/bbdata" --server-bind-host 127.0.0.1 --no-in-app-updates \
     > "$OUT/bb.out" 2>&1 < /dev/null &
   echo $! > "$OUT/bb.pid"
@@ -50,6 +77,8 @@ start_bb() {
 }
 
 say "== bb $(bb --version), plugin from $PLUGIN"
+model_provider
+say "== $(claude --version), on the mock model"
 bb machine list > /dev/null 2>&1 || start_bb
 
 # A deployment (a directory with oats-local.yaml) and one bb project inside it.

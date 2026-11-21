@@ -161,7 +161,9 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 |---|---|---|
 | a state | `State`, `StateMark` | the mark AND the word (`STATE` in `app/ui/words.ts`); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
 | where an agent is | `StatusLine` | the state, since when, the question or the reason, the act that applies |
-| a fact | `Facts`, `Fact` | `label · value`, the label muted, the value whole; `LINK` is a link's look |
+| a state that is not an agent's | `Toned` | a dot (ok, warn, bad, muted) AND its words |
+| a fact | `Facts`, `Fact` | `label · value`, the label muted, the value whole; a fact with no value is left out; `LINK` is a link's look |
+| a titled block of a page | `Section` | its heading, with a count where it lists things |
 | failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help |
 | nothing to list; a read in flight | `Empty`, `Loading` | the Desktop's sentence and the act that fills it; "Reading …", announced |
 | content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |

@@ -67,7 +67,7 @@ export function Tabs<Id extends string>({ label, tabs, value, onChange, panelId 
 }
 
 /** A segmented filter: one of a few choices, as a radio group (the arrows move the choice). */
-export function Segmented<Id extends string>({ label, options, value, onChange }: { label: string; options: readonly { id: Id; label: string }[]; value: Id; onChange: (id: Id) => void }) {
+export function Segmented<Id extends string>({ label, options, value, onChange }: { label: string; options: readonly { id: Id; label: string; count?: number }[]; value: Id; onChange: (id: Id) => void }) {
   const group = useRef<HTMLDivElement>(null);
   return (
     <div ref={group} role="radiogroup" aria-label={label} data-testid="oats-segmented" className="inline-flex shrink-0 rounded-md border border-border bg-card p-0.5">
@@ -91,6 +91,7 @@ export function Segmented<Id extends string>({ label, options, value, onChange }
             }}
           >
             {option.label}
+            {option.count === undefined ? null : <span className="ml-1.5 font-normal text-muted-foreground">{option.count}</span>}
           </button>
         );
       })}
@@ -121,12 +122,13 @@ export function SearchField({ label, value, onChange, placeholder }: { label: st
 }
 
 /** An on/off switch with its label beside it: `checked` is what is, `onChange` asks for the other. Space and Enter press it. */
-export function Switch({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
+export function Switch({ label, title, checked, onChange, disabled = false }: { label: string; /** what a press does, as the Desktop says it: "On here: click to turn it off on this computer" */ title?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      title={title}
       disabled={disabled}
       data-testid="oats-switch"
       className={`${TARGET} inline-flex shrink-0 items-center gap-2 rounded-md px-1 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50`}

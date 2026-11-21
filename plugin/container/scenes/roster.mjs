@@ -72,11 +72,11 @@ export default [
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
-      const digest = threads.get("thr_digest");
-      await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
+      const unreachable = threads.get("thr_mockups");
+      await page.goto(`/projects/${unreachable.projectId}/threads/${unreachable.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const dot = (id, state) => `document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] [data-state="${state}"]`)}) !== null`;
-      const drawn = await page.until(`${dot(digest.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
+      const drawn = await page.until(`${dot(unreachable.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
       check(Boolean(drawn), `${at} the tree draws the unreachable agent, on the open thread, and the agent whose session is a shell`, await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")} [data-state]`)})].map((e) => e.getAttribute("data-state")).join(",")`));
       await page.shot(`a16-${viewport.name}-states`);
     },

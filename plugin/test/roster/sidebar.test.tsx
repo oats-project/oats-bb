@@ -23,6 +23,9 @@ async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | nu
   return { slot, navigated: () => navigated };
 }
 
+/** The roster's own reads and asks, in order: a row another feature added to the block reads for itself. */
+const rosterCalls = (slot: Awaited<ReturnType<typeof sidebar>>["slot"]) => slot.inspection.rpcCalls.map((call) => call.method).filter((method) => method === "snapshot" || method === "refresh");
+
 const ids = (rows: HTMLElement[]) => rows.map((row) => row.getAttribute("data-sidebar-thread-id"));
 
 test("the tree: every bb agent has a row with both data-sidebar-thread-* attributes and its href", async () => {
@@ -167,7 +170,7 @@ test("with a failed snapshot: every thread is listed, the error's first line sho
   failing = false;
   fireEvent.click(slot.getByRole("button", { name: "Retry" }));
   await slot.findByTestId("oats-tree");
-  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => method !== "souls")).toEqual(["snapshot", "refresh", "snapshot"]);
+  expect(rosterCalls(slot)).toEqual(["snapshot", "refresh", "snapshot"]);
 });
 
 test("when the plugin's server does not answer at all, the threads are listed with the error and Retry", async () => {
@@ -190,7 +193,8 @@ test("an oats/changed event rereads the snapshot once, and the tree follows", as
   await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-19T12:40:00.000Z" });
   await waitFor(() => expect(ids(slot.getAllByTestId("oats-other-row"))).toEqual(["thr_digest", "thr_plain"]));
   // the souls are read once, for their names: a status change does not reread them
-  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["snapshot", "snapshot", "souls"]);
+  expect(rosterCalls(slot)).toEqual(["snapshot", "snapshot"]);
+  expect(slot.inspection.rpcCalls.filter((call) => call.method === "souls")).toHaveLength(1);
 });
 
 test("a title with markup is drawn as text", async () => {
@@ -264,21 +268,24 @@ test("when bb cannot list its threads the line says so, with Retry", async () =>
 
 test("a feature's own page is a row under the four pages, with its mark while its hook gives one", async () => {
   let failed = true;
-  const remove = addPageLink({ path: "automations", title: "Automations", useMark: () => (failed ? { label: "Automations, a run failed" } : null) });
+  const remove = addPageLink({ path: "example", title: "Example", useMark: () => (failed ? { label: "Example, a run failed" } : null) });
   try {
     const { slot } = await sidebar();
-    const row = await slot.findByTestId("oats-page-link-automations");
-    expect(Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent)).toEqual(["Souls", "Capabilities", "Teams", "Machines", "Automations"]);
+    const row = await slot.findByTestId("oats-page-link-example");
+    // The four pages first, then what the features added, this one last.
+    const rows = Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent);
+    expect(rows.slice(0, 4)).toEqual(["Souls", "Capabilities", "Teams", "Machines"]);
+    expect(rows.at(-1)).toBe("Example");
     const mark = row.querySelector('[data-testid="oats-mark"]')!;
-    expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Automations, a run failed"]);
+    expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Example, a run failed"]);
     // The four pages have no mark.
     expect(slot.getByTestId("oats-page-link-souls").querySelector('[data-testid="oats-mark"]')).toBeNull();
     fireEvent.click(row);
-    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations" }]);
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "example" }]);
     slot.unmount();
     failed = false;
     const calm = (await sidebar()).slot;
-    expect((await calm.findByTestId("oats-page-link-automations")).querySelector('[data-testid="oats-mark"]')).toBeNull();
+    expect((await calm.findByTestId("oats-page-link-example")).querySelector('[data-testid="oats-mark"]')).toBeNull();
     calm.unmount();
   } finally {
     remove();
@@ -286,5 +293,5 @@ test("a feature's own page is a row under the four pages, with its mark while it
   // Taken away: the block is the four pages again.
   const { slot } = await sidebar();
   await slot.findByTestId("oats-page-link-souls");
-  expect(slot.queryByTestId("oats-page-link-automations")).toBeNull();
+  expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
 });

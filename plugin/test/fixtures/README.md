@@ -41,7 +41,9 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
     run have no messaging capability, so no row has an identity.
 - Recorded from an earlier real kernel (OATS 0.69.20, `--json`), reduced and with the machine's paths
   replaced: `souls.json`, `capabilities.json`, `teams.json` (plus one unmapped team, shaped as the
-  reference documents it), `spawn-preview.json` (with `backend: "bb"` and one warning), the targets
+  reference documents it), `spawn-preview.json` (with `backend: "bb"`, one warning and, as the kernel answers the plugin's
+  `spawn … --yolo --preview` on a deployment with no launch configuration, `decision.effective.yolo:
+  true`; the real run keeps that answer whole as `container/real/out/answers/spawn-preview.json`), the targets
   of `stop-plan.json`. In `souls.json`, `knowledge-harvester` is a member soul so that it agrees
   with `status.json`; the real package soul `oats.okf/knowledge-harvester` is beside it, with no
   agents, and `research-expert` and the unspawnable `oats.okf/knowledge-maintainer` are shaped rows.

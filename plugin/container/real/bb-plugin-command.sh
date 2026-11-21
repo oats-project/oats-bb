@@ -10,7 +10,13 @@
 # output is printed and the exit code is 0. When it never answers, the last error is printed with
 # what was waited for, and the exit code is 1. BB names another bb (the test's).
 set -eu
-SECONDS_MOST=$1
+SECONDS_MOST=${1:-}
+case $SECONDS_MOST in
+  '' | *[!0-9]*)
+    echo "usage: bb-plugin-command.sh <seconds> <bb arguments…>" >&2
+    exit 2
+    ;;
+esac
 shift
 BB=${BB:-bb}
 started=$(date +%s)

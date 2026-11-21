@@ -45,5 +45,13 @@ run 1000 2
 check "a command that never comes fails after the limit: exit 1, bb's error and what was waited for, no output" \
   sh -c '[ "$(cat "$1/exit")" = 1 ] && [ ! -s "$1/out" ] && grep -q "unknown command .concurrency-limit." "$1/err" && grep -q "did not answer within 2 s" "$1/err"' - "$WORK"
 
+rm -f "$WORK/calls"
+set +e
+BB="$WORK/bb" COUNT="$WORK/calls" FAILS=1000 sh "$HERE/bb-plugin-command.sh" soon concurrency-limit status > "$WORK/out" 2> "$WORK/err"
+echo $? > "$WORK/exit"
+set -e
+check "a limit that is no number is refused at once: exit 2, the usage, bb not called" \
+  sh -c '[ "$(cat "$1/exit")" = 2 ] && grep -q "^usage: " "$1/err" && [ ! -s "$1/out" ] && [ ! -e "$1/calls" ]' - "$WORK"
+
 [ "$failures" = 0 ] || { echo "bb-plugin-command: $failures check(s) failed"; exit 1; }
 echo "bb-plugin-command: all checks passed"

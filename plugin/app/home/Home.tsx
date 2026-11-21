@@ -16,9 +16,9 @@ import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
-import { PAGES } from "../roster/Sidebar";
 import { attempt, errorMessage, useRead } from "../store";
 import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
+import { PAGES } from "../workspace/pages";
 
 /** The home's navigation badge: how many agents need the person. */
 export function useHomeBadge(): ExperimentalBadge | null {

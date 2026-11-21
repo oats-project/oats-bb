@@ -21,14 +21,8 @@ import type { Node } from "../../model/types";
 import { clean, count, needsYouLabel } from "../format";
 import { failureLine, useOats } from "../oats";
 import { Button, Dot, plainClick } from "../ui";
+import { PAGES } from "../workspace/pages";
 
-
-export const PAGES = [
-  { path: "souls", title: "Souls" },
-  { path: "capabilities", title: "Capabilities" },
-  { path: "teams", title: "Teams" },
-  { path: "machines", title: "Machines" },
-] as const;
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {

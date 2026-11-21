@@ -185,9 +185,13 @@ directory is in the home keeps the home from being resumed: end that process, or
 the home again (`oats session start`). What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
-a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess; to get such
-a thread back, send it a message in bb (`bb thread tell <thread id> <text>`), which
-starts a turn and brings it back to `idle`.
+a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess. While the
+thread stays in `error` there, OATS cannot act on the home: `oats session start` and
+`oats session input` refuse, because whether the home runs cannot be established. The
+route back is bb's own: send the thread a message in bb (`bb thread tell <thread id>
+<text>`, or in its UI), which starts a turn and brings it back to `idle`; OATS reads it
+again from then. A look that works on macOS is
+[oats-bb#22](https://github.com/oats-project/oats-bb/issues/22).
 
 **An input to a thread in `error` whose process is gone is told, like any other**
 (contract r23, A14): bb answers sent, starts the harness again in the same conversation

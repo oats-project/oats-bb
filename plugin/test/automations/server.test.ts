@@ -26,14 +26,26 @@ describe("automations", () => {
     expect((await backend.fake.calls()).filter((call) => call.verb.endsWith(" list")).map((call) => call.cwd)).toEqual([backend.fake.deployment, backend.fake.deployment]);
   });
 
-  it("one read serves every client that asks within a few seconds", async () => {
+  it("one read serves every client that asks while the roster stands as it was read", async () => {
     backend = await startBackend();
-    const [first, second] = await Promise.all([backend.rpc<Lists>("automations"), backend.rpc<Lists>("automations")]);
-    await backend.rpc("automations");
-    expect(second.at).toBe(first.at);
+    const first = await backend.rpc<Lists>("automations");
+    const [second, third] = await Promise.all([backend.rpc<Lists>("automations"), backend.rpc<Lists>("automations")]);
+    expect([second.at, third.at]).toEqual([first.at, first.at]);
     expect(await argvs(backend, "schedule list")).toHaveLength(1);
-    expect(LISTS_TTL_MS).toBeLessThanOrEqual(5_000);
+    expect(await argvs(backend, "trigger list")).toHaveLength(1);
+    expect(LISTS_TTL_MS).toBeLessThanOrEqual(30_000);
   });
+
+  it("Retry reads the lists again: a new read of OATS makes the next lists new", async () => {
+    backend = await startBackend();
+    const first = await backend.rpc<Lists>("automations");
+    await backend.fake.behave({ "schedule list": { file: "automations/schedule-list-scheduler-off.json" } });
+    await backend.rpc("refresh");
+    const second = await backend.rpc<Lists>("automations");
+    expect(second.at).not.toBe(first.at);
+    expect(automationList.parse(second.schedule.list).scheduler).toMatchObject({ installed: false });
+    expect(await argvs(backend, "schedule list")).toHaveLength(2);
+  }, 20_000);
 
   it("a list the kernel refuses is that list's refusal, with the kernel's code and message; the other list is still answered", async () => {
     const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });

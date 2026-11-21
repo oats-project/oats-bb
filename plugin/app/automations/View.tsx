@@ -79,7 +79,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
 
   const scheduler = list?.scheduler ?? null;
   return (
-    <div data-testid="oats-automations" data-kind={kind} className="flex flex-col gap-4">
+    <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
       {row !== null && list !== undefined ? null : (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border">
           <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, title: TITLES[id], count: reads[id].list?.rows.length ?? null }))} chosen={kind} onChoose={onKind} panelId={PANEL} />

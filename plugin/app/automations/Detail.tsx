@@ -517,7 +517,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
         )}
         {actions}
       </div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <div data-testid="oats-automation-identity" className="flex min-w-0 items-start gap-3">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -539,7 +539,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
             {identityAction}
           </div>
           <Sends row={row} />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 @xl:grid-cols-2">
             <WhenCard row={row} now={now} source={source} canOpenCapability={canOpenCapability} onOpenCapability={onOpenCapability} />
             {row.run === "spawn" ? <SpawnsCard row={row} /> : null}
           </div>

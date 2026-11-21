@@ -31,7 +31,7 @@ import type { OriginFilter } from "./words";
 
 const HEADS = ["Automation", "Soul", "When", "Runs on", "Last · next"] as const;
 // One row is a grid of five cells from bb's wide layout up, and a stack below it.
-const GRID = "lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] lg:gap-3";
+const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] @4xl:gap-3";
 const CELL = "flex min-w-0 flex-col gap-0.5";
 const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 
@@ -91,7 +91,7 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
   const cell = lastNext(row, now);
   const on = row.kind === "trigger" ? onSummary(row.on) : null;
   const words = cronInWords(row.cron);
-  const label = (head: string): ReactNode => <span className="sr-only lg:hidden">{`${head}: `}</span>;
+  const label = (head: string): ReactNode => <span className="sr-only @4xl:hidden">{`${head}: `}</span>;
   return (
     <div role="row" data-testid="oats-automation-row" data-id={row.id} data-group={row.group} className={`${GRID} flex flex-col gap-2 border-t border-border px-3 py-2 text-sm first:border-t-0`}>
       <div role="cell" className={CELL}>

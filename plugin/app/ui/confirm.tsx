@@ -1,6 +1,7 @@
 // The confirmation of an act on an agent (the UX standard, section 3): a dialog titled with the act
 // and the agent's name, what will happen as sentences, what is kept, the primary button named for
 // the act, and then, in the same dialog, the act in progress and its result.
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Button, Lines, Modal } from "../ui";
 import { Loading, Result } from "./patterns";
@@ -48,6 +49,17 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
   const close = () => {
     if (!running) onClose();
   };
+  // The focus never falls out of the dialog when the act starts or ends: the button that held it
+  // goes off, or goes away. It moves to Close once there is a result, and to the dialog meanwhile.
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dialog = body.current?.closest<HTMLElement>('[role="dialog"]');
+    if (dialog === null || dialog === undefined) return;
+    const held = document.activeElement;
+    const lost = !(held instanceof HTMLElement) || !dialog.contains(held) || (held instanceof HTMLButtonElement && held.disabled);
+    if (settled) dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    else if (lost) dialog.focus();
+  }, [phase.kind, settled]);
   const sentences = (title: string, lines: readonly string[]) =>
     lines.length === 0 ? null : (
       <section className="flex flex-col gap-1">
@@ -88,7 +100,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
         )
       }
     >
-      <div data-testid="oats-confirm" data-about={about} data-phase={phase.kind} className="flex flex-col gap-3">
+      <div ref={body} data-testid="oats-confirm" data-about={about} data-phase={phase.kind} className="flex flex-col gap-3">
         {mismatch ? (
           <Result title="This is not the plan for this agent." tone="failed">
             <p>{`OATS answered for ${shown(shownFor)}, not for ${shown(about)}. Nothing was done. Close this and ask again.`}</p>

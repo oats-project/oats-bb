@@ -355,6 +355,10 @@ describe("the controls", () => {
     rerender(<Switch label="Weekly digest" checked disabled onChange={(next) => asked.push(next)} />);
     fireEvent.click(control);
     expect(asked).toEqual([true, false]);
+    cleanup();
+    // In a list of switches with one visible label, each has a name of its own.
+    render(<Switch label="This computer" name="local/daily-review enabled on this computer" checked onChange={() => undefined} />);
+    expect(screen.getByRole("switch", { name: "local/daily-review enabled on this computer" }).textContent).toBe("This computerOn");
   });
 
   test("a menu: its button is named, it opens on its first item, the arrows move, Escape closes and returns the focus, an item that is off says why", () => {
@@ -526,12 +530,14 @@ describe("a confirmation", () => {
     expect((screen.getByTestId("oats-confirm-cancel") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retiring…");
+    expect(document.activeElement).toBe(screen.getByRole("dialog")); // both buttons are off: the focus stays in the dialog
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.mouseDown(screen.getByTestId("oats-modal"));
     expect(close).not.toHaveBeenCalled();
     rerender(<Confirm {...base} onClose={close} phase={{ kind: "done", title: "Weekly digest was retired.", lines: ["Its work tree is kept at /abs/kept."] }} />);
     expect(screen.getByTestId("oats-result").textContent).toBe("Weekly digest was retired.Its work tree is kept at /abs/kept.");
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Close"]);
+    expect(document.activeElement).toBe(screen.getByTestId("oats-confirm-close")); // the focus follows the result
     rerender(<Confirm {...base} onClose={close} phase={{ kind: "failed", title: "Weekly digest could not be retired.", refusal: "E_CHILDREN_RUNNING: a child would not stop\nstop it first", actions: <Button>Review again</Button> }} />);
     const failed = screen.getByRole("alert");
     expect(within(failed).getByRole("heading").textContent).toBe("Weekly digest could not be retired.");

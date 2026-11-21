@@ -169,11 +169,15 @@ What the features share, beyond the entries:
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
   state, its word and how long the agent has waited. It is the one function for every place that
   says a state in words (the tree, the line under a thread's header, the instance panel); today the
-  home's card reads its age from it, and the tree draws its dot from the same state.
+  home's card reads its age from it; the tree draws its dot from the same state and still prints a
+  stopped row's "· stopped" itself.
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
-  on every other. `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+  on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the identity row's OATS
+  chip opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
+  `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
@@ -246,7 +250,10 @@ display only: what goes back to OATS (an instance, a soul, a revision) is what t
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client
-  watches the snapshot: never two reads at once, never within 5 s of the last, 20 s limit. Each
+  watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
+  the last one took, whichever is longer, 20 s limit. So a change the watch reports is on screen
+  within 3 s on a kernel that answers in under a second, and a slow kernel spends at most half its
+  time on status (the first spec's "never within 5 s of the last" gave way to this). Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read

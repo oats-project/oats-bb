@@ -64,7 +64,9 @@ export function PatternBook() {
           <Fact label="Branch">agents/weekly-digest-helper</Fact>
           <Fact label="Home">/home/joan/Work/oats/agents/oats-expert/instances/weekly-digest-helper</Fact>
         </Facts>
-        <CopyButton text={`oats session attach --home /abs/${INSTANCE}`} label="Copy command" />
+        <div>
+          <CopyButton text={`oats session attach --home /abs/${INSTANCE}`} label="Copy command" />
+        </div>
       </section>
 
       <section data-testid="oats-patterns-notices" className="flex flex-col gap-2">

@@ -122,12 +122,13 @@ export function SearchField({ label, value, onChange, placeholder }: { label: st
 }
 
 /** An on/off switch with its label beside it: `checked` is what is, `onChange` asks for the other. Space and Enter press it. */
-export function Switch({ label, title, checked, onChange, disabled = false }: { label: string; /** what a press does, as the Desktop says it: "On here: click to turn it off on this computer" */ title?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
+export function Switch({ label, name, title, checked, onChange, disabled = false }: { label: string; /** the accessible name, where a list has many switches with one visible label: "local/daily-review enabled on this computer" (whether it is on is said by the switch's state) */ name?: string; /** what a press does, as the Desktop says it: "On here: click to turn it off on this computer" */ title?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={name}
       title={title}
       disabled={disabled}
       data-testid="oats-switch"

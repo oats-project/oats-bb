@@ -19,7 +19,7 @@
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -157,9 +157,11 @@ async function themedPage(browser, viewport, theme, at) {
 // ---- the scenes
 //
 // A scene is `{ stage, name, run }` in container/scenes/<feature>.mjs (its default export is the
-// feature's list). `run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep })` drives
+// feature's list). `run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, record })` drives
 // the page and takes its screenshots with `page.shot(name)`, which checks the contrast of what the
-// plugin draws there; `at` leads every check's line; `threads` is fixture thread id -> bb's thread.
+// plugin draws there; `at` leads every check's line; `threads` is fixture thread id -> bb's thread;
+// `record(changes)` makes a change the kernel records (the fake's status with `changes` by
+// instance, and a line in the event log) and answers when: a scene times how soon the screen shows it.
 // A stage is what the fake `oats` answers while its scenes run. For each stage, in each theme and
 // at each viewport, one page runs the stage's scenes: the features in the order of FEATURES (then
 // any other file), each feature's scenes in its list's order.
@@ -227,6 +229,20 @@ const BUILT_IN = {
   },
 };
 
+/**
+ * A change the kernel records, as a scene makes one to time how soon the screen shows it (the UX
+ * standard, section 6): the fake's status answers the fixtures with `changes` (by instance, fields
+ * that replace the row's own), and one line is appended to the deployment's event log, which is
+ * what the kernel does and what the plugin's watch sees. → the instant the change was recorded.
+ */
+const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl");
+function record(threads, changes = {}) {
+  fake({ status: { stdout: statusWithRealIds(threads, changes) } });
+  const at = Date.now();
+  appendFileSync(EVENTS, `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+  return at;
+}
+
 // ---- the run
 
 // A bb that was never opened shows its first-run guide in place of the app: mark it as done, as a
@@ -255,7 +271,7 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep });
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, record: (changes) => record(threads, changes) });
           } finally {
             await page.close();
           }

@@ -91,6 +91,22 @@ describe("snapshot", () => {
     expect((await rpc("snapshot")).at).toBe(one.at);
   }, 20_000);
 
+  it("pauses between two reads as long as the last one took, when that is longer than the floor: a slow kernel is not read without pause", async () => {
+    await fake.behave({ status: { sleepMs: 2_500 } });
+    await rpc("snapshot"); // took about 2.5 s
+    const ended = Date.now();
+    await fake.behave({});
+    const next = await rpc<{ at: string }>("refresh");
+    // The next read started no sooner than the last one's own time after it ended, not after 1 s.
+    expect(Date.parse(next.at) - ended).toBeGreaterThanOrEqual(2_400);
+    expect(Date.parse(next.at) - ended).toBeLessThan(4_500);
+    // And after that quick read, the floor is the pause again.
+    const after = Date.now();
+    const quick = await rpc<{ at: string }>("refresh");
+    expect(Date.parse(quick.at) - after).toBeLessThan(MIN_INTERVAL_MS + 800);
+    expect(await verbs()).toEqual(["status", "status", "status"]);
+  }, 20_000);
+
   it("rereads when the host entry signals a change, and publishes it", async () => {
     await rpc("snapshot");
     await fake.behave({ status: { stdout: JSON.stringify({ root: "/abs/deployment", agents: [] }) } });
@@ -113,7 +129,7 @@ describe("snapshot", () => {
     await expect.poll(async () => (await verbs()).length).toBe(1);
     const started = Date.now();
     expect((await rpc("snapshot")).ok).toBe(true);
-    expect(Date.now() - started).toBeLessThan(MIN_INTERVAL_MS - 1_000);
+    expect(Date.now() - started).toBeLessThan(1_500); // the 700 ms of the read in flight, not a second read after the pause
     expect(await verbs()).toEqual(["status"]);
     service.controller.abort();
     await service.done;

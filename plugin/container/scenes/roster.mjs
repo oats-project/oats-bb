@@ -69,6 +69,25 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "freshness: a change the kernel records is in the tree within 3 s",
+    run: async ({ page, at, viewport, threads, check, record }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const drawn = (state) => `document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`;
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} before the change the agent is drawn idle`);
+      // The kernel records that the agent was stopped: its status row, and a line in the event log.
+      const stopped = record({ "harvest-knowledge-helper": { running: false, runtimeState: "stopped" } });
+      const shown = (await page.until(drawn("stopped"), 15)) ? Date.now() - stopped : null;
+      check(shown !== null && shown <= 3000, `${at} the tree shows the agent stopped ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it (3 s at most)`);
+      // And back, so the scenes after this one draw the fixtures.
+      const back = record();
+      const again = (await page.until(drawn("idle"), 15)) ? Date.now() - back : null;
+      check(again !== null && again <= 3000, `${at} and idle again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`);
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {

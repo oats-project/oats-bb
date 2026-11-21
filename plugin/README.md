@@ -148,7 +148,10 @@ What the features share, beyond the entries:
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
-  on every other. `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+  on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the identity row's OATS
+  chip opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
+  `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.

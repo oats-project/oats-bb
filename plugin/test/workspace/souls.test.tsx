@@ -3,6 +3,7 @@
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
@@ -270,4 +271,20 @@ test("a preview's refusal that arrives after the task changed is dropped too", a
   refuse(new Error("E_TASK_REFUSED: about the first task"));
   await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview"));
   expect(slot.queryByRole("alert")).toBeNull();
+});
+
+test("an agent with no bb thread opens its own page, where a feature gives agents one", async () => {
+  const opened: string[] = [];
+  const plain = await souls("oats-developer");
+  await plain.findByTestId("oats-soul-agent-elsewhere");
+  expect(plain.queryByTestId("oats-soul-agent-open")).toBeNull(); // no feature has a page: nothing to press
+  plain.unmount();
+  setAgentPage((_navigate, instance) => void opened.push(instance));
+  try {
+    const slot = await souls("oats-developer");
+    fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
+    expect(opened).toEqual(["kernel-fix-developer"]);
+  } finally {
+    setAgentPage(null);
+  }
 });

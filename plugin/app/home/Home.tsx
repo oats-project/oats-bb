@@ -12,13 +12,13 @@ import type { ExperimentalBadge, ExperimentalThreadTabProps, PluginSidebarThread
 import type { Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { needsYouLabel } from "../format";
-import { getAgentTab } from "./agent-tab";
+import { forgetAgents, getAgentTab, rememberAgent, rememberedAgent } from "./agent-tab";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
 import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
-import { attempt, errorMessage, useRead } from "../store";
+import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
 import { PAGES } from "../workspace/pages";
 import { shown } from "../ui/text";
@@ -29,6 +29,8 @@ export function useHomeBadge(): ExperimentalBadge | null {
   const n = oats.phase === "ready" ? oats.view.needsYou.length : 0;
   return n === 0 ? null : { count: n, tone: "warning", label: needsYouLabel(n) };
 }
+
+onWindowReset(forgetAgents);
 
 type Ready = Extract<Oats, { phase: "ready" }>;
 
@@ -344,8 +346,19 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
   const AgentTab = getAgentTab();
-  const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  if (AgentTab !== null && node !== undefined) return <AgentTab agent={node.agent} threadId={threadId} />;
+  if (AgentTab !== null) {
+    if (oats.phase === "ready") {
+      const node = oats.nodeByThread.get(threadId);
+      if (node !== undefined) {
+        rememberAgent(threadId, node.agent);
+        return <AgentTab agent={node.agent} threadId={threadId} />;
+      }
+    } else {
+      // The roster cannot be read now: the agent this thread was keeps its view (agent-tab.ts).
+      const last = rememberedAgent(threadId);
+      if (last !== undefined) return <AgentTab agent={last} threadId={threadId} />;
+    }
+  }
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
       <Sections oats={oats} where="tab" visible={visible} />

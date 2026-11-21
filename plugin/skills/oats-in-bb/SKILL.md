@@ -43,8 +43,11 @@ agents, their homes, identities and mail are OATS's and aweb's.
   reply box sends a message to the agent you pick, through bb's own send.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
-  to copy), its harness, model and thread, its messaging id, its parent. Soul: its soul, the
-  agents root, and Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
+  to copy), its harness, model and thread, its messaging id, its parent, whether it is ready
+  (Instance readiness, with the checks behind a fold) and, once you press Load activity, its
+  recorded lifecycle events. Soul: its soul as the instance was spawned from it (core
+  capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
+  Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.

@@ -1,10 +1,13 @@
 // The instance panel's part of the real run (parts/README.md). The panel adds no act yet: it
 // reads. So this part makes the state its fixtures describe, checks that what the plugin answers
-// for one instance is what the kernel's own row says, and keeps what the kernel printed.
+// (the row's facts, the soul as spawned, readiness, the recorded events) is what the kernel
+// itself says, and keeps what the kernel printed for the plugin's own calls.
 //   - a child on its own worktree under the lead part B left (`oats spawn --parent`, on the command
 //     line: the plugin's spawn names no parent), with two facts and two questions on its board, set
 //     as its own session sets them (`oats instance board`, in its home);
-//   - then one commit to its soul in the workspace's member repository: the row's soul has moved.
+//   - then one commit to its soul in the workspace's member repository: the row's soul has moved;
+//   - then a restart, a stop and a start of the child through the plugin, and one more question on
+//     its board: its recorded history.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -58,6 +61,15 @@ export default async (run) => {
   check(recorded(["status"]).exit === 0, "the plugin read it from its one `oats status`: no other command of the panel's");
   fixtures.keep("panel/status.json", recorded(["status"]).stdout);
 
+  step("C panel 1b: the soul as the child was spawned from it: the plugin's answer is the kernel's inspection");
+  const inspected = JSON.parse(oats("inspect", "--home", home, "--json").stdout).result;
+  const soul = act("the soul as spawned", "panelSoul", { instance: CHILD })?.soul;
+  check(soul?.name === inspected.souls[0].name && soul.commit === inspected.souls[0].commit && soul.modules === inspected.capabilities.length, "the soul's name, the commit it was spawned from and the number of its modules are the kernel's", JSON.stringify([soul?.name, soul?.commit, soul?.modules]));
+  check(JSON.stringify(soul?.capabilities.map((capability) => capability.name)) === JSON.stringify(inspected.capabilities.map((capability) => capability.id)), "its capabilities are the ones the kernel resolved", JSON.stringify(soul?.capabilities));
+  const inspectCall = recorded(["inspect", "--home"]);
+  check(inspectCall.argv.join(" ") === `inspect --home ${home} --json`, "the plugin asked `oats inspect --home <the home the kernel named> --json`", inspectCall.argv.join(" "));
+  fixtures.keep("panel/inspect-home.json", inspectCall.stdout);
+
   step("C panel 2: the soul's repository moves on: the row says moved, and the plugin answers it");
   const git = (...args) => spawnSync("git", ["-c", "user.name=real-run", "-c", "user.email=real-run@example.invalid", ...args], { cwd: join(REAL, "ws"), encoding: "utf8", env: { ...process.env, GIT_AUTHOR_DATE: "2026-01-02T00:00:00Z", GIT_COMMITTER_DATE: "2026-01-02T00:00:00Z" } });
   writeFileSync(join(REAL, "ws", "souls", "oats-expert", "AGENTS.md"), `${readFileSync(join(REAL, "ws", "souls", "oats-expert", "AGENTS.md"), "utf8")}\nAnswer briefly.\n`);
@@ -69,4 +81,35 @@ export default async (run) => {
   show("drift", moved?.facts.drift);
   check(moved?.facts.drift.soul === "moved", "the plugin answers the kernel's word for the soul: moved", JSON.stringify(moved?.facts.drift));
   fixtures.keep("panel/status-soul-moved.json", recorded(["status"]).stdout);
+
+  step("C panel 3: readiness of the child's home and of its soul: the plugin's answer is the kernel's");
+  for (const [of, args, file] of [["instance", ["readiness", "--home", home, "--policy", "--json"], "panel/readiness-home.json"], ["soul", ["readiness", "--soul", "oats-expert", "--policy", "--json"], "panel/readiness-soul.json"]]) {
+    const kernel = JSON.parse(oats(...args).stdout).result;
+    const answer = act(`readiness of the ${of}`, "panelReadiness", { instance: CHILD, of });
+    check(answer?.summary.ready === kernel.summary.ready && answer.summary.required === kernel.summary.required && answer.summary.fail === kernel.summary.fail, `the ${of}'s summary is the kernel's (ready ${kernel.summary.ready}, ${kernel.summary.required} required)`, JSON.stringify(answer?.summary));
+    check(answer?.checks.map((item) => `${item.key} ${item.status} ${item.items.length}`).join(", ") === ["installed", "configured", "member", "providers"].map((key) => `${key} ${kernel.checks[key].status} ${kernel.checks[key].items.length}`).join(", "), `the ${of}'s four checks, their status and their items are the kernel's`, JSON.stringify(answer?.checks.map((item) => [item.key, item.status])));
+    check(answer?.policy?.length === Object.keys(kernel.policy).length, `the ${of}'s policy is answered`, JSON.stringify(answer?.policy));
+    const call = recorded(args.slice(0, 2));
+    check(call.argv.join(" ") === args.join(" "), `the plugin asked \`oats ${args.join(" ")}\``, call.argv.join(" "));
+    fixtures.keep(file, call.stdout);
+  }
+
+  step("C panel 4: the child's recorded lifecycle events, after a restart, a stop and a start through the plugin");
+  act("restart the child", "restart", { instance: CHILD });
+  await until(`${CHILD} to be started again`, () => (rowOf(CHILD)?.running !== false ? true : undefined));
+  const plan = act("the child's stop plan", "stopPlan", { instance: CHILD });
+  act("stop the child", "stopApply", { instance: CHILD, revision: plan?.revision, key: "panel-stop-5e1f2a3b" });
+  await until(`${CHILD} to read stopped`, () => (rowOf(CHILD)?.runtimeState === "stopped" ? true : undefined));
+  act("start the child", "start", { instance: CHILD });
+  await until(`${CHILD} to be started`, () => (rowOf(CHILD)?.running !== false ? true : undefined));
+  const asked = asInstance("instance", "board", "ask", "Which base branch?", "--option", "main: the default", "--option", "release: the 0.1 line", "--json");
+  check(asked.status === 0, "oats instance board ask, in the new session", asked.stdout + asked.stderr);
+  const kernelEvents = JSON.parse(oats("instance", "events", CHILD, "--home", home, "--limit", "100", "--json").stdout).result;
+  const events = act("the child's recorded events", "panelEvents", { instance: CHILD });
+  check(events?.count === kernelEvents.count && events.events.map((event) => event.kind).join(" ") === kernelEvents.events.map((event) => event.kind).join(" "), `the plugin answers the kernel's ${kernelEvents.count} rows, in its order: ${kernelEvents.events.map((event) => event.kind).join(" ")}`, JSON.stringify(events?.events.map((event) => event.kind)));
+  check(["spawned", "restarted", "stopped", "launched", "waiting"].every((kind) => events?.events.some((event) => event.kind === kind)), "the history holds the spawn, the restart, the stop, the starts and the board's claims");
+  check(events?.waitingOnYou?.producer === kernelEvents.waitingOnYou?.producer && events?.waitingClaims.length === kernelEvents.waitingClaims.length, "what is reported of waiting is the kernel's", JSON.stringify([events?.waitingOnYou, kernelEvents.waitingOnYou]));
+  const eventsCall = recorded(["instance", "events"]);
+  check(eventsCall.argv.join(" ") === `instance events ${CHILD} --home ${home} --limit 100 --json`, "the plugin asked `oats instance events <instance> --home <its home> --limit 100 --json`", eventsCall.argv.join(" "));
+  fixtures.keep("panel/events.json", eventsCall.stdout);
 };

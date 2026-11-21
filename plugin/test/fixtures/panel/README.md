@@ -11,7 +11,7 @@ scenario passed): bb-app 0.50.1, OATS 0.70.0 from npm (`@awebai/oats@0.70.0`), t
 provider of this repository's `main` at 134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5, Claude Code on the
 mock model, no aweb. By hand, with the commands below, before the real run had a place for a
 feature's own steps; `container/real/parts/panel.mjs` now makes the same state with the same
-commands and keeps the same two answers, as the plugin's own `oats status` printed them. One
+commands and keeps the same answers, as the plugin's own calls of `oats` printed them. One
 difference: before the hand recording, three agents the scenario had left were retired (`oats
 retire harvest-knowledge-helper`, `desktop-mockups-developer`, `digest-links-helper`); the run
 retires nobody, so its roster holds them too.

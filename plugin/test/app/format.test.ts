@@ -1,7 +1,7 @@
 // The helpers the slots print with, and the pure reading of bb's pending interactions.
 import { describe, expect, test } from "vitest";
 import { age, clean, count, homeTail, needsYouLabel } from "../../app/format";
-import { question } from "../../app/interactions";
+import { question } from "../../app/home/interactions";
 
 describe("format", () => {
   test("clean drops control characters and bidi overrides, and keeps newlines, tabs and markup as text", () => {

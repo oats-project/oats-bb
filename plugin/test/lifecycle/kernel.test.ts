@@ -38,7 +38,7 @@ describe("stop", () => {
   });
 
   it("says what the plan knows of a session: in a task, open with its activity unknown, or not running", async () => {
-    const answer = JSON.parse(await readFile(join(FIXTURES, "stop-plan.json"), "utf8"));
+    const answer = JSON.parse(await readFile(join(FIXTURES, "lifecycle/stop-plan.json"), "utf8"));
     const target = answer.result.targets.find((row: { instance: string }) => row.instance === "harvest-knowledge-helper");
     const line = async (session: object, midTask: unknown): Promise<string | false> => {
       Object.assign(target, { session, midTask });
@@ -70,15 +70,15 @@ describe("stop", () => {
   });
 
   it("A7: a revision the kernel refuses returns the kernel's code and message unchanged", async () => {
-    await fake.behave({ "instance stop --apply": { file: "stop-apply-stale.json" } });
-    const kernel = JSON.parse(await readFile(join(FIXTURES, "stop-apply-stale.json"), "utf8"));
+    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
+    const kernel = JSON.parse(await readFile(join(FIXTURES, "lifecycle/stop-apply-stale.json"), "utf8"));
     const applied = await oats.stopApply({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
     expect(applied).toEqual({ ok: false, error: { code: "E_PLAN_STALE", message: kernel.error.message } });
     expect(kernel.error.code).toBe("E_PLAN_STALE");
   });
 
   it("answers the kernel's code for a session that would not stop", async () => {
-    const receipt = JSON.parse(await readFile(join(FIXTURES, "stop-apply.json"), "utf8"));
+    const receipt = JSON.parse(await readFile(join(FIXTURES, "lifecycle/stop-apply.json"), "utf8"));
     receipt.result.ok = false;
     receipt.result.results[2] = { instance: "redesign-ui-lead", home: "/h", ok: false, code: "E_SESSION_STOP_FAILED", message: "its harness was signalled (SIGTERM) and still runs", stillRunning: [4242] };
     await fake.behave({ "instance stop --apply": { stdout: JSON.stringify(receipt) } });
@@ -117,7 +117,7 @@ describe("start and restart", () => {
   });
 
   it("answers no thread when the kernel's answer names none", async () => {
-    const answer = JSON.parse(await readFile(join(FIXTURES, "start.json"), "utf8"));
+    const answer = JSON.parse(await readFile(join(FIXTURES, "lifecycle/start.json"), "utf8"));
     delete answer.result.session;
     await fake.behave({ "session start": { stdout: JSON.stringify(answer) } });
     expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: null } });
@@ -165,7 +165,7 @@ describe("retire", () => {
   });
 
   it("says so when the kernel could not establish whether the session runs", async () => {
-    const answer = JSON.parse(await readFile(join(FIXTURES, "retire-plan.json"), "utf8"));
+    const answer = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-plan.json"), "utf8"));
     answer.result.facts.session = { state: "unestablished", present: null, backend: null, established: false, reason: "E_SESSION_UNAVAILABLE" };
     await fake.behave({ "retire --plan": { stdout: JSON.stringify(answer) } });
     const plan = await oats.retirePlan("weekly-digest-helper");
@@ -184,7 +184,7 @@ describe("retire", () => {
   });
 
   it("says for each extra tree what the kernel would do with it: keep, remove, or refuse the retire", async () => {
-    const answer = JSON.parse(await readFile(join(FIXTURES, "retire-plan.json"), "utf8"));
+    const answer = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-plan.json"), "utf8"));
     const tree = (name: string, disposition: string, reason: string | null) => ({
       path: `/h/.work-${name}`, repo: "/w/docs", branch: `agents/x-${name}`, detachedAt: null, disposition, movedTo: disposition === "retain" ? "/w/.agents/worktrees/docs/x" : null, reason,
     });
@@ -202,15 +202,15 @@ describe("retire", () => {
   it("applies the plan: the first answer is the receipt itself, a replay is an envelope", async () => {
     const apply = { instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" };
     expect(await oats.retireApply(apply)).toEqual({ ok: true, value: {} });
-    const receipt = JSON.parse(await readFile(join(FIXTURES, "retire-apply.json"), "utf8"));
+    const receipt = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-apply.json"), "utf8"));
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { ...receipt, replayed: true } }) } });
     expect(await oats.retireApply(apply)).toEqual({ ok: true, value: {} });
     expect((await fake.calls())[0]?.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "ef5028f1e6cb517560247307", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
   });
 
   it("says what the kernel left when a retire's cleanup is incomplete (the receipt, with exit 1)", async () => {
-    const receipt = JSON.parse(await readFile(join(FIXTURES, "retire-incomplete.json"), "utf8"));
-    await fake.behave({ retire: { file: "retire-incomplete.json", exit: 1 } });
+    const receipt = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-incomplete.json"), "utf8"));
+    await fake.behave({ retire: { file: "lifecycle/retire-incomplete.json", exit: 1 } });
     const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
     expect(applied).toEqual({
       ok: false,
@@ -227,13 +227,13 @@ describe("retire", () => {
   });
 
   it("does not take a retire that exits nonzero for done, whatever it printed", async () => {
-    await fake.behave({ retire: { file: "retire-apply.json", exit: 1, stderr: "TypeError: boom\n" } });
+    await fake.behave({ retire: { file: "lifecycle/retire-apply.json", exit: 1, stderr: "TypeError: boom\n" } });
     const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
     expect(applied).toEqual({ ok: false, error: { code: codes.failed, message: "`oats` exited 1: TypeError: boom" } });
   });
 
   it("still says that oats failed when another verb exits nonzero with a document that is no refusal", async () => {
-    await fake.behave({ "instance stop --apply": { file: "stop-apply.json", exit: 1 } });
+    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply.json", exit: 1 } });
     const applied = await oats.stopApply({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
     expect(applied.ok === false && applied.error.code).toBe(codes.failed);
   });

@@ -63,8 +63,8 @@ function rpc(method) {
 const fake = (verbs = {}) =>
   writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
-const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/threads.json"), "utf8")).threads;
-const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/status.json"), "utf8"));
+const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/threads.json"), "utf8")).threads;
+const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
 
 /** One bb thread per fixture thread, found or made by its title: fixture thread id -> bb's thread. */
 function threadsByFixtureId() {

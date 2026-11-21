@@ -69,7 +69,7 @@ describe("A4 status()", () => {
   });
 
   it("answers a typed error for a row with no instance", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "status.json"), "utf8"));
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
     delete roster.agents[1].instances[0].instance;
     await fake.behave({ status: { stdout: JSON.stringify(roster) } });
     const status = await oats().status();
@@ -92,7 +92,7 @@ describe("A4 status()", () => {
   });
 
   it("accepts unknown extra fields, at every level", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "status.json"), "utf8"));
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
     roster.somethingNew = { nested: [1, 2, 3] };
     roster.agents[0].laterField = true;
     for (const group of roster.agents) {

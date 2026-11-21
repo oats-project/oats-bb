@@ -149,7 +149,7 @@ describe("the host verbs", () => {
   it("answers the plan and the kernel's refusal of a stale apply", async () => {
     const plan = await harness.experimental_call("stopPlan", { ...base(), instance: "redesign-ui-lead" });
     expect(plan.ok && plan.value.revision).toBe("9c1f2e3d4b5a69788796a5b4");
-    await fake.behave({ "instance stop --apply": { file: "stop-apply-stale.json" } });
+    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
     const applied = await harness.experimental_call("stopApply", { ...base(), instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
     expect(applied).toMatchObject({ ok: false, error: { code: "E_PLAN_STALE" } });
   });

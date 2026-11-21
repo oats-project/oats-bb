@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ThreadTitle, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { askPlan, newKey, run } from "../acts";
+import { askPlan, newKey, run } from "../lifecycle/acts";
 import { instanceName } from "../../contract";
 import { clean, count } from "../format";
 import { failureLine, useOats } from "../oats";

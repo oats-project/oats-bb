@@ -4,10 +4,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
-import { clean } from "./format";
-import { errorMessage } from "./store";
-import type { Contract, Rpc } from "./store";
-import { Button, ErrorLine, Modal, Note } from "./ui";
+import { clean } from "../format";
+import { errorMessage } from "../store";
+import type { Contract, Rpc } from "../store";
+import { Button, ErrorLine, Modal, Note } from "../ui";
 
 export type PlanVerb = "stop" | "retire";
 export type RunVerb = "start" | "restart";

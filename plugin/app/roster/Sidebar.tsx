@@ -16,11 +16,11 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import { codes } from "../kernel/result";
-import type { Node } from "../model/types";
-import { clean, count, needsYouLabel } from "./format";
-import { failureLine, useOats } from "./oats";
-import { Button, Dot, plainClick } from "./ui";
+import { codes } from "../../kernel/result";
+import type { Node } from "../../model/types";
+import { clean, count, needsYouLabel } from "../format";
+import { failureLine, useOats } from "../oats";
+import { Button, Dot, plainClick } from "../ui";
 
 
 export const PAGES = [

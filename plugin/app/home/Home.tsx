@@ -9,16 +9,16 @@ import {
   useSdk,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalBadge, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import type { Node } from "../model/types";
-import { flatten } from "../model/view";
-import { age, clean, needsYouLabel } from "./format";
+import type { Node } from "../../model/types";
+import { flatten } from "../../model/view";
+import { age, clean, needsYouLabel } from "../format";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
-import { failureLine, useOats } from "./oats";
-import type { Oats } from "./oats";
-import { PAGES } from "./Sidebar";
-import { attempt, errorMessage, useRead } from "./store";
-import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "./ui";
+import { failureLine, useOats } from "../oats";
+import type { Oats } from "../oats";
+import { PAGES } from "../roster/Sidebar";
+import { attempt, errorMessage, useRead } from "../store";
+import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
 
 /** The home's navigation badge: how many agents need the person. */
 export function useHomeBadge(): ExperimentalBadge | null {

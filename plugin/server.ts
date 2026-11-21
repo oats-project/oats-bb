@@ -4,7 +4,7 @@
 import { experimental_PluginRpcRefusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { hostContract, hostSignals, REALTIME_CHANGED, rpcContract, type snapshot as snapshotSchema } from "./contract.js";
-import { withSoulCounts } from "./kernel/pages.js";
+import { withSoulCounts } from "./kernel/workspace.js";
 import { codes, type KernelError } from "./kernel/result.js";
 import type { Agent, Capability, Machine, Soul, Team } from "./model/types.js";
 

@@ -256,7 +256,7 @@ describe("acts", () => {
     await fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_DECISION_STALE", message: "the decision moved", details: {} } }) } });
     expect(await refusalOf(rpc("spawn", input))).toEqual({ code: "conflict", message: "E_DECISION_STALE: the decision moved" });
     // The decision the kernel would confirm now is another one.
-    const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
+    const preview = JSON.parse(await readFile(join(FIXTURES, "spawn/spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
     expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
@@ -296,7 +296,7 @@ describe("acts", () => {
     expect(plan.revision).toBe("9c1f2e3d4b5a69788796a5b4");
     expect(plan.lines[0]).toMatch(/^Stop redesign-ui-lead/);
     expect(await rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" })).toEqual({ ok: true });
-    await fake.behave({ "instance stop --apply": { file: "stop-apply-stale.json" } });
+    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
     expect(await refusalOf(rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-0000aaaa1111" }))).toEqual({
       code: "conflict",
       message: "E_PLAN_STALE: the stop plan changed since it was shown (f9dcbb5542487fc328e88b07 → c30af39bbdfb748db5e0b1b5); review the fresh plan",
@@ -328,7 +328,7 @@ describe("acts", () => {
   }, 20_000);
 
   it("refuses with a code of its own, never a kernel code, when no thread is named anywhere", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "status.json"), "utf8"));
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
     for (const group of roster.agents) for (const instance of group.instances) if (instance.instance === "weekly-digest-helper") delete instance.session;
     await fake.behave({
       status: { stdout: JSON.stringify(roster) },

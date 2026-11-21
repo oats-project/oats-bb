@@ -5,9 +5,9 @@ import {
   useBbNavigate,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { clean, count, homeTail } from "./format";
-import { useOats } from "./oats";
-import { Chip, plainClick } from "./ui";
+import { clean, count, homeTail } from "../format";
+import { useOats } from "../oats";
+import { Chip, plainClick } from "../ui";
 
 /** The fixed thread tab that shows the OATS home on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;

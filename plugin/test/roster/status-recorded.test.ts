@@ -7,13 +7,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseStatus } from "../../kernel/status";
+import { parseStatus } from "../../kernel/roster";
 import type { Agent, BbThread } from "../../model/types";
 import { view } from "../../model/view";
 import { FIXTURES } from "../support/fake-oats.js";
 
 type Recorded = Record<"working" | "idle" | "needsYou" | "question" | "stoppedByOats" | "threadDeleted" | "parentWithTwoChildren", unknown>;
-const recorded = JSON.parse(readFileSync(join(FIXTURES, "status-recorded.json"), "utf8")) as Recorded;
+const recorded = JSON.parse(readFileSync(join(FIXTURES, "roster/status-recorded.json"), "utf8")) as Recorded;
 
 function agentsOf(state: keyof Recorded): Agent[] {
   const status = parseStatus(recorded[state]);

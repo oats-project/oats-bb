@@ -24,19 +24,19 @@ const has = (flag) => argv.includes(flag);
 const after = (flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);
 
 const defaults = {
-  status: { file: "status.json" },
-  souls: { file: "souls.json" },
-  capabilities: { file: "capabilities.json" },
-  teams: { file: "teams.json" },
-  "server list": { file: "servers.json" },
-  "spawn --preview": { file: "spawn-preview.json" },
-  spawn: { file: "spawn.json" },
-  "instance stop --plan": { file: "stop-plan.json" },
-  "instance stop --apply": { file: "stop-apply.json" },
-  "session start": { file: "start.json" },
-  "session restart": { file: "restart.json" },
-  "retire --plan": { file: "retire-plan.json" },
-  retire: { file: "retire-apply.json" },
+  status: { file: "roster/status.json" },
+  souls: { file: "workspace/souls.json" },
+  capabilities: { file: "workspace/capabilities.json" },
+  teams: { file: "workspace/teams.json" },
+  "server list": { file: "workspace/servers.json" },
+  "spawn --preview": { file: "spawn/spawn-preview.json" },
+  spawn: { file: "spawn/spawn.json" },
+  "instance stop --plan": { file: "lifecycle/stop-plan.json" },
+  "instance stop --apply": { file: "lifecycle/stop-apply.json" },
+  "session start": { file: "lifecycle/start.json" },
+  "session restart": { file: "lifecycle/restart.json" },
+  "retire --plan": { file: "lifecycle/retire-plan.json" },
+  retire: { file: "lifecycle/retire-apply.json" },
 };
 
 function verbOf() {

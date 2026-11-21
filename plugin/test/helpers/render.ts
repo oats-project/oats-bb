@@ -4,7 +4,7 @@ import { cleanup } from "@testing-library/react";
 import { loadPluginApp } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginRpcTestHandlers } from "@get-bb/plugin-sdk/testing/app";
 import type { rpcContract } from "../../contract";
-import { resetActs } from "../../app/acts";
+import { resetActs } from "../../app/lifecycle/acts";
 import { resetReads } from "../../app/store";
 import type { Agent } from "../../model/types";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "./fixtures";

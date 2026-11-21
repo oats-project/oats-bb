@@ -1,7 +1,7 @@
 // The four read verbs behind the pages, against the recorded answers.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Oats, Processes } from "../../kernel/index.js";
-import { withSoulCounts } from "../../kernel/pages.js";
+import { withSoulCounts } from "../../kernel/workspace.js";
 import { installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
 let fake: FakeOats;

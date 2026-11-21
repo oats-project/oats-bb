@@ -7,12 +7,12 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import type { PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState } from "./model/types";
-import { ActsOverlay, askPlan, run } from "./app/acts";
-import { HomePage, HomeTab, useHomeBadge } from "./app/Home";
-import { IdentityRow } from "./app/IdentityRow";
-import { CapabilitiesPage, MachinesPage, TeamsPage } from "./app/pages/Lists";
-import { SoulsPage } from "./app/pages/Souls";
-import { Sidebar } from "./app/Sidebar";
+import { ActsOverlay, askPlan, run } from "./app/lifecycle/acts";
+import { HomePage, HomeTab, useHomeBadge } from "./app/home/Home";
+import { IdentityRow } from "./app/roster/IdentityRow";
+import { CapabilitiesPage, MachinesPage, TeamsPage } from "./app/workspace/Lists";
+import { SoulsPage } from "./app/workspace/Souls";
+import { Sidebar } from "./app/roster/Sidebar";
 import { useOats } from "./app/oats";
 import type { Oats } from "./app/oats";
 import type { Contract, Rpc } from "./app/store";

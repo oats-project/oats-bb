@@ -3,11 +3,11 @@
 import type { Capability, Machine, Soul, SpawnSummary, Team } from "../model/types.js";
 import { answerOf, type AnswerOptions } from "./envelope.js";
 import * as lifecycle from "./lifecycle.js";
-import * as pages from "./pages.js";
+import * as pages from "./workspace.js";
 import type { Result } from "./result.js";
 import { Processes } from "./run.js";
 import * as spawn from "./spawn.js";
-import { parseStatus, statusArgv, type Status } from "./status.js";
+import { parseStatus, statusArgv, type Status } from "./roster.js";
 import { withTaskFile } from "./task-file.js";
 
 /** How long each verb may run before it is stopped. */

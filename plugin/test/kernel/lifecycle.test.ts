@@ -162,7 +162,7 @@ describe("retire", () => {
     answer.result.facts.session = { state: "unknown", present: true, backend: "bb", established: true };
     await fake.behave({ "retire --plan": { stdout: JSON.stringify(answer) } });
     const running = await oats.retirePlan("weekly-digest-helper");
-    expect(running.ok && running.value.lines[0]).toMatch(/Its session is running and is stopped first\.$/);
+    expect(running.ok && running.value.lines[0]).toMatch(/Its session is open and is stopped first\.$/);
     // Established and observably gone: nothing to stop.
     answer.result.facts.session = { state: "absent", present: false, backend: "bb", established: true };
     await fake.behave({ "retire --plan": { stdout: JSON.stringify(answer) } });

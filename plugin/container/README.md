@@ -62,8 +62,8 @@ the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: wha
 Appearance writes) and puts the class `dark` on the document's root when it loads; no server
 setting and no `bb settings` key holds it. `browser.mjs` sets that key before any script of bb
 runs, and each check asserts the theme bb then draws. The screenshots are
-`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (68
-files, in `container/out/`, kept as CI artefacts).
+`<check>-<width>x<height>-<scene>.png` in the light theme and `…-dark.png` in the dark one (in
+`container/out/`, kept as CI artefacts).
 
 **The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
 text the plugin draws there reads at 4.5:1 or more against its effective background, and each
@@ -82,7 +82,8 @@ scene. It cannot see: hover, focus and other states the
 page is not in (a failed call's error line, the "Starting…" line, a spawn's problems: no scene
 brings them up; they use the same token as the form's refusal, which one does); a disabled
 control (skipped, as WCAG does); the options of an open select (the browser draws them); borders,
-icons and focus rings; a background that is an image or a gradient (reported and failed, never
+icons and focus rings; the text of a `display: contents` element (it has no box, so it is skipped
+as not rendered); `::before` and `::after` content (generated text is no text node); a background that is an image or a gradient (reported and failed, never
 guessed); what a non-ancestor draws over a text; and bb's own UI. `contrast.mjs` says how it
 computes.
 

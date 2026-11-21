@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The app's live checks (A13, A14), run by container/live.sh inside the container once bb-app
+// The app's live checks (A13, A14, A16), run by container/live.sh inside the container once bb-app
 // runs, the plugin is installed from the checkout and the fake `oats` prints the fixtures.
 //   A13 at 1280x800 and 390x800: the sidebar with the tree, an agent's thread with its header
 //       row, the home page (its badge shows 3), and each of the four pages render.

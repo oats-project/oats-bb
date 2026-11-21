@@ -155,7 +155,7 @@ export function parseRetirePlan(document: unknown): Result<Plan> {
       ? "Whether its session runs is not known; one that runs is stopped first."
       : idle(facts.session)
         ? "Its session is not running."
-        : "Its session is running and is stopped first.";
+        : "Its session is open and is stopped first.";
   lines.push(`Removed: the home of ${plan.instance}${plan.home ? ` (${plan.home})` : ""}. ${sessionLine}`);
   if (facts.ownWorktree === true) {
     const branch = facts.work?.branch ? ` on branch ${facts.work.branch}` : "";

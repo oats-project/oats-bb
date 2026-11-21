@@ -25,6 +25,9 @@
 //   - a disabled control, and what is inside one: skipped, as WCAG exempts it;
 //   - the options of an open select: the browser draws that list, not the page;
 //   - what is drawn but is no text and no state dot: borders, icons, focus rings;
+//   - the text of a `display: contents` element: it has no box of its own, so it counts as not
+//     rendered and is skipped, though its text is drawn;
+//   - `::before` and `::after` content: generated text is no text node of the page;
 //   - a background that is no colour (an image or a gradient on the element or an ancestor): the
 //     row is reported as `unsure`, and the check fails on it rather than guess;
 //   - something drawn over the text by an element that is not its ancestor (bb's own overlays);

@@ -1,7 +1,12 @@
 // The one function that says an agent's state in words, for every place that prints it (the tree,
 // the line under a thread's header, the instance panel), so that they say the same thing. Today the
 // home's card reads its age from it; the tree still draws the state's dot from the node's own
-// state, which is the same `state()`, and prints "· stopped" on a stopped row itself. Pure.
+// state, which is the same `state()`, and prints "· stopped" on a stopped row itself.
+// Its `word` is still the existing screens' (`STATE_WORD`, app/format.ts: "needs you", "error"),
+// which do not move in the change that brought the patterns. A NEW screen prints a state with
+// `State` or `StatusLine` (app/ui.tsx), whose words are the standard's (`STATE`, app/ui/words.ts:
+// "Needs you", "Failed"), and passes `state`, not this `word`. The roster's piece moves this
+// function, and the tree, onto `STATE`, and `STATE_WORD` and `Dot` go. Pure.
 import type { Agent, AgentState, BbThread } from "../../model/types";
 import { state } from "../../model/view";
 import { age, STATE_WORD } from "../format";

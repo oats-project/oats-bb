@@ -196,8 +196,15 @@ export function Modal({
           }
           if (event.key !== "Tab") return;
           // keep Tab inside the dialog
-          const stops = card.current?.querySelectorAll<HTMLElement>(TABBABLE);
-          if (stops === undefined || stops.length === 0) {
+          // What Tab really stops on: not a control a roving tabindex took out of the order (the
+          // unselected tabs, the unchecked choices), and nothing inside a disclosure that is closed
+          // but its summary.
+          const stops = Array.from(card.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? []).filter((stop) => {
+            if (stop.tabIndex < 0) return false;
+            const closed = stop.closest("details:not([open])");
+            return closed === null || (stop.tagName === "SUMMARY" && stop.parentElement === closed);
+          });
+          if (stops.length === 0) {
             // Nothing to stop on (an act in progress: its buttons are off): the focus stays on the dialog.
             event.preventDefault();
             card.current?.focus();

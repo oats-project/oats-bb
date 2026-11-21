@@ -86,12 +86,12 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
 /**
  * How old a read is, for a place that shows what it read earlier ("showing what was read <age>"):
  * the Desktop's `observedAgeText` (packages/desktop/renderer/loading.mjs at 95c7b43b3): "just now"
- * under 10 s, "45s ago", "3 min ago" (rounded), and from an hour on the local time, "at 14:05".
- * "just now" too for an instant that cannot be read.
+ * under 10 s, "45s ago", "3 min ago" (rounded), and from an hour on the local time, "at 14:05";
+ * null for an instant that cannot be read, and the place then says "showing what was last read".
  */
-export function readAge(at: string | number, now: number = Date.now()): string {
+export function readAge(at: string | number, now: number = Date.now()): string | null {
   const then = typeof at === "number" ? at : Date.parse(at);
-  if (!Number.isFinite(then)) return "just now";
+  if (!Number.isFinite(then)) return null;
   const s = Math.round(Math.max(0, now - then) / 1000);
   if (s < 10) return "just now";
   if (s < 60) return `${s}s ago`;

@@ -124,6 +124,14 @@ export default [
         `${at} the form: each control is named by its label alone ("· optional" where it is), described by its hint or its refusal, invalid with a refusal; a button that is off has its reason beside it`,
         JSON.stringify(form),
       );
+      // The form's focus order: its fields in their order; the button that is off is no stop.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-form")} textarea').focus()`);
+      const fields = [await page.evaluate(`document.activeElement.labels?.[0]?.innerText ?? ""`)];
+      await page.press("Tab");
+      fields.push(await page.evaluate(`document.activeElement.labels?.[0]?.innerText ?? ""`));
+      await page.press("Tab");
+      const after = await page.evaluate(`document.activeElement?.closest('${testId("oats-patterns-form")}') === null`);
+      check(JSON.stringify(fields) === JSON.stringify(["Opening instruction · optional", "Name · optional"]) && after === true, `${at} Tab walks the form's fields in their order and passes the button that is off`, JSON.stringify([fields, after]));
       await page.shot(`patterns-${viewport.name}-form`, { targets: true });
     },
   },

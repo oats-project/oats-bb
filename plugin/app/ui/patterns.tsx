@@ -148,6 +148,9 @@ export function Code({ children }: { children: string }) {
   return <code className="break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">{shown(children)}</code>;
 }
 
+/** The Desktop's sentence for content read earlier: with its age, or without one when the age is not known. */
+const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
+
 const TONE = {
   info: { frame: "border-border", title: "text-foreground", role: "status" },
   warning: { frame: "border-warning-text", title: "text-foreground", role: "status" },
@@ -175,6 +178,7 @@ export function Notice({
   tone?: keyof typeof TONE;
   code?: string | null;
   details?: string | null;
+  /** `readAge()` of what is still shown: a string, or null when the instant cannot be read ("Showing what was last read."); left out, the notice says nothing of it. */
   age?: string | null;
   actions?: ReactNode;
 }) {
@@ -183,7 +187,7 @@ export function Notice({
     <section role={look.role} data-testid="oats-notice" data-tone={tone} className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${look.frame}`}>
       <h3 className={`font-semibold ${look.title}`}>{title}</h3>
       {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
-      {age === undefined || age === null ? null : <p className="text-xs text-muted-foreground">{`Showing what was read ${age}.`}</p>}
+      {age === undefined ? null : <p className="text-xs text-muted-foreground">{showingRead(age)}</p>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
       {details === undefined || details === null || refusalLines(details).length === 0 ? null : (
         <Disclosure summary="Details" testId="oats-notice-details">
@@ -227,10 +231,10 @@ export function Loading({ children = "Reading OATS…" }: { children?: ReactNode
  * the content stays, marked with its age. `held` says why the acts that are unsafe on stale data
  * are held, where the place has such acts; `refreshing` is a re-read in flight.
  */
-export function Stale({ age, held, refreshing = false, action }: { age: string; held?: string | null; refreshing?: boolean; action?: ReactNode }) {
+export function Stale({ age, held, refreshing = false, action }: { age: string | null; held?: string | null; refreshing?: boolean; action?: ReactNode }) {
   return (
     <div role="status" data-testid="oats-stale" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground">
-      <span>{refreshing ? `Refreshing… showing what was read ${age}.` : `Showing what was read ${age}.`}</span>
+      <span>{refreshing ? `Refreshing… ${showingRead(age).replace(/^S/, "s")}` : showingRead(age)}</span>
       {held === undefined || held === null ? null : <span className="text-muted-foreground">{held}</span>}
       {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2">{action}</span>}
     </div>

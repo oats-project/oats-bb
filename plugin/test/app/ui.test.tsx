@@ -62,7 +62,7 @@ describe("the words", () => {
     // The age of a read, as the Desktop says it: seconds, rounded minutes, then the local time.
     expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["just now", "45s ago", "3 min ago", "59 min ago"]);
     expect(readAge(new Date(2026, 10, 21, 11, 5).getTime(), now)).toBe("at 11:05");
-    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual(["just now", "just now"]);
+    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "just now"]); // not readable: no age, as the Desktop
   });
 });
 
@@ -154,6 +154,7 @@ describe("facts, notices and the states of a list", () => {
         <Loading>Reading your agents…</Loading>
         <Stale age="2 min ago" held="Acts are held until OATS is read again." />
         <Stale age="just now" refreshing />
+        <Stale age={null} />
       </>,
     );
     expect(screen.getByTestId("oats-empty").textContent).toBe("No agents yet.New agent");
@@ -161,6 +162,7 @@ describe("facts, notices and the states of a list", () => {
       "Reading your agents…",
       "Showing what was read 2 min ago.Acts are held until OATS is read again.",
       "Refreshing… showing what was read just now.",
+      "Showing what was last read.", // an age that is not known
     ]);
   });
 
@@ -326,6 +328,30 @@ describe("the focus in a dialog that holds more than buttons", () => {
     expect(document.activeElement).toBe(summary);
     // Between two stops the key is the browser's own.
     expect(fireEvent.keyDown(summary, { key: "Tab" })).toBe(true);
+  });
+
+  test("a control a roving tabindex took out of the order, and one inside a closed disclosure, are no stops", () => {
+    render(
+      <Confirm {...base} destructive={false} confirmLabel="Save">
+        <Segmented label="Show" value="local" onChange={() => undefined} options={[{ id: "all", label: "All" }, { id: "local", label: "Local" }]} />
+      </Confirm>,
+    );
+    // The choice that is checked is the group's one stop, and the dialog's first: Shift+Tab on it wraps.
+    const local = screen.getByRole("radio", { name: "Local" });
+    const save = screen.getByRole("button", { name: "Save" });
+    local.focus();
+    expect(fireEvent.keyDown(local, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(save);
+    cleanup();
+    render(
+      <Confirm {...base} phase={{ kind: "failed", title: "It could not be retired.", refusal: "E_X: no", actions: <Disclosure summary="Details"><Button>inside</Button></Disclosure> }} />,
+    );
+    // The dialog's stops are the summary and Close: the button inside the closed disclosure is none, so Close is the last.
+    const close = screen.getByTestId("oats-confirm-close");
+    const summary = screen.getByText("Details").closest("summary")!;
+    expect(document.activeElement).toBe(close);
+    expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(summary);
   });
 
   test("a field that is off is no stop, and a menu's Tab is the dialog's to decide", () => {
@@ -609,7 +635,8 @@ describe("a confirmation", () => {
     const { rerender } = render(<Confirm {...base} onClose={close} phase={{ kind: "running", doing: "Retiring…" }} />);
     expect((screen.getByTestId("oats-confirm-cancel") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retiring…");
+    expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retire"); // the act's name stays; what it is doing is said once, under the plan
+    expect(screen.getByRole("status").textContent).toBe("Retiring…");
     expect(document.activeElement).toBe(screen.getByRole("dialog")); // both buttons are off: the focus stays in the dialog
     // And Tab does not take it out: with nothing to stop on, the key is held and the dialog keeps the focus.
     expect(fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" })).toBe(false);

@@ -109,6 +109,53 @@ with Retry; a first read that fails is a notice in words, the kernel's code afte
 message under Details. Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
+## Automations
+
+**Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's
+own schedules and triggers: the ones this deployment holds and the ones the workspace's members
+share through Git. They are the kernel's (`oats schedule …`, `oats trigger …`): the plugin is a
+front for them and never uses bb's own automations. The page is the OATS Desktop's Automations
+page, in its words.
+
+- **Two tabs, Schedules and Triggers**, each with its count. A list groups its rows by where they
+  run, because the first question is what this computer does: **Runs on this computer**, **Needs
+  attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
+  **Runs elsewhere**. All / Workspace / Local filters by where the definition lives; the search
+  reads the id, the soul, the task or wake message, the summary, the host and the account.
+- **A row** says its name and where it is from, its summary (or the first line of its prompt, in
+  italics), its soul, when it runs in words, where it runs and as whom, and its last and next run.
+  The kernel places every row (`runsHere`, `reason`, `enabledHere`); the plugin reads those facts
+  and derives none.
+- **A row's page** shows what it sends, whole (the prompt, the wake message, the command's argv,
+  the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
+  this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
+  that did not happen says why in the kernel's words. **Open file** previews the definition from
+  the machine that holds the deployment.
+- **A trigger's page** reads `oats trigger status`: what is live, what fired, what waits, the last
+  poll and the last error. For a trigger on a capability's source, the trigger file's parameters
+  and the source's own words (what it skipped, what OATS refused, its refusal) are shown as quoted
+  text under whose text it is, never as a link or as one of the plugin's sentences.
+- **The header** says the host scheduler's state ("Scheduler on · checked … · up to N at once", or
+  "Scheduler off"); when it is off and something here would run, a banner says nothing runs until
+  it is enabled.
+- **The sidebar's row** carries a red dot, announced "Automations, a run failed", while a
+  schedule's last run is launch failed or invalid.
+
+The lists are read together and kept beside the roster read they were made with: whatever makes
+the server read OATS again (an event of the deployment, an act, Retry, the poll) renews them, and
+the app asks again once a minute while the page or the sidebar shows them, since a run that fails
+writes no event the server watches. A trigger's state is read when its page opens, for an id the
+current list names. An OATS that does not list the feature `automations` (before 0.29) is not
+asked: the page says which OATS it needs.
+
+Not there yet: acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
+and creating or editing a schedule; they come in their own changes. Two of the Desktop's ways into
+the page wait for a product decision and are not built: its ⌘3 / Ctrl+3 shortcut and its palette
+entry (bb takes both from a plugin command registered with a default shortcut).
+
+`test/fixtures/automations/` holds what the real kernel printed for every command the feature
+runs, and `record/` there makes the recording again (its README says what was arranged).
+
 ## How it is built
 
 | File | Runs in | Does |
@@ -287,7 +334,8 @@ App, hooks and components: `experimental_useSidebarThreads`, `experimental_useRp
 watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisible`,
 `experimental_usePluginId`, `experimental_THREAD_ACTION_GROUPS`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,
-`experimental_resolveThreadStatus`.
+`experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
+Open file: a file of the machine that holds the deployment, in bb's own preview).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 

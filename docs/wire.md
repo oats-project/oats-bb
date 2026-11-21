@@ -256,8 +256,9 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   reaches no process before the spawn and the next launch rewrites it, so a launch that
   is refused after writing it is still a refusal: nothing was started. A Claude launch
   of a home whose project exists reads the project's env and unsets those three names
-  where it finds them (a pi launch of the same home left them, and bb starts `claude` by a
-  project `PATH`); it sets none, and leaves every other name.
+  wherever it finds them, whoever set them (a pi launch of the same home leaves them, and
+  bb starts `claude` by a project `PATH`); it sets none, and leaves every other name. A
+  read or an unset bb refuses there refuses the launch (`E_SESSION_START_FAILED`).
 - **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
   whose last turn failed and of one whose agent is gone. The provider decides at every
   call from this host's processes: a process whose environment carries

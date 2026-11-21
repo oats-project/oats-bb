@@ -275,7 +275,7 @@ test("a Claude launch whose project is made by this launch reads no env, and one
   const stuck = await setup(t, { "machine env list": { stdout: envList(["PATH"]) }, "machine env unset": { error: { code: "invalid_request", message: "HTTP 400: no" } } });
   const answer = await stuck.run({ harness: "claude", model: "claude-opus-5-5" });
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
-  assert.match(answer.error.message, /what a pi launch left in the env of bb project proj_a could not be removed: bb machine env unset PATH failed/);
+  assert.match(answer.error.message, /what a pi launch may have left in the env of bb project proj_a could not be removed: bb machine env unset PATH failed/);
   assert.ok(!names(stuck.bb).includes("thread spawn"));
 });
 

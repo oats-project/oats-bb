@@ -39,7 +39,8 @@ Called by the kernel (JSON on stdin, one JSON document on stdout):
   session launch | inspect | inspectMany | input | stop | check
   launch-hook                on another backend, removes what the provider wrote into the home
                              and into the env of its bb project
-  retire-hook                archives the home's bb threads at retire
+  retire-hook                archives the home's bb threads at retire, and removes the env of
+                             its bb project
 `;
 
 async function main(argv) {

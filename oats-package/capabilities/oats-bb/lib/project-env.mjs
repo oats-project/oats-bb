@@ -148,7 +148,7 @@ export async function removePiEnv(bb, projectId) {
   for (const name of await bb.projectEnvNames(projectId)) {
     if (!PI_ENV_NAMES.includes(name)) continue;
     const removed = await bb.envUnset(projectId, name);
-    if (!removed.ok) throw fail("E_SESSION_START_FAILED", `what a pi launch left in the env of bb project ${projectId} could not be removed: bb machine env unset ${name} failed (${removed.message})`);
+    if (!removed.ok) throw fail("E_SESSION_START_FAILED", `what a pi launch may have left in the env of bb project ${projectId} could not be removed: bb machine env unset ${name} failed (${removed.message})`);
   }
 }
 

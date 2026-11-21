@@ -19,7 +19,7 @@ export const POLL_MS = 15_000;
  * the last status took to answer, whichever is longer (a read that failed is followed by this floor). So a change the watch reports reaches the screen
  * within 3 s on a kernel that answers in under a second (the UX standard, section 6), and a slow
  * kernel spends at most half its time on status, however many events arrive. (The first spec's
- * "never within 5 s of the last" gave way to this on 2026-11-21.)
+ * "never within 5 s of the last" gave way to this.)
  */
 export const MIN_INTERVAL_MS = 1_000;
 /** How long the answers behind the four pages are reused. */

@@ -31,7 +31,7 @@ export type ConfirmProps = {
   phase:
     | { kind: "reading" }
     | { kind: "ready" }
-    /** The act is on its way: the dialog says so and cannot be dismissed into a lost result. */
+    /** The act is on its way: the dialog says so (`doing`, once, under the plan) and cannot be dismissed into a lost result. */
     | { kind: "running"; doing: string }
     | { kind: "done"; title: string; lines?: readonly string[]; actions?: ReactNode }
     /** A refusal or a failure: a person's words (`title`), then the kernel's code and message, and the next step. */
@@ -98,7 +98,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
               Cancel
             </Button>
             <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
-              {running ? phase.doing : confirmLabel}
+              {confirmLabel}
             </Button>
           </>
         )

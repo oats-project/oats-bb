@@ -168,7 +168,7 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 |---|---|---|
 | something to open and read ("Details", "Paths") | `Disclosure` | closed until pressed; its summary as high as a control |
 | a kernel's own word in a sentence | `Code` | a code, a flag, a file's name, filtered |
-| a state | `State`, `StateMark` | the mark AND the word (`STATE` in `app/ui/words.ts`); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
+| a state | `State`, `StateMark` | pass the `state`, not a word: the mark AND the word (`STATE` in `app/ui/words.ts`; the screens that are not on the patterns yet still print `agentStatus().word` and `Dot`, the older `STATE_WORD`, until the roster's piece moves them); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
 | where an agent is | `StatusLine` | the state, since when, the question or the reason, the act that applies |
 | a state that is not an agent's | `Toned` | a dot (ok, warn, bad, muted) AND its words |
 | a fact | `Facts`, `Fact` | `label · value`, the label muted, the value whole; a fact with no value is left out; `LINK` is a link's look |
@@ -194,6 +194,9 @@ looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `
 one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
 refusal's code and gives each line of the kernel's message a line of its own. The filter is for
 display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
+One named exception: `shownBlock(text)` draws a person's own definition text whole, in one block
+that keeps its lines (a schedule's or a trigger's Prompt and Wake message, as the Desktop draws
+them, and nothing else): no cut, nothing withheld, and only what is no text replaced by U+FFFD.
 
 - **Why the host entry runs `oats`.** Only it sees the user's login-shell PATH, and only it can
   target the machine that holds the homes.
@@ -227,7 +230,8 @@ display only: what goes back to OATS (an instance, a soul, a revision) is what t
   watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
   the last one took to answer, whichever is longer (after a read that failed, 1 s), 20 s limit. A status that hangs is ended at its limit before the
   next starts: under any burst of events one `oats status` is alive at a time. So a change the watch reports is on screen
-  within 3 s on a kernel that answers in under a second, and a slow kernel spends at most half its
+  within 3 s on a kernel that answers well under a second (a change that lands just after a read
+  started waits that read, the pause and the next read), and a slow kernel spends at most half its
   time on status (the first spec's "never within 5 s of the last" gave way to this). Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is

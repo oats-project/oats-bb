@@ -59,7 +59,10 @@ describe("the words", () => {
     expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("waiting 27 min (since 14:03)");
     expect(waitingSince(null, now)).toBeNull();
     expect(waitingSince("not a date", now)).toBeNull();
-    expect([readAge(now - 5_000, now), readAge(ago(2 * 60_000), now), readAge(ago(3 * 3_600_000), now), readAge(ago(49 * 3_600_000), now)]).toEqual(["just now", "2 min ago", "3 h ago", "2 d ago"]);
+    // The age of a read, as the Desktop says it: seconds, rounded minutes, then the local time.
+    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["just now", "45s ago", "3 min ago", "59 min ago"]);
+    expect(readAge(new Date(2026, 10, 21, 11, 5).getTime(), now)).toBe("at 11:05");
+    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "just now"]); // not readable: no age, as the Desktop
   });
 });
 
@@ -139,6 +142,14 @@ describe("facts, notices and the states of a list", () => {
     fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
     cleanup();
+    // An age that is not known is said as the Desktop says it; an age that is left out is not said.
+    render(
+      <Notice title="OATS could not be read" tone="error" age={null}>
+        The machine did not answer in time.
+      </Notice>,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("OATS could not be readThe machine did not answer in time.Showing what was last read.");
+    cleanup();
     // A notice that is no failure is announced politely, and shows no code and no age it was not given.
     render(<Notice title="No deployment is set">Choose the directory in the settings.</Notice>);
     expect(screen.getByRole("status").textContent).toBe("No deployment is setChoose the directory in the settings.");
@@ -151,6 +162,7 @@ describe("facts, notices and the states of a list", () => {
         <Loading>Reading your agents…</Loading>
         <Stale age="2 min ago" held="Acts are held until OATS is read again." />
         <Stale age="just now" refreshing />
+        <Stale age={null} />
       </>,
     );
     expect(screen.getByTestId("oats-empty").textContent).toBe("No agents yet.New agent");
@@ -158,6 +170,7 @@ describe("facts, notices and the states of a list", () => {
       "Reading your agents…",
       "Showing what was read 2 min ago.Acts are held until OATS is read again.",
       "Refreshing… showing what was read just now.",
+      "Showing what was last read.", // an age that is not known
     ]);
   });
 
@@ -287,6 +300,115 @@ describe("what the panel's header and a refusal's details need", () => {
     const card = screen.getByRole("region", { name: "Work" });
     expect(card.textContent).toBe("WorkOn its own branch.the paths");
     expect(document.querySelector("code")!.textContent).toBe("oats status");
+  });
+});
+
+describe("the focus in a dialog that holds more than buttons", () => {
+  const base: ConfirmProps = {
+    title: "Retire Weekly digest?",
+    about: "weekly-digest-helper",
+    shownFor: "weekly-digest-helper",
+    happens: ["Its home is removed."],
+    confirmLabel: "Retire",
+    destructive: true,
+    phase: { kind: "ready" },
+    onConfirm: () => undefined,
+    onClose: () => undefined,
+  };
+
+  test("a disclosure in a confirmation is a stop: Tab reaches it, and from it Shift+Tab goes round inside the dialog", () => {
+    render(
+      <Confirm {...base}>
+        <Disclosure summary="Details">
+          <p>the kernel's own words</p>
+        </Disclosure>
+      </Confirm>,
+    );
+    const summary = screen.getByText("Details").closest("summary")!;
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const retire = screen.getByRole("button", { name: "Retire" });
+    expect(document.activeElement).toBe(cancel);
+    // The summary is the dialog's first stop: Shift+Tab on it wraps to the last, and Tab on the last wraps to it.
+    summary.focus();
+    expect(fireEvent.keyDown(summary, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(retire);
+    expect(fireEvent.keyDown(retire, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    // Between two stops the key is the browser's own.
+    expect(fireEvent.keyDown(summary, { key: "Tab" })).toBe(true);
+  });
+
+  test("a control a roving tabindex took out of the order, and one inside a closed disclosure, are no stops", () => {
+    render(
+      <Confirm {...base} destructive={false} confirmLabel="Save">
+        <Segmented label="Show" value="local" onChange={() => undefined} options={[{ id: "all", label: "All" }, { id: "local", label: "Local" }]} />
+      </Confirm>,
+    );
+    // The choice that is checked is the group's one stop, and the dialog's first: Shift+Tab on it wraps.
+    const local = screen.getByRole("radio", { name: "Local" });
+    const save = screen.getByRole("button", { name: "Save" });
+    local.focus();
+    expect(fireEvent.keyDown(local, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(save);
+    cleanup();
+    render(
+      <Confirm {...base} phase={{ kind: "failed", title: "It could not be retired.", refusal: "E_X: no", actions: <Disclosure summary="Details"><Button>inside</Button></Disclosure> }} />,
+    );
+    // The dialog's stops are the summary and Close: the button inside the closed disclosure is none, so Close is the last.
+    const close = screen.getByTestId("oats-confirm-close");
+    const summary = screen.getByText("Details").closest("summary")!;
+    expect(document.activeElement).toBe(close);
+    expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    cleanup();
+    // The button inside a closed disclosure as the dialog's LAST control (the act runs: the footer's
+    // buttons are off): the summary is the only stop, so Tab on it is held.
+    render(
+      <Confirm {...base} phase={{ kind: "running", doing: "Retiring…" }}>
+        <Disclosure summary="Details">
+          <Button>inside</Button>
+        </Disclosure>
+      </Confirm>,
+    );
+    const only = screen.getByText("Details").closest("summary")!;
+    only.focus();
+    expect(fireEvent.keyDown(only, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(only);
+    cleanup();
+    // A disclosure inside a closed one: its summary cannot be reached, so the outer summary is the only stop.
+    render(
+      <Confirm {...base} phase={{ kind: "running", doing: "Retiring…" }}>
+        <Disclosure summary="Outer">
+          <Disclosure summary="Inner">x</Disclosure>
+        </Disclosure>
+      </Confirm>,
+    );
+    const outer = screen.getByText("Outer").closest("summary")!;
+    outer.focus();
+    expect(fireEvent.keyDown(outer, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(outer);
+  });
+
+  test("a field that is off is no stop, and a menu's Tab is the dialog's to decide", () => {
+    render(
+      <Confirm {...base} destructive={false} confirmLabel="Save">
+        <input aria-label="off" disabled />
+        <Menu label="More" items={[{ id: "one", label: "One", onSelect: () => undefined }]} />
+      </Confirm>,
+    );
+    const more = screen.getByRole("button", { name: "More" });
+    const save = screen.getByRole("button", { name: "Save" });
+    // The first stop is the menu's button, not the field that is off.
+    save.focus();
+    expect(fireEvent.keyDown(save, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(more);
+    // Tab in the open menu closes it, puts the focus on its button, and the dialog's own handler hears the key.
+    fireEvent.click(more);
+    const item = screen.getByRole("menuitem", { name: "One" });
+    expect(document.activeElement).toBe(item);
+    fireEvent.keyDown(item, { key: "Tab", shiftKey: true });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(save); // Shift+Tab from the first stop (the button) wraps to the last
   });
 });
 
@@ -436,7 +558,7 @@ describe("the controls", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(button.textContent).toBe("Couldn't copy");
+      expect(button.textContent).toBe("Copy failed");
     } finally {
       vi.useRealTimers();
     }
@@ -548,7 +670,8 @@ describe("a confirmation", () => {
     const { rerender } = render(<Confirm {...base} onClose={close} phase={{ kind: "running", doing: "Retiring…" }} />);
     expect((screen.getByTestId("oats-confirm-cancel") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retiring…");
+    expect(screen.getByTestId("oats-confirm-act").textContent).toBe("Retire"); // the act's name stays; what it is doing is said once, under the plan
+    expect(screen.getByRole("status").textContent).toBe("Retiring…");
     expect(document.activeElement).toBe(screen.getByRole("dialog")); // both buttons are off: the focus stays in the dialog
     // And Tab does not take it out: with nothing to stop on, the key is held and the dialog keeps the focus.
     expect(fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" })).toBe(false);

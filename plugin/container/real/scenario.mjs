@@ -264,8 +264,10 @@ function snapshotRow(instance) {
 }
 /**
  * Freshness (the UX standard, section 6): how long after the kernel recorded a change the plugin's
- * own snapshot has it, read as a client reads it (no refresh asked: the watch on the event log must
- * bring it). `recordedAt` is taken before the command that makes the change, so the delay holds the
+ * own snapshot has it, read as a client reads it (no refresh asked). What brings it is the watch on
+ * the event log, or the server's own reread behind a snapshot older than its 15 s poll: this check
+ * holds the delay a client sees, not the watch by itself (live.sh's L2 holds the watch, with the
+ * poll off). `recordedAt` is taken before the command that makes the change, so the delay holds the
  * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
  * own time is measured and said beside the delay, and a slower kernel is given twice that time and
  * the pause, so a slow kernel is told apart from a slow plugin.

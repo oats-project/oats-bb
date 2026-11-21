@@ -69,14 +69,33 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "freshness: a change the kernel records is in the tree within 3 s",
+    run: async ({ page, at, viewport, threads, check, record }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const drawn = (state) => `document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`;
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} before the change the agent is drawn idle`);
+      // The kernel records that the agent was stopped: its status row, and a line in the event log.
+      const stopped = record({ "harvest-knowledge-helper": { running: false, runtimeState: "stopped" } });
+      const shown = (await page.until(drawn("stopped"), 15)) ? Date.now() - stopped : null;
+      check(shown !== null && shown <= 3000, `${at} the tree shows the agent stopped ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it (3 s at most)`);
+      // And back, so the scenes after this one draw the fixtures.
+      const back = record();
+      const again = (await page.until(drawn("idle"), 15)) ? Date.now() - back : null;
+      check(again !== null && again <= 3000, `${at} and idle again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`);
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
-      const digest = threads.get("thr_digest");
-      await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
+      const unreachable = threads.get("thr_mockups");
+      await page.goto(`/projects/${unreachable.projectId}/threads/${unreachable.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const dot = (id, state) => `document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] [data-state="${state}"]`)}) !== null`;
-      const drawn = await page.until(`${dot(digest.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
+      const drawn = await page.until(`${dot(unreachable.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
       check(Boolean(drawn), `${at} the tree draws the unreachable agent, on the open thread, and the agent whose session is a shell`, await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")} [data-state]`)})].map((e) => e.getAttribute("data-state")).join(",")`));
       await page.shot(`a16-${viewport.name}-states`);
     },

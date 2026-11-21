@@ -13,7 +13,7 @@ import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
-import { FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
+import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
 let fake: FakeOats;
 let hostEntry: ReturnType<typeof experimental_createHostEntryHarness<any, any>>;
@@ -91,6 +91,56 @@ describe("snapshot", () => {
     expect((await rpc("snapshot")).at).toBe(one.at);
   }, 20_000);
 
+  it("pauses between two reads as long as the last one took, when that is longer than the floor: a slow kernel is not read without pause", async () => {
+    await fake.behave({ status: { sleepMs: 2_500 } });
+    await rpc("snapshot"); // took about 2.5 s
+    const ended = Date.now();
+    await fake.behave({});
+    const next = await rpc<{ at: string }>("refresh");
+    // The next read started no sooner than the last one's own time after it ended, not after 1 s.
+    expect(Date.parse(next.at) - ended).toBeGreaterThanOrEqual(2_400);
+    expect(Date.parse(next.at) - ended).toBeLessThan(4_500);
+    // And after that quick read, the floor is the pause again.
+    const after = Date.now();
+    const quick = await rpc<{ at: string }>("refresh");
+    expect(Date.parse(quick.at) - after).toBeLessThan(MIN_INTERVAL_MS + 800);
+    expect(await verbs()).toEqual(["status", "status", "status"]);
+  }, 20_000);
+
+  it("after a read that failed the pause is the floor: Retry is not held back by a timeout's own length", async () => {
+    await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 2_500 } });
+    const failed = await rpc<{ ok: boolean; code: string }>("snapshot"); // about 2.5 s, then OATS_FAILED
+    expect([failed.ok, failed.code]).toEqual([false, codes.failed]);
+    const ended = Date.now();
+    await fake.behave({});
+    const next = await rpc<{ at: string }>("refresh");
+    expect(Date.parse(next.at) - ended).toBeLessThan(MIN_INTERVAL_MS + 800); // not 2.5 s more
+    expect((await rpc<{ ok: boolean }>("snapshot")).ok).toBe(true);
+  }, 20_000);
+
+  it("with a kernel that hangs, under a burst of events, no more than one oats status is alive at a time", async () => {
+    await fake.behave({ status: { sleepMs: 600_000 } });
+    const first = rpc<{ ok: boolean; code: string }>("snapshot"); // runs into the 20 s limit
+    let most = 0;
+    let overlapped = false;
+    const deadline = Date.now() + 23_500;
+    while (Date.now() < deadline) {
+      // A burst: every event asks for a read; they share the one that is queued.
+      await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" });
+      const calls = (await fake.calls()).filter((call) => call.verb === "status");
+      const living = (await Promise.all(calls.map((call) => alive(call.pid)))).filter(Boolean).length;
+      most = Math.max(most, living);
+      if (living > 1) overlapped = true;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    expect((await first).code).toBe(codes.timeout);
+    const statuses = (await fake.calls()).filter((call) => call.verb === "status");
+    // The timed-out one was ended, and the next started after the floor: two by now, never two at once.
+    expect(statuses).toHaveLength(2);
+    expect(await alive(statuses[0]!.pid)).toBe(false);
+    expect([most, overlapped]).toEqual([1, false]);
+  }, 40_000);
+
   it("rereads when the host entry signals a change, and publishes it", async () => {
     await rpc("snapshot");
     await fake.behave({ status: { stdout: JSON.stringify({ root: "/abs/deployment", agents: [] }) } });
@@ -113,7 +163,7 @@ describe("snapshot", () => {
     await expect.poll(async () => (await verbs()).length).toBe(1);
     const started = Date.now();
     expect((await rpc("snapshot")).ok).toBe(true);
-    expect(Date.now() - started).toBeLessThan(MIN_INTERVAL_MS - 1_000);
+    expect(Date.now() - started).toBeLessThan(1_500); // the 700 ms of the read in flight, not a second read after the pause
     expect(await verbs()).toEqual(["status"]);
     service.controller.abort();
     await service.done;

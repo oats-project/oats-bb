@@ -21,6 +21,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, visible } from "../browser.mjs";
+import { sameImages } from "../images.mjs";
 import { Fixtures, sampleStatus } from "./fixtures.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,23 @@ const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800, mobile: false },
   { name: "390x800", width: 390, height: 800, mobile: true },
 ];
+// Every image is taken in bb's light theme and again in its dark theme (bb's own appearance
+// choice, set as bb keeps it: ../browser.mjs); a dark one's file name ends in "-dark".
+const VIEWS = ["light", "dark"].flatMap((theme) => VIEWPORTS.map((viewport) => ({ viewport, theme, suffix: theme === "light" ? "" : "-dark" })));
+/** A page of one view, with the theme bb draws checked once it has loaded something. */
+async function viewPage(browser, { viewport, theme }, at) {
+  const page = await browser.page(viewport, { theme });
+  const goto = page.goto;
+  let checked = false;
+  page.goto = async (path) => {
+    await goto(path);
+    if (checked) return;
+    checked = true;
+    const drawn = await page.until(`document.readyState === "complete" && (document.documentElement.classList.contains("dark") ? "dark" : "light")`, 15);
+    check(drawn === theme, `${at}: bb draws its ${theme} theme`, String(drawn));
+  };
+  return page;
+}
 mkdirSync(OUT, { recursive: true });
 
 // ---- what the run says
@@ -244,6 +262,34 @@ function snapshotRow(instance) {
   const snapshot = rpc("snapshot");
   return snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((agent) => agent.instance === instance) : undefined;
 }
+/**
+ * Freshness (the UX standard, section 6): how long after the kernel recorded a change the plugin's
+ * own snapshot has it, read as a client reads it (no refresh asked). What brings it is the watch on
+ * the event log, or the server's own reread behind a snapshot older than its 15 s poll: this check
+ * holds the delay a client sees, not the watch by itself (live.sh's L2 holds the watch, with the
+ * poll off). `recordedAt` is taken before the command that makes the change, so the delay holds the
+ * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
+ * own time is measured and said beside the delay, and a slower kernel is given twice that time and
+ * the pause, so a slow kernel is told apart from a slow plugin.
+ */
+async function fresh(what, instance, matches, recordedAt) {
+  let seen = null;
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const snapshot = rpc("snapshot");
+    const agent = snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((candidate) => candidate.instance === instance) : undefined;
+    if (agent !== undefined && matches(agent)) {
+      seen = Date.now() - recordedAt;
+      break;
+    }
+    await sleep(100);
+  }
+  const before = Date.now();
+  oats("status", "--json");
+  const statusMs = Date.now() - before;
+  const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
+  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
+}
 /** The plugin's snapshot agrees with the kernel's row: the thread, and the kernel's words for whether it runs. */
 function agrees(instance, row) {
   const mine = snapshotRow(instance);
@@ -260,9 +306,10 @@ let browser;
 /** At both widths: the tree's row of the agent, joined to its bb thread, and the thread's header row. */
 async function shots(scene, { instance, soul, threadId, state }) {
   const thread = bbThread(threadId);
-  for (const viewport of VIEWPORTS) {
-    const at = `${scene} ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `${scene} ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
@@ -270,14 +317,14 @@ async function shots(scene, { instance, soul, threadId, state }) {
       const drawn = await page.until(`document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`, 30);
       check(Boolean(drawn), `${at}: the tree has ${instance}, joined to its bb thread ${threadId}, drawn as ${state}`, await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.outerHTML.slice(0, 600) ?? "no such row: " + ${textOf(testId("oats-sidebar"))}`));
       show("row", await page.evaluate(textOf(row)));
-      await page.shot(`${scene}-${viewport.name}-sidebar`);
+      await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
 
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
       const chips = await page.evaluate(textOf(testId("oats-identity-row")));
       check([soul, instance, `home · …/instances/${instance}`, "OATS"].every((chip) => chips.includes(chip)), `${at}: the row's chips: soul, instance, home, OATS`, chips);
       show("header row", chips);
-      await page.shot(`${scene}-${viewport.name}-thread`);
+      await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
       await page.close();
     }
@@ -285,21 +332,22 @@ async function shots(scene, { instance, soul, threadId, state }) {
 }
 /** At both widths: the agent is not in the tree, and its soul's page says "thread missing", with Start and Retire. */
 async function missingShots(scene, { instance, soul }) {
-  for (const viewport of VIEWPORTS) {
-    const at = `${scene} ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `${scene} ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
       const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes(${JSON.stringify(instance)}) ? t : ""; })()`, 30);
       check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
-      await page.shot(`${scene}-${viewport.name}-soul`);
+      await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
       await sleep(1500);
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`);
       check(!rows.some((text) => text.includes(instance)), `${at}: ${instance} is not in the tree`, JSON.stringify(rows));
-      await page.shot(`${scene}-${viewport.name}-sidebar`);
+      await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {
       await page.close();
     }
@@ -386,15 +434,19 @@ try {
   step("A5b the agent asks for a person (a waiting claim): needs you");
   // As the agent's own session does it: `oats instance attention` in the home, with the session's environment.
   const asInstance = (...args) => spawnSync(OATS, args, { cwd: home, encoding: "utf8", env: { ...process.env, OATS_INSTANCE: A.instance, OATS_INSTANCE_HOME: home } });
+  const askedAt = Date.now(); // before the command: the delay then counts the command's own run too, never less than the truth
   const asked = asInstance("instance", "attention", "--message", "Keep the retry, or fail the job?");
   check(asked.status === 0, "oats instance attention, run in the agent's home", asked.stdout + asked.stderr);
+  await fresh("the claim", A.instance, (agent) => agent.waiting !== null, askedAt);
   row = await untilRow(A.instance, "a waiting claim", (r) => r.waitingOnYou != null);
   show("oats status", brief(row));
   const waiting = snapshotRow(A.instance)?.waiting;
   check(waiting?.reason === row?.waitingOnYou?.reason && waiting?.message === "Keep the retry, or fail the job?", "the plugin's snapshot has the claim, with the kernel's reason and the agent's message", JSON.stringify(waiting));
   keepStatus("needsYou", { [A.instance]: (r) => r.running === null && r.waitingOnYou?.message === "Keep the retry, or fail the job?" });
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
+  const clearedAt = Date.now();
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
+  await fresh("the claim cleared", A.instance, (agent) => agent.waiting === null, clearedAt);
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
@@ -418,15 +470,16 @@ try {
   await shots("real-question", { ...A, threadId, state: "needs-you" });
   // The home's card: the question and one button per option; the last width answers it, as a person does.
   const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.innerText.includes(${JSON.stringify(QUESTION)}))`;
-  for (const viewport of VIEWPORTS) {
-    const at = `real-question ${viewport.name}`;
-    const page = await browser.page(viewport);
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `real-question ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
     try {
       await page.goto("/plugins/oats/home");
       const choices = await page.until(`(() => { const c = ${card}; const b = c ? [...c.querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].map((e) => e.innerText.trim()) : []; return b.length > 0 ? JSON.stringify({ question: c.querySelector(${JSON.stringify(testId("oats-needs-question"))})?.innerText.trim(), choices: b }) : ""; })()`, 30);
       check(choices === JSON.stringify({ question: QUESTION, choices: ["Retry", "Mark failed"] }), `${at}: the home's card shows the question and its two choices`, choices ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
-      await page.shot(`real-question-${viewport.name}-home`);
-      if (viewport !== VIEWPORTS[VIEWPORTS.length - 1]) continue;
+      await page.shot(`real-question-${viewport.name}-home${suffix}`);
+      if (view !== VIEWS[VIEWS.length - 1]) continue;
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
       const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
       check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));
@@ -454,7 +507,7 @@ try {
   let slowPlan = rpc("stopPlan", { instance: A.instance });
   check(slowPlan.ok && slowPlan.ms >= 4000, `and a stop plan is read (${slowPlan.ms} ms)`, JSON.stringify(slowPlan));
   wrapper({ delays: { status: 600_000 } });
-  await sleep(5500); // the floor between two reads
+  await sleep(5500); // well past the pause between two reads (1 s after a quick or a failed one)
   slow = rpc("refresh");
   snapshot = rpc("snapshot");
   // 20 s is the plugin's limit for a status. The refresh can wait behind one read the 15 s poll
@@ -477,6 +530,8 @@ try {
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  // The stop is the plugin's own act: it rereads by itself afterwards, so this one holds that an act's result is on hand at once, not the watch.
+  await fresh("the agent stopped (the plugin's own act, counted from its answer)", A.instance, (agent) => agent.runtimeState === "stopped", Date.now());
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
   show("oats status", brief(row));
@@ -700,6 +755,21 @@ try {
 
 // The mock's own log of the model requests, beside the other artefacts.
 if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
+
+step("the images");
+// Two scenes of different states never produce the same image. The state each scene is in:
+const STATE_OF = { "real-working": "working", "real-idle": "idle", "real-answered": "idle", "real-needs-you": "needs-you", "real-question": "needs-you", "real-stopped": "stopped", "real-missing": "missing" };
+const sceneOf = (name) => Object.keys(STATE_OF).find((scene) => name.startsWith(`${scene}-`));
+// A KNOWN GAP (D-113 / S1): at 390 px the thread's view says nothing of the agent's state (the tree
+// is in bb's drawer, and the identity row carries no state), so the thread images of two states can
+// be one image there. The status line of the identity row ends it; this list is then emptied.
+const knownGap = (names) => names.every((name) => /-390x800-thread(-dark)?\.png$/.test(name));
+for (const names of sameImages(OUT)) {
+  const states = new Set(names.map((name) => STATE_OF[sceneOf(name)] ?? name));
+  if (states.size === 1) continue; // the same state, read twice (idle, and idle again after an answer)
+  if (knownGap(names)) note(`the same image for different states, a known gap (D-113 / S1: no state in the thread's view at 390 px): ${names.join(" = ")}`);
+  else fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
+}
 
 step("the recorded answers");
 // The kernel's version, as it prints it in the deployment: the one answer here that no RPC of the plugin asks for yet.

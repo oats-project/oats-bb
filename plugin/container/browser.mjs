@@ -100,6 +100,19 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
         writeFileSync(join(out, `${name}.png`), Buffer.from(data, "base64"));
         console.log(`     screenshot ${name}.png`);
       },
+      /**
+       * Presses a key as a person does (a real key event of the browser, which moves the focus on
+       * Tab and closes a dialog on Escape): "Tab", "Shift+Tab", "Enter", "Escape", " ", an arrow.
+       */
+      press: async (combination) => {
+        const shift = combination.startsWith("Shift+");
+        const key = shift ? combination.slice(6) : combination;
+        const code = KEYS[key];
+        if (code === undefined) throw new Error(`browser: no key "${key}"`);
+        const event = { key, code: code.code, windowsVirtualKeyCode: code.vk, modifiers: shift ? 8 : 0, ...(code.text ? { text: code.text } : {}) };
+        await cdp("Input.dispatchKeyEvent", { type: code.text ? "keyDown" : "rawKeyDown", ...event });
+        await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...event });
+      },
       close: () => send("Target.disposeBrowserContext", { browserContextId }),
     };
   }
@@ -113,7 +126,32 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
   };
 }
 
+const KEYS = {
+  Tab: { code: "Tab", vk: 9 },
+  Enter: { code: "Enter", vk: 13, text: "\r" },
+  Escape: { code: "Escape", vk: 27 },
+  " ": { code: "Space", vk: 32, text: " " },
+  ArrowLeft: { code: "ArrowLeft", vk: 37 },
+  ArrowUp: { code: "ArrowUp", vk: 38 },
+  ArrowRight: { code: "ArrowRight", vk: 39 },
+  ArrowDown: { code: "ArrowDown", vk: 40 },
+  Home: { code: "Home", vk: 36 },
+  End: { code: "End", vk: 35 },
+};
+
 // ---- what the page is asked
+
+/** What holds the focus, as a person would name it: its test id, else its accessible name or its text. */
+export const FOCUSED = `(() => { const e = document.activeElement; if (!e || e === document.body) return ""; return e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").replace(/\\s+/g, " ").trim() || e.tagName.toLowerCase(); })()`;
+
+/**
+ * The plugin's controls on screen that are lower than a person can press: under `min` px (32 at
+ * 1280, 44 at phone width). A link inside a sentence or a value (an inline one) is text, not a
+ * control, and is not held to it. → a JSON list of "<what> <height>px"; empty when every one is high enough.
+ */
+const CONTROL = 'button, a[href], input, select, textarea, summary, [role="tab"], [role="radio"], [role="switch"], [role="menuitem"]';
+export const lowTargets = (min) =>
+  `JSON.stringify([...document.querySelectorAll('[data-testid^="oats-"]')].flatMap((root) => [root, ...root.querySelectorAll('${CONTROL}')]).filter((e, i, all) => all.indexOf(e) === i && e.matches('${CONTROL}')).filter((e) => getComputedStyle(e).display !== "inline").map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0 && r.height < ${min} - 0.5).map(([e, r]) => (e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").trim().slice(0, 30) || e.tagName.toLowerCase()) + " " + Math.round(r.height) + "px"))`;
 
 /** On screen and not covered: the point at the element's middle (clamped to the viewport) is its own. */
 export const visible = (selector) =>

@@ -3,7 +3,15 @@ import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
+import { FILL, TARGET } from "./ui/patterns";
 import { refusalLines } from "./ui/text";
+
+// The patterns and the controls every screen is drawn with (the UX standard, section 3): one each.
+export { Confirm } from "./ui/confirm";
+export type { ConfirmProps } from "./ui/confirm";
+export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
+export type { MenuItem, TabItem } from "./ui/controls";
+export { Card, Code, DisabledReason, Disclosure, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";
 
 // bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
 // themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
@@ -11,14 +19,7 @@ import { refusalLines } from "./ui/text";
 // hold 4.5:1 on the page's own surfaces, not on an open row (`warning-text`: 4.35:1 there in the
 // light theme): a text in a row is `text-foreground` or `text-muted-foreground`. A refusal's text,
 // on a page or in a dialog, is `text-destructive-text`, never `text-destructive`.
-const DOT: Record<AgentState, string> = {
-  "needs-you": "bg-warning-text",
-  working: "bg-success-foreground",
-  idle: "border border-muted-foreground",
-  stopped: "bg-muted-foreground",
-  error: "bg-destructive-text",
-  unreachable: "bg-destructive-text",
-};
+const DOT: Record<AgentState, string> = { ...FILL, "needs-you": "bg-warning-text" };
 
 /**
  * A click the plugin should handle itself. A modified click (new tab, new window) is left to the
@@ -49,11 +50,13 @@ export function Mark({ label }: { label: string }) {
   return <span role="img" aria-label={label} title={label} data-testid="oats-mark" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
 }
 
-export function Chip({ children, title }: { children: ReactNode; title?: string }) {
+/** A tag: one word about a thing ("default", "workspace"). `tone` mutes it, or frames one that needs a look. Never a fact: a fact has its label (`Fact`). */
+export function Chip({ children, title, tone = "plain" }: { children: ReactNode; title?: string; tone?: "plain" | "muted" | "warn" }) {
   return (
     <span
       title={title}
-      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-border bg-card px-2 py-0.5 text-xs text-foreground"
+      data-tone={tone}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border bg-card px-2 py-0.5 text-xs ${tone === "warn" ? "border-warning-text text-foreground" : tone === "muted" ? "border-border text-muted-foreground" : "border-border text-foreground"}`}
     >
       {children}
     </span>
@@ -73,7 +76,7 @@ export function Button({ variant = "default", className = "", type = "button", .
   return (
     <button
       type={type}
-      className={`inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON[variant]} ${className}`}
+      className={`inline-flex ${TARGET} shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON[variant]} ${className}`}
       {...rest}
     />
   );
@@ -133,6 +136,9 @@ export function Page({ children, testId }: { children: ReactNode; testId: string
   );
 }
 
+/** What Tab stops on inside a dialog, in the page's order: every control that is not off, a disclosure's summary, and what a tabindex puts in the order. */
+const TABBABLE = 'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
 /**
  * A modal dialog drawn by the plugin: a centred card on a dimmed page, a sheet at the bottom of a
  * phone. Escape and a click on the dimmed page cancel; focus moves into it and stays in it.
@@ -142,19 +148,29 @@ export function Modal({
   children,
   footer,
   onCancel,
+  returnFocus,
 }: {
   title: string;
   children: ReactNode;
   footer: ReactNode;
   onCancel: () => void;
+  /** Where the focus goes when the dialog closes and the control that opened it is gone (a retired agent's row): its neighbour. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const titleId = useId();
   const card = useRef<HTMLDivElement>(null);
+  const after = useRef(returnFocus);
+  after.current = returnFocus;
   useEffect(() => {
     const previous = document.activeElement;
-    card.current?.focus();
+    // The focus starts on the control the dialog marks (`data-autofocus`: Cancel for a destructive
+    // act, a form's first field), else on the dialog itself.
+    (card.current?.querySelector<HTMLElement>("[data-autofocus]") ?? card.current)?.focus();
     return () => {
-      if (previous instanceof HTMLElement) previous.focus();
+      // What opened it, when it is still there and held the focus (a click focuses no button in some browsers).
+      const opener = previous instanceof HTMLElement && previous.isConnected && previous !== document.body ? previous : null;
+      const back = opener ?? after.current?.() ?? null;
+      back?.focus();
     };
   }, []);
   return (
@@ -180,8 +196,21 @@ export function Modal({
           }
           if (event.key !== "Tab") return;
           // keep Tab inside the dialog
-          const stops = card.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input, textarea, select");
-          if (stops === undefined || stops.length === 0) return;
+          // What Tab really stops on: not a control a roving tabindex took out of the order (the
+          // unselected tabs, the unchecked choices), and nothing inside a disclosure that is closed
+          // but its summary.
+          const stops = Array.from(card.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? []).filter((stop) => {
+            if (stop.tabIndex < 0) return false;
+            // A summary is its own disclosure's stop whether that is open or not: look from outside it.
+            const from = stop.tagName === "SUMMARY" && stop.parentElement?.tagName === "DETAILS" ? stop.parentElement.parentElement : stop;
+            return from === null || from.closest("details:not([open])") === null;
+          });
+          if (stops.length === 0) {
+            // Nothing to stop on (an act in progress: its buttons are off): the focus stays on the dialog.
+            event.preventDefault();
+            card.current?.focus();
+            return;
+          }
           const first = stops[0]!;
           const last = stops[stops.length - 1]!;
           if (event.shiftKey && (document.activeElement === first || document.activeElement === card.current)) {

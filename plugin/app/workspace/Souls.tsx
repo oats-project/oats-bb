@@ -4,6 +4,7 @@ import { ThreadTitle, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
+import { hasAgentPage, openAgentPage } from "../home/agent-tab";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
@@ -86,6 +87,12 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
           <li key={agent.instance} data-testid="oats-soul-agent-elsewhere" className="flex items-center gap-2 px-2 py-1.5">
             <span className="min-w-0 flex-1 truncate">{shown(agent.instance)}</span>
             <span className="text-xs text-muted-foreground">{`on ${shown(agent.backend)}`}</span>
+            {/* An agent with no bb thread has its own page, where a feature gives agents one. */}
+            {hasAgentPage() ? (
+              <Button data-testid="oats-soul-agent-open" onClick={() => void openAgentPage(navigate, agent.instance)}>
+                Open
+              </Button>
+            ) : null}
           </li>
         );
       })}

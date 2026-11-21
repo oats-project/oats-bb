@@ -270,7 +270,7 @@ test("the fixed thread tab shows the same three sections, with Workspace counts 
   expect([tab.id, tab.context.kind, tab.availability]).toEqual(["home", "thread", "fixed"]);
   const slot = renderSlot<ExperimentalThreadTabProps, Contract>(
     tab as { component: ComponentType<ExperimentalThreadTabProps> },
-    { threadId: "thr_ci", environment: null },
+    { threadId: "thr_plain", environment: null } /* a thread that is no agent's: an agent's own thread shows the view a feature names for it */,
     { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS },
   );
   expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you3");
@@ -287,7 +287,7 @@ test("a hidden tab does not read the four pages", async () => {
   const app = await loadApp();
   const slot = renderSlot<ExperimentalThreadTabProps, Contract>(
     app.tabs[0]! as { component: ComponentType<ExperimentalThreadTabProps> },
-    { threadId: "thr_ci", environment: null },
+    { threadId: "thr_plain", environment: null } /* a thread that is no agent's: an agent's own thread shows the view a feature names for it */,
     { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS, tabVisible: false },
   );
   await slot.findByTestId("oats-home-needs");
@@ -420,6 +420,47 @@ test("on an agent's own thread the tab shows the view a feature named for one ag
     const onPlain = render("thr_plain");
     expect(heading(await onPlain.findByTestId("oats-home-needs"))).toBe("Needs you3");
     expect(onPlain.queryByTestId("agent-view")).toBeNull();
+  } finally {
+    setAgentTab(null);
+  }
+});
+
+test("while the roster cannot be read the tab keeps the view of the agent it showed there, not the home's error line", async () => {
+  const app = await loadApp();
+  const tab = app.tabs[0]! as { component: ComponentType<ExperimentalThreadTabProps> };
+  let failing = false;
+  const rpc = handlers({ snapshot: () => (failing ? { ok: false as const, at: "2026-11-19T12:35:00.000Z", code: "OATS_TIMEOUT", message: "oats did not answer" } : fixtureSnapshot()) });
+  setAgentTab(({ agent, threadId }) => <p data-testid="agent-view">{`${agent.instance} on ${threadId}`}</p>);
+  try {
+    const first = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    expect((await first.findByTestId("agent-view")).textContent).toBe("flaky-ci-developer on thr_ci");
+    first.unmount();
+    // The read fails from now on: the same thread still shows the agent's view, with the agent as last read.
+    failing = true;
+    const later = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    expect((await later.findByTestId("agent-view")).textContent).toBe("flaky-ci-developer on thr_ci");
+    await waitFor(() => expect(later.inspection.rpcCalls.some((call) => call.method === "snapshot")).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(later.queryByTestId("agent-view")).not.toBeNull();
+    expect(later.queryByRole("alert")).toBeNull();
+    later.unmount();
+    // Once a roster is read that names no agent on that thread (it was retired), the tab forgets it:
+    // the next failed read shows the home there, not the retired agent's view.
+    failing = false;
+    const without = { ...fixtureSnapshot(fixtureAgents().filter((agent) => agent.instance !== "flaky-ci-developer")), at: "2026-11-19T12:40:00.000Z" };
+    const retired = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc: handlers({ snapshot: () => without }), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    await retired.findByTestId("oats-home-needs");
+    expect(retired.queryByTestId("agent-view")).toBeNull();
+    retired.unmount();
+    failing = true;
+    const afterwards = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_ci", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    expect((await afterwards.findByRole("alert")).textContent).toContain("oats did not answer");
+    expect(afterwards.queryByTestId("agent-view")).toBeNull();
+    afterwards.unmount();
+    // A thread the tab never showed an agent on gets the home, with its failure said.
+    const other = renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId: "thr_research", environment: null }, { rpc, sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+    expect((await other.findByRole("alert")).textContent).toContain("oats did not answer");
+    expect(other.queryByTestId("agent-view")).toBeNull();
   } finally {
     setAgentTab(null);
   }

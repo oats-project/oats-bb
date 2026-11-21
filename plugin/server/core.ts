@@ -14,8 +14,14 @@ export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly
 
 /** The slow poll, while at least one client is connected. */
 export const POLL_MS = 15_000;
-/** Never more than one `oats status` in this many milliseconds. */
-export const MIN_INTERVAL_MS = 5_000;
+/**
+ * The pause between the end of one `oats status` and the start of the next: this, or as long as
+ * the last status took to answer, whichever is longer (a read that failed is followed by this floor). So a change the watch reports reaches the screen
+ * within 3 s on a kernel that answers in under a second (the UX standard, section 6), and a slow
+ * kernel spends at most half its time on status, however many events arrive. (The first spec's
+ * "never within 5 s of the last" gave way to this.)
+ */
+export const MIN_INTERVAL_MS = 1_000;
 /** How long the answers behind the four pages are reused. */
 const PAGE_TTL_MS = 30_000;
 /** A client that asked for the snapshot this recently counts as connected, beside the watched reads. */
@@ -108,6 +114,9 @@ export function createCore(bb: BbPluginApi) {
   let rawRows: { root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
   let comparable = "";
   let lastStart = 0;
+  /** When the last read ended, and how long it took: what the pause before the next is counted from. */
+  let lastEnd = 0;
+  let lastTook = 0;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
   let watchers = 0;
@@ -230,19 +239,25 @@ export function createCore(bb: BbPluginApi) {
     cached = next;
     rawRows = rows === null ? null : { root, rows };
     comparable = key;
+    lastEnd = Date.now();
+    // Only a status that answered lengthens the pause: the guard is for a kernel that answers
+    // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
+    // waits the floor, so Retry and the watch are not held back by the failure's own length.
+    lastTook = next.ok ? lastEnd - lastStart : 0;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
   }
 
   /**
-   * The next read that starts from now on: after the one in flight, and never sooner than
-   * MIN_INTERVAL_MS after the last one started. Callers asking meanwhile share it.
+   * The next read that starts from now on: after the one in flight, and never sooner after the
+   * last one ended than MIN_INTERVAL_MS or the time that one took to answer, whichever is longer. Callers
+   * asking meanwhile share it.
    */
   function reread(): Promise<Snapshot> {
     if (queued) return queued;
     const next = (async () => {
       if (running) await running;
-      await sleep(Math.max(0, lastStart + MIN_INTERVAL_MS - Date.now()), lifetime.signal);
+      await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastTook) - Date.now()), lifetime.signal);
       queued = null;
       const mine = read();
       running = mine;

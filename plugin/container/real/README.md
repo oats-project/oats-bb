@@ -75,6 +75,14 @@ together.
 | `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
+Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
+The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
+claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most; the kernel's
+own `oats status` time is said beside it), and at its end it compares its images: two scenes of
+different states must not be the same image. One pair is, and is reported as a known gap (D-113 /
+S1): at 390 px the thread's view says nothing of the agent's state, until the status line of the
+identity row is built.
+
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays
   the automatic one: one running thread per processor, 2 in this container. The run is written for

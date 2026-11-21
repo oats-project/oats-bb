@@ -148,12 +148,41 @@ What the features share, beyond the entries:
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
-  on every other. `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+  on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the identity row's OATS
+  chip opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
+  `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
 - **A server test of a feature's verbs** starts the whole backend with `startBackend()`
   (`test/support/backend.ts`): bb's fake plugin host, the real host entry, the fake `oats`.
+
+### The patterns: one component each
+
+Every screen of every feature is drawn with the components of `app/ui.tsx` (the UX standard,
+section 3); a feature draws no other of its own, and asks for what one lacks. Their words are the
+Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
+
+| For | Component | What it holds |
+|---|---|---|
+| something to open and read ("Details", "Paths") | `Disclosure` | closed until pressed; its summary as high as a control |
+| a kernel's own word in a sentence | `Code` | a code, a flag, a file's name, filtered |
+| a state | `State`, `StateMark` | pass the `state`, not a word: the mark AND the word (`STATE` in `app/ui/words.ts`; the screens that are not on the patterns yet still print `agentStatus().word` and `Dot`, the older `STATE_WORD`, until the roster's piece moves them); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
+| where an agent is | `StatusLine` | the state, since when, the question or the reason, the act that applies |
+| a state that is not an agent's | `Toned` | a dot (ok, warn, bad, muted) AND its words |
+| a fact | `Facts`, `Fact` | `label · value`, the label muted, the value whole; a fact with no value is left out; `LINK` is a link's look |
+| a titled block of a page | `Section` | its heading, with a count where it lists things |
+| failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help |
+| nothing to list; a read in flight | `Empty`, `Loading` | the Desktop's sentence and the act that fills it; "Reading …", announced |
+| content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |
+| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog; it shows no plan that is another agent's |
+| what happened | `Result` | done, failed or not known, in words, with the code after and the next step |
+| a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
+| tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
+| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
+
+A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
 
 ### Text from OATS or an agent
 
@@ -165,6 +194,9 @@ looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `
 one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
 refusal's code and gives each line of the kernel's message a line of its own. The filter is for
 display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
+One named exception: `shownBlock(text)` draws a person's own definition text whole, in one block
+that keeps its lines (a schedule's or a trigger's Prompt and Wake message, as the Desktop draws
+them, and nothing else): no cut, nothing withheld, and only what is no text replaced by U+FFFD.
 
 - **Why the host entry runs `oats`.** Only it sees the user's login-shell PATH, and only it can
   target the machine that holds the homes.
@@ -195,7 +227,12 @@ display only: what goes back to OATS (an instance, a soul, a revision) is what t
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client
-  watches the snapshot: never two reads at once, never within 5 s of the last, 20 s limit. Each
+  watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
+  the last one took to answer, whichever is longer (after a read that failed, 1 s), 20 s limit. A status that hangs is ended at its limit before the
+  next starts: under any burst of events one `oats status` is alive at a time. So a change the watch reports is on screen
+  within 3 s on a kernel that answers well under a second (a change that lands just after a read
+  started waits that read, the pause and the next read), and a slow kernel spends at most half its
+  time on status (the first spec's "never within 5 s of the last" gave way to this). Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read

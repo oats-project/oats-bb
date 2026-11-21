@@ -6,6 +6,7 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { count, homeTail } from "../format";
+import { openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
 import { Chip, plainClick } from "../ui";
 import { shown } from "../ui/text";
@@ -36,9 +37,12 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const identity = agent.address ?? agent.alias;
 
   const openHome = () => {
-    // On a phone the home is a full page. On desktop it is the thread's fixed tab; where bb
-    // declines to open it, the page is the same view.
-    if (isCompactViewport() || !panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
+    // On desktop it is the thread's fixed tab. On a phone bb has no side panel: the agent's own
+    // page, where a feature has one, else the home, which is a full page. Where bb declines to
+    // open the tab, the home's page is the same view.
+    if (isCompactViewport()) {
+      if (!openAgentPage(navigate, agent.instance)) navigate.toPluginPanel("home");
+    } else if (!panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
   };
 
   return (

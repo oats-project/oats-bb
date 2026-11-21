@@ -14,6 +14,7 @@ import * as automations from "./app/automations";
 import * as home from "./app/home";
 import * as lifecycle from "./app/lifecycle";
 import * as panel from "./app/panel";
+import * as patterns from "./app/patterns";
 import * as roster from "./app/roster";
 import * as spawn from "./app/spawn";
 import * as workspace from "./app/workspace";
@@ -26,4 +27,5 @@ export default definePluginApp((app) => {
   lifecycle.register(app);
   automations.register(app);
   panel.register(app);
+  patterns.register(app);
 });

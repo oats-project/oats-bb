@@ -3,15 +3,24 @@
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
-afterEach(resetApp);
+afterEach(() => {
+  agentPage = null;
+  resetApp();
+});
+
+// The page of one agent, as these tests name it: none, unless a test gives one. Named after the
+// app is loaded, since a feature that has such a page names its own in its `register`.
+let agentPage: Parameters<typeof setAgentPage>[0] = null;
 
 async function souls(subPath: string, over: Partial<Handlers> = {}, agents?: Agent[], threads = fixtureThreads()) {
   const app = await loadApp();
+  setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
   expect(panel.experimental_hideFromNavigation).toBe(true);
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over, agents), sidebarThreads: { status: "ready", threads } });
@@ -222,6 +231,7 @@ test("a soul key with characters bb percent-encodes is decoded segment by segmen
 
 test("while bb is still listing its threads a soul's agents are not shown as missing", async () => {
   const app = await loadApp();
+  setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
   const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "oats-developer" }, { rpc: handlers(), sidebarThreads: { status: "loading", threads: [] } });
   await slot.findByTestId("oats-soul-detail");
@@ -270,4 +280,16 @@ test("a preview's refusal that arrives after the task changed is dropped too", a
   refuse(new Error("E_TASK_REFUSED: about the first task"));
   await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview"));
   expect(slot.queryByRole("alert")).toBeNull();
+});
+
+test("an agent with no bb thread opens its own page, where a feature gives agents one", async () => {
+  const opened: string[] = [];
+  const plain = await souls("oats-developer");
+  await plain.findByTestId("oats-soul-agent-elsewhere");
+  expect(plain.queryByTestId("oats-soul-agent-open")).toBeNull(); // no feature has a page: nothing to press
+  plain.unmount();
+  agentPage = (_navigate, instance) => void opened.push(instance);
+  const slot = await souls("oats-developer");
+  fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
+  expect(opened).toEqual(["kernel-fix-developer"]);
 });

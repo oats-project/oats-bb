@@ -3,7 +3,9 @@
 // `oats trigger … --json` answers into these (kernel/automations.ts), the server passes them on,
 // and the app draws them. The kernel places every row (runsHere, reason, enabledHere): nothing
 // here, and nothing that reads these, derives a placement again.
+import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { answer, hostBase, hostRead } from "./shared.js";
 
 const text = z.string().nullable();
 const count = z.number().int().nullable();
@@ -197,3 +199,39 @@ export type AutomationHost = z.infer<typeof automationHost>;
 export type AutomationScheduler = z.infer<typeof automationScheduler>;
 export type AutomationList = z.infer<typeof automationList>;
 export type TriggerStatus = z.infer<typeof triggerStatus>;
+
+// ---- the verbs ----
+
+/** One list as a client gets it: the kernel's answer, or why there is none (the kernel's code and message, or one of the plugin's own). */
+export const automationListAnswer = z.union([
+  z.object({ ok: z.literal(true), list: automationList }),
+  z.object({ ok: z.literal(false), code: z.string(), message: z.string() }),
+]);
+/** A qualified id (`local/<id>`, `<member>/<id>`) or a bare local one: never a path, never an option. */
+export const automationId = z.string().regex(/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/);
+
+/** app -> server */
+export const rpc = defineRpcContract({
+  /**
+   * Both lists, read together: each tab counts its rows, and one that fails does not hide the
+   * other. `hostId` is the bb machine that holds the deployment (a row's file opens there).
+   */
+  automations: {
+    input: z.null(),
+    output: z.object({ at: z.string(), hostId: z.string().nullable(), schedule: automationListAnswer, trigger: automationListAnswer }),
+  },
+  /** One trigger's recorded state. The id must be a trigger of the current list. */
+  triggerStatus: { input: z.object({ id: automationId }).strict(), output: triggerStatus },
+});
+
+/** server -> host: one method per `oats` command the feature runs. */
+export const host = defineRpcContract({
+  scheduleList: { experimental_retryable: true, input: hostRead, output: answer(automationList) },
+  triggerList: { experimental_retryable: true, input: hostRead, output: answer(automationList) },
+  /** `source` is the list row's `on.source`, which decides how an event is named; it reaches no argv. */
+  triggerStatus: {
+    experimental_retryable: true,
+    input: z.object({ ...hostBase, id: automationId, source: z.string().nullable() }).strict(),
+    output: answer(triggerStatus),
+  },
+});

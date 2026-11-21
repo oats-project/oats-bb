@@ -1,1 +1,5 @@
-{}
+{
+  "schedule list": { "file": "schedule-list.json" },
+  "trigger list": { "file": "trigger-list.json" },
+  "trigger status": { "file": "trigger-status.json" }
+}

@@ -62,12 +62,12 @@ describe("the page and its two tabs (D-266)", () => {
     const view = page();
     const tabs = view.getAllByRole("tab");
     expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-      ["Schedules10", "true"],
+      ["Schedules11", "true"],
       ["Triggers7", "false"],
     ]);
     expect(view.getByRole("tablist").getAttribute("aria-label")).toBe("Automations");
     expect(view.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tabs[0]!.id);
-    expect(view.rows()).toHaveLength(10);
+    expect(view.rows()).toHaveLength(11);
   });
 
   it("a click, and Right, Left, Home and End, switch tabs; focus follows", () => {
@@ -91,7 +91,7 @@ describe("the page and its two tabs (D-266)", () => {
 
   it("a tab whose list is not read yet shows no count, and its page says it is reading", () => {
     const view = page({ trigger: { list: undefined, loading: true, error: null } });
-    expect(view.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules10", "Triggers"]);
+    expect(view.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules11", "Triggers"]);
     fireEvent.click(view.getAllByRole("tab")[1]!);
     expect(view.getByText("Reading triggers…")).toBeTruthy();
     expect((view.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
@@ -113,24 +113,24 @@ describe("a list (D-267)", () => {
     expect(tables).toHaveLength(3);
     expect(within(tables[0]!).getAllByRole("columnheader").map((head) => head.textContent)).toEqual(["Automation", "Soul", "When", "Runs on", "Last · next"]);
     // each table is named by its group's heading
-    expect(tables.map((table) => document.getElementById(table.getAttribute("aria-labelledby")!)!.textContent)).toEqual(["Runs on this computer6", "Needs attention here3", "Runs elsewhere1"]);
+    expect(tables.map((table) => document.getElementById(table.getAttribute("aria-labelledby")!)!.textContent)).toEqual(["Runs on this computer7", "Needs attention here3", "Runs elsewhere1"]);
   });
 
   it("All, Workspace and Local filter it, each with its count", () => {
     const view = page();
     const origin = (id: string) => view.getByTestId(`oats-automations-origin-${id}`);
     expect(["all", "workspace", "local"].map((id) => [origin(id).textContent, origin(id).getAttribute("aria-pressed")])).toEqual([
-      ["All10", "true"],
+      ["All11", "true"],
       ["Workspace4", "false"],
-      ["Local6", "false"],
+      ["Local7", "false"],
     ]);
     fireEvent.click(origin("workspace"));
     expect(origin("workspace").getAttribute("aria-pressed")).toBe("true");
     expect(view.rows().map((row) => row.dataset.id)).toEqual(["oats-real/nightly-digest", "oats-real/reconcile", "oats-real/release-check", "oats-real/weekly-report"]);
     fireEvent.click(origin("local"));
-    expect(view.rows()).toHaveLength(6);
+    expect(view.rows()).toHaveLength(7);
     // The counts are of the whole list, whatever is shown.
-    expect(origin("all").textContent).toBe("All10");
+    expect(origin("all").textContent).toBe("All11");
   });
 
   it("the search narrows it, and says when nothing matches", () => {
@@ -213,7 +213,7 @@ describe("a row's facts (D-268, D-269)", () => {
   it("the groups say where: this computer, needing attention here, elsewhere", () => {
     const view = page();
     expect(view.getAllByTestId("oats-automations-group").map((group) => [group.dataset.group, within(group).getAllByTestId("oats-automation-row").map((row) => row.dataset.id!.split("/")[1]!.replace(/-\d{12}$/, ""))])).toEqual([
-      ["here", ["daily-review", "hourly-check", "status-check", "wake-oats-developer-review", "weekly-cleanup", "nightly-digest"]],
+      ["here", ["daily-review", "hourly-check", "notes-checkpoint", "status-check", "wake-oats-developer-review", "weekly-cleanup", "nightly-digest"]],
       ["attention", ["legacy-herdr", "reconcile", "release-check"]],
       ["elsewhere", ["weekly-report"]],
     ]);
@@ -303,7 +303,7 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
     expect(alert.textContent).toBe("E_SCHEDULE_INVALID: oats-schedules.json cannot be readRetry");
     fireEvent.click(within(alert).getByText("Retry"));
     expect(view.log).toEqual(["refresh"]);
-    expect(view.rows()).toHaveLength(10);
+    expect(view.rows()).toHaveLength(11);
   });
 });
 
@@ -319,7 +319,7 @@ describe("a row's page (D-279)", () => {
     expect([back.textContent, back.getAttribute("aria-label")]).toEqual(["‹ Schedules", "Back to Schedules"]);
     expect(document.activeElement).toBe(back);
     fireEvent.click(back);
-    expect(view.rows()).toHaveLength(10);
+    expect(view.rows()).toHaveLength(11);
     expect(document.activeElement).toBe(within(view.row("local/daily-review")).getByTestId("oats-automation-open"));
     view.open("oats-real/nightly-digest");
     fireEvent.keyDown(view.getByTestId("oats-automation-back"), { key: "Escape" });
@@ -354,6 +354,14 @@ describe("a row's page (D-279)", () => {
     expect(view.queryByTestId("oats-automation-run-state")).toBeNull();
     expect(card(view, "oats-automation-history")).toBe("Recent runson this computerRuns are recorded on the computer that runs it.");
     expect(card(view, "oats-automation-when")).toBe("WhenRunsEvery 30 minutesCron*/30 * * * *Time zoneUTC");
+  });
+
+  it("a provider operation: the operation and the home it runs in; the row says what it is", () => {
+    const view = page();
+    expect(cells(view.row("local/notes-checkpoint")).slice(0, 3)).toEqual(["notes-checkpointlocalNo summary", "Soul: operation", "When: Daily at 23:000 23 * * * · UTC"]);
+    view.open("local/notes-checkpoint");
+    expect(card(view, "oats-automation-sends")).toBe("OperationOperationknowledge:checkpointRuns in/abs/deployment/agents/note-keeper/instances/team-notes-keeper");
+    expect(view.queryByTestId("oats-automation-spawns")).toBeNull();
   });
 
   it("a wake: its message whole and the home it wakes", () => {

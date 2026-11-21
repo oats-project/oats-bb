@@ -5,8 +5,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus } from "../../contract/automations";
-import { clean } from "../format";
 import { Button, ErrorLine, Note } from "../ui";
+import { shown } from "../ui/text";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
@@ -102,14 +102,14 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
         {gate !== null ? (
           <div data-testid="oats-automations-gate" className="mx-auto flex max-w-md flex-col gap-1 py-8 text-center text-sm">
             <strong className="text-base font-semibold text-foreground">{gate.title}</strong>
-            {gate.detail === null ? null : <span className="break-words text-muted-foreground">{clean(gate.detail)}</span>}
+            {gate.detail === null ? null : <span className="break-words text-muted-foreground">{shown(gate.detail)}</span>}
           </div>
         ) : (
           <>
-            {read.error === null ? null : <ErrorLine onRetry={onRefresh}>{clean(read.error)}</ErrorLine>}
+            {read.error === null ? null : <ErrorLine onRetry={onRefresh}>{read.error}</ErrorLine>}
             {notice ? (
               <p role="status" data-testid="oats-automations-notice" className="break-words text-sm text-foreground">
-                {clean(notice)}
+                {shown(notice)}
               </p>
             ) : null}
             {list === undefined ? (

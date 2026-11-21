@@ -35,6 +35,7 @@ describe("oats schedule list", () => {
       "local/daily-review",
       "local/hourly-check",
       "local/legacy-herdr",
+      "local/notes-checkpoint",
       "local/status-check",
       expect.stringMatching(/^local\/wake-oats-developer-review-\d{12}$/),
       "local/weekly-cleanup",
@@ -103,6 +104,12 @@ describe("oats schedule list", () => {
       localPath: "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml",
     });
     expect(row).toMatchObject({ owner: "github.com/ana", runsOn: "bb-box", description: "Write the nightly digest of what the team shipped" });
+  });
+
+  it("a provider operation: the operation and the home it runs in", () => {
+    const row = rowOf(schedules(), "local/notes-checkpoint");
+    expect(row).toMatchObject({ run: "operation", soul: null, operation: "knowledge:checkpoint", home: "/abs/deployment/agents/note-keeper/instances/team-notes-keeper", task: null, message: null, argv: null });
+    expect(row.lastRun).toMatchObject({ outcome: "launched", error: null });
   });
 
   it("a wake, a command: what each sends, and no soul", () => {

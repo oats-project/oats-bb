@@ -4,8 +4,8 @@
 // (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
 import type { ReactNode } from "react";
 import type { AutomationList, AutomationRow } from "../../contract/automations";
-import { clean } from "../format";
 import { Note } from "../ui";
+import { shown } from "../ui/text";
 import { Banner, Segmented, Search, Tag, ToneDot } from "./parts";
 import {
   actsAs,
@@ -39,8 +39,8 @@ const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 export function OriginTag({ row }: { row: AutomationRow }) {
   const local = row.origin.kind === "local";
   return (
-    <Tag title={local ? "Local to this computer" : clean([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>
-      {local ? "local" : clean(row.origin.member ?? "workspace")}
+    <Tag title={local ? "Local to this computer" : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>
+      {local ? "local" : shown(row.origin.member ?? "workspace")}
     </Tag>
   );
 }
@@ -56,17 +56,17 @@ export function StateTags({ row }: { row: AutomationRow }) {
     <>
       {!row.enabledHere && row.group !== "elsewhere" ? <Tag tone="muted">Off here</Tag> : null}
       {check ? (
-        <Tag tone="warn" title={clean(row.invalid?.message ?? row.invalid?.code ?? "")}>
+        <Tag tone="warn" title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>
           Source check failed
         </Tag>
       ) : bad !== null ? (
-        <Tag tone="warn" title={clean(bad.message ?? bad.code ?? "")}>
+        <Tag tone="warn" title={shown(bad.message ?? bad.code ?? "")}>
           {row.unreadable !== null ? "Unreadable" : "Invalid"}
         </Tag>
       ) : null}
       {template === null ? null : (
-        <Tag tone="muted" title={clean(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>
-          {clean(template)}
+        <Tag tone="muted" title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>
+          {shown(template)}
         </Tag>
       )}
     </>
@@ -78,8 +78,8 @@ export function Summary({ row }: { row: AutomationRow }) {
   const summary = summaryLine(row);
   if (summary === null) return <span className={SUB}>No summary</span>;
   return (
-    <span title={clean(summary.title)} data-derived={summary.derived} className={`${SUB} ${summary.derived ? "italic" : ""}`}>
-      {clean(summary.text)}
+    <span title={shown(summary.title)} data-derived={summary.derived} className={`${SUB} ${summary.derived ? "italic" : ""}`}>
+      {shown(summary.text)}
     </span>
   );
 }
@@ -98,30 +98,30 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
         <button
           type="button"
           data-testid="oats-automation-open"
-          aria-label={`Open ${clean(row.id)}`}
+          aria-label={`Open ${shown(row.id)}`}
           className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded text-left hover:underline"
           onClick={() => onOpen(row.id)}
         >
-          <span title={clean(row.id)} className={`min-w-0 break-all font-mono font-semibold ${off ? "text-muted-foreground" : "text-foreground"}`}>
-            {clean(row.name)}
+          <span title={shown(row.id)} className={`min-w-0 break-all font-mono font-semibold ${off ? "text-muted-foreground" : "text-foreground"}`}>
+            {shown(row.name)}
           </span>
           <OriginTag row={row} />
           <StateTags row={row} />
         </button>
         <Summary row={row} />
         {/* Not trusted here: the kernel's words, which name the oats-local.yaml line to add, in the row itself. */}
-        {row.reason === "untrusted" && row.reasonDetail !== null ? <span className={SUB}>{clean(row.reasonDetail)}</span> : null}
+        {row.reason === "untrusted" && row.reasonDetail !== null ? <span className={SUB}>{shown(row.reasonDetail)}</span> : null}
       </div>
       <div role="cell" className={CELL}>
         {label("Soul")}
         {row.soul === null ? (
-          <span className={SUB}>{row.run !== null && row.run !== "spawn" ? clean(row.run) : "Not reported"}</span>
+          <span className={SUB}>{row.run !== null && row.run !== "spawn" ? shown(row.run) : "Not reported"}</span>
         ) : (
           <>
-            <span title={clean(`${row.soul.name} · ${soulOriginText(row.soul.origin).long}`)} className={`${main} font-mono`}>
-              {clean(row.soul.name)}
+            <span title={shown(`${row.soul.name} · ${soulOriginText(row.soul.origin).long}`)} className={`${main} font-mono`}>
+              {shown(row.soul.name)}
             </span>
-            <span className={SUB}>{clean(soulOriginText(row.soul.origin).short)}</span>
+            <span className={SUB}>{shown(soulOriginText(row.soul.origin).short)}</span>
           </>
         )}
       </div>
@@ -129,26 +129,26 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
         {label("When")}
         {row.kind === "schedule" ? (
           <>
-            <span title={clean([row.cron, row.tz].filter(Boolean).join(" · "))} className={main}>
-              {clean(words ?? row.cron ?? "Not reported")}
+            <span title={shown([row.cron, row.tz].filter(Boolean).join(" · "))} className={main}>
+              {shown(words ?? row.cron ?? "Not reported")}
             </span>
             {/* The cron itself goes under its words; with no words, the line above is already the cron. */}
-            <span className={`${SUB} font-mono`}>{clean([words !== null ? row.cron : null, row.tz].filter(Boolean).join(" · "))}</span>
+            <span className={`${SUB} font-mono`}>{shown([words !== null ? row.cron : null, row.tz].filter(Boolean).join(" · "))}</span>
           </>
         ) : (
           <>
-            <span className={main}>{clean(on?.title ?? "Not reported")}</span>
-            {on === null ? null : <span className={SUB}>{clean([on.repo, ...on.labels.map((entry) => `#${entry}`)].filter(Boolean).join(" · "))}</span>}
+            <span className={main}>{shown(on?.title ?? "Not reported")}</span>
+            {on === null ? null : <span className={SUB}>{shown([on.repo, ...on.labels.map((entry) => `#${entry}`)].filter(Boolean).join(" · "))}</span>}
           </>
         )}
       </div>
       <div role="cell" className={CELL}>
         {label("Runs on")}
-        <span title={place.detail === null ? undefined : clean(place.detail)} data-tone={place.tone} className={`flex min-w-0 items-center gap-1.5 ${place.tone === "warn" ? "font-semibold" : ""} ${main}`}>
+        <span title={place.detail === null ? undefined : shown(place.detail)} data-tone={place.tone} className={`flex min-w-0 items-center gap-1.5 ${place.tone === "warn" ? "font-semibold" : ""} ${main}`}>
           <ToneDot tone={place.tone} />
-          <span className="min-w-0 break-words">{clean(place.label)}</span>
+          <span className="min-w-0 break-words">{shown(place.label)}</span>
         </span>
-        <span className={SUB}>{clean(actsAs(row))}</span>
+        <span className={SUB}>{shown(actsAs(row))}</span>
       </div>
       <div role="cell" className={CELL}>
         {label("Last and next")}
@@ -160,7 +160,7 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
               {cell.next}
             </span>
             <span title={cell.lastTitle ?? undefined} className={SUB}>
-              {clean(cell.last)}
+              {shown(cell.last)}
             </span>
           </>
         )}

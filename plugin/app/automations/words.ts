@@ -3,7 +3,7 @@
 // functions over the rows of contract/automations.ts: no bb and no React import. Nothing here
 // derives a placement: the kernel's `runsHere`, `reason` and `enabledHere` are read as given.
 import type { AutomationHost, AutomationKind, AutomationList, AutomationOn, AutomationRow, AutomationRun, AutomationScheduler, AutomationSoul } from "../../contract/automations";
-import { displayLine, MAX_DISPLAY_LINE } from "../../kernel/automations-display";
+import { displayLine, MAX_DISPLAY_LINE } from "../ui/text";
 
 export const PULL_REQUEST = "github.pull_request";
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };

@@ -5,8 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
-import { displayLine } from "../../kernel/automations-display";
-import { clean } from "../format";
+import { displayLine, shown } from "../ui/text";
 import { Button, Note } from "../ui";
 import { OriginTag, StateTags } from "./List";
 import { Card, Facts, Quote, Section, ToneDot } from "./parts";
@@ -41,6 +40,9 @@ import type { CapabilitySource, RunState } from "./words";
 const NOTE = "text-xs text-muted-foreground";
 const LINE = "min-w-0 break-words text-sm";
 const PROSE = "whitespace-pre-wrap break-words rounded-md border border-border bg-card p-3 font-mono text-xs leading-relaxed text-foreground";
+
+/** A prompt or a message, whole: each of its lines through the display filter, its line breaks kept. */
+const prose = (text: string): string => text.split(/\r\n|[\n\r\u2028\u2029]/).map(shown).join("\n");
 
 /** "14:05" today, else "6 Oct, 14:05": when a run state began (its title keeps the full date). */
 function clockTime(iso: string, now: number): string {
@@ -112,8 +114,8 @@ function Sends({ row }: { row: AutomationRow }) {
   if (row.run === "wake") {
     return (
       <Section title="Wake message" testId="oats-automation-sends">
-        {row.message !== null ? <pre className={PROSE}>{clean(row.message)}</pre> : <Note>No wake message reported.</Note>}
-        <Facts facts={[["Wakes", row.home === null ? null : clean(row.home)]]} />
+        {row.message !== null ? <pre className={PROSE}>{prose(row.message)}</pre> : <Note>No wake message reported.</Note>}
+        <Facts facts={[["Wakes", row.home === null ? null : shown(row.home)]]} />
       </Section>
     );
   }
@@ -125,14 +127,14 @@ function Sends({ row }: { row: AutomationRow }) {
           <ol aria-label="Command arguments" className="flex flex-wrap gap-1.5 rounded-md border border-border bg-card p-3">
             {row.argv.map((word, at) => (
               <li key={at} className="whitespace-pre-wrap break-all rounded border border-border bg-background px-1.5 py-px font-mono text-xs text-foreground">
-                {clean(word)}
+                {shown(word)}
               </li>
             ))}
           </ol>
         ) : (
           <Note>No command reported.</Note>
         )}
-        <Facts facts={[["Runs in", row.cwd === null ? null : clean(row.cwd)]]} />
+        <Facts facts={[["Runs in", row.cwd === null ? null : shown(row.cwd)]]} />
       </Section>
     );
   }
@@ -140,7 +142,7 @@ function Sends({ row }: { row: AutomationRow }) {
     return (
       <Section title="Operation" testId="oats-automation-sends">
         {row.operation !== null || row.home !== null ? (
-          <Facts facts={[["Operation", row.operation === null ? null : clean(row.operation)], ["Runs in", row.home === null ? null : clean(row.home)]]} />
+          <Facts facts={[["Operation", row.operation === null ? null : shown(row.operation)], ["Runs in", row.home === null ? null : shown(row.home)]]} />
         ) : (
           <Note>No operation reported.</Note>
         )}
@@ -154,14 +156,14 @@ function Sends({ row }: { row: AutomationRow }) {
         <>
           <pre className={PROSE}>
             {trigger
-              ? taskParts(clean(row.task), row.on).map((part, at) =>
+              ? taskParts(prose(row.task), row.on).map((part, at) =>
                   "field" in part ? (
                     <span key={at} data-field={part.field} className="rounded border border-border bg-background px-1 font-semibold">{`{${part.field}}`}</span>
                   ) : (
                     part.text
                   ),
                 )
-              : clean(row.task)}
+              : prose(row.task)}
           </pre>
           {trigger ? (
             <p className={NOTE}>
@@ -172,7 +174,7 @@ function Sends({ row }: { row: AutomationRow }) {
           ) : null}
         </>
       ) : (
-        <Note>{row.run !== null && row.run !== "spawn" ? `Nothing to show for a ${clean(row.run)} run.` : "No prompt reported."}</Note>
+        <Note>{row.run !== null && row.run !== "spawn" ? `Nothing to show for a ${shown(row.run)} run.` : "No prompt reported."}</Note>
       )}
     </Section>
   );
@@ -183,7 +185,7 @@ function WhenCard({ row, now, source, canOpenCapability, onOpenCapability }: { r
   if (row.kind === "schedule") {
     return (
       <Card title="When" testId="oats-automation-when">
-        <Facts facts={[["Runs", cronInWords(row.cron)], ["Cron", row.cron === null ? null : clean(row.cron)], ["Time zone", row.tz === null ? null : clean(row.tz)], ["Next", row.runsHere ? relativeTime(row.nextDue, now)?.label : null, relativeTime(row.nextDue, now)?.title]]} />
+        <Facts facts={[["Runs", cronInWords(row.cron)], ["Cron", row.cron === null ? null : shown(row.cron)], ["Time zone", row.tz === null ? null : shown(row.tz)], ["Next", row.runsHere ? relativeTime(row.nextDue, now)?.label : null, relativeTime(row.nextDue, now)?.title]]} />
       </Card>
     );
   }
@@ -191,7 +193,7 @@ function WhenCard({ row, now, source, canOpenCapability, onOpenCapability }: { r
   if (source === null) {
     return (
       <Card title="On" testId="oats-automation-when">
-        <Facts facts={[["Event", on === null ? null : clean(on.title)], ["Repo", on?.repo == null ? null : clean(on.repo)], ["Labels", on === null ? null : clean(on.labels.join(", "))], ["Base", on?.base == null ? null : clean(on.base)], ["Polls", on?.poll ? `every ${clean(on.poll)}` : null]]} />
+        <Facts facts={[["Event", on === null ? null : shown(on.title)], ["Repo", on?.repo == null ? null : shown(on.repo)], ["Labels", on === null ? null : shown(on.labels.join(", "))], ["Base", on?.base == null ? null : shown(on.base)], ["Polls", on?.poll ? `every ${shown(on.poll)}` : null]]} />
       </Card>
     );
   }
@@ -222,16 +224,16 @@ function SpawnsCard({ row }: { row: AutomationRow }) {
   const wake = row.wake === null ? null : [cronInWords(row.wake.cron) ?? row.wake.cron, row.wake.tz].filter(Boolean).join(" · ");
   const origin = row.soul === null ? "" : soulOriginText(row.soul.origin).short;
   const facts: Fact[] = [
-    ["Soul", row.soul === null ? null : clean(`${row.soul.name}${origin !== "" ? ` · ${origin}` : ""}`)],
-    ["Purpose", row.purpose === null ? null : clean(row.purpose)],
-    ["Teams", clean(row.teams.join(", "))],
-    ["Harness", clean([row.harness !== null ? harnessName(row.harness) : null, row.model].filter(Boolean).join(" · "))],
-    ["Launch config", row.launchConfig === null ? null : clean(row.launchConfig)],
+    ["Soul", row.soul === null ? null : shown(`${row.soul.name}${origin !== "" ? ` · ${origin}` : ""}`)],
+    ["Purpose", row.purpose === null ? null : shown(row.purpose)],
+    ["Teams", shown(row.teams.join(", "))],
+    ["Harness", shown([row.harness !== null ? harnessName(row.harness) : null, row.model].filter(Boolean).join(" · "))],
+    ["Launch config", row.launchConfig === null ? null : shown(row.launchConfig)],
     ["Permissions", row.yolo === true ? "YOLO — skips permission prompts" : row.yolo === false ? "Native permission policy" : null],
-    ["Backend", row.backend === null ? null : clean(row.backend)],
+    ["Backend", row.backend === null ? null : shown(row.backend)],
     ["Concurrency", concurrency],
-    ["Wakes it", wake === null ? null : clean(wake), row.wake === null ? null : clean(row.wake.cron)],
-    ["Wake message", row.wake?.message == null ? null : clean(row.wake.message)],
+    ["Wakes it", wake === null ? null : shown(wake), row.wake === null ? null : shown(row.wake.cron)],
+    ["Wake message", row.wake?.message == null ? null : shown(row.wake.message)],
   ];
   return (
     <Card title="Spawns" testId="oats-automation-spawns">
@@ -357,12 +359,12 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
         <ul aria-label={trigger ? "Fired" : "Runs"} className="flex flex-col">
           {items.slice(0, 10).map((item, at) => (
             <HistoryLine key={at} iso={item.at} now={now} testId="oats-automation-run">
-              {clean(item.parts.filter(Boolean).join(" · ")) || "Recorded"}
+              {shown(item.parts.filter(Boolean).join(" · ")) || "Recorded"}
               {/* Why a run did not happen: the kernel's own words, and its code. */}
               {item.run !== null && item.run.error !== null ? (
                 <span data-testid="oats-automation-run-error" className="block text-xs text-destructive-text">
-                  {clean(item.run.error)}
-                  {item.run.errorCode !== null && !item.run.error.includes(item.run.errorCode) ? <code className="font-mono">{` ${clean(item.run.errorCode)}`}</code> : null}
+                  {shown(item.run.error)}
+                  {item.run.errorCode !== null && !item.run.error.includes(item.run.errorCode) ? <code className="font-mono">{` ${shown(item.run.errorCode)}`}</code> : null}
                 </span>
               ) : null}
             </HistoryLine>
@@ -423,8 +425,8 @@ function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunS
               ["Host slot", unknown.holdsSlot ? "held (counts against the host limit)" : null],
               ["Exited", unknown.exited ? "yes" : null],
               ["Exit status", unknown.exitStatus === null ? null : String(unknown.exitStatus)],
-              ["Exit signal", unknown.exitSignal === null ? null : clean(unknown.exitSignal)],
-              ["Error", unknown.error === null ? null : clean(unknown.error)],
+              ["Exit signal", unknown.exitSignal === null ? null : shown(unknown.exitSignal)],
+              ["Error", unknown.error === null ? null : shown(unknown.error)],
             ]}
           />
           {action}
@@ -509,7 +511,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
         </Button>
         <span className="min-w-0 flex-1" />
         {onOpenFile === undefined ? null : (
-          <Button data-testid="oats-automation-open-file" disabled={!canOpen} title={clean(openTitle)} onClick={() => onOpenFile(row)}>
+          <Button data-testid="oats-automation-open-file" disabled={!canOpen} title={shown(openTitle)} onClick={() => onOpenFile(row)}>
             Open file
           </Button>
         )}
@@ -519,14 +521,14 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
         <div className="flex min-w-0 flex-col gap-4">
           <div data-testid="oats-automation-identity" className="flex min-w-0 items-start gap-3">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <h2 className="break-all font-mono text-lg font-semibold text-foreground">{clean(row.name)}</h2>
-              <p className="break-all font-mono text-xs text-muted-foreground">{clean(row.id)}</p>
+              <h2 className="break-all font-mono text-lg font-semibold text-foreground">{shown(row.name)}</h2>
+              <p className="break-all font-mono text-xs text-muted-foreground">{shown(row.id)}</p>
               <div className="flex flex-wrap gap-1">
                 <OriginTag row={row} />
                 <StateTags row={row} />
               </div>
               {row.description !== null ? (
-                <p className="break-words text-sm text-foreground">{clean(row.description)}</p>
+                <p className="break-words text-sm text-foreground">{shown(row.description)}</p>
               ) : (
                 <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <span>No summary</span>
@@ -552,7 +554,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
             </Card>
           ) : bad !== null ? (
             <Card title={row.unreadable !== null ? "Unreadable" : "Invalid"} testId="oats-automation-problem" warn>
-              <Facts facts={[["Code", bad.code === null ? null : clean(bad.code)], ["Field", bad.field === null ? null : clean(bad.field)], ["Message", bad.message === null ? null : clean(bad.message)]]} />
+              <Facts facts={[["Code", bad.code === null ? null : shown(bad.code)], ["Field", bad.field === null ? null : shown(bad.field)], ["Message", bad.message === null ? null : shown(bad.message)]]} />
             </Card>
           ) : null}
           {run !== null ? <RunStateCard row={row} run={run} now={now} action={runStateAction} /> : null}
@@ -561,23 +563,23 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
               facts={
                 row.origin.kind === "local"
                   ? [["Runs on", "This computer"]]
-                  : [["Runs on", row.runsOn === null ? null : clean(row.runsOn)], ["This computer", clean(host.name ?? "no host name")], ["Acts as", row.owner === null ? null : clean(row.owner)], ["Logged in", hostLogin(host, row.owner)]]
+                  : [["Runs on", row.runsOn === null ? null : shown(row.runsOn)], ["This computer", shown(host.name ?? "no host name")], ["Acts as", row.owner === null ? null : shown(row.owner)], ["Logged in", hostLogin(host, row.owner)]]
               }
             />
             <p data-testid="oats-automation-verdict" className={`flex items-center gap-1.5 text-sm font-semibold ${place.tone === "warn" ? "text-warning-text" : "text-foreground"}`}>
               <ToneDot tone={place.tone} />
-              <span>{row.runsHere ? "Runs on this computer" : clean(place.label)}</span>
+              <span>{row.runsHere ? "Runs on this computer" : shown(place.label)}</span>
             </p>
-            {row.reasonDetail !== null ? <p className={`${NOTE} break-words`}>{clean(row.reasonDetail)}</p> : null}
+            {row.reasonDetail !== null ? <p className={`${NOTE} break-words`}>{shown(row.reasonDetail)}</p> : null}
           </Card>
           <Card title="Comes from" testId="oats-automation-from">
             {row.origin.kind === "workspace" ? (
               <Facts
                 facts={[
-                  ["Member", row.origin.member === null ? null : clean(row.origin.member)],
-                  ["Repo", row.origin.repoKey === null ? null : clean(row.origin.repoKey)],
-                  ["Path", row.origin.path === null ? null : clean(row.origin.path)],
-                  ["Commit", row.origin.commit === null ? null : clean(row.origin.commit.slice(0, 7)), row.origin.commit],
+                  ["Member", row.origin.member === null ? null : shown(row.origin.member)],
+                  ["Repo", row.origin.repoKey === null ? null : shown(row.origin.repoKey)],
+                  ["Path", row.origin.path === null ? null : shown(row.origin.path)],
+                  ["Commit", row.origin.commit === null ? null : shown(row.origin.commit.slice(0, 7)), row.origin.commit],
                   template,
                 ]}
               />

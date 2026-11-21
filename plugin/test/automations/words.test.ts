@@ -41,7 +41,7 @@ describe("the groups, the filter and the search", () => {
   it("rows are grouped by where they run, in page order, and an empty group is left out", () => {
     const groups = groupRows(schedules().rows);
     expect(groups.map((group) => [group.title, group.rows.map((entry) => entry.name)])).toEqual([
-      ["Runs on this computer", ["daily-review", "hourly-check", "status-check", expect.stringMatching(/^wake-/), "weekly-cleanup", "nightly-digest"]],
+      ["Runs on this computer", ["daily-review", "hourly-check", "notes-checkpoint", "status-check", expect.stringMatching(/^wake-/), "weekly-cleanup", "nightly-digest"]],
       ["Needs attention here", ["legacy-herdr", "reconcile", "release-check"]],
       ["Runs elsewhere", ["weekly-report"]],
     ]);
@@ -113,7 +113,7 @@ describe("when it runs", () => {
     for (const cron of ["0 9 1 * *", "0 9 * 1 *", "0 9 * * 1,3", "*/5 9 * * *", "every day", "", "0 9 * *"]) expect(cronInWords(cron), cron).toBeNull();
     expect(cronInWords(null)).toBeNull();
     // every schedule of the recording
-    expect(schedules().rows.map((entry) => cronInWords(entry.cron))).toEqual(["Weekdays at 09:00", "Every hour", "Daily at 06:00", "Every 15 minutes", "Every 30 minutes", "Fridays at 18:00", "Daily at 07:00", "Every 30 minutes", "Weekdays at 08:30", "Mondays at 09:00"]);
+    expect(schedules().rows.map((entry) => cronInWords(entry.cron))).toEqual(["Weekdays at 09:00", "Every hour", "Daily at 06:00", "Daily at 23:00", "Every 15 minutes", "Every 30 minutes", "Fridays at 18:00", "Daily at 07:00", "Every 30 minutes", "Weekdays at 08:30", "Mondays at 09:00"]);
   });
 
   it("a time relative to now, with the whole time for its title", () => {

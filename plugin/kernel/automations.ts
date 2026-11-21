@@ -18,9 +18,10 @@ import type {
   AutomationSoul,
   TriggerStatus,
 } from "../contract/automations.js";
-import { DETAIL_WITHHELD, displayLine } from "./automations-display.js";
+import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -372,3 +373,11 @@ export function parseTriggerStatus(document: unknown, id: string, source: string
     invalid: named === null ? null : sourceCheck(row.invalid),
   });
 }
+
+/** Automations' commands. */
+export const verbs = (oats: Runner) => ({
+  scheduleList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(scheduleListArgv(), parseScheduleList, oats.timeouts.read, signal),
+  triggerList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(triggerListArgv(), parseTriggerList, oats.timeouts.read, signal),
+  triggerStatus: (id: string, source: string | null, signal?: AbortSignal): Promise<Result<TriggerStatus>> =>
+    oats.run(triggerStatusArgv(id), (document) => parseTriggerStatus(document, id, source), oats.timeouts.read, signal),
+});

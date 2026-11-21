@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createFakePluginHost, makeHostResponse, type FakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { hostContract, REALTIME_CHANGED } from "../contract.js";
+import { hostContract, REALTIME_CHANGED } from "../contract/index.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";

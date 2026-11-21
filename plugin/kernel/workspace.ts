@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Capability, Machine, Soul, Team } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
 
 const text = z.string().nullish();
 
@@ -113,3 +114,12 @@ export function parseServers(document: unknown): Result<{ machines: Machine[] }>
     }),
   });
 }
+
+/** The four pages' commands. */
+export const verbs = (oats: Runner) => ({
+  souls: (signal?: AbortSignal): Promise<Result<{ souls: Soul[] }>> => oats.run(soulsArgv(), parseSouls, oats.timeouts.read, signal),
+  capabilities: (signal?: AbortSignal): Promise<Result<{ capabilities: Omit<Capability, "souls">[] }>> =>
+    oats.run(capabilitiesArgv(), parseCapabilities, oats.timeouts.read, signal),
+  teams: (signal?: AbortSignal): Promise<Result<{ teams: Team[] }>> => oats.run(teamsArgv(), parseTeams, oats.timeouts.read, signal),
+  servers: (signal?: AbortSignal): Promise<Result<{ machines: Machine[] }>> => oats.run(serversArgv(), parseServers, oats.timeouts.read, signal),
+});

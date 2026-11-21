@@ -1,6 +1,6 @@
 // The four read verbs behind the pages, against the recorded answers.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Oats, Processes } from "../../kernel/index.js";
+import { createOats, Processes, type Oats } from "../../kernel/index.js";
 import { withSoulCounts } from "../../kernel/workspace.js";
 import { installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
@@ -11,7 +11,7 @@ let oats: Oats;
 beforeEach(async () => {
   fake = await installFakeOats();
   processes = new Processes();
-  oats = new Oats({ bin: fake.bin, cwd: fake.deployment, processes });
+  oats = createOats({ bin: fake.bin, cwd: fake.deployment, processes });
 });
 afterEach(async () => {
   await processes.killAll();

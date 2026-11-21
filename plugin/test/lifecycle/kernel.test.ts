@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { codes, Oats, Processes } from "../../kernel/index.js";
+import { codes, createOats, Processes, type Oats } from "../../kernel/index.js";
 import { FIXTURES, installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
 let fake: FakeOats;
@@ -12,7 +12,7 @@ let oats: Oats;
 beforeEach(async () => {
   fake = await installFakeOats();
   processes = new Processes();
-  oats = new Oats({ bin: fake.bin, cwd: fake.deployment, processes });
+  oats = createOats({ bin: fake.bin, cwd: fake.deployment, processes });
 });
 afterEach(async () => {
   await processes.killAll();

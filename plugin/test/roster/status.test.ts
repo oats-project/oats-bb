@@ -3,12 +3,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { codes, Oats, Processes } from "../../kernel/index.js";
+import { codes, createOats, Processes, type Oats } from "../../kernel/index.js";
 import { FIXTURES, gone, installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
 let fake: FakeOats;
 let processes: Processes;
-const oats = (timeouts = {}) => new Oats({ bin: fake.bin, cwd: fake.deployment, processes, timeouts });
+const oats = (timeouts = {}) => createOats({ bin: fake.bin, cwd: fake.deployment, processes, timeouts });
 
 beforeEach(async () => {
   fake = await installFakeOats();
@@ -176,7 +176,7 @@ describe("A4 status()", () => {
   });
 
   it("says so when oats is absent", async () => {
-    const status = await new Oats({ bin: join(fake.deployment, "no-such-oats"), cwd: fake.deployment, processes }).status();
+    const status = await createOats({ bin: join(fake.deployment, "no-such-oats"), cwd: fake.deployment, processes }).status();
     expect(status.ok).toBe(false);
     if (status.ok) return;
     expect(status.error.code).toBe(codes.notFound);

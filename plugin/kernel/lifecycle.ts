@@ -5,6 +5,7 @@ import { z } from "zod";
 import { shaped } from "./envelope.js";
 import { checkHome, checkInstance, checkKey, checkRevision } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
 
 export type Plan = { revision: string; lines: string[] };
 type Apply = { instance: string; revision: string; key: string };
@@ -213,3 +214,19 @@ export function parseRetireApply(document: unknown): Result<Record<string, never
   }
   return ok({});
 }
+
+/** The lifecycle's commands. */
+export const verbs = (oats: Runner) => ({
+  stopPlan: (instance: string, signal?: AbortSignal): Promise<Result<Plan>> => oats.run(stopPlanArgv(instance), parseStopPlan, oats.timeouts.read, signal),
+  stopApply: (apply: Apply, signal?: AbortSignal): Promise<Result<Record<string, never>>> =>
+    oats.run(stopApplyArgv(apply), parseStopApply, oats.timeouts.act, signal),
+  start: (home: string, signal?: AbortSignal): Promise<Result<{ threadId: string | null }>> =>
+    oats.run(startArgv(home), (document) => parseSessionStart(document, "start"), oats.timeouts.act, signal),
+  restart: (home: string, signal?: AbortSignal): Promise<Result<{ threadId: string | null }>> =>
+    oats.run(restartArgv(home), (document) => parseSessionStart(document, "restart"), oats.timeouts.act, signal),
+  retirePlan: (instance: string, signal?: AbortSignal): Promise<Result<Plan>> =>
+    oats.run(retirePlanArgv(instance), parseRetirePlan, oats.timeouts.read, signal),
+  retireApply: (apply: Apply, signal?: AbortSignal): Promise<Result<Record<string, never>>> =>
+    // An incomplete retire prints its receipt and exits 1: the receipt is what says what is left.
+    oats.run(retireApplyArgv(apply), parseRetireApply, oats.timeouts.long, signal, { failedDocument: isIncompleteRetire }),
+});

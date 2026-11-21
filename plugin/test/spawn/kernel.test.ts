@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { codes, Oats, Processes } from "../../kernel/index.js";
+import { codes, createOats, Processes, type Oats } from "../../kernel/index.js";
 import { installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
 let fake: FakeOats;
@@ -18,7 +18,7 @@ const leftInTemp = async () => (existsSync(fake.tempDir) ? readdir(fake.tempDir)
 beforeEach(async () => {
   fake = await installFakeOats();
   processes = new Processes();
-  oats = new Oats({ bin: fake.bin, cwd: fake.deployment, processes });
+  oats = createOats({ bin: fake.bin, cwd: fake.deployment, processes });
 });
 afterEach(async () => {
   await processes.killAll();
@@ -120,7 +120,7 @@ describe("A5 spawn", () => {
 
   it("removes the task file when the spawn is cut off by its time limit", async () => {
     await fake.behave({ "spawn --preview": { sleepMs: 60_000 } });
-    const slow = new Oats({ bin: fake.bin, cwd: fake.deployment, processes, timeouts: { preview: 300 } });
+    const slow = createOats({ bin: fake.bin, cwd: fake.deployment, processes, timeouts: { preview: 300 } });
     const preview = await slow.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
     expect(preview.ok === false && preview.error.code).toBe(codes.timeout);
     expect(await leftInTemp()).toEqual([]);

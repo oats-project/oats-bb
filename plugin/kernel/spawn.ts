@@ -6,6 +6,8 @@ import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
 import { ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
+import { withTaskFile } from "./task-file.js";
 
 export type SpawnInput = { soul: string; name: string };
 
@@ -125,3 +127,42 @@ export function parseSpawn(document: unknown): Result<{ instance: string; thread
   if (!parsed.ok) return parsed;
   return ok({ instance: parsed.value.instance, threadId: parsed.value.session?.endpoint?.threadId ?? null });
 }
+
+/** Spawn's commands. */
+export const verbs = (oats: Runner) => ({
+  /**
+   * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the
+   * call. A soul not in the list or a name that is no instance name starts no process and writes
+   * no file.
+   */
+  async spawnPreview(
+    input: SpawnInput & { task: string },
+    context: { knownSouls: readonly string[]; tempDir: string },
+    signal?: AbortSignal,
+  ): Promise<Result<{ summary: SpawnSummary; revision: string }>> {
+    const checked = checkSpawn(input, context.knownSouls);
+    if (!checked.ok) return checked;
+    return withTaskFile(context.tempDir, input.task, (taskFile) =>
+      oats.run(spawnPreviewArgv(checked.value, taskFile), parseSpawnPreview, oats.timeouts.preview, signal),
+    );
+  },
+
+  /**
+   * Applies the decision `revision` (a preview's) with the idempotency key: the kernel refuses a
+   * decision that moved since, and replays a spawn it already made under this key.
+   */
+  async spawn(
+    input: SpawnInput & { task: string; key: string; revision: string },
+    context: { knownSouls: readonly string[]; tempDir: string },
+    signal?: AbortSignal,
+  ): Promise<Result<{ instance: string; threadId: string | null }>> {
+    const checked = checkSpawn(input, context.knownSouls);
+    if (!checked.ok) return checked;
+    // The key and the revision are checked before the task file is written.
+    const apply = checkApply(input);
+    if (!apply.ok) return apply;
+    return withTaskFile(context.tempDir, input.task, (taskFile) =>
+      oats.run(spawnArgv(checked.value, taskFile, apply.value), parseSpawn, oats.timeouts.long, signal),
+    );
+  },
+});

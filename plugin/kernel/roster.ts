@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Agent } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { ok, type Result } from "./result.js";
+import type { Runner } from "./runner.js";
 
 export const statusArgv = (): string[] => ["status", "--json"];
 
@@ -92,3 +93,8 @@ export function parseStatus(document: unknown): Result<Status> {
   for (const group of parsed.value.agents) for (const source of group.instances) agents.push(toAgent(group, source));
   return ok({ root: parsed.value.root, workspace: parsed.value.workspace?.key ?? null, agents });
 }
+
+/** The roster's command. */
+export const verbs = (oats: Runner) => ({
+  status: (signal?: AbortSignal): Promise<Result<Status>> => oats.run(statusArgv(), parseStatus, oats.timeouts.read, signal),
+});

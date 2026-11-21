@@ -73,7 +73,9 @@ test("the status line comes first and says where the agent is in words: a workin
   const parent = slot.getByTestId("oats-fact-parent").querySelector("a")!;
   expect(parent.getAttribute("href")).toBe("/projects/proj_redesign/threads/thr_redesign");
   fireEvent.click(parent);
-  fireEvent.click(slot.getByTestId("oats-fact-soul").querySelector("button")!);
+  const soulLink = slot.getByTestId("oats-fact-soul").querySelector("a")!;
+  expect(soulLink.getAttribute("href")).toBe("/plugins/test-plugin/souls/oats-desktop-developer");
+  fireEvent.click(soulLink);
   expect(slot.inspection.navigateCalls).toEqual([
     { method: "toThread", threadId: "thr_redesign" },
     { method: "toPluginPanel", path: "souls", options: { subPath: "oats-desktop-developer" } },

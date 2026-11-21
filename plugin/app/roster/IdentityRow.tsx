@@ -4,6 +4,7 @@
 // cut or scrolls out of sight, at any width.
 import {
   experimental_useAppPanel as useAppPanel,
+  experimental_usePluginId as usePluginId,
   useBbNavigate,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
@@ -50,6 +51,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const navigate = useBbNavigate();
   const panel = useAppPanel();
   const rpc = useRpc<Contract>();
+  const pluginId = usePluginId();
   const now = useNow();
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
@@ -104,9 +106,17 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       <StatusLine state={status.state} since={status.since} detail={[status.detail, asOf].filter((part) => part !== null).join(" · ") || null} action={act} />
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <Fact label="Soul" testId="oats-fact-soul">
-          <button type="button" className={LINK} onClick={() => openSoul(navigate, soul)}>
+          <a
+            href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
+            className={LINK}
+            onClick={(event) => {
+              if (!plainClick(event)) return;
+              event.preventDefault();
+              openSoul(navigate, soul);
+            }}
+          >
             {shown(soul)}
-          </button>
+          </a>
         </Fact>
         {agent.parent !== null ? (
           <Fact label="Under" testId="oats-fact-parent">

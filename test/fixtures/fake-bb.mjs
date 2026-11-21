@@ -38,6 +38,11 @@ if (key === null && (archivedRead || words.slice(0, 3).join(" ") === "thread que
   process.stdout.write("[]\n");
   process.exit(0);
 }
+// And the read every retire and every move off bb makes: a project bb holds no env for.
+if (key === null && words.slice(0, 3).join(" ") === "machine env list") {
+  process.stdout.write(`${JSON.stringify({ variables: [], inheritedVariables: [] })}\n`);
+  process.exit(0);
+}
 if (key === null) {
   process.stderr.write(`fake bb: no scripted answer for ${JSON.stringify(argv)}\n`);
   process.exit(97);

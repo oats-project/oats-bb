@@ -4,6 +4,13 @@
 // checked at every image (`targets: true` on each shot).
 import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 
+// A pattern, read INSIDE the pattern book only. The same patterns are drawn around it (the sidebar
+// says "Reading OATS…" under the id "oats-status-line" until its first read answers, and the
+// instance panel, when it is open, has a status line, notices and tabs of its own), so a read of
+// the whole document takes whichever comes first in it, which depends on when the read runs.
+// A dialog and an open menu's list are inside the page too (drawn over it, with no portal); they are
+// read by ids and roles that nothing else in the document carries while the book is open.
+const book = (id) => `${testId("oats-patterns-page")} ${testId(id)}`;
 const click = (id) => `document.querySelector(${JSON.stringify(testId(id))}).click()`;
 const into = (id) => `document.querySelector(${JSON.stringify(testId(id))}).scrollIntoView({ block: "center" })`;
 const STATES = [
@@ -28,7 +35,7 @@ export default [
         ),
       );
       check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the six states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
-      const lines = await page.evaluate(texts(testId("oats-status-line")));
+      const lines = await page.evaluate(texts(book("oats-status-line")));
       check(lines[0] === "! Needs you · waiting 27 min (since 14:03) · Asked you a question Open" && lines[1] === "Working", `${at} the status line: the word, since when, the reason, the act`, JSON.stringify(lines));
       await page.shot(`patterns-${viewport.name}-states`, { targets: true });
     },
@@ -38,23 +45,23 @@ export default [
     name: "notices, empty, loading, stale, results",
     run: async ({ page, at, viewport, check }) => {
       await page.evaluate(into("oats-patterns-notices"));
-      const notices = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll('${testId("oats-notice")}')].map((e) => [e.getAttribute("data-tone"), e.getAttribute("role"), e.querySelector("h3").innerText]))`));
+      const notices = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll('${book("oats-notice")}')].map((e) => [e.getAttribute("data-tone"), e.getAttribute("role"), e.querySelector("h3").innerText]))`));
       check(
         JSON.stringify(notices) === JSON.stringify([["info", "status", "No OATS deployment is set"], ["warning", "status", "OATS is older than this plugin needs"], ["error", "alert", "OATS could not be read"]]),
         `${at} the three notices: each titled, the failure an alert`,
         JSON.stringify(notices),
       );
-      const stale = await page.evaluate(texts(testId("oats-stale")));
+      const stale = await page.evaluate(texts(book("oats-stale")));
       check(stale[0].startsWith("Showing what was read 2 min ago.") && stale[1] === "Refreshing… showing what was read just now.", `${at} the stale line says the age of what is shown, and a re-read in flight`, JSON.stringify(stale));
-      const empty = await page.evaluate(textOf(testId("oats-empty")));
-      const loading = JSON.parse(await page.evaluate(`JSON.stringify({ role: document.querySelector('${testId("oats-loading")}').getAttribute("role"), words: ${textOf(testId("oats-loading"))} })`));
+      const empty = await page.evaluate(textOf(book("oats-empty")));
+      const loading = JSON.parse(await page.evaluate(`JSON.stringify({ role: document.querySelector('${book("oats-loading")}').getAttribute("role"), words: ${textOf(book("oats-loading"))} })`));
       check(empty === "No agents yet. New agent" && loading.role === "status" && loading.words === "Reading your agents…", `${at} the empty state says its sentence with the act that fills it, and the loading state is announced with its words`, JSON.stringify([empty, loading]));
       // The kernel's own message is one press away, under Details.
-      const details = JSON.parse(await page.evaluate(`JSON.stringify({ open: document.querySelector('${testId("oats-notice-details")}').open, summary: ${textOf(`${testId("oats-notice-details")} summary`)} })`));
+      const details = JSON.parse(await page.evaluate(`JSON.stringify({ open: document.querySelector('${book("oats-notice-details")}').open, summary: ${textOf(`${book("oats-notice-details")} summary`)} })`));
       check(details.open === false && /^▸\s?Details$/.test(details.summary), `${at} a notice keeps the kernel's message under Details, closed`, JSON.stringify(details));
       await page.shot(`patterns-${viewport.name}-notices`, { targets: true });
-      await page.evaluate(`document.querySelectorAll('${testId("oats-result")}')[1].scrollIntoView({ block: "center" })`);
-      const results = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll('${testId("oats-result")}')].map((e) => [e.getAttribute("data-tone"), e.getAttribute("role")]))`));
+      await page.evaluate(`document.querySelectorAll('${book("oats-result")}')[1].scrollIntoView({ block: "center" })`);
+      const results = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll('${book("oats-result")}')].map((e) => [e.getAttribute("data-tone"), e.getAttribute("role")]))`));
       check(JSON.stringify(results) === JSON.stringify([["done", "status"], ["failed", "alert"], ["unknown", "alert"]]), `${at} the three results: done, failed, not known`, JSON.stringify(results));
       await page.shot(`patterns-${viewport.name}-results`, { targets: true });
     },
@@ -66,7 +73,7 @@ export default [
       await page.evaluate(into("oats-patterns-blocks"));
       const blocks = JSON.parse(
         await page.evaluate(
-          `JSON.stringify({ heading: ${textOf(`${testId("oats-section")} h2`)}, cards: [...document.querySelectorAll('${testId("oats-patterns-blocks")} section[aria-label]')].map((e) => e.getAttribute("aria-label")), tags: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [data-tone]')].map((e) => e.getAttribute("data-tone") + ":" + e.innerText), code: document.querySelector('${testId("oats-patterns-blocks")} code').innerText, switches: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [role="switch"]')].map((e) => [e.getAttribute("aria-checked"), e.disabled, e.getAttribute("aria-label")]) })`,
+          `JSON.stringify({ heading: ${textOf(`${book("oats-section")} h2`)}, cards: [...document.querySelectorAll('${testId("oats-patterns-blocks")} section[aria-label]')].map((e) => e.getAttribute("aria-label")), tags: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [data-tone]')].map((e) => e.getAttribute("data-tone") + ":" + e.innerText), code: document.querySelector('${testId("oats-patterns-blocks")} code').innerText, switches: [...document.querySelectorAll('${testId("oats-patterns-blocks")} [role="switch"]')].map((e) => [e.getAttribute("aria-checked"), e.disabled, e.getAttribute("aria-label")]) })`,
         ),
       );
       check(
@@ -88,16 +95,16 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.evaluate(into("oats-patterns-controls"));
       // The tabs: the arrow keys move the selection and the focus.
-      await page.evaluate(`document.querySelector('${testId("oats-tab-schedules")}').focus()`);
+      await page.evaluate(`document.querySelector('${book("oats-tab-schedules")}').focus()`);
       await page.press("ArrowRight");
-      const tabs = JSON.parse(await page.evaluate(`JSON.stringify({ selected: [...document.querySelectorAll('[role="tab"]')].map((e) => e.getAttribute("aria-selected")), focus: ${FOCUSED} })`));
+      const tabs = JSON.parse(await page.evaluate(`JSON.stringify({ selected: [...document.querySelectorAll('${testId("oats-patterns-page")} [role="tab"]')].map((e) => e.getAttribute("aria-selected")), focus: ${FOCUSED} })`));
       check(JSON.stringify(tabs.selected) === '["false","true","false"]' && tabs.focus === "oats-tab-triggers", `${at} Right on the tabs selects the next tab and moves the focus to it`, JSON.stringify(tabs));
       await page.shot(`patterns-${viewport.name}-controls`, { targets: true });
       // The row's menu, open: its button is named, the focus is on its first item, an item that is off says why.
-      await page.evaluate(`document.querySelector('${testId("oats-menu")} button').focus()`);
+      await page.evaluate(`document.querySelector('${book("oats-menu")} button').focus()`);
       await page.press("Enter");
       const menu = JSON.parse(
-        await page.evaluate(`JSON.stringify({ button: document.querySelector('${testId("oats-menu")} button').getAttribute("aria-label"), expanded: document.querySelector('${testId("oats-menu")} button').getAttribute("aria-expanded"), items: ${texts('[role="menuitem"]')}, focus: ${FOCUSED} })`),
+        await page.evaluate(`JSON.stringify({ button: document.querySelector('${book("oats-menu")} button').getAttribute("aria-label"), expanded: document.querySelector('${book("oats-menu")} button').getAttribute("aria-expanded"), items: ${texts('[role="menuitem"]')}, focus: ${FOCUSED} })`),
       );
       check(
         menu.button === "Actions for Weekly digest helper" && menu.expanded === "true" && JSON.stringify(menu.items) === JSON.stringify(["Run now", "Edit… Defined in the workspace file.", "Remove…"]) && menu.focus === "oats-menu-item-run",
@@ -112,7 +119,7 @@ export default [
       // Each control's accessible name is its label's own words; the hint and the refusal describe it.
       const form = JSON.parse(
         await page.evaluate(
-          `JSON.stringify([...document.querySelectorAll('${testId("oats-field")}')].map((field) => { const control = field.querySelector("input, textarea, select"); const said = (control.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.innerText ?? ""); return { name: control.labels[0]?.innerText, described: said, invalid: control.getAttribute("aria-invalid") }; }))`,
+          `JSON.stringify([...document.querySelectorAll('${book("oats-field")}')].map((field) => { const control = field.querySelector("input, textarea, select"); const said = (control.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.innerText ?? ""); return { name: control.labels[0]?.innerText, described: said, invalid: control.getAttribute("aria-invalid") }; }))`,
         ),
       );
       check(
@@ -120,7 +127,7 @@ export default [
           JSON.stringify([
             { name: "Opening instruction · optional", described: ["What this agent is for."], invalid: null },
             { name: "Name · optional", described: ["Lower-case letters, digits and dashes; starts with a letter or a digit; 63 characters at most."], invalid: "true" },
-          ]) && (await page.evaluate(textOf(testId("oats-disabled-reason")))) === "Reading what will be created…",
+          ]) && (await page.evaluate(textOf(book("oats-disabled-reason")))) === "Reading what will be created…",
         `${at} the form: each control is named by its label alone ("· optional" where it is), described by its hint or its refusal, invalid with a refusal; a button that is off has its reason beside it`,
         JSON.stringify(form),
       );

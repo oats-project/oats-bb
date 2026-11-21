@@ -29,7 +29,8 @@ async function setup(t) {
   const local = () => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
   // The check as the kernel makes it before a launch: with the launch it plans.
   const check = (launch) => call("check", { home, soul: null, ...(launch ? { launch: { harness: "claude", yolo: false, args: [], trees: [join(home, "work")], protected: [], ...launch } } : {}) }, { settings: backend.settings(), bb, sandboxedModes: true });
-  const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: "{}", ...extra } });
+  // The hook asks bb for the env of the home's project when the home leaves bb: the fake bb answers it (none).
+  const hook = (backendName, extra = {}) => runBin(["launch-hook"], { env: { ...bb.env, OATS_INSTANCE_HOME: home, OATS_BACKEND: backendName, OATS_SETTINGS: JSON.stringify(backend.settings({ cli: bb.cli })), ...extra } });
   return { dir, home, bb, backend, launch, local, check, hook, settings: backend.settings() };
 }
 

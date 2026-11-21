@@ -346,6 +346,9 @@ async function missingShots(scene, { instance, soul }) {
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
+      // The tree is read only once the sidebar has its roster: while it still says "Reading OATS…" it
+      // has no rows at all, and "not in the tree" would pass on nothing.
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-workspace-line"))}) !== null`, 30)), `${at}: the sidebar has read the roster`);
       await sleep(1500);
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`);
       check(!rows.some((text) => text.includes(instance)), `${at}: ${instance} is not in the tree`, JSON.stringify(rows));

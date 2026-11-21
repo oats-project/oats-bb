@@ -11,19 +11,35 @@ const SETTLED = new Set(["pending", "idle"]);
 
 // What a home with no session reads as: a thread that is gone, and a lost one.
 const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
+// A thread at rest. With work bb holds in line (a turn its concurrency limit has not
+// started yet) it is busy: the turn starts by itself when a slot frees.
+const atRest = (thread) => ({ present: true, state: "unknown", running: hasQueuedWork(thread) ? true : null });
 
 /** The inspect answer for one existing bb thread: only what bb shows, nothing inferred.
- *  A status word this provider does not know is an error, never a guess. */
-export function inspectAnswer(thread) {
+ *  A status word this provider does not know is an error, never a guess.
+ *
+ *  `error` (contract r23, A13(1) and A14) is bb's word for a thread whose last turn failed, and
+ *  bb says the same of one whose agent is gone. Seen at bb-app 0.50.1, for pi and for
+ *  Claude alike: after a turn the model endpoint refused, the thread is `error` while its
+ *  agent process is still loaded in the home, and the next tell starts a turn and brings
+ *  it back to idle. Read as a lost session, the kernel would resume it beside that
+ *  process, and refuses to: the home would be stuck. So which of the two it is is decided
+ *  here, at every call, from the processes themselves, never from bb's word alone:
+ *  `processes.has(thread)` says whether the thread's harness lives on this host: the
+ *  process named pi or claude that carries the thread's id, never a command the agent left
+ *  running (lib/processes.mjs).
+ *  - it lives: the thread is there and at rest, and an input recovers it;
+ *  - none: a lost session, as the kernel reads one, which it may resume with an input;
+ *  - it cannot be told (the look throws): an error, never either of the two. */
+export function inspectAnswer(thread, processes) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
-  // A settled thread with work bb holds in line (a turn its concurrency limit has not
-  // started yet) is busy: the turn starts by itself when a slot frees.
-  if (SETTLED.has(status)) return { present: true, state: "unknown", running: hasQueuedWork(thread) ? true : null };
-  // A thread in error is a lost session: bb never resumes an interrupted turn. It reads as
-  // the kernel reads any lost session (not "shell", which on a tmux home means the harness
-  // ended and a shell remains), so the kernel may resume it with an input.
-  if (status === "error") return { ...MISSING };
+  if (SETTLED.has(status)) return atRest(thread);
+  if (status === "error") {
+    // A turn bb holds in line starts by itself, whatever is loaded now.
+    if (hasQueuedWork(thread)) return atRest(thread);
+    return processes.has(thread) ? atRest(thread) : { ...MISSING };
+  }
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
@@ -51,7 +67,7 @@ export function readEndpoint(endpoint, code = "E_SESSION_UNAVAILABLE") {
 
 /** The same directory: the same path, or (where bb recorded the path it resolved) the
  *  same real path. Exactly the home: never a parent, never a directory inside it. */
-function samePath(a, b) {
+export function samePath(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   if (resolve(a) === resolve(b)) return true;
   try { return realpathSync(a) === realpathSync(b); } catch { return false; }
@@ -80,7 +96,7 @@ export function openLink({ server, projectId, threadId }) {
  *  The home's thread is its recorded thread while that is live. Archived (in bb's UI, or
  *  by a retire) it is no longer the home's session: bb refuses every tell to an archived
  *  thread, so it reads as missing, and a start replaces it. */
-export function inspectHome({ home, endpoint }, threads) {
+export function inspectHome({ home, endpoint }, threads, processes) {
   const recorded = threads.find((thread) => isObject(thread) && thread.id === endpoint.threadId && isLive(thread)) ?? null;
   const others = liveThreadsOfHome(threads, home, [endpoint.projectId]).filter((thread) => thread.id !== endpoint.threadId);
   if (others.length > 0) {
@@ -90,7 +106,7 @@ export function inspectHome({ home, endpoint }, threads) {
     throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}. One home is one thread: archive the ${ids.length > 1 ? `${ids.length} others` : "other"} in bb. The recorded thread is ${endpoint.threadId}${recorded ? "" : " (missing or archived)"}; the other${ids.length > 1 ? "s" : ""}: ${named}`);
   }
   if (!recorded) return { ...MISSING };
-  return { ...inspectAnswer(recorded), open: openLink(endpoint) };
+  return { ...inspectAnswer(recorded, processes), open: openLink(endpoint) };
 }
 
 /** What runs in a home now: its bb projects, and its live threads. Two reads of bb. */

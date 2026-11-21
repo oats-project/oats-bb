@@ -11,6 +11,7 @@
     "validate": "node scripts/validate-manifests.mjs",
     "test": "npm run validate && node --test test/unit/*.test.mjs",
     "test:contract": "node --test --test-concurrency=1 --test-timeout=1500000 test/contract/*.test.mjs",
-    "test:kernel": "node --test --test-timeout=2400000 test/contract/kernel/kernel-run.mjs"
+    "test:kernel": "node --test --test-timeout=2400000 test/contract/kernel/kernel-run.mjs",
+    "test:kernel:pi": "node --test --test-concurrency=1 --test-timeout=2400000 test/contract/kernel/pi-run.mjs"
   }
 }

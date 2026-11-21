@@ -20,12 +20,21 @@ const PERMISSION_ARG = { auto: "auto", acceptEdits: "accept-edits", bypassPermis
  *  refused by name (bb starts Claude itself, so an argument has nowhere to go and is never
  *  dropped). Where yolo and the argument disagree (yolo with a mode that is not full; no
  *  yolo with bypassPermissions) the launch is refused: the provider never picks one, and
- *  never runs more permissively than the same launch would on tmux Claude. */
-export function permissionMode(args, yolo) {
+ *  never runs more permissively than the same launch would on tmux Claude.
+ *
+ *  For pi (`harness` "pi") no launch argument is carried at all, `--permission-mode`
+ *  included: bb starts pi itself, with its own arguments, and bb's pi has one mode. Only
+ *  yolo chooses: true is full, anything else is accept-edits, which the launch then
+ *  refuses (piModeRefusal). */
+export function permissionMode(args, yolo, harness = "claude") {
   if (args !== undefined && args !== null && !Array.isArray(args)) throw fail("E_BACKEND_LAUNCH_ARG", "the launch args must be a list");
   if (yolo !== true && yolo !== false && yolo !== null && yolo !== undefined) throw fail("E_SESSION_START_FAILED", "the launch input's yolo must be true, false or null");
   let mode = null;
   const list = args ?? [];
+  if (harness === "pi") {
+    if (list.length > 0) throw fail("E_BACKEND_LAUNCH_ARG", `the bb backend cannot carry the launch argument ${JSON.stringify(list[0])}${list.length > 1 ? ` (nor the ${list.length - 1} after it)` : ""}: bb starts pi itself, with its own arguments, and carries none of a launch's for pi. Remove ${list.length > 1 ? "them" : "it"} from the launch configuration or the capability that adds ${list.length > 1 ? "them" : "it"}`);
+    return yolo === true ? "full" : "accept-edits";
+  }
   for (let i = 0; i < list.length; i += 1) {
     const arg = list[i];
     let value = null;
@@ -42,12 +51,24 @@ export function permissionMode(args, yolo) {
   return mode;
 }
 
-export const HARNESSES = Object.freeze(["claude"]);
+export const HARNESSES = Object.freeze(["claude", "pi"]);
+// bb's own name for the provider that runs each harness (`bb thread spawn --provider`,
+// and the `providerId` of a thread's row and of bb's provider state).
+export const BB_PROVIDER = Object.freeze({ claude: "claude-code", pi: "pi" });
 
 /** Why this provider cannot run the harness, or null. → {code, message} | null. */
 export function harnessRefusal(harness) {
   if (typeof harness === "string" && HARNESSES.includes(harness)) return null;
-  return { code: "E_BACKEND_HARNESS", message: `the bb backend runs ${HARNESSES.join(", ")} only, not ${JSON.stringify(harness)}` };
+  return { code: "E_BACKEND_HARNESS", message: `the bb backend runs ${HARNESSES.join(" and ")} only, not ${JSON.stringify(harness)}` };
+}
+
+/** Why a pi launch cannot run in this mode, or null. bb's pi has one permission mode,
+ *  full (bb's own declaration: bb answers a spawn or a tell in another with "Provider pi
+ *  only supports full permission mode"), and pi has no sandbox. So this stands whatever
+ *  the provider's command offers for Claude. → {code, message} | null. */
+export function piModeRefusal(mode) {
+  if (mode === "full") return null;
+  return { code: "E_BACKEND_SANDBOXED_MODE", message: `this launch would run in bb's ${mode} mode, and bb runs pi in its full mode only (pi has no permission prompts and no sandbox). Launch in full mode: spawn or start with --yolo. Nothing was started` };
 }
 
 /** Why the provider's command does not launch in this mode (not offered), or null. bb's sandboxed modes
@@ -59,6 +80,14 @@ export function harnessRefusal(harness) {
 export function sandboxedModeRefusal(mode) {
   if (mode === "full") return null;
   return { code: "E_BACKEND_SANDBOXED_MODE", message: `this launch would run in bb's ${mode} mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started` };
+}
+
+/** Why a launch of this harness is not taken in this mode, or null: the one answer the
+ *  launch and the readiness check of a planned launch share. `sandboxedModes`: whether the
+ *  command takes Claude launches in bb's sandboxed modes (the tests' entry only). */
+export function modeRefusal(mode, harness, { sandboxedModes = false } = {}) {
+  if (harness === "pi") return piModeRefusal(mode);
+  return sandboxedModes ? null : sandboxedModeRefusal(mode);
 }
 
 /** Why a launch in this mode cannot have the sandbox it needs, or null. A sandboxed launch

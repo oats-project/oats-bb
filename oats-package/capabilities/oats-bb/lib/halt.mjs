@@ -136,10 +136,10 @@ export async function stopArchived(bb, threads, relist, options = {}) {
     // 500 characters. (Stop before delete: whether bb releases a deleted thread's process
     // is not known, and a deleted thread is out of this sweep's sight.)
     const stopped = threads.length - slow.length - unreached.length;
-    throw fail("E_SESSION_STOP_FAILED", `this home's bb project holds ${threads.length} archived threads, and ${slow.length + unreached.length} of them could not be stopped in the time this command has (${stopped} were): a Claude process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again`);
+    throw fail("E_SESSION_STOP_FAILED", `this home's bb project holds ${threads.length} archived threads, and ${slow.length + unreached.length} of them could not be stopped in the time this command has (${stopped} were): an agent process of one may still be loaded in the home. Remove old archived threads of that project in bb (bb thread list --project <id> --archived; for each, bb thread stop <id>, then bb thread delete --yes <id>), and try again`);
   }
   if (slow.length > 0) {
-    throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of ${slow.length} archived thread${slow.length > 1 ? "s" : ""} of this home in time, so ${slow.length > 1 ? "their Claude processes" : "its Claude process"} may still be loaded there. Try again; if it repeats, look at ${slow.length > 1 ? "them" : "it"} in bb: ${someOf(slow)}`);
+    throw fail("E_SESSION_STOP_FAILED", `bb did not acknowledge the stop of ${slow.length} archived thread${slow.length > 1 ? "s" : ""} of this home in time, so ${slow.length > 1 ? "their agent processes" : "its agent process"} may still be loaded there. Try again; if it repeats, look at ${slow.length > 1 ? "them" : "it"} in bb: ${someOf(slow)}`);
   }
   if (asked.length === 0) return;
   const now = await relist();

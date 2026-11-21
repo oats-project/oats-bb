@@ -5,12 +5,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus } from "../../contract/automations";
-import { Button, Lines, Loading, Notice, Stale, Tabs } from "../ui";
+import { Button, Lines, Loading, Notice, Stale, Tabs, Toned } from "../ui";
 import { shown } from "../ui/text";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
-import { ToneDot } from "./parts";
 import { readAge } from "../ui/words";
 import { schedulerLine, schedulerOn, TITLES } from "./words";
 import type { OriginFilter } from "./words";
@@ -97,9 +96,8 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
           <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
           <span className="min-w-0 flex-1" />
           {scheduler === null || gate !== null ? null : (
-            <span data-testid="oats-automations-scheduler" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <ToneDot tone={schedulerOn(scheduler) ? "ok" : "warn"} />
-              <span className="min-w-0 break-words">{schedulerLine(scheduler, now)}</span>
+            <span data-testid="oats-automations-scheduler" className="min-w-0 text-xs text-muted-foreground">
+              <Toned tone={schedulerOn(scheduler) ? "ok" : "bad"}>{schedulerLine(scheduler, now)}</Toned>
             </span>
           )}
           <span className="flex items-center gap-2 pb-1">

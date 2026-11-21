@@ -133,7 +133,7 @@ describe("a row's page", () => {
 
   it("a trigger's page reads that trigger's state once, and shows what fired, is live and waits", async () => {
     const slot = await page("triggers/oats-real/proposal-review");
-    await waitFor(() => expect(slot.getByTestId("oats-automation-history").querySelector("h3")!.textContent).toBe("Recent fireson this computer · 2 of 2 live now · 2 fired in all · 1 waiting"));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-history-note").textContent).toBe("on this computer · 2 of 2 live now · 2 fired in all · 1 waiting"));
     expect(slot.inspection.rpcCalls.filter((call) => call.method === "triggerStatus").map((call) => call.input)).toEqual([{ id: "oats-real/proposal-review" }]);
   });
 

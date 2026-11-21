@@ -233,13 +233,14 @@ export function hostLogin(host: AutomationHost, owner: string | null): string | 
   return login ? `${parts.host}/${login}` : "not logged in";
 }
 
-export type Tone = "ok" | "warn" | "muted";
+/** The tone of a placement: it runs here (ok), it cannot (bad), it is off here or another computer's (muted). */
+export type Tone = "ok" | "bad" | "muted";
 /** Where a row runs, in words, with the tone of its dot and the detail behind it. */
 export function placementText(row: AutomationRow, host: AutomationHost): { label: string; tone: Tone; detail: string | null } {
   if (row.origin.kind === "local") return { label: "This computer", tone: row.enabledHere ? "ok" : "muted", detail: "Local: runs on this computer as its own gh login" };
-  if (row.reason === "owner-mismatch") return { label: "Wrong account here", tone: "warn", detail: row.reasonDetail };
-  if (row.reason === "untrusted") return { label: "Not trusted here", tone: "warn", detail: row.reasonDetail };
-  if (row.reason === "other") return { label: "Doesn't run here", tone: "warn", detail: row.reasonDetail ?? `reason: ${row.reasonCode}` };
+  if (row.reason === "owner-mismatch") return { label: "Wrong account here", tone: "bad", detail: row.reasonDetail };
+  if (row.reason === "untrusted") return { label: "Not trusted here", tone: "bad", detail: row.reasonDetail };
+  if (row.reason === "other") return { label: "Doesn't run here", tone: "bad", detail: row.reasonDetail ?? `reason: ${row.reasonCode}` };
   if (row.reason === "host-unnamed") return { label: row.runsOn ?? "Not named", tone: "muted", detail: "This computer has no host name" };
   if (row.reason === "assigned-elsewhere") return { label: row.runsOn ?? "Another host", tone: "muted", detail: row.reasonDetail };
   return { label: "This computer", tone: row.enabledHere ? "ok" : "muted", detail: host.name !== null ? `This computer is ${host.name}` : null };

@@ -192,8 +192,8 @@ describe("where it runs", () => {
     expect(placed("local/daily-review")).toEqual({ label: "This computer", tone: "ok", detail: "Local: runs on this computer as its own gh login" });
     expect(placed("local/weekly-cleanup")).toMatchObject({ label: "This computer", tone: "muted" });
     expect(placed("oats-real/nightly-digest")).toEqual({ label: "This computer", tone: "ok", detail: "This computer is bb-box" });
-    expect(placed("oats-real/reconcile")).toEqual({ label: "Wrong account here", tone: "warn", detail: "acts as github.com/acme-billing-bot; this host's gh is logged in as github.com/ana" });
-    expect(placed("oats-real/release-check")).toMatchObject({ label: "Not trusted here", tone: "warn", detail: expect.stringContaining("oats-local.yaml") });
+    expect(placed("oats-real/reconcile")).toEqual({ label: "Wrong account here", tone: "bad", detail: "acts as github.com/acme-billing-bot; this host's gh is logged in as github.com/ana" });
+    expect(placed("oats-real/release-check")).toMatchObject({ label: "Not trusted here", tone: "bad", detail: expect.stringContaining("oats-local.yaml") });
     expect(placed("oats-real/weekly-report")).toEqual({ label: "report-server", tone: "muted", detail: "runs on report-server; this host is bb-box" });
     const unnamed = schedules("schedule-list-host-unnamed.json");
     expect(placementText(rowOf(unnamed, "oats-real/weekly-report"), unnamed.host)).toEqual({ label: "report-server", tone: "muted", detail: "This computer has no host name" });
@@ -204,7 +204,7 @@ describe("where it runs", () => {
     const workspace = { origin: { kind: "workspace" }, qualifiedId: "ws/x" };
     expect(placementText(row({ ...workspace, reason: "host-unnamed" }), host)).toMatchObject({ label: "Not named" });
     expect(placementText(row({ ...workspace, reason: "assigned-elsewhere" }), host)).toMatchObject({ label: "Another host" });
-    expect(placementText(row({ ...workspace, reason: "quarantined" }), host)).toEqual({ label: "Doesn't run here", tone: "warn", detail: "reason: quarantined" });
+    expect(placementText(row({ ...workspace, reason: "quarantined" }), host)).toEqual({ label: "Doesn't run here", tone: "bad", detail: "reason: quarantined" });
     expect(placementText(row({ ...workspace, runsHere: true }), host)).toEqual({ label: "This computer", tone: "ok", detail: null });
   });
 

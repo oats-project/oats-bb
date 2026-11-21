@@ -4,9 +4,8 @@
 // (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
 import type { ReactNode } from "react";
 import type { AutomationList, AutomationRow } from "../../contract/automations";
-import { Chip, Empty, Notice, SearchField, Segmented, TARGET } from "../ui";
+import { Chip, Empty, Notice, SearchField, Segmented, TARGET, Toned } from "../ui";
 import { shown } from "../ui/text";
-import { ToneDot } from "./parts";
 import {
   actsAs,
   capabilitySource,
@@ -51,13 +50,17 @@ export function StateTags({ row }: { row: AutomationRow }) {
   const template = templateLabel(row.template);
   return (
     <>
-      {!row.enabledHere && row.group !== "elsewhere" ? <Chip>Off here</Chip> : null}
+      {!row.enabledHere && row.group !== "elsewhere" ? <Chip tone="muted">Off here</Chip> : null}
       {check ? (
-        <Chip title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>Source check failed</Chip>
+        <Chip tone="warn" title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>
+          Source check failed
+        </Chip>
       ) : bad !== null ? (
-        <Chip title={shown(bad.message ?? bad.code ?? "")}>{row.unreadable !== null ? "Unreadable" : "Invalid"}</Chip>
+        <Chip tone="warn" title={shown(bad.message ?? bad.code ?? "")}>
+          {row.unreadable !== null ? "Unreadable" : "Invalid"}
+        </Chip>
       ) : null}
-      {template === null ? null : <Chip title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>{shown(template)}</Chip>}
+      {template === null ? null : <Chip tone="muted" title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>{shown(template)}</Chip>}
     </>
   );
 }
@@ -133,9 +136,8 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
       </div>
       <div role="cell" className={CELL}>
         {label("Runs on")}
-        <span title={place.detail === null ? undefined : shown(place.detail)} data-tone={place.tone} className={`flex min-w-0 items-center gap-1.5 ${place.tone === "warn" ? "font-semibold" : ""} ${main}`}>
-          <ToneDot tone={place.tone} />
-          <span className="min-w-0 break-words">{shown(place.label)}</span>
+        <span data-testid="oats-automation-place" title={place.detail === null ? undefined : shown(place.detail)} className={`${place.tone === "bad" ? "font-semibold" : ""} ${main}`}>
+          <Toned tone={place.tone}>{shown(place.label)}</Toned>
         </span>
         <span className={SUB}>{shown(actsAs(row))}</span>
       </div>
@@ -195,7 +197,7 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented
           label={`Show ${lower} from`}
-          options={ORIGIN_FILTERS.map((option) => ({ id: option.id, label: `${option.label} ${option.id === "all" ? rows.length : rows.filter((row) => row.origin.kind === option.id).length}` }))}
+          options={ORIGIN_FILTERS.map((option) => ({ ...option, count: option.id === "all" ? rows.length : rows.filter((row) => row.origin.kind === option.id).length }))}
           value={origin}
           onChange={onOrigin}
         />
@@ -205,10 +207,7 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
       </div>
       {rows.length === 0 ? (
         <div data-testid="oats-automations-empty">
-          <Empty>
-            <strong className="block font-semibold text-foreground">{`No ${lower} yet`}</strong>
-            {`Commit one to a member repository's ${NOUNS[list.kind]}s folder to share it with the workspace, or add a local one on this computer.`}
-          </Empty>
+          <Empty title={`No ${lower} yet`}>{`Commit one to a member repository's ${NOUNS[list.kind]}s folder to share it with the workspace, or add a local one on this computer.`}</Empty>
         </div>
       ) : shown_.length === 0 ? (
         <Empty>{`No ${lower} match.`}</Empty>

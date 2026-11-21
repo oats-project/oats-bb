@@ -6,9 +6,9 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
 import { displayLine, refusalLines, shown } from "../ui/text";
-import { Button, Empty } from "../ui";
+import { Button, Card, Empty, Section, Toned } from "../ui";
 import { OriginTag, StateTags } from "./List";
-import { FactList, Quote, Section, TitledCard, ToneDot } from "./parts";
+import { FactList, Quote } from "./parts";
 import type { FactRow, QuoteLine } from "./parts";
 import {
   capabilitySource,
@@ -136,7 +136,8 @@ function Sends({ row }: { row: AutomationRow }) {
   }
   if (row.run === "command") {
     return (
-      <Section title="Command" note="run as written, without a shell" testId="oats-automation-sends">
+      <Section title="Command" testId="oats-automation-sends">
+        <p className={NOTE}>run as written, without a shell</p>
         {row.argv !== null && row.argv.length > 0 ? (
           // The argv, verbatim: one chip per argument, so the boundaries show.
           <ol aria-label="Command arguments" className="flex flex-wrap gap-1.5 rounded-md border border-border bg-card p-3">
@@ -166,7 +167,8 @@ function Sends({ row }: { row: AutomationRow }) {
   }
   const trigger = row.kind === "trigger";
   return (
-    <Section title="Prompt" note={trigger ? "highlighted fields are filled from the event" : undefined} testId="oats-automation-sends">
+    <Section title="Prompt" testId="oats-automation-sends">
+      {trigger ? <p className={NOTE}>highlighted fields are filled from the event</p> : null}
       {row.task !== null ? (
         <>
           <Prose
@@ -202,22 +204,22 @@ function Sends({ row }: { row: AutomationRow }) {
 function WhenCard({ row, now, source, canOpenCapability, onOpenCapability }: { row: AutomationRow; now: number; source: CapabilitySource | null } & Pick<DetailProps, "canOpenCapability" | "onOpenCapability">) {
   if (row.kind === "schedule") {
     return (
-      <TitledCard title="When" testId="oats-automation-when">
+      <Card title="When" testId="oats-automation-when">
         <FactList facts={[["Runs", cronInWords(row.cron)], ["Cron", row.cron === null ? null : shown(row.cron)], ["Time zone", row.tz === null ? null : shown(row.tz)], ["Next", row.runsHere ? relativeTime(row.nextDue, now)?.label : null, relativeTime(row.nextDue, now)?.title]]} />
-      </TitledCard>
+      </Card>
     );
   }
   const on = onSummary(row.on);
   if (source === null) {
     return (
-      <TitledCard title="On" testId="oats-automation-when">
+      <Card title="On" testId="oats-automation-when">
         <FactList facts={[["Event", on === null ? null : shown(on.title)], ["Repo", on?.repo == null ? null : shown(on.repo)], ["Labels", on === null ? null : shown(on.labels.join(", "))], ["Base", on?.base == null ? null : shown(on.base)], ["Polls", on?.poll ? `every ${shown(on.poll)}` : null]]} />
-      </TitledCard>
+      </Card>
     );
   }
   const lookup = source.lookup;
   return (
-    <TitledCard title="On" testId="oats-automation-when">
+    <Card title="On" testId="oats-automation-when">
       <FactList facts={[["Source", sourceLabel(source) ?? source.id], ["Events", on?.events.join(", ")], ["Polls", on?.poll ? `every ${on.poll}` : null]]} />
       {lookup !== null && onOpenCapability !== undefined && canOpenCapability?.(lookup) === true ? (
         <div>
@@ -232,7 +234,7 @@ function WhenCard({ row, now, source, canOpenCapability, onOpenCapability }: { r
           <ParamsQuote row={row} />
         </>
       ) : null}
-    </TitledCard>
+    </Card>
   );
 }
 
@@ -254,9 +256,9 @@ function SpawnsCard({ row }: { row: AutomationRow }) {
     ["Wake message", row.wake?.message == null ? null : shown(row.wake.message)],
   ];
   return (
-    <TitledCard title="Spawns" testId="oats-automation-spawns">
+    <Card title="Spawns" testId="oats-automation-spawns">
       <FactList facts={facts} />
-    </TitledCard>
+    </Card>
   );
 }
 
@@ -309,7 +311,10 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
       : (row.recentRuns.length > 0 ? row.recentRuns : row.lastRun !== null ? [row.lastRun] : []).map(fromRow);
 
   return (
-    <Section title={trigger ? "Recent fires" : "Recent runs"} note={["on this computer", lead].filter(Boolean).join(" · ")} testId="oats-automation-history">
+    <Section title={trigger ? "Recent fires" : "Recent runs"} testId="oats-automation-history">
+      <p data-testid="oats-automation-history-note" className={NOTE}>
+        {["on this computer", lead].filter(Boolean).join(" · ")}
+      </p>
       {poll !== null && source !== null && (pollFailure || poll.events !== null) ? (
         <>
           <p data-testid="oats-automation-last-poll" className={`${LINE} ${poll.ok ? "text-foreground" : "text-destructive-text"}`}>
@@ -420,23 +425,22 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
 
 /** Run state on this computer: running since, an unknown state (with the reconcile command to paste), a wake waiting to be delivered. */
 function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunState; now: number; action?: ReactNode }) {
-  const line = (tone: "ok" | "warn", words: string, iso: string | null) => {
+  const line = (tone: "ok" | "bad", words: string, iso: string | null) => {
     const at = relativeTime(iso, now);
     return (
-      <p title={at?.title} className={`flex items-center gap-1.5 text-sm font-semibold ${tone === "warn" ? "text-warning-text" : "text-foreground"}`}>
-        <ToneDot tone={tone} />
-        <span>{at !== null && iso !== null ? `${words} since ${clockTime(iso, now)} · ${at.label}` : words}</span>
+      <p title={at?.title} className="text-sm font-semibold text-foreground">
+        <Toned tone={tone}>{at !== null && iso !== null ? `${words} since ${clockTime(iso, now)} · ${at.label}` : words}</Toned>
       </p>
     );
   };
   const unknown = run.unknown;
   const scheduled = unknown === null ? null : relativeTime(unknown.scheduledFor, now);
   return (
-    <TitledCard title="Run state" testId="oats-automation-run-state">
+    <Card title="Run state" testId="oats-automation-run-state">
       {run.running !== null ? line("ok", "Running", run.running.since) : null}
       {unknown !== null ? (
         <>
-          {line("warn", "Run state unknown", unknown.since)}
+          {line("bad", "Run state unknown", unknown.since)}
           <FactList
             facts={[
               ["Scheduled", scheduled?.label, scheduled?.title],
@@ -462,7 +466,7 @@ function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunS
           {`A wake message is waiting to be delivered${relativeTime(run.pendingWake.scheduledFor, now) !== null ? ` (due ${relativeTime(run.pendingWake.scheduledFor, now)!.label})` : ""}.`}
         </p>
       ) : null}
-    </TitledCard>
+    </Card>
   );
 }
 
@@ -567,16 +571,16 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
           {sideStart}
           {check !== null && check.at !== null ? (
             // The last source check failed at a poll: the kernel's message, code and field, and when.
-            <TitledCard title="Source check failed" testId="oats-automation-problem" warn>
+            <Card title="Source check failed" testId="oats-automation-problem" tone="warn">
               <FactList facts={[["Message", displayLine(check.message)], ["Code", displayLine(check.code)], ["Field", displayLine(check.field)], ["Checked", checked?.label, checked?.title]]} />
-            </TitledCard>
+            </Card>
           ) : bad !== null ? (
-            <TitledCard title={row.unreadable !== null ? "Unreadable" : "Invalid"} testId="oats-automation-problem" warn>
+            <Card title={row.unreadable !== null ? "Unreadable" : "Invalid"} testId="oats-automation-problem" tone="warn">
               <FactList facts={[["Code", bad.code === null ? null : shown(bad.code)], ["Field", bad.field === null ? null : shown(bad.field)], ["Message", bad.message === null ? null : shown(bad.message)]]} />
-            </TitledCard>
+            </Card>
           ) : null}
           {run !== null ? <RunStateCard row={row} run={run} now={now} action={runStateAction} /> : null}
-          <TitledCard title="Where it runs" testId="oats-automation-where">
+          <Card title="Where it runs" testId="oats-automation-where">
             <FactList
               facts={
                 row.origin.kind === "local"
@@ -584,13 +588,12 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
                   : [["Runs on", row.runsOn === null ? null : shown(row.runsOn)], ["This computer", shown(host.name ?? "no host name")], ["Acts as", row.owner === null ? null : shown(row.owner)], ["Logged in", hostLogin(host, row.owner)]]
               }
             />
-            <p data-testid="oats-automation-verdict" className={`flex items-center gap-1.5 text-sm font-semibold ${place.tone === "warn" ? "text-warning-text" : "text-foreground"}`}>
-              <ToneDot tone={place.tone} />
-              <span>{row.runsHere ? "Runs on this computer" : shown(place.label)}</span>
+            <p data-testid="oats-automation-verdict" className="text-sm font-semibold text-foreground">
+              <Toned tone={place.tone}>{row.runsHere ? "Runs on this computer" : shown(place.label)}</Toned>
             </p>
             {row.reasonDetail !== null ? <p className={`${NOTE} break-words`}>{shown(row.reasonDetail)}</p> : null}
-          </TitledCard>
-          <TitledCard title="Comes from" testId="oats-automation-from">
+          </Card>
+          <Card title="Comes from" testId="oats-automation-from">
             {row.origin.kind === "workspace" ? (
               <FactList
                 facts={[
@@ -607,7 +610,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
                 <FactList facts={[template, stamp("Created", row.createdAt), stamp("Updated", row.updatedAt)]} />
               </>
             )}
-          </TitledCard>
+          </Card>
           {sideEnd}
         </div>
       </div>

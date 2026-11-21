@@ -27,12 +27,12 @@ export default [
       // From bb's wide layout up a row is five cells under their headings; below it a row is a stack.
       const heads = await page.evaluate(visible('[role="columnheader"]'));
       check(heads === !viewport.mobile, `${at} ${viewport.mobile ? "a row is a stack: the headings are not drawn" : "the rows sit under the five headings"}`);
-      await page.shot(`automations-${viewport.name}-schedules`);
+      await page.shot(`automations-${viewport.name}-schedules`, { targets: true });
 
       await open(page, "/triggers", ROW);
       const n = await page.evaluate(count(ROW));
       check(n === 7, `${at} the Triggers tab lists its 7 triggers`, String(n));
-      await page.shot(`automations-${viewport.name}-triggers`);
+      await page.shot(`automations-${viewport.name}-triggers`, { targets: true });
 
       // the sidebar's row and its mark: two schedules of the recording failed their last run
       if (!viewport.mobile) {
@@ -45,7 +45,7 @@ export default [
       await page.evaluate(`[...document.querySelectorAll('[role="radio"]')].find((radio) => radio.innerText.startsWith("Workspace")).click()`);
       const workspace = await page.until(`(() => ${count(ROW)} === 4 ? "4" : "")()`, 10);
       check(workspace === "4", `${at} Workspace shows the 4 schedules a member's repository holds`, String(await page.evaluate(count(ROW))));
-      await page.shot(`automations-${viewport.name}-schedules-workspace`);
+      await page.shot(`automations-${viewport.name}-schedules-workspace`, { targets: true });
     },
   },
   {
@@ -57,7 +57,7 @@ export default [
       const spawn = await open(page, "/schedules/local/daily-review", testId("oats-automation-spawns"));
       check(/Backend bb/.test(spawn) && /YOLO — skips permission prompts/.test(spawn), `${at} a schedule's page says what it spawns, on bb, in full mode`, spawn);
       check((await page.evaluate(visible(ROW))) === false && (await page.evaluate(visible(testId("oats-automation-back")))) === true, `${at} the list gives way to the row's page, with Back`);
-      await page.shot(`automations-${viewport.name}-schedule`);
+      await page.shot(`automations-${viewport.name}-schedule`, { targets: true });
       // focus: the row's page opens with focus on Back, and Back returns it to the row it was opened from
       await open(page, "", ROW);
       await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(ROW)})].find((row) => row.dataset.id === "local/daily-review").querySelector(${JSON.stringify(testId("oats-automation-open"))}).click()`);
@@ -70,24 +70,24 @@ export default [
       // a run that did not happen, with the kernel's reason
       const failed = await open(page, "/schedules/local/hourly-check", testId("oats-automation-run-error"));
       check(/E_BACKEND_SANDBOXED_MODE/.test(failed), `${at} a launch the provider refused says why, in the kernel's words`, failed);
-      await page.shot(`automations-${viewport.name}-schedule-launch-failed`);
+      await page.shot(`automations-${viewport.name}-schedule-launch-failed`, { targets: true });
 
       // an unknown run state, an invalid definition, a placement that needs attention
       const unknown = await open(page, "/schedules/local/status-check", testId("oats-automation-run-state"));
       check(/^Run state Run state unknown since/.test(unknown), `${at} a run whose state is unknown says so, with the command that checks it`, unknown);
-      await page.shot(`automations-${viewport.name}-schedule-run-unknown`);
+      await page.shot(`automations-${viewport.name}-schedule-run-unknown`, { targets: true });
       const invalid = await open(page, "/schedules/local/legacy-herdr", testId("oats-automation-problem"));
       check(/^Invalid Code E_HERDR_REMOVED Field backend/.test(invalid), `${at} an invalid definition shows the kernel's code, field and message`, invalid);
-      await page.shot(`automations-${viewport.name}-schedule-invalid`);
+      await page.shot(`automations-${viewport.name}-schedule-invalid`, { targets: true });
       const where = await open(page, "/schedules/oats-real/reconcile", testId("oats-automation-where"));
       check(/Wrong account here/.test(where) && /Logged in github\.com\/ana/.test(where), `${at} a workspace schedule says why it does not run here`, where);
-      await page.shot(`automations-${viewport.name}-schedule-wrong-account`);
+      await page.shot(`automations-${viewport.name}-schedule-wrong-account`, { targets: true });
 
       // a pull-request trigger with its state
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
-      const lead = await page.until(`(() => { const t = ${textOf(`${testId("oats-automation-history")} h3`)}; return /live now/.test(t) ? t : ""; })()`, 30);
-      check(lead === "Recent fires on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await page.evaluate(textOf(detail))));
-      await page.shot(`automations-${viewport.name}-trigger`);
+      const lead = await page.until(`(() => { const t = ${textOf(testId("oats-automation-history-note"))}; return /live now/.test(t) ? t : ""; })()`, 30);
+      check(lead === "on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await page.evaluate(textOf(detail))));
+      await page.shot(`automations-${viewport.name}-trigger`, { targets: true });
 
       // a capability source's trigger: its parameters and the source's own words, quoted
       await page.goto("/plugins/oats/automations/triggers/oats-real/harvest-review");
@@ -95,7 +95,7 @@ export default [
       check(/says: harvest\/y not judged yet harvest\/z <img src=x onerror=alert\(1\)>/.test(skipped ?? ""), `${at} a capability source's words are quoted text, under whose they are`, skipped);
       const made = await page.evaluate(`document.querySelector(${JSON.stringify(detail)}).querySelectorAll("img, a").length`);
       check(made === 0, `${at} no image and no link is made from a source's text`, String(made));
-      await page.shot(`automations-${viewport.name}-trigger-source`);
+      await page.shot(`automations-${viewport.name}-trigger-source`, { targets: true });
     },
   },
   {
@@ -104,7 +104,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       const unnamed = await open(page, "", testId("oats-automations-host-unnamed"));
       check(/^This computer has no host name It runs none of the workspace's schedules\./.test(unnamed), `${at} a host with no name says what that means and what to do`, unnamed);
-      await page.shot(`automations-${viewport.name}-host-unnamed`);
+      await page.shot(`automations-${viewport.name}-host-unnamed`, { targets: true });
     },
   },
   {
@@ -115,7 +115,7 @@ export default [
       check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled.", `${at} a scheduler that is off says nothing here runs`, off);
       const header = await page.evaluate(textOf(testId("oats-automations-scheduler")));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
-      await page.shot(`automations-${viewport.name}-scheduler-off`);
+      await page.shot(`automations-${viewport.name}-scheduler-off`, { targets: true });
     },
   },
   {
@@ -126,7 +126,7 @@ export default [
       check(/^No schedules yet/.test(empty), `${at} with no schedule yet the page says so and how to add one`, empty);
       const foot = await page.evaluate(textOf(testId("oats-automations-foot")));
       check(/^Workspace items appear after the next sync/.test(foot), `${at} before the first sync the page says when workspace items appear`, foot);
-      await page.shot(`automations-${viewport.name}-empty`);
+      await page.shot(`automations-${viewport.name}-empty`, { targets: true });
     },
   },
   {
@@ -137,7 +137,7 @@ export default [
       check(failed === "Schedules could not be read oats-schedules.json: jobs must be an object E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
       const tabs = await page.evaluate(texts('[role="tab"]'));
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules", "Triggers 7"]), `${at} the other list is still read`, JSON.stringify(tabs));
-      await page.shot(`automations-${viewport.name}-failed`);
+      await page.shot(`automations-${viewport.name}-failed`, { targets: true });
     },
   },
   {
@@ -146,7 +146,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
       check(gate === "Schedules need the OATS CLI", `${at} with oats gone the page says what it needs`, gate);
-      await page.shot(`automations-${viewport.name}-no-oats`);
+      await page.shot(`automations-${viewport.name}-no-oats`, { targets: true });
     },
   },
 ];

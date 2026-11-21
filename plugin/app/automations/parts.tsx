@@ -1,12 +1,9 @@
-// What the Automations page adds to the plugin's shared patterns (app/ui.tsx), built from them:
-// a list of facts from rows of data, a titled card and a titled section of a row's page, the dot
-// of a placement or of the scheduler, and the quote treatment for text that is neither the
+// What the Automations page adds to the plugin's shared patterns (app/ui.tsx): a list of facts
+// from rows of data, built from them, and the quote treatment for text that is neither the
 // kernel's nor the plugin's. Everything a workspace file or a trigger source supplied is drawn as
 // text: no markup, no link and no title is ever made from it.
 import { useId } from "react";
-import type { ReactNode } from "react";
-import { Card, Fact, Facts } from "../ui";
-import type { Tone } from "./words";
+import { Fact, Facts } from "../ui";
 
 export type FactRow = readonly [label: string, value: string | null | undefined, title?: string | null];
 /** Facts from rows of data: one with nothing to say is left out, and with none there is no list. `title` is the whole of a value shown short (a commit id). */
@@ -16,45 +13,12 @@ export function FactList({ facts }: { facts: readonly FactRow[] }) {
   return (
     <Facts>
       {shown.map(([label, value, title]) => (
-        <Fact key={label} label={label}>
-          {title ? <span title={title}>{value}</span> : value}
+        <Fact key={label} label={label} title={title ?? undefined}>
+          {value}
         </Fact>
       ))}
     </Facts>
   );
-}
-
-/** A card of a row's page, named by its heading. `warn`: what is wrong with the row. */
-export function TitledCard({ title, children, testId, warn = false }: { title: string; children: ReactNode; testId: string; warn?: boolean }) {
-  return (
-    <Card testId={testId}>
-      <h3 className={`font-semibold ${warn ? "text-destructive-text" : "text-foreground"}`}>{title}</h3>
-      {children}
-    </Card>
-  );
-}
-
-export function Section({ title, note, children, testId }: { title: string; note?: string; children: ReactNode; testId?: string }) {
-  const titleId = useId();
-  return (
-    <section data-testid={testId} aria-labelledby={titleId} className="flex min-w-0 flex-col gap-2">
-      <h3 id={titleId} className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-foreground">
-        <span>{title}</span>
-        {note ? <span className="text-xs font-normal text-muted-foreground">{note}</span> : null}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-// A problem's dot is the refusal's colour: the warning colour means "needs you" in this plugin.
-const TONE_DOT: Record<Tone, string> = { ok: "bg-success-foreground", warn: "bg-destructive-text", muted: "border border-muted-foreground" };
-/**
- * The dot before where something runs, or before the scheduler's state. It always stands beside
- * its words, which say which it is, so it is hidden from assistive technology.
- */
-export function ToneDot({ tone }: { tone: Tone }) {
-  return <span aria-hidden="true" data-tone={tone} className={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone]}`} />;
 }
 
 export type QuoteLine = { label?: string | null; text: readonly (string | null)[]; note?: string | null };

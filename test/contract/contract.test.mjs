@@ -106,6 +106,8 @@ async function launched(name, extra, options) {
 /** How many processes work in the home (their cwd is in it), and how many of them are Claude. */
 const processesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim());
 const claudesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do case "$(readlink $p/cwd 2>/dev/null)" in ${home}*) tr '\\0' ' ' < $p/cmdline | grep -c 'bin/claude ' ;; esac; done | grep -c 1 || true`)).trim());
+/** The names of the processes that carry the thread's id (bb's BB_THREAD_ID). */
+const carriers = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then cat $p/comm; fi; done 2>/dev/null || true`)).split("\n").filter(Boolean);
 
 // The threads the tests launched, stopped after each test: bb keeps a thread's Claude
 // loaded while it is idle, and a dozen of them starve the bb servers that later tests
@@ -282,16 +284,38 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await once("T2-MIDTOOL");
   assert.equal(await landed("T2-TOOLSTART"), 1);
 
-  // error: the model endpoint refuses a turn; bb shows error, which reads as a lost
-  // session; the next tell recovers the thread
+  // error: the model endpoint refuses a turn; bb shows error, and keeps the thread's Claude
+  // loaded: a process that carries the thread's id is still there, so the thread reads as
+  // there and at rest (never a lost session, which the kernel would resume beside that
+  // process); the next tell recovers the thread
   await sh("touch mock-error");
   await tell("T2-FAILS marker");
   await waitStatus(id, "error");
+  assert.ok((await claudesIn(home)) >= 1, "bb released the Claude of a thread whose turn failed: the error rule may no longer be needed for Claude");
+  assert.ok((await carriers(id)).length >= 1, "a process of the thread carries BB_THREAD_ID");
   const errored = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: false, state: "stopped", running: false });
+  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: null });
   await sh("rm mock-error");
   await tell("T2-ERROR marker");
   await once("T2-ERROR");
+
+  // the other error: the turn failed and the thread's Claude is gone (stopped in bb): bb
+  // still says error, no process carries the thread's id, and that is a lost session
+  await sh("touch mock-error");
+  await tell("T2-FAILS-AGAIN marker");
+  await waitStatus(id, "error");
+  await sh(`bb thread stop ${id} --json >/dev/null`);
+  await waitFor("no process of the thread", async () => (await carriers(id)).length === 0, { timeoutMs: 20_000 });
+  assert.equal(await threadStatus(id), "error");
+  const lost = await provider("inspect", { home, endpoint });
+  assert.deepEqual({ present: lost.result.present, state: lost.result.state, running: lost.result.running }, { present: false, state: "stopped", running: false });
+  await sh("rm mock-error");
+  // an input to it is told: bb answers sent, starts Claude again in the same thread and
+  // runs the turn, once (under the kernel, its counted resume of the lost session). A bb
+  // that stops doing this fails here: the rule rests on it (contract r23, A14(3))
+  await tell("T2-RESUMED marker");
+  await once("T2-RESUMED");
+  assert.ok((await carriers(id)).length >= 1, "the thread's Claude runs again");
 });
 
 const SANDBOX = {

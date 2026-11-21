@@ -94,6 +94,9 @@ describe("automations", () => {
     expect([third!.at, fourth!.at]).toEqual([second!.at, second!.at]);
     expect(await argvs(running, "schedule list")).toHaveLength(2);
     expect(await argvs(running, "trigger list")).toHaveLength(2);
+    // The read that waited was made beside the newest roster: the next ask is answered by it.
+    expect((await running.rpc<Lists>("automations")).at).toBe(second!.at);
+    expect(await argvs(running, "schedule list")).toHaveLength(2);
   }, 40_000);
 
   it("Retry reads the lists again: a new read of OATS makes the next lists new", async () => {
@@ -162,8 +165,8 @@ describe("triggerStatus", () => {
   });
 
   it("the kernel's refusal is shown with its code and message", async () => {
-    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_TRIGGER_UNKNOWN", message: "no trigger local/pr-triage" } });
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_TRIGGER_UNKNOWN", message: 'no trigger "local/pr-triage" in /abs/deployment' } });
     backend = await startBackend({ verbs: { "trigger status": { stdout: refusal } } });
-    await expect(backend.rpc("triggerStatus", { id: "local/pr-triage" })).rejects.toThrow("E_TRIGGER_UNKNOWN: no trigger local/pr-triage");
+    await expect(backend.rpc("triggerStatus", { id: "local/pr-triage" })).rejects.toThrow('E_TRIGGER_UNKNOWN: no trigger "local/pr-triage" in /abs/deployment');
   });
 });

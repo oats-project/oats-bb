@@ -28,6 +28,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   let held: { at: number; roster: string; value: Promise<Lists>; settled: boolean } | null = null;
   /** The one read that waits behind a read still running: every ask of a newer roster shares it. */
   let queued: Promise<Lists> | null = null;
+  /** The newest roster read an ask waits with: the queued read is made beside it. */
+  let waiting = "";
 
   const read = (kind: "scheduleList" | "triggerList"): Promise<ListAnswer> =>
     core.call(kind, {}, HOST_TIMEOUT.read, core.signal).then(
@@ -48,9 +50,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // Never two reads at once: with a kernel whose lists are slow and a roster that keeps changing,
     // each ask would start another pair of processes. One read runs and one waits behind it.
     if (held !== null && !held.settled) {
+      waiting = roster;
       const after = () => {
         queued = null;
-        return start(roster);
+        return start(waiting);
       };
       queued ??= held.value.then(after, after);
       return queued;

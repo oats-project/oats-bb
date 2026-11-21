@@ -1,0 +1,8 @@
+{
+ "spawn --preview": {
+  "file": "spawn-preview.json"
+ },
+ "spawn": {
+  "file": "spawn.json"
+ }
+}

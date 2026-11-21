@@ -1,4 +1,4 @@
-// From what the kernel printed during the real run to the files of test/fixtures/: the same JSON
+// From what the kernel printed during the real run to the files of test/fixtures/<feature>/: the same JSON
 // document, printed with one space of indentation like the other fixtures, with two substitutions
 // and no other edit:
 //   - paths: the deployment directory is /abs/deployment, the run's own directory /abs/real, and
@@ -7,7 +7,7 @@
 // Everything else stays as recorded: bb's thread and project ids, start ids, plan and decision
 // revisions, commit ids, times, byte counts. No field is added, removed or reordered.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export class Fixtures {
   #out;
@@ -51,8 +51,9 @@ export class Fixtures {
 
   /** Writes every kept answer. → one line per file. */
   write() {
-    mkdirSync(this.#out, { recursive: true });
     return this.#kept.map(({ file, value, bytes }) => {
+      // `file` is `<feature>/<name>.json`, as test/fixtures/ holds it.
+      mkdirSync(dirname(join(this.#out, file)), { recursive: true });
       writeFileSync(join(this.#out, file), this.#written(value));
       return `${file} (${bytes} bytes as printed)`;
     });
@@ -63,7 +64,7 @@ export class Fixtures {
 export const SESSION_FIELDS = ["backend", "tmux", "session", "open", "running", "runtimeState", "runtimeError", "sessionEnd"];
 
 /**
- * test/fixtures/status.json is the design's sample (its agents, parents, identities and claims are
+ * test/fixtures/roster/status.json is the design's sample (its agents, parents, identities and claims are
  * not this run's). This gives each of its bb rows the session-side fields of a row the real kernel
  * printed for an agent in the same state: running, idle, or stopped by OATS. The sample's own thread
  * id, and the project of that thread in threads.json, take the place of the recorded ones; a field

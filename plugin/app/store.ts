@@ -5,12 +5,13 @@
 // (`bb.rpc.experimental_whileWatched`).
 import { useEffect, useRef } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
-import type { PluginRpcClient, PluginRpcResult } from "@get-bb/plugin-sdk/app";
+import type { PluginRpcClient, PluginRpcResult, StandardSchemaV1InferInput } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../contract";
 
 export type Contract = typeof rpcContract;
 export type Rpc = PluginRpcClient<Contract>;
-export type ReadMethod = "snapshot" | "souls" | "capabilities" | "teams" | "machines";
+/** The verbs a slot can read with `useRead`: every one of the contract that takes no input. */
+export type ReadMethod = { [Method in keyof Contract]: StandardSchemaV1InferInput<Contract[Method]["input"]> extends null ? Method : never }[keyof Contract];
 export type Result<Method extends keyof Contract> = PluginRpcResult<Contract[Method]>;
 
 export type Read<T> =
@@ -40,9 +41,17 @@ export function attempt<T>(call: () => Promise<T>): Promise<T> {
  */
 const acted = new Map<ReadMethod, string>();
 
-/** For tests: a new app window has acted on nothing. */
-export function resetReads(): void {
-  acted.clear();
+/** What a feature keeps for the length of an app window, outside React: forgotten between tests. */
+const windowState: (() => void)[] = [() => acted.clear()];
+
+/** A feature with state of its own for the app window names how to forget it. */
+export function onWindowReset(forget: () => void): void {
+  windowState.push(forget);
+}
+
+/** For tests: a new app window has acted on nothing and holds no feature's state. */
+export function resetWindow(): void {
+  for (const forget of windowState) forget();
 }
 
 function tokenOf(payload: unknown): string | undefined {

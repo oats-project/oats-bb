@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 import { clean } from "../format";
-import { errorMessage } from "../store";
+import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
 import { Button, ErrorLine, Modal, Note } from "../ui";
 
@@ -33,12 +33,12 @@ const subscribe = (listener: () => void) => {
 };
 const get = () => current;
 
-/** For tests: a new app window starts with nothing asked. */
-export function resetActs(): void {
+// A new app window starts with nothing asked.
+onWindowReset(() => {
   current = null;
   deferred = null;
   listeners.clear();
-}
+});
 
 /**
  * A key the kernel uses to make an apply or a spawn idempotent: one per intent, reused when the

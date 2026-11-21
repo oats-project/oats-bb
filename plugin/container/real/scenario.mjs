@@ -12,13 +12,14 @@
 //           Code asks (oats.core's claim), answered on the home's card.
 //   part B  the scenes the plugin's fixtures describe: a lead with two children (stop, and a stale
 //           stop plan), and an agent on a worktree with a child (start, restart, retire).
+//   part C  the steps each other feature adds for its own acts: parts/<feature>.mjs.
 // What the kernel printed for the plugin's calls is written to $OUT/fixtures/, with the paths and the
 // host name replaced and nothing else edited (fixtures.mjs says how).
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, visible } from "../browser.mjs";
 import { Fixtures, sampleStatus } from "./fixtures.mjs";
 
@@ -234,7 +235,7 @@ function keepStatus(key, expected) {
     fail(`status-recorded.json ${key}: the status the plugin read is not the state to record`, JSON.stringify([...rows.values()].map((row) => [row.instance, brief(row)])));
     return;
   }
-  fixtures.keepIn("status-recorded.json", key, record.stdout);
+  fixtures.keepIn("roster/status-recorded.json", key, record.stdout);
   pass(`status-recorded.json ${key}: kept from the plugin's own oats status (${[...rows.keys()].join(", ")})`);
 }
 /** The plugin's own snapshot, read again now; the row of one instance in it. */
@@ -346,7 +347,7 @@ try {
   const spawned = act("spawn", "spawn", { soul: A.soul, name: A.instance, task, key: "spawn-1f0c9a7e" });
   const spawnRecord = recorded(["spawn", A.soul], ["--idempotency-key"]);
   const spawnAnswer = JSON.parse(spawnRecord.stdout).result;
-  fixtures.keep("spawn.json", spawnRecord.stdout);
+  fixtures.keep("spawn/spawn.json", spawnRecord.stdout);
   check(spawned?.instance === A.instance && /^thr_/.test(spawned?.threadId ?? "") && spawned.threadId === spawnAnswer.session.endpoint.threadId, "the spawn answers the instance and the bb thread the kernel named");
   check(spawnRecord.argv.includes("--yolo") && spawnAnswer.yolo === true && spawnAnswer.launchConfig == null && spawnAnswer.launched === true, "the spawn launched in bb's full mode by the plugin's own --yolo: the answer has yolo true and names no launch configuration", JSON.stringify({ argv: spawnRecord.argv, yolo: spawnAnswer.yolo, launchConfig: spawnAnswer.launchConfig, launched: spawnAnswer.launched }));
   show("the spawn's answer", { yolo: spawnAnswer.yolo, launchConfig: spawnAnswer.launchConfig, launched: spawnAnswer.launched });
@@ -609,10 +610,10 @@ try {
   act("stop apply of that child", "stopApply", { instance: "harvest-knowledge-helper", revision: one.revision, key: "stop-5e6f7a8b9c0d" });
   await untilRow("harvest-knowledge-helper", "stopped", (r) => r.runtimeState === "stopped");
   const staleLead = refused("the apply of the lead's plan read before that stop", "E_PLAN_STALE", "stopApply", { instance: lead, revision: leadPlan.revision, key: "stop-0000aaaa1111" }, ["instance", "stop", lead], ["--apply", "stop-0000aaaa1111"]);
-  if (staleLead) fixtures.keep("stop-apply-stale.json", staleLead.record.stdout);
+  if (staleLead) fixtures.keep("lifecycle/stop-apply-stale.json", staleLead.record.stdout);
   const freshLead = act("stop plan of the lead, read again", "stopPlan", { instance: lead });
   act("stop apply of the lead", "stopApply", { instance: lead, revision: freshLead.revision, key: "stop-7f3a9c2e41b8" });
-  fixtures.keep("stop-apply.json", recorded(["instance", "stop", lead], ["--apply", "stop-7f3a9c2e41b8"]).stdout);
+  fixtures.keep("lifecycle/stop-apply.json", recorded(["instance", "stop", lead], ["--apply", "stop-7f3a9c2e41b8"]).stdout);
   for (const name of [lead, "desktop-mockups-developer", "harvest-knowledge-helper"]) {
     const stopped = await untilRow(name, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
     show(name, brief(stopped));
@@ -643,12 +644,12 @@ try {
   act("stop apply", "stopApply", { instance: digest, revision: digestStop.revision, key: "stop-6a7b8c9d0e1f" });
   await untilRow(digest, "stopped", (r) => r.runtimeState === "stopped");
   const digestStart = act("start", "start", { instance: digest });
-  fixtures.keep("start.json", recorded(["session", "start", "--home", digestHome]).stdout);
+  fixtures.keep("lifecycle/start.json", recorded(["session", "start", "--home", digestHome]).stdout);
   row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestStart.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(digestSpawn.threadId) && live(digestStart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   const digestRestart = act("restart", "restart", { instance: digest });
-  fixtures.keep("restart.json", recorded(["session", "restart", "--home", digestHome]).stdout);
+  fixtures.keep("lifecycle/restart.json", recorded(["session", "restart", "--home", digestHome]).stdout);
   row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestRestart.threadId && r.running === null && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(digestStart.threadId) && live(digestRestart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
@@ -656,9 +657,9 @@ try {
   act("stop apply", "stopApply", { instance: digest, revision: digestStop2.revision, key: "stop-8c9d0e1f2a3b" });
   await untilRow(digest, "stopped", (r) => r.runtimeState === "stopped");
   const digestRetire = act("retire plan", "retirePlan", { instance: digest });
-  fixtures.keep("retire-plan.json", recorded(["retire", digest], ["--plan"]).stdout);
+  fixtures.keep("lifecycle/retire-plan.json", recorded(["retire", digest], ["--plan"]).stdout);
   act("retire apply", "retireApply", { instance: digest, revision: digestRetire.revision, key: "retire-2b9d4e6f8a1c" });
-  fixtures.keep("retire-apply.json", recorded(["retire", digest], ["retire-2b9d4e6f8a1c"]).stdout);
+  fixtures.keep("lifecycle/retire-apply.json", recorded(["retire", digest], ["retire-2b9d4e6f8a1c"]).stdout);
   check(rowOf(digest) === undefined && !existsSync(digestHome), "oats status: no row is left, and the home is removed");
   check(archivedInBb(digestRestart.threadId), "bb: the retire archived the agent's current thread", threadsNow());
   const receipt = JSON.parse(recorded(["retire", digest], ["retire-2b9d4e6f8a1c"]).stdout);
@@ -675,11 +676,21 @@ try {
   rpc("refresh"); // the pages' answers are kept 30 s; a refresh drops them
   const machines = act("the machines", "machines");
   check(machines?.machines.length === 3 && machines.machines[0].isThisMachine === true, "this machine, then the two servers", JSON.stringify(machines));
-  fixtures.keep("servers.json", recorded(["server", "list"]).stdout);
+  fixtures.keep("workspace/servers.json", recorded(["server", "list"]).stdout);
 
   // Start and Restart name no mode: they keep what the home recorded at its spawn.
   const sessions = records().filter((record) => record.argv[0] === "session");
   check(sessions.length > 0 && sessions.every((record) => !record.argv.includes("--yolo")), `none of the plugin's ${sessions.length} start and restart calls names a mode (no --yolo)`, JSON.stringify(sessions.map((record) => record.argv)));
+
+  // Part C: the steps a feature adds for its own acts (container/real/parts/<feature>.mjs, in the
+  // files' order). A part's default export is `async (run) => {…}`: `run` holds this script's own
+  // helpers, so its acts go through the plugin's RPC and are recorded like the ones above.
+  const PARTS = join(HERE, "parts");
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, VIEWPORTS, DEPLOY, OUT };
+  for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
+    step(`C ${file.slice(0, -4)}`);
+    await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);
+  }
 
   check(browser.errors.length === 0, "no uncaught exception in the page", browser.errors.slice(0, 3).join(" | "));
 } finally {
@@ -693,7 +704,7 @@ if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "m
 step("the recorded answers");
 // status.json stays the design's sample; its bb rows take the session-side fields the kernel printed.
 const SAMPLES = join(HERE, "..", "..", "test", "fixtures");
-fixtures.keep("status.json", sampleStatus(readFileSync(join(SAMPLES, "status.json"), "utf8"), readFileSync(join(SAMPLES, "threads.json"), "utf8"), fixtures.kept("status-recorded.json")));
+fixtures.keep("roster/status.json", sampleStatus(readFileSync(join(SAMPLES, "roster", "status.json"), "utf8"), readFileSync(join(SAMPLES, "roster", "threads.json"), "utf8"), fixtures.kept("roster/status-recorded.json")));
 for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
 

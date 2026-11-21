@@ -7,45 +7,54 @@
 // Configuration: the JSON file named by FAKE_OATS_CONFIG, else `fake-oats.json` beside this script:
 //   { "fixtures": "<dir of the fixture files>",
 //     "log": "<file: one JSON line per call>",              (optional)
-//     "verbs": { "<verb>": { "file": "x.json" | "stdout": "…", "exit": 0, "sleepMs": 0,
+//     "verbs": { "<verb>": { "file": "<feature>/x.json" | "stdout": "…", "exit": 0, "sleepMs": 0,
 //                            "grandchild": false, "stderr": "…" } } }   (optional overrides)
-// A verb is the command's words: status, souls, capabilities, teams, "server list",
-// "spawn --preview", spawn, "instance stop --plan", "instance stop --apply", "session start",
-// "session restart", "retire --plan", retire. The verb "*" overrides every one.
+//
+// The verbs it knows are the features' own lists: `<fixtures>/<feature>/verbs.json`, an object
+// `{ "<verb>": { "file": "x.json" } }` whose files are beside it. A verb is the command's leading
+// words, then the flags that tell it from another verb of the same words: status, "server list",
+// "spawn --preview", spawn, "instance stop --plan", "retire --plan", retire. A call is the verb
+// with the most words and flags among those whose words lead its argv and whose flags are in it;
+// a call no verb matches is named by its first word. The verb "*" overrides every one.
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(realpathSync(fileURLToPath(import.meta.url)));
 const config = JSON.parse(readFileSync(process.env.FAKE_OATS_CONFIG ?? join(here, "fake-oats.json"), "utf8"));
 const argv = process.argv.slice(2);
-const has = (flag) => argv.includes(flag);
 const after = (flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);
 
-const defaults = {
-  status: { file: "roster/status.json" },
-  souls: { file: "workspace/souls.json" },
-  capabilities: { file: "workspace/capabilities.json" },
-  teams: { file: "workspace/teams.json" },
-  "server list": { file: "workspace/servers.json" },
-  "spawn --preview": { file: "spawn/spawn-preview.json" },
-  spawn: { file: "spawn/spawn.json" },
-  "instance stop --plan": { file: "lifecycle/stop-plan.json" },
-  "instance stop --apply": { file: "lifecycle/stop-apply.json" },
-  "session start": { file: "lifecycle/start.json" },
-  "session restart": { file: "lifecycle/restart.json" },
-  "retire --plan": { file: "lifecycle/retire-plan.json" },
-  retire: { file: "lifecycle/retire-apply.json" },
-};
+/** Every feature's verbs, each with its fixture's path from the fixtures directory. */
+function featureVerbs() {
+  const verbs = {};
+  for (const feature of readdirSync(config.fixtures, { withFileTypes: true })) {
+    const list = join(config.fixtures, feature.name, "verbs.json");
+    if (!feature.isDirectory() || !existsSync(list)) continue;
+    for (const [verb, behaviour] of Object.entries(JSON.parse(readFileSync(list, "utf8")))) {
+      if (verb in verbs) throw new Error(`fake oats: the verb "${verb}" is in two features' verbs.json`);
+      verbs[verb] = { ...behaviour, ...(behaviour.file === undefined ? {} : { file: join(feature.name, behaviour.file) }) };
+    }
+  }
+  return verbs;
+}
+const defaults = featureVerbs();
 
 function verbOf() {
-  const [first, second] = argv;
-  if (first === "spawn") return has("--preview") ? "spawn --preview" : "spawn";
-  if (first === "instance" && second === "stop") return has("--plan") ? "instance stop --plan" : "instance stop --apply";
-  if (first === "session" || first === "server") return `${first} ${second}`;
-  if (first === "retire") return has("--plan") ? "retire --plan" : "retire";
-  return first ?? "";
+  let best = argv[0] ?? "";
+  let size = 0;
+  for (const name of new Set([...Object.keys(defaults), ...Object.keys(config.verbs ?? {})])) {
+    const parts = name.split(" ");
+    const words = parts.filter((part) => !part.startsWith("--"));
+    const flags = parts.filter((part) => part.startsWith("--"));
+    if (name === "*" || parts.length <= size) continue;
+    if (words.every((word, index) => argv[index] === word) && flags.every((flag) => argv.includes(flag))) {
+      best = name;
+      size = parts.length;
+    }
+  }
+  return best;
 }
 
 const verb = verbOf();

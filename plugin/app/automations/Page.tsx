@@ -11,6 +11,7 @@ import { codes } from "../../kernel/result";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
+import { useActs } from "./acts";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
@@ -155,9 +156,27 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const onOpenCapability = useCallback(() => navigate.toPluginPanel("capabilities"), [navigate]);
   const onOpen = useCallback((id: string | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(kind, id) }), [kind, navigate]);
 
+  const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
+  const list = reads[kind].list;
+  const acts = useActs({
+    rpc,
+    refresh,
+    summaries: descriptions,
+    onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
+    onOpenFile,
+    onRemoved: (row) => {
+      if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });
+    },
+  });
+
   return (
     <Page testId="oats-automations-page">
+      {acts.dialog}
       <View
+        rowActs={acts}
+        rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
+        schedulerAction={acts.schedulerAction}
+        result={acts.result}
         kind={kind}
         onKind={(next) => navigate.toPluginPanel(PATH, { subPath: subPathOf(next) })}
         reads={reads}

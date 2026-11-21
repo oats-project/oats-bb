@@ -4,7 +4,8 @@
 // (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
 import type { ReactNode } from "react";
 import type { AutomationList, AutomationRow } from "../../contract/automations";
-import { Chip, Empty, Notice, SearchField, Segmented, TARGET, Toned } from "../ui";
+import { Chip, Empty, Menu, Notice, SearchField, Segmented, TARGET, Toned } from "../ui";
+import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
 import {
   actsAs,
@@ -30,8 +31,10 @@ import {
 import type { OriginFilter } from "./words";
 
 const HEADS = ["Automation", "Soul", "When", "Runs on", "Last · next"] as const;
+/** What a row's acts add to it, where the page has them: its switch before its name, its menu after its facts. */
+export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
 // One row is a grid of five cells from bb's wide layout up, and a stack below it.
-const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] @4xl:gap-3";
+const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] @4xl:gap-3";
 const CELL = "flex min-w-0 flex-col gap-0.5";
 const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 
@@ -76,7 +79,7 @@ export function Summary({ row }: { row: AutomationRow }) {
   );
 }
 
-function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationList; now: number; onOpen: (id: string) => void }) {
+function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: AutomationList; now: number; onOpen: (id: string) => void; acts?: RowActs }) {
   const off = !row.enabledHere && row.group !== "elsewhere";
   const main = `min-w-0 break-words ${off ? "text-muted-foreground" : "text-foreground"}`;
   const place = placementText(row, list.host);
@@ -87,6 +90,7 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
   return (
     <div role="row" data-testid="oats-automation-row" data-id={row.id} data-group={row.group} className={`${GRID} flex flex-col gap-2 border-t border-border px-3 py-2 text-sm first:border-t-0`}>
       <div role="cell" className={CELL}>
+        {acts === undefined ? null : <div data-testid="oats-automation-switch">{acts.switchOf(row)}</div>}
         <button
           type="button"
           data-testid="oats-automation-open"
@@ -156,6 +160,11 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
           </>
         )}
       </div>
+      {acts === undefined ? null : (
+        <div data-testid="oats-automation-menu" className="flex items-start @4xl:justify-end">
+          <Menu label={`Actions for ${shown(row.id)}`} items={acts.menuOf(row)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -170,9 +179,10 @@ export type ListProps = {
   onOpen: (id: string) => void;
   /** The act of the notice of a scheduler that is off (Enable scheduler), where the page offers it. */
   schedulerAction?: ReactNode;
+  acts?: RowActs;
 };
 
-export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, schedulerAction }: ListProps) {
+export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, schedulerAction, acts }: ListProps) {
   const title = TITLES[list.kind];
   const lower = title.toLowerCase();
   const rows = list.rows;
@@ -229,7 +239,7 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
                 ))}
               </div>
               {group.rows.map((row) => (
-                <Row key={row.id} row={row} list={list} now={now} onOpen={onOpen} />
+                <Row key={row.id} row={row} list={list} now={now} onOpen={onOpen} acts={acts} />
               ))}
             </div>
           </section>

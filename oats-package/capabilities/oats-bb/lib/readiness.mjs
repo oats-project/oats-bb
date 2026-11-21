@@ -3,12 +3,13 @@
 // touches anything. Each finding is {code, message, status}; `status` is the readiness
 // wire's word for it (needs-configuration, authorization-required or unavailable).
 import { accessSync, constants, existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 import { bbClient } from "./bb.mjs";
+import { checkDataDir, sandboxDeny } from "./deny.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
-import { gapList, missingRemedy, readSandbox } from "./local-settings.mjs";
+import { gapList, missingRemedy, readSandbox, sandboxKeysOf } from "./local-settings.mjs";
 import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
@@ -222,9 +223,9 @@ export async function readinessResult(settings, options = {}) {
 
 /** What a readiness read with no planned launch says, since it cannot know the mode a
  *  launch would run in (`oats readiness`, for a soul or a home; `oats bb doctor`): the
- *  backend launches in full mode only for now. A warning: a soul that launches with yolo is
+ *  backend launches in full mode only. A warning: a soul that launches with yolo is
  *  ready. */
-export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only for now: a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). The rules that keep a sandboxed agent's tools off its own home's hooks and settings come with a later release of this provider" });
+export const FULL_MODE_ONLY = Object.freeze({ code: "session-provider-full-mode-only", message: "the bb backend launches in bb's full mode only (sandboxed modes are not offered): a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). bb lets a command leave its sandbox, so those modes are no boundary; full mode claims none" });
 
 // Hosts that serve everyone's repositories: allowing one for a knowledge base's remote
 // allows the whole forge, not only that base.
@@ -237,17 +238,36 @@ function otherTeamsWarning(mode, rows, unnamed) {
   return { code: "session-provider-sandbox-team-unreachable", message: `the deployment records no host for a team that is not this agent's default: ${cannot}. ${missingRemedy(rows)}. Missing: ${gapList(rows, unnamed)}` };
 }
 
+/** What a home's own Claude settings say of the sandbox, for a person reading readiness
+ *  (contract item 6c, A5a): a home is reported sandboxed only where BOTH additions that
+ *  keep Claude's file tools inside its working directories stand there (the deny of bb's
+ *  directory-move tool, and the switch). The sandbox block is not part of the condition:
+ *  a sandboxed launch that was handed no allowances writes none. Read for the report only: nothing the provider writes or deletes depends
+ *  on it, and the next launch rewrites all of it. → warnings. */
+export function homeSandboxWarnings(home) {
+  if (typeof home !== "string" || !isAbsolute(home)) return [];
+  const keys = sandboxKeysOf(home);
+  if (!keys.any) return [];
+  if (keys.deny && keys.block) {
+    return [{ code: "session-provider-sandboxed", message: "this home's .claude/settings.local.json holds the provider's deny rules and the switch that keeps Claude's Write and Edit tools inside its working directories: its last launch was written for one of bb's sandboxed modes. Those modes limit accidents, not a determined agent: they are not a security boundary between an agent and the operator's account" }];
+  }
+  const lacking = [keys.deny ? null : "the deny of bb's directory-move tool (permissions.deny)", keys.block ? null : "permissions.blockWritesOutsideWorkingDirectories"].filter(Boolean);
+  return [{ code: "session-provider-sandbox-incomplete", message: `this home's .claude/settings.local.json holds some of the provider's sandbox keys but not ${lacking.join(" and not ")}: the home is not reported as sandboxed (without all of them Claude's Write and Edit tools can write outside the home). The file is the home's agent's to write, and the provider rewrites all of it at every launch: restart the home (oats session restart), and if this shows again, something in the home is changing the file` }];
+}
+
 /** What the planned launch the kernel hands the check would meet in the sandbox: the
  *  refusal a launch in that mode would answer, as a problem; optional rows, skipped
- *  capabilities and, in full mode, the gaps, as warnings. → {problems, warnings}. */
-export function plannedLaunchFindings(planned, { sandboxedModes = false } = {}) {
+ *  capabilities and, in full mode, the gaps, as warnings. `settings` and `home` are the
+ *  check's own: with them a sandboxed launch's deny rules are built as the launch builds
+ *  them, and what would refuse there is a problem here. → {problems, warnings}. */
+export function plannedLaunchFindings(planned, { sandboxedModes = false, settings = null, home = null } = {}) {
   const problems = [], warnings = [];
   const unsupported = harnessRefusal(planned.harness);
   if (unsupported !== null) return { problems: [{ ...unsupported, status: "needs-configuration" }], warnings };
   let mode, allowances;
   try {
     mode = permissionMode(planned.args, planned.yolo);
-    // A mode the command does not launch in yet: that is the whole answer, as it is the
+    // A mode the command does not launch in (not offered): that is the whole answer, as it is the
     // launch's own first refusal.
     const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
     if (notOffered !== null) return { problems: [{ ...notOffered, status: "needs-configuration" }], warnings };
@@ -262,6 +282,20 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false } = {}) 
     warnings.push({ code: "session-provider-sandbox-unavailable", message: `the deployment's configuration could not be resolved for the sandbox (${allowances.unavailable}). The planned launch runs in full mode, which has no sandbox; a launch in auto or accept-edits would be refused` });
   } else if (allowances.missing.length + allowances.unnamed > 0) {
     warnings.push({ code: "session-provider-sandbox-host-missing", message: `the deployment records no host for some of what a sandbox would need. The planned launch runs in full mode, which has no sandbox; a launch in auto or accept-edits is refused. ${missingRemedy(allowances.missing)}. Missing: ${gapList(allowances.missing, allowances.unnamed)}` });
+  }
+  if (mode !== "full" && settings !== null) {
+    // The deny rules of a sandboxed launch (contract item 6c): what the launch would refuse
+    // for, said before it. The home's trees and what the kernel keeps outside the home are
+    // the kernel's to name: where the planned launch carries either, the whole set is
+    // built, as the launch builds it; where it carries neither, only this host's part is
+    // checked, and the launch itself refuses a missing list.
+    try {
+      if ((planned.trees !== undefined || planned.protected !== undefined) && typeof home === "string" && isAbsolute(home)) sandboxDeny({ mode, home, trees: planned.trees, protected: planned.protected, dataDir: settings.dataDir });
+      else checkDataDir(mode, settings.dataDir);
+    } catch (error) {
+      if (!(error instanceof ProviderError)) throw error;
+      problems.push({ code: error.code, message: error.message, status: "needs-configuration" });
+    }
   }
   if (mode !== "full" && !isObject(planned.sandbox)) {
     // A kernel that hands the launch no sandbox at all: nothing will be added, and bb's

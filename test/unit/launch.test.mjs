@@ -33,8 +33,8 @@ async function setup(t, script = {}, backendOverrides = {}) {
   });
   const input = (extra = {}) => ({ home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: true, env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });
   const run = (extra, settings = {}) => call("launch", input(extra), { settings: backend.settings(settings), bb });
-  // The same launch with bb's sandboxed modes taken, which the command refuses for now.
-  const runSandboxed = (extra) => call("launch", input(extra), { settings: backend.settings(), bb, sandboxedModes: true });
+  // The same launch with bb's sandboxed modes taken, which the command refuses (they are not offered).
+  const runSandboxed = (extra) => call("launch", { ...input(extra), trees: [join(home, "work")], protected: [] }, { settings: backend.settings(), bb, sandboxedModes: true });
   return { dir, home, backend, bb, run, runSandboxed, input };
 }
 const localSettings = (home) => JSON.parse(readFileSync(join(home, ".claude/settings.local.json"), "utf8"));
@@ -438,7 +438,7 @@ test("bb's own no to the spawn, with nothing else changed, is a refusal that lea
   const answer = await run();
   assert.equal(answer.error.code, "E_SESSION_START_FAILED");
   assert.match(answer.error.message, /Project not found/);
-  assert.deepEqual(readdirSync(home).sort(), ["TASK.md"], "nothing the launch wrote is left");
+  assert.deepEqual(readdirSync(home).sort(), ["TASK.md", "work"], "nothing the launch wrote is left");
   assert.deepEqual(effects(bb), ["thread spawn"]);
 });
 
@@ -450,7 +450,7 @@ test("bb's own no to the spawn puts a settings file that was there back byte for
   assert.equal((await run()).error.code, "E_SESSION_START_FAILED");
   assert.equal(readFileSync(join(home, ".claude/settings.local.json"), "utf8"), before);
   assert.equal(statSync(join(home, ".claude/settings.local.json")).mode & 0o777, 0o640);
-  assert.deepEqual(readdirSync(home).sort(), [".claude", "TASK.md"]);
+  assert.deepEqual(readdirSync(home).sort(), [".claude", "TASK.md", "work"]);
 });
 
 test("a project bb may or may not have created (a server error) leaves the launch in doubt; bb's own no is a refusal", async (t) => {

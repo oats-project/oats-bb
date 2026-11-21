@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Tests only: the provider's `session <verb>` with the sandboxed modes taken
 // (sessionHandlers({ sandboxedModes: true })). The provider's own command refuses a launch
-// in auto or accept-edits until the release that brings the deny rules; the code of those
-// modes is already here, and its tests reach it through this entry.
+// in auto or accept-edits (bb homes run in full mode only: sandboxed modes are not offered);
+// the code of those modes is here, and its tests reach it through this entry.
 import { sessionHandlers } from "../../oats-package/capabilities/oats-bb/lib/commands.mjs";
 import { VERBS, answer, readStdin } from "../../oats-package/capabilities/oats-bb/lib/wire.mjs";
 

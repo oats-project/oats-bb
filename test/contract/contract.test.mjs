@@ -24,7 +24,7 @@ const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
 const SANDBOXED_ENTRY = "/repo/test/fixtures/sandboxed-bin.mjs";
 const SERVER = "http://127.0.0.1:38886";
 const MODEL = "claude-opus-5-5";
-const SETTINGS = { version: BB_VERSION, trust: "container" };
+const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 /** Run a shell line in the container. → stdout. `ok: false` tolerates a nonzero exit. */
@@ -45,7 +45,7 @@ const bbJson = async (args, options) => JSON.parse(await sh(`bb ${args} --json`,
  *  request on stdin, the settings in OATS_SETTINGS. → the answer envelope. */
 async function provider(verb, input, settings = SETTINGS, { sandboxedModes = false } = {}) {
   const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-  // The provider's own command launches in bb's full mode only for now. The tests that
+  // The provider's own command launches in bb's full mode only (sandboxed modes are not offered). The tests that
   // need a thread waiting on a person's permission launch in accept-edits through the
   // test entry that takes the sandboxed modes (test/fixtures/sandboxed-bin.mjs).
   const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${sandboxedModes ? SANDBOXED_ENTRY : PROVIDER} session ${verb}`, { input: JSON.stringify(request) });
@@ -87,7 +87,7 @@ async function makeHome(name) {
   // The hook also runs `contract-shim` by its bare name: it is found only if the launch's
   // pathPrepend (the home's shim directory) reached Claude's PATH.
   const hook = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: `printf '%s|%s|%s|%s\\n' "$OATS_INSTANCE" "$CONTRACT_PROBE" "$(contract-shim 2>/dev/null)" "\${CONTRACT_AMBIENT-unset}" >> ${home}/hook-env.log` }] }] } };
-  await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
+  await sh(`mkdir -p ${home}/.claude ${home}/.oats/bin ${home}/work && printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim && chmod 700 ${home} && printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md && cat > ${home}/.claude/settings.json`, { input: JSON.stringify(hook) });
   return home;
 }
 const launchInput = (home, name, extra = {}) => ({
@@ -303,7 +303,7 @@ const SANDBOX = {
  *  launch carries the sandbox allowances), and a scripted Bash call. */
 async function waitingOnPermission(name, ranFile) {
   await armTool(`echo RAN > ${ranFile}`);
-  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX }, { sandboxedModes: true });
+  const { home, endpoint } = await launched(name, { yolo: false, sandbox: SANDBOX, trees: [`/home/node/homes/${name}/work`], protected: [] }, { sandboxedModes: true });
   const pending = await waitFor("a pending interaction", async () => (await bbJson(`thread interactions list ${endpoint.threadId}`)).find((i) => i.status === "pending"));
   return { home, endpoint, pending };
 }
@@ -316,10 +316,11 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   assert.deepEqual(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).sandbox,
     { network: { allowedDomains: ["app.aweb.ai"] }, filesystem: { allowWrite: ["/home/node/deployment/.agents/events"] } });
   const sandboxedCheck = (input) => provider("check", input, SETTINGS, { sandboxedModes: true });
-  // The provider keeps no record of a launch in the home: a plain check says nothing of
-  // it, and the check of the launch the kernel plans lists what that launch adds.
-  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported"]);
-  assert.deepEqual((await sandboxedCheck({ home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: SANDBOX } })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox"]);
+  // The provider keeps no record of a launch in the home: a plain check says what the
+  // home's settings hold now (the sandbox block and both additions that keep Claude's
+  // file tools in), and the check of the launch the kernel plans lists what that launch adds.
+  assert.deepEqual((await sandboxedCheck({ home, soul: null })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandboxed"]);
+  assert.deepEqual((await sandboxedCheck({ home, soul: null, launch: { harness: "claude", yolo: false, args: [], sandbox: SANDBOX } })).result.warnings.map((w) => w.code), ["session-provider-sandbox-unsupported", "session-provider-sandbox", "session-provider-sandboxed"]);
   assert.equal((await sh(`ls -A ${home} | grep -c '^\\.oats-bb' || true`)).trim(), "0", "nothing of the provider's own in the home");
   // The check the kernel runs before a launch, with the launch it plans: a host the
   // deployment does not record refuses a sandboxed launch there, before anything starts.
@@ -327,7 +328,7 @@ test("T3 while an interaction is pending the provider refuses PROMPT_OPEN, and a
   const plannedCheck = await sandboxedCheck(planned);
   assert.deepEqual(plannedCheck.result.problems.map((p) => p.code), ["E_BACKEND_SANDBOX_HOST"]);
   assert.equal(plannedCheck.result.status, "needs-configuration");
-  // The provider's own command says, of that same planned launch, that it takes none in a sandboxed mode yet.
+  // The provider's own command says, of that same planned launch, that it takes none in a sandboxed mode.
   assert.deepEqual((await provider("check", planned)).result.problems.map((p) => p.code), ["E_BACKEND_SANDBOXED_MODE"]);
 
   const answer = await provider("input", { home, endpoint, text: "T3-PROVIDER marker" });
@@ -635,7 +636,10 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   await run("docker", ["exec", "-d", NAME, "sh", "-c",
     "cd ~ && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates > bb-app-signed-out.out 2>&1"]);
   const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
-  await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 120_000, everyMs: 1_000 });
+  // This wait has timed out twice in some ten runs with no cause found: when it does, say
+  // what that bb printed and what its daemon answered, so the next one is read, not rerun.
+  await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 180_000, everyMs: 1_000 })
+    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await sh("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await sh("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}`); });
 
   const result = (await check(signedOut)).result;
   assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);

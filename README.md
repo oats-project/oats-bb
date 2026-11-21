@@ -502,7 +502,8 @@ the repository stays.
 
 ```sh
 npm test                 # manifest validation and the unit tests (a fake bb)
-npm run test:contract    # the contract test: the pinned bb-app in a container (needs docker)
+npm run test:contract    # the contract tests: the pinned bb-app in a container (needs docker)
+npm run test:kernel      # the provider under a real OATS kernel (needs docker, a clone of OATS, the network)
 ```
 
 The contract test builds `test/contract/Dockerfile` at the version in `bb-version`, starts
@@ -511,3 +512,18 @@ on their wire: every bb command and HTTP address the provider uses. bb runs only
 container: no port is published. Moving the bb pin is one change to `bb-version` and the
 manifest's `version` default (`npm run validate` keeps them equal) that the contract test
 must pass.
+
+A second contract file (`test/contract/sandbox.test.mjs`, its own image with a sandbox
+runtime) runs bb's sandboxed modes with the sandbox really started, through the tests' own
+entry: it is where the deny rules are shown to hold, and where their limit is pinned. Its
+container must be able to make user namespaces; the CI job says what that takes on
+Ubuntu.
+
+`npm run test:kernel` (`test/contract/kernel/`) runs the provider under a real kernel:
+`OATS_KERNEL_REPO=<a clone of OATS> OATS_KERNEL_REF=<commit> npm run test:kernel`. The
+kernel's own spawn, check, inspect and retire drive the provider as it ships (full mode),
+and a trial-only package whose session verbs take the sandboxed modes shows a sandboxed
+launch made by that kernel: what it sends (`trees`, `protected`), and that the agent
+runs the kernel's module copy and cannot change it. CI does not run it (it has no kernel
+checkout at a chosen commit); run it when the kernel's side of the wire moves, and at a
+bb bump.

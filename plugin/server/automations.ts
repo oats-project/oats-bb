@@ -31,7 +31,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   let held: { at: number; roster: string; value: Promise<Lists> } | null = null;
 
   const read = (kind: "scheduleList" | "triggerList"): Promise<ListAnswer> =>
-    core.call(kind, {}, HOST_TIMEOUT.read, core.lifetime.signal).then(
+    core.call(kind, {}, HOST_TIMEOUT.read, core.signal).then(
       (list) => ({ ok: true as const, list }),
       (error: unknown) => failed(error),
     );

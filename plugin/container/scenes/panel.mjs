@@ -139,8 +139,8 @@ async function open(page, viewport, threads, agent) {
   } else {
     const thread = threads.get(agent.thread);
     await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
-    await page.until(visible(testId("oats-chip-oats")), 30);
-    await page.evaluate(click(testId("oats-chip-oats")));
+    await page.until(visible(testId("oats-open-panel")), 30);
+    await page.evaluate(click(testId("oats-open-panel")));
   }
   const shown = await page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inPanel("oats-panel-name"))})?.getAttribute("title") === ${JSON.stringify(agent.instance)}`, 30);
   // At the phone's width, and for an agent with no thread, that is the agent's own page.

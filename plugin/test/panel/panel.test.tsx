@@ -575,6 +575,6 @@ test("at the phone's width the thread's OATS chip opens the agent's page", async
     rpc: handlers({ snapshot: () => panelSnapshot() }),
     sidebarThreads: panelThreads(),
   });
-  fireEvent.click(await slot.findByTestId("oats-chip-oats"));
+  fireEvent.click(await slot.findByTestId("oats-open-panel"));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: CHILD } }]);
 });

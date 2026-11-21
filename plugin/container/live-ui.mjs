@@ -19,11 +19,11 @@
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { fill, launchBrowser, showSidebar, testId, textOf, texts, visible } from "./browser.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { launchBrowser } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,8 +63,8 @@ function rpc(method) {
 const fake = (verbs = {}) =>
   writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
-const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/threads.json"), "utf8")).threads;
-const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/status.json"), "utf8"));
+const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/threads.json"), "utf8")).threads;
+const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
 
 /** One bb thread per fixture thread, found or made by its title: fixture thread id -> bb's thread. */
 function threadsByFixtureId() {
@@ -149,184 +149,76 @@ async function themedPage(browser, viewport, theme, at) {
   return page;
 }
 
-async function a13(browser, viewport, threads, theme) {
-  const at = `A13 ${theme} ${viewport.name}`;
-  const page = await themedPage(browser, viewport, theme, at);
-  try {
-    // the sidebar with the tree
-    await page.goto("/");
-    check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-    await page.until(visible(testId("oats-tree")), 30);
-    const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
-    const expected = fixtureThreads.filter((thread) => thread.id !== "thr_plain").map((thread) => threads.get(thread.id).id);
-    check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
-    const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
-    check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.includes("pl-6") === true`), `${at} a child is indented under its parent`);
-    check((await page.evaluate(textOf(testId("oats-workspace-line")))).includes("8 agents"), `${at} the workspace line`, await page.evaluate(textOf(testId("oats-workspace-line"))));
-    check((await page.evaluate(textOf(testId("oats-needs-line")))) === "3 need you", `${at} "3 need you"`, await page.evaluate(textOf(testId("oats-needs-line"))));
-    const others = await page.evaluate(texts(testId("oats-other-row")));
-    check(others.some((text) => text.includes("Plain bb thread")), `${at} the thread that is no agent is under Other threads`, JSON.stringify(others));
-    await page.shot(`a13-${viewport.name}-sidebar`);
+// ---- the scenes
+//
+// A scene is `{ stage, name, run }` in container/scenes/<feature>.mjs (its default export is the
+// feature's list). `run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep })` drives
+// the page and takes its screenshots with `page.shot(name)`, which checks the contrast of what the
+// plugin draws there; `at` leads every check's line; `threads` is fixture thread id -> bb's thread.
+// A stage is what the fake `oats` answers while its scenes run. For each stage, in each theme and
+// at each viewport, one page runs the stage's scenes: the features in the order of FEATURES (then
+// any other file), each feature's scenes in its list's order.
+//   fixtures  (A13) the fixtures as they are
+//   detached  (A16) one agent on a thread bb does not have, one the kernel cannot reach and one
+//             whose session fell back to a shell
+//   no-oats   (A14) the fake oats removed
+// A feature that needs another state exports `stages`: `{ <name>: { label, enter, leave? } }`, where
+// `enter({ fake, statusWithRealIds, threads, untilSnapshot })` sets the fake and waits for the
+// snapshot it makes; its stages run after these three.
 
-    // the home's badge: bb's own navigation entry for the home (the rail on desktop, the drawer on a
-    // phone), never the plugin's own "3 need you" line, carries the label and draws the count
-    const badge = await page.until(
-      `(() => { const own = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const entry = [...document.querySelectorAll("[aria-label]")].find((e) => !own?.contains(e) && /^OATS\\b.*3 agents need you/.test(e.getAttribute("aria-label"))); if (!entry) return ""; const r = entry.getBoundingClientRect(); const drawn = [...entry.querySelectorAll("*")].some((e) => e.children.length === 0 && e.textContent.trim() === "3"); return r.width > 0 && drawn ? entry.getAttribute("aria-label") : ""; })()`,
-      15,
-    );
-    check(Boolean(badge), `${at} bb's navigation entry for the home shows the badge 3 (${badge ?? "not found"})`, await page.evaluate(`JSON.stringify([...document.querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label")).filter((l) => /OATS/.test(l)))`));
+const FEATURES = ["roster", "home", "workspace", "spawn", "lifecycle"];
+const SCENES = join(PLUGIN, "container", "scenes");
 
-    // an agent's thread with its header row
-    const mockups = threads.get("thr_mockups");
-    await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
-    check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at} an agent's thread shows the identity row`);
-    const chips = await page.evaluate(textOf(testId("oats-identity-row")));
-    check(
-      ["oats-desktop-developer", "desktop-mockups-developer", "✓ desktop-mockups-developer", "parent · redesign-ui-lead", "home · …/instances/desktop-mockups-developer", "OATS"].every((chip) => chips.includes(chip)),
-      `${at} the row's chips: soul, instance, alias, parent, home, OATS`,
-      chips,
-    );
-    // By its place: the whole chip lies inside the row and inside the viewport, which is what the
-    // pin is for. This does not see a chip covered by something drawn over it: `visible()` would,
-    // but its probe point can land on the row beside a chip that has scrolled away, and pass.
-    const chipInRow = await page.evaluate(
-      `(() => { const chip = document.querySelector(${JSON.stringify(testId("oats-chip-oats"))})?.getBoundingClientRect(); const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect(); return Boolean(chip && row && chip.width > 0 && chip.left >= row.left && chip.right <= Math.min(row.right, innerWidth)); })()`,
-    );
-    check(chipInRow, `${at} the OATS chip is on screen, whatever the other chips' width`);
-    const rowHeight = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect().height ?? -1`);
-    check(rowHeight > 0 && rowHeight < 50, `${at} the row is one line (${Math.round(rowHeight)} px)`);
-    await page.shot(`a13-${viewport.name}-thread`);
-
-    // the thread of an agent that needs you: its row is the open one, with its dot and its "?"
-    const release = threads.get("thr_release");
-    await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
-    check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-    const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
-    const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-state="needs-you"]') && row.querySelector('[aria-hidden="true"][title="needs you"]')?.innerText.trim() === "?" ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
-    const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
-    check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its dot and its "?", on the open row's background`, `${marked} against ${resting}`);
-    await page.shot(`a13-${viewport.name}-thread-needs`);
-
-    // a thread that is no agent has no row
-    const plain = threads.get("thr_plain");
-    await page.goto(`/projects/${plain.projectId}/threads/${plain.id}`);
-    await sleep(3000);
-    check(!(await page.evaluate(visible(testId("oats-identity-row")))), `${at} a thread that is no agent has no identity row`);
-
-    // the home page
-    await page.goto("/plugins/oats/home");
-    check(Boolean(await page.until(visible(testId("oats-needs-card")), 30)), `${at} the home page renders`);
-    const sections = await page.evaluate(`["needs", "working", "finished"].map((s) => document.querySelector('[data-testid="oats-home-' + s + '"] h2')?.innerText.replace(/\\s+/g, " ").trim())`);
-    check(/^needs you 3$/i.test(sections[0] ?? "") && /^working 2$/i.test(sections[1] ?? ""), `${at} the home's counts: Needs you 3, Working 2`, JSON.stringify(sections));
-    await page.shot(`a13-${viewport.name}-home`);
-    // the reply box, with a message typed: its fields, and Send enabled
-    await page.evaluate(fill(testId("oats-reply-text"), "Keep depth 6 and sweep lr."));
-    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-reply-send"))})?.disabled === false`, 10)), `${at} a typed message enables Send`);
-    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-reply-send"))}).scrollIntoView({ block: "center" })`);
-    await page.shot(`a13-${viewport.name}-home-reply`);
-
-    // the four pages
-    const pages = [
-      ["souls", "oats-soul-row", "Souls"],
-      ["capabilities", "oats-capability-row", "Capabilities"],
-      ["teams", "oats-team-row", "Teams"],
-      ["machines", "oats-machine-row", "Machines"],
-    ];
-    for (const [path, row, title] of pages) {
-      await page.goto(`/plugins/oats/${path}`);
-      const drawn = await page.until(visible(testId(row)), 30);
-      const n = await page.evaluate(`document.querySelectorAll(${JSON.stringify(testId(row))}).length`);
-      check(Boolean(drawn) && n > 0, `${at} ${title} renders (${n} rows)`);
-      await page.shot(`a13-${viewport.name}-${path}`);
+async function loadScenes() {
+  const files = readdirSync(SCENES).filter((file) => file.endsWith(".mjs")).map((file) => file.slice(0, -4));
+  const order = [...FEATURES.filter((feature) => files.includes(feature)), ...files.filter((feature) => !FEATURES.includes(feature)).sort()];
+  const scenes = [];
+  const stages = {};
+  for (const feature of order) {
+    const module = await import(pathToFileURL(join(SCENES, `${feature}.mjs`)).href);
+    for (const scene of module.default ?? []) scenes.push({ ...scene, feature });
+    for (const [name, stage] of Object.entries(module.stages ?? {})) {
+      if (name in stages || name in BUILT_IN) throw new Error(`live-ui: the stage "${name}" of scenes/${feature}.mjs is already defined`);
+      stages[name] = stage;
     }
-    // a soul's own page: at phone width the detail replaces the list
-    await page.goto("/plugins/oats/souls/oats-developer");
-    check(Boolean(await page.until(visible(testId("oats-soul-detail")), 30)), `${at} a soul's page renders, with the spawn form`, await page.evaluate(textOf(testId("oats-souls-page"))));
-    check((await page.evaluate(visible(testId("oats-soul-row")))) === !viewport.mobile, `${at} ${viewport.mobile ? "the list gives way to the soul, with Back" : "the list stays beside the soul"}`);
-    // the one line that says which mode a spawn asks for (text, no control); its contrast is checked at this screenshot
-    check((await page.evaluate(textOf(testId("oats-spawn-mode")))) === "Runs in bb's full mode: no sandbox." && (await page.evaluate(visible(testId("oats-spawn-mode")))), `${at} the New agent form says it runs in bb's full mode, with no sandbox`, await page.evaluate(textOf(testId("oats-soul-detail"))));
-    await page.shot(`a13-${viewport.name}-soul`);
-    // the spawn form: a name it refuses, then a name and a task it takes, and the preview
-    await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));
-    const refused = await page.until(`(() => { const t = ${textOf(testId("oats-spawn-form"))}; return /Lower-case letters, digits and dashes/.test(t) ? t : ""; })()`, 10);
-    check(Boolean(refused), `${at} the form says why it refuses a name`, await page.evaluate(textOf(testId("oats-spawn-form"))));
-    await page.shot(`a13-${viewport.name}-soul-refused`);
-    await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
-    await page.evaluate(fill(testId("oats-spawn-task"), "Try depth 7."));
-    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))})?.disabled === false`, 10)), `${at} a name and a task enable Preview`);
-    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))}).click()`);
-    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))})?.disabled === false && ${visible(testId("oats-preview"))}`, 30)), `${at} Preview shows what OATS would do, and enables the spawn`, await page.evaluate(textOf(testId("oats-spawn-form"))));
-    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))}).scrollIntoView({ block: "center" })`);
-    await page.shot(`a13-${viewport.name}-soul-form`);
-    // a package soul's key has a slash: its row opens its own page too
-    await page.goto("/plugins/oats/souls");
-    await page.until(visible(testId("oats-soul-row")), 30);
-    const key = await page.evaluate(
-      `(() => { const row = [...document.querySelectorAll(${JSON.stringify(testId("oats-soul-row"))})].find((e) => e.innerText.includes("/")); row?.click(); return row?.querySelector("span")?.innerText ?? null; })()`,
-    );
-    const heading = key === null ? "" : await page.until(`(() => { const t = ${textOf(`${testId("oats-soul-detail")} h2`)}; return t === ${JSON.stringify(key)} ? t : ""; })()`, 15);
-    check(key !== null && heading === key, `${at} a package soul's row opens its page (${key})`, await page.evaluate("location.pathname + ' | ' + document.body.innerText.slice(0, 200)"));
-  } finally {
-    await page.close();
   }
+  return { scenes, stages };
 }
 
-/**
- * A16: an agent of the status whose thread bb does not have, on its soul's page, and its Retire;
- * then the tree with an unreachable agent on the open thread and an agent whose session is a shell.
- */
-async function a16(browser, viewport, threads, theme) {
-  const at = `A16 ${theme} ${viewport.name}`;
-  const page = await themedPage(browser, viewport, theme, at);
-  try {
-    await page.goto("/plugins/oats/souls/oats-developer");
-    const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes("flaky-ci-developer") ? t : ""; })()`, 30);
-    check(Boolean(line) && /thread missing/.test(line), `${at} the soul's page says "thread missing" for the agent whose thread bb does not have`, line ?? (await page.evaluate(textOf(testId("oats-souls-page")))));
-    await page.shot(`a16-${viewport.name}-soul`);
-    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-detached-retire"))}).click()`);
-    const plan = await page.until(`(() => { const lines = document.querySelectorAll(${JSON.stringify(`${testId("oats-plan")} li`)}); return lines.length > 0 && document.querySelector(${JSON.stringify(testId("oats-plan-confirm"))})?.disabled === false ? lines.length : 0; })()`, 30);
-    check(Boolean(plan), `${at} Retire opens the plan dialog, with the kernel's plan (${plan ?? 0} lines) and Confirm`, await page.evaluate(textOf(testId("oats-modal"))));
-    await page.shot(`a16-${viewport.name}-plan`);
-    await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-plan-cancel"))}).click()`);
-    check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} Cancel closes the dialog`);
-
-    const digest = threads.get("thr_digest");
-    await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
-    check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-    const dot = (id, state) => `document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] [data-state="${state}"]`)}) !== null`;
-    const drawn = await page.until(`${dot(digest.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
-    check(Boolean(drawn), `${at} the tree draws the unreachable agent, on the open thread, and the agent whose session is a shell`, await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")} [data-state]`)})].map((e) => e.getAttribute("data-state")).join(",")`));
-    await page.shot(`a16-${viewport.name}-states`);
-  } finally {
-    await page.close();
-  }
-}
-
-async function a14(browser, viewport, threads, theme) {
-  const at = `A14 ${theme} ${viewport.name}`;
-  const page = await themedPage(browser, viewport, theme, at);
-  try {
-    await page.goto("/");
-    check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
-    const line = await page.until(`(() => { const t = ${textOf(testId("oats-status-line"))}; return /not found/i.test(t) ? t : ""; })()`, 30);
-    check(Boolean(line), `${at} the "not found" line shows: ${line ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
-    const listed = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-other-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
-    check([...threads.values()].every((thread) => listed.includes(thread.id)), `${at} bb's threads are all listed (${listed.length})`, JSON.stringify(listed));
-    check(!(await page.evaluate(visible(testId("oats-tree")))), `${at} no tree is drawn from a stale answer`);
-    await page.shot(`a14-${viewport.name}-sidebar`);
-
-    const target = threads.get("thr_redesign");
-    await page.evaluate(`document.querySelector('${testId("oats-other-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
-    const opened = await page.until(`location.pathname.endsWith("/threads/${target.id}")`, 15);
-    check(Boolean(opened), `${at} a thread opens from the list`, await page.evaluate("location.pathname"));
-    await sleep(2500);
-    check(!(await page.evaluate(visible(testId("oats-identity-row")))), `${at} the open thread has no OATS row while OATS cannot be read`);
-    // The one scene the plugin may draw nothing in: no row, and at phone width the list is in bb's closed drawer.
-    await page.shot(`a14-${viewport.name}-thread`, { plugin: false });
-  } finally {
-    await page.close();
-  }
-}
+const BUILT_IN = {
+  fixtures: {
+    label: "A13",
+    enter: async ({ threads }) => {
+      fake({ status: { stdout: statusWithRealIds(threads) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.threadId === threads.get("thr_release").id));
+    },
+  },
+  // The same status, with one agent on a thread bb does not have (its fixture id, unmapped), one
+  // the kernel cannot reach and one whose session fell back to a shell.
+  detached: {
+    label: "A16",
+    enter: async ({ threads }) => {
+      const detached = new Map([...threads].filter(([id]) => id !== "thr_ci"));
+      const states = {
+        "weekly-digest-helper": { running: null, runtimeState: "unreachable", sessionEnd: null },
+        "harvest-knowledge-helper": { running: false, runtimeState: "shell" },
+      };
+      fake({ status: { stdout: statusWithRealIds(detached, states) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
+    },
+  },
+  // The fake oats is removed for the length of the stage, then put back.
+  "no-oats": {
+    label: "A14",
+    enter: async () => {
+      renameSync(OATS, `${OATS}.away`);
+      await untilSnapshot((snapshot) => snapshot.ok === false && snapshot.code === "OATS_NOT_FOUND");
+    },
+    leave: async () => {
+      if (existsSync(`${OATS}.away`)) renameSync(`${OATS}.away`, OATS);
+    },
+  },
+};
 
 // ---- the run
 
@@ -335,32 +227,31 @@ async function a14(browser, viewport, threads, theme) {
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
 const threads = threadsByFixtureId();
-fake({ status: { stdout: statusWithRealIds(threads) } });
-await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.threadId === threads.get("thr_release").id));
-
+const { scenes, stages } = await loadScenes();
 const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {
-  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a13(browser, viewport, threads, theme);
-
-  // A16: the same status, with one agent on a thread bb does not have (its fixture id, unmapped),
-  // one the kernel cannot reach and one whose session fell back to a shell.
-  const detached = new Map([...threads].filter(([id]) => id !== "thr_ci"));
-  const states = {
-    "weekly-digest-helper": { running: null, runtimeState: "unreachable", sessionEnd: null },
-    "harvest-knowledge-helper": { running: false, runtimeState: "shell" },
-  };
-  fake({ status: { stdout: statusWithRealIds(detached, states) } });
-  await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "flaky-ci-developer" && agent.threadId === "thr_ci"));
-  for (const theme of THEMES) for (const viewport of VIEWPORTS) await a16(browser, viewport, threads, theme);
-
-  // A14: the fake oats is removed for the length of the check, then put back.
-  renameSync(OATS, `${OATS}.away`);
-  try {
-    await untilSnapshot((snapshot) => snapshot.ok === false && snapshot.code === "OATS_NOT_FOUND");
-    for (const theme of THEMES) for (const viewport of VIEWPORTS) await a14(browser, viewport, threads, theme);
-  } finally {
-    if (existsSync(`${OATS}.away`)) renameSync(`${OATS}.away`, OATS);
+  for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
+    const mine = scenes.filter((scene) => scene.stage === name);
+    if (mine.length === 0) continue;
+    try {
+      await stage.enter({ fake, statusWithRealIds, threads, untilSnapshot });
+      for (const theme of THEMES) {
+        for (const viewport of VIEWPORTS) {
+          const at = `${stage.label} ${theme} ${viewport.name}`;
+          const page = await themedPage(browser, viewport, theme, at);
+          try {
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep });
+          } finally {
+            await page.close();
+          }
+        }
+      }
+    } finally {
+      await stage.leave?.({ fake, statusWithRealIds, threads, untilSnapshot });
+    }
   }
+  const unknown = scenes.filter((scene) => !(scene.stage in BUILT_IN) && !(scene.stage in stages));
+  check(unknown.length === 0, "every scene names a stage that exists", unknown.map((scene) => `${scene.feature}: "${scene.name}" in "${scene.stage}"`).join(" | "));
   check(browser.errors.length === 0, "no uncaught exception in the page", browser.errors.slice(0, 3).join(" | "));
 } finally {
   await browser.close();

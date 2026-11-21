@@ -1,0 +1,14 @@
+{
+ "souls": {
+  "file": "souls.json"
+ },
+ "capabilities": {
+  "file": "capabilities.json"
+ },
+ "teams": {
+  "file": "teams.json"
+ },
+ "server list": {
+  "file": "servers.json"
+ }
+}

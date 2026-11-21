@@ -27,8 +27,10 @@ agents, their homes, identities and mail are OATS's and aweb's.
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types
   into an agent for you.
-- A kernel refusal is shown with the kernel's code and message (`E_…`), unchanged: act on what it
-  says.
+- A kernel refusal is shown with the kernel's code and message (`E_…`): act on what it says. Text
+  from OATS or an agent is drawn as text on one line; where it looks like a secret (a token, a
+  password, a URL with credentials) the plugin shows `[withheld]` instead: read it with `oats` in
+  the deployment.
 
 ## Where things are
 

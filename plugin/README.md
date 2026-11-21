@@ -27,7 +27,7 @@ bb plugin install <path to the checkout>/plugin --yes
 bb plugin list                                       # oats … running
 ```
 
-`@get-bb/plugin-sdk` is under `dependencies`, not `devDependencies`: the app imports `contract.ts`
+`@get-bb/plugin-sdk` is under `dependencies`, not `devDependencies`: the app imports `contract/`
 (the watched reads need the contract as a value), bb's frontend build bundles the SDK's root from
 the plugin's own install, and a git install omits dev dependencies. The live tests install by
 `git:` to keep that true.
@@ -57,7 +57,7 @@ shows one line that says what is missing. The line's code:
 | `CHOOSE_HOST` | the bb server has several machines and `host` is empty |
 | `HOST_NOT_FOUND`, `NO_HOST`, `HOST_UNREACHABLE` | the machine set is not one of the server's, the server has none, or its daemon did not answer |
 | `OATS_TIMEOUT`, `OATS_NOT_JSON`, `OATS_BAD_ANSWER`, `OATS_FAILED` | `oats status` took more than 20 s, printed something that is not JSON, answered a document the plugin cannot read, or failed with no answer |
-| `E_…` | the kernel's own refusal, with its message unchanged |
+| `E_…` | the kernel's own refusal, with its message (drawn through the display filter: "Text from OATS or an agent") |
 
 An act's refusal has the same codes, and two of its own: `RETIRE_INCOMPLETE` (the retire ran, its
 cleanup is incomplete, the kernel kept the home and its lines say what is left) and
@@ -89,14 +89,82 @@ a thread was deleted.
 
 | File | Runs in | Does |
 |---|---|---|
-| `host.ts` (`bb.host`) | bb's host daemon, on the machine that holds the homes | runs `oats`, and watches the deployment's event log; nothing else |
-| `server.ts` (`bb.server`) | bb's server process | the settings, the RPC contract, one cached snapshot for all clients, the realtime invalidation |
+| `host.ts` (`bb.host`), `host/` | bb's host daemon, on the machine that holds the homes | runs `oats`, and watches the deployment's event log; nothing else |
+| `server.ts` (`bb.server`), `server/` | bb's server process | the settings, the RPC handlers, one cached snapshot for all clients, the realtime invalidation |
 | `app.tsx` (`bb.app`), `app/` | the web UI | the slots |
-| `contract.ts` | shared | the RPC contract (app to server), the host contract (server to host), the realtime channel |
+| `contract/` | shared | the RPC contract (app to server), the host contract (server to host), the realtime channel |
 | `kernel/` | the host entry and tests | one function per `oats` command: the argv, and the answer read with a schema into the plugin's types |
 | `model/` | the app and tests | pure functions from the agents and bb's threads to what each slot draws |
 
 `kernel/` and `model/` import neither bb nor React.
+
+### One module per feature
+
+The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
+`spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
+retire), `automations` and `panel` (the instance panel; these two are registered and empty until
+their pieces land). Each has one module, or one directory, in every layer, and the entry of a layer
+only composes them:
+
+| Layer | A feature's own | Composed by | Shared by all |
+|---|---|---|---|
+| contract | `contract/<feature>.ts`: its schemas, `rpc` (app to server) and `host` (server to host) | `contract/index.ts` | `contract/shared.ts` |
+| server | `server/<feature>.ts`: `handlers(core)`, one per verb of its `rpc` | `server.ts` | `server/core.ts` |
+| host | `host/<feature>.ts`: `handlers(core)`, one per verb of its `host` | `host.ts` | `host/core.ts` |
+| kernel | `kernel/<feature>.ts` (and `kernel/<feature>-*.ts`): `verbs(oats)`, the argv and the parser of each command | `kernel/index.ts` | `kernel/runner.ts`, `run.ts`, `envelope.ts`, `input.ts`, `result.ts`, `task-file.ts` |
+| app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
+| model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts` |
+| unit tests | `test/<feature>/`, with `handlers.ts`: the slot tests' default answer of each of its RPC verbs | `test/helpers/render.ts` | `test/helpers/`, `test/support/` |
+| fixtures | `test/fixtures/<feature>/`, with `verbs.json`: each `oats` verb the fake answers, and its file | `container/fake-oats.mjs` | |
+| live checks | `container/scenes/<feature>.mjs` | `container/live-ui.mjs` | `container/` |
+| real run | `container/real/parts/<feature>.mjs` | `container/real/scenario.mjs` | `container/real/` |
+
+A change to a feature touches its own modules only. A new verb is one entry in the feature's
+`contract/<feature>.ts`, its handler in `server/<feature>.ts`, and for a host verb its handler in
+`host/<feature>.ts` and its command in `kernel/<feature>.ts`: the entries (`contract/index.ts`,
+`server.ts`, `host.ts`, `kernel/index.ts`, `app.tsx`, `test/helpers/render.ts`) change only when a
+feature is added, by one line each. The host contract stays a closed list (`hostVerbs` in
+`contract/index.ts`): the server never sends a command, a flag or a path.
+
+What the features share, beyond the entries:
+
+- **One status read.** The server runs one `oats status --json` for everybody and keeps the
+  kernel's own rows beside the snapshot. A feature that draws more of a row than `Agent` holds
+  (`model/types.ts`, pinned) asks `core.rowOf(instance)` or `core.rowsOf()` in its
+  `server/<feature>.ts` and reads with a schema of its own what the kernel printed: the
+  instance's `row`, its `agent` group's row (the soul's, without the instances) and the roster's
+  `root`, each with the snapshot's `at`. A raw row holds everything the kernel printed (settings of
+  capabilities, paths): a feature picks the fields it draws with its schema and answers those to the
+  app, never a row whole (bb's API has no login). Nobody starts a second status process. The server publishes `oats/changed` when
+  anything the kernel printed changes, a field outside `Agent` included.
+- **One read of the kernel's version.** `core.versionOf()` answers `oats version --json`
+  (`version`, `desktopApi`, `features`, and `apis`: each `<name>Api` number), read once for every feature and client and reused like a
+  page's answer. A feature that depends on a kernel feature asks there.
+- **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
+  state, its word and how long the agent has waited. It is the one function for every place that
+  says a state in words (the tree, the line under a thread's header, the instance panel); today the
+  home's card reads its age from it; the tree draws its dot from the same state and still prints a
+  stopped row's "· stopped" itself.
+- **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
+  with a view of one agent (the instance panel) names its component with `setAgentTab`
+  (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
+  on every other. `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+- **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
+  with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
+  `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
+- **A server test of a feature's verbs** starts the whole backend with `startBackend()`
+  (`test/support/backend.ts`): bb's fake plugin host, the real host entry, the fake `oats`.
+
+### Text from OATS or an agent
+
+Everything the plugin draws that OATS or an agent wrote (a name, a description, a message, a
+refusal) goes through one display filter, `app/ui/text.ts`: the OATS Desktop's
+(`packages/client/display-text.mjs`). Control characters and line breaks never reach the screen (a
+character that is not text is drawn as U+FFFD), a line is cut at 2048 characters, and a text that
+looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `shown(text)` is
+one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
+refusal's code and gives each line of the kernel's message a line of its own. The filter is for
+display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
 
 - **Why the host entry runs `oats`.** Only it sees the user's login-shell PATH, and only it can
   target the machine that holds the homes.
@@ -164,8 +232,8 @@ App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental
 
 Not experimental, but bb's to change: the thread rows' `data-sidebar-thread-shortcut-target` and
 `data-sidebar-thread-id` attributes, the settings route `/settings/plugins/<plugin id>` (the
-"Choose a machine" link), the icon names (`app.tsx`, `ICON`), and bb's compact breakpoint
-`(max-width: 767px)` (`app/IdentityRow.tsx`).
+"Choose a machine" link), the icon names (each feature's `ICON`; `app.tsx` says how to check one), and bb's compact breakpoint
+`(max-width: 767px)` (`app/roster/IdentityRow.tsx`).
 
 ## Developing
 
@@ -198,5 +266,5 @@ The bb version the tests run is the repository's pin: the one line of `bb-versio
 repository's root where that file exists, else `devDependencies["bb-app"]` in `package.json`. The
 two are kept equal, and `engines.bb` contains it.
 
-`contract.ts`, `model/types.ts` and `test/fixtures/status.json` and `threads.json` are pinned by the
-spec: a change to them is agreed with the spec's author first.
+`contract/`, `model/types.ts` and `test/fixtures/roster/status.json` and `threads.json` are pinned by
+the spec: a change to them is agreed with the spec's author first.

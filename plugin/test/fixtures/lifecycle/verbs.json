@@ -1,0 +1,20 @@
+{
+ "instance stop --plan": {
+  "file": "stop-plan.json"
+ },
+ "instance stop --apply": {
+  "file": "stop-apply.json"
+ },
+ "session start": {
+  "file": "start.json"
+ },
+ "session restart": {
+  "file": "restart.json"
+ },
+ "retire --plan": {
+  "file": "retire-plan.json"
+ },
+ "retire": {
+  "file": "retire-apply.json"
+ }
+}

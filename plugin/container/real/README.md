@@ -72,6 +72,7 @@ together.
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
+| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign

@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { createFakePluginHost, makeHostResponse, type FakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { hostContract, REALTIME_CHANGED } from "../contract.js";
+import { hostContract, REALTIME_CHANGED } from "../contract/index.js";
+import { host as lifecycleHost } from "../contract/lifecycle.js";
+import { host as rosterHost } from "../contract/roster.js";
+import { host as spawnHost } from "../contract/spawn.js";
+import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
@@ -256,7 +260,7 @@ describe("acts", () => {
     await fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_DECISION_STALE", message: "the decision moved", details: {} } }) } });
     expect(await refusalOf(rpc("spawn", input))).toEqual({ code: "conflict", message: "E_DECISION_STALE: the decision moved" });
     // The decision the kernel would confirm now is another one.
-    const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
+    const preview = JSON.parse(await readFile(join(FIXTURES, "spawn/spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
     expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
@@ -296,7 +300,7 @@ describe("acts", () => {
     expect(plan.revision).toBe("9c1f2e3d4b5a69788796a5b4");
     expect(plan.lines[0]).toMatch(/^Stop redesign-ui-lead/);
     expect(await rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" })).toEqual({ ok: true });
-    await fake.behave({ "instance stop --apply": { file: "stop-apply-stale.json" } });
+    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
     expect(await refusalOf(rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-0000aaaa1111" }))).toEqual({
       code: "conflict",
       message: "E_PLAN_STALE: the stop plan changed since it was shown (f9dcbb5542487fc328e88b07 → c30af39bbdfb748db5e0b1b5); review the fresh plan",
@@ -328,7 +332,7 @@ describe("acts", () => {
   }, 20_000);
 
   it("refuses with a code of its own, never a kernel code, when no thread is named anywhere", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "status.json"), "utf8"));
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
     for (const group of roster.agents) for (const instance of group.instances) if (instance.instance === "weekly-digest-helper") delete instance.session;
     await fake.behave({
       status: { stdout: JSON.stringify(roster) },
@@ -364,9 +368,11 @@ describe("the host-call limits", () => {
     expect(HOST_TIMEOUT.act).toBeGreaterThan(timeouts.act);
     expect(HOST_TIMEOUT.long).toBeGreaterThan(timeouts.long);
     expect(HOST_TIMEOUT.long).toBeLessThanOrEqual(30 * 60_000); // bb's cap for a host call
-    // Which verbs bb retries, and so which limit each needs.
-    const retryable = Object.entries(hostContract).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams"]);
+    // Which verbs bb retries, and so which limit each needs: the reads, never an act. Of the roster,
+    // the pages, spawn and the lifecycle; another feature holds the list of its own verbs in its tests.
+    const mine = { ...rosterHost, ...workspaceHost, ...spawnHost, ...lifecycleHost };
+    const retryable = Object.entries(mine).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
+    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams", "version"]);
   });
 });
 

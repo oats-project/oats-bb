@@ -11,15 +11,6 @@ export const STATE_WORD: Record<AgentState, string> = {
   unreachable: "unreachable",
 };
 
-/**
- * Text from the kernel, an agent or a person, made safe to print on one or several lines: React
- * already draws it as text, never as markup; this drops the control characters (escape sequences,
- * bells, bidi overrides) that would garble a line or reorder it. Newlines and tabs stay.
- */
-export function clean(text: string): string {
-  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "");
-}
-
 /** `…/<last two segments>` of a home path; the whole path when it is that short. */
 export function homeTail(home: string): string {
   const parts = home.split("/").filter((part) => part !== "");

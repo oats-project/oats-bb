@@ -11,5 +11,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["server.ts", "host.ts", "app.tsx", "contract.ts", "kernel", "model", "app", "test"]
+  "include": ["server.ts", "host.ts", "app.tsx", "contract", "server", "host", "kernel", "model", "app", "test"]
 }

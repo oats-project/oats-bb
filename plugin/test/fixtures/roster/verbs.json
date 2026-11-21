@@ -1,0 +1,8 @@
+{
+ "status": {
+  "file": "status.json"
+ },
+ "version": {
+  "file": "version.json"
+ }
+}

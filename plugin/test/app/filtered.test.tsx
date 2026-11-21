@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 // Every text from OATS or an agent that a slot draws goes through the display filter
-// (app/ui/text.ts): each kind of text is given a hostile value here, in the server's answer, and
-// the slot must draw one line, U+FFFD for a character that is no text, and "[withheld]" for what
-// looks like a secret. A slot that draws such a text raw fails here.
+// (app/ui/text.ts): each kind of free text is given a hostile value here, in the server's or bb's
+// answer, and the slot must draw one line, U+FFFD for a character that is no text, and "[withheld]"
+// for what looks like a secret. The kinds held: the sidebar's workspace line and rows, the thread's
+// row, the home's cards and reply box, a soul's page, the capabilities and the machines, the spawn
+// preview (and, in test/lifecycle/actions.test.tsx, a plan's lines).
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { fixtureAgents } from "../helpers/fixtures";
+import type { ExperimentalThreadHeaderRowProps, PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads, SOULS } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
@@ -39,7 +41,45 @@ test("the home's card: an agent's message with a line break and a bidi override 
   expect(questions.join("")).not.toMatch(/[\n\t\u202E]|abc123/);
 });
 
-test("the sidebar and the thread's row: a soul's name and an instance with a character that is no text are drawn with U+FFFD", async () => {
+test("the sidebar: the workspace, the machine and a soul's name are each one filtered line", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer` } : agent));
+  const snapshot = { ...fixtureSnapshot(agents), deployment: { root: "/abs/deployment", workspace: `oats${BIDI}`, machine: "fal\ncon" } };
+  const app = await loadApp();
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    app.threadLists[0]!,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({ snapshot: () => snapshot, souls: () => ({ souls: [] }) }), sidebarThreads: sidebarThreads() },
+  );
+  expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe(`oats${GONE} · fal con · 8 agents`);
+  const row = slot.getAllByTestId("oats-agent-row").find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === "thr_ci")!;
+  expect(row.textContent).toContain(`oats${GONE}developer`);
+  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/[\n\u202E]/);
+});
+
+test("the home: what bb says an agent asks (its title, its choices) and a thread's title in the reply box are filtered", async () => {
+  const threads = sidebarThreads();
+  const titled = { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, displayTitle: `Fix${BIDI} CI` } : thread)) };
+  const asked = [{ id: "p1", threadId: "thr_x", status: "pending", payload: { kind: "provider-pi/extension-ui", title: "Confirm", data: { method: "select", fullTitle: "Run\tit\nnow?", options: [`Yes${BIDI}`, "use password: hunter2"] } } }];
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(), sidebarThreads: titled, sdk: { threads: { interactions: { list: async () => asked as never } } } });
+  await waitFor(() => expect(slot.getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(expect.arrayContaining([`Yes${GONE}`, "[withheld]"])));
+  expect(slot.getAllByTestId("oats-needs-detail").map((detail) => detail.textContent)).toContain("Run it now?");
+  const options = Array.from(slot.getByTestId("oats-reply-agent").querySelectorAll("option")).map((option) => option.textContent);
+  expect(options).toContain(`Fix${GONE} CI · flaky-ci-developer`);
+});
+
+test("the machines page: a server's id, its route and its note are each one filtered line", async () => {
+  const machines = [
+    { id: "falcon", route: null, isThisMachine: true, note: null },
+    { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, note: "workspace /srv/oats\n2 saved instance routes" },
+  ];
+  const slot = await page("machines", "", handlers({ machines: () => ({ machines }) }));
+  const row = await slot.findByTestId("oats-machine-row");
+  expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "workspace /srv/oats 2 saved instance routes"]);
+});
+
+test("the thread's row: a soul's name and an alias with a character that is no text are drawn with U+FFFD", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer`, alias: `flaky\u200Bci`, address: null } : agent));
   const app = await loadApp();
   const row = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId: "thr_ci", projectId: "proj_ci", environment: null }, { rpc: handlers({ souls: () => ({ souls: [] }) }, agents), sidebarThreads: sidebarThreads() });

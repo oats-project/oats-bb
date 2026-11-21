@@ -1,4 +1,4 @@
-// agentStatus(): the state in words, the same for the tree, the thread's header and the panel.
+// agentStatus(): the state in words, for every place that says one (today the home's card reads its age from it).
 import { expect, test } from "vitest";
 import { agentStatus } from "../../app/roster/status";
 import type { BbThread } from "../../model/types";

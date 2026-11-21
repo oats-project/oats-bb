@@ -3,8 +3,9 @@
 // that has no bb thread at all. The page shows one agent and a way back.
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { failureLine, useOats } from "../oats";
-import { Button, ErrorLine, Note } from "../ui";
+import { firstLine, useOats } from "../oats";
+import { isKernelCode } from "../../kernel/result";
+import { Button, Empty, Loading, Notice } from "../ui";
 import { shown } from "../ui/text";
 import { InstancePanel } from "./Panel";
 
@@ -37,11 +38,11 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
     <div data-testid="oats-agent-page" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-2">
         {thread === undefined ? (
-          <Button data-testid="oats-agent-back" className="min-h-11 md:min-h-8" onClick={() => navigate.toPluginPanel("home")}>
+          <Button data-testid="oats-agent-back" onClick={() => navigate.toPluginPanel("home")}>
             Back to Home
           </Button>
         ) : (
-          <Button data-testid="oats-agent-back" className="min-h-11 md:min-h-8" onClick={() => navigate.toThread(thread.id)}>
+          <Button data-testid="oats-agent-back" onClick={() => navigate.toThread(thread.id)}>
             Back to the thread
           </Button>
         )}
@@ -53,11 +54,13 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
       ) : (
         <div className="p-3">
           {oats.phase === "loading" ? (
-            <Note>Reading OATS…</Note>
+            <Loading />
           ) : oats.phase === "failed" ? (
-            <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
+            <Notice title="OATS could not be read" tone="error" code={isKernelCode(oats.code) ? oats.code : null} actions={<Button onClick={oats.retry}>Retry</Button>}>
+              <p className="m-0">{shown(firstLine(oats.message))}</p>
+            </Notice>
           ) : (
-            <Note>{instance === null ? "No agent is named here." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}</Note>
+            <Empty>{instance === null ? "No agent is named here." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}</Empty>
           )}
         </div>
       )}

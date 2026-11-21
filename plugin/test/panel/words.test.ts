@@ -1,23 +1,13 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import {
-  ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, stateText, waitedText, waitingClock, waitingDetail,
-  waitingHead, waitingLabel, workFolder, workSentence,
-} from "../../app/panel/words";
+import { ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 
-describe("the header's state", () => {
-  it("Running with the age of its last start, Stopped, else the tree's own word for the agent", () => {
-    expect(stateText({ running: true, startedAt: ago(42 * MIN) }, "working", NOW)).toEqual({ text: "Running · 42m", title: `started ${ago(42 * MIN)}` });
-    expect(stateText({ running: true, startedAt: null }, "needs you", NOW)).toEqual({ text: "Running", title: null });
-    expect(stateText({ running: false, startedAt: ago(MIN) }, "stopped", NOW)).toEqual({ text: "Stopped", title: null });
-    expect(stateText({ running: null, startedAt: ago(MIN) }, "idle", NOW)).toEqual({ text: "Idle", title: null });
-    expect(stateText({ running: null, startedAt: null }, "unreachable", NOW)).toEqual({ text: "Unreachable", title: null });
-  });
+describe("ages", () => {
   it("ages: compact for the header, in words for the session", () => {
     expect([shortAge(ago(20_000), NOW), shortAge(ago(59 * MIN), NOW), shortAge(ago(3 * HOUR), NOW), shortAge(ago(49 * HOUR), NOW), shortAge("soon", NOW), shortAge(null, NOW)]).toEqual(["<1m", "59m", "3h", "2d", null, null]);
     expect([ageText(ago(20_000), NOW), ageText(ago(5 * MIN), NOW), ageText(ago(3 * HOUR), NOW), ageText(ago(49 * HOUR), NOW), ageText(ago(40 * 24 * HOUR), NOW), ageText("soon", NOW)]).toEqual([
@@ -96,32 +86,5 @@ describe("the Session card", () => {
     expect(sessionLine({ backend: null, threadId: null, tmuxSession: "oats-main" })).toBe("tmux · oats-main");
     expect(sessionLine({ backend: null, threadId: null, tmuxSession: null })).toBe("");
     expect(runtimeErrorLine("bb did not answer")).toBe("OATS says: bb did not answer");
-  });
-});
-
-describe("Needs input", () => {
-  it("the reason in words, never the raw reason", () => {
-    const claim = (reason: string | null) => ({ reason, message: null, since: null });
-    expect(["permission", "question", "attention", "valueOf", null].map((reason) => waitingLabel(claim(reason)))).toEqual([
-      "Waiting for a tool approval", "Asked you a question", "Asked for your attention", "Needs input", "Needs input",
-    ]);
-  });
-  it("the detail is the message, else the reason in words, else nothing", () => {
-    expect(waitingDetail({ reason: "question", message: "Keep the retry?", since: null })).toBe("Keep the retry?");
-    expect(waitingDetail({ reason: "question", message: "  ", since: null })).toBe("Asked you a question");
-    expect(waitingDetail({ reason: "other", message: null, since: null })).toBeNull();
-  });
-  it("how long, and since when", () => {
-    expect([waitedText(ago(20_000), NOW), waitedText(ago(12 * MIN), NOW), waitedText(ago(5 * HOUR), NOW), waitedText(ago(50 * HOUR), NOW), waitedText(ago(-MIN), NOW), waitedText(null, NOW)]).toEqual([
-      "under a minute", "12 min", "5 h", "2 d", "under a minute", "under a minute",
-    ]);
-    const local = (y: number, m: number, d: number, h: number, min: number) => new Date(y, m, d, h, min).toISOString();
-    const now = new Date(2026, 10, 21, 18, 30).getTime();
-    expect(waitingClock(local(2026, 10, 21, 14, 3), now)).toBe("14:03");
-    expect(waitingClock(local(2026, 9, 2, 9, 5), now)).toBe("Oct 2, 09:05");
-    expect(waitingClock(local(2025, 9, 2, 14, 3), now)).toBe("2025-10-02 14:03");
-    expect(waitingClock("soon", now)).toBe("");
-    expect(waitingHead({ reason: "attention", message: null, since: local(2026, 10, 21, 18, 18) }, now)).toBe("Asked for your attention · waiting 12 min (since 18:18)");
-    expect(waitingHead({ reason: null, message: null, since: null }, now)).toBe("Needs input · waiting under a minute");
   });
 });

@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
-import { InstancePanel } from "../../app/panel/Panel";
+import { InstancePanel, showPanelTab } from "../../app/panel/Panel";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import type { Agent } from "../../model/types";
 import { handlers, loadApp, resetApp } from "../helpers/render";
@@ -34,36 +34,49 @@ function panel(props: { threadId?: string; instance?: string } = { threadId: CHI
   });
 }
 const text = (element: HTMLElement) => element.textContent;
+/** The Copy button of a path: the one after it. */
+const copyOf = (path: HTMLElement) => within(path.parentElement!).getByTestId("oats-copy");
+/** The state the header says, as a screen reader reads it: its word, and after it since when (the mark beside the word is hidden from it). */
+function stateOf(slot: { getByTestId(id: string): HTMLElement }): string {
+  const line = within(slot.getByTestId("oats-panel-state")).getByTestId("oats-status-line").cloneNode(true) as HTMLElement;
+  line.querySelectorAll('[aria-hidden="true"]').forEach((mark) => mark.remove());
+  return line.textContent ?? "";
+}
 
-test("two tabs, Instance first; the header names the instance, its soul and its state in the tree's word", async () => {
+test("two tabs, Instance first; the header names the instance as words, its soul, and its state as a mark and its word", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null }) });
   await slot.findByTestId("oats-panel-work");
-  expect(within(slot.getByRole("tablist")).getAllByRole("tab").map((tab) => `${text(tab)} ${tab.getAttribute("aria-selected")}`)).toEqual(["Instance true", "Soul false"]);
-  expect(text(slot.getByTestId("oats-panel-name"))).toBe(CHILD);
+  const tabs = within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab");
+  expect(tabs.map((tab) => `${text(tab)} ${tab.getAttribute("aria-selected")}`)).toEqual(["Instance true", "Soul false"]);
+  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tabs[0]!.id);
+  expect(tabs[0]!.getAttribute("aria-controls")).toBe(slot.getByRole("tabpanel").id);
+  // The name as words; the kernel's own name stays one hover away.
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(CHILD);
   expect(text(slot.getByTestId("oats-panel-header"))).toContain("instance of");
   expect(text(slot.getByTestId("oats-panel-soul-link"))).toBe("oats-expert");
   // The kernel says neither running nor stopped for an agent idle in bb: the tree's word, never "Not reported".
-  expect(text(slot.getByTestId("oats-panel-state"))).toBe("Idle");
-  expect(slot.getByTestId("oats-panel-state").querySelector('[data-state="idle"]')).not.toBeNull();
+  expect(stateOf(slot)).toBe("Idle");
+  expect(within(slot.getByTestId("oats-panel-state")).getByTestId("oats-state").getAttribute("data-state")).toBe("idle");
   expect(slot.queryByTestId("oats-panel-drift")).toBeNull();
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
-test("Running with how long since its last start; Stopped", async () => {
+test("a running agent says since when it runs; a stopped one says Stopped and shows no claim", async () => {
   const running = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: true, waiting: null }) });
   await running.findByTestId("oats-panel-work");
   // started 18:13:36Z, read at 18:29:30Z
-  expect(text(running.getByTestId("oats-panel-state"))).toBe("Running · 15m");
+  expect(stateOf(running)).toBe("Working· 15m");
   expect(running.getByTestId("oats-panel-state").getAttribute("title")).toBe("started 2026-11-21T18:13:36.478Z");
   running.unmount();
   const stopped = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: false, runtimeState: "stopped" }) });
   await stopped.findByTestId("oats-panel-work");
-  expect(text(stopped.getByTestId("oats-panel-state"))).toBe("Stopped");
+  expect(stateOf(stopped)).toBe("Stopped");
   // A stopped agent's claim belongs to an ended session: it is not shown.
   expect(stopped.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
-test("Needs input: the reason in words, how long and since when, and the agent's message", async () => {
+test("Needs input: the reason in words, how long and since when, and the agent's message; the header says the same wait", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");
   const since = new Date("2026-11-21T18:14:12.916Z");
@@ -71,7 +84,7 @@ test("Needs input: the reason in words, how long and since when, and the agent's
   expect(text(within(waiting).getByRole("heading"))).toBe("Needs input");
   expect(text(slot.getByTestId("oats-panel-waiting-head"))).toBe(`Asked for your attention · waiting 15 min (since ${clock})`);
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
-  expect(text(slot.getByTestId("oats-panel-state"))).toBe("Needs you");
+  expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${clock})`);
 });
 
 test("a claim with no message says the reason alone; its message is drawn as text through the display filter", async () => {
@@ -81,6 +94,8 @@ test("a claim with no message says the reason alone; its message is drawn as tex
   bare.unmount();
   const unsafe = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: { reason: "question", message: "use token=abc123 <b>now</b>", since: null } }) });
   expect(text(await unsafe.findByTestId("oats-panel-waiting-message"))).toBe("[withheld]");
+  // No instant from the kernel: the reason alone, no invented time.
+  expect(text(unsafe.getByTestId("oats-panel-waiting-head"))).toBe("Asked you a question");
 });
 
 test("Work: the mode in one sentence with the row's own facts, and the paths to copy", async () => {
@@ -91,18 +106,19 @@ test("Work: the mode in one sentence with the row's own facts, and the paths to 
   expect(text(within(work).getByRole("heading"))).toBe("Work");
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toBe("Works in its own worktree of oats-real, on branch agents/panel-worktree-helper.");
   const paths = slot.getByTestId("oats-panel-paths");
-  expect(text(paths.querySelector("summary")!)).toBe("Paths");
+  expect(text(paths.querySelector("summary")!)).toContain("Paths");
   expect(paths.hasAttribute("open")).toBe(false);
+  expect(within(paths).getAllByTestId("oats-fact").map((fact) => text(fact.querySelector("dt")!))).toEqual(["Folder", "Home"]);
   expect(text(slot.getByTestId("oats-panel-folder"))).toBe("/abs/deployment/agents/oats-expert/instances/panel-worktree-helper/work");
   expect(text(slot.getByTestId("oats-panel-home"))).toBe("/abs/deployment/agents/oats-expert/instances/panel-worktree-helper");
   // its own worktree is not a shared tree
   expect(within(paths).queryByRole("note")).toBeNull();
-  const copyFolder = slot.getByTestId("oats-panel-folder-copy");
-  expect(copyFolder.getAttribute("aria-label")).toBe("Copy folder path");
+  const copyFolder = copyOf(slot.getByTestId("oats-panel-folder"));
+  expect(text(copyFolder)).toBe("Copy folder path");
   fireEvent.click(copyFolder);
-  await waitFor(() => expect(copyFolder.getAttribute("aria-label")).toBe("Copied"));
-  expect(slot.getByTestId("oats-panel-home-copy").getAttribute("aria-label")).toBe("Copy home path");
-  fireEvent.click(slot.getByTestId("oats-panel-home-copy"));
+  await waitFor(() => expect(text(copyFolder)).toBe("Copied"));
+  expect(text(copyOf(slot.getByTestId("oats-panel-home")))).toBe("Copy home path");
+  fireEvent.click(copyOf(slot.getByTestId("oats-panel-home")));
   await waitFor(() => expect(writes).toEqual(["/abs/deployment/agents/oats-expert/instances/panel-worktree-helper/work", "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper"]));
 });
 
@@ -113,30 +129,32 @@ test("a shared tree is tagged shared; a copy the browser refuses says so; a mode
   const tag = within(shared.getByTestId("oats-panel-paths")).getByRole("note");
   expect(text(tag)).toBe("shared");
   expect(tag.getAttribute("title")).toBe("A link to the shared tree; changes here are visible to every instance that shares it.");
-  fireEvent.click(shared.getByTestId("oats-panel-home-copy"));
-  await waitFor(() => expect(shared.getByTestId("oats-panel-home-copy").getAttribute("aria-label")).toBe("Copy failed"));
+  const copy = copyOf(shared.getByTestId("oats-panel-home"));
+  fireEvent.click(copy);
+  await waitFor(() => expect(text(copy)).toBe("Couldn't copy"));
   shared.unmount();
   const none = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, work: null }) });
   await none.findByTestId("oats-panel-session");
   expect(none.queryByTestId("oats-panel-work")).toBeNull();
 });
 
-test("Session: the harness, the model and where it came from, where the session runs and since when", async () => {
+test("Session: the harness, the model and where it came from, where the session runs and since when, each a labelled fact", async () => {
   const slot = panel();
   const session = await slot.findByTestId("oats-panel-session");
   expect(text(within(session).getByRole("heading"))).toBe("Session");
-  expect(text(slot.getByTestId("oats-panel-harness"))).toBe("Claude");
-  expect(text(slot.getByTestId("oats-panel-model"))).toBe("claude-opus-5-5 · the soul's choice");
-  expect(text(slot.getByTestId("oats-panel-session-line"))).toBe("bb · thread thr_gx4sgexjgw");
-  expect(text(slot.getByTestId("oats-panel-started"))).toBe("started 16 min ago");
+  expect(within(session).getAllByTestId("oats-fact").map((fact) => `${text(fact.querySelector("dt")!)}: ${text(fact.querySelector("dd")!)}`)).toEqual([
+    "Harness: Claude", "Model: claude-opus-5-5 · the soul's choice", "Runs in: bb · thread thr_gx4sgexjgw", "Started: 16 min ago",
+  ]);
   expect(slot.getByTestId("oats-panel-started").getAttribute("title")).toBe("2026-11-21T18:13:36.478Z · created 2026-11-21T18:13:36.478Z");
   expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
 });
 
 test("a home never started says when it was created; the row's runtime error is said with who said it", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, startedAt: null, model: null, runtimeError: "bb did not answer at http://127.0.0.1:38886" }) });
-  expect(text(await slot.findByTestId("oats-panel-started"))).toBe("created 16 min ago");
-  expect(slot.queryByTestId("oats-panel-model")).toBeNull();
+  const session = await slot.findByTestId("oats-panel-session");
+  expect(within(session).getAllByTestId("oats-fact").map((fact) => `${text(fact.querySelector("dt")!)}: ${text(fact.querySelector("dd")!)}`)).toEqual([
+    "Harness: Claude", "Runs in: bb · thread thr_gx4sgexjgw", "Created: 16 min ago",
+  ]);
   expect(text(slot.getByTestId("oats-panel-runtime-error"))).toBe("OATS says: bb did not answer at http://127.0.0.1:38886");
 });
 
@@ -148,9 +166,9 @@ test("Messaging & Teams: the messaging id with its copy, only where the row has 
   const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, messagingId: "oats.aweb.ai/panel-worktree-helper" }) });
   const messaging = await slot.findByTestId("oats-panel-messaging");
   expect(text(within(messaging).getByRole("heading"))).toBe("Messaging & Teams");
-  expect(text(messaging)).toContain("Messaging ID");
+  expect(text(within(messaging).getByTestId("oats-fact").querySelector("dt")!)).toBe("Messaging ID");
   expect(text(slot.getByTestId("oats-panel-messaging-id"))).toBe("oats.aweb.ai/panel-worktree-helper");
-  expect(slot.getByTestId("oats-panel-messaging-id-copy").getAttribute("aria-label")).toBe("Copy messaging ID");
+  expect(text(copyOf(slot.getByTestId("oats-panel-messaging-id")))).toBe("Copy messaging ID");
 });
 
 test("Lineage: the parent is a link to its thread; the owning human and a sibling are named where the row has them", async () => {
@@ -177,7 +195,7 @@ test("an agent with nothing to say about its lineage has no Lineage section", as
 test("older build: a chip that opens to what moved since the spawn", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, drift: { soul: "moved", modules: [{ name: "oats.core", status: "moved", was: "1.26.0", now: "1.27.0", reason: null }] } }) });
   const drift = await slot.findByTestId("oats-panel-drift");
-  expect(text(drift.querySelector("summary")!)).toBe("older build");
+  expect(text(drift.querySelector("summary")!)).toContain("older build");
   expect(text(drift)).toContain("Built from an older state of the workspace:");
   expect(text(drift)).toContain("• Its soul's repository has moved on since it was spawned.");
   expect(text(drift)).toContain("• oats.core has changed since (1.26.0 → 1.27.0).");
@@ -187,44 +205,49 @@ test("older build: a chip that opens to what moved since the spawn", async () =>
 test("the soul's name opens the Soul tab: its name, its description, Details with the agents root, and Open soul page", async () => {
   const slot = panel();
   fireEvent.click(await slot.findByTestId("oats-panel-soul-link"));
-  expect(slot.getByTestId("oats-panel-tab-soul").getAttribute("aria-selected")).toBe("true");
+  expect(slot.getByTestId("oats-tab-soul").getAttribute("aria-selected")).toBe("true");
   expect(text(await slot.findByTestId("oats-panel-soul-name"))).toBe("oats-expert");
   expect(text(slot.getByTestId("oats-panel-soul-description"))).toBe("OATS expert: answers questions about OATS.");
   const details = slot.getByTestId("oats-panel-details");
-  expect(text(details.querySelector("summary")!)).toBe("Details");
-  expect(text(details)).toContain("Agents root");
+  expect(text(details.querySelector("summary")!)).toContain("Details");
+  expect(text(within(details).getByTestId("oats-fact").querySelector("dt")!)).toBe("Agents root");
   expect(text(slot.getByTestId("oats-panel-agents-root"))).toBe("/abs/deployment/agents");
-  expect(slot.getByTestId("oats-panel-agents-root-copy").getAttribute("aria-label")).toBe("Copy agents root path");
+  expect(text(copyOf(slot.getByTestId("oats-panel-agents-root")))).toBe("Copy agents root path");
   const open = slot.getByTestId("oats-panel-open-soul");
   expect(text(open)).toBe("Open soul page");
+  expect(slot.queryByTestId("oats-panel-open-soul-why")).toBeNull();
   fireEvent.click(open);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats-expert" } }]);
 });
 
-test("a soul OATS does not list has no page to open, and says why", async () => {
+test("a soul OATS does not list has no page to open, and the reason is beside the button", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, {}, { rpc: handlers({ snapshot: () => panelSnapshot(), panelInstance: ({ instance }) => ({ ...instanceAnswer(instance), agentsRoot: null, soul: { key: null, description: null } }) }) });
-  fireEvent.click(await slot.findByTestId("oats-panel-tab-soul"));
-  const open = await slot.findByTestId("oats-panel-open-soul");
-  await waitFor(() => expect(open.getAttribute("title")).toBe("OATS lists no soul of this name here: there is no soul page to open."));
-  expect((open as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(await slot.findByTestId("oats-tab-soul"));
+  expect(text(await slot.findByTestId("oats-panel-open-soul-why"))).toBe("OATS lists no soul of this name here, so there is no soul page to open.");
+  expect((slot.getByTestId("oats-panel-open-soul") as HTMLButtonElement).disabled).toBe(true);
   expect(slot.queryByTestId("oats-panel-details")).toBeNull();
   expect(slot.queryByTestId("oats-panel-soul-description")).toBeNull();
 });
 
 test("the arrow keys move between the tabs, and the tab a person left the panel on is the one another agent opens on", async () => {
   const slot = panel();
-  const instanceTab = await slot.findByTestId("oats-panel-tab-instance");
+  const instanceTab = await slot.findByTestId("oats-tab-instance");
   fireEvent.keyDown(instanceTab, { key: "ArrowRight" });
-  expect(slot.getByTestId("oats-panel-tab-soul").getAttribute("aria-selected")).toBe("true");
-  expect(document.activeElement).toBe(slot.getByTestId("oats-panel-tab-soul"));
-  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe("oats-panel-tab-soul");
-  fireEvent.keyDown(slot.getByTestId("oats-panel-tab-soul"), { key: "ArrowRight" });
-  expect(instanceTab.getAttribute("aria-selected")).toBe("true");
-  fireEvent.keyDown(instanceTab, { key: "End" });
+  expect(slot.getByTestId("oats-tab-soul").getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(slot.getByTestId("oats-tab-soul"));
+  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(slot.getByTestId("oats-tab-soul").id);
   slot.unmount();
   const other = panel({ instance: "redesign-ui-lead" });
-  expect((await other.findByTestId("oats-panel-tab-soul")).getAttribute("aria-selected")).toBe("true");
+  expect((await other.findByTestId("oats-tab-soul")).getAttribute("aria-selected")).toBe("true");
   expect(text(await other.findByTestId("oats-panel-soul-name"))).toBe("oats-product-expert");
+});
+
+test("another feature turns an open panel to one of its tabs", async () => {
+  const slot = panel();
+  await slot.findByTestId("oats-panel-work");
+  act(() => showPanelTab("soul"));
+  expect(slot.getByTestId("oats-tab-soul").getAttribute("aria-selected")).toBe("true");
+  expect(text(await slot.findByTestId("oats-panel-soul-name"))).toBe("oats-expert");
 });
 
 test("by instance name, for an agent with no thread in bb: the same panel, its state from the kernel's word", async () => {
@@ -235,8 +258,8 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
     sidebarThreads: panelThreads(agents),
   });
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux · oats-agents");
-  expect(text(slot.getByTestId("oats-panel-state"))).toBe("Running · 15m");
-  expect(text(slot.getByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(stateOf(slot)).toBe("Working· 15m");
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
 });
 
 test("a thread that is no agent's, and a name the roster does not hold, draw nothing", async () => {
@@ -249,7 +272,7 @@ test("a thread that is no agent's, and a name the roster does not hold, draw not
   expect(unknown.queryByTestId("oats-panel")).toBeNull();
 });
 
-test("while the instance is read the header is already there; a read that fails says the kernel's refusal, with Retry", async () => {
+test("a first read that fails: a notice in words, the kernel's code after them, its message under Details, and Retry", async () => {
   let fail = true;
   const slot = panel({ threadId: CHILD_THREAD }, {}, {
     rpc: handlers({
@@ -260,17 +283,41 @@ test("while the instance is read the header is already there; a read that fails 
       },
     }),
   });
-  const alert = await slot.findByRole("alert");
-  expect(text(alert)).toContain("E_LOCAL_MISSING");
-  expect(text(alert)).toContain("no oats-local.yaml here");
+  const notice = await slot.findByRole("alert");
+  expect(text(within(notice).getByRole("heading"))).toBe("This instance could not be read");
+  expect(text(notice)).toContain("E_LOCAL_MISSING");
+  expect(text(within(notice).getByTestId("oats-panel-refusal"))).toContain("no oats-local.yaml here");
   // what the roster already says stays: the name, the state, the claim
-  expect(text(slot.getByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();
   expect(slot.queryByTestId("oats-panel-work")).toBeNull();
   fail = false;
-  fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
   expect(text(await slot.findByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
   expect(slot.queryByRole("alert")).toBeNull();
+});
+
+test("a later read that fails keeps what was read, says how old it is and why, and offers Retry", async () => {
+  let fail = false;
+  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+    rpc: handlers({
+      snapshot: () => panelSnapshot(),
+      panelInstance: ({ instance }) => {
+        if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+        return { ...instanceAnswer(instance), at: "2026-11-21T18:27:00.000Z" };
+      },
+    }),
+  });
+  await slot.findByTestId("oats-panel-work");
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  const stale = await slot.findByTestId("oats-stale");
+  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("It could not be read again (OATS_TIMEOUT).");
+  expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
+  fail = false;
+  fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(slot.queryByTestId("oats-stale")).toBeNull());
 });
 
 test("the panel reads again when OATS changes", async () => {
@@ -293,7 +340,7 @@ async function agentPage(subPath: string, options: RenderSlotOptions<Contract> =
 
 test("the agent's page is the same panel by instance name, with the way back to its thread", async () => {
   const slot = await agentPage(CHILD);
-  expect(text(await slot.findByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(text(await slot.findByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(text(await slot.findByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree of oats-real");
   const back = slot.getByTestId("oats-agent-back");
   expect(text(back)).toBe("Back to the thread");
@@ -304,7 +351,7 @@ test("the agent's page is the same panel by instance name, with the way back to 
 test("the page of an agent with no thread in bb goes back to Home; a name OATS does not list says so", async () => {
   const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null } : agent));
   const tmux = await agentPage(CHILD, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
-  expect(text(await tmux.findByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(text(await tmux.findByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   fireEvent.click(tmux.getByTestId("oats-agent-back"));
   expect(tmux.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
   tmux.unmount();
@@ -319,6 +366,8 @@ test("the page of an agent with no thread in bb goes back to Home; a name OATS d
 test("while OATS cannot be read the page says the kernel's refusal, with Retry", async () => {
   const slot = await agentPage(CHILD, { rpc: handlers({ snapshot: () => ({ ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }) }) });
   const alert = await slot.findByRole("alert");
+  expect(text(within(alert).getByRole("heading"))).toBe("OATS could not be read");
+  expect(text(alert)).toContain("no oats-local.yaml here");
   expect(text(alert)).toContain("E_LOCAL_MISSING");
   expect(within(alert).getByRole("button", { name: "Retry" })).not.toBeNull();
 });
@@ -331,6 +380,6 @@ test("on an agent's own thread the plugin's fixed tab is the panel", async () =>
     rpc: handlers({ snapshot: () => panelSnapshot() }),
     sidebarThreads: panelThreads(),
   });
-  expect(text(await slot.findByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(text(await slot.findByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.queryByTestId("oats-home-tab")).toBeNull();
 });

@@ -94,19 +94,21 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the instance's name, "instance of <soul>" (it opens the Soul tab) and its state in words beside its dot: "Running · 42m" since its last start, "Stopped", else the word the tree draws it with (Idle, Needs you, …). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words, how long and since when, and its message. **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs (`bb · thread <id>`), since when, and the kernel's runtime error when it has one. **Messaging & Teams**: the messaging id, with Copy. **Lineage**: the owning human, the parent and the sibling, each a link when it has a thread in bb. |
-| **Soul** | the soul's key and description, **Details** (the agents root, with Copy) and **Open soul page**. |
+| **Instance** | the instance's name as words, its state as a mark and its word with since when ("Working · 42m" since its last start, "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words, how long and since when, and its message. **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs (`bb · thread <id>`), since when, and the kernel's runtime error when it has one. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, the parent and the sibling, each a link when it has a thread in bb. |
+| **Soul** | the soul's key and description, **Details** (the agents root, with its Copy) and **Open soul page**. |
 
 A fact the kernel does not report is not drawn: the panel never says "Not reported" and never
-guesses. The words are the Desktop's (`app/panel/words.ts` names where each comes from). The
+guesses. The words are the Desktop's (`app/panel/words.ts` and `app/ui/words.ts` name where each
+comes from), and it is drawn with the patterns of `app/ui.tsx`. The
 Developer tab, the board, the mail, the teams, the recorded events and the readiness are not in
 this version yet.
 
 How it reads: `panelInstance` (`contract/panel.ts`) answers one instance's facts from what the one
 status read kept, as the kernel printed it (`core.rowOf`: the instance's row, its agent group's row
 and the roster's root), parsed by `kernel/panel-instance.ts`. It starts no process. The panel reads
-again at every `oats/changed`; when a read fails it keeps what it read, says how old that is, and
-shows the refusal with Retry. Another feature opens the panel on one of its tabs with
+again at every `oats/changed`; when a read fails it keeps what it read and says how old that is,
+with Retry; a first read that fails is a notice in words, the kernel's code after them and its
+message under Details. Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
 ## How it is built

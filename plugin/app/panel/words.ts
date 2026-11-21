@@ -1,7 +1,8 @@
-// The instance panel's words, as pure functions of what the kernel reported. They are the OATS
-// Desktop's own (packages/desktop/renderer/context-panel.mjs, packages/client/waiting-on-you.mjs and
-// packages/desktop/renderer/provider-row.mjs at awebai/oats 95c7b43b): where words are the
-// feature, bb says what the Desktop says. No bb and no React import.
+// The instance panel's own words, as pure functions of what the kernel reported. They are the OATS
+// Desktop's (packages/desktop/renderer/context-panel.mjs, age-text.mjs, identity-marks.mjs and
+// provider-row.mjs at awebai/oats 95c7b43b): where words are the feature, bb says what the Desktop
+// says. The words every feature shares (a state, a waiting claim) are in app/ui/words.ts. No bb and
+// no React import.
 import type { PanelInstance } from "../../kernel/panel-instance";
 
 /** How long ago, compactly ("<1m", "42m", "3h", "2d"); null when it is no timestamp. */
@@ -26,19 +27,6 @@ export function ageText(iso: string, now: number): string {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.round(hours / 24);
   return days < 30 ? `${days} d ago` : new Date(at).toISOString().slice(0, 10);
-}
-
-/**
- * The header's state in words: "Running · 42m" (since its last start) and "Stopped" where the
- * kernel says so; where it says neither (an agent idle in bb reads `running: null`), `word`, the
- * word the tree draws the agent with (app/roster/status.ts), so every place says the same thing.
- */
-export function stateText(facts: { running: boolean | null; startedAt: string | null }, word: string, now: number): { text: string; title: string | null } {
-  if (facts.running === true) {
-    const since = shortAge(facts.startedAt, now);
-    return since === null ? { text: "Running", title: null } : { text: `Running · ${since}`, title: `started ${facts.startedAt}` };
-  }
-  return { text: facts.running === false ? "Stopped" : word.charAt(0).toUpperCase() + word.slice(1), title: null };
 }
 
 /**
@@ -123,43 +111,3 @@ export function sessionLine(facts: Pick<PanelInstance, "backend" | "threadId" | 
 
 /** The row's runtime error, with who said it: every fact here is the kernel's. */
 export const runtimeErrorLine = (error: string): string => `OATS says: ${error}`;
-
-// ---- Needs input ----
-
-export type Claim = { reason: string | null; message: string | null; since: string | null };
-
-const REASON: Record<string, string> = { permission: "Waiting for a tool approval", question: "Asked you a question", attention: "Asked for your attention" };
-const reasonWords = (claim: Claim): string | null => (claim.reason !== null && Object.hasOwn(REASON, claim.reason) ? (REASON[claim.reason] ?? null) : null);
-
-/** The reason in words. The raw reason is never drawn: an unknown one reads "Needs input". */
-export const waitingLabel = (claim: Claim): string => reasonWords(claim) ?? "Needs input";
-/** What a place that already says "Needs input" adds: the message, else the reason in words, else nothing. */
-export const waitingDetail = (claim: Claim): string | null => (claim.message !== null && claim.message.trim() !== "" ? claim.message : reasonWords(claim));
-
-/** How long it has waited: "under a minute", "N min", "N h", "N d". */
-export function waitedText(since: string | null, now: number): string {
-  const ms = since === null ? Number.NaN : now - Date.parse(since);
-  if (!Number.isFinite(ms) || ms < 60_000) return "under a minute";
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${hours} h` : `${Math.floor(hours / 24)} d`;
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const pad = (n: number): string => String(n).padStart(2, "0");
-/** The claim's start in local time: "14:03" today, "Oct 2, 14:03" another day of this year, "2025-10-02 14:03" another year. */
-export function waitingClock(since: string | null, now: number): string {
-  const at = new Date(since ?? Number.NaN);
-  const today = new Date(now);
-  if (!Number.isFinite(at.getTime())) return "";
-  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
-  if (at.getFullYear() !== today.getFullYear()) return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${time}`;
-  return at.getMonth() === today.getMonth() && at.getDate() === today.getDate() ? time : `${MONTHS[at.getMonth()]} ${at.getDate()}, ${time}`;
-}
-
-/** The Needs input section's head: "<reason> · waiting 12 min (since 14:03)". */
-export function waitingHead(claim: Claim, now: number): string {
-  const clock = waitingClock(claim.since, now);
-  return `${waitingLabel(claim)} · waiting ${waitedText(claim.since, now)}${clock === "" ? "" : ` (since ${clock})`}`;
-}

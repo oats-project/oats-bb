@@ -10,7 +10,7 @@ type Contract = typeof rpcContract;
 /** The panel's verbs that read one instance. */
 export type InstanceRead = "panelInstance";
 
-export function useInstanceRead<Method extends InstanceRead>(method: Method, instance: string, enabled = true): Read<PluginRpcResult<Contract[Method]>> & { retry(): void } {
+export function useInstanceRead<Method extends InstanceRead>(method: Method, instance: string, enabled = true): Read<PluginRpcResult<Contract[Method]>> & { retry(): void; fetching: boolean } {
   const query = useRpcQuery({ contract: rpcContract, method, input: { instance }, enabled });
   const refetch = useRef(query.refetch);
   useEffect(() => {
@@ -21,9 +21,10 @@ export function useInstanceRead<Method extends InstanceRead>(method: Method, ins
   });
   const data = query.data as PluginRpcResult<Contract[Method]> | undefined;
   const retry = () => void refetch.current();
-  if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry };
-  if (data === undefined) return { status: "loading", data: undefined, error: null, retry };
-  return { status: "ready", data, error: null, retry };
+  const fetching = query.isFetching;
+  if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching };
+  if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching };
+  return { status: "ready", data, error: null, retry, fetching };
 }
 
 /**

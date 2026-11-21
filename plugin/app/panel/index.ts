@@ -8,7 +8,7 @@ import { AgentTab } from "./Panel";
 
 export { openAgentPage } from "./AgentPage";
 export { InstancePanel, showPanelTab } from "./Panel";
-export type { TabId } from "./parts";
+export type { TabId } from "./Panel";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
 const ICON = "Bot";

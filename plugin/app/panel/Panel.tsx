@@ -1,29 +1,38 @@
 // The instance panel: who an agent is and how it runs, in tabs, as the OATS Desktop's instance
 // panel (packages/desktop/renderer/context-panel.mjs). It reads one instance by its name and never
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
+// Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useSyncExternalStore } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
-import type { Agent, AgentState, Node } from "../../model/types";
 import type { PanelInstance } from "../../kernel/panel-instance";
-import { STATE_WORD } from "../format";
+import type { Agent, AgentState, Node } from "../../model/types";
 import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { agentStatus } from "../roster/status";
 import { onWindowReset } from "../store";
 import type { Read, Result } from "../store";
-import { Button, Dot, ErrorLine, Note, plainClick } from "../ui";
+import { Button, Card, Fact, Facts, LINK, Loading, Notice, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
+import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
 import { openSoul } from "../workspace/pages";
-import { Card, Code, CopyButton, Facts, PathLine, Section, Tabs, Tag } from "./parts";
-import type { TabId } from "./parts";
+import { Code, Fold, PathLine, Section, Tag } from "./parts";
 import { useInstanceRead, useNow } from "./read";
-import {
-  SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, stateText, waitingHead, workFolder, workSentence,
-} from "./words";
+import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "./words";
 
 type InstanceAnswer = Result<"panelInstance">;
+type InstanceRead = Read<InstanceAnswer> & { retry(): void; fetching: boolean };
 type Ready = Extract<Oats, { phase: "ready" }>;
+
+/** The panel's tabs. */
+export type TabId = "instance" | "soul";
+const TABS: readonly TabItem<TabId>[] = [
+  { id: "instance", label: "Instance" },
+  { id: "soul", label: "Soul" },
+];
+/** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
+const PANEL_ID = "oats-panel-page";
 
 // The tab a person left the panel on, for the length of the app window: another agent opens on it too.
 let shownTab: TabId = "instance";
@@ -68,96 +77,92 @@ export function InstancePanel({ threadId, instance }: { threadId?: string; insta
   if (agent === undefined) return null;
   return (
     <div data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
-      <Tabs selected={tab} onSelect={showPanelTab} />
+      <div className="shrink-0 px-3">
+        <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+      </div>
       {/* One instance at a time: another agent starts from its own read. */}
-      <Pages key={agent.instance} oats={oats} agent={agent} node={node} tab={tab} onSelect={showPanelTab} />
+      <Pages key={agent.instance} oats={oats} agent={agent} node={node} tab={tab} />
     </div>
   );
 }
 
-function Pages({ oats, agent, node, tab, onSelect }: { oats: Ready; agent: Agent; node: Node | undefined; tab: TabId; onSelect: (tab: TabId) => void }) {
+function Pages({ oats, agent, node, tab }: { oats: Ready; agent: Agent; node: Node | undefined; tab: TabId }) {
   const read = useInstanceRead("panelInstance", agent.instance);
   const now = useNow();
   return (
-    <div
-      role="tabpanel"
-      id={`oats-panel-page-${tab}`}
-      data-testid={`oats-panel-page-${tab}`}
-      aria-labelledby={`oats-panel-tab-${tab}`}
-      tabIndex={0}
-      className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3"
-    >
-      {tab === "instance" ? <InstancePage oats={oats} agent={agent} node={node} read={read} now={now} onSelect={onSelect} /> : <SoulPage oats={oats} agent={agent} read={read} />}
+    <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
+      {tab === "instance" ? <InstancePage oats={oats} agent={agent} node={node} read={read} now={now} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} />}
     </div>
   );
+}
+
+/** A refusal as the server words it, `<code>: <message>`: the code apart, to be drawn after the words. */
+function refusalParts(error: string): { code: string | null; message: string } {
+  const lead = /^([A-Z][A-Z0-9_]*): ([\s\S]*)$/.exec(error);
+  return lead === null ? { code: null, message: error } : { code: lead[1]!, message: lead[2]! };
 }
 
 /** What a read that is not there yet, or failed, says in a tab: nothing when the read is there and current. */
-function ReadState({ read, now }: { read: Read<InstanceAnswer> & { retry(): void }; now: number }) {
-  if (read.status === "loading") return <Note>Reading this instance from OATS…</Note>;
+function ReadState({ read, now }: { read: InstanceRead; now: number }) {
+  if (read.status === "loading") return <Loading>Reading this instance…</Loading>;
   if (read.status !== "error") return null;
-  if (read.data === undefined) return <ErrorLine onRetry={read.retry}>{read.error}</ErrorLine>;
+  const { code, message } = refusalParts(read.error);
+  const retry = <Button onClick={read.retry}>Retry</Button>;
   // A failed reread keeps what was read, and says how old it is.
+  if (read.data !== undefined) {
+    return <Stale age={readAge(read.data.at, now)} refreshing={read.fetching} held={`It could not be read again${code === null ? "" : ` (${code})`}.`} action={retry} />;
+  }
   return (
-    <div data-testid="oats-panel-stale" className="flex flex-col gap-1">
-      <Note>{`Couldn't read this instance again · showing what was read ${ageText(read.data.at, now)}.`}</Note>
-      <ErrorLine onRetry={read.retry}>{read.error}</ErrorLine>
-    </div>
+    <Notice title="This instance could not be read" tone="error" code={code} actions={retry}>
+      <Fold summary="Details" testId="oats-panel-refusal">
+        <p className="m-0 break-words text-muted-foreground">{shown(message)}</p>
+      </Fold>
+    </Notice>
   );
 }
 
-function InstancePage({
-  oats, agent, node, read, now, onSelect,
-}: { oats: Ready; agent: Agent; node: Node | undefined; read: Read<InstanceAnswer> & { retry(): void }; now: number; onSelect: (tab: TabId) => void }) {
+function InstancePage({ oats, agent, node, read, now }: { oats: Ready; agent: Agent; node: Node | undefined; read: InstanceRead; now: number }) {
   const facts = read.data?.facts;
-  const status = node === undefined ? null : agentStatus(agent, node.thread, now);
-  const drawn = status?.state ?? stateWithoutThread(agent);
-  const state = stateText({ running: agent.running, startedAt: facts?.startedAt ?? null }, status?.word ?? STATE_WORD[drawn], now);
-  const drift = facts === undefined ? null : driftLines(facts.drift);
-  // A claim is shown unless the agent is stopped: one that waits on a person is idle in bb.
+  // A claim is shown unless the agent is stopped: one that waits on a person is idle in bb, and a
+  // stopped agent's claim belongs to a session that ended.
   const claim = agent.waiting !== null && agent.running !== false ? agent.waiting : null;
+  const drawn = node === undefined ? stateWithoutThread(agent) : agentStatus(agent, node.thread, now).state;
+  // The header never says "Needs you" for a wait the panel does not show.
+  const state = drawn === "needs-you" && claim === null && node?.thread.hasPendingInteraction !== true ? stateWithoutThread(agent) : drawn;
+  // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
+  const since = state === "needs-you" && claim !== null ? waitingSince(claim.since, now) : agent.running === true ? shortAge(facts?.startedAt ?? null, now) : null;
+  const drift = facts === undefined ? null : driftLines(facts.drift);
+  const soul = shown(oats.soulOf(agent));
   return (
     <>
       <header data-testid="oats-panel-header" className="flex min-w-0 flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 data-testid="oats-panel-name" title={agent.instance} className="min-w-0 flex-1 truncate text-base font-semibold">
-            {shown(agent.instance)}
-          </h2>
-          <span data-testid="oats-panel-state" title={state.title ?? undefined} className="flex shrink-0 items-center gap-1.5 text-sm text-foreground">
-            <Dot state={drawn} />
-            {state.text}
-          </span>
+        <h2 data-testid="oats-panel-name" title={agent.instance} className="m-0 min-w-0 break-words text-base font-semibold">
+          {instanceDisplayName(shown(agent.instance))}
+        </h2>
+        <div data-testid="oats-panel-state" title={agent.running === true && facts?.startedAt ? `started ${facts.startedAt}` : undefined}>
+          <StatusLine state={state} since={since} />
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
-          <button
-            type="button"
-            data-testid="oats-panel-soul-link"
-            title={`${shown(oats.soulOf(agent))}: show the Soul tab`}
-            className="inline-flex min-h-11 min-w-0 items-center truncate text-foreground underline md:min-h-8"
-            onClick={() => onSelect("soul")}
-          >
-            {shown(oats.soulOf(agent))}
+          <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-all text-foreground`} onClick={() => showPanelTab("soul")}>
+            {soul}
           </button>
         </div>
         {drift === null ? null : (
-          <details data-testid="oats-panel-drift" className="text-sm">
-            <summary className="w-fit cursor-pointer py-3.5 text-xs font-semibold text-foreground md:py-2">
-              <span className="rounded border border-border px-1.5 py-0.5">older build</span>
-            </summary>
-            <div className="mt-1 flex flex-col gap-0.5 text-muted-foreground">
+          <Fold summary={<span className="rounded border border-border px-1.5 py-0.5 text-xs">older build</span>} testId="oats-panel-drift">
+            <div className="flex flex-col gap-0.5 pb-1 text-muted-foreground">
               {drift.map((line, index) => (
                 <span key={index}>{shown(line)}</span>
               ))}
             </div>
-          </details>
+          </Fold>
         )}
       </header>
 
       {claim === null ? null : (
         <Section label="Needs input" testId="oats-panel-waiting">
           <p data-testid="oats-panel-waiting-head" className="m-0 font-semibold text-foreground">
-            {waitingHead(claim, now)}
+            {[waitingLabel(claim), waitingSince(claim.since, now)].filter((part) => part !== null).join(" · ")}
           </p>
           {claim.message === null || shown(claim.message) === "" ? null : (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
@@ -168,18 +173,19 @@ function InstancePage({
       )}
 
       <ReadState read={read} now={now} />
-      {facts === undefined ? null : <InstanceFacts oats={oats} agent={agent} facts={facts} now={now} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
     </>
   );
 }
 
-function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent; facts: PanelInstance; now: number }) {
+function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance; now: number }) {
   const navigate = useBbNavigate();
   const sentence = workSentence(facts);
   const where = sessionLine(facts);
   const from = modelFromText(facts);
   const started = facts.startedAt ?? facts.createdAt;
   const hasSession = facts.harness !== null || where !== "" || started !== null || facts.runtimeError !== null;
+  /** Another instance, by its name: a link to its thread where it has one in bb. */
   const instanceLink = (name: string, testId: string) => {
     const thread = oats.nodeByInstance.get(name)?.thread;
     const bbThread = thread === undefined ? undefined : oats.threadById.get(thread.id);
@@ -188,7 +194,7 @@ function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent;
       <a
         data-testid={testId}
         href={bbThread.href}
-        className="inline-flex min-h-11 items-center underline md:min-h-8"
+        className={`${TARGET} ${LINK} inline-flex items-center`}
         onClick={(event) => {
           if (!plainClick(event)) return;
           event.preventDefault();
@@ -203,107 +209,100 @@ function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent;
     <>
       {sentence === null ? null : (
         <Section label="Work" testId="oats-panel-work">
-          <Card>
-            <p data-testid="oats-panel-work-sentence" className="m-0 px-3 py-2.5 leading-relaxed">
-              {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{shown(part.code)}</Code>))}
+          <Card testId="oats-panel-work-card">
+            <p data-testid="oats-panel-work-sentence" className="m-0 leading-relaxed">
+              {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{part.code}</Code>))}
             </p>
-            <details data-testid="oats-panel-paths" className="border-t border-border px-3">
-              <summary className="cursor-pointer py-3.5 text-xs font-semibold text-muted-foreground md:py-2">Paths</summary>
-              <div className="pb-2.5">
-                <Facts
-                  rows={[
-                    {
-                      label: "Folder",
-                      testId: "oats-panel-folder-row",
-                      value: (
-                        <PathLine
-                          path={workFolder(facts.home)}
-                          copyLabel="Copy folder path"
-                          testId="oats-panel-folder"
-                          tag={sharedWork(facts.work) ? <Tag title={SHARED_TITLE}>shared</Tag> : undefined}
-                        />
-                      ),
-                    },
-                    { label: "Home", testId: "oats-panel-home-row", value: <PathLine path={facts.home} copyLabel="Copy home path" testId="oats-panel-home" /> },
-                  ]}
-                />
+            <Fold summary="Paths" testId="oats-panel-paths" className="border-t border-border pt-1">
+              <div className="pb-1">
+                <Facts>
+                  <Fact label="Folder">
+                    <PathLine
+                      path={workFolder(facts.home)}
+                      copyLabel="Copy folder path"
+                      testId="oats-panel-folder"
+                      tag={sharedWork(facts.work) ? <Tag title={SHARED_TITLE}>shared</Tag> : undefined}
+                    />
+                  </Fact>
+                  <Fact label="Home">
+                    <PathLine path={facts.home} copyLabel="Copy home path" testId="oats-panel-home" />
+                  </Fact>
+                </Facts>
               </div>
-            </details>
+            </Fold>
           </Card>
         </Section>
       )}
 
       {!hasSession ? null : (
         <Section label="Session" testId="oats-panel-session">
-          <Card>
-            <div className="flex min-w-0 flex-col gap-1 px-3 py-2.5">
-              <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                {facts.harness === null ? null : (
-                  <span data-testid="oats-panel-harness" className="font-semibold">
-                    {shown(harnessName(facts.harness))}
-                  </span>
-                )}
-                {where === "" ? null : (
-                  <span data-testid="oats-panel-session-line" className="min-w-0 break-all font-mono text-xs text-foreground">
+          <Card testId="oats-panel-session-card">
+            <Facts>
+              {facts.harness === null ? null : (
+                <Fact label="Harness">
+                  <span data-testid="oats-panel-harness">{shown(harnessName(facts.harness))}</span>
+                </Fact>
+              )}
+              {facts.model === null ? null : (
+                <Fact label="Model">
+                  <span data-testid="oats-panel-model">{from === null ? shown(facts.model) : `${shown(facts.model)} · ${from}`}</span>
+                </Fact>
+              )}
+              {where === "" ? null : (
+                <Fact label="Runs in">
+                  <span data-testid="oats-panel-session-line" className="break-all font-mono text-xs">
                     {shown(where)}
                   </span>
-                )}
-              </div>
-              <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-muted-foreground">
-                {facts.model === null ? null : (
-                  <span data-testid="oats-panel-model" className="min-w-0 break-words">
-                    {from === null ? shown(facts.model) : `${shown(facts.model)} · ${from}`}
-                  </span>
-                )}
-                {started === null ? null : (
+                </Fact>
+              )}
+              {started === null ? null : (
+                <Fact label={facts.startedAt === null ? "Created" : "Started"}>
                   <span
                     data-testid="oats-panel-started"
                     title={facts.startedAt === null ? started : [facts.startedAt, facts.createdAt === null ? null : `created ${facts.createdAt}`].filter(Boolean).join(" · ")}
                   >
-                    {`${facts.startedAt === null ? "created" : "started"} ${ageText(started, now)}`}
+                    {ageText(started, now)}
                   </span>
-                )}
-              </div>
-              {facts.runtimeError === null ? null : (
-                <p data-testid="oats-panel-runtime-error" className="m-0 break-words text-muted-foreground">
-                  {shown(runtimeErrorLine(facts.runtimeError))}
-                </p>
+                </Fact>
               )}
-            </div>
+            </Facts>
+            {facts.runtimeError === null ? null : (
+              <p data-testid="oats-panel-runtime-error" className="m-0 break-words text-muted-foreground">
+                {shown(runtimeErrorLine(facts.runtimeError))}
+              </p>
+            )}
           </Card>
         </Section>
       )}
 
       {facts.messagingId === null ? null : (
         <Section label="Messaging & Teams" testId="oats-panel-messaging">
-          <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs font-semibold text-muted-foreground">Messaging ID</span>
-            <span className="flex min-w-0 items-start gap-2">
-              <span data-testid="oats-panel-messaging-id" title={facts.messagingId} className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">
-                {shown(facts.messagingId)}
-              </span>
-              <CopyButton value={facts.messagingId} label="Copy messaging ID" testId="oats-panel-messaging-id-copy" />
-            </span>
-          </div>
+          <Facts>
+            <Fact label="Messaging ID">
+              <PathLine path={facts.messagingId} copyLabel="Copy messaging ID" testId="oats-panel-messaging-id" />
+            </Fact>
+          </Facts>
         </Section>
       )}
 
       {facts.human === null && facts.parent === null && facts.sibling === null ? null : (
         <Section label="Lineage" testId="oats-panel-lineage">
-          <Facts
-            rows={[
-              { label: "Owning human", testId: "oats-panel-human", value: facts.human === null ? null : shown(facts.human) },
-              { label: "Parent", testId: "oats-panel-parent-row", value: facts.parent === null ? null : instanceLink(facts.parent, "oats-panel-parent") },
-              { label: "Sibling", testId: "oats-panel-sibling-row", value: facts.sibling === null ? null : instanceLink(facts.sibling, "oats-panel-sibling") },
-            ]}
-          />
+          <Facts>
+            {facts.human === null ? null : (
+              <Fact label="Owning human">
+                <span data-testid="oats-panel-human">{shown(facts.human)}</span>
+              </Fact>
+            )}
+            {facts.parent === null ? null : <Fact label="Parent">{instanceLink(facts.parent, "oats-panel-parent")}</Fact>}
+            {facts.sibling === null ? null : <Fact label="Sibling">{instanceLink(facts.sibling, "oats-panel-sibling")}</Fact>}
+          </Facts>
         </Section>
       )}
     </>
   );
 }
 
-function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read<InstanceAnswer> & { retry(): void } }) {
+function SoulPage({ oats, agent, read, now }: { oats: Ready; agent: Agent; read: InstanceRead; now: number }) {
   const navigate = useBbNavigate();
   const answer = read.data;
   const key = answer?.soul.key ?? null;
@@ -311,7 +310,7 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
   return (
     <>
       <header data-testid="oats-panel-soul-header" className="flex min-w-0 flex-col gap-1">
-        <h2 data-testid="oats-panel-soul-name" title={oats.soulOf(agent)} className="min-w-0 truncate text-base font-semibold">
+        <h2 data-testid="oats-panel-soul-name" className="m-0 min-w-0 break-words text-base font-semibold">
           {shown(key ?? oats.soulOf(agent))}
         </h2>
         {description === null ? null : (
@@ -320,27 +319,27 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
           </p>
         )}
       </header>
+      <ReadState read={read} now={now} />
       {answer === undefined || answer.agentsRoot === null ? null : (
-        <details data-testid="oats-panel-details" className="border-t border-border pt-1">
-          <summary className="cursor-pointer py-3 text-sm font-semibold text-foreground md:py-2">Details</summary>
-          <div className="mt-2 flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agents root</span>
-            <PathLine path={answer.agentsRoot} copyLabel="Copy agents root path" testId="oats-panel-agents-root" />
-          </div>
-        </details>
+        <Fold summary="Details" testId="oats-panel-details" className="border-t border-border pt-1">
+          <Facts>
+            <Fact label="Agents root">
+              <PathLine path={answer.agentsRoot} copyLabel="Copy agents root path" testId="oats-panel-agents-root" />
+            </Fact>
+          </Facts>
+        </Fold>
       )}
-      <div className="mt-auto flex flex-wrap gap-2">
+      <div className="mt-auto flex flex-wrap items-center gap-2">
         <Button
           data-testid="oats-panel-open-soul"
-          className="min-h-11 md:min-h-8"
           disabled={key === null}
-          title={key === null ? "OATS lists no soul of this name here: there is no soul page to open." : "Open this instance's soul on the Souls page"}
           onClick={() => {
             if (key !== null) openSoul(navigate, key);
           }}
         >
           Open soul page
         </Button>
+        {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
       </div>
     </>
   );

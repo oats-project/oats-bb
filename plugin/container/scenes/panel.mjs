@@ -29,6 +29,8 @@ export const stages = {
 };
 
 const inPanel = (id) => `${testId("oats-panel")} ${testId(id)}`;
+/** The header's state: [the mark's state, the word, what follows it, whether the mark is hidden from a screen reader]. */
+const stateOf = `(() => { const line = document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")} ${testId("oats-status-line")}`)}); const state = line?.querySelector(${JSON.stringify(testId("oats-state"))}); const mark = state?.querySelector("[data-state]"); const word = state?.querySelector("span:not([data-state])")?.innerText.trim() ?? ""; const rest = [...(line?.children ?? [])].slice(1).map((e) => e.innerText.trim()).join(" "); return JSON.stringify([mark?.getAttribute("data-state"), word, rest, mark?.getAttribute("aria-hidden") === "true"]); })()`;
 const click = (selector) => `document.querySelector(${JSON.stringify(selector)}).click()`;
 
 /** Shows the panel of `agent`: the OATS tab of its thread, or on a phone its own page. */
@@ -41,7 +43,7 @@ async function open(page, viewport, threads, agent) {
     await page.until(visible(testId("oats-chip-oats")), 30);
     await page.evaluate(click(testId("oats-chip-oats")));
   }
-  return Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(inPanel("oats-panel-name"))} === ${JSON.stringify(agent.instance)}`, 30));
+  return Boolean(await page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inPanel("oats-panel-name"))})?.getAttribute("title") === ${JSON.stringify(agent.instance)}`, 30));
 }
 
 /** What the standard asks of every screen: nothing is cut sideways, and every control is high enough to press. */
@@ -62,18 +64,19 @@ export default [
       const where = viewport.mobile ? "the agent's page" : "the OATS tab of the agent's thread";
       check(await open(page, viewport, threads, CHILD), `${at} the panel shows on ${where}`);
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
-      const tabs = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel")} [role="tab"]')].map((e) => e.innerText.trim() + ":" + e.getAttribute("aria-selected")).join(" ")`);
-      check(tabs === "Instance:true Soul:false", `${at} the tabs: Instance (selected), Soul`, tabs);
-      // The state is a dot AND its word, and the dot's accessible name is the word.
-      const state = await page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(inPanel("oats-panel-state"))}); return JSON.stringify([e?.innerText.trim(), e?.querySelector('[role="img"]')?.getAttribute("aria-label"), e?.querySelector("[data-state]")?.getAttribute("data-state")]); })()`);
-      check(state === JSON.stringify(["Needs you", "needs you", "needs-you"]), `${at} the header says the state in words, beside its dot: Needs you`, state);
+      const tabs = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel")} [role="tablist"][aria-label="Instance context"] [role="tab"]')].map((e) => e.innerText.trim() + ":" + e.getAttribute("aria-selected")).join(" ")`);
+      check(tabs === "Instance:true Soul:false", `${at} the tabs, named Instance context: Instance (selected), Soul`, tabs);
+      check((await page.evaluate(textOf(inPanel("oats-panel-name")))) === "Panel worktree helper", `${at} the header names the instance as words`);
+      // The state is a mark AND its word; beside its word the mark is hidden from a screen reader, which reads the word.
+      const state = await page.evaluate(stateOf);
+      check(/^\["needs-you","Needs you","· waiting \d+ (min|h|d) \(since .+\)",true\]$/.test(state), `${at} the header says the state in words beside its mark, and since when: Needs you · waiting …`, state);
       const head = await page.evaluate(textOf(inPanel("oats-panel-waiting-head")));
       check(/^Asked for your attention · waiting \d+ (min|h|d) \(since .+\)$/.test(head), `${at} Needs input: the reason in words, how long and since when`, head);
       check((await page.evaluate(textOf(inPanel("oats-panel-waiting-message")))) === "How should I merge the pull request?", `${at} Needs input: the agent's message`);
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "Works in its own worktree of oats-real, on branch agents/panel-worktree-helper.", `${at} Work: the mode in one sentence`, work);
       const session = await page.evaluate(textOf(inPanel("oats-panel-session")));
-      check(["Claude", "claude-opus-5-5 · the soul's choice", `bb · thread ${threads.get(CHILD.thread).id}`, "started "].every((part) => session.includes(part)), `${at} Session: the harness, the model and where it came from, the thread, since when`, session);
+      check(["Harness Claude", "Model claude-opus-5-5 · the soul's choice", `Runs in bb · thread ${threads.get(CHILD.thread).id}`, "Started "].every((part) => session.includes(part)), `${at} Session: the harness, the model and where it came from, the thread, since when, each a labelled fact`, session);
       check((await page.evaluate(textOf(inPanel("oats-panel-lineage")))).includes("Parent redesign-ui-lead"), `${at} Lineage: the parent`);
       let fit = await fits(page, viewport);
       check(fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0, `${at} nothing is cut sideways and every control is high enough to press`, JSON.stringify(fit));
@@ -82,10 +85,10 @@ export default [
       // the older-build chip and the paths, open
       await page.evaluate(`document.querySelectorAll('${testId("oats-panel")} details').forEach((e) => { e.open = true; })`);
       const drift = await page.evaluate(textOf(inPanel("oats-panel-drift")));
-      check(drift.startsWith("older build") && drift.includes("Its soul's repository has moved on since it was spawned."), `${at} older build opens to what moved since the spawn`, drift);
+      check(drift.includes("older build") && drift.includes("Its soul's repository has moved on since it was spawned."), `${at} older build opens to what moved since the spawn`, drift);
       const paths = await page.evaluate(textOf(inPanel("oats-panel-paths")));
       check(paths.includes("Folder") && paths.includes("/instances/panel-worktree-helper/work") && paths.includes("Home"), `${at} Paths: the folder and the home, each with its Copy`, paths);
-      const copies = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel-paths")} button')].map((e) => e.getAttribute("aria-label")).join(", ")`);
+      const copies = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel-paths")} button')].map((e) => e.innerText.trim()).join(", ")`);
       check(copies === "Copy folder path, Copy home path", `${at} the Copy buttons are named for what they copy`, copies);
       await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-paths"))}).scrollIntoView({ block: "center" })`);
       fit = await fits(page, viewport);
@@ -98,7 +101,7 @@ export default [
       check((await page.evaluate(textOf(inPanel("oats-panel-soul-description")))) === "OATS expert: answers questions about OATS.", `${at} the Soul tab: the soul's description`);
       await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-details"))}).open = true`);
       const details = await page.evaluate(textOf(inPanel("oats-panel-details")));
-      check(details.startsWith("Details") && /agents root/i.test(details) && details.includes("/agents"), `${at} Details: the agents root, with its Copy`, details);
+      check(details.includes("Details") && /agents root/i.test(details) && details.includes("/agents"), `${at} Details: the agents root, with its Copy`, details);
       check((await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled`)) === false, `${at} Open soul page is offered`);
       fit = await fits(page, viewport);
       check(fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0, `${at} the Soul tab: nothing is cut sideways and every control is high enough to press`, JSON.stringify(fit));
@@ -108,10 +111,10 @@ export default [
 
       // a stopped agent, in its own folder
       check(await open(page, viewport, threads, PARENT), `${at} the stopped agent's panel shows on ${where}`);
-      await page.evaluate(click(inPanel("oats-panel-tab-instance")));
+      await page.evaluate(click(inPanel("oats-tab-instance")));
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
-      const stopped = await page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(inPanel("oats-panel-state"))}); return JSON.stringify([e?.innerText.trim(), e?.querySelector('[role="img"]')?.getAttribute("aria-label")]); })()`);
-      check(stopped === JSON.stringify(["Stopped", "stopped"]), `${at} a stopped agent's header says Stopped, beside its dot`, stopped);
+      const stopped = await page.evaluate(stateOf);
+      check(stopped === JSON.stringify(["stopped", "Stopped", "", true]), `${at} a stopped agent's header says Stopped, beside its mark`, stopped);
       check((await page.evaluate(textOf(inPanel("oats-panel-work-sentence")))).startsWith("Has its own folder, not tied to one repository"), `${at} Work: an agent in its own folder`);
       check(!(await page.evaluate(visible(inPanel("oats-panel-waiting")))), `${at} a stopped agent shows no Needs input`);
       await page.shot(`panel-${viewport.name}-instance-stopped`);

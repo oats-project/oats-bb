@@ -143,7 +143,8 @@ What the features share, beyond the entries:
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
   state, its word and how long the agent has waited. It is the one function for every place that
   says a state in words (the tree, the line under a thread's header, the instance panel); today the
-  home's card reads its age from it, and the tree draws its dot from the same state.
+  home's card reads its age from it; the tree draws its dot from the same state and still prints a
+  stopped row's "· stopped" itself.
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home

@@ -34,22 +34,19 @@ export default [
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at} an agent's thread shows the identity row`);
-      const chips = await page.evaluate(textOf(testId("oats-identity-row")));
+      // The image's name says a thread with its row: the row says where the agent is in words, then who it is, each fact with its label.
+      const row = JSON.parse(await page.evaluate(`JSON.stringify({ status: ${textOf(testId("oats-status-line"))}, state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state"), facts: ${texts(`${testId("oats-identity-facts")} > *`)} })`));
       check(
-        ["oats-desktop-developer", "desktop-mockups-developer", "✓ desktop-mockups-developer", "parent · redesign-ui-lead", "home · …/instances/desktop-mockups-developer", "OATS"].every((chip) => chips.includes(chip)),
-        `${at} the row's chips: soul, instance, alias, parent, home, OATS`,
-        chips,
+        row.state === "working" && row.status === "Working" && JSON.stringify(row.facts) === JSON.stringify(["Soul oats-desktop-developer", "Under redesign-ui-lead", "Identity in default:oats.aweb.ai desktop-mockups-developer", "OATS"]),
+        `${at} the row: the state in words, then the soul, the parent, the identity, each with its label, and OATS`,
+        JSON.stringify(row),
       );
-      // By its place: the whole chip lies inside the row and inside the viewport, which is what the
-      // pin is for. This does not see a chip covered by something drawn over it: `visible()` would,
-      // but its probe point can land on the row beside a chip that has scrolled away, and pass.
-      const chipInRow = await page.evaluate(
-        `(() => { const chip = document.querySelector(${JSON.stringify(testId("oats-chip-oats"))})?.getBoundingClientRect(); const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect(); return Boolean(chip && row && chip.width > 0 && chip.left >= row.left && chip.right <= Math.min(row.right, innerWidth)); })()`,
+      // Nothing of the row is cut or scrolls out of sight: it is as wide as its place, and every part of it is inside it.
+      const whole = await page.evaluate(
+        `(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const box = row.getBoundingClientRect(); return row.scrollWidth <= row.clientWidth + 1 && [...row.querySelectorAll("*")].every((e) => { const r = e.getBoundingClientRect(); return r.width === 0 || (r.left >= box.left - 1 && r.right <= Math.min(box.right, innerWidth) + 1); }); })()`,
       );
-      check(chipInRow, `${at} the OATS chip is on screen, whatever the other chips' width`);
-      const rowHeight = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.getBoundingClientRect().height ?? -1`);
-      check(rowHeight > 0 && rowHeight < 50, `${at} the row is one line (${Math.round(rowHeight)} px)`);
-      await page.shot(`a13-${viewport.name}-thread`);
+      check(whole, `${at} nothing of the row is cut or out of sight`);
+      await page.shot(`a13-${viewport.name}-thread`, { targets: true });
 
       // the thread of an agent that needs you: its row is the open one, with its dot and its "?"
       const release = threads.get("thr_release");

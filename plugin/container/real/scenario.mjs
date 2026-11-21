@@ -321,9 +321,11 @@ async function shots(scene, { instance, soul, threadId, state }) {
 
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
-      const chips = await page.evaluate(textOf(testId("oats-identity-row")));
-      check([soul, instance, `home · …/instances/${instance}`, "OATS"].every((chip) => chips.includes(chip)), `${at}: the row's chips: soul, instance, home, OATS`, chips);
-      show("header row", chips);
+      // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
+      const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
+      const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
+      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`Soul ${soul}`) && line.row.includes("OATS"), `${at}: the thread's row says "${WORD[state]}", and the soul`, JSON.stringify(line));
+      show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
       await page.close();
@@ -760,16 +762,16 @@ step("the images");
 // Two scenes of different states never produce the same image. The state each scene is in:
 const STATE_OF = { "real-working": "working", "real-idle": "idle", "real-answered": "idle", "real-needs-you": "needs-you", "real-question": "needs-you", "real-stopped": "stopped", "real-missing": "missing" };
 const sceneOf = (name) => Object.keys(STATE_OF).find((scene) => name.startsWith(`${scene}-`));
-// A KNOWN GAP (D-113 / S1): at 390 px the thread's view says nothing of the agent's state (the tree
-// is in bb's drawer, and the identity row carries no state), so the thread images of two states can
-// be one image there. The status line of the identity row ends it; this list is then emptied.
-const knownGap = (names) => names.every((name) => /-390x800-thread(-dark)?\.png$/.test(name));
+// The thread's own row says its agent's state at every width (D-113), so this holds for the thread
+// images too: the gap that was reported here until then (S1) is closed.
+let same = 0;
 for (const names of sameImages(OUT)) {
   const states = new Set(names.map((name) => STATE_OF[sceneOf(name)] ?? name));
   if (states.size === 1) continue; // the same state, read twice (idle, and idle again after an answer)
-  if (knownGap(names)) note(`the same image for different states, a known gap (D-113 / S1: no state in the thread's view at 390 px): ${names.join(" = ")}`);
-  else fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
+  same += 1;
+  fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
 }
+if (same === 0) pass("no two scenes of different states produced the same image");
 
 step("the recorded answers");
 // The kernel's version, as it prints it in the deployment: the one answer here that no RPC of the plugin asks for yet.

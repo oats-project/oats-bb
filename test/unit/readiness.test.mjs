@@ -93,11 +93,12 @@ test("the check of a planned launch for a home that does not exist yet answers a
   for (const [launch, status, problems] of expected) {
     const answer = (await check(planned, launch)).result;
     assert.deepEqual([answer.status, codes({ result: answer })], [status, problems], JSON.stringify(launch));
-    // Whole, it is the answer of a home that exists: no problem and no warning is added for the
-    // missing home, its tree or the kernel's directory.
+    // No warning at all: none for the missing home, its tree or the kernel's directory (which
+    // is absent for the home that exists too, so the comparison below would not show it).
+    assert.deepEqual(answer.warnings, [], JSON.stringify(launch));
+    // Whole, it is the answer of a home that exists.
     assert.deepEqual(answer, (await check(home, launch)).result, JSON.stringify(launch));
   }
-  assert.deepEqual((await check(planned, expected[0][0])).result, { status: "ready", problems: [], warnings: [] });
   // Nothing was made where the home will be.
   for (const path of absent) assert.equal(existsSync(path), false, `${path} was not made`);
 });

@@ -127,7 +127,8 @@ export default [
     name: "acting on a row",
     run: async ({ page, at, viewport, check }) => {
       const result = testId("oats-automations-result");
-      const dialog = '[role="dialog"]';
+      // The plugin's own dialog: at the phone's width bb's drawer is a dialog too.
+      const dialog = `${testId("oats-modal")} [role="dialog"]`;
       const said = (selector, seconds = 30) => page.until(`(() => ${textOf(selector)})()`, seconds);
       const gone = (selector) => page.until(`(() => document.querySelector(${JSON.stringify(selector)}) === null ? "gone" : "")()`, 15);
 
@@ -145,7 +146,8 @@ export default [
       await page.shot(`automations-${viewport.name}-run-launched`, { targets: true });
 
       // the switch says what it is and what a press does
-      const toggle = await page.evaluate(`(() => { const s = document.querySelector(${JSON.stringify(`${rowOf("local/weekly-cleanup")} [role="switch"]`)}); return s === null ? "" : [s.getAttribute("aria-checked"), s.innerText.replace(/\s+/g, " ").trim(), s.title].join(" | "); })()`);
+      const toggleOf = `${rowOf("local/weekly-cleanup")} [role="switch"]`;
+      const toggle = [await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.getAttribute("aria-checked") ?? ""`), await page.evaluate(textOf(toggleOf)), await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.title ?? ""`)].join(" | ");
       check(toggle === "false | This computer Off | Off here: click to turn it on", `${at} a row that is off here has its switch off, and says a press turns it on`, toggle);
 
       // Edit summary: the dialog takes the focus on its field, keeps what it holds, and Escape returns the focus
@@ -214,18 +216,18 @@ export default [
     name: "no host scheduler",
     run: async ({ page, at, viewport, check }) => {
       const off = await open(page, "", testId("oats-automations-scheduler-off"));
-      check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled.", `${at} a scheduler that is off says nothing here runs`, off);
+      check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled. Enable scheduler", `${at} a scheduler that is off says nothing here runs`, off);
       const header = await page.evaluate(textOf(testId("oats-automations-scheduler")));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
       await page.shot(`automations-${viewport.name}-scheduler-off`, { targets: true });
       // Enable scheduler: says what it installs on this computer before it does; here the kernel refuses (no service manager)
       await page.evaluate(click(testId("oats-automations-enable-scheduler")));
-      const asks = await page.until(`(() => ${textOf('[role="dialog"]')})()`, 15);
+      const asks = await page.until(`(() => ${textOf(`${testId("oats-modal")} [role="dialog"]`)})()`, 15);
       check(/^Enable scheduler .*OATS installs its scheduler's timer on this computer, for the account bb's machine runs as/.test(asks ?? ""), `${at} Enable scheduler says what it installs on this computer before it does`, asks);
       await page.shot(`automations-${viewport.name}-enable-scheduler-confirm`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-act")));
-      const refused = await page.until(`(() => { const t = ${textOf('[role="dialog"]')}; return /was not enabled/.test(t) ? t : ""; })()`, 30);
-      check(/The scheduler was not enabled .*systemctl --user daemon-reload failed: Failed to connect to bus: No medium found .*E_SCHEDULE_HOST/.test(refused ?? ""), `${at} on a computer with no service manager the kernel's refusal is shown, its code after`, refused);
+      const refused = await page.until(`(() => { const t = ${textOf(`${testId("oats-modal")} [role="dialog"]`)}; return /was not enabled/.test(t) ? t : ""; })()`, 30);
+      check(/The scheduler was not enabled .*E_SCHEDULE_HOST.*systemctl --user daemon-reload failed: Failed to connect to bus: No medium found/.test(refused ?? ""), `${at} on a computer with no service manager the kernel's refusal is shown, with its code`, refused);
       await page.shot(`automations-${viewport.name}-enable-scheduler-refused`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-close")));
     },

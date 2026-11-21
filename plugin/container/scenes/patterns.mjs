@@ -8,7 +8,8 @@ import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 // says "Reading OATS…" under the id "oats-status-line" until its first read answers, and the
 // instance panel, when it is open, has a status line, notices and tabs of its own), so a read of
 // the whole document takes whichever comes first in it, which depends on when the read runs.
-// What is drawn outside the page on purpose (a dialog, an open menu's list) is read by its own id.
+// A dialog and an open menu's list are inside the page too (drawn over it, with no portal); they are
+// read by ids and roles that nothing else in the document carries while the book is open.
 const book = (id) => `${testId("oats-patterns-page")} ${testId(id)}`;
 const click = (id) => `document.querySelector(${JSON.stringify(testId(id))}).click()`;
 const into = (id) => `document.querySelector(${JSON.stringify(testId(id))}).scrollIntoView({ block: "center" })`;

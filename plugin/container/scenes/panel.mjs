@@ -60,7 +60,7 @@ function states(threads, model = RUNNING_MODEL) {
   delete rowOf(PARENT.instance).sessionEnd;
   groupOf(CHILD.instance).instances.push(copy(IDLE, { running: null, runtimeState: "unknown" }));
   // an agent with no thread in bb: a tmux row
-  const tmux = copy(TMUX, { running: true, backend: "tmux", tmux: { session: "oats-agents", socket: "/tmp/tmux-1000/oats" }, open: null });
+  const tmux = copy(TMUX, { running: true, runtimeState: "running", backend: "tmux", tmux: { session: "oats-agents", socket: "/tmp/tmux-1000/oats" }, open: null });
   delete tmux.session;
   groupOf(CHILD.instance).instances.push(tmux);
   // an agent whose session fell back to a shell, of a soul the roster does not name by a key

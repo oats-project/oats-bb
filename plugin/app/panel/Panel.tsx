@@ -45,11 +45,17 @@ const PANEL_ID = "oats-panel-page";
 // The tab a person left the panel on, for the length of the app window: another agent opens on it too.
 let shownTab: TabId = "instance";
 const listeners = new Set<() => void>();
-/** Shows one of the panel's tabs, from anywhere: an open panel turns to it, and the next one opens on it. */
-export function showPanelTab(tab: TabId): void {
-  if (shownTab === tab) return;
-  shownTab = tab;
-  for (const listener of listeners) listener();
+/**
+ * Shows one of the panel's tabs, from anywhere: an open panel turns to it, and the next one opens
+ * on it. `focus`: the tab takes the focus too, for a control that leaves the page as the tab turns.
+ */
+export function showPanelTab(tab: TabId, { focus = false }: { focus?: boolean } = {}): void {
+  if (shownTab !== tab) {
+    shownTab = tab;
+    for (const listener of listeners) listener();
+  }
+  // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
+  if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${tab}`)?.focus());
 }
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
@@ -63,8 +69,18 @@ export function AgentTab({ agent, threadId }: AgentTabProps) {
   return <InstancePanel threadId={threadId} known={agent} />;
 }
 
-/** A claim is shown unless the agent is stopped: one that waits on a person is idle in bb, and a stopped agent's claim belongs to a session that ended. */
-const claimOf = (agent: Agent): Agent["waiting"] => (agent.waiting !== null && agent.running !== false ? agent.waiting : null);
+/**
+ * The claim a panel may show, by the Desktop's gate (packages/client/waiting-on-you.mjs
+ * `waitingClaim`). On a session provider (bb) a claim is shown unless the agent is stopped: one
+ * that waits on a person is idle there, and a stopped agent's claim belongs to a session that
+ * ended. On tmux only while the kernel says the agent runs: a shell, a stopped pane and a session
+ * it cannot reach show none.
+ */
+function claimOf(agent: Agent): Agent["waiting"] {
+  if (agent.waiting === null) return null;
+  const live = agent.backend === "tmux" ? agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") : agent.running !== false;
+  return live ? agent.waiting : null;
+}
 
 /** The state to draw for an agent with no bb thread: the kernel's words alone. */
 function stateWithoutThread(agent: Agent): AgentState {
@@ -122,10 +138,15 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   );
 }
 
-/** The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one of the plugin's own: drawn after the words. */
+/**
+ * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
+ * of the plugin's own: drawn after the words. The rule is app/ui/text.ts's (`refusalLines`), word
+ * for word; that file exports it as `refusalCode` on a branch that is not on main yet, and this
+ * copy goes when it is.
+ */
 function codeOf(error: string): string | null {
   const lead = /^([A-Z][A-Z0-9_]*): /.exec(error)?.[1];
-  return lead !== undefined && (isKernelCode(lead) || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
+  return lead !== undefined && (lead.startsWith("E_") || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
 }
 
 /**
@@ -158,7 +179,8 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
   // The header never says "Needs you" for a wait the panel does not show.
   const state = drawn === "needs-you" && claim === null && node?.thread.hasPendingInteraction !== true ? stateWithoutThread(agent) : drawn;
   // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
-  const since = state === "needs-you" && claim !== null ? waitingSince(claim.since, now) : agent.running === true ? shortAge(facts?.startedAt ?? null, now) : null;
+  // An agent that needs you for a question bb shows, with no claim, has no instant to count from.
+  const since = state === "needs-you" ? (claim === null ? null : waitingSince(claim.since, now)) : state === "working" ? shortAge(facts?.startedAt ?? null, now) : null;
   const drift = facts === undefined ? null : driftLines(facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (
@@ -170,13 +192,13 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
             {instanceDisplayName(shown(agent.instance))}
           </h2>
         </div>
-        <div data-testid="oats-panel-state" title={agent.running === true && facts?.startedAt ? shown(`started ${facts.startedAt}`) : undefined}>
+        <div data-testid="oats-panel-state" title={state === "working" && facts?.startedAt ? shown(`started ${facts.startedAt}`) : undefined}>
           {/* The Desktop's word for an agent that runs; every other state says its own word, as the tree does. */}
           <StatusLine state={state} word={state === "working" ? "Running" : undefined} since={since} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
-          <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-all text-foreground`} onClick={() => showPanelTab("soul")}>
+          <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-all text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
             {soul}
           </button>
         </div>

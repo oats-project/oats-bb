@@ -3,7 +3,7 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { CopyButton } from "../ui";
-import { shown } from "../ui/text";
+import { DETAIL_WITHHELD, UNSAFE, shown } from "../ui/text";
 import { markText } from "./words";
 
 /**
@@ -15,17 +15,20 @@ export function PathLine({ path, copyName, tag, testId }: { path: string; copyNa
   return (
     <span className="flex min-w-0 flex-col items-start gap-1.5">
       <span data-testid={testId} className="min-w-0 break-words font-mono text-xs text-foreground">
-        {/* A line may end after a slash, so a long path breaks between its segments, not inside a name. */}
-        {path.split("/").map((segment, index) => (
-          <Fragment key={index}>
-            {index === 0 ? null : (
-              <>
-                /<wbr />
-              </>
-            )}
-            {shown(segment)}
-          </Fragment>
-        ))}
+        {/* Withheld whole when the path as given looks like a secret: its segments alone would not show it. */}
+        {UNSAFE.test(path)
+          ? DETAIL_WITHHELD
+          : // A line may end after a slash, so a long path breaks between its segments, not inside a name.
+            path.split("/").map((segment, index) => (
+              <Fragment key={index}>
+                {index === 0 ? null : (
+                  <>
+                    /<wbr />
+                  </>
+                )}
+                {shown(segment)}
+              </Fragment>
+            ))}
       </span>
       {tag}
       <CopyButton text={path} name={copyName} />

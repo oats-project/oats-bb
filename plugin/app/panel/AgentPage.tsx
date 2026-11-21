@@ -41,15 +41,16 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
     last.current = agent === undefined ? null : { instance: agent.instance, threadId: oats.nodeByInstance.get(agent.instance)?.thread.id ?? null };
   }
   const known = last.current !== null && last.current.instance === instance ? last.current : null;
+  const threadId = known?.threadId ?? null;
   return (
     <div data-testid="oats-agent-page" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-2">
-        {known === null || known.threadId === null ? (
+        {threadId === null ? (
           <Button data-testid="oats-agent-back" onClick={() => navigate.toPluginPanel("home")}>
             Back to Home
           </Button>
         ) : (
-          <Button data-testid="oats-agent-back" onClick={() => navigate.toThread(known.threadId!)}>
+          <Button data-testid="oats-agent-back" onClick={() => navigate.toThread(threadId)}>
             Back to the thread
           </Button>
         )}

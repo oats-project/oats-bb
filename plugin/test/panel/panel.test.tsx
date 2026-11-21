@@ -203,8 +203,12 @@ test("older build: a chip that opens to what moved since the spawn", async () =>
 
 test("the soul's name opens the Soul tab: its name, its description, Details with the agents root, and Open soul page", async () => {
   const slot = panel();
-  fireEvent.click(await slot.findByTestId("oats-panel-soul-link"));
+  const link = await slot.findByTestId("oats-panel-soul-link");
+  link.focus();
+  fireEvent.click(link);
   expect(slot.getByTestId("oats-tab-soul").getAttribute("aria-selected")).toBe("true");
+  // The link leaves with its page: the focus goes to the tab it opened, never to the body.
+  await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-tab-soul")));
   expect(text(await slot.findByTestId("oats-panel-soul-name"))).toBe("oats-expert");
   expect(text(slot.getByTestId("oats-panel-soul-description"))).toBe("OATS expert: answers questions about OATS.");
   const details = slot.getByTestId("oats-panel-details");
@@ -339,11 +343,34 @@ test("an agent whose session fell back to a shell says Failed, and one the kerne
 });
 
 test("an agent with no thread that waits on a person says Needs you, as its Needs input section does", async () => {
-  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: true } : agent));
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: true, runtimeState: "running" } : agent));
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-waiting");
   expect(stateOf(slot)).toMatch(/^Needs you· waiting 15 min \(since \d\d:\d\d\)$/);
+});
+
+test("an agent on tmux shows a claim only while the kernel says it runs: one it cannot reach says Unreachable and shows none", async () => {
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: null, runtimeState: "unreachable" } : agent));
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
+  await slot.findByTestId("oats-panel-work");
+  expect(stateOf(slot)).toBe("Unreachable");
+  expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
+});
+
+test("an agent that needs you for a question bb shows, with no claim, says Needs you with no time, never the age of its start", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, waiting: null, running: true } : agent));
+  const threads = panelThreads(agents);
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
+    rpc: handlers({ snapshot: () => panelSnapshot(agents) }),
+    sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === CHILD_THREAD ? { ...thread, hasPendingInteraction: true } : thread)) },
+  });
+  await slot.findByTestId("oats-panel-work");
+  expect(stateOf(slot)).toBe("Needs you");
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBeNull();
+  expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
 test("both headers draw the soul's mark, hidden from a screen reader beside the name it repeats", async () => {
@@ -366,6 +393,10 @@ test("what the kernel's row holds is drawn through the display filter, and copie
   expect(text(slot.getByTestId("oats-panel-harness"))).toBe("constructor");
   fireEvent.click(copyOf(slot.getByTestId("oats-panel-messaging-id")));
   await waitFor(() => expect(writes).toEqual([id]));
+  slot.unmount();
+  // A path that looks like a secret as a whole is withheld whole, also where no segment of it does.
+  const secret = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, messagingId: "https://ana:hunter2@aweb.example/ana" }) });
+  expect(text(await secret.findByTestId("oats-panel-messaging-id"))).toBe("[withheld]");
 });
 
 test("when the roster cannot be read again, an open panel keeps what it read, with its age, the refusal's code and Retry", async () => {

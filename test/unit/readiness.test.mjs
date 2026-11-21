@@ -1,6 +1,7 @@
 // Readiness (contract items 6a, 7, 8): the provider's `check` verb, whose result the kernel
 // relays as a readiness providers item, and the same checks a launch runs first.
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir, networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -62,6 +63,44 @@ test("the check of a planned launch that is not in full mode: E_BACKEND_SANDBOXE
     assert.deepEqual((await check(target, { harness: "claude", yolo: true, args: ["--permission-mode", "auto"] })).result.problems.map((p) => p.code), ["E_BACKEND_LAUNCH_ARG"]);
     assert.deepEqual((await check(target, { harness: "codex", yolo: false, args: [] })).result.problems.map((p) => p.code), ["E_BACKEND_HARNESS"]);
   }
+});
+
+// A spawn's preview asks the check before anything of the home exists (OATS 0.70.1: the kernel
+// hands the home's PLANNED path, its one planned tree and the kernel's directory by name, none
+// of them made). An absent home is absent, never an error: the answer is the one a home that
+// exists gets, whole (status, problems and warnings), so a preview says what the spawn will.
+test("the check of a planned launch for a home that does not exist yet answers as for a home that exists: refused by its mode, or ready, with no problem and no warning from the missing home", async (t) => {
+  const { dir, home, backend, bb } = await setup(t);
+  const planned = join(dir, "agents", "dev", "instances", "not-spawned-yet");
+  const kept = [join(dir, "agents", "dev", "instances", ".oats-retirement")];
+  const absent = [planned, join(planned, "work"), ...kept];
+  for (const path of absent) assert.equal(existsSync(path), false, `${path} is not there`);
+  const sandbox = { domains: [{ host: "app.example.org", capability: "oats.aweb", setting: "server" }], write: [{ path: join(dir, ".agents", "events"), reason: "the deployment's events" }], missing: [] };
+  // The input as the kernel hands it: the settings in it too (and in OATS_SETTINGS, as the harness sets them).
+  const check = (target, launch) => call("check", { home: target, soul: null, settings: { ...backend.settings(), cli: bb.cli }, launch: { ...launch, sandbox, trees: [join(target, "work")], protected: kept } }, { settings: backend.settings(), bb });
+  const expected = [
+    // Full mode: ready.
+    [{ harness: "claude", yolo: true, args: [] }, "ready", []],
+    [{ harness: "claude", yolo: null, args: ["--permission-mode", "bypassPermissions"] }, "ready", []],
+    // A sandboxed mode: the launch's own first refusal, alone.
+    [{ harness: "claude", yolo: false, args: [] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    [{ harness: "claude", yolo: null, args: [] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    [{ harness: "claude", yolo: null, args: ["--permission-mode", "auto"] }, "needs-configuration", ["E_BACKEND_SANDBOXED_MODE"]],
+    // Every other refusal of a planned launch.
+    [{ harness: "codex", yolo: true, args: [] }, "needs-configuration", ["E_BACKEND_HARNESS"]],
+    [{ harness: "claude", yolo: true, args: ["--permission-mode", "auto"] }, "needs-configuration", ["E_BACKEND_LAUNCH_ARG"]],
+  ];
+  for (const [launch, status, problems] of expected) {
+    const answer = (await check(planned, launch)).result;
+    assert.deepEqual([answer.status, codes({ result: answer })], [status, problems], JSON.stringify(launch));
+    // No warning at all: none for the missing home, its tree or the kernel's directory (which
+    // is absent for the home that exists too, so the comparison below would not show it).
+    assert.deepEqual(answer.warnings, [], JSON.stringify(launch));
+    // Whole, it is the answer of a home that exists.
+    assert.deepEqual(answer, (await check(home, launch)).result, JSON.stringify(launch));
+  }
+  // Nothing was made where the home will be.
+  for (const path of absent) assert.equal(existsSync(path), false, `${path} was not made`);
 });
 
 test("no trust setting: E_BACKEND_TRUST, needs-configuration", async (t) => {

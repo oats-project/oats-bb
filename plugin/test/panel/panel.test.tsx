@@ -8,7 +8,7 @@ import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import { InstancePanel } from "../../app/panel/Panel";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import type { Agent } from "../../model/types";
-import { handlers, resetApp } from "../helpers/render";
+import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
 import { instanceAnswer, panelAgents, panelSnapshot, panelThreads } from "./handlers";
 
@@ -280,4 +280,57 @@ test("the panel reads again when OATS changes", async () => {
   model = "claude-fable-5.2";
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:00.000Z" }));
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-model"))).toContain("claude-fable-5.2"));
+});
+
+// ---- the panel as a page of its own
+async function agentPage(subPath: string, options: RenderSlotOptions<Contract> = {}) {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const app = await loadApp();
+  const page = app.navPanels.find((candidate) => candidate.id === "agent")!;
+  expect([page.path, page.experimental_hideFromNavigation]).toEqual(["agent", true]);
+  return renderSlot<{ subPath: string }, Contract>(page, { subPath }, { rpc: handlers({ snapshot: () => panelSnapshot() }), sidebarThreads: panelThreads(), ...options });
+}
+
+test("the agent's page is the same panel by instance name, with the way back to its thread", async () => {
+  const slot = await agentPage(CHILD);
+  expect(text(await slot.findByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(text(await slot.findByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree of oats-real");
+  const back = slot.getByTestId("oats-agent-back");
+  expect(text(back)).toBe("Back to the thread");
+  fireEvent.click(back);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: CHILD_THREAD }]);
+});
+
+test("the page of an agent with no thread in bb goes back to Home; a name OATS does not list says so", async () => {
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null } : agent));
+  const tmux = await agentPage(CHILD, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
+  expect(text(await tmux.findByTestId("oats-panel-name"))).toBe(CHILD);
+  fireEvent.click(tmux.getByTestId("oats-agent-back"));
+  expect(tmux.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  tmux.unmount();
+  const gone = await agentPage("gone-helper");
+  await waitFor(() => expect(text(gone.getByTestId("oats-agent-page"))).toContain("OATS lists no agent named gone-helper in this deployment: it may have been retired."));
+  expect(gone.queryByTestId("oats-panel")).toBeNull();
+  gone.unmount();
+  const none = await agentPage("");
+  await waitFor(() => expect(text(none.getByTestId("oats-agent-page"))).toContain("No agent is named here."));
+});
+
+test("while OATS cannot be read the page says the kernel's refusal, with Retry", async () => {
+  const slot = await agentPage(CHILD, { rpc: handlers({ snapshot: () => ({ ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }) }) });
+  const alert = await slot.findByRole("alert");
+  expect(text(alert)).toContain("E_LOCAL_MISSING");
+  expect(within(alert).getByRole("button", { name: "Retry" })).not.toBeNull();
+});
+
+test("on an agent's own thread the plugin's fixed tab is the panel", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const app = await loadApp();
+  const tab = app.tabs.find((candidate) => candidate.id === "home")!;
+  const slot = renderSlot<{ threadId: string; environment: null }, Contract>(tab as never, { threadId: CHILD_THREAD, environment: null }, {
+    rpc: handlers({ snapshot: () => panelSnapshot() }),
+    sidebarThreads: panelThreads(),
+  });
+  expect(text(await slot.findByTestId("oats-panel-name"))).toBe(CHILD);
+  expect(slot.queryByTestId("oats-home-tab")).toBeNull();
 });

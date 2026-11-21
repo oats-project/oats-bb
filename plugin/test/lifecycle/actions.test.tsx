@@ -6,7 +6,7 @@ import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@get-bb/plugin-sdk/app";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
+import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
@@ -40,6 +40,7 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
     ["start", "4_lifecycle"],
     ["restart", "4_lifecycle"],
     ["retire", "4_lifecycle"],
+    ["unreadable", "4_lifecycle"],
   ]);
   expect(app.appOverlays).toHaveLength(1);
   const Overlay = app.appOverlays[0]!.component;
@@ -65,7 +66,7 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
   await new Promise((resolve) => setTimeout(resolve, 0));
   const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null ? [] : [id]));
   const pick = (id: string) => items[id]!.run({ requestRename: () => {} });
-  return { slot, shown, pick, label: (id: string) => items[id]!.label };
+  return { slot, shown, pick, label: (id: string) => items[id]!.label, item: (id: string) => items[id] ?? null };
 }
 const calls = (slot: Awaited<ReturnType<typeof menu>>["slot"], ...methods: string[]) =>
   slot.inspection.rpcCalls.filter((call) => methods.includes(call.method));
@@ -100,9 +101,57 @@ test("each action shows only in the states it applies to", async () => {
   ]);
 });
 
-test("no action shows while OATS cannot be read", async () => {
-  const { shown } = await menu("thr_redesign", { snapshot: () => ({ ok: false, at: "t", code: "OATS_NOT_FOUND", message: "oats: not found" }) });
-  expect(shown()).toEqual([]);
+test("with no roster ever read, every thread's menu has one entry, off, that says OATS can't be read and why: never only bb's own acts", async () => {
+  for (const threadId of ["thr_redesign", "thr_plain"]) {
+    const { shown, item } = await menu(threadId, { snapshot: () => ({ ok: false, at: "t", code: "OATS_NOT_FOUND", message: "oats: not found", last: null }) });
+    expect(shown()).toEqual(["unreadable"]);
+    expect(item("unreadable")).toMatchObject({ label: "OATS agents: can't be read", detail: "OATS is not installed on this machine", disabled: true });
+    resetApp();
+  }
+});
+
+test("while OATS cannot be read after it was, the acts stay for the agents of the last roster, each saying how old that is", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const stale = () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last });
+  const { shown, item } = await menu("thr_redesign", { snapshot: stale });
+  expect(shown()).toEqual(["stop", "restart", "retire"]);
+  for (const id of ["stop", "restart", "retire"]) expect(item(id)).toMatchObject({ detail: "as of 2 min ago" });
+  expect(item("stop")!.disabled).toBeUndefined();
+  resetApp();
+  // A thread that was no agent's has none, and no "can't be read" entry either: the roster is known, as of then.
+  expect((await menu("thr_plain", { snapshot: stale })).shown()).toEqual([]);
+});
+
+test("with the roster just read the acts carry no age", async () => {
+  const { item } = await menu("thr_redesign");
+  expect(item("stop")!.detail).toBeUndefined();
+});
+
+test("while the first read is in flight the menu says so only once it has taken more than a second", async () => {
+  let answer!: (value: ReturnType<typeof fixtureSnapshot>) => void;
+  const pending = new Promise<ReturnType<typeof fixtureSnapshot>>((resolve) => (answer = resolve));
+  const app = await loadApp();
+  let items: Record<string, PluginThreadAction | null> = {};
+  const slot = renderSlot<object, Contract>(
+    {
+      component: function Menu() {
+        const navigate = useBbNavigate();
+        const next: Record<string, PluginThreadAction | null> = {};
+        for (const action of app.threadActions) next[action.id] = action.item({ thread: target("thr_plain"), data: action.useData!({ threadIds: ["thr_plain"] }), sdk: {} as never, navigate, experimental_panel: {} as never });
+        items = next;
+        return null;
+      },
+    },
+    {},
+    { rpc: handlers({ snapshot: () => pending }), sidebarThreads: sidebarThreads() },
+  );
+  const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null ? [] : [id]));
+  expect(shown()).toEqual([]); // a normal start flashes nothing onto the menus
+  await waitFor(() => expect(shown()).toEqual(["unreadable"]), { timeout: 3_000 });
+  expect(items.unreadable).toMatchObject({ label: "OATS agents: reading…", disabled: true });
+  answer(fixtureSnapshot());
+  await waitFor(() => expect(shown()).toEqual([]));
+  slot.unmount();
 });
 
 test("Stop shows the kernel's plan; Confirm calls stopPlan then stopApply with the plan's revision", async () => {

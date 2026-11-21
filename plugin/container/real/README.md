@@ -145,7 +145,8 @@ home's modules (`<instances>/.oats-retirement/modules/…`, OATS 0.70.0), and th
 command. The plugin's snapshot has the claim, the tree draws the agent as needing you, and the
 home's card shows the question with one button per option. The run presses one, which is the
 plugin's `threads.interactions.resolve`: bb has no pending interaction left, the model is asked
-again with the answer, the claim is gone from `oats status` and the agent is idle.
+again with the answer, the claim is gone from `oats status`, and the agent is idle and drawn so
+in the tree.
 
 **Part B, the scenes the fixtures describe**: a lead with two children (`redesign-ui-lead`; the
 children are spawned with `oats spawn --parent` on the command line, since the plugin's spawn names

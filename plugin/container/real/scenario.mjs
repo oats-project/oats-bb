@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The real run (container/real/README.md), inside the container once setup.sh has finished: bb-app,
-// the packed kernel, the bb session provider, Claude Code on the mock model, and the plugin
+// the OATS kernel, the bb session provider, Claude Code on the mock model, and the plugin
 // installed from the checkout with `oatsBin` set to the recording wrapper (oats-record.mjs).
 //
 // Every act goes through the plugin's own RPC (`bb plugin rpc call oats …`, the calls its UI
@@ -425,7 +425,9 @@ try {
   check(row !== undefined, "oats status: the claim is cleared once the question is answered, and the agent is idle", brief(rowOf(A.instance)));
   show("oats status", brief(row));
   const afterAnswer = snapshotRow(A.instance);
-  check(afterAnswer !== undefined && afterAnswer.waiting === null && bbThread(threadId)?.hasPendingInteraction !== true, "the plugin's snapshot has no claim left, and bb no pending interaction: the agent no longer needs you", JSON.stringify(afterAnswer));
+  check(afterAnswer !== undefined && afterAnswer.waiting === null && pendingQuestions().length === 0, "the plugin's snapshot has no claim left, and bb no pending interaction", JSON.stringify(afterAnswer));
+  // And the tree: the row that was drawn as needing you is drawn idle.
+  await shots("real-answered", { ...A, threadId, state: "idle" });
   // The answer reached Claude Code: the model was asked again in that conversation, with the tool's result.
   const asks = modelRequests().filter((request) => request.event === "asked-a-question");
   const after = modelRequests().filter((request) => request.event === "answered" && request.n > asks[0]?.n && request.messages > asks[0]?.messages);

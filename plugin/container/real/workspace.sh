@@ -10,7 +10,9 @@
 #     only. Their names are the ones the plugin's fixtures use.
 #   - the deployment $REAL/deploy, onboarded into that workspace, with the host's facts for bb
 #     (`trust: container`, the pinned version) and a default launch configuration for Claude Code
-#     with `yolo: true`, so that no bb approval waits (the image has no bubblewrap).
+#     with `yolo: true` (bb's full mode): the plugin's spawn, start and restart name no mode, and
+#     the provider launches in full mode only, so without this default the kernel refuses them
+#     with E_BACKEND_SANDBOXED_MODE (README.md, "The deployment").
 set -eu
 REAL=${REAL:-/home/node/real}
 BB_VERSION=${BB_VERSION:-$(bb --version)}

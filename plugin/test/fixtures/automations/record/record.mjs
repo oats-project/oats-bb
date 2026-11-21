@@ -138,6 +138,8 @@ keep("schedule-enable-workspace.json", "ok", "schedule", "enable", "oats-real/ni
 keep("schedule-describe.json", "ok", "schedule", "update", "status-check", "--description=Check that the roster answers", "--json");
 keep("schedule-describe-workspace.json", "E_AUTOMATION_WORKSPACE", "schedule", "update", "oats-real/nightly-digest", "--description=Mine now", "--json");
 keep("schedule-show.json", "ok", "schedule", "show", "daily-review", "--json");
+// What the Capabilities page lists in this workspace: a trigger source's capability is looked up in it.
+keep("capabilities.json", "ok", "capabilities", "--json");
 
 // ---- a list with rows that run here and no host timer (the banner's state)
 keep("schedule-list-scheduler-off.json", "ok", "schedule", "list", "--json");

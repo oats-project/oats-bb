@@ -3,9 +3,9 @@
 // functions over the rows of contract/automations.ts: no bb and no React import. Nothing here
 // derives a placement: the kernel's `runsHere`, `reason` and `enabledHere` are read as given.
 import type { AutomationHost, AutomationKind, AutomationList, AutomationOn, AutomationRow, AutomationRun, AutomationScheduler, AutomationSoul } from "../../contract/automations";
+import { eventLabel, PULL_REQUEST } from "../../kernel/automations";
 import { displayLine, MAX_DISPLAY_LINE } from "../ui/text";
 
-export const PULL_REQUEST = "github.pull_request";
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };
 export const NOUNS: Record<AutomationKind, string> = { schedule: "schedule", trigger: "trigger" };
 
@@ -307,13 +307,6 @@ export const outcomeWords = (outcome: string | null): string | null => (outcome 
 /** When a run happened: a trigger's fire has `at`, a schedule's run its start, else the minute it was due. */
 export const runTime = (run: AutomationRun | null): string | null => run?.at ?? run?.startedAt ?? run?.scheduledFor ?? null;
 
-/** A fire's label from a list row's last run: its subject, else its number, as `#42` for a pull request; else its key. */
-export function fireLabel(run: AutomationRun, source: string | null): string | null {
-  const name = displayLine(run.subject) ?? (run.number !== null && run.number > 0 ? String(run.number) : null);
-  if (name !== null) return source === PULL_REQUEST ? `#${name}` : name;
-  return displayLine(run.key);
-}
-
 /**
  * The row's last cell: "Next in 5 min" (or "Off here", "Polls at the next tick", "Next not
  * reported") over "Last 2 h ago · agent launched" (or "Not run yet"). Null for a row another
@@ -326,7 +319,7 @@ export function lastNext(row: AutomationRow, now: number): { next: string; nextT
   // A trigger that runs here but has not polled yet polls at the next tick (nextDue null).
   const nextText = next !== null ? `Next ${next.label}` : !row.enabledHere ? "Off here" : row.runsHere && row.kind === "trigger" ? "Polls at the next tick" : "Next not reported";
   // A trigger's last fire is named by its event's subject, else its number; a schedule's by its outcome.
-  const fired = row.lastRun === null ? null : row.kind === "trigger" ? fireLabel(row.lastRun, row.on?.source ?? null) : row.lastRun.number ? `#${row.lastRun.number}` : null;
+  const fired = row.lastRun === null ? null : row.kind === "trigger" ? eventLabel(row.lastRun, row.on?.source ?? null) : row.lastRun.number ? `#${row.lastRun.number}` : null;
   const outcome = outcomeWords(row.lastRun?.outcome ?? null);
   return {
     next: nextText,
@@ -400,5 +393,3 @@ export const FAILED_RUN_TEXT = ", a run failed";
  * and carries no outcome, and `unknown`, a missing last run and any other word do not mark.
  */
 export const lastRunFailed = (row: AutomationRow): boolean => row.kind === "schedule" && row.lastRun !== null && row.lastRun.outcome !== null && FAILED_OUTCOMES.includes(row.lastRun.outcome);
-/** How many rows of the lists failed their last run. */
-export const failedRuns = (lists: readonly AutomationList[]): number => lists.reduce((sum, list) => sum + list.rows.filter(lastRunFailed).length, 0);

@@ -83,6 +83,22 @@ describe("the lists", () => {
     expect((await slot.findByRole("alert")).textContent).toBe(`Schedules could not be read${message}CHOOSE_HOSTRetry`);
   });
 
+  it("a re-read that fails after one that answered says so over the list still shown, with Retry", async () => {
+    let asked = 0;
+    const slot = await page("", {
+      automations: () => {
+        asked += 1;
+        if (asked > 1) throw new Error("the plugin's server is restarting");
+        return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+    });
+    expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(11);
+    fireEvent.click(slot.getByTestId("oats-automations-refresh"));
+    const alert = await slot.findByRole("alert");
+    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingShowing what was read .+\.Retry$/);
+    expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(11);
+  });
+
   it("a server that does not answer says so, with Retry", async () => {
     const slot = await page("", {
       automations: () => {
@@ -152,6 +168,26 @@ describe("a row's page", () => {
     const slot = await page("schedules/local/gone");
     await slot.findAllByTestId("oats-automation-row");
     await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "schedules" } }]));
+  });
+
+  it("Open capability shows for a source whose capability the Capabilities page lists once, and opens that page", async () => {
+    const listed = { capabilities: () => ({ capabilities: [{ id: "acme.graph", description: "A knowledge graph.", origin: "oats-real", souls: 1 }] }) };
+    const slot = await page("triggers/oats-real/harvest-review", listed);
+    const button = await slot.findByTestId("oats-automation-open-capability");
+    expect(button.getAttribute("aria-label")).toBe("Open capability acme.graph");
+    fireEvent.click(button);
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "capabilities" }]);
+    resetApp();
+    // Not listed, or listed twice: the source stays text.
+    const unlisted = await page("triggers/oats-real/harvest-review");
+    await unlisted.findByTestId("oats-automation-when");
+    await waitFor(() => expect(unlisted.inspection.rpcCalls.map((call) => call.method)).toContain("capabilities"));
+    expect(unlisted.queryByTestId("oats-automation-open-capability")).toBeNull();
+    resetApp();
+    const twice = await page("triggers/oats-real/harvest-review", { capabilities: () => ({ capabilities: [1, 2].map(() => ({ id: "acme.graph", description: "", origin: "x", souls: 0 })) }) });
+    await twice.findByTestId("oats-automation-when");
+    await waitFor(() => expect(twice.inspection.rpcCalls.map((call) => call.method)).toContain("capabilities"));
+    expect(twice.queryByTestId("oats-automation-open-capability")).toBeNull();
   });
 
   it("Open file previews the definition from the machine that holds the deployment", async () => {

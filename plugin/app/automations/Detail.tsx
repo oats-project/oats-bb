@@ -5,8 +5,9 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
-import { displayLine, refusalLines, shown } from "../ui/text";
+import { displayLine, shown, shownBlock } from "../ui/text";
 import { Button, Card, Empty, Section, Toned } from "../ui";
+import { eventLabel } from "../../kernel/automations";
 import { OriginTag, StateTags } from "./List";
 import { FactList, Quote } from "./parts";
 import type { FactRow, QuoteLine } from "./parts";
@@ -15,7 +16,6 @@ import {
   causeWords,
   cronInWords,
   EVENTS_SHOWN,
-  fireLabel,
   harnessName,
   hostLogin,
   LEAD_INS,
@@ -39,22 +39,18 @@ import type { CapabilitySource, RunState } from "./words";
 
 const NOTE = "text-xs text-muted-foreground";
 const LINE = "min-w-0 break-words text-sm";
-const PROSE = "break-words rounded-md border border-border bg-card p-3 font-mono text-xs leading-relaxed text-foreground";
+const PROSE = "max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-3 font-mono text-xs leading-relaxed text-foreground";
 
-/**
- * A prompt or a message, whole, as its lines: the text is held to the display filter as a whole
- * (what is withheld is withheld whole), then each line is one display line. No line break reaches
- * the screen as a character: each line is an element of its own.
- */
-const proseLines = (text: string): string[] => refusalLines(text);
-function Prose({ text, line = (value: string): ReactNode => value }: { text: string; line?: (value: string) => ReactNode }) {
+// A prompt or a wake message is drawn as a block through `shownBlock` (app/ui/text.ts): the text
+// as it is, for these two fields only (decided by the spec's author: it is the definition a
+// person or their workspace wrote, the page's purpose is to read it, and the same reader can open
+// the file). Nothing is withheld and nothing is cut; only a character that is not text is drawn
+// as U+FFFD, so a definition from a shared repository cannot reorder or hide what the page shows.
+/** The block a prompt or a message is drawn in: whole, its lines and indentation kept, scrolling when it is long. */
+function Prose({ children }: { children: ReactNode }) {
   return (
-    <div data-testid="oats-automation-prose" className={PROSE}>
-      {proseLines(text).map((value, at) => (
-        <span key={at} className="block">
-          {line(value)}
-        </span>
-      ))}
+    <div data-testid="oats-automation-prose" tabIndex={0} className={PROSE}>
+      {children}
     </div>
   );
 }
@@ -129,7 +125,7 @@ function Sends({ row }: { row: AutomationRow }) {
   if (row.run === "wake") {
     return (
       <Section title="Wake message" testId="oats-automation-sends">
-        {row.message !== null ? <Prose text={row.message} /> : <Empty>No wake message reported.</Empty>}
+        {row.message !== null ? <Prose>{shownBlock(row.message)}</Prose> : <Empty>No wake message reported.</Empty>}
         <FactList facts={[["Wakes", row.home === null ? null : shown(row.home)]]} />
       </Section>
     );
@@ -171,20 +167,17 @@ function Sends({ row }: { row: AutomationRow }) {
       {trigger ? <p className={NOTE}>highlighted fields are filled from the event</p> : null}
       {row.task !== null ? (
         <>
-          <Prose
-            text={row.task}
-            line={(value) =>
-              trigger
-                ? taskParts(value, row.on).map((part, at) =>
-                    "field" in part ? (
-                      <span key={at} data-field={part.field} className="rounded border border-border bg-background px-1 font-semibold">{`{${part.field}}`}</span>
-                    ) : (
-                      part.text
-                    ),
-                  )
-                : value
-            }
-          />
+          <Prose>
+            {trigger
+              ? taskParts(shownBlock(row.task), row.on).map((part, at) =>
+                  "field" in part ? (
+                    <span key={at} data-field={part.field} className="rounded border border-border bg-background px-1 font-semibold">{`{${part.field}}`}</span>
+                  ) : (
+                    part.text
+                  ),
+                )
+              : shownBlock(row.task)}
+          </Prose>
           {trigger ? (
             <p className={NOTE}>
               {capabilitySource(row.on) !== null
@@ -303,7 +296,7 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
   // A trigger's fires are named by what fired; a schedule's runs lead with their outcome.
   const fromRow = (run: AutomationRun) =>
     trigger
-      ? { at: runTime(run), parts: [fireLabel(run, row.on?.source ?? null), run.event === null ? null : (displayLine(run.event)?.replace(/_/g, " ") ?? null), displayLine(run.instance), outcomeWords(run.outcome)], run }
+      ? { at: runTime(run), parts: [eventLabel(run, row.on?.source ?? null), run.event === null ? null : (displayLine(run.event)?.replace(/_/g, " ") ?? null), displayLine(run.instance), outcomeWords(run.outcome)], run }
       : { at: runTime(run), parts: [outcomeWords(run.outcome), run.event === null ? null : run.event.replace(/_/g, " "), run.number ? `#${run.number}` : null, run.instance], run };
   const items =
     st !== null && st.fired.length > 0
@@ -452,6 +445,7 @@ function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunS
             ]}
           />
           {action}
+          {/* The command is drawn as it is pasted: its id and its directory are the kernel's own, quoted for a shell (words.ts). */}
           <p className={NOTE}>
             {"From a terminal: "}
             <code className="break-all rounded border border-border bg-background px-1 font-mono text-foreground">{reconcileCommand(row)}</code>
@@ -585,7 +579,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
               facts={
                 row.origin.kind === "local"
                   ? [["Runs on", "This computer"]]
-                  : [["Runs on", row.runsOn === null ? null : shown(row.runsOn)], ["This computer", shown(host.name ?? "no host name")], ["Acts as", row.owner === null ? null : shown(row.owner)], ["Logged in", hostLogin(host, row.owner)]]
+                  : [["Runs on", row.runsOn === null ? null : shown(row.runsOn)], ["This computer", shown(host.name ?? "no host name")], ["Acts as", row.owner === null ? null : shown(row.owner)], ["Logged in", shown(hostLogin(host, row.owner))]]
               }
             />
             <p data-testid="oats-automation-verdict" className="text-sm font-semibold text-foreground">

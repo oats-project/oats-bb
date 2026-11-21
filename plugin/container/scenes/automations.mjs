@@ -2,10 +2,12 @@
 // a host with no name and no scheduler, and the page with `oats` gone. The lists are what the real
 // kernel printed (test/fixtures/automations/); their times are the recording's, so "2 d ago" moves
 // with the day the checks run.
-import { testId, textOf, texts, visible } from "../browser.mjs";
+import { fill, testId, textOf, texts, visible } from "../browser.mjs";
 
 const ROW = testId("oats-automation-row");
 const count = (selector) => `document.querySelectorAll(${JSON.stringify(selector)}).length`;
+/** Presses the first element of `selector`. */
+const click = (selector) => `(() => { const found = document.querySelector(${JSON.stringify(selector)}); if (!found) throw new Error("nothing to press: " + ${JSON.stringify(selector)}); found.click(); return true; })()`;
 /** Opens the page at a route and waits for what it should draw. → the text of `wait`, or "" */
 async function open(page, route, wait) {
   await page.goto(`/plugins/oats/automations${route}`);
@@ -46,6 +48,13 @@ export default [
       const workspace = await page.until(`(() => ${count(ROW)} === 4 ? "4" : "")()`, 10);
       check(workspace === "4", `${at} Workspace shows the 4 schedules a member's repository holds`, String(await page.evaluate(count(ROW))));
       await page.shot(`automations-${viewport.name}-schedules-workspace`, { targets: true });
+
+      // a search nothing answers to
+      await open(page, "", ROW);
+      await page.evaluate(fill(testId("oats-search"), "nothing is called this"));
+      const none = await page.until(`(() => ${count(ROW)} === 0 ? ${textOf(`${testId("oats-automations-list")} ${testId("oats-empty")}`)} : "")()`, 10);
+      check(none === "No schedules match.", `${at} a search nothing answers to says "No schedules match."`, String(none));
+      await page.shot(`automations-${viewport.name}-no-match`, { targets: true });
     },
   },
   {
@@ -96,6 +105,11 @@ export default [
       const made = await page.evaluate(`document.querySelector(${JSON.stringify(detail)}).querySelectorAll("img, a").length`);
       check(made === 0, `${at} no image and no link is made from a source's text`, String(made));
       await page.shot(`automations-${viewport.name}-trigger-source`, { targets: true });
+
+      // a source check that failed at a poll: its own card, with the kernel's message, code and field
+      const check_ = await open(page, "/triggers/oats-real/harvest-closed", testId("oats-automation-problem"));
+      check(/^Source check failed Message on\.events: acme\.graph:harvest-branches has no event closed \(its events: opened, updated\) Code E_TRIGGER_INVALID Field on\.events Checked /.test(check_ ?? ""), `${at} a source check that failed at a poll has its own card: the kernel's message, code and field, and when`, check_);
+      await page.shot(`automations-${viewport.name}-trigger-source-check-failed`, { targets: true });
     },
   },
   {
@@ -141,6 +155,68 @@ export default [
     },
   },
   {
+    stage: "automations-poll-failed",
+    name: "a trigger whose last poll failed",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/plugins/oats/automations/triggers/oats-real/harvest-review");
+      const poll = await page.until(`(() => ${textOf(testId("oats-automation-last-poll"))})()`, 30);
+      check(/^Last poll .+ failed: the source refused$/.test(poll ?? ""), `${at} a failed poll says when, and its cause in words`, poll);
+      const error = await page.evaluate(textOf(testId("oats-automation-poll-error")));
+      check(error === "acme.graph:harvest-branches refused the poll E_TRIGGER_POLL", `${at} the kernel's error follows, its code after`, error);
+      const says = await page.evaluate(textOf(testId("oats-automation-source-says")));
+      check(says === "acme.graph · harvest-branches says: graph-offline <img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run.", `${at} the source's own refusal is quoted under whose it is`, says);
+      const from = await page.evaluate(textOf(testId("oats-automation-lists-from")));
+      check(from === "From the last successful poll, before the failure above", `${at} the lists under it say they are the last good poll's`, from);
+      // Open capability: in this stage `oats capabilities` answers the recording's workspace, which lists the source's capability once
+      const openCapability = await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automation-open-capability"))})?.getAttribute("aria-label") ?? "")()`, 20);
+      check(openCapability === "Open capability acme.graph", `${at} a source whose capability the Capabilities page lists offers Open capability`, String(openCapability));
+      await page.shot(`automations-${viewport.name}-trigger-poll-failed`, { targets: true });
+    },
+  },
+  {
+    stage: "automations-old-oats",
+    name: "an OATS without the automations lists",
+    run: async ({ page, at, viewport, check }) => {
+      const gate = await open(page, "", testId("oats-automations-gate"));
+      check(gate === "Schedules need OATS 0.29 or later Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", `${at} an OATS without the lists: the page says which OATS it needs`, gate);
+      await page.shot(`automations-${viewport.name}-old-oats`, { targets: true });
+    },
+  },
+  {
+    stage: "automations-slow",
+    name: "reading, reading again, and a re-read that fails over the list still shown",
+    run: async ({ page, at, viewport, check, sleep }) => {
+      // The lists take ten seconds. The server keeps one read for every client, so the scene first
+      // asks for a new one (Refresh), then loads the page again while that read is still under way:
+      // a page with nothing read yet says it is reading, in the place the list will be.
+      await page.goto("/plugins/oats/automations");
+      await page.until(visible(testId("oats-automations-refresh")), 40);
+      await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automations-refresh"))})?.disabled === false ? "ready" : "")()`, 40);
+      await page.evaluate(click(testId("oats-automations-refresh")));
+      await sleep(2500);
+      await page.goto("/plugins/oats/automations");
+      const reading = await page.until(`(() => ${textOf(`${testId("oats-automations-page")} ${testId("oats-loading")}`)})()`, 20);
+      check(reading === "Reading schedules…", `${at} while the lists are read the page says "Reading schedules…"`, String(reading));
+      await page.shot(`automations-${viewport.name}-loading`, { targets: true });
+      await page.until(visible(ROW), 60);
+
+      // Refresh: the list stays, and the page says it is reading again
+      await page.evaluate(click(testId("oats-automations-refresh")));
+      const again = await page.until(`(() => ${textOf(`${testId("oats-automations-page")} ${testId("oats-stale")}`)})()`, 15);
+      check(/^Refreshing… showing what was read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
+      await page.shot(`automations-${viewport.name}-refreshing`, { targets: true });
+      await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-stale"))}) === null ? "done" : "")()`, 60);
+
+      // the next read is refused: the notice says so over the list that was read, with its age
+      refuse();
+      await page.evaluate(click(testId("oats-automations-refresh")));
+      const failed = await page.until(`(() => ${textOf(testId("oats-automations-failed"))})()`, 40);
+      check(/^Schedules could not be read oats-schedules\.json: jobs must be an object Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      await page.shot(`automations-${viewport.name}-failed-over-list`, { targets: true });
+      slow();
+    },
+  },
+  {
     stage: "no-oats",
     name: "Automations without oats",
     run: async ({ page, at, viewport, check }) => {
@@ -154,7 +230,38 @@ export default [
 const lists = (schedule, trigger) => ({ "schedule list": { file: `automations/${schedule}` }, "trigger list": { file: `automations/${trigger}` } });
 const settled = (untilSnapshot) => untilSnapshot((snapshot) => snapshot.ok === true);
 
+const REFUSAL = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });
+// What the "automations-slow" stage's scene changes while it runs: the lists slow, then the schedules refused.
+let slow = () => undefined;
+let refuse = () => undefined;
+
 export const stages = {
+  // The lists and one trigger's state as they were after the source refused a poll.
+  "automations-poll-failed": {
+    label: "AU5",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({ status: { stdout: statusWithRealIds(threads) }, ...lists("schedule-list.json", "trigger-list-poll-failed.json"), "trigger status": { file: "automations/trigger-status-poll-failed.json" }, capabilities: { file: "automations/capabilities.json" } });
+      await settled(untilSnapshot);
+    },
+  },
+  // An OATS from before the automations lists: what `oats version --json` of such a kernel lists (no `automations`).
+  "automations-old-oats": {
+    label: "AU6",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({ status: { stdout: statusWithRealIds(threads) }, version: { stdout: JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", version: "0.28.0", desktopApi: 1, scheduleApi: 2, features: ["schedule", "session-start"] }) } });
+      await settled(untilSnapshot);
+    },
+  },
+  "automations-slow": {
+    label: "AU7",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      const status = { status: { stdout: statusWithRealIds(threads) } };
+      slow = () => fake({ ...status, "schedule list": { file: "automations/schedule-list.json", sleepMs: 10000 }, "trigger list": { file: "automations/trigger-list.json", sleepMs: 10000 } });
+      refuse = () => fake({ ...status, "schedule list": { stdout: REFUSAL } });
+      slow();
+      await settled(untilSnapshot);
+    },
+  },
   // `host.name` taken out of oats-local.yaml: every workspace row is unplaced.
   "automations-host-unnamed": {
     label: "AU1",
@@ -174,8 +281,7 @@ export const stages = {
   "automations-failed": {
     label: "AU4",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });
-      fake({ status: { stdout: statusWithRealIds(threads) }, "schedule list": { stdout: refusal } });
+      fake({ status: { stdout: statusWithRealIds(threads) }, "schedule list": { stdout: REFUSAL } });
       await settled(untilSnapshot);
     },
   },

@@ -42,8 +42,8 @@
      "tz": "Europe/Madrid",
      "message": "Anything new on your review?"
     },
-    "createdAt": "2026-11-21T18:35:29.142Z",
-    "updatedAt": "2026-11-21T18:35:29.142Z",
+    "createdAt": "2026-11-21T20:17:25.238Z",
+    "updatedAt": "2026-11-21T20:17:25.238Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -98,8 +98,8 @@
     "agent": "oats-developer",
     "backend": "bb",
     "task": "Check the build queue.",
-    "createdAt": "2026-11-21T18:35:30.359Z",
-    "updatedAt": "2026-11-21T18:35:30.359Z",
+    "createdAt": "2026-11-21T20:17:25.920Z",
+    "updatedAt": "2026-11-21T20:17:25.920Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -108,7 +108,7 @@
      "capture": "unknown",
      "migrationRequired": true
     },
-    "nextRun": "2026-11-21T19:00:00.000Z",
+    "nextRun": "2026-11-21T21:00:00.000Z",
     "lastRun": null,
     "history": {
      "status": "ok",
@@ -144,7 +144,7 @@
     "harness": null,
     "model": null,
     "concurrency": null,
-    "nextDue": "2026-11-21T19:00:00.000Z",
+    "nextDue": "2026-11-21T21:00:00.000Z",
     "enabled": true
    },
    {
@@ -154,8 +154,8 @@
     "kind": "operation",
     "operation": "knowledge:checkpoint",
     "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
-    "createdAt": "2026-11-21T18:35:36.603Z",
-    "updatedAt": "2026-11-21T18:35:36.603Z",
+    "createdAt": "2026-11-21T20:17:29.226Z",
+    "updatedAt": "2026-11-21T20:17:29.226Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -208,8 +208,8 @@
      "status",
      "--json"
     ],
-    "createdAt": "2026-11-21T18:35:30.550Z",
-    "updatedAt": "2026-11-21T18:35:38.812Z",
+    "createdAt": "2026-11-21T20:17:26.064Z",
+    "updatedAt": "2026-11-21T20:17:30.742Z",
     "description": "Check that the roster answers",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
@@ -219,7 +219,7 @@
      "capture": "unknown",
      "migrationRequired": true
     },
-    "nextRun": "2026-11-21T18:45:00.000Z",
+    "nextRun": "2026-11-21T20:30:00.000Z",
     "lastRun": null,
     "history": {
      "status": "ok",
@@ -248,7 +248,7 @@
     "harness": null,
     "model": null,
     "concurrency": null,
-    "nextDue": "2026-11-21T18:45:00.000Z",
+    "nextDue": "2026-11-21T20:30:00.000Z",
     "enabled": true
    },
    {
@@ -260,8 +260,8 @@
     "backend": "bb",
     "task": "Close what the week left open.",
     "yolo": true,
-    "createdAt": "2026-11-21T18:35:31.102Z",
-    "updatedAt": "2026-11-21T18:35:37.537Z",
+    "createdAt": "2026-11-21T20:17:26.356Z",
+    "updatedAt": "2026-11-21T20:17:29.837Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -512,7 +512,7 @@
    "command": "oats trigger list"
   },
   "snapshot": {
-   "takenAt": "2026-11-21T18:35:28.544Z",
+   "takenAt": "2026-11-21T20:17:24.885Z",
    "problems": 0
   },
   "scheduler": {

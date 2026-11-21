@@ -57,7 +57,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:37:25.324Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "instance": "graph-reviewer-graph-watch-harvest-a",
      "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-harvest-a",
      "event": "opened",
@@ -65,7 +65,7 @@
      "subject": "harvest/a",
      "key": "local/graph-watch:harvest/a:h1"
     },
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -77,8 +77,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:35:54.118Z",
-    "updatedAt": "2026-11-21T18:35:55.185Z"
+    "createdAt": "2026-11-21T20:17:42.215Z",
+    "updatedAt": "2026-11-21T20:17:42.953Z"
    },
    {
     "kind": "trigger",
@@ -137,8 +137,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:35:54.304Z",
-    "updatedAt": "2026-11-21T18:35:54.969Z"
+    "createdAt": "2026-11-21T20:17:42.338Z",
+    "updatedAt": "2026-11-21T20:17:42.813Z"
    },
    {
     "kind": "trigger",
@@ -185,7 +185,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:35:58.535Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "instance": "oats-developer-triage-41",
      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
      "event": "opened",
@@ -193,7 +193,7 @@
      "subject": "41",
      "key": "local/pr-triage:github.com/acme/app#41:opened:2026-11-20T10:41:00Z"
     },
-    "nextDue": "2026-11-21T18:37:58.535Z",
+    "nextDue": "2026-11-21T20:19:45.457Z",
     "enabled": true,
     "spawn": {
      "soul": "oats-developer",
@@ -205,8 +205,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:35:53.720Z",
-    "updatedAt": "2026-11-21T18:35:53.720Z"
+    "createdAt": "2026-11-21T20:17:41.945Z",
+    "updatedAt": "2026-11-21T20:17:41.945Z"
    },
    {
     "kind": "trigger",
@@ -312,7 +312,7 @@
      "perKey": 1
     },
     "lastRun": null,
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -328,7 +328,7 @@
      "code": "E_TRIGGER_INVALID",
      "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)",
      "field": "on.events",
-     "at": "2026-11-21T18:37:25.324Z"
+     "at": "2026-11-21T20:19:12.371Z"
     }
    },
    {
@@ -379,7 +379,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:37:25.324Z",
+     "at": "2026-11-21T20:19:12.371Z",
      "instance": "graph-reviewer-harvest-review-harvest-a",
      "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-harvest-a",
      "event": "opened",
@@ -387,7 +387,7 @@
      "subject": "harvest/a",
      "key": "oats-real/harvest-review:harvest/a:h1"
     },
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -451,7 +451,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:35:58.535Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "instance": "oats-developer-review-pr-41",
      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
      "event": "opened",
@@ -459,7 +459,7 @@
      "subject": "41",
      "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z"
     },
-    "nextDue": "2026-11-21T18:37:58.535Z",
+    "nextDue": "2026-11-21T20:19:45.457Z",
     "enabled": true,
     "spawn": {
      "soul": "oats-developer",
@@ -474,7 +474,7 @@
    }
   ],
   "snapshot": {
-   "takenAt": "2026-11-21T18:35:28.544Z",
+   "takenAt": "2026-11-21T20:17:24.885Z",
    "problems": 0
   },
   "scheduler": {
@@ -482,7 +482,7 @@
    "active": true,
    "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
    "problems": [],
-   "lastTick": "2026-11-21T18:37:25.324Z",
+   "lastTick": "2026-11-21T20:19:12.371Z",
    "maxConcurrent": 5,
    "triggersMaxConcurrent": null,
    "tickIntervalSec": 60,

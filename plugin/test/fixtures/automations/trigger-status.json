@@ -19,35 +19,35 @@
      "perKey": 1
     },
     "lastPoll": {
-     "at": "2026-11-21T18:37:25.324Z",
+     "at": "2026-11-21T20:19:12.371Z",
      "ok": true,
      "events": 3,
      "invalidEvents": 2,
      "skipped": 2,
      "filtered": 0
     },
-    "nextPollAt": "2026-11-21T18:38:25.324Z",
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextPollAt": "2026-11-21T20:20:12.371Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "pending": [
      {
       "key": "local/graph-watch:harvest/b:h1",
       "event": "updated",
       "number": null,
       "subject": "harvest/b",
-      "observedAt": "2026-11-21T18:37:25.324Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      },
      {
       "key": "local/graph-watch:harvest/d:h1",
       "event": "opened",
       "number": null,
       "subject": "harvest/d",
-      "observedAt": "2026-11-21T18:37:25.324Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      }
     ],
     "fired": [
      {
       "key": "local/graph-watch:harvest/a:h1",
-      "at": "2026-11-21T18:37:25.324Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "graph-reviewer-graph-watch-harvest-a",
       "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-harvest-a",
       "event": "opened",
@@ -130,13 +130,13 @@
      "perKey": 1
     },
     "lastPoll": {
-     "at": "2026-11-21T18:35:58.535Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "ok": true,
      "prs": 5,
      "matching": 5
     },
-    "nextPollAt": "2026-11-21T18:37:58.535Z",
-    "nextDue": "2026-11-21T18:37:58.535Z",
+    "nextPollAt": "2026-11-21T20:19:45.457Z",
+    "nextDue": "2026-11-21T20:19:45.457Z",
     "pending": [
      {
       "key": "local/pr-triage:github.com/acme/app#42:opened:2026-11-20T10:42:00Z",
@@ -144,7 +144,7 @@
       "number": 42,
       "subject": "42",
       "url": "https://github.com/acme/knowledge/pull/42",
-      "observedAt": "2026-11-21T18:35:58.535Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      },
      {
       "key": "local/pr-triage:github.com/acme/app#43:opened:2026-11-20T10:43:00Z",
@@ -152,7 +152,7 @@
       "number": 43,
       "subject": "43",
       "url": "https://github.com/acme/knowledge/pull/43",
-      "observedAt": "2026-11-21T18:35:58.535Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      },
      {
       "key": "local/pr-triage:github.com/acme/app#45:opened:2026-11-20T10:45:00Z",
@@ -160,13 +160,13 @@
       "number": 45,
       "subject": "45",
       "url": "https://github.com/acme/knowledge/pull/45",
-      "observedAt": "2026-11-21T18:35:58.535Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      }
     ],
     "fired": [
      {
       "key": "local/pr-triage:github.com/acme/app#41:opened:2026-11-20T10:41:00Z",
-      "at": "2026-11-21T18:35:58.535Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "oats-developer-triage-41",
       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
       "event": "opened",
@@ -225,15 +225,15 @@
      "perKey": 1
     },
     "lastPoll": null,
-    "nextPollAt": "2026-11-21T18:38:25.324Z",
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextPollAt": "2026-11-21T20:20:12.371Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "pending": [],
     "fired": [],
     "firedTotal": 0,
     "live": [],
     "liveCount": 0,
     "lastError": {
-     "at": "2026-11-21T18:37:25.324Z",
+     "at": "2026-11-21T20:19:12.371Z",
      "code": "E_TRIGGER_INVALID",
      "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)"
     },
@@ -247,7 +247,7 @@
      "code": "E_TRIGGER_INVALID",
      "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)",
      "field": "on.events",
-     "at": "2026-11-21T18:37:25.324Z"
+     "at": "2026-11-21T20:19:12.371Z"
     }
    },
    {
@@ -264,28 +264,28 @@
      "perKey": 1
     },
     "lastPoll": {
-     "at": "2026-11-21T18:37:25.324Z",
+     "at": "2026-11-21T20:19:12.371Z",
      "ok": true,
      "events": 2,
      "invalidEvents": 2,
      "skipped": 2,
      "filtered": 1
     },
-    "nextPollAt": "2026-11-21T18:38:25.324Z",
-    "nextDue": "2026-11-21T18:38:25.324Z",
+    "nextPollAt": "2026-11-21T20:20:12.371Z",
+    "nextDue": "2026-11-21T20:20:12.371Z",
     "pending": [
      {
       "key": "oats-real/harvest-review:harvest/d:h1",
       "event": "opened",
       "number": null,
       "subject": "harvest/d",
-      "observedAt": "2026-11-21T18:37:25.324Z"
+      "observedAt": "2026-11-21T20:19:12.371Z"
      }
     ],
     "fired": [
      {
       "key": "oats-real/harvest-review:harvest/a:h1",
-      "at": "2026-11-21T18:37:25.324Z",
+      "at": "2026-11-21T20:19:12.371Z",
       "instance": "graph-reviewer-harvest-review-harvest-a",
       "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-harvest-a",
       "event": "opened",
@@ -345,13 +345,13 @@
      "perKey": 1
     },
     "lastPoll": {
-     "at": "2026-11-21T18:35:58.535Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "ok": true,
      "prs": 5,
      "matching": 4
     },
-    "nextPollAt": "2026-11-21T18:37:58.535Z",
-    "nextDue": "2026-11-21T18:37:58.535Z",
+    "nextPollAt": "2026-11-21T20:19:45.457Z",
+    "nextDue": "2026-11-21T20:19:45.457Z",
     "pending": [
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
@@ -359,13 +359,13 @@
       "number": 43,
       "subject": "43",
       "url": "https://github.com/acme/knowledge/pull/43",
-      "observedAt": "2026-11-21T18:35:58.535Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      }
     ],
     "fired": [
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
-      "at": "2026-11-21T18:35:58.535Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "oats-developer-review-pr-41",
       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
       "event": "opened",
@@ -374,7 +374,7 @@
      },
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
-      "at": "2026-11-21T18:35:58.535Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "oats-developer-review-pr-42",
       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
       "event": "opened",

@@ -9,8 +9,8 @@
    "kind": "operation",
    "operation": "knowledge:checkpoint",
    "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
-   "createdAt": "2026-11-21T18:35:36.603Z",
-   "updatedAt": "2026-11-21T18:35:36.603Z",
+   "createdAt": "2026-11-21T20:17:29.226Z",
+   "updatedAt": "2026-11-21T20:17:29.226Z",
    "scope": "/abs/deployment",
    "scheduleApi": 2,
    "scheduleHistoryApi": 3,
@@ -21,12 +21,12 @@
    },
    "nextRun": "2026-11-21T23:00:00.000Z",
    "lastRun": {
-    "scheduledFor": "2026-11-21T18:35:00.000Z",
-    "startedAt": "2026-11-21T18:35:52.395Z",
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:40.971Z",
     "kind": "command",
     "launched": true,
     "outcome": "launched",
-    "runId": "dd6acd5ec6731e68e4c90cb5",
+    "runId": "70c55e50475328e3de077376",
     "session": {
      "instance": null,
      "home": null,
@@ -42,14 +42,14 @@
    },
    "recentRuns": [
     {
-     "runId": "dd6acd5ec6731e68e4c90cb5",
-     "scheduledFor": "2026-11-21T18:35:00.000Z",
-     "startedAt": "2026-11-21T18:35:52.395Z",
+     "runId": "70c55e50475328e3de077376",
+     "scheduledFor": "2026-11-21T20:17:00.000Z",
+     "startedAt": "2026-11-21T20:17:40.971Z",
      "kind": "command",
      "launched": true,
      "outcome": "launched",
      "settled": false,
-     "recordedAt": "2026-11-21T18:35:53.142Z",
+     "recordedAt": "2026-11-21T20:17:41.541Z",
      "transitions": [
       "launched"
      ],
@@ -89,8 +89,8 @@
    "enabled": true
   },
   "run": {
-   "scheduledFor": "2026-11-21T18:35:00.000Z",
-   "startedAt": "2026-11-21T18:35:52.395Z",
+   "scheduledFor": "2026-11-21T20:17:00.000Z",
+   "startedAt": "2026-11-21T20:17:40.971Z",
    "kind": "command",
    "launched": true,
    "outcome": "launched"
@@ -99,7 +99,7 @@
    {
     "workspace": "/abs/deployment",
     "id": "notes-checkpoint",
-    "minute": "2026-11-21T18:35",
+    "minute": "2026-11-21T20:17",
     "action": "launched"
    }
   ]

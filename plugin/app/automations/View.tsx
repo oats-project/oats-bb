@@ -42,8 +42,7 @@ export type ViewProps = {
   status: TriggerStatus | null;
   /** What the page adds for a row: its acts, and the cards they bring. */
   rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "sideStart" | "sideEnd" | "identityAction" | "summaryAction">;
-  /** Beside Refresh (New schedule), and in the banner of a scheduler that is off (Enable scheduler). */
-  headerActions?: ReactNode;
+  /** The act of the notice of a scheduler that is off (Enable scheduler). */
   schedulerAction?: ReactNode;
   /** A re-read is in flight. */
   refreshing?: boolean;
@@ -55,7 +54,7 @@ const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, rowParts, headerActions, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, rowParts, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -91,7 +90,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
   const scheduler = list?.scheduler ?? null;
   return (
     <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
-      {row !== null && list !== undefined ? null : (
+      {row !== null && list !== undefined && gate === null ? null : (
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
           <span className="min-w-0 flex-1" />
@@ -101,7 +100,6 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
             </span>
           )}
           <span className="flex items-center gap-2 pb-1">
-            {headerActions}
             <Button data-testid="oats-automations-refresh" aria-label={`Refresh ${title.toLowerCase()}`} title="Refresh" disabled={read.loading || refreshing} onClick={onRefresh}>
               Refresh
             </Button>
@@ -126,7 +124,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                   tone="error"
                   title={`${title} could not be read`}
                   code={read.error.code}
-                  age={list !== undefined && read.readAt !== null ? readAge(read.readAt, now) : null}
+                  {...(list !== undefined && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
                   actions={
                     <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
                       Retry

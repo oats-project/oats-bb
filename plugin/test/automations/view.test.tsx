@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { useState } from "react";
 import type { AutomationKind, AutomationList, TriggerStatus } from "../../contract/automations";
+import { shownBlock } from "../../app/ui/text";
 import { View } from "../../app/automations/View";
 import type { Gate, ListRead, ViewProps } from "../../app/automations/View";
 import { rowOf, schedules, statusOf, triggers } from "./fixtures";
@@ -298,6 +299,18 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
     expect(view.queryByTestId("oats-automations-scheduler")).toBeNull();
   });
 
+  it("what cannot be shown takes the place of a row's page too, with the tabs and Refresh still there", () => {
+    const gate: Gate = { title: "Schedules need the OATS CLI", detail: null };
+    function Open() {
+      return <View kind="schedule" onKind={() => undefined} reads={{ schedule: ready(schedules()), trigger: ready(triggers()) }} gate={gate} now={NOW} onRefresh={() => undefined} openId="local/daily-review" onOpen={() => undefined} status={null} />;
+    }
+    const view = render(<Open />);
+    expect(view.getByTestId("oats-automations-gate").textContent).toBe("Schedules need the OATS CLI");
+    expect(view.getAllByRole("tab")).toHaveLength(2);
+    expect(view.getByTestId("oats-automations-refresh")).toBeTruthy();
+    expect(view.queryByTestId("oats-automation-detail")).toBeNull();
+  });
+
   it("a read that failed says so in a person's words, then the kernel's message and its code, with Retry, over what was read before and how old that is", () => {
     const view = page({ schedule: { list: schedules(), loading: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" }, readAt: new Date(NOW - 3 * 60e3).toISOString() } });
     const alert = view.getByRole("alert");
@@ -345,9 +358,7 @@ describe("a row's page (D-279)", () => {
     const view = page();
     view.open("local/daily-review");
     expect(card(view, "oats-automation-identity")).toBe("daily-reviewlocal/daily-reviewlocalReview open pull requests every weekday morning");
-    expect(card(view, "oats-automation-sends")).toBe("PromptReview the open pull requests.Report what blocks each.");
-    // The prompt is whole, each of its lines an element of its own: no line break is drawn as a character.
-    expect(Array.from(view.getByTestId("oats-automation-prose").children).map((line) => line.textContent)).toEqual(["Review the open pull requests.", "Report what blocks each."]);
+    expect(card(view, "oats-automation-sends")).toBe("PromptReview the open pull requests.\nReport what blocks each.");
     expect(card(view, "oats-automation-when")).toMatch(/^WhenRunsWeekdays at 09:00Cron0 9 \* \* 1-5Time zoneEurope\/MadridNextin \d+ (h|d)$/);
     expect(card(view, "oats-automation-spawns")).toBe("SpawnsSouloats-developer · oats-realPurposereviewPermissionsYOLO — skips permission promptsBackendbbWakes itEvery 30 minutes · Europe/MadridWake messageAnything new on your review?");
     expect(card(view, "oats-automation-where")).toBe("Where it runsRuns onThis computerRuns on this computer");
@@ -425,6 +436,53 @@ describe("a row's page (D-279)", () => {
     const without = page();
     without.open("oats-real/nightly-digest");
     expect(without.queryByTestId("oats-automation-open-file")).toBeNull();
+  });
+});
+
+describe("a prompt and a wake message are drawn whole (D-279)", () => {
+  const withTask = (task: string) => {
+    const list = schedules();
+    return ready({ ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, task } : row)) });
+  };
+  const prose = (task: string) => {
+    const view = page({ schedule: withTask(task) });
+    view.open("local/daily-review");
+    return view.getByTestId("oats-automation-prose");
+  };
+
+  it("keeps every line, blank line and indentation, however a line break was written", () => {
+    expect(shownBlock("Review the open PRs.\r\n\r\nSteps:\n  1. list them\n\t- nested\u2028done")).toBe("Review the open PRs.\n\nSteps:\n  1. list them\n\t- nested\ndone");
+    const block = prose("Review the open PRs.\n\nSteps:\n  1. list them");
+    expect(block.textContent).toBe("Review the open PRs.\n\nSteps:\n  1. list them");
+    expect(block.className).toContain("whitespace-pre-wrap");
+  });
+
+  it("withholds nothing and cuts nothing: a prompt that names a password is the prompt", () => {
+    expect(prose("Check that password=hunter2 never appears in logs.").textContent).toBe("Check that password=hunter2 never appears in logs.");
+    cleanup();
+    const long = `Read this.\n${"y".repeat(5000)}`;
+    expect(prose(long).textContent).toBe(long);
+  });
+
+  it("a character that is not text is drawn as U+FFFD: a bidi override, a control, a zero-width space", () => {
+    expect(prose("pay \u202eeno ot\u202c me").textContent).toBe("pay \ufffdeno ot\ufffd me");
+    expect(shownBlock("bell\u0007 zero\u200bwidth tag\u{E0041}")).toBe("bell\ufffd zero\ufffdwidth tag\ufffd");
+    expect(shownBlock(7)).toBe("");
+  });
+
+  it("a wake's message is whole too, and a trigger's fields are still told from its text across lines", () => {
+    const list = schedules();
+    const wake = list.rows.find((row) => row.run === "wake")!;
+    const view = page({ schedule: ready({ ...list, rows: list.rows.map((row) => (row.id === wake.id ? { ...row, message: "Anything new?\n  token: is it still valid" } : row)) }) });
+    view.open(wake.id);
+    expect(view.getByTestId("oats-automation-prose").textContent).toBe("Anything new?\n  token: is it still valid");
+    cleanup();
+    const all = triggers();
+    const multi = page({ kind: "trigger", trigger: ready({ ...all, rows: all.rows.map((row) => (row.id === "oats-real/proposal-review" ? { ...row, task: "Review {repo}#{number}.\n\nThen say so on {url}." } : row)) }) });
+    multi.open("oats-real/proposal-review");
+    const block = multi.getByTestId("oats-automation-prose");
+    expect(block.textContent).toBe("Review {repo}#{number}.\n\nThen say so on {url}.");
+    expect(Array.from(block.querySelectorAll("[data-field]")).map((field) => field.textContent)).toEqual(["{repo}", "{number}", "{url}"]);
   });
 });
 

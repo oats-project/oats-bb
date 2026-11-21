@@ -130,11 +130,17 @@ page, in its words.
   the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
   this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
   that did not happen says why in the kernel's words. **Open file** previews the definition from
-  the machine that holds the deployment.
+  the machine that holds the deployment. A schedule's or a trigger's Prompt and a wake's message are
+  the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
+  lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
+  definition a person or their workspace wrote and the page is there to read it. Only a character
+  that is not text (a control, a bidi override, a zero-width space) is drawn as U+FFFD, so a
+  definition from a shared repository cannot reorder or hide what the page shows.
 - **A trigger's page** reads `oats trigger status`: what is live, what fired, what waits, the last
   poll and the last error. For a trigger on a capability's source, the trigger file's parameters
   and the source's own words (what it skipped, what OATS refused, its refusal) are shown as quoted
-  text under whose text it is, never as a link or as one of the plugin's sentences.
+  text under whose text it is, never as a link or as one of the plugin's sentences. **Open
+  capability** opens the Capabilities page when that page lists the source's capability once.
 - **The header** says the host scheduler's state ("Scheduler on · checked … · up to N at once", or
   "Scheduler off"); when it is off and something here would run, a banner says nothing runs until
   it is enabled.
@@ -143,12 +149,13 @@ page, in its words.
 
 The lists are read together and kept beside the roster read they were made with: whatever makes
 the server read OATS again (an event of the deployment, an act, Retry, the poll) renews them, and
-the app asks again once a minute while the page or the sidebar shows them, since a run that fails
-writes no event the server watches. A trigger's state is read when its page opens, for an id the
+the app asks again every 30 s while the page shows them (once a minute for the sidebar's mark
+alone), since a run that fails writes no event the server watches. A trigger's state is read when its page opens, for an id the
 current list names. An OATS that does not list the feature `automations` (before 0.29) is not
 asked: the page says which OATS it needs.
 
-Not there yet: acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
+Not there yet: the selection of the sidebar's Automations row while its page is open (it comes
+with the sidebar's own rework, for every page of the block); acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
 and creating or editing a schedule; they come in their own changes. Two of the Desktop's ways into
 the page wait for a product decision and are not built: its ⌘3 / Ctrl+3 shortcut and its palette
 entry (bb takes both from a plugin command registered with a default shortcut).

@@ -19,13 +19,13 @@
      "perKey": 1
     },
     "lastPoll": {
-     "at": "2026-11-21T18:35:58.535Z",
+     "at": "2026-11-21T20:17:45.457Z",
      "ok": true,
      "prs": 5,
      "matching": 4
     },
-    "nextPollAt": "2026-11-21T18:37:58.535Z",
-    "nextDue": "2026-11-21T18:37:58.535Z",
+    "nextPollAt": "2026-11-21T20:19:45.457Z",
+    "nextDue": "2026-11-21T20:19:45.457Z",
     "pending": [
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
@@ -33,13 +33,13 @@
       "number": 43,
       "subject": "43",
       "url": "https://github.com/acme/knowledge/pull/43",
-      "observedAt": "2026-11-21T18:35:58.535Z"
+      "observedAt": "2026-11-21T20:17:45.457Z"
      }
     ],
     "fired": [
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
-      "at": "2026-11-21T18:35:58.535Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "oats-developer-review-pr-41",
       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
       "event": "opened",
@@ -48,7 +48,7 @@
      },
      {
       "key": "oats-real/proposal-review:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
-      "at": "2026-11-21T18:35:58.535Z",
+      "at": "2026-11-21T20:17:45.457Z",
       "instance": "oats-developer-review-pr-42",
       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
       "event": "opened",

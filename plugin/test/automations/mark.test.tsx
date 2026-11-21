@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-// The Automations row of the sidebar's block (D-037) and its failed-run mark (D-038).
+// The Automations row of the sidebar's block (D-037: the row and where it leads) and its failed-run
+// mark (D-038). The selection of the open page's row is not here: the sidebar gets it with the
+// roster's own change (a page will say it is open with `useOpenPage`).
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";

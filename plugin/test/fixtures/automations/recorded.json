@@ -1,6 +1,6 @@
 {
  "oats": "0.70.0",
- "at": "2026-11-21T18:38:48.575Z",
+ "at": "2026-11-21T20:20:29.648Z",
  "calls": {
   "schedule-list-empty.json": {
    "argv": [
@@ -141,6 +141,13 @@
     "schedule",
     "show",
     "daily-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "capabilities.json": {
+   "argv": [
+    "capabilities",
     "--json"
    ],
    "exit": 0

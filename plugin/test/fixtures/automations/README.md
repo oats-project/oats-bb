@@ -26,8 +26,10 @@ UPDATE_FIXTURES=1 plugin/test/fixtures/automations/record/record.sh
 The script arranges the kernel's input, never its answer:
 
 - **Definitions**, through `oats schedule add` and `oats trigger add`, and the member's own files:
-  four workspace schedules and four workspace triggers, placed on this host (`bb-box`) and on
+  four workspace schedules and five workspace triggers, placed on this host (`bb-box`) and on
   others, one of them not trusted here and one acting as another account.
+- **A capability that fills the knowledge layer with one operation** (`acme.notes`), its soul and
+  an agent of it on bb: what a schedule that runs a provider operation names.
 - **A capability with a trigger source** (`acme.graph:harvest-branches`, a member capability) and a
   soul that composes it. Its script answers what the recording tells it: two events the trigger
   selects, one it filters, two OATS refuses, two items the source skipped (one with text a hostile
@@ -58,7 +60,9 @@ bound, and recorded the failed poll.
 | `host-status-on.json`, `host-install.json`, `host-install-refused.json` | `schedule host status`, `install` | the timer on; installed; a host with no service manager (`E_SCHEDULE_HOST`) |
 | `schedule-add*.json`, `schedule-show.json`, `schedule-enable*.json`, `schedule-disable*.json`, `schedule-describe*.json`, `schedule-remove*.json` | the verb in the name | the answer, and the refusals (`-exists`, `-invalid`, `-workspace`, `-unknown`) |
 | `schedule-test*.json` | `schedule test` | ready here; placed elsewhere; the bb job without yolo |
-| `schedule-run*.json` | `schedule run` | a bb agent launched; a launch the provider refused; a command; the refusals (`-elsewhere`, `-disabled`) |
+| `schedule-run*.json` | `schedule run` | a bb agent launched; a launch the provider refused; a command; a provider operation; the refusals (`-elsewhere`, `-disabled`) |
+| `capabilities.json` | `oats capabilities` | the capabilities of the recording's workspace (the Capabilities page's list: a trigger source's capability is looked up in it) |
+| `inspect-home.json` | `oats inspect --home <the notes keeper's home>` | the operations a home offers |
 | `schedule-reconcile.json` | `schedule reconcile status-check` | a run whose state is unknown, checked |
 | `trigger-add*.json`, `trigger-show.json`, `trigger-enable.json`, `trigger-disable.json`, `trigger-describe*.json`, `trigger-remove.json` | the verb in the name | the answer, and the refusals |
 | `trigger-test.json`, `trigger-test-elsewhere.json` | `trigger test` of a pull-request trigger | what would fire now; one placed elsewhere |
@@ -71,6 +75,7 @@ The rows of `schedule-list.json`:
 | `local/daily-review` | a spawn on bb with `yolo`, a summary and a wake for its agents; run once: a bb agent launched |
 | `local/wake-oats-developer-review-<minute>` | the wake the kernel made for that agent |
 | `local/hourly-check` | a spawn on bb **without** `yolo`: OATS 0.70.0 saves it, and its run is `launch-failed` (`E_BACKEND_SANDBOXED_MODE`) |
+| `local/notes-checkpoint` | a provider operation (`knowledge:checkpoint`) in the home of an agent that keeps the notes; run once |
 | `local/status-check` | a command; its run answered no envelope, so its state is unknown (an `attempt`) |
 | `local/weekly-cleanup` | a spawn, turned off |
 | `local/legacy-herdr` | invalid (above) |
@@ -93,7 +98,5 @@ The rows of `trigger-list.json`:
 
 ## What could not be recorded
 
-- A schedule that runs a **provider operation**: the real run's workspace has no capability that
-  fills a layer, so no operation exists to name.
 - An **unreadable** row, and a workspace row with a web address (`origin.url`: the kernel gives one
   for `github.com` members only, and the member here is a local repository).

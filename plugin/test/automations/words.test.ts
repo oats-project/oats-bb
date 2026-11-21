@@ -7,7 +7,6 @@ import {
   capabilitySource,
   causeWords,
   cronInWords,
-  failedRuns,
   filterRows,
   groupRows,
   harnessName,
@@ -285,6 +284,8 @@ describe("last and next", () => {
     expect(lastNext(row({ runsHere: true }, "trigger"), NOW)).toMatchObject({ next: "Polls at the next tick", last: "Not run yet" });
     expect(lastNext(row({ runsHere: true }), NOW)).toMatchObject({ next: "Next not reported" });
     expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW - 60e3).toISOString(), outcome: "newly-named" } }), NOW)).toMatchObject({ last: "Last 1 min ago · newly-named" });
+    // A subject that is withheld is not dressed as a pull request's number.
+    expect(lastNext(row({ runsHere: true, on: { source: "github.pull_request" }, lastRun: { at: new Date(NOW - 60e3).toISOString(), subject: "token=abcdef0123456789" } }, "trigger"), NOW)).toMatchObject({ last: "Last 1 min ago · [withheld]" });
   });
 });
 
@@ -323,8 +324,8 @@ describe("the failed-run mark", () => {
   it("a schedule whose last run is launch failed or invalid marks; nothing else does", () => {
     const list = schedules();
     expect(list.rows.filter(lastRunFailed).map((entry) => entry.name)).toEqual(["hourly-check", "legacy-herdr"]);
-    expect(failedRuns([list, triggers()])).toBe(2);
-    expect(failedRuns([schedules("schedule-list-scheduler-off.json"), triggers("trigger-list-empty.json")])).toBe(0);
+    expect(schedules("schedule-list-scheduler-off.json").rows.filter(lastRunFailed)).toEqual([]);
+    expect(triggers().rows.filter(lastRunFailed)).toEqual([]);
     // `unknown` is a launch whose state is not known, not a failed one; a trigger's last run carries no outcome.
     expect(lastRunFailed(rowOf(list, "local/status-check"))).toBe(false);
     expect(lastRunFailed(row({ lastRun: { outcome: "launch-failed" } }, "trigger"))).toBe(false);

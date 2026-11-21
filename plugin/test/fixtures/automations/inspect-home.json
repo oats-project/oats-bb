@@ -75,7 +75,7 @@
      "commit": "04755d41aa407a4b28e7390efdee278b23284ac5"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/39a81f26fb11/acme.notes",
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/acme.notes",
     "settings": {},
     "declares": [],
     "compatibility": {
@@ -115,7 +115,7 @@
      "repoKey": "local//abs/real/oats-bb.git"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/39a81f26fb11/oats.bb",
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/oats.bb",
     "settings": {
      "server": "http://127.0.0.1:38886",
      "daemon": "http://127.0.0.1:38887",
@@ -153,7 +153,7 @@
      "repoKey": "github.com/awebai/oats"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/39a81f26fb11/oats.core",
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/oats.core",
     "settings": {},
     "declares": [],
     "compatibility": {
@@ -229,7 +229,7 @@
    "launchConfig": null,
    "launchConfigDefault": false,
    "launched": true,
-   "createdAt": "2026-11-21T18:35:33.094Z",
+   "createdAt": "2026-11-21T20:17:27.287Z",
    "color": null,
    "resolution": "a93d21746aa924f38ff6539c",
    "soulDir": "/abs/deployment/agents/note-keeper/souls/04755d41aa40",

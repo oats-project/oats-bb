@@ -13,8 +13,8 @@
     "status",
     "--json"
    ],
-   "createdAt": "2026-11-21T18:35:30.550Z",
-   "updatedAt": "2026-11-21T18:35:38.812Z",
+   "createdAt": "2026-11-21T20:17:26.064Z",
+   "updatedAt": "2026-11-21T20:17:30.742Z",
    "description": "Check that the roster answers",
    "scope": "/abs/deployment",
    "scheduleApi": 2,
@@ -29,16 +29,16 @@
      "migrationRequired": true
     }
    },
-   "nextRun": "2026-11-21T18:45:00.000Z",
+   "nextRun": "2026-11-21T20:30:00.000Z",
    "lastRun": {
-    "scheduledFor": "2026-11-21T18:35:00.000Z",
-    "startedAt": "2026-11-21T18:35:50.757Z",
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:39.936Z",
     "kind": "command",
     "launched": false,
     "unconfirmed": true,
     "error": "command answered no valid envelope; its side effects are unconfirmed",
     "outcome": "unknown",
-    "runId": "9fabf84f972661b148b6f4f6",
+    "runId": "3aaef3c1accc5c3b410a779a",
     "session": {
      "instance": null,
      "home": null,
@@ -54,16 +54,16 @@
    },
    "recentRuns": [
     {
-     "runId": "9fabf84f972661b148b6f4f6",
-     "scheduledFor": "2026-11-21T18:35:00.000Z",
-     "startedAt": "2026-11-21T18:35:50.757Z",
+     "runId": "3aaef3c1accc5c3b410a779a",
+     "scheduledFor": "2026-11-21T20:17:00.000Z",
+     "startedAt": "2026-11-21T20:17:39.936Z",
      "kind": "command",
      "launched": false,
      "unconfirmed": true,
      "error": "command answered no valid envelope; its side effects are unconfirmed",
      "outcome": "unknown",
      "settled": true,
-     "recordedAt": "2026-11-21T18:38:46.611Z",
+     "recordedAt": "2026-11-21T20:20:27.703Z",
      "transitions": [
       "unknown"
      ],
@@ -79,9 +79,9 @@
    ],
    "running": false,
    "attempt": {
-    "scheduledFor": "2026-11-21T18:35:00.000Z",
-    "startedAt": "2026-11-21T18:35:50.757Z",
-    "wallClock": "2026-11-21T18:35:51.329Z",
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:39.936Z",
+    "wallClock": "2026-11-21T20:17:40.297Z",
     "error": "command answered no valid envelope; its side effects are unconfirmed",
     "exited": true,
     "exitStatus": 0,
@@ -107,7 +107,7 @@
    "harness": null,
    "model": null,
    "concurrency": null,
-   "nextDue": "2026-11-21T18:45:00.000Z",
+   "nextDue": "2026-11-21T20:30:00.000Z",
    "enabled": true
   },
   "reconciled": "unknown",

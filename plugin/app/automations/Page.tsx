@@ -7,7 +7,7 @@ import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
 import { codes } from "../../kernel/result";
-import { attempt } from "../store";
+import { attempt, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
 import { fileOf } from "./Detail";
@@ -16,7 +16,7 @@ import { automationsSupported } from "./version";
 import type { OatsVersion } from "./version";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
-import { TITLES } from "./words";
+import { capabilitySource, TITLES } from "./words";
 
 export const PATH = "automations";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
@@ -49,8 +49,9 @@ type Lists = Result<"automations">;
 type Kept = { list: NonNullable<ListRead["list"]>; at: string };
 function listRead(answer: Lists[AutomationKind] | undefined, at: string | undefined, loading: boolean, failure: string | null, kept: Kept | undefined): ListRead {
   const shown = { list: kept?.list, readAt: kept?.at ?? null };
-  // The server did not answer at all: its own words, with what was read before.
-  if (answer === undefined || at === undefined) return { ...shown, loading, error: failure === null ? null : { code: null, message: failure } };
+  // The server did not answer, now or at this re-read: its own words, over what was read before.
+  if (failure !== null) return { ...shown, loading, error: { code: null, message: failure } };
+  if (answer === undefined || at === undefined) return { ...shown, loading, error: null };
   if (answer.ok) return { list: answer.list, readAt: at, loading, error: null };
   // The kernel's refusal, or the plugin's own lack: its message, and its code after it.
   return { ...shown, loading, error: { code: answer.code, message: answer.message } };
@@ -143,6 +144,13 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     },
     [hostId, navigate],
   );
+  // A source's "Open capability" resolves against the Capabilities page's own list: exactly one
+  // capability of that name, or the source stays text.
+  // It is read only while the page of a trigger on a capability's source is open.
+  const sourced = kind === "trigger" && openId !== null && capabilitySource(reads.trigger.list?.rows.find((entry) => entry.id === openId)?.on ?? null) !== null;
+  const capabilities = useRead("capabilities", { live: false, enabled: sourced }).data?.capabilities;
+  const canOpenCapability = useCallback((name: string) => (capabilities ?? []).filter((capability) => capability.id === name).length === 1, [capabilities]);
+  const onOpenCapability = useCallback(() => navigate.toPluginPanel("capabilities"), [navigate]);
   const onOpen = useCallback((id: string | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(kind, id) }), [kind, navigate]);
 
   return (
@@ -159,6 +167,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         onOpen={onOpen}
         status={status !== null && status.id === openId ? status.value : null}
         onOpenFile={onOpenFile}
+        canOpenCapability={canOpenCapability}
+        onOpenCapability={onOpenCapability}
       />
     </Page>
   );

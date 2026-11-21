@@ -355,6 +355,10 @@ describe("the controls", () => {
     rerender(<Switch label="Weekly digest" checked disabled onChange={(next) => asked.push(next)} />);
     fireEvent.click(control);
     expect(asked).toEqual([true, false]);
+    cleanup();
+    // In a list of switches with one visible label, each has a name of its own.
+    render(<Switch label="This computer" name="local/daily-review enabled on this computer" checked onChange={() => undefined} />);
+    expect(screen.getByRole("switch", { name: "local/daily-review enabled on this computer" }).textContent).toBe("This computerOn");
   });
 
   test("a menu: its button is named, it opens on its first item, the arrows move, Escape closes and returns the focus, an item that is off says why", () => {

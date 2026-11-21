@@ -35,6 +35,12 @@ export type Oats = {
   | { phase: "failed"; code: string; message: string }
   | {
       phase: "ready";
+      /**
+       * Null: this is the roster as just read. Else it is the LAST roster read, kept while OATS
+       * cannot be read: why it cannot (`code`, `message`), and when what is shown was read (`at`).
+       * Every place then draws the roster as last read, marked with its age.
+       */
+      stale: { code: string; message: string; at: string } | null;
       deployment: Deployment;
       agents: readonly Agent[];
       view: View;
@@ -50,33 +56,40 @@ export function useOats(): Oats {
   const souls = useRead("souls", { live: false }).data?.souls;
   const sidebar = useSidebarThreads();
   const threads = sidebar.threads;
-  const snapshot = read.status === "ready" ? read.data : undefined;
+  // What the server last answered; kept by the read when the call itself fails after it.
+  const snapshot = read.data;
+  // The roster to draw: the one just read, or the last one the server keeps while OATS cannot be read.
+  const roster = snapshot === undefined ? undefined : snapshot.ok ? snapshot : (snapshot.last ?? undefined);
 
   const threadById = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
   const joined = useMemo(() => {
-    if (snapshot === undefined || !snapshot.ok) return null;
-    const v = view(snapshot.agents, threads);
+    if (roster === undefined) return null;
+    const v = view(roster.agents, threads);
     const nodes = flatten(v.roots);
     return {
       view: v,
       nodeByThread: new Map(nodes.map((node) => [node.thread.id, node])),
       nodeByInstance: new Map(nodes.map((node) => [node.agent.instance, node])),
     };
-  }, [snapshot, threads]);
+  }, [roster, threads]);
 
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);
   const soulOf = (agent: Agent) => soulNames.get(agent.soul) ?? agent.soul;
   const base = { threads, threadById, retry: read.retry, soulOf };
-  if (read.status === "loading") return { ...base, phase: "loading" };
-  if (read.status === "error") return { ...base, phase: "failed", code: RPC_FAILED, message: read.error };
-  if (!read.data.ok) return { ...base, phase: "failed", code: read.data.code, message: read.data.message };
+  // Why OATS cannot be read now, if it cannot: the call to the plugin's server failed, or the server says so.
+  const failure =
+    read.status === "error" ? { code: RPC_FAILED, message: read.error } : snapshot !== undefined && !snapshot.ok ? { code: snapshot.code, message: snapshot.message } : null;
+  if (roster === undefined) {
+    if (failure !== null) return { ...base, phase: "failed", ...failure };
+    return { ...base, phase: "loading" };
+  }
   // Until bb has listed its threads nothing can be joined: an empty list would make every agent
   // look like one whose thread is missing.
   if (sidebar.status === "error") {
     return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them." };
   }
   if (sidebar.status !== "ready" || joined === null) return { ...base, phase: "loading" };
-  return { ...base, phase: "ready", deployment: read.data.deployment, agents: read.data.agents, ...joined };
+  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, ...joined };
 }
 
 /** The first line of a message: what the sidebar's one status line has room for. */

@@ -7,7 +7,7 @@ import { AutomationsPage, PATH } from "./Page";
 import { useFailedRunMark } from "./read";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
-const ICON = "CalendarClock";
+const ICON = "Clock";
 
 export function register(app: PluginAppBuilder): void {
   app.slots.navPanel({ id: "automations", title: "Automations", icon: ICON, path: PATH, experimental_hideFromNavigation: true, component: AutomationsPage });

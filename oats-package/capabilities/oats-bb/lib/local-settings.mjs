@@ -9,7 +9,11 @@
 //   the launch, which are the ones OATS's own messaging, knowledge, tasks and events need.
 //   Claude Code adds them to bb's own sandbox settings; they never replace a restriction.
 //
-// In a bb home these two keys are the provider's, whole: every launch rewrites them from
+// - `permissions.deny` and `permissions.blockWritesOutsideWorkingDirectories`: in the
+//   sandboxed modes, the rules that keep the agent's tools off what runs outside its
+//   sandbox (lib/deny.mjs), and the switch that keeps Claude's file tools in.
+//
+// In a bb home these four keys are the provider's, whole: every launch rewrites them from
 // the launch input and never reads what they held, and no record of them is kept in the
 // home, which its agent can write. Every other key of the file is left as it is.
 import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
@@ -383,17 +387,43 @@ function directories(home, { create }) {
 
 /** What `settings.local.json` holds, to keep every key that is not the provider's. A
  *  file that is not a regular file, larger than the provider reads, or not a JSON object
- *  refuses: the provider does not overwrite what it cannot read. What its own two keys
+ *  refuses: the provider does not overwrite what it cannot read. What the provider's own keys
  *  hold is never looked at: they are replaced whole, whatever stands there. */
 const readOthers = (settingsPath) => readJsonObject(settingsPath, "Claude's local settings") ?? {};
 
-/** Put the provider's keys into `settings`, replacing whatever they held: `env` whole and
- *  `sandbox` whole. A key with nothing to hold is removed. Every other key stays. */
-function own(settings, { env, sandbox }) {
+// The two keys under `permissions` that are the provider's: the deny rules of a sandboxed
+// launch (D16 rule 1) and the switch that keeps Claude's Write and Edit tools inside the
+// working directories (A5a). `permissions.allow` and the rest of that block are Claude's
+// and the person's, and stay.
+const DENY = "deny", BLOCK = "blockWritesOutsideWorkingDirectories";
+/** The MCP tool of bb's own bridge that moves a thread's directory: with it a sandboxed
+ *  agent would work, and write, somewhere else. Denied in every sandboxed launch. */
+export const DENIED_TOOLS = Object.freeze(["mcp__bb-bridge__update_environment_directory"]);
+
+/** Put the provider's keys into `settings`, replacing whatever they held: `env`,
+ *  `sandbox`, `permissions.deny` and `permissions.blockWritesOutsideWorkingDirectories`,
+ *  each whole. `deny` null is a launch with no sandbox (bb's full mode, or a move away):
+ *  both `permissions` keys go, and a `permissions` block left empty goes with them. A key
+ *  with nothing to hold is removed. Every other key stays. */
+function own(settings, { env, sandbox, deny }) {
   if (env && Object.keys(env).length > 0) settings.env = env; else delete settings.env;
   if (sandbox) settings.sandbox = sandbox; else delete settings.sandbox;
+  if (deny) {
+    // A `permissions` that is no map cannot hold the rules: it is replaced, as the two
+    // keys under it would be (a sandboxed launch with no deny rules is never written).
+    if (!isObject(settings.permissions)) settings.permissions = {};
+    settings.permissions[DENY] = [...deny, ...DENIED_TOOLS];
+    settings.permissions[BLOCK] = true;
+  } else if (isObject(settings.permissions)) {
+    delete settings.permissions[DENY];
+    delete settings.permissions[BLOCK];
+    if (Object.keys(settings.permissions).length === 0) delete settings.permissions;
+  }
   return settings;
 }
+
+/** Whether a settings document holds one of the provider's sandbox keys. */
+const sandboxKeysIn = (settings) => settings.sandbox !== undefined || (isObject(settings.permissions) && (settings.permissions[DENY] !== undefined || settings.permissions[BLOCK] !== undefined));
 
 /** The `sandbox` block of a sandboxed launch: exactly the hosts and paths the kernel
  *  handed it, or null when there is none of either. */
@@ -428,18 +458,20 @@ export function snapshotLaunchSettings(home) {
 
 /** Write a launch's settings into `<home>/.claude/settings.local.json` (0600).
  *
- *  Two keys of that file are the provider's in a bb home, whole: `env` (the launch
- *  environment, minus `unset`) and `sandbox` (the allowances of a sandboxed launch). Every
+ *  Four keys of that file are the provider's in a bb home, whole: `env` (the launch
+ *  environment, minus `unset`), `sandbox` (the allowances of a sandboxed launch),
+ *  `permissions.deny` and `permissions.blockWritesOutsideWorkingDirectories` (`deny`:
+ *  the rules of a sandboxed launch, null for a launch with no sandbox). Every
  *  launch rewrites them from the launch input and never reads what they held: the home is
  *  its agent's to write, so what stands there proves nothing, and the provider keeps no
- *  record of its own in the home. A person's own entries under those two keys are not
- *  kept. In bb's full mode there is no sandbox: `sandbox` is removed. Every other key is
- *  kept as it is. */
-export function writeLaunchSettings(home, { env, unset = [], sandbox, dryRun = false }) {
+ *  record of its own in the home. A person's own entries under those keys are not
+ *  kept. In bb's full mode there is no sandbox: `sandbox` and the two `permissions` keys
+ *  are removed. Every other key is kept as it is. */
+export function writeLaunchSettings(home, { env, unset = [], sandbox, deny = null, dryRun = false }) {
   const { settingsPath } = directories(home, { create: !dryRun });
   const settings = readOthers(settingsPath);
   env = { ...Object.fromEntries(unset.map((name) => [name, ""])), ...env };
-  own(settings, { env, sandbox: sandboxBlock(sandbox) });
+  own(settings, { env, sandbox: sandboxBlock(sandbox), deny });
   // A dry run has done every check that can refuse (a home, a .claude or a file that is
   // not what it should be), and writes nothing: the launch runs it before its first effect.
   if (dryRun) return { path: settingsPath, names: Object.keys(env).sort() };
@@ -448,21 +480,32 @@ export function writeLaunchSettings(home, { env, unset = [], sandbox, dryRun = f
   return { path: settingsPath, names: Object.keys(env).sort() };
 }
 
-/** Whether Claude's local settings in the home hold a `sandbox` block now. Read for one
- *  thing only, what a warning says: it decides nothing the provider writes or deletes.
- *  → true | false, false when unreadable. */
-export function holdsSandboxKey(home) {
+/** What Claude's local settings in the home hold of the provider's sandbox keys now.
+ *  Read for one thing only, what readiness and a warning say: it decides nothing the
+ *  provider writes or deletes (the home is its agent's to write).
+ *  → { any, sandbox, deny, block }: `any` one of the keys is there; `sandbox` the block
+ *  is there; `deny` every tool the provider denies is in the deny list; `block` the
+ *  switch is true. All false where the file is absent or cannot be read. */
+export function sandboxKeysOf(home) {
+  const none = { any: false, sandbox: false, deny: false, block: false };
   try {
-    if (!realDirectory(join(home, ".claude"), "the home's")) return false;
-    return (readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {}).sandbox !== undefined;
+    if (!realDirectory(join(home, ".claude"), "the home's")) return none;
+    const settings = readJsonObject(join(home, ".claude", "settings.local.json"), "Claude's local settings") ?? {};
+    const permissions = isObject(settings.permissions) ? settings.permissions : {};
+    return {
+      any: sandboxKeysIn(settings),
+      sandbox: settings.sandbox !== undefined,
+      deny: Array.isArray(permissions[DENY]) && DENIED_TOOLS.every((tool) => permissions[DENY].includes(tool)),
+      block: permissions[BLOCK] === true,
+    };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    return false;
+    return none;
   }
 }
 
 /** The home ran on bb before this launch and now starts on another backend (the kernel
- *  says so, from its own record outside the home): take the provider's two keys out of
+ *  says so, from its own record outside the home): take the provider's four keys out of
  *  settings.local.json. Nothing in the home decides this: the caller removes only on the
  *  kernel's word. A file that holds neither key is left as it is, byte for byte.
  *  → whether a key was removed. */
@@ -470,7 +513,7 @@ export function removeLaunchSettings(home) {
   const { settingsPath, hasClaude } = directories(home, { create: false });
   if (!hasClaude) return false;
   const settings = readOthers(settingsPath);
-  if (settings.env === undefined && settings.sandbox === undefined) return false;
-  writeJson(settingsPath, own(settings, { env: null, sandbox: null }));
+  if (settings.env === undefined && !sandboxKeysIn(settings)) return false;
+  writeJson(settingsPath, own(settings, { env: null, sandbox: null, deny: null }));
   return true;
 }

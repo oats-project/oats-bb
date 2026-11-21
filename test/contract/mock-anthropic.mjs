@@ -30,7 +30,13 @@ http.createServer((req, res) => {
     const usage = { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     let tname = 'Bash', tinput = { command: tool, description: 'scripted' };
     if (tool && tool.startsWith('{')) { const o = JSON.parse(tool); tname = o.tool; tinput = o.input; }
-    const blocks = tool ? [{ type: 'tool_use', id: 'toolu_mock' + n, name: tname, input: tinput }] : [{ type: 'text', text: 'MOCK-REPLY ' + n }];
+    // Claude Code's auto mode asks a classifier, in a request of its own with no tools,
+    // to grade the action ("Respond with <severity>N</severity>"). Unless the test arms a
+    // grade (/home/node/mock-severity), the mock grades every action harmless: what a
+    // classifier that does not flag an action answers.
+    const grading = tools.length === 0 && textOf(last.content).includes('<severity>N</severity>');
+    const severity = fs.existsSync('/home/node/mock-severity') ? fs.readFileSync('/home/node/mock-severity', 'utf8').trim() : '0';
+    const blocks = tool ? [{ type: 'tool_use', id: 'toolu_mock' + n, name: tname, input: tinput }] : [{ type: 'text', text: grading ? `<severity>${severity}</severity>` : 'MOCK-REPLY ' + n }];
     if (!j.stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ id, type: 'message', role: 'assistant', model: j.model, content: blocks, stop_reason: tool ? 'tool_use' : 'end_turn', stop_sequence: null, usage }));

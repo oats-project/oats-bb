@@ -3,13 +3,13 @@
 // stdin, one JSON document out); `retire-hook` is its retire hook; `doctor` is a person's.
 import { sessionHandlers } from "../lib/commands.mjs";
 import { bounded } from "../lib/errors.mjs";
-import { holdsSandboxKey, removeLaunchSettings, removeLeftovers } from "../lib/local-settings.mjs";
+import { removeLaunchSettings, removeLeftovers, sandboxKeysOf } from "../lib/local-settings.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
 
-// The command takes no launch in a sandboxed mode yet (lib/commands.mjs says why).
+// The command takes no launch in a sandboxed mode: they are not offered (lib/commands.mjs says why).
 const handlers = sessionHandlers();
 /** doctor's arguments: `--json`, and `--soul <name>`, which the kernel reads to choose
  *  whose settings it resolves into OATS_SETTINGS and then forwards: it changes nothing
@@ -48,8 +48,8 @@ async function main(argv) {
   if (command === "launch-hook" && rest.length === 0) {
     // Runs at every start of a home that has this capability, whatever its backend. On
     // this provider the launch verb writes Claude's local settings. Where the home ran on
-    // bb before and now starts on another backend, the provider's two keys are removed, so
-    // a tmux Claude neither reads a stale launch env nor keeps the sandbox allowances.
+    // bb before and now starts on another backend, the provider's keys are removed, so
+    // a tmux Claude neither reads a stale launch env nor keeps the sandbox block and the deny rules.
     // Which backend it ran on before is the kernel's word (OATS_PREVIOUS_BACKEND, from its
     // record outside the home), never anything the home holds: a tmux home a person set
     // up by hand keeps its own `env`.
@@ -60,16 +60,19 @@ async function main(argv) {
     // home ran on: those names are the provider's own, and they decide nothing (best effort).
     removeLeftovers(home);
     if (!previous) {
-      // A first launch, or a kernel that does not say: nothing is removed. Where a sandbox
-      // block stands in the file, it may be the provider's, left behind.
-      if (holdsSandboxKey(home)) print({ warning: `this home starts on ${backend}, its .claude/settings.local.json holds a sandbox block, and this kernel does not say which backend the home ran on before: the bb provider removed nothing. If the home ran on bb, that block and the env key are the provider's, now stale: remove them by hand` });
+      // A first launch, or a kernel that does not say: nothing is removed. Where the file
+      // holds what only this provider writes there (a sandbox block, or bb's directory-move
+      // tool in the deny list), it may be the provider's, left behind. A person's own deny
+      // rules are not that: a home that never ran on bb is told nothing.
+      const keys = sandboxKeysOf(home);
+      if (keys.sandbox || keys.deny) print({ warning: `this home starts on ${backend}, its .claude/settings.local.json holds sandbox keys as the bb provider writes them (sandbox, permissions.deny, permissions.blockWritesOutsideWorkingDirectories), and this kernel does not say which backend the home ran on before: the bb provider removed nothing. If the home ran on bb, those keys and the env key are the provider's and may be stale: remove them by hand` });
       return 0;
     }
     if (previous !== PROVIDER) return 0;
     try {
-      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its two keys from .claude/settings.local.json (env and sandbox)` });
+      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its keys from .claude/settings.local.json (env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories)` });
     } catch (error) {
-      print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env and sandbox there by hand` });
+      print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories there by hand` });
     }
     return 0;
   }

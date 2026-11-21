@@ -1,6 +1,7 @@
 // launch: one OATS home becomes one bb thread (contract items 1, 4, 6).
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import { sandboxDeny } from "./deny.mjs";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
@@ -40,7 +41,7 @@ function readInput(input) {
 export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
   const { home, instance, model, promptFile, previous } = readInput(input);
   const mode = permissionMode(input.args, input.yolo);
-  // Before anything else is read or started: a mode the command does not launch in yet.
+  // Before anything else is read or started: a mode the command does not launch in (not offered).
   const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
   const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
@@ -53,9 +54,14 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   if (refusal !== null) throw fail(refusal.code, refusal.message);
   if (!existsSync(home)) throw fail("E_SESSION_START_FAILED", `the home ${home} does not exist`);
   if (!existsSync(promptFile)) throw fail("E_SESSION_START_FAILED", `the prompt file ${promptFile} does not exist`);
+  // A sandboxed launch also writes the deny rules that keep the agent's tools off what is
+  // run, or read as configuration, outside its sandbox (D16 rule 1). They are built from
+  // what the kernel says (the home, its trees, what it keeps outside the home) and from this host (the user's Claude
+  // configuration, bb's data directory): never from anything the home holds.
+  const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, protected: input.protected, dataDir: settings.dataDir });
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
-  const settingsToWrite = { env: launchEnv, unset, sandbox };
+  const settingsToWrite = { env: launchEnv, unset, sandbox, deny };
   writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
   const { problems, server } = await backendProblems(settings, { deadline, env });

@@ -63,6 +63,10 @@
       "hostOnly": true,
       "default": "bb",
       "description": "The bb CLI: a command name on PATH, or an absolute path. Set it only in oats-local.yaml."
+    },
+    "dataDir": {
+      "hostOnly": true,
+      "description": "bb's data directory on this host (bb-app's --data-dir), an absolute path. Unset: .bb in the home of the user that runs bb. bb does not say where it is; a launch in bb's sandboxed modes keeps the agent's tools off bb's thread storage there, and is refused where the directory holds no thread-storage. Set it only in oats-local.yaml."
     }
   }
 }

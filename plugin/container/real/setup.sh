@@ -73,7 +73,8 @@ if ! bb machine list > /dev/null 2>&1; then
     setsid bb-app --data-dir "$HOME/bbdata" --server-bind-host 127.0.0.1 --no-in-app-updates > "$OUT/bb.out" 2>&1 < /dev/null &
   echo $! > "$REAL/bb.pid"
   wait_until 120 bb machine list --json > /dev/null 2>&1 || { echo "setup: bb did not start"; tail -20 "$OUT/bb.out"; exit 1; }
-  wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -q connected' || { echo "setup: no machine connected"; exit 1; }
+  # The word: "disconnected" holds "connected" too.
+  wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -qw connected' || { echo "setup: no machine connected"; exit 1; }
 fi
 
 # bb's own limit stays: one running thread per processor (2 here); the run uses it (scenario.mjs, B1).

@@ -45,7 +45,8 @@ start_bb() {
     > "$OUT/bb.out" 2>&1 < /dev/null &
   echo $! > "$OUT/bb.pid"
   wait_until 90 bb machine list --json > /dev/null 2>&1 || { say "bb did not start"; tail -20 "$OUT/bb.out"; exit 1; }
-  wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -q connected' || { say "no machine connected"; exit 1; }
+  # The word: "disconnected" holds "connected" too.
+  wait_until 60 sh -c 'bb machine list 2>/dev/null | grep -qw connected' || { say "no machine connected"; exit 1; }
 }
 
 say "== bb $(bb --version), plugin from $PLUGIN"

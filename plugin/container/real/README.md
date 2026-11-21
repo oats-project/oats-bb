@@ -73,6 +73,7 @@ together.
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
 | `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
+| `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
@@ -81,7 +82,6 @@ own `oats status` time is said beside it), and at its end it compares its images
 different states must not be the same image. One pair is, and is reported as a known gap (D-113 /
 S1): at 390 px the thread's view says nothing of the agent's state, until the status line of the
 identity row is built.
-| `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays

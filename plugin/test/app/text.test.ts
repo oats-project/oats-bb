@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { cleanLine, DETAIL_WITHHELD, displayLine, MAX_DISPLAY_LINE, NOT_NOTE_TEXT, refusalLines, shown, UNSAFE } from "../../app/ui/text";
+import { cleanLine, DETAIL_WITHHELD, displayLine, MAX_DISPLAY_LINE, NOT_NOTE_TEXT, refusalLines, shown, shownBlock, UNSAFE } from "../../app/ui/text";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const at = (codePoint: number) => String.fromCodePoint(codePoint);
@@ -176,6 +176,21 @@ describe("what the plugin adds", () => {
     expect(shown("line 1\n\tline 2")).toBe("line 1 line 2");
     expect(shown("\u202egnp.exe")).toBe(`${REPLACEMENT}gnp.exe`);
     for (const nothing of [null, undefined, "", " \n"]) expect(shown(nothing)).toBe("");
+  });
+
+  test("shownBlock: a prompt is drawn whole, with its lines, its blank lines and its indentation; only what is no text is replaced", () => {
+    expect(shownBlock("Check that password=hunter2 never appears")).toBe("Check that password=hunter2 never appears"); // nothing is withheld
+    expect(shownBlock("a\u202eb")).toBe(`a${REPLACEMENT}b`);
+    expect(shownBlock("one\r\n\ttwo\n\nthree")).toBe("one\n\ttwo\n\nthree");
+    expect(shownBlock("a\rb\u2028c\u2029d")).toBe("a\nb\nc\nd"); // a line break, however it was written
+    expect(shownBlock("m".repeat(5000))).toHaveLength(5000); // no cut
+    // Every character of the set but the line feed and the tab is replaced, one for one.
+    for (const codePoint of [...WITHHELD.filter((cp) => cp !== 0x000d), ...REPLACED.filter((cp) => cp !== 0x2028 && cp !== 0x2029)]) {
+      expect(shownBlock(`a${at(codePoint)}b`), codePoint.toString(16)).toBe(`a${REPLACEMENT}b`);
+    }
+    for (const text of TEXT) expect(shownBlock(text), JSON.stringify(text)).toBe(text); // international text, ZWJ, ZWNJ and the marks stay
+    for (const nothing of [undefined, null, 7, {}]) expect(shownBlock(nothing)).toBe("");
+    expect(shownBlock("")).toBe("");
   });
 
   test("refusalLines: a refusal's code is kept, and its message is one display line", () => {

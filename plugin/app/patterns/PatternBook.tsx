@@ -1,7 +1,7 @@
 // Every pattern of app/ui.tsx in each of its states (index.ts says what the page is for).
 import { useEffect, useState } from "react";
 import type { AgentState } from "../../model/types";
-import { Button, Card, Confirm, CopyButton, DisabledReason, Empty, Fact, Facts, Field, Heading, INPUT, LINK, Loading, Menu, Notice, Page, Result, SearchField, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../ui";
+import { Button, Card, Chip, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Heading, INPUT, LINK, Loading, Menu, Notice, Page, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { instanceDisplayName, waitingLabel, waitingSince } from "../ui/words";
 
@@ -18,7 +18,19 @@ const PHASES: Record<string, Phase> = {
   ready: { kind: "ready" },
   running: { kind: "running", doing: "Retiring…" },
   done: { kind: "done", title: `${NAME} was retired.`, lines: ["Its work tree is kept, moved out of the home."] },
-  failed: { kind: "failed", title: `${NAME} could not be retired.`, refusal: "E_CHILDREN_RUNNING: a child would not stop\nstop it first, then retire again", actions: <Button>Review again</Button> },
+  failed: {
+    kind: "failed",
+    title: `${NAME} could not be retired.`,
+    refusal: "E_CHILDREN_RUNNING: a child would not stop\nstop it first, then retire again",
+    actions: (
+      <>
+        <Button>Review again</Button>
+        <Disclosure summary="Details" testId="oats-patterns-refusal-details">
+          <p className="text-xs text-muted-foreground">oats retire weekly-digest-helper: exit 1</p>
+        </Disclosure>
+      </>
+    ),
+  },
 };
 
 export function PatternBook() {
@@ -83,7 +95,7 @@ export function PatternBook() {
         <Notice title="OATS is older than this plugin needs" tone="warning" actions={<Button>Details</Button>}>
           Some of what is shown may be missing until OATS is updated.
         </Notice>
-        <Notice title="OATS could not be read" tone="error" code="OATS_TIMEOUT" age="2 min ago" actions={<Button>Retry</Button>}>
+        <Notice title="OATS could not be read" tone="error" code="OATS_TIMEOUT" age="2 min ago" details={"OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped"} actions={<Button>Retry</Button>}>
           The machine did not answer in time.
         </Notice>
         <Heading>Empty, loading, stale</Heading>
@@ -99,6 +111,29 @@ export function PatternBook() {
           <p>Its session did not end.</p>
         </Result>
         <Result title="It is not known whether the spawn finished." tone="unknown" actions={<Button>Check result</Button>} />
+      </section>
+
+      <section data-testid="oats-patterns-blocks" className="flex flex-col gap-3">
+        <Heading>Section, card, tag, disclosure, code</Heading>
+        <Section title="Runs" n={2}>
+          <Card title="Weekly digest" footer={<Disclosure summary="Paths">/home/joan/Work/oats/agents/oats-expert/instances/weekly-digest-helper</Disclosure>}>
+            <p>
+              Runs <Code>oats schedule run weekly-digest</Code> on this computer.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip>default</Chip>
+              <Chip tone="muted">workspace</Chip>
+              <Chip tone="warn">wrong account</Chip>
+            </div>
+          </Card>
+          <Card title="Nightly sweep" tone="warn">
+            <p>Its last run did not start.</p>
+          </Card>
+        </Section>
+        <div className="flex flex-wrap items-center gap-3">
+          <Switch label="Nightly sweep" checked={false} onChange={() => undefined} />
+          <Switch label="Defined in the workspace" name="workspace/sweep enabled on this computer" checked disabled onChange={() => undefined} />
+        </div>
       </section>
 
       <section data-testid="oats-patterns-controls" className="flex flex-col gap-3">
@@ -157,13 +192,23 @@ export function PatternBook() {
           <Button data-testid="oats-patterns-open-other" onClick={() => setDialog({ destructive: true, phase: "other" })}>
             Another agent's plan
           </Button>
+          <Button data-testid="oats-patterns-open-reading" onClick={() => setDialog({ destructive: true, phase: "reading" })}>
+            Reading the plan
+          </Button>
+          <Button data-testid="oats-patterns-open-blocked" onClick={() => setDialog({ destructive: true, phase: "blocked" })}>
+            Blocked
+          </Button>
+          <Button data-testid="oats-patterns-open-unnamed" onClick={() => setDialog({ destructive: true, phase: "unnamed" })}>
+            A plan that names no agent
+          </Button>
         </div>
       </section>
       {dialog === null ? null : (
         <Confirm
           title={`${dialog.destructive ? "Retire" : "Stop"} ${NAME}?`}
           about={INSTANCE}
-          shownFor={dialog.phase === "other" ? "flaky-ci-developer" : INSTANCE}
+          shownFor={dialog.phase === "other" ? "flaky-ci-developer" : dialog.phase === "unnamed" || dialog.phase === "reading" ? null : INSTANCE}
+          blocked={dialog.phase === "blocked" ? "Tick the box to discard its work." : null}
           happens={dialog.destructive ? ["Its home is removed.", "Its session is open and is stopped first."] : ["Its session is stopped."]}
           kept={dialog.destructive ? ["Its work tree, moved out of the home, and its branch."] : ["Its home, its work, its transcript and its launch settings. Start brings it back."]}
           confirmLabel={dialog.destructive ? "Retire" : "Stop"}

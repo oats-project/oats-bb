@@ -70,6 +70,27 @@ export function shown(text: unknown): string {
   return displayLine(text) ?? "";
 }
 
+// Every character of NOT_NOTE_TEXT but the line feed and the tab.
+const NOT_BLOCK_TEXT = /(?![\n\t])[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF\u{E0000}-\u{E007F}]/gu;
+
+/**
+ * A person's own definition text shown back to them WHOLE, in one block that keeps its line breaks,
+ * blank lines and indentation (`whitespace-pre-wrap`): a schedule's or a trigger's Prompt and Wake
+ * message, as the Desktop draws them, and nothing else. It is the one named exception to the
+ * one-line filter (the spec's author's decision of 2026-11-21): no cut at MAX_DISPLAY_LINE, and
+ * nothing is withheld, since the text is the prompt the person wrote and must be read as written.
+ * Never for a kernel's message or an agent's note: those are `shown()` and `refusalLines()`.
+ * What stays of the filter: a line break is a line feed however it was written (\r\n, \r, the
+ * line and paragraph separators), and every other character of NOT_NOTE_TEXT (controls, bidi
+ * overrides and isolates, the zero-width space, the word joiner, the BOM, tags) is drawn as U+FFFD,
+ * so a definition from a shared repository cannot reorder or hide what the page shows. '' for what
+ * is not a string.
+ */
+export function shownBlock(text: unknown): string {
+  if (typeof text !== "string") return "";
+  return text.replace(/\r\n?|[\u2028\u2029]/g, "\n").replace(NOT_BLOCK_TEXT, "\uFFFD");
+}
+
 /**
  * A code that leads a refusal as the plugin's server words it, `<code>: <message>`: the kernel's
  * (`E_…`) or one of the plugin's own (kernel/result.ts). Any other leading word is part of the

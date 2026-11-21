@@ -1,7 +1,7 @@
 // The words of the plugin's patterns: the OATS Desktop's, copied whole where a table of the Desktop
 // is the same thing (awebai/oats at 95c7b43b3: packages/client/waiting-on-you.mjs `LABELS`,
 // `waitingLabel`, `waitingDetail`, `waitedText`, `waitingClock`; packages/client/
-// instance-display-name.mjs), and the plugin's own where bb's nature changes one (plugin/WORDS.md
+// instance-display-name.mjs; packages/desktop/renderer/loading.mjs `observedAgeText`), and the plugin's own where bb's nature changes one (plugin/WORDS.md
 // holds each such pair). Pure: no bb, no React, never throws.
 import type { AgentState } from "../../model/types";
 
@@ -50,12 +50,8 @@ export const waitingDetail = (claim: Claim | null): string | null => claim?.mess
 
 /** How long it has waited (floor): "under a minute", "N min", "N h", "N d". A future instant (clock skew) reads "under a minute". */
 export function waitedText(since: string, now: number = Date.now()): string {
-  return span(now - Date.parse(since)) ?? "under a minute";
-}
-
-/** A length of time in its largest whole unit, "N min", "N h" or "N d"; null under a minute, or when it cannot be read. */
-function span(ms: number): string | null {
-  if (!Number.isFinite(ms) || ms < 60_000) return null;
+  const ms = now - Date.parse(since);
+  if (!Number.isFinite(ms) || ms < 60_000) return "under a minute";
   const min = Math.floor(ms / 60_000);
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
@@ -87,8 +83,20 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
   return clock === "" ? null : `waiting ${waitedText(since, now)} (since ${clock})`;
 }
 
-/** How old a read is, for a place that shows what it read earlier: "just now", "2 min ago", "3 h ago", "2 d ago". */
-export function readAge(at: string | number, now: number = Date.now()): string {
-  const length = span(now - (typeof at === "number" ? at : Date.parse(at)));
-  return length === null ? "just now" : `${length} ago`;
+/**
+ * How old a read is, for a place that shows what it read earlier ("showing what was read <age>"):
+ * the Desktop's `observedAgeText` (packages/desktop/renderer/loading.mjs at 95c7b43b3): "just now"
+ * under 10 s, "45s ago", "3 min ago" (rounded), and from an hour on the local time, "at 14:05";
+ * null for an instant that cannot be read, and the place then says "showing what was last read".
+ */
+export function readAge(at: string | number, now: number = Date.now()): string | null {
+  const then = typeof at === "number" ? at : Date.parse(at);
+  if (!Number.isFinite(then)) return null;
+  const s = Math.round(Math.max(0, now - then) / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const d = new Date(then);
+  return `at ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

@@ -137,7 +137,7 @@ describe("the host verbs", () => {
 
   it("A5: spawn runs souls and the apply, with the task in a 0600 file of the worker's temporary directory", async () => {
     const spawned = await harness.experimental_call("spawn", { ...base(), soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" });
-    expect(spawned).toMatchObject({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_zcfuxuf3cg" } });
+    expect(spawned).toMatchObject({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" } });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb)).toEqual(["souls", "spawn"]);
     expect(calls[1]?.taskFile).toMatchObject({ mode: "600", text: "Fix it." });

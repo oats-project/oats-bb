@@ -2,7 +2,8 @@
 # Runs inside the container, as node (run.sh calls it): everything the real run needs, in $REAL.
 #   bb-app at the repository's pin and the plugin's dependencies (container/setup.sh)
 #   Claude Code, and a mock model for it (mock-anthropic.mjs): no login, nothing spent
-#   the OATS kernel, packed from the tree in $REAL/kernel with `npm pack --ignore-scripts`
+#   the OATS kernel, packed from the tree in $REAL/kernel with `npm pack --ignore-scripts`, or
+#     with KERNEL_NPM=<version> the registry's tarball of @awebai/oats@<version>, its integrity checked
 #   the bb session provider, from the tree in $REAL/provider, a workspace and a deployment (workspace.sh)
 #   bb-app, started with the mock model's address and a placeholder key in its own environment
 #   the plugin, installed from this checkout, with `oatsBin` set to the recording wrapper
@@ -34,10 +35,25 @@ claude_ready || { echo "setup: Claude Code $CLAUDE_CODE_VERSION could not be ins
 # bb's server runs with.
 printf '{ "env": { "ANTHROPIC_BASE_URL": "http://127.0.0.1:%s" } }\n' "$MOCK_PORT" > "$HOME/.claude/settings.json"
 
-echo "== the kernel, packed from $REAL/kernel"
-if ! command -v oats > /dev/null; then
-  (cd "$REAL/kernel" && npm pack --ignore-scripts --pack-destination "$REAL" > /dev/null)
-  npm install -g --no-audit --no-fund "$REAL"/awebai-oats-*.tgz
+KERNEL_NPM=${KERNEL_NPM:-}
+if [ -n "$KERNEL_NPM" ]; then
+  echo "== the kernel, from npm: @awebai/oats@$KERNEL_NPM"
+  if ! command -v oats > /dev/null; then
+    # The registry's tarball, fetched once: what npm says of it is kept (kernel.json), its
+    # integrity is the one asked for, and that file is what is installed.
+    (cd "$REAL" && npm pack "@awebai/oats@$KERNEL_NPM" --json > "$OUT/kernel.json")
+    read_pack() { node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0][process.argv[2]]' "$OUT/kernel.json" "$1"; }
+    echo "kernel tarball: $(read_pack id), integrity $(read_pack integrity), gitHead $(npm view "@awebai/oats@$KERNEL_NPM" gitHead)"
+    [ -z "${KERNEL_INTEGRITY:-}" ] || [ "$(read_pack integrity)" = "$KERNEL_INTEGRITY" ] || { echo "setup: the tarball of @awebai/oats@$KERNEL_NPM is not the one expected (KERNEL_INTEGRITY $KERNEL_INTEGRITY)" >&2; exit 1; }
+    npm install -g --no-audit --no-fund "$REAL/$(read_pack filename)"
+  fi
+  [ "$(oats version --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')" = "$KERNEL_NPM" ] || { echo "setup: the installed oats is not $KERNEL_NPM" >&2; exit 1; }
+else
+  echo "== the kernel, packed from $REAL/kernel"
+  if ! command -v oats > /dev/null; then
+    (cd "$REAL/kernel" && npm pack --ignore-scripts --pack-destination "$REAL" > /dev/null)
+    npm install -g --no-audit --no-fund "$REAL"/awebai-oats-*.tgz
+  fi
 fi
 oats version --json | grep -q '"session-providers"' || { echo "setup: this kernel does not list the feature session-providers" >&2; exit 1; }
 echo "oats $(oats version --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"

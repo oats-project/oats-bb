@@ -8,22 +8,34 @@ bb, takes the screenshots, and records what the kernel printed: that recording i
 fixtures marked "recorded" in `test/fixtures/README.md` come from.
 
 ```sh
-KERNEL_REPO=<a clone of the OATS repository> plugin/container/real/run.sh
+plugin/container/real/run.sh        # or: plugin/container/ci.sh real
 ```
 
-The recording in `test/fixtures/` is of 2026-11-20: the plugin of this checkout against the kernel
-of awebai/oats `main` at `da296359e97eb435f6de561947ef2fdda92c927c` (oats-project/oats#2040 merged: OATS 0.69.24, session-provider wire
-1.3) and the bb session provider of this repository's `main` at `92fecf735475a363c1d55158d6ff078acf017bb7` (oats-bb#3 merged), bb-app at
-the root `bb-version` (0.50.1), Claude Code on a mock model, no aweb. The provider's floor
-(`compatibility.oats: >=0.70.0`) is above that kernel's version, so the run lowered it **inside
-the container only**, with a trial-only commit that is never pushed (below, "The provider").
+The recording in `test/fixtures/` is of 2026-11-21: the plugin of this checkout against OATS
+0.70.0 from npm (`@awebai/oats@0.70.0`, gitHead `7512163012876511088da79168c74540f9523c66`,
+tarball integrity
+`sha512-DeVGFZi1ev2ClxF3p/UV0OBc4XwAWuLjEckJ56rz7UVCg8deavPAOHPjeIuyIvg5l4g52rzRBtoe3aVsxQrxrQ==`)
+and the bb session provider of this repository's `main` at
+`134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5` (oats-bb#8 merged; wire 1.3), bb-app at the root `bb-version`
+(0.50.1), Claude Code on a mock model, no aweb. The floor was the provider's real one
+(`compatibility.oats: >=0.70.0`): it admits that kernel, so **no trial commit was made**, and the
+run's log says so (`workspace: … (no trial commit: its own floor (>=0.70.0) admits the kernel)`).
+This is the run the release lane asks for before an oats-bb release.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `KERNEL_REPO` | none, required | a clone of the OATS repository that holds `KERNEL_REF`; only read (`git archive`) |
-| `KERNEL_REF` | `da296359e97eb435f6de561947ef2fdda92c927c` | the kernel commit (awebai/oats `main`, oats-project/oats#2040 merged: OATS 0.69.24, wire 1.3) |
+| `KERNEL_NPM` | `0.70.0` | the OATS release installed from npm: the registry's tarball is fetched once in the container (`npm pack`, kept as `kernel.json`) and that file is installed |
+| `KERNEL_INTEGRITY` | the integrity of 0.70.0's tarball, for that version; none for another | the tarball's integrity, checked before the install; with another `KERNEL_NPM`, set it too, or leave it out for no check |
+| `REQUIRE_REAL_FLOOR` | `1` | the provider's floor is its own: a floor that refuses the kernel under test fails the run. `0`: a trial, the floor is lowered inside the container (below, "The provider") |
+| `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
 | `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` | as `container/ci.sh` | keep the container, name it, the image, extra `docker run` arguments (`--dns 1.1.1.1`) |
+
+A kernel that is on no release yet, the way the run was made before OATS 0.70.0:
+
+```sh
+KERNEL_NPM= KERNEL_REPO=<a clone of the OATS repository> KERNEL_REF=<commit> REQUIRE_REAL_FLOOR=0 plugin/container/real/run.sh
+```
 
 The container is the one of the other tests (`container/Dockerfile`): `--cpus 2 --memory 6g`, no
 mount, no port, no Docker socket, nothing of the host's home. The trees go in through `tar` and the
@@ -36,23 +48,24 @@ run's own inputs (`rpc-input.json`, the children's `task-*.md`). It needs the ne
 npm and for the `oats.framework` package (github.com); nothing else leaves the container. A run
 takes six to eight minutes.
 
-## Why CI does not run it
+## CI runs it
 
-`container/ci.sh all` does not call `run.sh`, and the workflow does not either. The provider is this
-checkout's own (`oats-package/`), but the kernel it needs is on no npm release yet: it is a commit
-of another repository, and a CI runner has no clone of it. The run can join CI when an OATS release
-that the provider's floor admits (`compatibility.oats`, `>=0.70.0`) is on npm: `setup.sh` then
-installs `@awebai/oats@<that version>` instead of packing a tree, `KERNEL_REPO` goes away, and
-`workspace.sh` makes no trial-only commit (it makes one only where the floor refuses the kernel).
+`container/ci.sh all` ends with this run (`ci.sh real` is the run alone), and the workflow
+(`.github/workflows/plugin.yml`) calls `ci.sh all`: the kernel is a release on npm that the
+provider's floor admits, and the provider is this checkout's own (`oats-package/`), so a CI runner
+needs nothing but docker and the network. The run has a container of its own, started once the
+unit and live tests' container is gone, and its artefacts are kept beside theirs.
 
-Until then a person or an agent runs it by hand when the kernel, the provider or the plugin's
-`kernel/` changes, and with `UPDATE_FIXTURES=1` when the answers are to be recorded again.
+In CI the kernel is the release named above, with its integrity checked. A newer kernel is a
+change to `run.sh` (`KERNEL_NPM`, `KERNEL_INTEGRITY`), with `UPDATE_FIXTURES=1` when the answers
+are to be recorded again: the recording, the tests' literals and the two READMEs' refs change
+together.
 
 ## What is in the container
 
 | File | Runs | Does |
 |---|---|---|
-| `run.sh` | on the host | starts the container, copies in the plugin, the kernel's tree and the provider's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
+| `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
 | `mock-anthropic.mjs` | in the container | the mock model |
@@ -64,17 +77,22 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays
   the automatic one: one running thread per processor, 2 in this container. The run is written for
   that limit (part B).
-- **The kernel**: `npm pack --ignore-scripts` in the tree, then `npm install -g` of the tarball.
+- **The kernel**: the registry's tarball of `@awebai/oats@<KERNEL_NPM>` (`npm pack`, which prints
+  its integrity: `setup.sh` prints it with the release's gitHead and checks it against
+  `KERNEL_INTEGRITY`), then `npm install -g` of that file, and the installed version is checked.
+  For an unreleased kernel: `npm pack --ignore-scripts` in the tree, then the same install.
   `setup.sh` stops unless `oats version --json` lists `session-providers`.
 - **The provider**: this checkout's `oats-package/` becomes a local git repository in the
-  container. Where the provider's floor refuses the kernel under test, and only then, one
-  **trial-only commit** goes on top that sets `compatibility.oats` to `>=<the packed kernel's
-  version>` in both manifests (the provider's README, "A trial against an unreleased kernel").
-  That commit exists only inside the container and is never pushed: the floor in the repository
-  stays `>=0.70.0`. It was needed for this recording (the kernel is 0.69.24); without it the
-  kernel answers `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=0.70.0; this kernel is …`.
+  container, with its own floor: `workspace.sh` prints `no trial commit: its own floor (…) admits
+  the kernel`. A floor that refuses the kernel under test fails the run there
+  (`REQUIRE_REAL_FLOOR=1`, the default). Only a trial (`REQUIRE_REAL_FLOOR=0`, against a kernel
+  that is on no release) lowers it: one **trial-only commit** goes on top that sets
+  `compatibility.oats` to `>=<the kernel's version>` in both manifests (the provider's README, "A
+  trial against an unreleased kernel"); it exists only inside the container and is never pushed,
+  and the line then reads `trial floor >=… in place of …`. Without it such a kernel answers
+  `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=0.70.0; this kernel is …`.
   The workspace pins the package by the container's commit:
-  `oats.bb: git:file://…/oats-bb.git@<commit>`; `setup.sh` prints which floor was used.
+  `oats.bb: git:file://…/oats-bb.git@<commit>`.
 - **The workspace**: one member repository with five souls named as the fixtures name them
   (`oats-developer`, `oats-product-expert`, `oats-desktop-developer`, `knowledge-harvester`,
   `oats-expert`), each with `oats.core` and `oats.bb` and **no messaging capability**
@@ -82,13 +100,18 @@ Until then a person or an agent runs it by hand when the kernel, the provider or
   harness, and the provider runs Claude Code only). `oats-expert` works in a worktree; the others
   in a directory. Its commits have fixed dates, so the same trees give the same commit ids.
 - **The deployment** (`oats onboard`): `settings.oats.bb` holds `trust: container` and the bb
-  version, and a default launch configuration for Claude Code sets `yolo: true`. The image has no
-  bubblewrap, so in bb's sandboxed modes every command would wait for a person; the plugin's spawn
-  has no `--yolo`, so the host's default carries it.
+  version, and a default launch configuration for Claude Code sets `yolo: true` (bb's full mode).
+  The plugin's spawn, start and restart name no mode (no `--yolo`, no launch configuration), so the
+  deployment's default decides it, and the provider launches in bb's full mode only: without that
+  default the kernel refuses each of them with the provider's `E_BACKEND_SANDBOXED_MODE` (the
+  plugin shows it unchanged; a spawn preview says nothing of it). The image has no bubblewrap
+  either, so a sandboxed mode could not run a command here.
 - **The mock model**: Claude Code's user settings point `ANTHROPIC_BASE_URL` at
   `mock-anthropic.mjs` on loopback, and bb's server gets a placeholder key in its own environment
   (bb reports its claude-code provider ready only with a credential). No login, nothing spent. The
-  mock answers one line of text and never asks for a tool. A task that holds `MOCK-HOLD:<name>` is
+  mock answers one line of text. It asks for one tool, and only where a person's message says so:
+  a message with a line `MOCK-ASK:<json>` is answered with a call of AskUserQuestion with that
+  input, and the request that brings the answer back with the line of text. A task that holds `MOCK-HOLD:<name>` is
   not answered while the file `mock/hold/<name>` exists: that is how the run keeps an agent
   "working" for as long as a check needs.
 - **The recording wrapper**: the plugin's `oatsBin` setting names `oats-record`, which runs the
@@ -105,7 +128,7 @@ A refusal counts only when it is the kernel's expected code, shown unchanged.
 
 **Part A, one agent** (`flaky-ci-2-developer` of `oats-developer`): the spawn preview; the spawn,
 which answers the new thread's id; a waiting claim set as the agent's session sets it
-(`oats instance attention`); stop (plan, apply); start; restart; retire (plan, apply). Between
+(`oats instance attention`); a question Claude Code asks (below); stop (plan, apply); start; restart; retire (plan, apply). Between
 them, the edge cases, each with its output: a second spawn of the same name, a start on a running
 agent, `oats` taking seconds (4 s more on every call, then a status that never answers:
 `OATS_TIMEOUT` at 20 s, and the snapshot comes back), a stale stop plan (applied after another
@@ -113,6 +136,17 @@ stop), a stop on a stopped agent, the thread archived in bb and then Start, the 
 bb. Screenshots at 1280x800 and 390x800 of the tree's row and the thread's header row for the agent
 working, idle, waiting for a person and stopped by OATS, and of its soul's page ("thread missing")
 once its thread is deleted in bb.
+
+**The question** (A5c): a message in the agent's thread makes the mock have Claude Code call
+AskUserQuestion. bb then holds a pending interaction, and the hook oats.core wrote into the home's
+Claude settings sets a waiting claim: `oats status --json` shows it with `producer: "oats.core"`,
+`reason: "question"` and the question's text. That hook is run from the kernel's copy of the
+home's modules (`<instances>/.oats-retirement/modules/…`, OATS 0.70.0), and the run prints its
+command. The plugin's snapshot has the claim, the tree draws the agent as needing you, and the
+home's card shows the question with one button per option. The run presses one, which is the
+plugin's `threads.interactions.resolve`: bb has no pending interaction left, the model is asked
+again with the answer, the claim is gone from `oats status`, and the agent is idle and drawn so
+in the tree.
 
 **Part B, the scenes the fixtures describe**: a lead with two children (`redesign-ui-lead`; the
 children are spawned with `oats spawn --parent` on the command line, since the plugin's spawn names
@@ -139,4 +173,9 @@ Each is the kernel's or the provider's to decide; the plugin shows what they say
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the
   deployment. The plugin does not draw it.
-- **A waiting claim set by `oats instance attention` has `producer: "agent"`.**
+- **A waiting claim set by `oats instance attention` has `producer: "agent"`**; the one oats.core's
+  hooks set for a question has `producer: "oats.core"`, and the row reads `running: true` while
+  the question is open (the thread is in its turn).
+- **A status row, and the answers of `session start` and `session restart`, carry `moduleCopy`**
+  (`{runs: "kernel-copy", homeCopy: "same", differs: []}`) from OATS 0.70.0. The plugin does not
+  draw it.

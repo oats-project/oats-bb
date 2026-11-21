@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The real run (container/real/README.md), inside the container once setup.sh has finished: bb-app,
-// the packed kernel, the bb session provider, Claude Code on the mock model, and the plugin
+// the OATS kernel, the bb session provider, Claude Code on the mock model, and the plugin
 // installed from the checkout with `oatsBin` set to the recording wrapper (oats-record.mjs).
 //
 // Every act goes through the plugin's own RPC (`bb plugin rpc call oats …`, the calls its UI
@@ -8,7 +8,8 @@
 //   part A  one agent, flaky-ci-2-developer: spawn preview, spawn, stop (plan, apply), start,
 //           restart, retire (plan, apply), with the edge cases between them, and the plugin's tree
 //           and header row at 1280x800 and 390x800 for an agent that is working, idle, waiting for
-//           a person, stopped by OATS, and whose thread was deleted in bb.
+//           a person, stopped by OATS, and whose thread was deleted in bb; and a question Claude
+//           Code asks (oats.core's claim), answered on the home's card.
 //   part B  the scenes the plugin's fixtures describe: a lead with two children (stop, and a stale
 //           stop plan), and an agent on a worktree with a child (start, restart, retire).
 // What the kernel printed for the plugin's calls is written to $OUT/fixtures/, with the paths and the
@@ -382,6 +383,55 @@ try {
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
+
+  step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
+  // Not the agent's own claim: the hooks oats.core wrote into the home's Claude settings set it when
+  // Claude Code calls AskUserQuestion, and clear it when the session moves on. The mock asks the
+  // question a person's message names (mock-anthropic.mjs, MOCK-ASK).
+  const QUESTION = "Retry the flaky job once more, or mark it as failed?";
+  const ask = { questions: [{ question: QUESTION, header: "Flaky job", multiSelect: false, options: [{ label: "Retry", description: "Run the job one more time." }, { label: "Mark failed", description: "Fail the job now." }] }] };
+  const hooks = readFileSync(join(home, ".claude", "settings.json"), "utf8");
+  show("the hook that sets the claim", JSON.parse(hooks).hooks?.PreToolUse?.find((group) => group.matcher === "AskUserQuestion")?.hooks?.[0]?.command ?? "none in the home's .claude/settings.json");
+  say(`     ${bb("thread", "tell", threadId, `One more thing before you go on.\nMOCK-ASK:${JSON.stringify(ask)}\n`).trim()}`);
+  const pendingQuestions = () => bbJson("thread", "interactions", "list", threadId).filter((interaction) => interaction.status === "pending");
+  const pendingQuestion = await until("bb to show the question as a pending interaction", () => pendingQuestions()[0], 60);
+  check(pendingQuestion?.payload?.kind === "user_question", "bb: the thread has one pending interaction, a question", JSON.stringify(pendingQuestion));
+  row = await untilRow(A.instance, "oats.core's claim", (r) => r.waitingOnYou != null);
+  check(row?.waitingOnYou?.producer === "oats.core" && row.waitingOnYou.reason === "question" && row.waitingOnYou.message === QUESTION, "oats status: a waiting claim of producer oats.core, reason question, with the question's text", brief(row));
+  show("oats status", brief(row));
+  const questionClaim = snapshotRow(A.instance)?.waiting;
+  check(questionClaim?.reason === "question" && questionClaim.message === QUESTION, "the plugin's snapshot has the claim, with the kernel's reason and the question", JSON.stringify(questionClaim));
+  keepStatus("question", { [A.instance]: (r) => r.waitingOnYou?.producer === "oats.core" && r.waitingOnYou.reason === "question" && r.session?.threadId === threadId });
+  await shots("real-question", { ...A, threadId, state: "needs-you" });
+  // The home's card: the question and one button per option; the last width answers it, as a person does.
+  const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.innerText.includes(${JSON.stringify(QUESTION)}))`;
+  for (const viewport of VIEWPORTS) {
+    const at = `real-question ${viewport.name}`;
+    const page = await browser.page(viewport);
+    try {
+      await page.goto("/plugins/oats/home");
+      const choices = await page.until(`(() => { const c = ${card}; const b = c ? [...c.querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].map((e) => e.innerText.trim()) : []; return b.length > 0 ? JSON.stringify({ question: c.querySelector(${JSON.stringify(testId("oats-needs-question"))})?.innerText.trim(), choices: b }) : ""; })()`, 30);
+      check(choices === JSON.stringify({ question: QUESTION, choices: ["Retry", "Mark failed"] }), `${at}: the home's card shows the question and its two choices`, choices ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
+      await page.shot(`real-question-${viewport.name}-home`);
+      if (viewport !== VIEWPORTS[VIEWPORTS.length - 1]) continue;
+      await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
+      const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
+      check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));
+    } finally {
+      await page.close();
+    }
+  }
+  row = await untilRow(A.instance, "no claim, its turn over", (r) => r.waitingOnYou == null && r.running === null && settled(r));
+  check(row !== undefined, "oats status: the claim is cleared once the question is answered, and the agent is idle", brief(rowOf(A.instance)));
+  show("oats status", brief(row));
+  const afterAnswer = snapshotRow(A.instance);
+  check(afterAnswer !== undefined && afterAnswer.waiting === null && pendingQuestions().length === 0, "the plugin's snapshot has no claim left, and bb no pending interaction", JSON.stringify(afterAnswer));
+  // And the tree: the row that was drawn as needing you is drawn idle.
+  await shots("real-answered", { ...A, threadId, state: "idle" });
+  // The answer reached Claude Code: the model was asked again in that conversation, with the tool's result.
+  const asks = modelRequests().filter((request) => request.event === "asked-a-question");
+  const after = modelRequests().filter((request) => request.event === "answered" && request.n > asks[0]?.n && request.messages > asks[0]?.messages);
+  check(asks.length === 1 && after.length >= 1, "the mock asked the question once, and was asked again with its answer", JSON.stringify({ asks, after }));
 
   step("A6 edge: oats taking seconds");
   wrapper({ delayMs: 4000 });

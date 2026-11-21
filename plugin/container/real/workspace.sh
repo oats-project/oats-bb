@@ -4,12 +4,15 @@
 #   - the provider (oats.bb) as a local git repository made from the tree in $REAL/provider. Only
 #     where its `compatibility.oats` floor refuses the kernel under test, one trial-only commit goes
 #     on top that lowers the floor to the packed kernel's version (the provider's README, "A trial
-#     against an unreleased kernel"). That commit exists only in this container.
+#     against an unreleased kernel"). That commit exists only in this container. With
+#     REQUIRE_REAL_FLOOR=1 none is made: a floor that refuses the kernel fails the run instead.
 #   - a workspace repository with souls that have NO messaging capability: oats.core and oats.bb
 #     only. Their names are the ones the plugin's fixtures use.
 #   - the deployment $REAL/deploy, onboarded into that workspace, with the host's facts for bb
 #     (`trust: container`, the pinned version) and a default launch configuration for Claude Code
-#     with `yolo: true`, so that no bb approval waits (the image has no bubblewrap).
+#     with `yolo: true` (bb's full mode): the plugin's spawn, start and restart name no mode, and
+#     the provider launches in full mode only, so without this default the kernel refuses them
+#     with E_BACKEND_SANDBOXED_MODE (README.md, "The deployment").
 set -eu
 REAL=${REAL:-/home/node/real}
 BB_VERSION=${BB_VERSION:-$(bb --version)}
@@ -32,8 +35,10 @@ if [ ! -d .git ]; then
   # The trial-only floor, only where the provider's own floor refuses the kernel under test.
   FLOOR=$(node -pe 'JSON.parse(require("fs").readFileSync("oats-package/oats-package.json", "utf8")).compatibility.oats')
   if node -e 'const [floor,version]=process.argv.slice(1),m=/^>=(\d+)\.(\d+)\.(\d+)$/.exec(floor);if(!m)process.exit(1);const v=version.split(/[.-]/).map(Number);for(let i=0;i<3;i++){if(v[i]>+m[i+1])process.exit(0);if(v[i]<+m[i+1])process.exit(1)}' "$FLOOR" "$KERNEL_VERSION"; then
-    TRIAL="its own floor ($FLOOR)"
+    TRIAL="no trial commit: its own floor ($FLOOR) admits the kernel"
   else
+    # The run a release waits on: the floor is the provider's own, or the run fails here.
+    [ "${REQUIRE_REAL_FLOOR:-0}" != 1 ] || { echo "workspace: REQUIRE_REAL_FLOOR=1, and the provider's floor ($FLOOR) refuses kernel $KERNEL_VERSION: the floor is not lowered" >&2; exit 1; }
     for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
       node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
     done
@@ -43,6 +48,8 @@ if [ ! -d .git ]; then
   fi
 fi
 TRIAL=${TRIAL:-$(git log -1 --format=%s)}
+# A tree left by an earlier call: one commit is the provider's own tree, a second is a trial floor.
+[ "${REQUIRE_REAL_FLOOR:-0}" != 1 ] || [ "$(git rev-list --count HEAD)" = 1 ] || { echo "workspace: REQUIRE_REAL_FLOOR=1, and the provider's tree here carries a trial-only commit ($TRIAL)" >&2; exit 1; }
 PROVIDER_OID=$(git rev-parse HEAD)
 rm -rf "$REAL/oats-bb.git"
 git clone -q --bare "$REAL/provider" "$REAL/oats-bb.git"

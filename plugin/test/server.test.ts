@@ -227,7 +227,7 @@ describe("the pages", () => {
 describe("acts", () => {
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
-    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zcfuxuf3cg" });
+    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
@@ -254,7 +254,7 @@ describe("acts", () => {
     const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
-    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_zcfuxuf3cg" });
+    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" });
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn --preview", "spawn"]);
     expect(calls[3]!.argv[calls[3]!.argv.indexOf("--expect-decision") + 1]).toBe("aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -307,8 +307,8 @@ describe("acts", () => {
     await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
     expect(await verbs()).toEqual(["status"]);
 
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_ucvykiyd2s" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_ax7hbx4x8t" });
+    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_3ufx45khmp" });
+    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_guaerjwvwg" });
     const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
     expect(sessions.map((call) => call.argv)).toEqual([
       ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
@@ -337,11 +337,11 @@ describe("acts", () => {
 
   it("retires through the plan and its guarded apply", async () => {
     const plan = await rpc("retirePlan", { instance: "weekly-digest-helper" });
-    expect(plan.revision).toBe("905ceb6c159d7b87e8035721");
+    expect(plan.revision).toBe("ef5028f1e6cb517560247307");
     expect(plan.lines[0]).toMatch(/^Removed: the home of weekly-digest-helper/);
     expect(await rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" })).toEqual({ ok: true });
     const retire = (await fake.calls()).find((call) => call.verb === "retire")!;
-    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "905ceb6c159d7b87e8035721", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
+    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "ef5028f1e6cb517560247307", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
   });
 
   it("rereads the snapshot after an act", async () => {

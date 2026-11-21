@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs on the host (a developer's machine or a CI runner) and does everything else in a container:
-#   container/ci.sh [all|unit|live]        (default: all)
+#   container/ci.sh [all|unit|live|real]   (default: all)
 # The container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's
 # home: the checkout is copied in with tar, and the artefacts (test output, logs, screenshots) are
 # copied out to container/out/. bb runs sovereign: no account, BB_TELEMETRY=false, loopback only.
@@ -9,9 +9,19 @@
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
 # The bb version is the repository's pin: the one line of bb-version at the repository's root when
 # that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
+# `real` is the run against a real OATS kernel and the bb session provider, in a container of its
+# own (real/run.sh, real/README.md; its artefacts go to container/real/out/); `all` ends with it.
 set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
+case "$STAGE" in
+  all | unit | live) ;;
+  real) exec sh "$HERE/real/run.sh" ;;
+  *)
+    echo "usage: container/ci.sh [all|unit|live|real]" >&2
+    exit 2
+    ;;
+esac
 PLUGIN=$(dirname "$HERE")
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-ci-$$}
@@ -46,8 +56,10 @@ case "$STAGE" in
     run sh container/unit.sh
     run bash container/live.sh
     ;;
-  *)
-    echo "usage: container/ci.sh [all|unit|live]" >&2
-    exit 2
-    ;;
 esac
+# The real run has a container of its own: this one goes first (its artefacts are copied out now).
+if [ "$STAGE" = all ]; then
+  trap - EXIT
+  (cleanup) || exit $?
+  NAME="$NAME-real" sh "$HERE/real/run.sh"
+fi

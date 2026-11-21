@@ -165,9 +165,10 @@ bb sovereign: no account, `BB_TELEMETRY=false`, loopback). Never `npm install` o
 From the repository's root (the scripts find the plugin by their own place, so any directory works):
 
 ```sh
-plugin/container/ci.sh            # the image, the installs, typecheck, unit tests, build, live tests
+plugin/container/ci.sh            # the image, the installs, typecheck, unit tests, build, live tests, the real run
 plugin/container/ci.sh unit       # typecheck, unit tests and the build
 plugin/container/ci.sh live       # the live tests only (bb-app, the plugin installed, a fake oats)
+plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, the bb session provider)
 ```
 
 `plugin/container/README.md` says what each script does and how to keep a container for a session
@@ -180,7 +181,7 @@ The fake is checked against the real thing by a run of its own: `plugin/containe
 puts bb-app, a real OATS kernel, the bb session provider and Claude Code on a mock model in one
 container, drives the plugin through its RPC (spawn, stop, start, restart, retire, and the
 refusals), and records what the kernel printed; `test/fixtures/README.md` says which fixtures are
-those recordings, and at which commits. It is run by hand, not by CI
+those recordings, and at which versions. It is the last stage of `ci.sh`, so CI runs it too
 (`plugin/container/real/README.md`).
 
 The bb version the tests run is the repository's pin: the one line of `bb-version` at the

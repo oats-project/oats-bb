@@ -12,8 +12,8 @@
   "warnings": [],
   "launchPrompts": {
    "status": "not-engaged",
-   "startId": "742229d9-2e6a-4462-b3e8-6888ed0dcee7",
-   "at": "2026-11-20T19:50:52.014Z"
+   "startId": "dbbc0283-454a-4f36-be05-3bd4cf90ff72",
+   "at": "2026-11-21T05:50:46.851Z"
   },
   "tmux": null,
   "backend": "bb",
@@ -21,8 +21,8 @@
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_nt89aux7a4",
-    "threadId": "thr_zcfuxuf3cg"
+    "projectId": "proj_q2nv2zr9tp",
+    "threadId": "thr_pkixkg8mvn"
    }
   },
   "repo": "/abs/deployment",
@@ -61,8 +61,8 @@
      "oats.core": {}
     }
    },
-   "resolution": "ec28f20c3082b1c87aa039c9",
-   "revision": "16ecef74c477e33c7d95e6bd"
+   "resolution": "3b3439a1ed840f0405bb7a70",
+   "revision": "de041a9a3b24b071f9ebecaf"
   },
   "replayed": false,
   "wake": {

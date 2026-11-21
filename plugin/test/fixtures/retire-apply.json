@@ -2,17 +2,17 @@
  "retired": "weekly-digest-helper",
  "agent": "oats-expert",
  "workRecovery": {
-  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-Zi8uA5",
+  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-qOMIZD",
   "classes": [
    "changed instance-home bytes",
    "untracked or ignored worktree bytes"
   ],
-  "bytes": 338205,
+  "bytes": 365241,
   "home": {
    "paths": [
     {
      "path": ".oats/",
-     "bytes": 234560
+     "bytes": 260645
     },
     {
      "path": ".agents/",
@@ -20,11 +20,11 @@
     },
     {
      "path": "instance.json",
-     "bytes": 16885
+     "bytes": 17225
     },
     {
      "path": ".claude/",
-     "bytes": 5525
+     "bytes": 6137
     },
     {
      "path": "AGENTS.md",
@@ -55,7 +55,7 @@
      "bytes": 9
     }
    ],
-   "bytes": 305200
+   "bytes": 332237
   },
   "outputs": {
    "paths": [
@@ -95,11 +95,11 @@
   "oats.bb": {
    "retired": true,
    "archived": [
-    "thr_ax7hbx4x8t"
+    "thr_guaerjwvwg"
    ]
   }
  },
- "planRevision": "905ceb6c159d7b87e8035721",
+ "planRevision": "ef5028f1e6cb517560247307",
  "idempotencyKey": "retire-2b9d4e6f8a1c",
  "replayed": false
 }

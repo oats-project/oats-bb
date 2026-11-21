@@ -1,8 +1,9 @@
 // The whole `oats status --json` answers of a real kernel with the bb session provider
 // (test/fixtures/status-recorded.json, one document per state; container/real/README.md says how
 // they were recorded), read by the plugin's own parser and joined by the model: what the tree
-// draws for an agent that is working, idle, waiting for a person, stopped by OATS, and whose thread
-// was deleted in bb, and for a parent with two children.
+// draws for an agent that is working, idle, waiting for a person (its own claim, and the one
+// oats.core's hooks set for a question Claude Code asks), stopped by OATS, and whose thread was
+// deleted in bb, and for a parent with two children.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,7 +12,7 @@ import type { Agent, BbThread } from "../../model/types";
 import { view } from "../../model/view";
 import { FIXTURES } from "../support/fake-oats.js";
 
-type Recorded = Record<"working" | "idle" | "needsYou" | "stoppedByOats" | "threadDeleted" | "parentWithTwoChildren", unknown>;
+type Recorded = Record<"working" | "idle" | "needsYou" | "question" | "stoppedByOats" | "threadDeleted" | "parentWithTwoChildren", unknown>;
 const recorded = JSON.parse(readFileSync(join(FIXTURES, "status-recorded.json"), "utf8")) as Recorded;
 
 function agentsOf(state: keyof Recorded): Agent[] {
@@ -56,38 +57,50 @@ describe("a real kernel's status, read by the parser", () => {
   });
 
   it("working: running true, state unknown, on its bb thread", () => {
-    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: true, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: true, runtimeState: "unknown", waiting: null }]);
   });
 
   it("idle: running null, state unknown, the same thread", () => {
-    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: null, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: null, runtimeState: "unknown", waiting: null }]);
   });
 
   it("waiting for a person: the claim of `oats instance attention`, with the agent's message", () => {
     expect(agentsOf("needsYou")).toEqual([
       {
         ...one,
-        threadId: "thr_zcfuxuf3cg",
+        threadId: "thr_pkixkg8mvn",
         running: null,
         runtimeState: "unknown",
-        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-20T19:51:31.639Z" },
+        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-21T05:51:26.629Z" },
+      },
+    ]);
+  });
+
+  it("a question Claude Code asks: oats.core's claim, with the question's text, while the turn is open", () => {
+    expect(agentsOf("question")).toEqual([
+      {
+        ...one,
+        threadId: "thr_pkixkg8mvn",
+        running: true,
+        runtimeState: "unknown",
+        waiting: { reason: "question", message: "Retry the flaky job once more, or mark it as failed?", since: "2026-11-21T05:51:48.937Z" },
       },
     ]);
   });
 
   it("stopped by OATS: running false, state stopped, the thread kept", () => {
-    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_zcfuxuf3cg", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("its thread deleted in bb: running false, state stopped, still naming the thread that is gone", () => {
-    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_4j4yyhn8x7", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_piw73uvy5i", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("a parent with two children: each child names its parent, in the kernel's order", () => {
     expect(agentsOf("parentWithTwoChildren").map((agent) => [agent.instance, agent.soul, agent.parent, agent.running, agent.threadId])).toEqual([
-      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_vudvwsxhnf"],
-      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_xajbky4bdn"],
-      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_yma9pyxmpu"],
+      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_trijn6gyv6"],
+      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_9rz67f2pnh"],
+      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_wqeixc6256"],
     ]);
   });
 });
@@ -102,10 +115,12 @@ describe("a real kernel's status, joined to bb's threads by the model", () => {
     ["working", "working"],
     ["idle", "idle"],
     ["needsYou", "needs-you"],
+    // A turn that is open on a question is drawn as needing the person, not as working.
+    ["question", "needs-you"],
     ["stoppedByOats", "stopped"],
   ] as const)("%s is drawn in the tree as %s", (recordedState, drawnState) => {
     const result = drawn(recordedState);
-    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_zcfuxuf3cg", drawnState]]);
+    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_pkixkg8mvn", drawnState]]);
     expect(result.detached).toEqual([]);
     expect(result.elsewhere).toEqual([]);
   });

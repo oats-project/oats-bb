@@ -2,8 +2,8 @@
 // tab shows it on an agent's own thread: app/home/agent-tab.ts), and the same panel as a page of
 // its own, by instance. Its components are in this directory.
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
-import { setAgentTab } from "../home/agent-tab";
-import { AGENT_PAGE, AgentPage } from "./AgentPage";
+import { setAgentPage, setAgentTab } from "../home/agent-tab";
+import { AGENT_PAGE, AgentPage, openAgentPage } from "./AgentPage";
 import { AgentTab } from "./Panel";
 
 export { openAgentPage } from "./AgentPage";
@@ -15,6 +15,9 @@ const ICON = "Bot";
 
 export function register(app: PluginAppBuilder): void {
   setAgentTab(AgentTab);
+  // Where the other features open one agent's page from: the thread's OATS chip at the phone's
+  // width, and the row of an agent with no bb thread.
+  setAgentPage(openAgentPage);
   // Opened from an agent's row or thread, never from bb's own navigation.
   app.slots.navPanel({ id: "agent", title: "Agent", icon: ICON, path: AGENT_PAGE, experimental_hideFromNavigation: true, component: AgentPage });
 }

@@ -1,10 +1,8 @@
 // The instance panel's RPC handlers, one per verb of contract/panel.ts.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { rpc } from "../contract/panel.js";
-import { parsePanelInstance } from "../kernel/panel-instance.js";
+import { parsePanelInstance, text } from "../kernel/panel-instance.js";
 import { refusal, type Core } from "./core.js";
-
-const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => ({
   /**

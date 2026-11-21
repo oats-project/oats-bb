@@ -97,7 +97,8 @@ const HARNESS: Record<string, string> = { claude: "Claude", pi: "Pi", codex: "Co
 /** A reported harness's display name (Claude, Pi, Codex), else the value as reported. */
 export function harnessName(harness: string): string {
   const reported = harness.trim();
-  return HARNESS[reported.toLowerCase()] ?? reported;
+  const key = reported.toLowerCase();
+  return Object.hasOwn(HARNESS, key) ? (HARNESS[key] ?? reported) : reported;
 }
 
 /**
@@ -111,3 +112,22 @@ export function sessionLine(facts: Pick<PanelInstance, "backend" | "threadId" | 
 
 /** The row's runtime error, with who said it: every fact here is the kernel's. */
 export const runtimeErrorLine = (error: string): string => `OATS says: ${error}`;
+
+const wordsOf = (text: string): string[] => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+/**
+ * A soul's two-letter mark, the Desktop's grammar (packages/desktop/renderer/identity-marks.mjs
+ * `markText`): drop a package qualifier (after the last `/` or `--`) and, from three words, a
+ * leading namespace word; then the initials of two words, or a single word's first two
+ * characters, upper-cased. By code points; "?" when there is no letter or digit to take.
+ */
+export function markText(value: string): string {
+  const slash = value.lastIndexOf("/");
+  const dashes = value.lastIndexOf("--");
+  const cut = Math.max(slash < 0 ? 0 : slash + 1, dashes < 0 ? 0 : dashes + 2);
+  let parts = wordsOf(value.slice(cut));
+  if (parts.length >= 3) parts = parts.slice(1);
+  const chars = parts.length >= 2 ? [[...parts[0]!][0]!, [...parts[1]!][0]!] : parts.length === 1 ? [...parts[0]!].slice(0, 2) : [];
+  const upper = [...chars.join("").toLocaleUpperCase("en")];
+  // Upper case can grow ("ß" is "SS"): a mark is two glyphs at most, so then each character keeps its first.
+  return (upper.length <= 2 ? upper : chars.map((char) => [...char.toLocaleUpperCase("en")][0])).join("") || "?";
+}

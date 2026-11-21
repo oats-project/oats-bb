@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "../../app/panel/words";
+import { ageText, driftLines, harnessName, markText, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -72,7 +72,7 @@ describe("the Work card", () => {
 
 describe("the Session card", () => {
   it("names the harness, and where the model came from only beside a model", () => {
-    expect(["claude", " PI ", "codex", "aider"].map(harnessName)).toEqual(["Claude", "Pi", "Codex", "aider"]);
+    expect(["claude", " PI ", "codex", "aider", "constructor"].map(harnessName)).toEqual(["Claude", "Pi", "Codex", "aider", "constructor"]);
     expect(modelFromText({ model: "claude-opus-5-5", modelFrom: "soul" })).toBe("the soul's choice");
     expect(modelFromText({ model: "m", modelFrom: "harness-default" })).toBe("the harness's default");
     expect(modelFromText({ model: "m", modelFrom: "local-default" })).toBe("this computer's default for every soul");
@@ -86,5 +86,13 @@ describe("the Session card", () => {
     expect(sessionLine({ backend: null, threadId: null, tmuxSession: "oats-main" })).toBe("tmux · oats-main");
     expect(sessionLine({ backend: null, threadId: null, tmuxSession: null })).toBe("");
     expect(runtimeErrorLine("bb did not answer")).toBe("OATS says: bb did not answer");
+  });
+});
+
+describe("a soul's mark", () => {
+  it("two letters, the Desktop's grammar", () => {
+    expect(["oats-expert", "oats.okf/knowledge-harvester", "oats-okf--knowledge-maintainer", "oats-desktop-developer", "dev", "x", "ßeta", "--", ""].map(markText)).toEqual([
+      "OE", "KH", "KM", "DD", "DE", "X", "SE", "?", "?",
+    ]);
   });
 });

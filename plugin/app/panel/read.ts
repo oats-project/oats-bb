@@ -7,19 +7,25 @@ import { REALTIME_CHANGED, rpcContract } from "../../contract";
 import { errorMessage, type Read } from "../store";
 
 type Contract = typeof rpcContract;
-/** The panel's verbs that read one instance. */
-export type InstanceRead = "panelInstance";
+type InstanceAnswer = PluginRpcResult<Contract["panelInstance"]>;
 
-export function useInstanceRead<Method extends InstanceRead>(method: Method, instance: string, enabled = true): Read<PluginRpcResult<Contract[Method]>> & { retry(): void; fetching: boolean } {
-  const query = useRpcQuery({ contract: rpcContract, method, input: { instance }, enabled });
+/**
+ * One instance's facts, kept fresh: read when the instance is shown, again when the server
+ * publishes `oats/changed`, and again when a panel opens on an answer bb still holds from an
+ * earlier visit (nothing told that copy what changed while the panel was closed).
+ */
+export function usePanelInstance(instance: string): Read<InstanceAnswer> & { retry(): void; fetching: boolean } {
+  const query = useRpcQuery({ contract: rpcContract, method: "panelInstance", input: { instance } });
   const refetch = useRef(query.refetch);
   useEffect(() => {
     refetch.current = query.refetch;
   });
-  useRealtime(REALTIME_CHANGED, () => {
-    if (enabled) void refetch.current();
-  });
-  const data = query.data as PluginRpcResult<Contract[Method]> | undefined;
+  const heldAtMount = useRef(query.data !== undefined);
+  useEffect(() => {
+    if (heldAtMount.current) void refetch.current();
+  }, []);
+  useRealtime(REALTIME_CHANGED, () => void refetch.current());
+  const data = query.data as InstanceAnswer | undefined;
   const retry = () => void refetch.current();
   const fetching = query.isFetching;
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching };

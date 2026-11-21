@@ -65,7 +65,7 @@ const frame = z.looseObject({ instance: z.string().min(1), home: z.string().min(
 type Row = Record<string, unknown>;
 const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
 /** A fact that is text and not empty; anything else is unreported. */
-const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+export const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const lastSegment = (path: string): string | null => text(path.replace(/\/+$/, "").split("/").pop());
 
 /**

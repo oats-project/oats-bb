@@ -328,6 +328,80 @@ test("the panel reads again when OATS changes", async () => {
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-model"))).toContain("claude-fable-5.2"));
 });
 
+test("an agent whose session fell back to a shell says Failed, and one the kernel cannot reach Unreachable, as the tree does", async () => {
+  const shell = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: false, runtimeState: "shell" }) });
+  await shell.findByTestId("oats-panel-work");
+  expect(stateOf(shell)).toBe("Failed");
+  shell.unmount();
+  const unreachable = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable" }) });
+  await unreachable.findByTestId("oats-panel-work");
+  expect(stateOf(unreachable)).toBe("Unreachable");
+});
+
+test("an agent with no thread that waits on a person says Needs you, as its Needs input section does", async () => {
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: true } : agent));
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
+  await slot.findByTestId("oats-panel-waiting");
+  expect(stateOf(slot)).toMatch(/^Needs you· waiting 15 min \(since \d\d:\d\d\)$/);
+});
+
+test("both headers draw the soul's mark, hidden from a screen reader beside the name it repeats", async () => {
+  const slot = panel();
+  const mark = within(await slot.findByTestId("oats-panel-header")).getByTestId("oats-soul-mark");
+  expect([text(mark), mark.getAttribute("aria-hidden")]).toEqual(["OE", "true"]);
+  fireEvent.click(slot.getByTestId("oats-tab-soul"));
+  expect(text(within(await slot.findByTestId("oats-panel-soul-header")).getByTestId("oats-soul-mark"))).toBe("OE");
+});
+
+test("what the kernel's row holds is drawn through the display filter, and copied as the kernel gave it", async () => {
+  const writes: string[] = [];
+  vi.stubGlobal("navigator", { clipboard: { writeText: async (value: string) => void writes.push(value) } });
+  const id = "alias evil\u202Egnp.exe on team";
+  const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, messagingId: id, startedAt: "tomorrow\u202E", harness: "constructor" }) });
+  expect(text(await slot.findByTestId("oats-panel-messaging-id"))).toBe("alias evil\uFFFDgnp.exe on team");
+  expect(text(slot.getByTestId("oats-panel-started"))).toBe("tomorrow\uFFFD");
+  expect(slot.getByTestId("oats-panel-started").getAttribute("title")).not.toContain("\u202E");
+  // A harness the plugin has no name for is named as reported, never by a key it did not write.
+  expect(text(slot.getByTestId("oats-panel-harness"))).toBe("constructor");
+  fireEvent.click(copyOf(slot.getByTestId("oats-panel-messaging-id")));
+  await waitFor(() => expect(writes).toEqual([id]));
+});
+
+test("when the roster cannot be read again, an open panel keeps what it read, with its age, the refusal's code and Retry", async () => {
+  let fail = false;
+  let refreshed = 0;
+  const failing = { ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" };
+  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+    rpc: handlers({
+      snapshot: () => (fail ? failing : panelSnapshot()),
+      refresh: () => {
+        refreshed += 1;
+        return { at: "2026-11-21T18:29:20.000Z" };
+      },
+      panelInstance: ({ instance }) => {
+        if (fail) throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+        return { ...instanceAnswer(instance), at: "2026-11-21T18:27:00.000Z" };
+      },
+    }),
+  });
+  await slot.findByTestId("oats-panel-work");
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  const stale = await slot.findByTestId("oats-stale");
+  await waitFor(() => expect(text(stale)).toContain("OATS could not be read again (E_LOCAL_MISSING)."));
+  expect(text(stale)).toContain("howing what was read 2 min ago.");
+  // Everything it read is still there: the name, the state, the claim, the facts.
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();
+  expect(text(slot.getByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
+  fail = false;
+  fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(slot.queryByTestId("oats-stale")).toBeNull());
+  expect(refreshed).toBe(1);
+  expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
+});
+
 // ---- the panel as a page of its own
 async function agentPage(subPath: string, options: RenderSlotOptions<Contract> = {}) {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
@@ -381,4 +455,76 @@ test("on an agent's own thread the plugin's fixed tab is the panel", async () =>
   });
   expect(text(await slot.findByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.queryByTestId("oats-home-tab")).toBeNull();
+});
+
+test("the page keeps the agent and its way back while the roster cannot be read again", async () => {
+  let fail = false;
+  const slot = await agentPage(CHILD, {
+    rpc: handlers({
+      snapshot: () => (fail ? { ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped" } : panelSnapshot()),
+      panelInstance: ({ instance }) => {
+        if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+        return instanceAnswer(instance);
+      },
+    }),
+  });
+  await slot.findByTestId("oats-panel-work");
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS could not be read again.");
+  expect(text(slot.getByTestId("oats-agent-back"))).toBe("Back to the thread");
+  expect(text(slot.getByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
+});
+
+test("the fixed tab keeps the agent's panel when the roster cannot be read again, with its age and why", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  let fail = false;
+  const app = await loadApp();
+  const tab = app.tabs.find((candidate) => candidate.id === "home")!;
+  const slot = renderSlot<{ threadId: string; environment: null }, Contract>(tab as never, { threadId: CHILD_THREAD, environment: null }, {
+    rpc: handlers({
+      snapshot: () => (fail ? { ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" } : panelSnapshot()),
+      panelInstance: ({ instance }) => {
+        if (fail) throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+        return instanceAnswer(instance);
+      },
+    }),
+    sidebarThreads: panelThreads(),
+  });
+  await slot.findByTestId("oats-panel-work");
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS could not be read again (E_LOCAL_MISSING).");
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  expect(slot.queryByTestId("oats-home-tab")).toBeNull();
+});
+
+test("a panel that opens while the roster cannot be read shows the agent its caller last read, and why nothing more", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const known = panelAgents().find((agent) => agent.instance === CHILD)!;
+  const slot = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, {
+    rpc: handlers({
+      snapshot: () => ({ ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
+      panelInstance: () => {
+        throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+      },
+    }),
+    sidebarThreads: panelThreads(),
+  });
+  const notice = await slot.findByRole("alert");
+  expect(text(within(notice).getByRole("heading"))).toBe("OATS could not be read");
+  expect(text(notice)).toContain("E_LOCAL_MISSING");
+  expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  expect(stateOf(slot)).toMatch(/^Needs you/);
+});
+
+test("at the phone's width the thread's OATS chip opens the agent's page", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 767px)" }));
+  const app = await loadApp();
+  const slot = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: CHILD_THREAD, projectId: "proj_panel", environment: null }, {
+    rpc: handlers({ snapshot: () => panelSnapshot() }),
+    sidebarThreads: panelThreads(),
+  });
+  fireEvent.click(await slot.findByTestId("oats-chip-oats"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: CHILD } }]);
 });

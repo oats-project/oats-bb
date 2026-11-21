@@ -1,0 +1,14 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_AUTOMATION_NOT_HERE",
+  "message": "oats-real/weekly-report does not run on this host (assigned-elsewhere: runs on report-server; this host is bb-box)",
+  "details": {
+   "id": "oats-real/weekly-report",
+   "reason": "assigned-elsewhere",
+   "runsOn": "report-server",
+   "owner": "github.com/acme-bot"
+  }
+ }
+}

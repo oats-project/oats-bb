@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SCHEDULE_DISABLED",
+  "message": "schedule weekly-cleanup is disabled; enable it or pass --force"
+ }
+}

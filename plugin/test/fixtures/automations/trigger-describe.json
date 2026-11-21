@@ -1,0 +1,67 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "trigger": {
+   "kind": "trigger",
+   "id": "local/graph-watch",
+   "name": "graph-watch",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": "Watch every harvest branch",
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/graph-watch",
+   "soul": {
+    "name": "graph-reviewer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "task": "Look at branch {subject} ({event}).",
+   "on": {
+    "source": "acme.graph:harvest-branches",
+    "params": {
+     "prefix": "harvest/"
+    },
+    "events": [
+     "opened",
+     "updated"
+    ],
+    "poll": "1m"
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastRun": null,
+   "nextDue": null,
+   "enabled": true,
+   "spawn": {
+    "soul": "graph-reviewer",
+    "purpose": "{trigger}-{subject}",
+    "task": "Look at branch {subject} ({event}).",
+    "teams": [],
+    "yolo": true,
+    "backend": "bb"
+   },
+   "triggerApi": 1,
+   "scope": "/abs/deployment",
+   "createdAt": "2026-11-21T18:18:57.470Z",
+   "updatedAt": "2026-11-21T18:18:58.266Z"
+  }
+ }
+}

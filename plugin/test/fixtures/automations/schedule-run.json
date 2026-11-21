@@ -1,0 +1,286 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "daily-review",
+   "cron": "0 9 * * 1-5",
+   "tz": "Europe/Madrid",
+   "kind": "spawn",
+   "description": "Review open pull requests every weekday morning",
+   "agent": "oats-developer",
+   "backend": "bb",
+   "purpose": "review",
+   "task": "Review the open pull requests.\nReport what blocks each.",
+   "yolo": true,
+   "wake": {
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "message": "Anything new on your review?"
+   },
+   "createdAt": "2026-11-21T18:18:44.907Z",
+   "updatedAt": "2026-11-21T18:18:44.907Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true,
+    "intent": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    }
+   },
+   "nextRun": "2026-11-23T08:00:00.000Z",
+   "lastRun": {
+    "scheduledFor": "2026-11-21T18:18:00.000Z",
+    "startedAt": "2026-11-21T18:18:49.110Z",
+    "instance": "oats-developer-review-202611211818",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+    "launched": true,
+    "kind": "spawn",
+    "materialized": "workspace",
+    "wakeSchedule": {
+     "id": "wake-oats-developer-review-202611211818",
+     "cron": "*/30 * * * *",
+     "tz": "Europe/Madrid",
+     "kind": "wake",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+     "message": "Anything new on your review?",
+     "createdAt": "2026-11-21T18:18:51.628Z",
+     "updatedAt": "2026-11-21T18:18:51.628Z",
+     "scope": "/abs/deployment",
+     "scheduleApi": 2,
+     "scheduleHistoryApi": 3,
+     "executionStatus": {
+      "kind": "legacy",
+      "capture": "unknown",
+      "migrationRequired": true
+     },
+     "nextRun": "2026-11-21T18:30:00.000Z",
+     "lastRun": null,
+     "history": {
+      "status": "ok",
+      "stored": 0,
+      "truncated": false
+     },
+     "recentRuns": [],
+     "running": false,
+     "name": "wake-oats-developer-review-202611211818",
+     "origin": {
+      "kind": "local",
+      "path": "oats-schedules.json",
+      "url": null,
+      "localPath": "/abs/deployment/oats-schedules.json"
+     },
+     "description": null,
+     "owner": null,
+     "runsOn": null,
+     "runsHere": true,
+     "reason": null,
+     "enabledHere": true,
+     "qualifiedId": "local/wake-oats-developer-review-202611211818",
+     "soul": null,
+     "task": null,
+     "teams": [],
+     "launchConfig": null,
+     "harness": null,
+     "model": null,
+     "concurrency": null,
+     "nextDue": "2026-11-21T18:30:00.000Z",
+     "enabled": true
+    },
+    "outcome": "launched",
+    "runId": "eb44306a72ebece5bcd23068",
+    "session": {
+     "instance": "oats-developer-review-202611211818",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+     "incarnation": null,
+     "server": null,
+     "delivery": "launched"
+    }
+   },
+   "history": {
+    "status": "ok",
+    "stored": 1,
+    "truncated": false
+   },
+   "recentRuns": [
+    {
+     "runId": "eb44306a72ebece5bcd23068",
+     "scheduledFor": "2026-11-21T18:18:00.000Z",
+     "startedAt": "2026-11-21T18:18:49.110Z",
+     "instance": "oats-developer-review-202611211818",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+     "launched": true,
+     "kind": "spawn",
+     "materialized": "workspace",
+     "wakeSchedule": {
+      "id": "wake-oats-developer-review-202611211818",
+      "cron": "*/30 * * * *",
+      "tz": "Europe/Madrid",
+      "kind": "wake",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "message": "Anything new on your review?",
+      "createdAt": "2026-11-21T18:18:51.628Z",
+      "updatedAt": "2026-11-21T18:18:51.628Z",
+      "scope": "/abs/deployment",
+      "scheduleApi": 2,
+      "scheduleHistoryApi": 3,
+      "executionStatus": {
+       "kind": "legacy",
+       "capture": "unknown",
+       "migrationRequired": true
+      },
+      "nextRun": "2026-11-21T18:30:00.000Z",
+      "lastRun": null,
+      "history": {
+       "status": "ok",
+       "stored": 0,
+       "truncated": false
+      },
+      "recentRuns": [],
+      "running": false,
+      "name": "wake-oats-developer-review-202611211818",
+      "origin": {
+       "kind": "local",
+       "path": "oats-schedules.json",
+       "url": null,
+       "localPath": "/abs/deployment/oats-schedules.json"
+      },
+      "description": null,
+      "owner": null,
+      "runsOn": null,
+      "runsHere": true,
+      "reason": null,
+      "enabledHere": true,
+      "qualifiedId": "local/wake-oats-developer-review-202611211818",
+      "soul": null,
+      "task": null,
+      "teams": [],
+      "launchConfig": null,
+      "harness": null,
+      "model": null,
+      "concurrency": null,
+      "nextDue": "2026-11-21T18:30:00.000Z",
+      "enabled": true
+     },
+     "outcome": "launched",
+     "settled": false,
+     "recordedAt": "2026-11-21T18:18:51.631Z",
+     "transitions": [
+      "launched"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": "oats-developer-review-202611211818",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "incarnation": null,
+      "server": null,
+      "delivery": "launched"
+     }
+    }
+   ],
+   "running": true,
+   "name": "daily-review",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/daily-review",
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-23T08:00:00.000Z",
+   "enabled": true
+  },
+  "run": {
+   "scheduledFor": "2026-11-21T18:18:00.000Z",
+   "startedAt": "2026-11-21T18:18:49.110Z",
+   "instance": "oats-developer-review-202611211818",
+   "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+   "launched": true,
+   "kind": "spawn",
+   "materialized": "workspace",
+   "wakeSchedule": {
+    "id": "wake-oats-developer-review-202611211818",
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "kind": "wake",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+    "message": "Anything new on your review?",
+    "createdAt": "2026-11-21T18:18:51.628Z",
+    "updatedAt": "2026-11-21T18:18:51.628Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-21T18:30:00.000Z",
+    "lastRun": null,
+    "history": {
+     "status": "ok",
+     "stored": 0,
+     "truncated": false
+    },
+    "recentRuns": [],
+    "running": false,
+    "name": "wake-oats-developer-review-202611211818",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/wake-oats-developer-review-202611211818",
+    "soul": null,
+    "task": null,
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-21T18:30:00.000Z",
+    "enabled": true
+   },
+   "outcome": "launched"
+  },
+  "considered": [
+   {
+    "workspace": "/abs/deployment",
+    "id": "daily-review",
+    "minute": "2026-11-21T18:18",
+    "action": "launched",
+    "instance": "oats-developer-review-202611211818"
+   }
+  ]
+ }
+}

@@ -1,0 +1,83 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "triggerApi": 1,
+  "scope": "/abs/deployment",
+  "triggers": [
+   {
+    "id": "oats-real/proposal-review",
+    "name": "proposal-review",
+    "enabled": true,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "repo": "github.com/acme/knowledge",
+    "soul": "oats-developer",
+    "concurrency": {
+     "max": 2,
+     "perKey": 1
+    },
+    "lastPoll": {
+     "at": "2026-11-21T18:19:00.977Z",
+     "ok": true,
+     "prs": 5,
+     "matching": 4
+    },
+    "nextPollAt": "2026-11-21T18:21:00.977Z",
+    "nextDue": "2026-11-21T18:21:00.977Z",
+    "pending": [
+     {
+      "key": "oats-real/proposal-review:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
+      "event": "opened",
+      "number": 43,
+      "subject": "43",
+      "url": "https://github.com/acme/knowledge/pull/43",
+      "observedAt": "2026-11-21T18:19:00.977Z"
+     }
+    ],
+    "fired": [
+     {
+      "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
+      "at": "2026-11-21T18:19:00.977Z",
+      "instance": "oats-developer-review-pr-41",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+      "event": "opened",
+      "number": 41,
+      "subject": "41"
+     },
+     {
+      "key": "oats-real/proposal-review:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
+      "at": "2026-11-21T18:19:00.977Z",
+      "instance": "oats-developer-review-pr-42",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+      "event": "opened",
+      "number": 42,
+      "subject": "42"
+     }
+    ],
+    "firedTotal": 2,
+    "live": [
+     {
+      "instance": "oats-developer-review-pr-41",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+      "repo": "github.com/acme/knowledge",
+      "number": 41,
+      "subject": "41",
+      "event": "opened"
+     },
+     {
+      "instance": "oats-developer-review-pr-42",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+      "repo": "github.com/acme/knowledge",
+      "number": 42,
+      "subject": "42",
+      "event": "opened"
+     }
+    ],
+    "liveCount": 2,
+    "lastError": null
+   }
+  ]
+ }
+}

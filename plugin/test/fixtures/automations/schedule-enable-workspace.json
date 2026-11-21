@@ -1,0 +1,65 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "oats-real/nightly-digest",
+   "cron": "0 7 * * *",
+   "tz": "Europe/Madrid",
+   "kind": "spawn",
+   "agent": "knowledge-harvester",
+   "backend": "bb",
+   "purpose": "digest",
+   "task": "Write the nightly digest.\nRead yesterday's merged pull requests and summarise them for the team.\n",
+   "yolo": true,
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-22T06:00:00.000Z",
+   "lastRun": null,
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "nightly-digest",
+   "origin": {
+    "kind": "workspace",
+    "repoKey": "local//abs/real/src/oats-real",
+    "path": "oats-schedules/nightly-digest.yaml",
+    "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+    "url": null,
+    "localPath": "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml"
+   },
+   "description": "Write the nightly digest of what the team shipped",
+   "owner": "github.com/ana",
+   "runsOn": "bb-box",
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "oats-real/nightly-digest",
+   "soul": {
+    "name": "knowledge-harvester",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-22T06:00:00.000Z",
+   "enabled": true
+  }
+ }
+}

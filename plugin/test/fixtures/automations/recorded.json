@@ -1,0 +1,478 @@
+{
+ "oats": "0.70.0",
+ "at": "2026-11-21T18:21:48.721Z",
+ "calls": {
+  "schedule-list-empty.json": {
+   "argv": [
+    "schedule",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-list-empty.json": {
+   "argv": [
+    "trigger",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "host-status-off.json": {
+   "argv": [
+    "schedule",
+    "host",
+    "status",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-add.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "daily-review",
+    "--file",
+    "/abs/real/spec-1.json",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-add-exists.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "daily-review",
+    "--file",
+    "/abs/real/spec-2.json",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-add-invalid.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "bad-cron",
+    "--file",
+    "/abs/real/spec-3.json",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-add-sandboxed-saved.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "hourly-check",
+    "--file",
+    "/abs/real/spec-4.json",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-disable.json": {
+   "argv": [
+    "schedule",
+    "disable",
+    "weekly-cleanup",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-enable.json": {
+   "argv": [
+    "schedule",
+    "enable",
+    "weekly-cleanup",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-disable-workspace.json": {
+   "argv": [
+    "schedule",
+    "disable",
+    "oats-real/nightly-digest",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-enable-workspace.json": {
+   "argv": [
+    "schedule",
+    "enable",
+    "oats-real/nightly-digest",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-describe.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "status-check",
+    "--description=Check that the roster answers",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-describe-workspace.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "oats-real/nightly-digest",
+    "--description=Mine now",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-show.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "daily-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-list-scheduler-off.json": {
+   "argv": [
+    "schedule",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-test.json": {
+   "argv": [
+    "schedule",
+    "test",
+    "daily-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-test-elsewhere.json": {
+   "argv": [
+    "schedule",
+    "test",
+    "oats-real/weekly-report",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-test-sandboxed.json": {
+   "argv": [
+    "schedule",
+    "test",
+    "hourly-check",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-run.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "daily-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-run-launch-failed.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "hourly-check",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-run-command.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "status-check",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-run-elsewhere.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "oats-real/weekly-report",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-run-disabled.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "weekly-cleanup",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "trigger-add.json": {
+   "argv": [
+    "trigger",
+    "add",
+    "--file",
+    "/abs/real/spec-7.json",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-add-exists.json": {
+   "argv": [
+    "trigger",
+    "add",
+    "--file",
+    "/abs/real/spec-8.json",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "trigger-disable.json": {
+   "argv": [
+    "trigger",
+    "disable",
+    "old-prs",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-enable.json": {
+   "argv": [
+    "trigger",
+    "enable",
+    "old-prs",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-describe.json": {
+   "argv": [
+    "trigger",
+    "update",
+    "graph-watch",
+    "--description=Watch every harvest branch",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-describe-workspace.json": {
+   "argv": [
+    "trigger",
+    "update",
+    "oats-real/proposal-review",
+    "--description=Mine now",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "trigger-show.json": {
+   "argv": [
+    "trigger",
+    "show",
+    "pr-triage",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-test.json": {
+   "argv": [
+    "trigger",
+    "test",
+    "oats-real/proposal-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-test-elsewhere.json": {
+   "argv": [
+    "trigger",
+    "test",
+    "oats-real/docs-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-test-source-unconfirmed.json": {
+   "argv": [
+    "trigger",
+    "test",
+    "oats-real/harvest-review",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "trigger-test-source.json": {
+   "argv": [
+    "trigger",
+    "test",
+    "oats-real/harvest-review",
+    "--run-source",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-test-source-failed.json": {
+   "argv": [
+    "trigger",
+    "test",
+    "oats-real/harvest-review",
+    "--run-source",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "host-install-refused.json": {
+   "argv": [
+    "schedule",
+    "host",
+    "install",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "host-install.json": {
+   "argv": [
+    "schedule",
+    "host",
+    "install",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-status.json": {
+   "argv": [
+    "trigger",
+    "status",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-status-one.json": {
+   "argv": [
+    "trigger",
+    "status",
+    "oats-real/proposal-review",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-list.json": {
+   "argv": [
+    "schedule",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-list.json": {
+   "argv": [
+    "trigger",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "host-status-on.json": {
+   "argv": [
+    "schedule",
+    "host",
+    "status",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-status-poll-failed.json": {
+   "argv": [
+    "trigger",
+    "status",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-list-poll-failed.json": {
+   "argv": [
+    "trigger",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-list-host-unnamed.json": {
+   "argv": [
+    "schedule",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "trigger-list-host-unnamed.json": {
+   "argv": [
+    "trigger",
+    "list",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-reconcile.json": {
+   "argv": [
+    "schedule",
+    "reconcile",
+    "status-check",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-remove.json": {
+   "argv": [
+    "schedule",
+    "remove",
+    "weekly-cleanup",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-remove-workspace.json": {
+   "argv": [
+    "schedule",
+    "remove",
+    "oats-real/nightly-digest",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-remove-unknown.json": {
+   "argv": [
+    "schedule",
+    "remove",
+    "weekly-cleanup",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "trigger-remove.json": {
+   "argv": [
+    "trigger",
+    "remove",
+    "old-prs",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "version.json": {
+   "argv": [
+    "version",
+    "--json"
+   ],
+   "exit": 0
+  }
+ }
+}

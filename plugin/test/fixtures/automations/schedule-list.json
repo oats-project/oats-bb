@@ -1,0 +1,852 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "scope": "/abs/deployment",
+  "scheduleApi": 2,
+  "scheduleHistoryApi": 3,
+  "integrity": {
+   "sources": [
+    {
+     "path": "definitions",
+     "status": "ok",
+     "bytes": 4938
+    },
+    {
+     "path": "state",
+     "status": "ok",
+     "bytes": 8708
+    }
+   ]
+  },
+  "host": {
+   "name": "bb-box",
+   "ghUser": {
+    "github.com": "ana"
+   }
+  },
+  "schedules": [
+   {
+    "id": "daily-review",
+    "cron": "0 9 * * 1-5",
+    "tz": "Europe/Madrid",
+    "kind": "spawn",
+    "description": "Review open pull requests every weekday morning",
+    "agent": "oats-developer",
+    "backend": "bb",
+    "purpose": "review",
+    "task": "Review the open pull requests.\nReport what blocks each.",
+    "yolo": true,
+    "wake": {
+     "cron": "*/30 * * * *",
+     "tz": "Europe/Madrid",
+     "message": "Anything new on your review?"
+    },
+    "createdAt": "2026-11-21T18:18:44.907Z",
+    "updatedAt": "2026-11-21T18:18:44.907Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true,
+     "intent": {
+      "kind": "legacy",
+      "capture": "unknown",
+      "migrationRequired": true
+     }
+    },
+    "nextRun": "2026-11-23T08:00:00.000Z",
+    "lastRun": {
+     "scheduledFor": "2026-11-21T18:18:00.000Z",
+     "startedAt": "2026-11-21T18:18:49.110Z",
+     "instance": "oats-developer-review-202611211818",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+     "launched": true,
+     "kind": "spawn",
+     "materialized": "workspace",
+     "wakeSchedule": {
+      "id": "wake-oats-developer-review-202611211818",
+      "cron": "*/30 * * * *",
+      "tz": "Europe/Madrid",
+      "kind": "wake",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "message": "Anything new on your review?",
+      "createdAt": "2026-11-21T18:18:51.628Z",
+      "updatedAt": "2026-11-21T18:18:51.628Z",
+      "scope": "/abs/deployment",
+      "scheduleApi": 2,
+      "scheduleHistoryApi": 3,
+      "executionStatus": {
+       "kind": "legacy",
+       "capture": "unknown",
+       "migrationRequired": true
+      },
+      "nextRun": "2026-11-21T18:30:00.000Z",
+      "lastRun": null,
+      "history": {
+       "status": "ok",
+       "stored": 0,
+       "truncated": false
+      },
+      "recentRuns": [],
+      "running": false,
+      "name": "wake-oats-developer-review-202611211818",
+      "origin": {
+       "kind": "local",
+       "path": "oats-schedules.json",
+       "url": null,
+       "localPath": "/abs/deployment/oats-schedules.json"
+      },
+      "description": null,
+      "owner": null,
+      "runsOn": null,
+      "runsHere": true,
+      "reason": null,
+      "enabledHere": true,
+      "qualifiedId": "local/wake-oats-developer-review-202611211818",
+      "soul": null,
+      "task": null,
+      "teams": [],
+      "launchConfig": null,
+      "harness": null,
+      "model": null,
+      "concurrency": null,
+      "nextDue": "2026-11-21T18:30:00.000Z",
+      "enabled": true
+     },
+     "outcome": "active",
+     "runId": "eb44306a72ebece5bcd23068",
+     "session": {
+      "instance": "oats-developer-review-202611211818",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "incarnation": null,
+      "server": null,
+      "delivery": "launched"
+     }
+    },
+    "history": {
+     "status": "ok",
+     "stored": 1,
+     "truncated": false
+    },
+    "recentRuns": [
+     {
+      "runId": "eb44306a72ebece5bcd23068",
+      "scheduledFor": "2026-11-21T18:18:00.000Z",
+      "startedAt": "2026-11-21T18:18:49.110Z",
+      "instance": "oats-developer-review-202611211818",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "launched": true,
+      "kind": "spawn",
+      "materialized": "workspace",
+      "wakeSchedule": {
+       "id": "wake-oats-developer-review-202611211818",
+       "cron": "*/30 * * * *",
+       "tz": "Europe/Madrid",
+       "kind": "wake",
+       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+       "message": "Anything new on your review?",
+       "createdAt": "2026-11-21T18:18:51.628Z",
+       "updatedAt": "2026-11-21T18:18:51.628Z",
+       "scope": "/abs/deployment",
+       "scheduleApi": 2,
+       "scheduleHistoryApi": 3,
+       "executionStatus": {
+        "kind": "legacy",
+        "capture": "unknown",
+        "migrationRequired": true
+       },
+       "nextRun": "2026-11-21T18:30:00.000Z",
+       "lastRun": null,
+       "history": {
+        "status": "ok",
+        "stored": 0,
+        "truncated": false
+       },
+       "recentRuns": [],
+       "running": false,
+       "name": "wake-oats-developer-review-202611211818",
+       "origin": {
+        "kind": "local",
+        "path": "oats-schedules.json",
+        "url": null,
+        "localPath": "/abs/deployment/oats-schedules.json"
+       },
+       "description": null,
+       "owner": null,
+       "runsOn": null,
+       "runsHere": true,
+       "reason": null,
+       "enabledHere": true,
+       "qualifiedId": "local/wake-oats-developer-review-202611211818",
+       "soul": null,
+       "task": null,
+       "teams": [],
+       "launchConfig": null,
+       "harness": null,
+       "model": null,
+       "concurrency": null,
+       "nextDue": "2026-11-21T18:30:00.000Z",
+       "enabled": true
+      },
+      "outcome": "launched",
+      "settled": false,
+      "recordedAt": "2026-11-21T18:18:51.829Z",
+      "transitions": [
+       "launched"
+      ],
+      "legacy": false,
+      "session": {
+       "instance": "oats-developer-review-202611211818",
+       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+       "incarnation": null,
+       "server": null,
+       "delivery": "launched"
+      }
+     }
+    ],
+    "running": true,
+    "name": "daily-review",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/daily-review",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-23T08:00:00.000Z",
+    "enabled": true
+   },
+   {
+    "id": "hourly-check",
+    "cron": "0 * * * *",
+    "tz": "UTC",
+    "kind": "spawn",
+    "agent": "oats-developer",
+    "backend": "bb",
+    "task": "Check the build queue.",
+    "createdAt": "2026-11-21T18:18:45.742Z",
+    "updatedAt": "2026-11-21T18:18:45.742Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-21T19:00:00.000Z",
+    "lastRun": {
+     "scheduledFor": "2026-11-21T18:18:00.000Z",
+     "startedAt": "2026-11-21T18:18:51.827Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-202611211818 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "runId": "b169fd068476831f680fc99a",
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    "history": {
+     "status": "ok",
+     "stored": 1,
+     "truncated": false
+    },
+    "recentRuns": [
+     {
+      "runId": "b169fd068476831f680fc99a",
+      "scheduledFor": "2026-11-21T18:18:00.000Z",
+      "startedAt": "2026-11-21T18:18:51.827Z",
+      "kind": "spawn",
+      "launched": false,
+      "error": "oats-developer-hourly-check-202611211818 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+      "errorCode": "E_BACKEND_SANDBOXED_MODE",
+      "unconfirmed": false,
+      "outcome": "launch-failed",
+      "settled": false,
+      "recordedAt": "2026-11-21T18:20:29.862Z",
+      "transitions": [
+       "launch-failed"
+      ],
+      "legacy": false,
+      "session": {
+       "instance": null,
+       "home": null,
+       "incarnation": null,
+       "server": null,
+       "delivery": "none"
+      }
+     }
+    ],
+    "running": false,
+    "name": "hourly-check",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/hourly-check",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-21T19:00:00.000Z",
+    "enabled": true
+   },
+   {
+    "id": "legacy-herdr",
+    "kind": "spawn",
+    "cron": "0 6 * * *",
+    "tz": "UTC",
+    "agent": "oats-developer",
+    "backend": "herdr",
+    "task": "A job from before Herdr was removed.",
+    "createdAt": "2026-06-01T00:00:00.000Z",
+    "updatedAt": "2026-06-01T00:00:00.000Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-22T06:00:00.000Z",
+    "lastRun": {
+     "outcome": "invalid",
+     "error": "definition cannot be evaluated: Herdr is no longer supported by OATS (removed in 0.31.0); tmux is the only session backend. /abs/deployment/oats-schedules.json sets jobs.legacy-herdr.backend: herdr. Remove it (or use tmux).",
+     "errorCode": "E_HERDR_REMOVED",
+     "runId": null,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    "history": {
+     "status": "ok",
+     "stored": 0,
+     "truncated": false
+    },
+    "recentRuns": [],
+    "running": false,
+    "name": "legacy-herdr",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": false,
+    "reason": null,
+    "enabledHere": true,
+    "invalid": {
+     "code": "E_HERDR_REMOVED",
+     "message": "Herdr is no longer supported by OATS (removed in 0.31.0); tmux is the only session backend. /abs/deployment/oats-schedules.json sets jobs.legacy-herdr.backend: herdr. Remove it (or use tmux).",
+     "field": "backend"
+    },
+    "qualifiedId": "local/legacy-herdr",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": null,
+    "enabled": true
+   },
+   {
+    "id": "status-check",
+    "cron": "*/15 * * * *",
+    "tz": "UTC",
+    "kind": "command",
+    "cwd": "/abs/deployment",
+    "argv": [
+     "oats",
+     "status",
+     "--json"
+    ],
+    "createdAt": "2026-11-21T18:18:45.878Z",
+    "updatedAt": "2026-11-21T18:18:47.260Z",
+    "description": "Check that the roster answers",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true,
+     "intent": {
+      "kind": "legacy",
+      "capture": "unknown",
+      "migrationRequired": true
+     }
+    },
+    "nextRun": "2026-11-21T18:30:00.000Z",
+    "lastRun": {
+     "scheduledFor": "2026-11-21T18:18:00.000Z",
+     "startedAt": "2026-11-21T18:18:55.828Z",
+     "kind": "command",
+     "launched": false,
+     "unconfirmed": true,
+     "error": "command answered no valid envelope; its side effects are unconfirmed",
+     "outcome": "unknown",
+     "runId": "b054933377e51caa97f3f553",
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    "history": {
+     "status": "ok",
+     "stored": 1,
+     "truncated": false
+    },
+    "recentRuns": [
+     {
+      "runId": "b054933377e51caa97f3f553",
+      "scheduledFor": "2026-11-21T18:18:00.000Z",
+      "startedAt": "2026-11-21T18:18:55.828Z",
+      "kind": "command",
+      "launched": false,
+      "unconfirmed": true,
+      "error": "command answered no valid envelope; its side effects are unconfirmed",
+      "outcome": "unknown",
+      "settled": true,
+      "recordedAt": "2026-11-21T18:20:29.862Z",
+      "transitions": [
+       "unknown"
+      ],
+      "legacy": false,
+      "session": {
+       "instance": null,
+       "home": null,
+       "incarnation": null,
+       "server": null,
+       "delivery": "none"
+      }
+     }
+    ],
+    "running": false,
+    "attempt": {
+     "scheduledFor": "2026-11-21T18:18:00.000Z",
+     "startedAt": "2026-11-21T18:18:55.828Z",
+     "wallClock": "2026-11-21T18:18:56.230Z",
+     "error": "command answered no valid envelope; its side effects are unconfirmed",
+     "exited": true,
+     "exitStatus": 0,
+     "exitSignal": null
+    },
+    "name": "status-check",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/status-check",
+    "soul": null,
+    "task": null,
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-21T18:30:00.000Z",
+    "enabled": true
+   },
+   {
+    "id": "wake-oats-developer-review-202611211818",
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "kind": "wake",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+    "message": "Anything new on your review?",
+    "createdAt": "2026-11-21T18:18:51.628Z",
+    "updatedAt": "2026-11-21T18:18:51.628Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-21T18:30:00.000Z",
+    "lastRun": null,
+    "history": {
+     "status": "ok",
+     "stored": 0,
+     "truncated": false
+    },
+    "recentRuns": [],
+    "running": false,
+    "name": "wake-oats-developer-review-202611211818",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/wake-oats-developer-review-202611211818",
+    "soul": null,
+    "task": null,
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-21T18:30:00.000Z",
+    "enabled": true
+   },
+   {
+    "id": "weekly-cleanup",
+    "cron": "0 18 * * 5",
+    "tz": "Europe/Madrid",
+    "kind": "spawn",
+    "agent": "oats-product-expert",
+    "backend": "bb",
+    "task": "Close what the week left open.",
+    "yolo": true,
+    "createdAt": "2026-11-21T18:18:46.286Z",
+    "updatedAt": "2026-11-21T18:18:46.674Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": null,
+    "lastRun": null,
+    "history": {
+     "status": "ok",
+     "stored": 0,
+     "truncated": false
+    },
+    "recentRuns": [],
+    "running": false,
+    "name": "weekly-cleanup",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": false,
+    "reason": null,
+    "enabledHere": false,
+    "qualifiedId": "local/weekly-cleanup",
+    "soul": {
+     "name": "oats-product-expert",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": null,
+    "enabled": false
+   },
+   {
+    "id": "oats-real/nightly-digest",
+    "cron": "0 7 * * *",
+    "tz": "Europe/Madrid",
+    "kind": "spawn",
+    "agent": "knowledge-harvester",
+    "backend": "bb",
+    "purpose": "digest",
+    "task": "Write the nightly digest.\nRead yesterday's merged pull requests and summarise them for the team.\n",
+    "yolo": true,
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-22T06:00:00.000Z",
+    "lastRun": null,
+    "history": {
+     "status": "ok",
+     "stored": 0,
+     "truncated": false
+    },
+    "recentRuns": [],
+    "running": false,
+    "name": "nightly-digest",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-schedules/nightly-digest.yaml",
+     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml"
+    },
+    "description": "Write the nightly digest of what the team shipped",
+    "owner": "github.com/ana",
+    "runsOn": "bb-box",
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "oats-real/nightly-digest",
+    "soul": {
+     "name": "knowledge-harvester",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-22T06:00:00.000Z",
+    "enabled": true
+   },
+   {
+    "id": "oats-real/reconcile",
+    "cron": "*/30 * * * *",
+    "tz": "UTC",
+    "kind": "command",
+    "cwd": "/abs/deployment",
+    "argv": [
+     "oats",
+     "status",
+     "--json"
+    ],
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "nextRun": null,
+    "lastRun": null,
+    "running": false,
+    "name": "reconcile",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "services/billing/reconcile.oats-schedule.yaml",
+     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/services/billing/reconcile.oats-schedule.yaml"
+    },
+    "description": "Reconcile the billing ledger as the billing bot",
+    "owner": "github.com/acme-billing-bot",
+    "runsOn": "bb-box",
+    "runsHere": false,
+    "reason": "owner-mismatch",
+    "reasonDetail": "acts as github.com/acme-billing-bot; this host's gh is logged in as github.com/ana",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/reconcile",
+    "soul": null,
+    "task": null,
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": null,
+    "enabled": true
+   },
+   {
+    "id": "oats-real/release-check",
+    "cron": "30 8 * * 1-5",
+    "tz": "Europe/Madrid",
+    "kind": "spawn",
+    "agent": "oats-developer",
+    "backend": "bb",
+    "task": "Check the release branch and report what blocks it.",
+    "yolo": true,
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "nextRun": null,
+    "lastRun": null,
+    "running": false,
+    "name": "release-check",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-schedules/release-check.yaml",
+     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-schedules/release-check.yaml"
+    },
+    "description": null,
+    "owner": "github.com/ana",
+    "runsOn": "bb-box",
+    "runsHere": false,
+    "reason": "untrusted",
+    "reasonDetail": "declared for this host, not trusted here; to run it, add the line \"- oats-real/release-check\" under automations: trust: in oats-local.yaml",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/release-check",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": null,
+    "enabled": true
+   },
+   {
+    "id": "oats-real/weekly-report",
+    "cron": "0 9 * * 1",
+    "tz": "Europe/Madrid",
+    "kind": "spawn",
+    "agent": "oats-product-expert",
+    "task": "Write the weekly report.",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "nextRun": null,
+    "lastRun": null,
+    "running": false,
+    "name": "weekly-report",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-schedules/weekly-report.yaml",
+     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-schedules/weekly-report.yaml"
+    },
+    "description": "The weekly report, on the reporting server",
+    "owner": "github.com/acme-bot",
+    "runsOn": "report-server",
+    "runsHere": false,
+    "reason": "assigned-elsewhere",
+    "reasonDetail": "runs on report-server; this host is bb-box",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/weekly-report",
+    "soul": {
+     "name": "oats-product-expert",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": null,
+    "enabled": true
+   }
+  ],
+  "triggers": {
+   "count": 7,
+   "command": "oats trigger list"
+  },
+  "snapshot": {
+   "takenAt": "2026-11-21T18:18:44.476Z",
+   "problems": 0
+  },
+  "scheduler": {
+   "installed": true,
+   "active": true,
+   "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
+   "problems": [],
+   "lastTick": "2026-11-21T18:20:29.461Z",
+   "maxConcurrent": 5,
+   "triggersMaxConcurrent": null,
+   "tickIntervalSec": 60,
+   "workspace": "/abs/deployment",
+   "registered": true,
+   "workspaces": [
+    "/abs/deployment"
+   ],
+   "live": 1
+  }
+ }
+}

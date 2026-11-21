@@ -1,0 +1,66 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "trigger": {
+   "kind": "trigger",
+   "id": "local/old-prs",
+   "name": "old-prs",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": null,
+   "owner": null,
+   "runsOn": null,
+   "runsHere": false,
+   "reason": null,
+   "enabledHere": false,
+   "qualifiedId": "local/old-prs",
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+   "on": {
+    "source": "github.pull_request",
+    "repo": "github.com/acme/legacy",
+    "events": [
+     "opened",
+     "reopened"
+    ],
+    "labels": [],
+    "poll": "2m"
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastRun": null,
+   "nextDue": null,
+   "enabled": false,
+   "spawn": {
+    "soul": "oats-developer",
+    "purpose": "triage-{number}",
+    "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+    "teams": [],
+    "yolo": true,
+    "backend": "bb"
+   },
+   "triggerApi": 1,
+   "scope": "/abs/deployment",
+   "createdAt": "2026-11-21T18:18:57.578Z",
+   "updatedAt": "2026-11-21T18:18:57.759Z"
+  }
+ }
+}

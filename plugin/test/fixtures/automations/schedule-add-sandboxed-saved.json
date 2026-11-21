@@ -1,0 +1,59 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "hourly-check",
+   "cron": "0 * * * *",
+   "tz": "UTC",
+   "kind": "spawn",
+   "agent": "oats-developer",
+   "backend": "bb",
+   "task": "Check the build queue.",
+   "createdAt": "2026-11-21T18:18:45.742Z",
+   "updatedAt": "2026-11-21T18:18:45.742Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-21T19:00:00.000Z",
+   "lastRun": null,
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "hourly-check",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": null,
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/hourly-check",
+   "soul": {
+    "name": "oats-developer",
+    "origin": null
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-21T19:00:00.000Z",
+   "enabled": true
+  }
+ }
+}

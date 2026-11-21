@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SCHEDULE_HOST",
+  "message": "systemctl --user daemon-reload failed: Failed to connect to bus: No medium found"
+ }
+}

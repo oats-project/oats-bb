@@ -41,6 +41,10 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
   a tab in a thread's side panel): Needs you, Working, Finished and not looked at. On the page, a
   reply box sends a message to the agent you pick, through bb's own send.
+- On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
+  state in words, what it waits on you for and since when, where it works (the folder and the home
+  to copy), its harness, model and thread, its messaging id, its parent. Soul: its soul, the
+  agents root, and Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.

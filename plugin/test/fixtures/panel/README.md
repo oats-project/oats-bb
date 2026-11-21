@@ -9,8 +9,16 @@ literals.
 Recorded on 2026-11-21 in the real run's container (`container/real/`, kept with `KEEP=1`, after its
 scenario passed): bb-app 0.50.1, OATS 0.70.0 from npm (`@awebai/oats@0.70.0`), the bb session
 provider of this repository's `main` at 134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5, Claude Code on the
-mock model, no aweb. In the deployment the scenario left (`redesign-ui-lead` of `oats-product-expert`,
-its two children retired by hand), one more agent was spawned, a child on a worktree:
+mock model, no aweb. By hand, with the commands below, before the real run had a place for a
+feature's own steps; `container/real/parts/panel.mjs` now makes the same state with the same
+commands and keeps the same two answers, as the plugin's own `oats status` printed them. One
+difference: before the hand recording, three agents the scenario had left were retired (`oats
+retire harvest-knowledge-helper`, `desktop-mockups-developer`, `digest-links-helper`); the run
+retires nobody, so its roster holds them too.
+
+In the deployment the scenario left (`redesign-ui-lead` of `oats-product-expert`, stopped through
+OATS by the scenario's last stop), one more agent
+was spawned, a child on a worktree:
 
 ```sh
 oats spawn oats-expert --backend bb --yolo --name panel-worktree-helper --parent redesign-ui-lead --task-file <f> --json

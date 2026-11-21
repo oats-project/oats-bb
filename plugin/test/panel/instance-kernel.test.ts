@@ -3,22 +3,21 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { panelInstance, parsePanelInstance as parseRaw, type RawRow } from "../../kernel/panel-instance.js";
+import { panelInstance, parsePanelInstance as parseRow } from "../../kernel/panel-instance.js";
 
 const read = (name: string): unknown => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures", name), "utf8"));
-const recorded = read("status-recorded.json") as Record<string, { agents: { instances: Record<string, unknown>[] }[] }>;
+const recorded = read("roster/status-recorded.json") as Record<string, { agents: { instances: Record<string, unknown>[] }[] }>;
 
-type Roster = { root: unknown; agents: ({ instances: Record<string, unknown>[] } & Record<string, unknown>)[] };
-/** What the shared status read keeps for one instance: the roster's root, its agent row and its own row. */
-function rawOf(document: unknown, instance: string): RawRow {
-  const roster = document as Roster;
-  for (const { instances, ...agent } of roster.agents) {
-    const row = instances.find((candidate) => candidate.instance === instance);
-    if (row !== undefined) return { root: roster.root, agent, row };
+type Roster = { agents: { instances: Record<string, unknown>[] }[] };
+/** The instance's own row of a recorded roster: what the shared status read keeps (server/core.ts `rowOf`). */
+function rowOf(document: unknown, instance: string): Record<string, unknown> {
+  for (const agent of (document as Roster).agents) {
+    const row = agent.instances.find((candidate) => candidate.instance === instance);
+    if (row !== undefined) return row;
   }
   throw new Error(`the recording has no instance ${instance}`);
 }
-const parsePanelInstance = (document: unknown, instance: string) => parseRaw(rawOf(document, instance));
+const parsePanelInstance = (document: unknown, instance: string) => parseRow(rowOf(document, instance));
 
 /** The recorded document with the instance's row changed by `change`: for the facts no recording holds. */
 function withRow(name: string, instance: string, change: (row: Record<string, unknown>) => void): unknown {
@@ -35,8 +34,6 @@ describe("the panel's read of one instance", () => {
       value: {
         instance: "panel-worktree-helper",
         soul: "oats-expert",
-        description: "OATS expert: answers questions about OATS.",
-        agentsRoot: "/abs/deployment/agents",
         home: "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
         running: null,
         runtimeState: "unknown",
@@ -140,18 +137,15 @@ describe("the panel's read of one instance", () => {
       "panel-worktree-helper",
     );
     expect(answer.ok && answer.value).toMatchObject({
-      soul: "oats-expert", work: null, branch: null, model: null, running: null, startedAt: null, threadId: null, messagingId: null, repo: "deployment",
+      soul: null, work: null, branch: null, model: null, running: null, startedAt: null, threadId: null, messagingId: null, repo: null,
       drift: { soul: null, modules: [] },
     });
   });
 
-  it("a row without its frame (the roster's root, the row's instance and home) is the plugin's own error, naming the fault", () => {
-    const raw = rawOf(read("panel/status.json"), "panel-worktree-helper");
-    const noRoot = parseRaw({ ...raw, root: undefined });
-    expect(!noRoot.ok && noRoot.error.code).toBe("OATS_BAD_ANSWER");
-    expect(!noRoot.ok && noRoot.error.message).toContain("at root");
-    const noHome = parseRaw({ ...raw, row: { instance: "panel-worktree-helper" } });
-    expect(!noHome.ok && noHome.error.message).toContain("at row.home");
-    expect(parseRaw({ root: "/abs/deployment/agents", agent: null, row: null }).ok).toBe(false);
+  it("a row without its instance or its home is the plugin's own error, naming the fault", () => {
+    const noHome = parseRow({ instance: "panel-worktree-helper" });
+    expect(!noHome.ok && noHome.error.code).toBe("OATS_BAD_ANSWER");
+    expect(!noHome.ok && noHome.error.message).toContain("at home");
+    expect(parseRow(null).ok).toBe(false);
   });
 });

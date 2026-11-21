@@ -5,8 +5,8 @@
 // fact the row does not report is null.
 //
 // No process of its own: the plugin runs one `oats status` for everyone, and this reads the row
-// that read kept, as the kernel printed it. The read is tolerant where the Desktop's is: only the
-// row's `instance` and `home` and the roster's `root` must be there; a fact of another type is
+// that read kept, as the kernel printed it (server/core.ts `rowOf`). The read is tolerant where the
+// Desktop's is: only the row's `instance` and `home` must be there; a fact of another type is
 // unreported.
 import { z } from "zod";
 import { shaped } from "./envelope.js";
@@ -26,12 +26,8 @@ export const panelModuleDrift = z.object({
 
 export const panelInstance = z.object({
   instance: z.string(),
-  /** the roster's name for the soul: the row's `agent`, else its group's name */
-  soul: z.string(),
-  /** the soul's description, from the roster's agent row */
-  description: z.string().nullable(),
-  /** the roster's `root`: `<deployment>/agents` */
-  agentsRoot: z.string(),
+  /** the roster's name for the soul: the row's `agent` */
+  soul: z.string().nullable(),
   home: z.string(),
   running: z.boolean().nullable(),
   runtimeState: z.string().nullable(),
@@ -43,7 +39,7 @@ export const panelInstance = z.object({
   drift: z.object({ soul: z.string().nullable(), modules: z.array(panelModuleDrift) }),
   /** the work mode: `worktree`, `checkout`, `attached`, `directory`, `workspace`, or another word */
   work: z.string().nullable(),
-  /** the last segment of the row's `repo`, else of the deployment directory */
+  /** the last segment of the row's `repo` */
   repo: z.string().nullable(),
   branch: z.string().nullable(),
   parent: z.string().nullable(),
@@ -64,27 +60,13 @@ export const panelInstance = z.object({
 export type PanelInstance = z.output<typeof panelInstance>;
 export type PanelModuleDrift = z.output<typeof panelModuleDrift>;
 
-/** What the shared status read keeps for one instance, each as the kernel printed it. */
-export type RawRow = {
-  /** the roster's `root` */
-  root: unknown;
-  /** the instance's agent row (its soul), without its instances */
-  agent: unknown;
-  /** the instance's own row */
-  row: unknown;
-};
-const frame = z.looseObject({
-  root: z.string().min(1),
-  agent: z.looseObject({ name: z.string().min(1) }),
-  row: z.looseObject({ instance: z.string().min(1), home: z.string().min(1) }),
-});
+const frame = z.looseObject({ instance: z.string().min(1), home: z.string().min(1) });
 
 type Row = Record<string, unknown>;
 const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
 /** A fact that is text and not empty; anything else is unreported. */
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const lastSegment = (path: string): string | null => text(path.replace(/\/+$/, "").split("/").pop());
-const parentOf = (path: string): string => path.replace(/\/+$/, "").replace(/\/[^/]*$/, "");
 
 /**
  * The served identity in one line, as the Desktop writes it (packages/client/deployment-facts.mjs
@@ -121,14 +103,12 @@ function moduleDrift(value: unknown): PanelModuleDrift[] {
   return drifted;
 }
 
-function toPanelInstance(root: string, group: Row, row: Row & { instance: string; home: string }): PanelInstance {
+function toPanelInstance(row: Row & { instance: string; home: string }): PanelInstance {
   const soulStatus = text(record(row.soul)?.status);
   const repo = text(row.repo);
   return {
     instance: row.instance,
-    soul: text(row.agent) ?? (group.name as string),
-    description: text(group.description),
-    agentsRoot: root,
+    soul: text(row.agent),
     home: row.home,
     running: typeof row.running === "boolean" ? row.running : null,
     runtimeState: text(row.runtimeState),
@@ -137,7 +117,7 @@ function toPanelInstance(root: string, group: Row, row: Row & { instance: string
     createdAt: text(row.createdAt),
     drift: { soul: soulStatus === null || soulStatus === "current" ? null : soulStatus, modules: moduleDrift(row.modules) },
     work: text(row.work),
-    repo: lastSegment(repo ?? parentOf(root)),
+    repo: repo === null ? null : lastSegment(repo),
     branch: text(row.branch),
     parent: text(row.parentInstance),
     sibling: text(row.siblingInstance),
@@ -152,8 +132,8 @@ function toPanelInstance(root: string, group: Row, row: Row & { instance: string
   };
 }
 
-/** The row as the panel draws it. */
-export function parsePanelInstance(raw: RawRow): Result<PanelInstance> {
-  const parsed = shaped(frame, raw, "oats status");
-  return parsed.ok ? { ok: true, value: toPanelInstance(parsed.value.root, parsed.value.agent, parsed.value.row) } : parsed;
+/** One row of `oats status --json`, as the panel draws it. */
+export function parsePanelInstance(row: unknown): Result<PanelInstance> {
+  const parsed = shaped(frame, row, "oats status");
+  return parsed.ok ? { ok: true, value: toPanelInstance(parsed.value) } : parsed;
 }

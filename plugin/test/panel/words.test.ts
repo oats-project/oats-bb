@@ -11,11 +11,12 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 describe("the header's state", () => {
-  it("Running with the age of its last start, Stopped, Not reported", () => {
-    expect(stateText({ running: true, startedAt: ago(42 * MIN) }, NOW)).toEqual({ state: "running", text: "Running · 42m", title: `started ${ago(42 * MIN)}` });
-    expect(stateText({ running: true, startedAt: null }, NOW)).toEqual({ state: "running", text: "Running", title: null });
-    expect(stateText({ running: false, startedAt: ago(MIN) }, NOW)).toEqual({ state: "stopped", text: "Stopped", title: null });
-    expect(stateText({ running: null, startedAt: ago(MIN) }, NOW)).toEqual({ state: "unknown", text: "Not reported", title: null });
+  it("Running with the age of its last start, Stopped, else the tree's own word for the agent", () => {
+    expect(stateText({ running: true, startedAt: ago(42 * MIN) }, "working", NOW)).toEqual({ text: "Running · 42m", title: `started ${ago(42 * MIN)}` });
+    expect(stateText({ running: true, startedAt: null }, "needs you", NOW)).toEqual({ text: "Running", title: null });
+    expect(stateText({ running: false, startedAt: ago(MIN) }, "stopped", NOW)).toEqual({ text: "Stopped", title: null });
+    expect(stateText({ running: null, startedAt: ago(MIN) }, "idle", NOW)).toEqual({ text: "Idle", title: null });
+    expect(stateText({ running: null, startedAt: null }, "unreachable", NOW)).toEqual({ text: "Unreachable", title: null });
   });
   it("ages: compact for the header, in words for the session", () => {
     expect([shortAge(ago(20_000), NOW), shortAge(ago(59 * MIN), NOW), shortAge(ago(3 * HOUR), NOW), shortAge(ago(49 * HOUR), NOW), shortAge("soon", NOW), shortAge(null, NOW)]).toEqual(["<1m", "59m", "3h", "2d", null, null]);

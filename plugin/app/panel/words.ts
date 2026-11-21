@@ -4,9 +4,6 @@
 // feature, bb says what the Desktop says. No bb and no React import.
 import type { PanelInstance } from "../../kernel/panel-instance";
 
-/** What stands where the kernel reported nothing. */
-export const NOT_REPORTED = "Not reported";
-
 /** How long ago, compactly ("<1m", "42m", "3h", "2d"); null when it is no timestamp. */
 export function shortAge(iso: string | null, now: number): string | null {
   const at = iso === null ? Number.NaN : Date.parse(iso);
@@ -31,13 +28,17 @@ export function ageText(iso: string, now: number): string {
   return days < 30 ? `${days} d ago` : new Date(at).toISOString().slice(0, 10);
 }
 
-/** The header's state: "Running · 42m" (since its last start), "Stopped", or "Not reported". */
-export function stateText(facts: Pick<PanelInstance, "running" | "startedAt">, now: number): { state: "running" | "stopped" | "unknown"; text: string; title: string | null } {
+/**
+ * The header's state in words: "Running · 42m" (since its last start) and "Stopped" where the
+ * kernel says so; where it says neither (an agent idle in bb reads `running: null`), `word`, the
+ * word the tree draws the agent with (app/roster/status.ts), so every place says the same thing.
+ */
+export function stateText(facts: { running: boolean | null; startedAt: string | null }, word: string, now: number): { text: string; title: string | null } {
   if (facts.running === true) {
     const since = shortAge(facts.startedAt, now);
-    return { state: "running", text: since === null ? "Running" : `Running · ${since}`, title: since === null ? null : `started ${facts.startedAt}` };
+    return since === null ? { text: "Running", title: null } : { text: `Running · ${since}`, title: `started ${facts.startedAt}` };
   }
-  return facts.running === false ? { state: "stopped", text: "Stopped", title: null } : { state: "unknown", text: NOT_REPORTED, title: null };
+  return { text: facts.running === false ? "Stopped" : word.charAt(0).toUpperCase() + word.slice(1), title: null };
 }
 
 /**

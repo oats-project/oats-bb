@@ -201,8 +201,9 @@ export function Modal({
           // but its summary.
           const stops = Array.from(card.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? []).filter((stop) => {
             if (stop.tabIndex < 0) return false;
-            const closed = stop.closest("details:not([open])");
-            return closed === null || (stop.tagName === "SUMMARY" && stop.parentElement === closed);
+            // A summary is its own disclosure's stop whether that is open or not: look from outside it.
+            const from = stop.tagName === "SUMMARY" && stop.parentElement?.tagName === "DETAILS" ? stop.parentElement.parentElement : stop;
+            return from === null || from.closest("details:not([open])") === null;
           });
           if (stops.length === 0) {
             // Nothing to stop on (an act in progress: its buttons are off): the focus stays on the dialog.

@@ -142,6 +142,14 @@ describe("facts, notices and the states of a list", () => {
     fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
     cleanup();
+    // An age that is not known is said as the Desktop says it; an age that is left out is not said.
+    render(
+      <Notice title="OATS could not be read" tone="error" age={null}>
+        The machine did not answer in time.
+      </Notice>,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("OATS could not be readThe machine did not answer in time.Showing what was last read.");
+    cleanup();
     // A notice that is no failure is announced politely, and shows no code and no age it was not given.
     render(<Notice title="No deployment is set">Choose the directory in the settings.</Notice>);
     expect(screen.getByRole("status").textContent).toBe("No deployment is setChoose the directory in the settings.");
@@ -352,6 +360,33 @@ describe("the focus in a dialog that holds more than buttons", () => {
     expect(document.activeElement).toBe(close);
     expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(false);
     expect(document.activeElement).toBe(summary);
+    cleanup();
+    // The button inside a closed disclosure as the dialog's LAST control (the act runs: the footer's
+    // buttons are off): the summary is the only stop, so Tab on it is held.
+    render(
+      <Confirm {...base} phase={{ kind: "running", doing: "Retiring…" }}>
+        <Disclosure summary="Details">
+          <Button>inside</Button>
+        </Disclosure>
+      </Confirm>,
+    );
+    const only = screen.getByText("Details").closest("summary")!;
+    only.focus();
+    expect(fireEvent.keyDown(only, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(only);
+    cleanup();
+    // A disclosure inside a closed one: its summary cannot be reached, so the outer summary is the only stop.
+    render(
+      <Confirm {...base} phase={{ kind: "running", doing: "Retiring…" }}>
+        <Disclosure summary="Outer">
+          <Disclosure summary="Inner">x</Disclosure>
+        </Disclosure>
+      </Confirm>,
+    );
+    const outer = screen.getByText("Outer").closest("summary")!;
+    outer.focus();
+    expect(fireEvent.keyDown(outer, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(outer);
   });
 
   test("a field that is off is no stop, and a menu's Tab is the dialog's to decide", () => {

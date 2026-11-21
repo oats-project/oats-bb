@@ -6,8 +6,8 @@ import type { Agent, AgentState, BbThread, Node, View } from "./types";
  * (`running`), never inferred: bb cannot tell a live idle agent from a settled one, so anything
  * the kernel does not call running is "idle", an unknown `runtimeState` word included.
  */
-export function state(agent: Agent, thread: BbThread): AgentState {
-  if (agent.waiting !== null || thread.hasPendingInteraction) return "needs-you";
+export function state(agent: Agent, thread: BbThread | null): AgentState {
+  if (agent.waiting !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";

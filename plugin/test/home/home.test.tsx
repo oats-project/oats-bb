@@ -338,12 +338,12 @@ test("a claim's age follows the clock while the view stays open and nothing chan
   try {
     const slot = await homePage();
     const card = (await slot.findAllByTestId("oats-needs-card"))[0]!;
-    expect(card.textContent).toContain("just now");
+    expect(card.textContent).toContain("waiting under a minute (since "); // the Desktop's words for how long, and since when
     const before = slot.inspection.rpcCalls.length;
     await act(async () => {
       vi.advanceTimersByTime(18 * 60_000);
     });
-    expect(slot.getAllByTestId("oats-needs-card")[0]!.textContent).toContain("18 min ago");
+    expect(slot.getAllByTestId("oats-needs-card")[0]!.textContent).toContain("waiting 18 min (since ");
     expect(slot.inspection.rpcCalls.length).toBe(before); // the clock alone: no reread
   } finally {
     vi.useRealTimers();

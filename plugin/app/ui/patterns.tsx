@@ -30,12 +30,12 @@ export function StateMark({ state, name, hidden = false }: { state: AgentState; 
   const says = hidden ? ({ "aria-hidden": true } as const) : ({ role: "img", "aria-label": label, title: label } as const);
   if (state === "needs-you") {
     return (
-      <span {...says} data-state={state} className="inline-flex size-3 shrink-0 items-center justify-center rounded-full bg-warning-text text-[10px] font-bold leading-none text-background">
+      <span {...says} data-mark="" data-state={state} className="inline-flex size-3 shrink-0 items-center justify-center rounded-full bg-warning-text text-[10px] font-bold leading-none text-background">
         !
       </span>
     );
   }
-  return <span {...says} data-state={state} className={`inline-block size-2 shrink-0 rounded-full ${FILL[state]}`} />;
+  return <span {...says} data-mark="" data-state={state} className={`inline-block size-2 shrink-0 rounded-full ${FILL[state]}`} />;
 }
 
 /**
@@ -60,7 +60,7 @@ const TONED = { ok: "bg-success-foreground", warn: "bg-warning-text", bad: "bg-d
 export function Toned({ tone, children }: { tone: keyof typeof TONED; children: ReactNode }) {
   return (
     <span data-testid="oats-toned" data-tone={tone} className="inline-flex min-w-0 items-center gap-1.5">
-      <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${TONED[tone]}`} />
+      <span aria-hidden="true" data-mark="" className={`inline-block size-2 shrink-0 rounded-full ${TONED[tone]}`} />
       <span className="min-w-0 break-words">{children}</span>
     </span>
   );

@@ -26,7 +26,7 @@ export function Card({ children }: { children: ReactNode }) {
 /** A fact of the kernel's inside a sentence, or a path: the code face, breaking only where it must. */
 export function Code({ children }: { children: string }) {
   return (
-    <span title={children} className="break-all font-mono text-xs text-foreground">
+    <span title={children} className="break-words font-mono text-xs text-foreground">
       {children}
     </span>
   );
@@ -99,7 +99,7 @@ export function Facts({ rows }: { rows: { label: string; value: ReactNode | null
   const reported = rows.filter((row) => row.value !== null);
   if (reported.length === 0) return null;
   return (
-    <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-start gap-x-3 gap-y-1.5 text-sm">
+    <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-sm">
       {reported.map((row) => (
         <div key={row.testId} className="contents">
           <dt className="text-muted-foreground">{row.label}</dt>

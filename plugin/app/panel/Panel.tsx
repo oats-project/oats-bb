@@ -142,7 +142,7 @@ function InstancePage({
         </div>
         {drift === null ? null : (
           <details data-testid="oats-panel-drift" className="text-sm">
-            <summary className="w-fit cursor-pointer py-3 text-xs font-semibold text-foreground md:py-1.5">
+            <summary className="w-fit cursor-pointer py-3.5 text-xs font-semibold text-foreground md:py-2">
               <span className="rounded border border-border px-1.5 py-0.5">older build</span>
             </summary>
             <div className="mt-1 flex flex-col gap-0.5 text-muted-foreground">
@@ -188,7 +188,7 @@ function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent;
       <a
         data-testid={testId}
         href={bbThread.href}
-        className="underline"
+        className="inline-flex min-h-11 items-center underline md:min-h-8"
         onClick={(event) => {
           if (!plainClick(event)) return;
           event.preventDefault();
@@ -208,7 +208,7 @@ function InstanceFacts({ oats, agent, facts, now }: { oats: Ready; agent: Agent;
               {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{shown(part.code)}</Code>))}
             </p>
             <details data-testid="oats-panel-paths" className="border-t border-border px-3">
-              <summary className="cursor-pointer py-3 text-xs font-semibold text-muted-foreground md:py-1.5">Paths</summary>
+              <summary className="cursor-pointer py-3.5 text-xs font-semibold text-muted-foreground md:py-2">Paths</summary>
               <div className="pb-2.5">
                 <Facts
                   rows={[
@@ -322,7 +322,7 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
       </header>
       {answer === undefined || answer.agentsRoot === null ? null : (
         <details data-testid="oats-panel-details" className="border-t border-border pt-1">
-          <summary className="cursor-pointer py-3 text-sm font-semibold text-foreground md:py-1.5">Details</summary>
+          <summary className="cursor-pointer py-3 text-sm font-semibold text-foreground md:py-2">Details</summary>
           <div className="mt-2 flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agents root</span>
             <PathLine path={answer.agentsRoot} copyLabel="Copy agents root path" testId="oats-panel-agents-root" />
@@ -332,6 +332,7 @@ function SoulPage({ oats, agent, read }: { oats: Ready; agent: Agent; read: Read
       <div className="mt-auto flex flex-wrap gap-2">
         <Button
           data-testid="oats-panel-open-soul"
+          className="min-h-11 md:min-h-8"
           disabled={key === null}
           title={key === null ? "OATS lists no soul of this name here: there is no soul page to open." : "Open this instance's soul on the Souls page"}
           onClick={() => {

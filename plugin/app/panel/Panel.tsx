@@ -7,24 +7,27 @@ import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
-import { codes, isKernelCode } from "../../kernel/result";
+import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, BbThread, Node } from "../../model/types";
 import { state as stateOf } from "../../model/view";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
-import type { Read, Result } from "../store";
 import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
 import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
 import { openSoul } from "../workspace/pages";
+import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
-import { useNow, usePanelInstance } from "./read";
+import { Readiness } from "./Readiness";
+import { useNow, usePanelInstance, usePanelSoul } from "./read";
+import type { PanelRead } from "./read";
+import { SoulBody } from "./SoulBody";
+import { codeOf } from "./state";
 import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "./words";
 
-type InstanceAnswer = Result<"panelInstance">;
-type InstanceRead = Read<InstanceAnswer> & { retry(): void; fetching: boolean };
+type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
 type Roster = Pick<Oats, "soulOf" | "threadById"> & { nodeByInstance: ReadonlyMap<string, Node> };
 /** The agent a panel shows, and for which thread or name it is shown. */
@@ -145,15 +148,6 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
 }
 
 /**
- * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
- * of the plugin's own: drawn after the words. The rule is that of app/ui/text.ts `refusalLines`.
- */
-function codeOf(error: string): string | null {
-  const lead = /^([A-Z][A-Z0-9_]*): /.exec(error)?.[1];
-  return lead !== undefined && (lead.startsWith("E_") || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
-}
-
-/**
  * What the panel says when what it shows is not a current read: the read in flight, a first read
  * that failed, or (the roster's failure first: it is why the instance cannot be read either) what
  * was read earlier, with its age. Nothing when the read is there and current.
@@ -230,6 +224,8 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
 
       {readState}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
+      <Readiness instance={agent.instance} of="instance" />
+      <Activity instance={agent.instance} />
     </>
   );
 }
@@ -371,6 +367,8 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
 function SoulPage({ oats, agent, read, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; state: ReactNode }) {
   const navigate = useBbNavigate();
   const answer = read.data;
+  // Read again when the instance was started again or what it was built from moved: the same instance, another record.
+  const soul = usePanelSoul(agent.instance, answer === undefined ? "" : JSON.stringify([answer.facts.startedAt, answer.facts.drift]));
   const key = answer?.soul.key ?? null;
   const description = answer?.soul.description ?? null;
   return (
@@ -389,6 +387,8 @@ function SoulPage({ oats, agent, read, state: readState }: { oats: Roster; agent
         )}
       </header>
       {readState}
+      <SoulBody read={soul} />
+      {key === null ? null : <Readiness instance={agent.instance} of="soul" />}
       {answer === undefined || answer.agentsRoot === null ? null : (
         <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>

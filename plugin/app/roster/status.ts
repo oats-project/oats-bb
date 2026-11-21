@@ -1,5 +1,7 @@
-// The one place that says an agent's state in words: the tree, the line under a thread's header
-// and the instance panel all print what this answers, so they say the same thing. Pure.
+// The one function that says an agent's state in words, for every place that prints it (the tree,
+// the line under a thread's header, the instance panel), so that they say the same thing. Today the
+// home's card reads its age from it; the tree still draws the state's dot from the node's own
+// state, which is the same `state()`. Pure.
 import type { Agent, AgentState, BbThread } from "../../model/types";
 import { state } from "../../model/view";
 import { age, STATE_WORD } from "../format";

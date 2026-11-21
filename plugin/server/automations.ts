@@ -107,11 +107,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
 
     async automationEnable({ kind, id, enabled }) {
       const row = await rowOf(kind, id);
-      return act(() => core.call("automationEnable", { kind, id: row.id, enabled }, HOST_TIMEOUT.act, core.lifetime.signal));
+      return act(() => core.call("automationEnable", { kind, id: row.id, enabled }, HOST_TIMEOUT.act, core.signal));
     },
     async scheduleRun({ id }) {
       const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleRun", { id: row.id }, HOST_TIMEOUT.long, core.lifetime.signal));
+      return act(() => core.call("scheduleRun", { id: row.id }, HOST_TIMEOUT.long, core.signal));
     },
     async automationTest({ kind, id, runSource }, context) {
       const row = await rowOf(kind, id);
@@ -123,17 +123,17 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     },
     async automationDescribe({ kind, id, description }) {
       const row = await rowOf(kind, id);
-      return act(() => core.call("automationDescribe", { kind, id: row.id, description }, HOST_TIMEOUT.act, core.lifetime.signal));
+      return act(() => core.call("automationDescribe", { kind, id: row.id, description }, HOST_TIMEOUT.act, core.signal));
     },
     async scheduleRemove({ id }) {
       const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleRemove", { id: row.id }, HOST_TIMEOUT.act, core.lifetime.signal));
+      return act(() => core.call("scheduleRemove", { id: row.id }, HOST_TIMEOUT.act, core.signal));
     },
     async scheduleReconcile({ id }) {
       const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleReconcile", { id: row.id }, HOST_TIMEOUT.act, core.lifetime.signal));
+      return act(() => core.call("scheduleReconcile", { id: row.id }, HOST_TIMEOUT.act, core.signal));
     },
-    schedulerEnable: () => act(() => core.call("schedulerEnable", {}, HOST_TIMEOUT.act, core.lifetime.signal)),
+    schedulerEnable: () => act(() => core.call("schedulerEnable", {}, HOST_TIMEOUT.act, core.signal)),
 
     async triggerStatus({ id }, context) {
       const row = await rowOf("trigger", id);

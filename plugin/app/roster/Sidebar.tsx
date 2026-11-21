@@ -20,7 +20,7 @@ import { codes } from "../../kernel/result";
 import type { Node } from "../../model/types";
 import { count, needsYouLabel } from "../format";
 import { failureLine, useOats } from "../oats";
-import { Button, Dot, Mark, plainClick } from "../ui";
+import { Button, Dot, Mark, plainClick, TARGET } from "../ui";
 import { pageLinks } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { refusalLines, shown } from "../ui/text";
@@ -45,7 +45,8 @@ function target(thread: PluginSidebarThread): PluginThreadActionTarget {
 }
 
 const INDENT = ["pl-2", "pl-6", "pl-10"] as const;
-const ROW = "flex min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent";
+// A row is a control: as high as one (TARGET).
+const ROW = `flex ${TARGET} min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent`;
 const HEADING = "px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
 const noMark = () => null;

@@ -146,10 +146,11 @@ export const FOCUSED = `(() => { const e = document.activeElement; if (!e || e =
 
 /**
  * The plugin's controls on screen that are lower than a person can press: under `min` px (32 at
- * 1280, 44 at phone width). → a JSON list of "<what> <height>px"; empty when every one is high enough.
+ * 1280, 44 at phone width). A link inside a sentence or a value (an inline one) is text, not a
+ * control, and is not held to it. → a JSON list of "<what> <height>px"; empty when every one is high enough.
  */
 export const lowTargets = (min) =>
-  `JSON.stringify([...document.querySelectorAll('[data-testid^="oats-"]')].flatMap((root) => [root, ...root.querySelectorAll('button, a[href], input, select, textarea, [role="tab"], [role="radio"], [role="switch"], [role="menuitem"]')]).filter((e, i, all) => all.indexOf(e) === i && e.matches('button, a[href], input, select, textarea, [role="tab"], [role="radio"], [role="switch"], [role="menuitem"]')).map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0 && r.height < ${min} - 0.5).map(([e, r]) => (e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").trim().slice(0, 30) || e.tagName.toLowerCase()) + " " + Math.round(r.height) + "px"))`;
+  `JSON.stringify([...document.querySelectorAll('[data-testid^="oats-"]')].flatMap((root) => [root, ...root.querySelectorAll('button, a[href], input, select, textarea, [role="tab"], [role="radio"], [role="switch"], [role="menuitem"]')]).filter((e, i, all) => all.indexOf(e) === i && e.matches('button, a[href], input, select, textarea, [role="tab"], [role="radio"], [role="switch"], [role="menuitem"]')).filter((e) => getComputedStyle(e).display !== "inline").map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0 && r.height < ${min} - 0.5).map(([e, r]) => (e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").trim().slice(0, 30) || e.tagName.toLowerCase()) + " " + Math.round(r.height) + "px"))`;
 
 /** On screen and not covered: the point at the element's middle (clamped to the viewport) is its own. */
 export const visible = (selector) =>

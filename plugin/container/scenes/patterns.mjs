@@ -96,7 +96,7 @@ export default [
       await page.until(visible(testId("oats-confirm")), 10);
       const before = JSON.parse(await dialog());
       check(
-        before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && before.phase === "ready" && before.body.includes("What will happen") && before.body.includes("What is kept") && before.focus === "oats-confirm-cancel",
+        before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && before.phase === "ready" && /what will happen/i.test(before.body) && /what is kept/i.test(before.body) && before.focus === "oats-confirm-cancel",
         `${at} the confirmation before the act: titled with the act and the agent, what will happen, what is kept, the focus on Cancel (it is destructive)`,
         JSON.stringify(before),
       );
@@ -116,7 +116,7 @@ export default [
       await page.shot(`patterns-${viewport.name}-confirm-running`);
       await page.evaluate(click("oats-patterns-finish"));
       const done = JSON.parse(await dialog());
-      check(done.phase === "done" && done.body.includes("Weekly digest helper was retired.") && done.focus !== "", `${at} after the act: the result, in the dialog`, JSON.stringify(done));
+      check(done.phase === "done" && done.body.includes("Weekly digest helper was retired.") && done.focus === "oats-confirm-close", `${at} after the act: the result, in the dialog, and the focus on Close`, JSON.stringify(done));
       await page.shot(`patterns-${viewport.name}-confirm-done`, { targets: true });
       await page.evaluate(click("oats-confirm-close"));
       const back = await page.until(`document.querySelector('${testId("oats-modal")}') === null && ${FOCUSED}`, 10);
@@ -135,7 +135,7 @@ export default [
       await page.until(visible(testId("oats-confirm")), 10);
       const other = JSON.parse(await dialog());
       const off = await page.evaluate(`document.querySelector('${testId("oats-confirm-act")}').disabled`);
-      check(other.body.includes("This is not the plan for this agent.") && !other.body.includes("What will happen") && off === true, `${at} a plan that is another agent's is not shown, and cannot be confirmed`, JSON.stringify(other));
+      check(other.body.includes("This is not the plan for this agent.") && !/what will happen/i.test(other.body) && off === true, `${at} a plan that is another agent's is not shown, and cannot be confirmed`, JSON.stringify(other));
       await page.shot(`patterns-${viewport.name}-confirm-other-agent`);
       await page.press("Escape");
     },

@@ -8,8 +8,10 @@ import { onWindowReset, useRead } from "../store";
 import type { Read, Result } from "../store";
 import { FAILED_RUN_TEXT, lastRunFailed } from "./words";
 
-/** The Desktop rereads the lists for its mark at most this often. */
+/** The Desktop rereads the lists for its mark at most this often; so does the sidebar's row. */
 export const REREAD_MS = 60_000;
+/** While the page shows the lists they are never older than this without saying so (the UX standard, freshness). */
+export const PAGE_REREAD_MS = 30_000;
 
 /** When this window last asked on its own clock: every slot shares the one timer's worth of reads. */
 let rereadAt = 0;
@@ -17,7 +19,7 @@ onWindowReset(() => {
   rereadAt = 0;
 });
 
-export function useAutomations(): Read<Result<"automations">> & { retry(): void } {
+export function useAutomations(every: number = REREAD_MS): Read<Result<"automations">> & { retry(): void } {
   const read = useRead("automations");
   // The same shared copy, held for its `refetch`.
   const query = useRpcQuery({ contract: rpcContract, method: "automations", input: null });
@@ -27,12 +29,13 @@ export function useAutomations(): Read<Result<"automations">> & { retry(): void 
   });
   useEffect(() => {
     const timer = setInterval(() => {
-      if (Date.now() - rereadAt < REREAD_MS) return;
+      // Several slots share the one copy: whichever asks first asks for all.
+      if (Date.now() - rereadAt < every - 1_000) return;
       rereadAt = Date.now();
       void refetch.current();
-    }, REREAD_MS);
+    }, every);
     return () => clearInterval(timer);
-  }, []);
+  }, [every]);
   return read;
 }
 

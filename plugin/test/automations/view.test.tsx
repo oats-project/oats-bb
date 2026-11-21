@@ -12,11 +12,11 @@ import { rowOf, schedules, statusOf, triggers } from "./fixtures";
 
 afterEach(cleanup);
 
-const ready = (list: AutomationList): ListRead => ({ list, loading: false, error: null });
+const ready = (list: AutomationList, readAt: string | null = null): ListRead => ({ list, loading: false, error: null, readAt });
 /** Two hours after the recording: every recorded time is in the past, every next run in the future. */
 const NOW = Date.parse(schedules().scheduler!.lastTick!) + 2 * 3600e3;
 
-type Over = Partial<Pick<ViewProps, "gate" | "onOpenFile" | "canOpenCapability" | "onOpenCapability" | "notice">> & {
+type Over = Partial<Pick<ViewProps, "gate" | "onOpenFile" | "canOpenCapability" | "onOpenCapability" | "refreshing">> & {
   schedule?: ListRead;
   trigger?: ListRead;
   kind?: AutomationKind;
@@ -42,7 +42,7 @@ function Harness({ over, log }: { over: Over; log: string[] }) {
       onOpenFile={over.onOpenFile}
       canOpenCapability={over.canOpenCapability}
       onOpenCapability={over.onOpenCapability}
-      notice={over.notice}
+      refreshing={over.refreshing}
     />
   );
 }
@@ -90,7 +90,7 @@ describe("the page and its two tabs (D-266)", () => {
   });
 
   it("a tab whose list is not read yet shows no count, and its page says it is reading", () => {
-    const view = page({ trigger: { list: undefined, loading: true, error: null } });
+    const view = page({ trigger: { list: undefined, loading: true, error: null, readAt: null } });
     expect(view.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules11", "Triggers"]);
     fireEvent.click(view.getAllByRole("tab")[1]!);
     expect(view.getByText("Reading triggers…")).toBeTruthy();
@@ -118,24 +118,25 @@ describe("a list (D-267)", () => {
 
   it("All, Workspace and Local filter it, each with its count", () => {
     const view = page();
-    const origin = (id: string) => view.getByTestId(`oats-automations-origin-${id}`);
-    expect(["all", "workspace", "local"].map((id) => [origin(id).textContent, origin(id).getAttribute("aria-pressed")])).toEqual([
-      ["All11", "true"],
-      ["Workspace4", "false"],
-      ["Local7", "false"],
+    const origin = (id: string) => view.getByRole("radio", { name: new RegExp(`^${id} `, "i") });
+    expect(view.getByRole("radiogroup").getAttribute("aria-label")).toBe("Show schedules from");
+    expect(["all", "workspace", "local"].map((id) => [origin(id).textContent, origin(id).getAttribute("aria-checked")])).toEqual([
+      ["All 11", "true"],
+      ["Workspace 4", "false"],
+      ["Local 7", "false"],
     ]);
     fireEvent.click(origin("workspace"));
-    expect(origin("workspace").getAttribute("aria-pressed")).toBe("true");
+    expect(origin("workspace").getAttribute("aria-checked")).toBe("true");
     expect(view.rows().map((row) => row.dataset.id)).toEqual(["oats-real/nightly-digest", "oats-real/reconcile", "oats-real/release-check", "oats-real/weekly-report"]);
     fireEvent.click(origin("local"));
     expect(view.rows()).toHaveLength(7);
     // The counts are of the whole list, whatever is shown.
-    expect(origin("all").textContent).toBe("All11");
+    expect(origin("all").textContent).toBe("All 11");
   });
 
   it("the search narrows it, and says when nothing matches", () => {
     const view = page();
-    const search = view.getByTestId("oats-automations-search") as HTMLInputElement;
+    const search = view.getByTestId("oats-search") as HTMLInputElement;
     expect([search.getAttribute("aria-label"), search.placeholder]).toEqual(["Search schedules", "Search schedules"]);
     fireEvent.change(search, { target: { value: "digest" } });
     expect(view.rows().map((row) => row.dataset.id)).toEqual(["oats-real/nightly-digest"]);
@@ -147,11 +148,11 @@ describe("a list (D-267)", () => {
 
   it("another tab starts with neither the filter nor the search of the one before", () => {
     const view = page();
-    fireEvent.click(view.getByTestId("oats-automations-origin-workspace"));
-    fireEvent.change(view.getByTestId("oats-automations-search"), { target: { value: "digest" } });
+    fireEvent.click(view.getByRole("radio", { name: /^Workspace / }));
+    fireEvent.change(view.getByTestId("oats-search"), { target: { value: "digest" } });
     fireEvent.click(view.getAllByRole("tab")[1]!);
-    expect((view.getByTestId("oats-automations-search") as HTMLInputElement).value).toBe("");
-    expect(view.getByTestId("oats-automations-origin-all").getAttribute("aria-pressed")).toBe("true");
+    expect((view.getByTestId("oats-search") as HTMLInputElement).value).toBe("");
+    expect(view.getByRole("radio", { name: /^All / }).getAttribute("aria-checked")).toBe("true");
     expect(view.rows()).toHaveLength(7);
   });
 
@@ -266,8 +267,8 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
     const view = page({ schedule: ready(schedules("schedule-list-scheduler-off.json")) });
     expect(view.text("oats-automations-scheduler")).toBe("Scheduler off");
     expect(view.getByTestId("oats-automations-scheduler").querySelector("[data-tone]")!.getAttribute("data-tone")).toBe("warn");
-    expect(view.text("oats-automations-scheduler-off")).toBe("The scheduler is not running on this computer, so nothing here runs until it is enabled.");
-    expect(view.getByTestId("oats-automations-scheduler-off").getAttribute("role")).toBe("note");
+    expect(view.text("oats-automations-scheduler-off")).toBe("The scheduler is not running on this computerNothing here runs until it is enabled.");
+    expect(within(view.getByTestId("oats-automations-scheduler-off")).getByTestId("oats-notice").dataset.tone).toBe("warning");
   });
 
   it("off, with nothing to run here: no banner", () => {
@@ -278,10 +279,10 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
 
   it("this computer has no host name: the banner says what that means and what to do", () => {
     const view = page({ schedule: ready(schedules("schedule-list-host-unnamed.json")), trigger: ready(triggers("trigger-list-host-unnamed.json")) });
-    expect(view.text("oats-automations-host-unnamed")).toBe("This computer has no host name, so it runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it.");
+    expect(view.text("oats-automations-host-unnamed")).toBe("This computer has no host nameIt runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it.");
     expect(within(view.row("oats-real/weekly-report")).getAllByRole("cell")[3]!.querySelector("[data-tone]")!.getAttribute("title")).toBe("This computer has no host name");
     fireEvent.click(view.getAllByRole("tab")[1]!);
-    expect(view.text("oats-automations-host-unnamed")).toContain("it runs none of the workspace's triggers");
+    expect(view.text("oats-automations-host-unnamed")).toContain("It runs none of the workspace's triggers");
   });
 
   it("the line under the list says how old the workspace's items are", () => {
@@ -290,21 +291,35 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
 
   it("what cannot be shown at all is said in place of the list, with the tabs still there", () => {
     const gate: Gate = { title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs." };
-    const view = page({ gate, schedule: { list: undefined, loading: false, error: null } });
+    const view = page({ gate, schedule: { list: undefined, loading: false, error: null, readAt: null } });
     expect(view.text("oats-automations-gate")).toBe(`${gate.title}${gate.detail}`);
     expect(view.getAllByRole("tab")).toHaveLength(2);
     expect(view.queryByTestId("oats-automations-list")).toBeNull();
     expect(view.queryByTestId("oats-automations-scheduler")).toBeNull();
   });
 
-  it("a read that failed says the kernel's words with Retry, over what was read before", () => {
-    const view = page({ schedule: { list: schedules(), loading: false, error: "E_SCHEDULE_INVALID: oats-schedules.json cannot be read" } });
+  it("a read that failed says so in a person's words, then the kernel's message and its code, with Retry, over what was read before and how old that is", () => {
+    const view = page({ schedule: { list: schedules(), loading: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" }, readAt: new Date(NOW - 3 * 60e3).toISOString() } });
     const alert = view.getByRole("alert");
-    expect(alert.textContent).toBe("E_SCHEDULE_INVALID: oats-schedules.json cannot be readRetry");
+    expect(alert.textContent).toBe("Schedules could not be readoats-schedules.json cannot be readShowing what was read 3 min ago.E_SCHEDULE_INVALIDRetry");
     fireEvent.click(within(alert).getByText("Retry"));
     expect(view.log).toEqual(["refresh"]);
     expect(view.rows()).toHaveLength(11);
   });
+
+  it("a list read a while ago says how old it is; one being read again says so, without blanking", () => {
+    const old = page({ schedule: { ...ready(schedules()), readAt: new Date(NOW - 2 * 60e3).toISOString() } });
+    expect(old.getByTestId("oats-stale").textContent).toBe("Showing what was read 2 min ago.");
+    cleanup();
+    const fresh = page({ schedule: { ...ready(schedules()), readAt: new Date(NOW - 5e3).toISOString() } });
+    expect(fresh.queryByTestId("oats-stale")).toBeNull();
+    cleanup();
+    const again = page({ refreshing: true, schedule: { ...ready(schedules()), readAt: new Date(NOW - 5e3).toISOString() } });
+    expect(again.getByTestId("oats-stale").textContent).toBe("Refreshing… showing what was read just now.");
+    expect(again.rows()).toHaveLength(11);
+    expect((again.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
+  });
+
 });
 
 describe("a row's page (D-279)", () => {
@@ -330,7 +345,9 @@ describe("a row's page (D-279)", () => {
     const view = page();
     view.open("local/daily-review");
     expect(card(view, "oats-automation-identity")).toBe("daily-reviewlocal/daily-reviewlocalReview open pull requests every weekday morning");
-    expect(card(view, "oats-automation-sends")).toBe("PromptReview the open pull requests.\nReport what blocks each.");
+    expect(card(view, "oats-automation-sends")).toBe("PromptReview the open pull requests.Report what blocks each.");
+    // The prompt is whole, each of its lines an element of its own: no line break is drawn as a character.
+    expect(Array.from(view.getByTestId("oats-automation-prose").children).map((line) => line.textContent)).toEqual(["Review the open pull requests.", "Report what blocks each."]);
     expect(card(view, "oats-automation-when")).toMatch(/^WhenRunsWeekdays at 09:00Cron0 9 \* \* 1-5Time zoneEurope\/MadridNextin \d+ (h|d)$/);
     expect(card(view, "oats-automation-spawns")).toBe("SpawnsSouloats-developer · oats-realPurposereviewPermissionsYOLO — skips permission promptsBackendbbWakes itEvery 30 minutes · Europe/MadridWake messageAnything new on your review?");
     expect(card(view, "oats-automation-where")).toBe("Where it runsRuns onThis computerRuns on this computer");

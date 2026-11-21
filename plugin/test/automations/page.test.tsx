@@ -70,17 +70,17 @@ describe("the lists", () => {
       automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" }, trigger: { ok: true as const, list: triggers() } }),
     });
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toBe("E_SCHEDULE_INVALID: oats-schedules.json: jobs must be an objectRetry");
+    expect(alert.textContent).toBe("Schedules could not be readoats-schedules.json: jobs must be an objectE_SCHEDULE_INVALIDRetry");
     expect(slot.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules", "Triggers7"]);
     fireEvent.click(within(alert).getByText("Retry"));
     await waitFor(() => expect(calls(slot)).toEqual(["automations", "refresh", "automations"]));
   });
 
-  it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, without a code", async () => {
+  it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, its code after", async () => {
     const message = 'This bb server has 2 machines (falcon, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };
     const slot = await page("", { automations: () => ({ at: AT, hostId: null, oats: null, schedule: refused, trigger: refused }) });
-    expect((await slot.findByRole("alert")).textContent).toBe(`${message}Retry`);
+    expect((await slot.findByRole("alert")).textContent).toBe(`Schedules could not be read${message}CHOOSE_HOSTRetry`);
   });
 
   it("a server that does not answer says so, with Retry", async () => {
@@ -89,7 +89,7 @@ describe("the lists", () => {
         throw new Error("the plugin's server is restarting");
       },
     });
-    expect((await slot.findByRole("alert")).textContent).toBe("the plugin's server is restartingRetry");
+    expect((await slot.findByRole("alert")).textContent).toBe("Schedules could not be readthe plugin's server is restartingRetry");
   });
 });
 

@@ -34,9 +34,15 @@ export default [
       check(n === 7, `${at} the Triggers tab lists its 7 triggers`, String(n));
       await page.shot(`automations-${viewport.name}-triggers`);
 
+      // the sidebar's row and its mark: two schedules of the recording failed their last run
+      if (!viewport.mobile) {
+        const mark = await page.until(`(() => document.querySelector(${JSON.stringify(`${testId("oats-page-link-automations")} ${testId("oats-mark")}`)})?.getAttribute("aria-label") ?? "")()`, 20);
+        check(mark === "Automations, a run failed", `${at} the sidebar's Automations row carries a mark named "Automations, a run failed"`, String(mark));
+      }
+
       // the filter and the search
       await open(page, "", ROW);
-      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-automations-origin-workspace"))}).click()`);
+      await page.evaluate(`[...document.querySelectorAll('[role="radio"]')].find((radio) => radio.innerText.startsWith("Workspace")).click()`);
       const workspace = await page.until(`(() => ${count(ROW)} === 4 ? "4" : "")()`, 10);
       check(workspace === "4", `${at} Workspace shows the 4 schedules a member's repository holds`, String(await page.evaluate(count(ROW))));
       await page.shot(`automations-${viewport.name}-schedules-workspace`);
@@ -52,6 +58,14 @@ export default [
       check(/Backend bb/.test(spawn) && /YOLO — skips permission prompts/.test(spawn), `${at} a schedule's page says what it spawns, on bb, in full mode`, spawn);
       check((await page.evaluate(visible(ROW))) === false && (await page.evaluate(visible(testId("oats-automation-back")))) === true, `${at} the list gives way to the row's page, with Back`);
       await page.shot(`automations-${viewport.name}-schedule`);
+      // focus: the row's page opens with focus on Back, and Back returns it to the row it was opened from
+      await open(page, "", ROW);
+      await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(ROW)})].find((row) => row.dataset.id === "local/daily-review").querySelector(${JSON.stringify(testId("oats-automation-open"))}).click()`);
+      const onBack = await page.until(`(() => document.activeElement?.dataset?.testid === "oats-automation-back" ? "back" : "")()`, 15);
+      check(onBack === "back", `${at} a row's page opens with the focus on Back`, await page.evaluate("document.activeElement?.outerHTML?.slice(0, 120)"));
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-automation-back"))}).click()`);
+      const onRow = await page.until(`(() => document.activeElement?.dataset?.testid === "oats-automation-open" ? document.activeElement.closest(${JSON.stringify(ROW)}).dataset.id : "")()`, 15);
+      check(onRow === "local/daily-review", `${at} Back returns the focus to the row the page was opened from`, String(onRow));
 
       // a run that did not happen, with the kernel's reason
       const failed = await open(page, "/schedules/local/hourly-check", testId("oats-automation-run-error"));
@@ -89,7 +103,7 @@ export default [
     name: "a host with no name",
     run: async ({ page, at, viewport, check }) => {
       const unnamed = await open(page, "", testId("oats-automations-host-unnamed"));
-      check(/^This computer has no host name, so it runs none of the workspace's schedules\./.test(unnamed), `${at} a host with no name says what that means and what to do`, unnamed);
+      check(/^This computer has no host name It runs none of the workspace's schedules\./.test(unnamed), `${at} a host with no name says what that means and what to do`, unnamed);
       await page.shot(`automations-${viewport.name}-host-unnamed`);
     },
   },
@@ -98,7 +112,7 @@ export default [
     name: "no host scheduler",
     run: async ({ page, at, viewport, check }) => {
       const off = await open(page, "", testId("oats-automations-scheduler-off"));
-      check(off === "The scheduler is not running on this computer, so nothing here runs until it is enabled.", `${at} a scheduler that is off says nothing here runs`, off);
+      check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled.", `${at} a scheduler that is off says nothing here runs`, off);
       const header = await page.evaluate(textOf(testId("oats-automations-scheduler")));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
       await page.shot(`automations-${viewport.name}-scheduler-off`);
@@ -113,6 +127,17 @@ export default [
       const foot = await page.evaluate(textOf(testId("oats-automations-foot")));
       check(/^Workspace items appear after the next sync/.test(foot), `${at} before the first sync the page says when workspace items appear`, foot);
       await page.shot(`automations-${viewport.name}-empty`);
+    },
+  },
+  {
+    stage: "automations-failed",
+    name: "a list the kernel refuses",
+    run: async ({ page, at, viewport, check }) => {
+      const failed = await open(page, "", testId("oats-automations-failed"));
+      check(failed === "Schedules could not be read oats-schedules.json: jobs must be an object E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
+      const tabs = await page.evaluate(texts('[role="tab"]'));
+      check(JSON.stringify(tabs) === JSON.stringify(["Schedules", "Triggers 7"]), `${at} the other list is still read`, JSON.stringify(tabs));
+      await page.shot(`automations-${viewport.name}-failed`);
     },
   },
   {
@@ -143,6 +168,14 @@ export const stages = {
     label: "AU2",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
       fake({ status: { stdout: statusWithRealIds(threads) }, ...lists("schedule-list-scheduler-off.json", "trigger-list.json") });
+      await settled(untilSnapshot);
+    },
+  },
+  "automations-failed": {
+    label: "AU4",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });
+      fake({ status: { stdout: statusWithRealIds(threads) }, "schedule list": { stdout: refusal } });
       await settled(untilSnapshot);
     },
   },

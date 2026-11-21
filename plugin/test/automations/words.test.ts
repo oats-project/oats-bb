@@ -12,7 +12,8 @@ import {
   groupRows,
   harnessName,
   hostLogin,
-  hostUnnamed,
+  HOST_UNNAMED,
+  hostUnnamedDetail,
   lastNext,
   lastRunFailed,
   listBanners,
@@ -241,8 +242,8 @@ describe("the host scheduler and the list's notices", () => {
   it("the banner for a host with no name shows when the workspace has rows it cannot place", () => {
     expect(listBanners(schedules("schedule-list-host-unnamed.json")).hostUnnamed).toBe(true);
     expect(listBanners(triggers("trigger-list-host-unnamed.json")).hostUnnamed).toBe(true);
-    expect(hostUnnamed("schedule")).toBe("This computer has no host name, so it runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it.");
-    expect(hostUnnamed("trigger")).toContain("none of the workspace's triggers");
+    expect([HOST_UNNAMED.title, hostUnnamedDetail("schedule")]).toEqual(["This computer has no host name", "It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it."]);
+    expect(hostUnnamedDetail("trigger")).toContain("none of the workspace's triggers");
   });
 
   it("the line under the list: the last sync, what it could not read, or that none happened yet", () => {

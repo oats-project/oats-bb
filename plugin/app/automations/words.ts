@@ -261,10 +261,13 @@ export function schedulerLine(scheduler: AutomationScheduler, now: number): stri
   const checked = relativeTime(scheduler.lastTick, now);
   return ["Scheduler on", checked !== null ? `checked ${checked.label}` : null, scheduler.maxConcurrent !== null ? `up to ${scheduler.maxConcurrent} at once` : null].filter(Boolean).join(" · ");
 }
-export const SCHEDULER_OFF = "The scheduler is not running on this computer, so nothing here runs until it is enabled.";
-export const hostUnnamed = (kind: AutomationKind): string =>
-  `This computer has no host name, so it runs none of the workspace's ${TITLES[kind].toLowerCase()}. Name it in this deployment's local settings to take on the ones assigned to it.`;
-/** The banners a list shows above its rows: this host has no name, and the host timer is off. */
+// The two notices above a list. The Desktop says each as one sentence in a banner; the plugin's
+// notice has a title, so the sentence's first clause is the title and the rest follows (WORDS.md).
+export const SCHEDULER_OFF = { title: "The scheduler is not running on this computer", detail: "Nothing here runs until it is enabled." } as const;
+export const HOST_UNNAMED = { title: "This computer has no host name" } as const;
+export const hostUnnamedDetail = (kind: AutomationKind): string =>
+  `It runs none of the workspace's ${TITLES[kind].toLowerCase()}. Name it in this deployment's local settings to take on the ones assigned to it.`;
+/** The notices a list shows above its rows: this host has no name, and the host timer is off. */
 export function listBanners(list: AutomationList): { hostUnnamed: boolean; schedulerOff: boolean } {
   return {
     hostUnnamed: list.host.name === null && list.rows.some((row) => row.reason === "host-unnamed"),

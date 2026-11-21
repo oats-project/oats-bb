@@ -11,7 +11,7 @@ import { attempt } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
 import { fileOf } from "./Detail";
-import { useAutomations } from "./read";
+import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { automationsSupported } from "./version";
 import type { OatsVersion } from "./version";
 import { KINDS, View } from "./View";
@@ -46,10 +46,14 @@ export function gateOf(kind: AutomationKind, answer: { code: string } | null, oa
 }
 
 type Lists = Result<"automations">;
-function listRead(answer: Lists[AutomationKind] | undefined, loading: boolean, failure: string | null, kept: ListRead["list"]): ListRead {
-  if (answer === undefined) return { list: kept, loading, error: failure };
-  // A refusal keeps its code before its message, as every refusal the plugin shows.
-  return answer.ok ? { list: answer.list, loading, error: null } : { list: kept, loading, error: /^E_[A-Z0-9_]+$/.test(answer.code) ? `${answer.code}: ${answer.message}` : answer.message };
+type Kept = { list: NonNullable<ListRead["list"]>; at: string };
+function listRead(answer: Lists[AutomationKind] | undefined, at: string | undefined, loading: boolean, failure: string | null, kept: Kept | undefined): ListRead {
+  const shown = { list: kept?.list, readAt: kept?.at ?? null };
+  // The server did not answer at all: its own words, with what was read before.
+  if (answer === undefined || at === undefined) return { ...shown, loading, error: failure === null ? null : { code: null, message: failure } };
+  if (answer.ok) return { list: answer.list, readAt: at, loading, error: null };
+  // The kernel's refusal, or the plugin's own lack: its message, and its code after it.
+  return { ...shown, loading, error: { code: answer.code, message: answer.message } };
 }
 
 /** `now`, moving on every half minute so that "in 5 min" and "2 h ago" stay true while the page is open. */
@@ -63,23 +67,42 @@ function useNow(): number {
 }
 
 export function AutomationsPage({ subPath }: PluginNavPanelProps) {
-  const read = useAutomations();
+  const read = useAutomations(PAGE_REREAD_MS);
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const now = useNow();
   const { kind, openId } = routeOf(subPath);
 
   // A list that was read stays on screen while a later read fails or is under way.
-  const kept = useRef<Partial<Record<AutomationKind, ListRead["list"]>>>({});
+  const kept = useRef<Partial<Record<AutomationKind, Kept>>>({});
   const loading = read.status === "loading";
   const failure = read.status === "error" ? read.error : null;
   const reads = Object.fromEntries(
     KINDS.map((id) => {
-      const one = listRead(read.data?.[id], loading, failure, kept.current[id]);
-      if (one.list !== undefined) kept.current[id] = one.list;
+      const one = listRead(read.data?.[id], read.data?.at, loading, failure, kept.current[id]);
+      if (one.list !== undefined && one.readAt !== null && one.error === null) kept.current[id] = { list: one.list, at: one.readAt };
       return [id, one];
     }),
   ) as Record<AutomationKind, ListRead>;
+
+  // Refresh and Retry: the page says it is reading again until the answer is another one, or fails.
+  const [rereadFrom, setRereadFrom] = useState<string | null>(null);
+  const seen = read.data?.at ?? "";
+  const refreshing = rereadFrom !== null && rereadFrom === seen && read.status !== "error";
+  useEffect(() => {
+    if (rereadFrom === null) return;
+    if (rereadFrom !== seen || read.status === "error") {
+      setRereadFrom(null);
+      return;
+    }
+    // An answer that never comes does not leave the page saying so for ever.
+    const timer = setTimeout(() => setRereadFrom(null), 60_000);
+    return () => clearTimeout(timer);
+  }, [rereadFrom, seen, read.status]);
+  const refresh = () => {
+    setRereadFrom(seen);
+    read.retry();
+  };
   const answer = read.data?.[kind];
   const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null, read.data?.oats ?? null);
 
@@ -130,7 +153,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         reads={reads}
         gate={gate}
         now={now}
-        onRefresh={read.retry}
+        onRefresh={refresh}
+        refreshing={refreshing}
         openId={openId}
         onOpen={onOpen}
         status={status !== null && status.id === openId ? status.value : null}

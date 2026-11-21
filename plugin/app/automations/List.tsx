@@ -4,16 +4,17 @@
 // (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
 import type { ReactNode } from "react";
 import type { AutomationList, AutomationRow } from "../../contract/automations";
-import { Note } from "../ui";
+import { Chip, Empty, Notice, SearchField, Segmented, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { Banner, Segmented, Search, Tag, ToneDot } from "./parts";
+import { ToneDot } from "./parts";
 import {
   actsAs,
   capabilitySource,
   cronInWords,
   filterRows,
   groupRows,
-  hostUnnamed,
+  HOST_UNNAMED,
+  hostUnnamedDetail,
   lastNext,
   listBanners,
   NOUNS,
@@ -38,11 +39,7 @@ const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 /** Where a row comes from: "local", or the member whose repository holds it. */
 export function OriginTag({ row }: { row: AutomationRow }) {
   const local = row.origin.kind === "local";
-  return (
-    <Tag title={local ? "Local to this computer" : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>
-      {local ? "local" : shown(row.origin.member ?? "workspace")}
-    </Tag>
-  );
+  return <Chip title={local ? "Local to this computer" : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>{local ? "local" : shown(row.origin.member ?? "workspace")}</Chip>;
 }
 
 /** What is to be said of a row's state: off here, a failed source check, invalid, unreadable, its package template. */
@@ -54,21 +51,13 @@ export function StateTags({ row }: { row: AutomationRow }) {
   const template = templateLabel(row.template);
   return (
     <>
-      {!row.enabledHere && row.group !== "elsewhere" ? <Tag tone="muted">Off here</Tag> : null}
+      {!row.enabledHere && row.group !== "elsewhere" ? <Chip>Off here</Chip> : null}
       {check ? (
-        <Tag tone="warn" title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>
-          Source check failed
-        </Tag>
+        <Chip title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>Source check failed</Chip>
       ) : bad !== null ? (
-        <Tag tone="warn" title={shown(bad.message ?? bad.code ?? "")}>
-          {row.unreadable !== null ? "Unreadable" : "Invalid"}
-        </Tag>
+        <Chip title={shown(bad.message ?? bad.code ?? "")}>{row.unreadable !== null ? "Unreadable" : "Invalid"}</Chip>
       ) : null}
-      {template === null ? null : (
-        <Tag tone="muted" title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>
-          {shown(template)}
-        </Tag>
-      )}
+      {template === null ? null : <Chip title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>{shown(template)}</Chip>}
     </>
   );
 }
@@ -99,7 +88,7 @@ function Row({ row, list, now, onOpen }: { row: AutomationRow; list: AutomationL
           type="button"
           data-testid="oats-automation-open"
           aria-label={`Open ${shown(row.id)}`}
-          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded text-left hover:underline"
+          className={`${TARGET} flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded text-left hover:underline`}
           onClick={() => onOpen(row.id)}
         >
           <span title={shown(row.id)} className={`min-w-0 break-all font-mono font-semibold ${off ? "text-muted-foreground" : "text-foreground"}`}>
@@ -177,7 +166,7 @@ export type ListProps = {
   query: string;
   onQuery: (query: string) => void;
   onOpen: (id: string) => void;
-  /** The banner's action for a scheduler that is off (Enable scheduler), where the page offers it. */
+  /** The act of the notice of a scheduler that is off (Enable scheduler), where the page offers it. */
   schedulerAction?: ReactNode;
 };
 
@@ -186,33 +175,45 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
   const lower = title.toLowerCase();
   const rows = list.rows;
   const banners = listBanners(list);
-  const shown = filterRows(rows, { origin, query });
+  const shown_ = filterRows(rows, { origin, query });
   return (
     <div data-testid="oats-automations-list" className="flex flex-col gap-4">
-      {banners.hostUnnamed ? <Banner testId="oats-automations-host-unnamed">{hostUnnamed(list.kind)}</Banner> : null}
+      {banners.hostUnnamed ? (
+        <div data-testid="oats-automations-host-unnamed">
+          <Notice tone="warning" title={HOST_UNNAMED.title}>
+            {hostUnnamedDetail(list.kind)}
+          </Notice>
+        </div>
+      ) : null}
       {banners.schedulerOff ? (
-        <Banner testId="oats-automations-scheduler-off" action={schedulerAction}>
-          {SCHEDULER_OFF}
-        </Banner>
+        <div data-testid="oats-automations-scheduler-off">
+          <Notice tone="warning" title={SCHEDULER_OFF.title} actions={schedulerAction}>
+            {SCHEDULER_OFF.detail}
+          </Notice>
+        </div>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented
           label={`Show ${lower} from`}
-          options={ORIGIN_FILTERS.map((option) => ({ ...option, count: option.id === "all" ? rows.length : rows.filter((row) => row.origin.kind === option.id).length }))}
-          chosen={origin}
-          onChoose={onOrigin}
+          options={ORIGIN_FILTERS.map((option) => ({ id: option.id, label: `${option.label} ${option.id === "all" ? rows.length : rows.filter((row) => row.origin.kind === option.id).length}` }))}
+          value={origin}
+          onChange={onOrigin}
         />
-        <Search label={`Search ${lower}`} value={query} onChange={onQuery} />
+        <div className="w-full @xl:w-60">
+          <SearchField label={`Search ${lower}`} value={query} onChange={onQuery} />
+        </div>
       </div>
       {rows.length === 0 ? (
-        <div data-testid="oats-automations-empty" className="mx-auto flex max-w-md flex-col gap-1 py-8 text-center text-sm">
-          <strong className="text-base font-semibold text-foreground">{`No ${lower} yet`}</strong>
-          <span className="text-muted-foreground">{`Commit one to a member repository's ${NOUNS[list.kind]}s folder to share it with the workspace, or add a local one on this computer.`}</span>
+        <div data-testid="oats-automations-empty">
+          <Empty>
+            <strong className="block font-semibold text-foreground">{`No ${lower} yet`}</strong>
+            {`Commit one to a member repository's ${NOUNS[list.kind]}s folder to share it with the workspace, or add a local one on this computer.`}
+          </Empty>
         </div>
-      ) : shown.length === 0 ? (
-        <Note>{`No ${lower} match.`}</Note>
+      ) : shown_.length === 0 ? (
+        <Empty>{`No ${lower} match.`}</Empty>
       ) : null}
-      {groupRows(shown).map((group) => {
+      {groupRows(shown_).map((group) => {
         const headId = `oats-automations-${list.kind}-${group.id}`;
         return (
           <section key={group.id} data-testid="oats-automations-group" data-group={group.id} className="flex flex-col gap-2">

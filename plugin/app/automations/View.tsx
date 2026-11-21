@@ -5,19 +5,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus } from "../../contract/automations";
-import { Button, ErrorLine, Note } from "../ui";
+import { Button, Lines, Loading, Notice, Stale, Tabs } from "../ui";
 import { shown } from "../ui/text";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
-import { Tabs, ToneDot } from "./parts";
+import { ToneDot } from "./parts";
+import { readAge } from "../ui/words";
 import { schedulerLine, schedulerOn, TITLES } from "./words";
 import type { OriginFilter } from "./words";
 
 export const KINDS: readonly AutomationKind[] = ["schedule", "trigger"];
 
 /** One list as the page has it: being read, read, or failed (with what an earlier read answered, if any). */
-export type ListRead = { list: AutomationList | undefined; loading: boolean; error: string | null };
+export type ListRead = {
+  list: AutomationList | undefined;
+  loading: boolean;
+  /** Why the last read failed: the kernel's code (or the plugin's) and message. */
+  error: { code: string | null; message: string } | null;
+  /** When what is shown was read. */
+  readAt: string | null;
+};
 /** Why a list cannot be shown at all, in place of it: what is missing, and what to do about it. */
 export type Gate = { title: string; detail: string | null };
 
@@ -38,13 +46,17 @@ export type ViewProps = {
   /** Beside Refresh (New schedule), and in the banner of a scheduler that is off (Enable scheduler). */
   headerActions?: ReactNode;
   schedulerAction?: ReactNode;
-  /** A line above the list: what an act just did. */
-  notice?: string | null;
+  /** A re-read is in flight. */
+  refreshing?: boolean;
+  /** Above the list: what an act just did (a result). */
+  result?: ReactNode;
 } & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
+/** A list read longer ago than this is marked with its age (the UX standard, freshness). */
+export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, rowParts, headerActions, schedulerAction, notice, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, rowParts, headerActions, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -81,8 +93,8 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
   return (
     <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
       {row !== null && list !== undefined ? null : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border">
-          <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, title: TITLES[id], count: reads[id].list?.rows.length ?? null }))} chosen={kind} onChoose={onKind} panelId={PANEL} />
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+          <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
           <span className="min-w-0 flex-1" />
           {scheduler === null || gate !== null ? null : (
             <span data-testid="oats-automations-scheduler" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -92,7 +104,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
           )}
           <span className="flex items-center gap-2 pb-1">
             {headerActions}
-            <Button data-testid="oats-automations-refresh" aria-label={`Refresh ${title.toLowerCase()}`} title="Refresh" disabled={read.loading} onClick={onRefresh}>
+            <Button data-testid="oats-automations-refresh" aria-label={`Refresh ${title.toLowerCase()}`} title="Refresh" disabled={read.loading || refreshing} onClick={onRefresh}>
               Refresh
             </Button>
           </span>
@@ -100,21 +112,39 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
       )}
       <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={`${PANEL}-tab-${kind}`} className="flex flex-col gap-4">
         {gate !== null ? (
-          <div data-testid="oats-automations-gate" className="mx-auto flex max-w-md flex-col gap-1 py-8 text-center text-sm">
-            <strong className="text-base font-semibold text-foreground">{gate.title}</strong>
-            {gate.detail === null ? null : <span className="break-words text-muted-foreground">{shown(gate.detail)}</span>}
+          <div data-testid="oats-automations-gate">
+            <Notice title={gate.title}>{gate.detail === null ? null : shown(gate.detail)}</Notice>
           </div>
         ) : (
           <>
-            {read.error === null ? null : <ErrorLine onRetry={onRefresh}>{read.error}</ErrorLine>}
-            {notice ? (
-              <p role="status" data-testid="oats-automations-notice" className="break-words text-sm text-foreground">
-                {shown(notice)}
-              </p>
-            ) : null}
+            {read.error === null ? (
+              // What is shown was read a while ago, or is being read again: it says so, with its age.
+              list !== undefined && read.readAt !== null && (refreshing || now - Date.parse(read.readAt) > STALE_MS) ? (
+                <Stale age={readAge(read.readAt, now)} refreshing={refreshing} />
+              ) : null
+            ) : (
+              <div data-testid="oats-automations-failed">
+                <Notice
+                  tone="error"
+                  title={`${title} could not be read`}
+                  code={read.error.code}
+                  age={list !== undefined && read.readAt !== null ? readAge(read.readAt, now) : null}
+                  actions={
+                    <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
+                      Retry
+                    </Button>
+                  }
+                >
+                  <p>
+                    <Lines text={read.error.message} />
+                  </p>
+                </Notice>
+              </div>
+            )}
+            {result}
             {list === undefined ? (
               read.loading ? (
-                <Note>{`Reading ${title.toLowerCase()}…`}</Note>
+                <Loading>{`Reading ${title.toLowerCase()}…`}</Loading>
               ) : null
             ) : row !== null ? (
               <Detail

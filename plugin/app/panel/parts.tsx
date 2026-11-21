@@ -1,18 +1,9 @@
 // The panel's own small parts, on bb's theme tokens only: what the patterns of app/ui.tsx (the UX
 // standard, section 3) have no component for. Everything else the panel draws is one of those.
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { CopyButton, TARGET } from "../ui";
 import { shown } from "../ui/text";
-
-/** A labelled section of a tab: its label in the small upper-case face, then its content. */
-export function Section({ label, children, testId }: { label: string; children: ReactNode; testId: string }) {
-  return (
-    <section data-testid={testId} className="flex min-w-0 flex-col gap-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</h3>
-      {children}
-    </section>
-  );
-}
 
 /** A fact of the kernel's inside a sentence: the code face, breaking inside only where it cannot fit a line. */
 export function Code({ children }: { children: string }) {
@@ -36,8 +27,18 @@ export function Tag({ children, title }: { children: string; title: string }) {
 export function PathLine({ path, copyLabel, tag, testId }: { path: string; copyLabel: string; tag?: ReactNode; testId: string }) {
   return (
     <span className="flex min-w-0 flex-col items-start gap-1.5">
-      <span data-testid={testId} className="min-w-0 break-all font-mono text-xs text-foreground">
-        {path}
+      <span data-testid={testId} className="min-w-0 break-words font-mono text-xs text-foreground">
+        {/* A line may end after a slash, so a long path breaks between its segments, not inside a name. */}
+        {path.split("/").map((segment, index) => (
+          <Fragment key={index}>
+            {index === 0 ? null : (
+              <>
+                /<wbr />
+              </>
+            )}
+            {segment}
+          </Fragment>
+        ))}
       </span>
       {tag}
       <CopyButton text={path} label={copyLabel} />

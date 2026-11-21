@@ -12,12 +12,12 @@ import type { Oats } from "../oats";
 import { agentStatus } from "../roster/status";
 import { onWindowReset } from "../store";
 import type { Read, Result } from "../store";
-import { Button, Card, Fact, Facts, LINK, Loading, Notice, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
 import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
 import { openSoul } from "../workspace/pages";
-import { Code, Fold, PathLine, Section, Tag } from "./parts";
+import { Code, Fold, PathLine, Tag } from "./parts";
 import { useInstanceRead, useNow } from "./read";
 import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "./words";
 
@@ -160,7 +160,7 @@ function InstancePage({ oats, agent, node, read, now }: { oats: Ready; agent: Ag
       </header>
 
       {claim === null ? null : (
-        <Section label="Needs input" testId="oats-panel-waiting">
+        <Section title="Needs input" testId="oats-panel-waiting">
           <p data-testid="oats-panel-waiting-head" className="m-0 font-semibold text-foreground">
             {[waitingLabel(claim), waitingSince(claim.since, now)].filter((part) => part !== null).join(" · ")}
           </p>
@@ -208,7 +208,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
   return (
     <>
       {sentence === null ? null : (
-        <Section label="Work" testId="oats-panel-work">
+        <Section title="Work" testId="oats-panel-work">
           <Card testId="oats-panel-work-card">
             <p data-testid="oats-panel-work-sentence" className="m-0 leading-relaxed">
               {sentence.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <Code key={index}>{part.code}</Code>))}
@@ -235,7 +235,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
       )}
 
       {!hasSession ? null : (
-        <Section label="Session" testId="oats-panel-session">
+        <Section title="Session" testId="oats-panel-session">
           <Card testId="oats-panel-session-card">
             <Facts>
               {facts.harness === null ? null : (
@@ -276,7 +276,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
       )}
 
       {facts.messagingId === null ? null : (
-        <Section label="Messaging & Teams" testId="oats-panel-messaging">
+        <Section title="Messaging & Teams" testId="oats-panel-messaging">
           <Facts>
             <Fact label="Messaging ID">
               <PathLine path={facts.messagingId} copyLabel="Copy messaging ID" testId="oats-panel-messaging-id" />
@@ -286,7 +286,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Ready; facts: PanelInstance
       )}
 
       {facts.human === null && facts.parent === null && facts.sibling === null ? null : (
-        <Section label="Lineage" testId="oats-panel-lineage">
+        <Section title="Lineage" testId="oats-panel-lineage">
           <Facts>
             {facts.human === null ? null : (
               <Fact label="Owning human">

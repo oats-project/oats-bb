@@ -8,6 +8,14 @@ const ROW = testId("oats-automation-row");
 const count = (selector) => `document.querySelectorAll(${JSON.stringify(selector)}).length`;
 /** Presses the first element of `selector`. */
 const click = (selector) => `(() => { const found = document.querySelector(${JSON.stringify(selector)}); if (!found) throw new Error("nothing to press: " + ${JSON.stringify(selector)}); found.click(); return true; })()`;
+/**
+ * Takes a scene's image with the thing its name claims in view: a row's page is longer than the
+ * window, most of all at the phone's width, and an image must show the state it is named for.
+ */
+async function shotOf(page, selector, name) {
+  await page.evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center" })`);
+  await page.shot(name, { targets: true });
+}
 /** Opens the page at a route and waits for what it should draw. → the text of `wait`, or "" */
 async function open(page, route, wait) {
   await page.goto(`/plugins/oats/automations${route}`);
@@ -66,7 +74,7 @@ export default [
       const spawn = await open(page, "/schedules/local/daily-review", testId("oats-automation-spawns"));
       check(/Backend bb/.test(spawn) && /YOLO — skips permission prompts/.test(spawn), `${at} a schedule's page says what it spawns, on bb, in full mode`, spawn);
       check((await page.evaluate(visible(ROW))) === false && (await page.evaluate(visible(testId("oats-automation-back")))) === true, `${at} the list gives way to the row's page, with Back`);
-      await page.shot(`automations-${viewport.name}-schedule`, { targets: true });
+      await shotOf(page, testId("oats-automation-spawns"), `automations-${viewport.name}-schedule`);
       // focus: the row's page opens with focus on Back, and Back returns it to the row it was opened from
       await open(page, "", ROW);
       await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(ROW)})].find((row) => row.dataset.id === "local/daily-review").querySelector(${JSON.stringify(testId("oats-automation-open"))}).click()`);
@@ -79,24 +87,24 @@ export default [
       // a run that did not happen, with the kernel's reason
       const failed = await open(page, "/schedules/local/hourly-check", testId("oats-automation-run-error"));
       check(/E_BACKEND_SANDBOXED_MODE/.test(failed), `${at} a launch the provider refused says why, in the kernel's words`, failed);
-      await page.shot(`automations-${viewport.name}-schedule-launch-failed`, { targets: true });
+      await shotOf(page, testId("oats-automation-run-error"), `automations-${viewport.name}-schedule-launch-failed`);
 
       // an unknown run state, an invalid definition, a placement that needs attention
       const unknown = await open(page, "/schedules/local/status-check", testId("oats-automation-run-state"));
       check(/^Run state Run state unknown since/.test(unknown), `${at} a run whose state is unknown says so, with the command that checks it`, unknown);
-      await page.shot(`automations-${viewport.name}-schedule-run-unknown`, { targets: true });
+      await shotOf(page, testId("oats-automation-run-state"), `automations-${viewport.name}-schedule-run-unknown`);
       const invalid = await open(page, "/schedules/local/legacy-herdr", testId("oats-automation-problem"));
       check(/^Invalid Code E_HERDR_REMOVED Field backend/.test(invalid), `${at} an invalid definition shows the kernel's code, field and message`, invalid);
-      await page.shot(`automations-${viewport.name}-schedule-invalid`, { targets: true });
+      await shotOf(page, testId("oats-automation-problem"), `automations-${viewport.name}-schedule-invalid`);
       const where = await open(page, "/schedules/oats-real/reconcile", testId("oats-automation-where"));
       check(/Wrong account here/.test(where) && /Logged in github\.com\/ana/.test(where), `${at} a workspace schedule says why it does not run here`, where);
-      await page.shot(`automations-${viewport.name}-schedule-wrong-account`, { targets: true });
+      await shotOf(page, testId("oats-automation-where"), `automations-${viewport.name}-schedule-wrong-account`);
 
       // a pull-request trigger with its state
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const lead = await page.until(`(() => { const t = ${textOf(testId("oats-automation-history-note"))}; return /live now/.test(t) ? t : ""; })()`, 30);
       check(lead === "on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await page.evaluate(textOf(detail))));
-      await page.shot(`automations-${viewport.name}-trigger`, { targets: true });
+      await shotOf(page, testId("oats-automation-history-note"), `automations-${viewport.name}-trigger`);
 
       // a capability source's trigger: its parameters and the source's own words, quoted
       await page.goto("/plugins/oats/automations/triggers/oats-real/harvest-review");
@@ -104,12 +112,12 @@ export default [
       check(/says: harvest\/y not judged yet harvest\/z <img src=x onerror=alert\(1\)>/.test(skipped ?? ""), `${at} a capability source's words are quoted text, under whose they are`, skipped);
       const made = await page.evaluate(`document.querySelector(${JSON.stringify(detail)}).querySelectorAll("img, a").length`);
       check(made === 0, `${at} no image and no link is made from a source's text`, String(made));
-      await page.shot(`automations-${viewport.name}-trigger-source`, { targets: true });
+      await shotOf(page, testId("oats-automation-skipped"), `automations-${viewport.name}-trigger-source`);
 
       // a source check that failed at a poll: its own card, with the kernel's message, code and field
       const check_ = await open(page, "/triggers/oats-real/harvest-closed", testId("oats-automation-problem"));
       check(/^Source check failed Message on\.events: acme\.graph:harvest-branches has no event closed \(its events: opened, updated\) Code E_TRIGGER_INVALID Field on\.events Checked /.test(check_ ?? ""), `${at} a source check that failed at a poll has its own card: the kernel's message, code and field, and when`, check_);
-      await page.shot(`automations-${viewport.name}-trigger-source-check-failed`, { targets: true });
+      await shotOf(page, testId("oats-automation-problem"), `automations-${viewport.name}-trigger-source-check-failed`);
     },
   },
   {
@@ -170,7 +178,7 @@ export default [
       // Open capability: in this stage `oats capabilities` answers the recording's workspace, which lists the source's capability once
       const openCapability = await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automation-open-capability"))})?.getAttribute("aria-label") ?? "")()`, 20);
       check(openCapability === "Open capability acme.graph", `${at} a source whose capability the Capabilities page lists offers Open capability`, String(openCapability));
-      await page.shot(`automations-${viewport.name}-trigger-poll-failed`, { targets: true });
+      await shotOf(page, testId("oats-automation-last-poll"), `automations-${viewport.name}-trigger-poll-failed`);
     },
   },
   {
@@ -182,7 +190,7 @@ export default [
       check(failed === "This trigger's state could not be read no trigger state can be read while the scheduler's lock is held What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_SCHEDULER_BUSY Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
       const last = await page.evaluate(textOf(testId("oats-automation-run")));
       check(/#41 · opened · oats-developer-review-pr-41$/.test(last), `${at} the row's own last fire still shows under it`, last);
-      await page.shot(`automations-${viewport.name}-trigger-state-failed`, { targets: true });
+      await shotOf(page, testId("oats-automation-status-failed"), `automations-${viewport.name}-trigger-state-failed`);
     },
   },
   {
@@ -190,7 +198,7 @@ export default [
     name: "an OATS without the automations lists",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(gate === "Schedules need OATS 0.29 or later Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", `${at} an OATS without the lists: the page says which OATS it needs`, gate);
+      check(gate === "Schedules need OATS 0.29 or later Update OATS to see the workspace's schedules and this computer's own, and where each one runs. OATS_NO_AUTOMATIONS", `${at} an OATS without the lists: the page says which OATS it needs`, gate);
       await page.shot(`automations-${viewport.name}-old-oats`, { targets: true });
     },
   },
@@ -233,7 +241,7 @@ export default [
     name: "Automations without oats",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(gate === "Schedules need the OATS CLI", `${at} with oats gone the page says what it needs`, gate);
+      check(/^Schedules need the OATS CLI oats was not found on .+ OATS_NOT_FOUND$/.test(gate ?? ""), `${at} with oats gone the page says what it needs, where, and the code`, gate);
       await page.shot(`automations-${viewport.name}-no-oats`, { targets: true });
     },
   },

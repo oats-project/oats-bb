@@ -112,6 +112,7 @@ describe("the lists", () => {
     const alert = await slot.findByRole("alert");
     fireEvent.click(within(alert).getByText("Retry"));
     await waitFor(() => expect((slot.getByTestId("oats-automations-retry") as HTMLButtonElement).disabled).toBe(true));
+    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readthe plugin's server is restartingRefreshing…Retry");
     expect((slot.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(release).toBeDefined());
     release!();
@@ -134,26 +135,29 @@ describe("what cannot be shown at all (D-285)", () => {
   it("no oats on the machine: the page says the list needs the OATS CLI", async () => {
     const refused = { ok: false as const, code: "OATS_NOT_FOUND", message: "`oats` could not be run (ENOENT)" };
     const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
-    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Schedules need the OATS CLI");
+    // The title is the Desktop's; the server's own words (which machine, what to do) and its code follow.
+    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Schedules need the OATS CLI`oats` could not be run (ENOENT)OATS_NOT_FOUND");
     resetApp();
     const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
-    expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need the OATS CLI");
+    expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need the OATS CLI`oats` could not be run (ENOENT)OATS_NOT_FOUND");
   });
 
   it("an OATS without the automations lists, as the server answers for one", async () => {
     const none = { ok: false as const, code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." };
     const slot = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: { version: "0.28.0", features: ["schedule"], automationsApi: null }, schedule: none, trigger: none }) });
-    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need OATS 0.29 or laterUpdate OATS to see the workspace's triggers and this computer's own, and where each one runs.");
+    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need OATS 0.29 or laterUpdate OATS to see the workspace's triggers and this computer's own, and where each one runs.OATS_NO_AUTOMATIONS");
     expect(slot.queryByRole("alert")).toBeNull();
   });
 
-  it("the gate is the server's word: its code for an OATS without the lists, or for no oats; any other refusal is no gate", () => {
-    expect(gateOf("schedule", { code: "OATS_NO_AUTOMATIONS" })).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs." });
-    expect(gateOf("trigger", { code: "OATS_NO_AUTOMATIONS" })).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
-    expect(gateOf("trigger", { code: "OATS_NOT_FOUND" })).toEqual({ title: "Triggers need the OATS CLI", detail: null });
-    expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID" })).toBeNull();
+  it("the gate is the server's word: its code for an OATS without the lists, or for no oats, kept with its message; any other refusal is no gate", () => {
+    const none = { code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." };
+    expect(gateOf("schedule", none)).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", code: "OATS_NO_AUTOMATIONS" });
+    expect(gateOf("trigger", none)).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
+    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there." })).toEqual({ title: "Triggers need the OATS CLI", detail: "oats was not found on falcon: install OATS there.", code: "OATS_NOT_FOUND" });
+    expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID", message: "x" })).toBeNull();
     expect(gateOf("schedule", null)).toBeNull();
   });
+
 
 });
 
@@ -238,6 +242,15 @@ describe("a row's page", () => {
     await twice.findByTestId("oats-automation-when");
     await waitFor(() => expect(twice.inspection.rpcCalls.map((call) => call.method)).toContain("capabilities"));
     expect(twice.queryByTestId("oats-automation-open-capability")).toBeNull();
+  });
+
+  it("Open file of a member with no clone here opens its page on the web", async () => {
+    const list = schedules();
+    const web = "https://github.com/acme/agents/blob/0123abc/oats-schedules/nightly-digest.yaml";
+    const rows = list.rows.map((row) => (row.id === "oats-real/nightly-digest" ? { ...row, origin: { ...row.origin, localPath: null, url: web } } : row));
+    const slot = await page("schedules/oats-real/nightly-digest", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows } }, trigger: { ok: true as const, list: triggers() } }) });
+    fireEvent.click(await slot.findByTestId("oats-automation-open-file"));
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "openUrl", url: web }]);
   });
 
   it("Open file previews the definition from the machine that holds the deployment", async () => {

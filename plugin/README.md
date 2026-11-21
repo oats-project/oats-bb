@@ -130,7 +130,7 @@ page, in its words.
   the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
   this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
   that did not happen says why in the kernel's words. **Open file** previews the definition from
-  the machine that holds the deployment. A schedule's or a trigger's Prompt and a wake's message are
+  the machine that holds the deployment, or opens its web page for a member with no clone here. A schedule's or a trigger's Prompt and a wake's message are
   the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
   lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
   definition a person or their workspace wrote and the page is there to read it. Only a character

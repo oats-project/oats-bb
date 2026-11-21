@@ -6,6 +6,7 @@
 // reads those facts. An unknown or missing fact stays null; nothing is guessed. One row the
 // plugin cannot read never fails the others.
 import { z } from "zod";
+import { SCHEDULE_ID, TRIGGER_ID } from "../contract/automations.js";
 import type {
   AutomationGroup,
   AutomationKind,
@@ -18,7 +19,8 @@ import type {
   AutomationSoul,
   TriggerStatus,
 } from "../contract/automations.js";
-import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
+import { displayLine } from "../app/ui/text.js";
+import { eventLabel, eventWords, PULL_REQUEST } from "../model/automations.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
@@ -30,15 +32,9 @@ const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const integer = (value: unknown): number | null => (Number.isInteger(value) ? (value as number) : null);
 const counted = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
-export const PULL_REQUEST = "github.pull_request";
-
 // ---- the ids an act may name ----
-// The kernel's grammar for a qualified id (`local/<id>`, `<member>/<id>`) or a bare local one: a
-// member of at most 64 characters, a trigger's id of at most 64 and a schedule's of at most 100.
-// Neither part can start with "-", so an id is never read as an option.
-const TRIGGER_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const SCHEDULE_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-
+// The kernel's grammar for an id (contract/automations.ts: TRIGGER_ID, SCHEDULE_ID). Neither part
+// can start with "-", so an id is never read as an option.
 /** `id` as one argv element, or the refusal: no process starts for an id that is not one. */
 export function checkAutomationId(kind: AutomationKind, id: string): Result<string> {
   return (kind === "schedule" ? SCHEDULE_ID : TRIGGER_ID).test(id) ? ok(id) : err(codes.invalidInput, `"${id}" is not the id of a ${kind}`);
@@ -262,20 +258,6 @@ export function parseTriggerList(document: unknown): Result<AutomationList> {
 
 // ---- a trigger's recorded state ----
 
-/**
- * A trigger event's name for display: its `subject`, else its `number`, as `#42` only for a
- * pull-request source (`source`: the list row's `on.source`; a status row carries no `on`); else
- * its `key`; else null. Never "#null".
- */
-export function eventLabel(entry: unknown, source: string | null): string | null {
-  if (!record(entry)) return null;
-  const name = displayLine(entry.subject) ?? (Number.isSafeInteger(entry.number) && (entry.number as number) > 0 ? String(entry.number) : null);
-  if (name !== null) return source === PULL_REQUEST && name !== DETAIL_WITHHELD ? `#${name}` : name;
-  return displayLine(entry.key);
-}
-/** An event kind in words ("ready for review"). */
-export const eventWords = (value: unknown): string | null => displayLine(value)?.replace(/_/g, " ") ?? null;
-
 /** What a trigger source itself said (`source: { code, message? }` of a failed poll): its own, untrusted words. */
 function sourceSays(raw: unknown): { code: string | null; message: string | null } | null {
   if (!record(raw)) return null;
@@ -381,3 +363,5 @@ export const verbs = (oats: Runner) => ({
   triggerStatus: (id: string, source: string | null, signal?: AbortSignal): Promise<Result<TriggerStatus>> =>
     oats.run(triggerStatusArgv(id), (document) => parseTriggerStatus(document, id, source), oats.timeouts.read, signal),
 });
+
+export { eventLabel, eventWords, PULL_REQUEST };

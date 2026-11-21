@@ -1,6 +1,7 @@
 // The lists as every slot of Automations reads them: one copy per app window (the page and the
-// sidebar's mark share it), reread when the server says OATS changed, and once a minute while
-// something shows them: a run that fails writes no event the server watches for.
+// sidebar's mark share it). It is read again whenever the server says OATS changed, and on a timer
+// while something shows it, since a run that fails writes no event the server watches for: every
+// 30 s while the page is open, once a minute for the sidebar's mark alone.
 import { useEffect, useRef } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRpc } from "@get-bb/plugin-sdk/app";
 import { rpcContract } from "../../contract";
@@ -8,7 +9,7 @@ import { attempt, onWindowReset, useRead } from "../store";
 import type { Contract, Read, Result } from "../store";
 import { FAILED_RUN_TEXT, lastRunFailed } from "./words";
 
-/** The Desktop rereads the lists for its mark at most this often; so does the sidebar's row. */
+/** The timer of the sidebar's mark, when no page is open: the Desktop rereads the lists for its mark this often. */
 export const REREAD_MS = 60_000;
 /** While the page shows the lists they are never older than this without saying so (the UX standard, freshness). */
 export const PAGE_REREAD_MS = 30_000;
@@ -38,13 +39,10 @@ export function useAutomations(every: number = REREAD_MS): Read<Result<"automati
     return () => clearInterval(timer);
   }, [every]);
   /** Asks the server to read OATS again now, then reads the lists: settles when that read did, whatever it answered. */
-  const refresh = async (): Promise<void> => {
-    try {
-      await attempt(() => rpc.call("refresh", null));
-    } catch {
-      // The lists' own read says what is wrong with the server.
-    }
-    await refetch.current();
+  const refresh = (): Promise<void> => {
+    // Whether or not the server could be asked to read OATS again, the lists' own read says what is.
+    const reread = () => refetch.current();
+    return attempt(() => rpc.call("refresh", null)).then(reread, reread);
   };
   return { ...read, refresh };
 }

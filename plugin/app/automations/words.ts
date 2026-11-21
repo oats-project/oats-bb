@@ -3,7 +3,7 @@
 // functions over the rows of contract/automations.ts: no bb and no React import. Nothing here
 // derives a placement: the kernel's `runsHere`, `reason` and `enabledHere` are read as given.
 import type { AutomationHost, AutomationKind, AutomationList, AutomationOn, AutomationRow, AutomationRun, AutomationScheduler, AutomationSoul } from "../../contract/automations";
-import { eventLabel, PULL_REQUEST } from "../../kernel/automations";
+import { eventLabel, PULL_REQUEST } from "../../model/automations";
 import { displayLine, MAX_DISPLAY_LINE } from "../ui/text";
 
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };
@@ -393,3 +393,20 @@ export const FAILED_RUN_TEXT = ", a run failed";
  * and carries no outcome, and `unknown`, a missing last run and any other word do not mark.
  */
 export const lastRunFailed = (row: AutomationRow): boolean => row.kind === "schedule" && row.lastRun !== null && row.lastRun.outcome !== null && FAILED_OUTCOMES.includes(row.lastRun.outcome);
+
+// ---- a row's file ----
+/** How a row's defining file can be opened: in bb's preview on the machine that holds the deployment, or as its web page. */
+export type FileTarget = { kind: "preview"; hostId: string; path: string } | { kind: "web"; url: string };
+/**
+ * What Open file opens, decided in one place: the file on the deployment's machine when the
+ * kernel names it there and that machine is known, else its web page, else nothing, with why.
+ */
+export function fileTarget(row: AutomationRow, hostId: string | null): { target: FileTarget | null; title: string } {
+  const { localPath, url } = row.origin;
+  if (localPath !== null && hostId !== null) return { target: { kind: "preview", hostId, path: localPath }, title: localPath };
+  if (url !== null) return { target: { kind: "web", url }, title: url };
+  return {
+    target: null,
+    title: localPath !== null ? "The machine that holds this deployment did not answer, so its file cannot be opened from here" : "This computer has no clone of this member, and the kernel reports no web address for the file",
+  };
+}

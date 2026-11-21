@@ -6,7 +6,7 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import { NO_AUTOMATIONS, type automationListAnswer, type rpc } from "../contract/automations.js";
-import { codes } from "../kernel/result.js";
+import { codes, isKernelCode } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusedWith, type Core } from "./core.js";
 
 /** The longest one read of the lists serves: the page, the sidebar's mark and a second window ask at once. */
@@ -34,8 +34,15 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     );
   /** Both lists: this read, or the one made beside the same roster read, if it is recent. */
   const lists = async (): Promise<Lists> => {
-    const roster = (await core.clientSnapshot()).at;
+    const snapshot = await core.clientSnapshot();
+    const roster = snapshot.at;
     if (held !== null && held.roster === roster && Date.now() - held.at < LISTS_TTL_MS) return held.value;
+    // What the plugin itself lacks (no machine, no deployment, no `oats` there) is said once, in
+    // the server's own words for it, which name the machine and what to do: no list is asked for.
+    if (!snapshot.ok && !isKernelCode(snapshot.code)) {
+      const lack: ListAnswer = { ok: false, code: snapshot.code, message: snapshot.message };
+      return { at: snapshot.at, hostId: null, oats: null, schedule: lack, trigger: lack };
+    }
     const value = (async (): Promise<Lists> => {
       // The kernel's own word on what it can do; when it cannot be asked, the lists' refusals say why.
       const version = await core.versionOf().catch(() => null);

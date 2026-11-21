@@ -11,11 +11,11 @@ import { codes } from "../../kernel/result";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
-import { fileOf } from "./Detail";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
 import { capabilitySource, TITLES } from "./words";
+import type { FileTarget } from "./words";
 
 export const PATH = "automations";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
@@ -34,12 +34,16 @@ export function routeOf(subPath: string): { kind: AutomationKind; openId: string
 }
 export const subPathOf = (kind: AutomationKind, openId: string | null = null): string => (openId === null ? SEGMENT[kind] : `${SEGMENT[kind]}/${openId}`);
 
-/** Why a list cannot be shown at all, in the Desktop's words where it has them: no `oats` on the machine, or an OATS from before the lists (the server says which). */
-export function gateOf(kind: AutomationKind, answer: { code: string } | null): Gate | null {
+/**
+ * Why a list cannot be shown at all, in the Desktop's words where it has them: no `oats` on the
+ * machine, or an OATS from before the lists (the server says which). The server's own message
+ * (which machine, what to install or set) and its code follow the title.
+ */
+export function gateOf(kind: AutomationKind, answer: { code: string; message: string } | null): Gate | null {
   const title = TITLES[kind];
   if (answer === null) return null;
-  if (answer.code === codes.notFound) return { title: `${title} need the OATS CLI`, detail: null };
-  if (answer.code === NO_AUTOMATIONS) return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and this computer's own, and where each one runs.` };
+  if (answer.code === codes.notFound) return { title: `${title} need the OATS CLI`, detail: answer.message, code: answer.code };
+  if (answer.code === NO_AUTOMATIONS) return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and this computer's own, and where each one runs.`, code: answer.code };
   return null;
 }
 
@@ -134,14 +138,13 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
 
   const hostId = read.data?.hostId ?? null;
   const onOpenFile = useCallback(
-    (row: AutomationRow) => {
-      const file = fileOf(row);
+    (target: FileTarget) => {
       // Read-only, in bb's own file preview, from the machine that holds the deployment; a member
       // with no clone here opens its web page.
-      if (file.path !== null && hostId !== null) navigate.experimental_openFilePreview({ target: { kind: "host", hostId, path: file.path }, location: null });
-      else if (file.url !== null) navigate.openUrl(file.url);
+      if (target.kind === "preview") navigate.experimental_openFilePreview({ target: { kind: "host", hostId: target.hostId, path: target.path }, location: null });
+      else navigate.openUrl(target.url);
     },
-    [hostId, navigate],
+    [navigate],
   );
   // A source's "Open capability" resolves against the Capabilities page's own list: exactly one
   // capability of that name, or the source stays text.
@@ -167,6 +170,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         status={mine?.value ?? null}
         statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value === null ? null : mine.readAt, onRetry: () => setStatusRetry((n) => n + 1) }}
         onOpenFile={onOpenFile}
+        hostId={hostId}
         canOpenCapability={canOpenCapability}
         onOpenCapability={onOpenCapability}
       />

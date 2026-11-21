@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus } from "../../contract/automations";
 import { Button, Lines, Loading, Notice, Stale, Tabs, Toned } from "../ui";
-import { shown } from "../ui/text";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
@@ -26,7 +25,7 @@ export type ListRead = {
   readAt: string | null;
 };
 /** Why a list cannot be shown at all, in place of it: what is missing, and what to do about it. */
-export type Gate = { title: string; detail: string | null };
+export type Gate = { title: string; detail: string | null; code: string | null };
 
 export type ViewProps = {
   kind: AutomationKind;
@@ -50,13 +49,13 @@ export type ViewProps = {
   refreshing?: boolean;
   /** Above the list: what an act just did (a result). */
   result?: ReactNode;
-} & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
+} & Pick<DetailProps, "onOpenFile" | "hostId" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -111,7 +110,13 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
       <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={`${PANEL}-tab-${kind}`} className="flex flex-col gap-4">
         {gate !== null ? (
           <div data-testid="oats-automations-gate">
-            <Notice title={gate.title}>{gate.detail === null ? null : shown(gate.detail)}</Notice>
+            <Notice title={gate.title} code={gate.code}>
+              {gate.detail === null ? null : (
+                <p>
+                  <Lines text={gate.detail} />
+                </p>
+              )}
+            </Notice>
           </div>
         ) : (
           <>
@@ -136,6 +141,11 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                   <p>
                     <Lines text={read.error.message} />
                   </p>
+                  {refreshing ? (
+                    <p role="status" data-testid="oats-automations-rereading">
+                      Refreshing…
+                    </p>
+                  ) : null}
                 </Notice>
               </div>
             )}
@@ -153,6 +163,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                 statusFailure={row.kind === "trigger" ? statusFailure : null}
                 onBack={() => onOpen(null)}
                 onOpenFile={onOpenFile}
+                hostId={hostId}
                 canOpenCapability={canOpenCapability}
                 onOpenCapability={onOpenCapability}
                 {...rowParts?.(row)}

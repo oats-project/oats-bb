@@ -51,6 +51,15 @@ describe("automations", () => {
     expect(await argvs(backend, "schedule list")).toEqual([]);
   });
 
+  it("what the plugin itself lacks is said in the server's own words for it, and no list is asked for", async () => {
+    backend = await startBackend({ settings: { oatsBin: "/nowhere/oats" } });
+    const lists = await backend.rpc<Lists>("automations");
+    expect(lists.schedule).toMatchObject({ ok: false, code: "OATS_NOT_FOUND", message: expect.stringMatching(/^oats was not found on .+: install OATS there, or set the path to oats in the OATS plugin's settings\./) });
+    expect(lists.trigger).toEqual(lists.schedule);
+    expect([lists.hostId, lists.oats]).toEqual([null, null]);
+    expect(await backend.verbs()).toEqual([]);
+  });
+
   it("one read serves every client that asks while the roster stands as it was read", async () => {
     backend = await startBackend();
     const first = await backend.rpc<Lists>("automations");

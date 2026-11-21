@@ -8,7 +8,7 @@ import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, T
 import { cleanLine, displayLine, shown, shownBlock } from "../ui/text";
 import { readAge } from "../ui/words";
 import { Button, Card, Empty, Lines, Notice, Section, Toned } from "../ui";
-import { eventLabel, eventWords } from "../../kernel/automations";
+import { eventLabel, eventWords } from "../../model/automations";
 import { OriginTag, StateTags } from "./List";
 import { FactList, Quote } from "./parts";
 import type { FactRow, QuoteLine } from "./parts";
@@ -17,6 +17,7 @@ import {
   causeWords,
   cronInWords,
   EVENTS_SHOWN,
+  fileTarget,
   harnessName,
   hostLogin,
   LEAD_INS,
@@ -36,7 +37,7 @@ import {
   templateProvenance,
   TITLES,
 } from "./words";
-import type { CapabilitySource, RunState } from "./words";
+import type { CapabilitySource, FileTarget, RunState } from "./words";
 
 const NOTE = "text-xs text-muted-foreground";
 const LINE = "min-w-0 break-words text-sm";
@@ -136,10 +137,10 @@ function Sends({ row }: { row: AutomationRow }) {
       <Section title="Command" testId="oats-automation-sends">
         <p className={NOTE}>run as written, without a shell</p>
         {row.argv !== null && row.argv.length > 0 ? (
-          // The argv, verbatim: one chip per argument, so the boundaries show.
+          // The argv, one chip per argument, so the boundaries show; each through the display filter, like every text of OATS but a prompt.
           <ol aria-label="Command arguments" className="flex flex-wrap gap-1.5 rounded-md border border-border bg-card p-3">
             {row.argv.map((word, at) => (
-              <li key={at} className="whitespace-pre-wrap break-all rounded border border-border bg-background px-1.5 py-px font-mono text-xs text-foreground">
+              <li key={at} className="break-all rounded border border-border bg-background px-1.5 py-px font-mono text-xs text-foreground">
                 {shown(word)}
               </li>
             ))}
@@ -274,7 +275,7 @@ function HistoryLine({ iso, now, children, testId }: { iso: string | null; now: 
  * waiting (newest first, at most 10), the instances live now, then what fired. Until that answer
  * is here, and when it fails, the row's own last fire shows.
  */
-function History({ row, status, failure, source, now }: { row: AutomationRow; status: TriggerStatus | null; failure: DetailProps["statusFailure"]; source: CapabilitySource | null; now: number }) {
+function History({ row, status, failure, source, check, now }: { row: AutomationRow; status: TriggerStatus | null; failure: DetailProps["statusFailure"]; source: CapabilitySource | null; check: AutomationProblem | null; now: number }) {
   const trigger = row.kind === "trigger";
   const st = trigger ? status : null;
   const lead =
@@ -285,7 +286,6 @@ function History({ row, status, failure, source, now }: { row: AutomationRow; st
   // A capability source's failure is said once. After a failed poll the kernel's last error is
   // that same failure (its time and message), and after a failed check it repeats `invalid`: the
   // Last error line is then left out, and its code goes beside the kernel's text of the failure.
-  const check: AutomationProblem | null = source === null ? null : st?.invalid?.at ? st.invalid : row.invalid;
   const err = st?.lastError ?? null;
   const pollFailure = source !== null && poll !== null && !poll.ok && poll.cause !== null;
   const samePoll = pollFailure && err !== null && err.at === poll.at && err.message === poll.error;
@@ -502,7 +502,9 @@ export type DetailProps = {
   statusFailure?: { code: string | null; message: string; readAt: string | null; onRetry: () => void } | null;
   onBack: () => void;
   /** Opens the row's defining file; absent where this client cannot. */
-  onOpenFile?: (row: AutomationRow) => void;
+  onOpenFile?: (target: FileTarget) => void;
+  /** The bb machine that holds the deployment, once known: a file of that machine is previewed there. */
+  hostId?: string | null;
   /** Whether a capability of that name is one the Capabilities page lists exactly once. */
   canOpenCapability?: (name: string) => boolean;
   onOpenCapability?: (name: string) => void;
@@ -518,10 +520,7 @@ export type DetailProps = {
   summaryAction?: ReactNode;
 };
 
-/** Whether the row's defining file can be opened: from this machine (a local item, a cloned member), else as its web page. */
-export const fileOf = (row: AutomationRow): { path: string | null; url: string | null } => ({ path: row.origin.localPath, url: row.origin.localPath === null ? row.origin.url : null });
-
-export function Detail({ row, host, now, status, statusFailure = null, onBack, onOpenFile, canOpenCapability, onOpenCapability, actions, runStateAction, sideStart, sideEnd, identityAction, summaryAction }: DetailProps) {
+export function Detail({ row, host, now, status, statusFailure = null, onBack, onOpenFile, hostId = null, canOpenCapability, onOpenCapability, actions, runStateAction, sideStart, sideEnd, identityAction, summaryAction }: DetailProps) {
   const title = TITLES[row.kind];
   const page = useRef<HTMLDivElement>(null);
   // Opening the page puts focus on Back, where Escape and Enter both lead out again.
@@ -529,13 +528,13 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
     page.current?.querySelector<HTMLElement>('[data-testid="oats-automation-back"]')?.focus();
   }, [row.id]);
   const source = row.kind === "trigger" ? capabilitySource(row.on, status?.source ?? null) : null;
-  const file = fileOf(row);
-  const canOpen = onOpenFile !== undefined && (file.path !== null || file.url !== null);
-  const openTitle = file.path ?? file.url ?? "This computer has no clone of this member, and the kernel reports no web address for the file";
+  const file = fileTarget(row, hostId);
   const place = placementText(row, host);
   const run = runState(row);
   const bad = row.unreadable ?? row.invalid;
-  const check = row.unreadable === null && source !== null ? (status?.invalid?.at ? status.invalid : row.invalid) : null;
+  // A capability source's check that failed at a poll: the state's own, else the row's. Worked out once, for the card and the history.
+  const sourceCheck: AutomationProblem | null = source === null ? null : status?.invalid?.at ? status.invalid : row.invalid;
+  const check = row.unreadable === null ? sourceCheck : null;
   const checked = check === null ? null : relativeTime(check.at, now);
   const template: FactRow = ["Template", shown(templateProvenance(row.template)), row.template === null ? null : shown([templateLabel(row.template) ?? row.template.from, row.template.version, row.template.commit].filter(Boolean).join(" "))];
   const stamp = (label: string, iso: string | null): FactRow => [label, relativeTime(iso, now)?.label, relativeTime(iso, now)?.title];
@@ -557,7 +556,7 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
         </Button>
         <span className="min-w-0 flex-1" />
         {onOpenFile === undefined ? null : (
-          <Button data-testid="oats-automation-open-file" disabled={!canOpen} title={shown(openTitle)} onClick={() => onOpenFile(row)}>
+          <Button data-testid="oats-automation-open-file" disabled={file.target === null} title={shown(file.title)} onClick={() => (file.target === null ? undefined : onOpenFile(file.target))}>
             Open file
           </Button>
         )}
@@ -589,7 +588,7 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
             <WhenCard row={row} now={now} source={source} canOpenCapability={canOpenCapability} onOpenCapability={onOpenCapability} />
             {row.run === "spawn" ? <SpawnsCard row={row} /> : null}
           </div>
-          <History row={row} status={status} failure={row.kind === "trigger" ? statusFailure : null} source={source} now={now} />
+          <History row={row} status={status} failure={row.kind === "trigger" ? statusFailure : null} source={source} check={sourceCheck} now={now} />
         </div>
         <div className="flex min-w-0 flex-col gap-3">
           {sideStart}

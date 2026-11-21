@@ -210,8 +210,12 @@ export const automationListAnswer = z.union([
   z.object({ ok: z.literal(true), list: automationList }),
   z.object({ ok: z.literal(false), code: z.string(), message: z.string() }),
 ]);
-/** A qualified id (`local/<id>`, `<member>/<id>`) or a bare local one: never a path, never an option. */
-export const automationId = z.string().regex(/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/);
+// The kernel's grammar for a qualified id (`local/<id>`, `<member>/<id>`) or a bare local one: a
+// member of at most 64 characters, a trigger's id of at most 64 and a schedule's of at most 100.
+export const TRIGGER_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export const SCHEDULE_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+/** An id as an RPC takes it: never a path, never an option. The wider of the two; the host holds each kind to its own. */
+export const automationId = z.string().regex(SCHEDULE_ID);
 
 /** app -> server */
 export const rpc = defineRpcContract({
@@ -232,7 +236,7 @@ export const rpc = defineRpcContract({
     }),
   },
   /** One trigger's recorded state. The id must be a trigger of the current list. */
-  triggerStatus: { input: z.object({ id: automationId }).strict(), output: triggerStatus },
+  triggerStatus: { input: z.object({ id: z.string().regex(TRIGGER_ID) }).strict(), output: triggerStatus },
 });
 
 /** server -> host: one method per `oats` command the feature runs. */

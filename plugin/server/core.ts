@@ -110,8 +110,10 @@ export function createCore(bb: BbPluginApi) {
   let settingsGeneration = 0;
   let watchAsserted = false;
   let cached: Snapshot | null = null;
-  /** What the kernel printed behind `cached`: its root, and each instance's rows; null when `cached` is not a roster. */
-  let rawRows: { root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
+  /** What the kernel printed behind the last roster read: its root, and each instance's rows; null before any. */
+  let rawRows: { at: string; root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
+  /** The last roster read, kept while OATS cannot be read (it is `cached` while that is a roster). */
+  let lastRoster: Extract<Snapshot, { ok: true }> | null = null;
   let comparable = "";
   let lastStart = 0;
   /** When the last read ended, and how long it took: what the pause before the next is counted from. */
@@ -234,10 +236,16 @@ export function createCore(bb: BbPluginApi) {
     }
     // A change is a change of anything the kernel printed: a feature may draw a field of a raw row
     // that the snapshot's agents do not hold.
-    const key = JSON.stringify({ ...next, at: null, root, rows: rows === null ? null : [...rows] });
+    if (next.ok) {
+      lastRoster = next;
+      rawRows = rows === null ? null : { at, root, rows };
+    } else {
+      // What was read before stays, with its age: no place falls back to nothing where there was a roster.
+      next = { ...next, last: lastRoster === null ? null : { at: lastRoster.at, deployment: lastRoster.deployment, agents: lastRoster.agents } };
+    }
+    const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
-    rawRows = rows === null ? null : { root, rows };
     comparable = key;
     lastEnd = Date.now();
     // Only a status that answered lengthens the pause: the guard is for a kernel that answers
@@ -311,26 +319,27 @@ export function createCore(bb: BbPluginApi) {
   }
 
   /**
-   * What the kernel printed for the current snapshot, whole, as `oats status --json` printed it:
-   * the roster's `root`, and by instance its own `row` and the row of its `agent` group (without
-   * the group's instances), with the snapshot's `at`. For a feature that draws more than `Agent`
+   * What the kernel printed for the roster, whole, as `oats status --json` printed it: the roster's
+   * `root`, and by instance its own `row` and the row of its `agent` group (without the group's
+   * instances), with the `at` of the read they are from. For a feature that draws more than `Agent`
    * holds: it reads them with a schema of its own, and nobody runs a second `oats status`.
-   * A snapshot that is no roster is refused, as for `agentOf`.
+   * While OATS cannot be read they are the LAST roster's, with `stale: true`; with no roster ever
+   * read, the failure is the refusal, as for `agentOf`.
    */
-  async function rowsOf(): Promise<{ at: string; root: string; rows: ReadonlyMap<string, RawRow> }> {
+  async function rowsOf(): Promise<{ at: string; stale: boolean; root: string; rows: ReadonlyMap<string, RawRow> }> {
     const now = await current();
-    if (!now.ok) throw refusal({ code: now.code, message: now.message });
-    // `rawRows` is set with `cached`, in one step: it is this snapshot's unless a newer read landed, and then both are newer.
-    const held = cached !== null && cached.ok && rawRows !== null ? { at: cached.at, ...rawRows } : null;
-    if (held === null) throw refusal({ code: codes.hostUnreachable, message: "The OATS roster is being read again: try once more." });
-    return held;
+    if (rawRows === null) {
+      if (!now.ok) throw refusal({ code: now.code, message: now.message });
+      throw refusal({ code: codes.hostUnreachable, message: "The OATS roster is being read again: try once more." });
+    }
+    return { ...rawRows, stale: !now.ok };
   }
-  /** The same for one instance of the current snapshot; an instance it does not name is refused. */
-  async function rowOf(instance: string): Promise<{ at: string; root: string } & RawRow> {
-    const { at, root, rows } = await rowsOf();
+  /** The same for one instance of that roster; an instance it does not name is refused. */
+  async function rowOf(instance: string): Promise<{ at: string; stale: boolean; root: string } & RawRow> {
+    const { at, stale, root, rows } = await rowsOf();
     const found = rows.get(instance);
-    if (found === undefined) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
-    return { at, root, ...found };
+    if (found === undefined) throw invalid(`"${instance}" is not an agent of this OATS deployment's ${stale ? "last" : "current"} snapshot`);
+    return { at, stale, root, ...found };
   }
 
   /** One answer per page for all clients, reused for PAGE_TTL_MS; a failed read is not kept. */
@@ -398,6 +407,9 @@ export function createCore(bb: BbPluginApi) {
     bb.events.on("thread.deleted", rereadSoon);
     settings.onChange(() => {
       settingsGeneration += 1;
+      // Another machine or deployment: what was read of the old one is not this one's last roster.
+      lastRoster = null;
+      rawRows = null;
       target = null;
       watchAsserted = false;
       pages.clear();

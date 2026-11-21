@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
+import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
 import { Button, ErrorLine, Modal, Note } from "../ui";
@@ -39,17 +40,6 @@ onWindowReset(() => {
   deferred = null;
   listeners.clear();
 });
-
-/**
- * A key the kernel uses to make an apply or a spawn idempotent: one per intent, reused when the
- * same intent is retried. `crypto.randomUUID` is absent on a plain-http origin (a phone on the
- * LAN), `getRandomValues` is not.
- */
-export function newKey(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 /** Ask for the kernel's plan to stop or retire an agent; the overlay shows it and asks once. */
 export function askPlan(verb: PlanVerb, instance: string): void {

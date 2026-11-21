@@ -19,7 +19,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       if (decision && (decision.soul !== soul || decision.name !== name)) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
       if (!decision) {
         // The kernel binds an idempotency key to the decision it confirms: read that decision first.
-        const preview = await core.call("spawnPreview", { soul, name, task }, HOST_TIMEOUT.preview, core.lifetime.signal);
+        const preview = await core.call("spawnPreview", { soul, name, task }, HOST_TIMEOUT.preview, core.signal);
         decision = { soul, name, revision: preview.revision };
         if (spawns.size >= 200) spawns.delete(spawns.keys().next().value as string);
         spawns.set(key, decision);
@@ -27,7 +27,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // An act is not ended by its caller going away: only by the plugin's own end.
       let spawned: Value<"spawn">;
       try {
-        spawned = await core.call("spawn", { soul, name, task, key, revision: decision.revision }, HOST_TIMEOUT.long, core.lifetime.signal);
+        spawned = await core.call("spawn", { soul, name, task, key, revision: decision.revision }, HOST_TIMEOUT.long, core.signal);
       } catch (error) {
         // The decision moved and the kernel created nothing: there is nothing to replay under this
         // key, so the next call with it reads the decision again instead of sending the stale one.

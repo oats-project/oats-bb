@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
-import { Button, Confirm, CopyButton, DisabledReason, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
+import { Button, Card, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import type { AgentState } from "../../model/types";
 import { instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
@@ -209,6 +209,71 @@ describe("a state that is not an agent's, and a page's section", () => {
     );
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Runs3");
     expect(screen.getByTestId("oats-section").textContent).toBe("Runs3the runs");
+  });
+});
+
+describe("what the panel's header and a refusal's details need", () => {
+  test("a state can print the Desktop's own word for a place, with the state's mark; the status line too", () => {
+    render(
+      <>
+        <State state="working" word="Running" />
+        <StatusLine state="working" word="Running" since="42m" />
+      </>,
+    );
+    expect(screen.getAllByTestId("oats-state").map((state) => [state.getAttribute("data-state"), state.textContent])).toEqual([
+      ["working", "Running"],
+      ["working", "Running"],
+    ]);
+    expect(screen.getByTestId("oats-status-line").textContent).toBe("Running· 42m");
+  });
+
+  test("a notice keeps the kernel's own message one press away, under Details, each of its lines whole", () => {
+    render(
+      <Notice title="Weekly digest could not be started" tone="error" details={"E_SESSION_START_FAILED: bb thread spawn failed\nthe provider is not signed in"}>
+        Sign the provider in, then start it again.
+      </Notice>,
+    );
+    const details = screen.getByTestId("oats-notice-details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")!.textContent).toBe("Details");
+    expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["E_SESSION_START_FAILED: bb thread spawn failed", "the provider is not signed in"]);
+    cleanup();
+    render(<Notice title="Nothing more to say" details="" />);
+    expect(screen.queryByTestId("oats-notice-details")).toBeNull();
+  });
+
+  test("a disclosure is closed until pressed, and can be controlled", () => {
+    const { rerender } = render(
+      <Disclosure summary="Paths" testId="paths" open={false}>
+        <p>/abs/home</p>
+      </Disclosure>,
+    );
+    const paths = screen.getByTestId("paths") as HTMLDetailsElement;
+    expect(paths.open).toBe(false);
+    rerender(
+      <Disclosure summary="Paths" testId="paths" open>
+        <p>/abs/home</p>
+      </Disclosure>,
+    );
+    expect(paths.open).toBe(true);
+  });
+
+  test("a copy button can say more to a screen reader than its label; a card can have a second part; a kernel word is drawn as code, filtered", () => {
+    render(
+      <>
+        <CopyButton text="/abs/home" label="Copy" name="Copy home path" />
+        <Card title="Work" footer={<p>the paths</p>}>
+          <p>On its own branch.</p>
+        </Card>
+        <p>
+          Run <Code>{"oats\tstatus"}</Code>
+        </p>
+      </>,
+    );
+    expect(screen.getByRole("button", { name: "Copy home path" }).textContent).toBe("Copy");
+    const card = screen.getByRole("region", { name: "Work" });
+    expect(card.textContent).toBe("WorkOn its own branch.the paths");
+    expect(document.querySelector("code")!.textContent).toBe("oats status");
   });
 });
 

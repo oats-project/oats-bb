@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import { instanceName } from "../../contract";
-import { newKey } from "../lifecycle/acts";
+import { newKey } from "../keys";
 import { errorMessage } from "../store";
 import type { Contract, Result } from "../store";
 import { Button, ErrorLine } from "../ui";

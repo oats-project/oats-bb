@@ -10,8 +10,8 @@ import { REALTIME_CHANGED, rpcContract } from "../contract";
 
 export type Contract = typeof rpcContract;
 export type Rpc = PluginRpcClient<Contract>;
-/** The verbs a slot can read with `useRead`: every one of the contract that takes no input. */
-export type ReadMethod = { [Method in keyof Contract]: StandardSchemaV1InferInput<Contract[Method]["input"]> extends null ? Method : never }[keyof Contract];
+/** The verbs a slot can read with `useRead`: every one of the contract that takes no input, but `refresh`, which asks OATS to be read again. */
+export type ReadMethod = Exclude<{ [Method in keyof Contract]: StandardSchemaV1InferInput<Contract[Method]["input"]> extends null ? Method : never }[keyof Contract], "refresh">;
 export type Result<Method extends keyof Contract> = PluginRpcResult<Contract[Method]>;
 
 export type Read<T> =

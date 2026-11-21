@@ -3,7 +3,7 @@
 // Every screen of every feature draws these; none draws another of its own. bb's tokens only.
 import type { ReactNode } from "react";
 import type { AgentState } from "../../model/types";
-import { shown } from "./text";
+import { refusalLines, shown } from "./text";
 import { STATE } from "./words";
 
 /** A control's height: 32 px, and 44 px at bb's compact (phone) width, where a finger presses it. */
@@ -37,12 +37,15 @@ export function StateMark({ state, name, hidden = false }: { state: AgentState; 
   return <span {...says} data-state={state} className={`inline-block size-2 shrink-0 rounded-full ${FILL[state]}`} />;
 }
 
-/** A state: its mark AND its word, always both. */
-export function State({ state }: { state: AgentState }) {
+/**
+ * A state: its mark AND its word, always both. `word` is for a place whose words for the same
+ * state are the Desktop's own ("Running", where the tree says "Working"): the mark stays the state's.
+ */
+export function State({ state, word }: { state: AgentState; word?: string }) {
   return (
     <span data-testid="oats-state" data-state={state} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
       <StateMark state={state} hidden />
-      <span>{STATE[state].word}</span>
+      <span>{word ?? STATE[state].word}</span>
     </span>
   );
 }
@@ -81,12 +84,12 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * the panel's header and the home's rows draw this one. `since` and `detail` are text from OATS or
  * an agent and go through the display filter here; the line wraps, and nothing in it is cut.
  */
-export function StatusLine({ state, since, detail, action }: { state: AgentState; since?: string | null; detail?: string | null; action?: ReactNode }) {
+export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
   const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
   return (
     <div data-testid="oats-status-line" data-state={state} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground">
       <span className="font-semibold">
-        <State state={state} />
+        <State state={state} word={word} />
       </span>
       {said.map((part, index) => (
         <span key={index} className="min-w-0 break-words text-muted-foreground">{`· ${part}`}</span>
@@ -120,6 +123,24 @@ export function Facts({ children }: { children: ReactNode }) {
 /** A link's look, for a fact's value or a notice's text that opens something. */
 export const LINK = "underline underline-offset-2 hover:opacity-80";
 
+/**
+ * Something a person opens to read more ("Details", "Paths"): closed until pressed, its summary as
+ * high as a control. Uncontrolled, or controlled with `open` and `onToggle`.
+ */
+export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
+  return (
+    <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+      <summary className={`${TARGET} inline-flex cursor-pointer items-center text-xs text-muted-foreground hover:text-foreground`}>{summary}</summary>
+      <div className="flex min-w-0 flex-col gap-1 break-words pt-1">{children}</div>
+    </details>
+  );
+}
+
+/** A kernel's own word inside a sentence (a code, a flag, a file's name): drawn as that, through the display filter. */
+export function Code({ children }: { children: string }) {
+  return <code className="break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">{shown(children)}</code>;
+}
+
 const TONE = {
   info: { frame: "border-border", title: "text-foreground", role: "status" },
   warning: { frame: "border-warning-text", title: "text-foreground", role: "status" },
@@ -130,13 +151,15 @@ const TONE = {
  * A notice in a person's words: a title, one or two sentences, the acts that help (Retry, Open
  * settings, Details), and for a read that failed the age of what is still shown. For the failed,
  * stale, not-configured and cannot-show states of every page. `code` is the kernel's or the
- * plugin's code, drawn after the words in the muted style, never before them.
+ * plugin's code, drawn after the words in the muted style, never before them; `details` is the
+ * kernel's own message (a refusal as the server words it), one press away under "Details".
  */
 export function Notice({
   title,
   children,
   tone = "info",
   code,
+  details,
   age,
   actions,
 }: {
@@ -144,6 +167,7 @@ export function Notice({
   children?: ReactNode;
   tone?: keyof typeof TONE;
   code?: string | null;
+  details?: string | null;
   age?: string | null;
   actions?: ReactNode;
 }) {
@@ -154,6 +178,15 @@ export function Notice({
       {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
       {age === undefined || age === null ? null : <p className="text-xs text-muted-foreground">{`Showing what was read ${age}.`}</p>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
+      {details === undefined || details === null || refusalLines(details).length === 0 ? null : (
+        <Disclosure summary="Details" testId="oats-notice-details">
+          {refusalLines(details).map((line, index) => (
+            <p key={index} className="text-xs text-muted-foreground">
+              {line}
+            </p>
+          ))}
+        </Disclosure>
+      )}
       {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </section>
   );
@@ -221,12 +254,14 @@ export function Result({ title, tone = "done", children, code, actions }: { titl
  * A card: one thing of a list that has parts (a team, a schedule, a question). With a `title` it is
  * a section named by it; `tone="warn"` frames one that needs a look. Its acts go last in `children`.
  */
-export function Card({ title, tone, children, testId = "oats-card" }: { title?: string; tone?: "warn"; children: ReactNode; testId?: string }) {
+export function Card({ title, tone, footer, children, testId = "oats-card" }: { title?: string; tone?: "warn"; /** a second part, under a rule */ footer?: ReactNode; children: ReactNode; testId?: string }) {
   const frame = `flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${tone === "warn" ? "border-warning-text" : "border-border"}`;
+  const second = footer === undefined || footer === null ? null : <div className="flex min-w-0 flex-col gap-2 border-t border-border pt-2">{footer}</div>;
   if (title === undefined) {
     return (
       <div data-testid={testId} className={frame}>
         {children}
+        {second}
       </div>
     );
   }
@@ -234,6 +269,7 @@ export function Card({ title, tone, children, testId = "oats-card" }: { title?: 
     <section data-testid={testId} aria-label={title} className={frame}>
       <h3 className="break-words font-semibold">{title}</h3>
       {children}
+      {second}
     </section>
   );
 }

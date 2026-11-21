@@ -57,4 +57,25 @@ describe("the raw rows of the snapshot", () => {
     expect(await refusalOf(core.rowsOf())).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
     expect(await refusalOf(core.rowOf("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
   });
+
+  it("a change of a printed field that the snapshot's agents do not hold is published, once; the same answer again is not", async () => {
+    await start();
+    const signals = () => backend.server.harness.realtimeSignals.length;
+    await core.clientSnapshot();
+    expect(signals()).toBe(1);
+    // The same roster, with one field of one raw row changed: `open` is not a field of the plugin's `Agent`.
+    const printed = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
+    const row = printed.agents.flatMap((group: { instances: { instance: string; open?: unknown }[] }) => group.instances).find((candidate: { instance: string }) => candidate.instance === "redesign-ui-lead");
+    row.open = { label: "Open in bb", url: "http://127.0.0.1:38886/elsewhere" };
+    await backend.fake.behave({ status: { stdout: JSON.stringify(printed) } });
+    const before = await core.clientSnapshot();
+    await core.clientRefresh();
+    const after = await core.clientSnapshot();
+    expect({ ...after, at: null }).toEqual({ ...before, at: null }); // the agents are the same
+    expect((await core.rowOf("redesign-ui-lead")).row.open).toEqual(row.open);
+    expect(signals()).toBe(2);
+    await core.clientRefresh();
+    expect(signals()).toBe(2);
+    expect(await backend.verbs()).toEqual(["status", "status", "status"]);
+  }, 20_000);
 });

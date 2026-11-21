@@ -75,12 +75,12 @@ export const absolutePath = (value) => typeof value === "string" && isAbsolute(v
  *  readiness read, as a setting of the wrong shape (the value is not shown). */
 export const PI_AGENT_DIR_SHAPE = Object.freeze({ code: "E_BACKEND_SETTINGS", status: "needs-configuration", message: "settings.oats.bb.piAgentDir must be an absolute path: the pi configuration directory bb's server runs pi with (its PI_CODING_AGENT_DIR). Set it in oats-local.yaml, or remove it for the default (.pi/agent in the home of the user that runs bb)" });
 
-/** Why bb's pi must not run an OATS home now, by its configuration. `globalEnvNames()` →
+/** Why bb's pi must not run an OATS home now, by its configuration. `agentDir` is an
+ *  absolute path: its shape is the caller's to refuse (PI_AGENT_DIR_SHAPE). `globalEnvNames()` →
  *  the names of bb's machine env, asked only when @awebai/pi is listed; it may throw a
  *  ProviderError, which the caller turns into its own problem. → problems
  *  [{code, status, message}] in the order a person would fix them. */
 export async function piConfigurationProblems(agentDir, globalEnvNames) {
-  if (!absolutePath(agentDir)) return [{ ...PI_AGENT_DIR_SHAPE }];
   // In each message: what is wrong, the remedy, and last the file that was read, which may be
   // long: the kernel relays 500 characters, and a cut must take the path, never the remedy.
   const found = readPiPackages(agentDir);

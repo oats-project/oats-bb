@@ -467,9 +467,12 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   (`E_SESSION_START_FAILED`): its env would reach whatever runs there. Such a project is
   not the home's alone, so the retire hook and a move away remove only those three names
   from it, and leave what a person keeps there. A Claude launch
-  owns no project env: it only removes those three names where a pi launch of the same
-  home left them (bb gives a project's env to every thread of it, and starts `claude` by
-  a project `PATH`, which a pi launch composed for pi), and leaves any other name alone. bb shows no value of its env back, and no record of it
+  sets no project env. It reads the project's env (one more bb call, whose failure
+  refuses the launch) and unsets those three names wherever it finds them, whoever set
+  them, leaving any other name: bb gives a project's env to every thread of it and starts
+  `claude` by a project `PATH`, and a pi launch of the same home composed that one for
+  pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive
+  a launch, of either harness. bb shows no value of its env back, and no record of it
   is kept in the home.
 
 **The home's skills load through @awebai/oats-pi**, the OATS bridge for pi, and only

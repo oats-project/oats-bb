@@ -1,5 +1,5 @@
 // The launch env of a pi thread: three variables, in the env of the home's bb project
-// (contract r23, A13(1) and A14). Written whole at every pi launch, removed at retire and when the
+// (contract r23, A12(2)). Written whole at every pi launch, removed at retire and when the
 // home leaves bb.
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -197,6 +197,20 @@ test("which file is pi: an executable named pi in an absolute directory of the P
   assert.equal(piPathRefusal(`/nonexistent::${bin}`), null);
   assert.notEqual(piPathRefusal("bin:."), null, "a relative entry is not looked in: it would be read from the provider's own directory");
   assert.equal(piPathRefusal(undefined), null, "a launch that carries no PATH leaves bb's own, which is not the provider's to judge");
+  // A directory named pi is no pi: the first file that can be run is.
+  const other = join(dir, "other");
+  mkdirSync(join(other, "pi"), { recursive: true });
+  assert.notEqual(piPathRefusal(other), null, "a directory named pi");
+  assert.equal(piPathRefusal(`${other}:${bin}`), null, "it is passed over for the pi behind it");
+  // What pi is run with: the program env is asked for, behind -S and behind assignments.
+  const script = (shebang) => { writeFileSync(join(bin, "pi"), `${shebang}\nconsole.log(1)\n`, { mode: 0o755 }); return piPathRefusal(bin); };
+  assert.match(script("#!/usr/bin/env node").message, /holds pi and not node/);
+  assert.match(script("#!/usr/bin/env -S NODE_OPTIONS=--no-warnings node --flag").message, /holds pi and not node/, "an assignment is not the program");
+  assert.match(script("#!/bin/env   -S  A=1 B=2 bun").message, /holds pi and not bun/);
+  writeFileSync(join(bin, "node"), "#!/bin/sh\n", { mode: 0o755 });
+  assert.equal(script("#!/usr/bin/env -S NODE_OPTIONS=--no-warnings node"), null);
+  // Anything else is not read, and not checked: another option of env, another interpreter, a binary.
+  for (const shebang of ["#!/usr/bin/env -i node20", "#!/bin/sh", "#!/opt/node/bin/node", "\u007fELF"]) assert.equal(script(shebang), null, shebang);
 });
 
 test("a launch that carries no PATH sets none, and is not asked where pi is", async (t) => {
@@ -300,7 +314,7 @@ test("retire with an env bb will not remove warns, with the remedy, and does not
   const run = await runBin(["retire-hook"], { env: hookEnv(home, bb, backend) });
   assert.equal(run.status, 0);
   const last = lastLine(run);
-  assert.match(last.warning, /the env a pi launch wrote into this home's bb project could not be removed \(E_BACKEND_UNREACHABLE\).*bb machine env unset <NAME> --project <id>.*Removed: OATS_INSTANCE$/);
+  assert.match(last.warning, /what a pi launch may have written into the env of this home's bb project could not be removed \(E_BACKEND_UNREACHABLE\).*bb machine env unset <NAME> --project <id>.*Removed: OATS_INSTANCE$/);
   assert.deepEqual(last.meta, { archived: [], env: 1 });
 });
 
@@ -338,6 +352,6 @@ test("a home that leaves bb with a bb that cannot be asked starts all the same, 
   assert.equal(moved.stdout.trim().split("\n").length, 1);
   const { warning } = lastLine(moved);
   assert.match(warning, /removed its keys from \.claude\/settings\.local\.json/);
-  assert.match(warning, /the env a pi launch wrote into this home's bb project could not be removed \(E_BACKEND_UNREACHABLE\)/);
+  assert.match(warning, /what a pi launch may have written into the env of this home's bb project could not be removed \(E_BACKEND_UNREACHABLE\)/);
   assert.ok(warning.length <= 480, String(warning.length));
 });

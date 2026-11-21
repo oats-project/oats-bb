@@ -54,6 +54,13 @@ For every bb agent, Claude Code included:
   by bb's Claude being signed out, nor a Claude launch by anything of pi's. A read with no
   planned launch (`oats readiness`, `oats bb doctor`) reports Claude's state as before and
   pi's as one warning, `session-provider-pi-not-ready`.
+- **A Claude launch reads the env of the home's bb project**, one more bb call, and unsets
+  `OATS_INSTANCE`, `OATS_INSTANCE_HOME` and `PATH` wherever it finds them there, whoever
+  set them: bb gives a project's env to every thread of it and starts `claude` by a project
+  `PATH`, and a pi launch of the same home leaves those three. A project-level `PATH` an
+  operator set by hand in an OATS home's bb project does not survive a launch (put what bb
+  needs in the bb server's own environment). A bb that cannot give that env refuses the
+  launch.
 - **The retire hook and the launch hook ask bb for one more thing**, the env of the home's
   bb project: a bb that cannot be asked adds a warning, as before for its threads.
 

@@ -180,7 +180,8 @@ async function piConfiguration(settings, bb) {
   try { return await piConfigurationProblems(settings.piAgentDir, () => bb.machineEnvNames()); }
   catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    return [{ code: "E_BACKEND_PI_LISTENER", status: "unavailable", message: `the pi configuration bb's server runs with (settings.oats.bb.piAgentDir) lists ${PI_AWEB_EXTENSION}, and bb's machine env could not be read to see whether ${DELIVERY_VARIABLE} silences it in bb's pi (${error.message}): every pi bb starts may take the agent's mail beside the host wake broker` }];
+    // The remedy before bb's own words, which may be long.
+    return [{ code: "E_BACKEND_PI_LISTENER", status: "unavailable", message: `bb's pi may take this agent's mail: ${PI_AWEB_EXTENSION} is in bb's pi configuration, and bb's machine env could not be read to see whether ${DELIVERY_VARIABLE} silences it there. Make \`bb machine env list\` answer, or give bb's server a pi configuration without ${PI_AWEB_EXTENSION}. bb said: ${error.message}` }];
   }
 }
 

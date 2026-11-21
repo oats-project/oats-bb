@@ -31,12 +31,14 @@ const USAGE = `oats bb: the bb session provider (oats.bb)
 
   oats bb doctor [--json] [--soul <name>]
                              check this deployment's bb: server, host daemon, version,
-                             exposure, trust, bb's claude-code provider, orphaned threads
+                             exposure, trust, bb's claude-code provider (and, as a warning, what
+                             a pi launch would be refused for), orphaned threads
                              (--soul: whose settings to read; the kernel resolves them)
 
 Called by the kernel (JSON on stdin, one JSON document on stdout):
   session launch | inspect | inspectMany | input | stop | check
   launch-hook                on another backend, removes what the provider wrote into the home
+                             and into the env of its bb project
   retire-hook                archives the home's bb threads at retire
 `;
 

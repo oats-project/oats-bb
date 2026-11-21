@@ -19,7 +19,7 @@
 // `claude` by a project PATH) and leaves any other name. No record of it is kept in
 // the home. One project is one home: a project with a second root would hand the env to
 // whatever runs there, and a pi launch refuses it.
-import { accessSync, closeSync, constants, openSync, readSync } from "node:fs";
+import { accessSync, closeSync, constants, openSync, readSync, statSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject, someOf } from "./errors.mjs";
@@ -73,8 +73,9 @@ export function piLaunchEnv(env, pathPrepend, ambientPath) {
   return withPathPrepend(out, pathPrepend, ambientPath);
 }
 
+/** A file that can be run: a directory of that name passes the access check, and is none. */
 function executable(path) {
-  try { accessSync(path, constants.X_OK); return true; } catch { return false; }
+  try { accessSync(path, constants.X_OK); return statSync(path).isFile(); } catch { return false; }
 }
 
 /** The program a script asks `env` to run it with (`#!/usr/bin/env node`), or null: for a
@@ -85,7 +86,9 @@ function envInterpreter(path) {
     fd = openSync(path, "r");
     const head = Buffer.alloc(256);
     const line = head.subarray(0, readSync(fd, head, 0, head.length, 0)).toString("latin1").split("\n")[0];
-    const match = /^#!\s*(?:\/usr)?\/bin\/env\s+(?:-S\s+)?([A-Za-z0-9._+-]+)/.exec(line);
+    // `env [-S] [NAME=value ...] program`: the program is the first word that is no assignment.
+    // Any other option of env (-i, -u) is not read: such a script is not checked.
+    const match = /^#!\s*(?:\/usr)?\/bin\/env\s+(?:-S\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([A-Za-z0-9][A-Za-z0-9._+-]*)(?:\s|$)/.exec(line);
     return match ? match[1] : null;
   } catch { return null; }
   finally { if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ } }
@@ -180,6 +183,6 @@ export async function clearHomeProjectEnv(home, readSettings, { deadline, env = 
     return { removed, warning: null };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
-    return { removed, warning: `the env a pi launch wrote into this home's bb project could not be removed (${error.code}): it stays in bb's database (OATS_INSTANCE, OATS_INSTANCE_HOME and PATH: no secret). Remove it in bb (bb machine env list --project <id>, bb machine env unset <NAME> --project <id>)${removed.length ? `. Removed: ${someOf(removed)}` : ""}` };
+    return { removed, warning: `what a pi launch may have written into the env of this home's bb project could not be removed (${error.code}): it stays in bb's database (OATS_INSTANCE, OATS_INSTANCE_HOME and PATH: no secret). Remove it in bb (bb machine env list --project <id>, bb machine env unset <NAME> --project <id>)${removed.length ? `. Removed: ${someOf(removed)}` : ""}` };
   }
 }

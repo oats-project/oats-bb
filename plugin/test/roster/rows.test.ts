@@ -25,18 +25,25 @@ const refusalOf = (promise: Promise<unknown>) =>
 describe("the raw rows of the snapshot", () => {
   it("are the kernel's rows, whole, by instance, with the snapshot's instant, from the one status read", async () => {
     await start();
-    const printed = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8")) as { agents: { instances: { instance: string }[] }[] };
-    const rows = printed.agents.flatMap((group) => group.instances);
+    const printed = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8")) as {
+      root: string;
+      agents: ({ instances: { instance: string }[] } & Record<string, unknown>)[];
+    };
+    const rows = printed.agents.flatMap(({ instances, ...agent }) => instances.map((row) => ({ row, agent })));
     const snapshot = await core.clientSnapshot();
     const held = await core.rowsOf();
     expect(held.at).toBe(snapshot.at);
-    expect([...held.rows.keys()]).toEqual(rows.map((row) => row.instance));
-    for (const row of rows) expect(held.rows.get(row.instance)).toEqual(row);
-    // A field the plugin's `Agent` does not hold is there for a feature to read with its own schema.
+    expect(held.root).toBe(printed.root);
+    expect([...held.rows.keys()]).toEqual(rows.map(({ row }) => row.instance));
+    for (const expected of rows) expect(held.rows.get(expected.row.instance)).toEqual(expected);
+    // A field the plugin's `Agent` does not hold is there for a feature to read with its own schema:
+    // of the instance's row, and of its agent group's (the soul's), which carries no instances.
     const one = await core.rowOf("redesign-ui-lead");
-    expect(one.at).toBe(snapshot.at);
-    expect(one.row).toEqual(rows.find((row) => row.instance === "redesign-ui-lead"));
+    const lead = rows.find(({ row }) => row.instance === "redesign-ui-lead")!;
+    expect(one).toEqual({ at: snapshot.at, root: printed.root, ...lead });
     expect(Object.keys(one.row)).toContain("open");
+    expect(one.agent.name).toBe("oats-product-expert");
+    expect(Object.keys(one.agent)).not.toContain("instances");
     expect(await backend.verbs()).toEqual(["status"]);
   });
 

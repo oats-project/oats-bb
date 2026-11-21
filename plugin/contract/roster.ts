@@ -24,6 +24,9 @@ export const agent = z.object({
     .nullable(),
 });
 
+const raw = z.record(z.string(), z.unknown());
+const rawRow = z.object({ row: raw, agent: raw });
+
 export const snapshot = z.union([
   z.object({
     ok: z.literal(true),
@@ -54,10 +57,11 @@ export const host = defineRpcContract({
   status: {
     experimental_retryable: true,
     input: hostRead,
-    /** `rows[n]` is the kernel's own row of `agents[n]`, whole: the server keeps it for the features (server/core.ts). */
-    output: answer(
-      z.object({ root: z.string(), workspace: z.string().nullable(), agents: z.array(agent), rows: z.array(z.record(z.string(), z.unknown())) }),
-    ),
+    /**
+     * `rows[n]` is what the kernel printed for `agents[n]`, whole: its own row, and its agent group's
+     * row without the instances. The server keeps them for the features (server/core.ts).
+     */
+    output: answer(z.object({ root: z.string(), workspace: z.string().nullable(), agents: z.array(agent), rows: z.array(rawRow) })),
   },
   /** `oats version --json`: the kernel's release, the version of its JSON answers and its features. */
   version: {

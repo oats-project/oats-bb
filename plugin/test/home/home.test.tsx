@@ -9,6 +9,7 @@ import type { ExperimentalBadge, ExperimentalThreadTabProps } from "@get-bb/plug
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract } from "../helpers/render";
+import { setAgentTab } from "../../app/home/agent-tab";
 import type { Agent } from "../../model/types";
 
 afterEach(resetApp);
@@ -402,4 +403,24 @@ test("two choices with one label are both drawn and answer with their own values
   expect(slot.inspection.sdkCalls.find((call) => call.method === "threads.interactions.resolve")!.args).toEqual([
     { threadId: "thr_ci", interactionId: "p", resolution: { kind: "user_answer", answers: { q: { selected: ["b"] } } } },
   ]);
+});
+
+test("on an agent's own thread the tab shows the view a feature named for one agent, and the home on any other thread", async () => {
+  const app = await loadApp();
+  const tab = app.tabs[0]! as { component: ComponentType<ExperimentalThreadTabProps> };
+  const render = (threadId: string) =>
+    renderSlot<ExperimentalThreadTabProps, Contract>(tab, { threadId, environment: null }, { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+  setAgentTab(({ agent, threadId }) => <p data-testid="agent-view">{`${agent.instance} on ${threadId}`}</p>);
+  try {
+    const onAgent = render("thr_ci");
+    expect((await onAgent.findByTestId("agent-view")).textContent).toBe("flaky-ci-developer on thr_ci");
+    expect(onAgent.queryByTestId("oats-home-tab")).toBeNull();
+    onAgent.unmount();
+    // A thread that is no agent's keeps the home.
+    const onPlain = render("thr_plain");
+    expect(heading(await onPlain.findByTestId("oats-home-needs"))).toBe("Needs you3");
+    expect(onPlain.queryByTestId("agent-view")).toBeNull();
+  } finally {
+    setAgentTab(null);
+  }
 });

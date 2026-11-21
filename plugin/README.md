@@ -112,7 +112,7 @@ only composes them:
 | server | `server/<feature>.ts`: `handlers(core)`, one per verb of its `rpc` | `server.ts` | `server/core.ts` |
 | host | `host/<feature>.ts`: `handlers(core)`, one per verb of its `host` | `host.ts` | `host/core.ts` |
 | kernel | `kernel/<feature>.ts` (and `kernel/<feature>-*.ts`): `verbs(oats)`, the argv and the parser of each command | `kernel/index.ts` | `kernel/runner.ts`, `run.ts`, `envelope.ts`, `input.ts`, `result.ts`, `task-file.ts` |
-| app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts` |
+| app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
 | model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts` |
 | unit tests | `test/<feature>/`, with `handlers.ts`: the slot tests' default answer of each of its RPC verbs | `test/helpers/render.ts` | `test/helpers/`, `test/support/` |
 | fixtures | `test/fixtures/<feature>/`, with `verbs.json`: each `oats` verb the fake answers, and its file | `container/fake-oats.mjs` | |
@@ -133,14 +133,17 @@ What the features share, beyond the entries:
   (`model/types.ts`, pinned) asks `core.rowOf(instance)` or `core.rowsOf()` in its
   `server/<feature>.ts` and reads with a schema of its own what the kernel printed: the
   instance's `row`, its `agent` group's row (the soul's, without the instances) and the roster's
-  `root`, each with the snapshot's `at`. Nobody starts a second status process. The server publishes `oats/changed` when
+  `root`, each with the snapshot's `at`. A raw row holds everything the kernel printed (settings of
+  capabilities, paths): a feature picks the fields it draws with its schema and answers those to the
+  app, never a row whole (bb's API has no login). Nobody starts a second status process. The server publishes `oats/changed` when
   anything the kernel printed changes, a field outside `Agent` included.
 - **One read of the kernel's version.** `core.versionOf()` answers `oats version --json`
   (`version`, `desktopApi`, `features`, and `apis`: each `<name>Api` number), read once for every feature and client and reused like a
   page's answer. A feature that depends on a kernel feature asks there.
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
-  state, its word and how long the agent has waited: the tree, the line under a thread's header and
-  the instance panel print what it answers, so they say the same thing.
+  state, its word and how long the agent has waited. It is the one function for every place that
+  says a state in words (the tree, the line under a thread's header, the instance panel); today the
+  home's card reads its age from it, and the tree draws its dot from the same state.
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home

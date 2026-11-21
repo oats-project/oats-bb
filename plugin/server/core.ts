@@ -411,7 +411,7 @@ export function createCore(bb: BbPluginApi) {
 
   return {
     /** Aborted when the plugin ends: an act is not ended by its caller going away, only by this. */
-    lifetime,
+    signal: lifetime.signal,
     /** Where `oats` runs, once found; null before, and after a failed read. */
     target: () => target,
     call,

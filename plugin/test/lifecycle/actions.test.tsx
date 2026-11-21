@@ -306,3 +306,12 @@ test("while an apply is in flight the dialog cannot be closed, and its refusal i
   fireEvent.click(slot.getByTestId("oats-plan-cancel")); // and now it closes
   expect(slot.queryByRole("dialog")).toBeNull();
 });
+
+test("the plan's lines are the kernel's, each one filtered line: a line break is folded, and one that looks like a secret is withheld", async () => {
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => ({ revision: "rev-1", lines: ["Stop redesign-ui-lead:\n\trunning", "its hook printed password: hunter2", "kept\u202E: its home"] }),
+  });
+  await pick("stop");
+  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
+  expect(Array.from(slot.getByTestId("oats-plan").querySelectorAll("li")).map((line) => line.textContent)).toEqual(["Stop redesign-ui-lead: running", "[withheld]", "kept\uFFFD: its home"]);
+});

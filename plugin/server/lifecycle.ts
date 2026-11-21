@@ -11,7 +11,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   async stopApply({ instance, revision, key }) {
     await core.agentOf(instance);
     try {
-      await core.call("stopApply", { instance, revision, key }, HOST_TIMEOUT.act, core.lifetime.signal);
+      await core.call("stopApply", { instance, revision, key }, HOST_TIMEOUT.act, core.signal);
     } finally {
       core.rereadSoon();
     }
@@ -21,7 +21,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     const agent = await core.agentOf(instance);
     let started: Value<"start">;
     try {
-      started = await core.call("start", { home: agent.home }, HOST_TIMEOUT.act, core.lifetime.signal);
+      started = await core.call("start", { home: agent.home }, HOST_TIMEOUT.act, core.signal);
     } finally {
       core.rereadSoon();
     }
@@ -31,7 +31,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     const agent = await core.agentOf(instance);
     let started: Value<"restart">;
     try {
-      started = await core.call("restart", { home: agent.home }, HOST_TIMEOUT.act, core.lifetime.signal);
+      started = await core.call("restart", { home: agent.home }, HOST_TIMEOUT.act, core.signal);
     } finally {
       core.rereadSoon();
     }
@@ -44,7 +44,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   async retireApply({ instance, revision, key }) {
     await core.agentOf(instance);
     try {
-      await core.call("retireApply", { instance, revision, key }, HOST_TIMEOUT.long, core.lifetime.signal);
+      await core.call("retireApply", { instance, revision, key }, HOST_TIMEOUT.long, core.signal);
     } finally {
       core.rereadSoon();
     }

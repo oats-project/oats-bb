@@ -99,6 +99,13 @@ export function shownBlock(text: unknown): string {
 const OWN_CODES: ReadonlySet<string> = new Set(Object.values(codes));
 const LEADING_CODE = /^([A-Z][A-Z0-9_]*): /;
 
+/** The code that leads a refusal (`<code>: <message>`), the kernel's or one of the plugin's own; null when the text leads with none. */
+export function refusalCode(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const lead = LEADING_CODE.exec(text);
+  return lead !== null && (lead[1]!.startsWith("E_") || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
+}
+
 /**
  * A refusal or a failure, as the lines to draw. The server words a refusal `<code>: <message>`
  * and a few messages hold several lines of the kernel's (what a retire left). The code is always
@@ -108,8 +115,7 @@ const LEADING_CODE = /^([A-Z][A-Z0-9_]*): /;
  */
 export function refusalLines(text: unknown): string[] {
   if (typeof text !== "string") return [];
-  const lead = LEADING_CODE.exec(text);
-  const code = lead !== null && (lead[1]!.startsWith("E_") || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
+  const code = refusalCode(text);
   const message = code === null ? text : text.slice(code.length + 2);
   const lines = UNSAFE.test(message)
     ? [DETAIL_WITHHELD]

@@ -4,13 +4,13 @@ import { isAbsolute } from "node:path";
 import { sandboxDeny } from "./deny.mjs";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
-import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
+import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject, someOf } from "./errors.mjs";
+import { piLaunchEnv, piPathRefusal, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
 
-const BB_PROVIDER = "claude-code";
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
 const SPAWN_LOOKS = 3;
@@ -32,20 +32,32 @@ function readInput(input) {
   if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
   // A bb thread is resumed by an input into its own conversation, never by a launch.
   if (input.resume !== undefined && input.resume !== null) throw fail("E_SESSION_START_FAILED", "the bb backend does not resume by launching: a launch starts a fresh thread, and a resume is an input to the home's thread");
-  return { home, instance, model: model ?? null, promptFile, previous: previous ?? null };
+  return { home, instance, harness, model: model ?? null, promptFile, previous: previous ?? null };
 }
 
 /** → { endpoint: { server, projectId, threadId } }. Order matters: everything that can
  *  refuse runs before the first effect (archiving the previous thread, creating the
- *  project, writing Claude's local settings, spawning). */
+ *  project, writing Claude's local settings, spawning).
+ *
+ *  A pi launch (`harness` "pi") is the same launch with bb's pi provider, and nothing of
+ *  Claude's: no launch argument is carried, the mode is full, and the home's `.claude` is
+ *  neither read nor written. */
 export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
-  const { home, instance, model, promptFile, previous } = readInput(input);
-  const mode = permissionMode(input.args, input.yolo);
-  // Before anything else is read or started: a mode the command does not launch in (not offered).
-  const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
+  const { home, instance, harness, model, promptFile, previous } = readInput(input);
+  const pi = harness === "pi";
+  const mode = permissionMode(input.args, input.yolo, harness);
+  // Before anything else is read or started: a mode the command does not launch in (not
+  // offered), or one bb's pi does not have.
+  const notOffered = modeRefusal(mode, harness, { sandboxedModes });
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
-  const launchEnv = withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
-  const unset = readUnset(input.unset, launchEnv);
+  // A pi thread is given three variables and no more (lib/project-env.mjs); Claude's whole
+  // launch env goes into its settings file.
+  const launchEnv = pi ? piLaunchEnv(input.env, input.pathPrepend, env.PATH) : withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
+  const unset = pi ? [] : readUnset(input.unset, launchEnv);
+  // bb starts `pi` by the PATH the launch gives the thread: one with no pi on it would
+  // answer a thread that ends at once.
+  const noPi = pi ? piPathRefusal(launchEnv.PATH) : null;
+  if (noPi !== null) throw fail(noPi.code, noPi.message);
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
   // sandboxed launch wrote is removed).
   const allowances = readSandbox(input.sandbox, { sandboxed: mode !== "full" });
@@ -61,10 +73,11 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, protected: input.protected, dataDir: settings.dataDir });
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
+  // (A pi launch writes nothing of Claude's, and does not look at it.)
   const settingsToWrite = { env: launchEnv, unset, sandbox, deny };
-  writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
+  if (!pi) writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
-  const { problems, server } = await backendProblems(settings, { deadline, env });
+  const { problems, server } = await backendProblems(settings, { deadline, env, harness });
   if (problems.length > 0) {
     const [first, ...rest] = problems;
     throw fail(first.code, rest.length ? `${first.message} (and ${rest.length} more: ${rest.map((problem) => problem.code).join(", ")}; see oats readiness)` : first.message);
@@ -81,6 +94,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     throw fail("E_SESSION_START_FAILED", `${others.length > 1 ? `${others.length} live bb threads already run` : "a live bb thread already runs"} in ${home}. One home is one thread: stop and archive ${others.length > 1 ? "them" : "it"} in bb, then start again. Running there: ${someOf(others.map((thread) => `${thread.id} (${thread.status})`))}`);
   }
   const replaced = live.find((thread) => thread.id === previousId) ?? null;
+  // One home, one bb project, and for pi one project, one home: what the launch writes
+  // into the project's env reaches every thread of it.
+  const shared = pi ? sharedProjectRefusal(mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null, home) : null;
+  if (shared !== null) throw fail(shared.code, shared.message);
   if (replaced && (!isSettled(replaced) || hasQueuedWork(replaced))) {
     throw fail("E_SESSION_START_FAILED", `the home's bb thread ${replaced.id} is still ${isSettled(replaced) ? `${replaced.status} with a turn bb holds in line` : replaced.status}: stop it (oats instance stop ${instance}) before starting again`);
   }
@@ -110,7 +127,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const known = new Set([...live.map((candidate) => candidate.id), ...archivedNow.map((candidate) => candidate.id), ...(previousId ? [previousId] : [])]);
   // And the launch's own files in the home as they stand, to put back should it end in a
   // refusal: read here, by the confined read, before anything is changed.
-  const restoreSettings = snapshotLaunchSettings(home);
+  const restoreSettings = pi ? () => {} : snapshotLaunchSettings(home);
 
   // Then the changes, and from the first one that MAY have happened a failure is no longer
   // a refusal: the kernel reads a refusal as "nothing happened" and may drop its record
@@ -156,7 +173,11 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     // The launch's own files in the home. Where the write fails with nothing else
     // changed, they are put back as they were and the failure is a refusal; where they
     // cannot be put back, the home was changed, and it is not one.
-    try { writeLaunchSettings(home, settingsToWrite); }
+    // A pi launch's env goes into the env of the home's bb project, which is then exactly
+    // this launch's. It reaches no process before the spawn, and the next launch rewrites
+    // it whole, so a launch refused after it is still a refusal: nothing was started.
+    if (pi) await writeProjectEnv(bb, project.id, launchEnv);
+    try { if (!pi) writeLaunchSettings(home, settingsToWrite); }
     catch (error) {
       if (effect === null) {
         try { restoreSettings(); }
@@ -167,7 +188,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
 
   } catch (error) { throw inDoubtAfter(error); }
 
-  const args = ["--project", project.id, "--provider", BB_PROVIDER, ...(model ? ["--model", model] : []),
+  const args = ["--project", project.id, "--provider", BB_PROVIDER[harness], ...(model ? ["--model", model] : []),
     "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
   const askedAt = Date.now();
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });

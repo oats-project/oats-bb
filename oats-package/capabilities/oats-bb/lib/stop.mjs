@@ -4,6 +4,7 @@ import { bbClient } from "./bb.mjs";
 import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { loopbackOrigin } from "./settings.mjs";
+import { clearHomeProjectEnv } from "./project-env.mjs";
 import { liveInHome, readEndpoint } from "./threads.mjs";
 
 // The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
@@ -113,14 +114,18 @@ export async function retire(home, readSettings, { deadline, env = process.env }
       // The sweep's own account (how many, the remedy) is carried; bb's raw words are not.
       unswept = error.code === "E_SESSION_STOP_FAILED" ? error.message : `bb could not be asked (${error.code}): a Claude process of one may still be loaded; look at them in bb (bb thread list --project <id> --archived)`;
     }
+    // What a pi launch wrote into the env of the home's bb project goes with the home: the
+    // project stays in bb (its archived threads are its history), its env does not.
+    const projectEnv = await clearHomeProjectEnv(home, null, { bb, projects });
     const warnings = [];
     // The sweep's own words first: they begin with the count and the remedy, and the cut
     // to what the kernel relays then falls in a list of ids.
     if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped: ${unswept}`);
     if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
-    if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}) }, warning: bounded(warnings.join(". ")) };
-    if (live.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
-    return { meta: { retired: true, archived } };
+    if (projectEnv.warning !== null) warnings.push(projectEnv.warning);
+    if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}), ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) }, warning: bounded(warnings.join(". ")) };
+    if (live.length === 0 && projectEnv.removed.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
+    return { meta: { retired: true, archived, ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) } };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     // Why, in the provider's own words (they may carry bb's), cut short: the remedy stands before it.

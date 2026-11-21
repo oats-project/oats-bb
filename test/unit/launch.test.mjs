@@ -351,7 +351,7 @@ test("a harness the provider does not run: E_BACKEND_HARNESS, bb never called", 
   const { bb, run } = await setup(t);
   const answer = await run({ harness: "codex" });
   assert.equal(answer.error.code, "E_BACKEND_HARNESS");
-  assert.match(answer.error.message, /claude only, not "codex"/);
+  assert.match(answer.error.message, /claude and pi only, not "codex"/);
   assert.deepEqual(bb.calls(), []);
 });
 

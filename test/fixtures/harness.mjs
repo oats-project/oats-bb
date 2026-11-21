@@ -87,6 +87,8 @@ export async function fakeBackend(t, overrides = {}) {
     daemonStatus: null,
     provider: { providerId: "claude-code", displayName: "Claude Code", status: "ready", statusMessage: null, loginCommand: "claude auth login" },
     providerHttpStatus: 200,
+    // bb's pi provider, as bb-app 0.50.1 reports one that is installed (no account: pi keeps its own logins).
+    piProvider: { providerId: "pi", displayName: "Pi", status: "ready", statusMessage: null, accountEmail: null, installedVersion: "1.5.2", loginCommand: "pi" },
     ...overrides,
   };
   const listen = (handler, host = "127.0.0.1") => new Promise((resolveListen, reject) => {
@@ -103,6 +105,7 @@ export async function fakeBackend(t, overrides = {}) {
       if (state.providerRaw !== undefined) { res.writeHead(200, { "content-type": "application/json" }); return res.end(state.providerRaw); }
       return json(res, state.providerHttpStatus, state.providerHttpStatus === 200 ? { providers: state.provider ? [state.provider] : [] } : { code: "error" });
     }
+    if (req.url === "/api/v1/system/providers/state?providerId=pi") return json(res, 200, { providers: state.piProvider ? [state.piProvider] : [] });
     return json(res, 404, { code: "not_found", message: "Not found" });
   }, overrides.bindHost);
   const serverUrl = `http://127.0.0.1:${server.address().port}`;
@@ -116,7 +119,13 @@ export async function fakeBackend(t, overrides = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "oats-bb-test-data-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "thread-storage"));
-  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", dataDir, ...extra }) };
+  // The pi configuration bb's server runs with, as `pi install npm:@awebai/oats-pi` leaves
+  // one: the bridge, and no aweb extension. `piSettings(doc)` rewrites its settings.json.
+  const piAgentDir = join(dataDir, "pi-agent");
+  mkdirSync(piAgentDir);
+  const piSettings = (doc) => writeFileSync(join(piAgentDir, "settings.json"), typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
+  piSettings({ packages: ["npm:@awebai/oats-pi@0.70.0"] });
+  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", dataDir, piAgentDir, ...extra }) };
 }
 
 /** A loopback port where nothing answers, held for the whole test: a listener that drops

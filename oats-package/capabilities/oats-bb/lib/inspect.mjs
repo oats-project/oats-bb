@@ -2,6 +2,7 @@
 import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { bounded, fail, isObject, recode } from "./errors.mjs";
+import { processLook } from "./processes.mjs";
 import { inspectHome, readEndpoint } from "./threads.mjs";
 
 function readHome(entry) {
@@ -18,7 +19,7 @@ export async function inspect(input, settings, { deadline, env = process.env } =
   try {
     const subject = readHome(input);
     const bb = bbClient({ cli: settings.cli, server: subject.endpoint.server, deadline, env });
-    return inspectHome(subject, await bb.threads());
+    return inspectHome(subject, await bb.threads(), processLook());
   } catch (error) { throw unavailable(error); }
 }
 
@@ -27,6 +28,8 @@ export async function inspect(input, settings, { deadline, env = process.env } =
 export async function inspectMany(input, settings, { deadline, env = process.env } = {}) {
   if (!isObject(input) || !Array.isArray(input.homes)) throw fail("E_SESSION_UNAVAILABLE", "the inspectMany input has no homes list");
   const lists = new Map();
+  // One look at this host's processes for all the homes, and only if a thread is in error.
+  const processes = processLook();
   const listOf = (server) => {
     if (!lists.has(server)) lists.set(server, bbClient({ cli: settings.cli, server, deadline, env }).threads().then((threads) => ({ threads }), (error) => ({ error })));
     return lists.get(server);
@@ -36,7 +39,7 @@ export async function inspectMany(input, settings, { deadline, env = process.env
       const subject = readHome(entry);
       const read = await listOf(subject.endpoint.server);
       if (read.error) throw read.error;
-      return inspectHome(subject, read.threads);
+      return inspectHome(subject, read.threads, processes);
     } catch (error) {
       const refused = unavailable(error);
       return { error: { code: refused.code, message: bounded(refused.message) } };

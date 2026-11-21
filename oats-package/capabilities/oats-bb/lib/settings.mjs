@@ -60,6 +60,10 @@ export function readSettings(raw) {
   // Read only for a launch in a sandboxed mode, which checks its shape there: a value
   // that is wrong holds up no other verb.
   const dataDir = text("dataDir", join(homedir(), ".bb")).replace(/(?<=.)\/+$/, "");
+  // The pi configuration directory bb's server runs pi with (pi's PI_CODING_AGENT_DIR, as bb's
+  // server has it): bb does not say which it is. pi's default is `.pi/agent` in the home of the
+  // user that runs it. Read only for a pi launch and its readiness, which check its shape.
+  const piAgentDir = text("piAgentDir", join(homedir(), ".pi", "agent")).replace(/(?<=.)\/+$/, "");
   return {
     server: text("server", DEFAULT_SERVER),
     daemon: text("daemon", DEFAULT_DAEMON),
@@ -67,5 +71,6 @@ export function readSettings(raw) {
     trust: text("trust", null),
     cli,
     dataDir,
+    piAgentDir,
   };
 }

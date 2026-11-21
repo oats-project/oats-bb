@@ -4,6 +4,7 @@
 import { sessionHandlers } from "../lib/commands.mjs";
 import { bounded } from "../lib/errors.mjs";
 import { removeLaunchSettings, removeLeftovers, sandboxKeysOf } from "../lib/local-settings.mjs";
+import { clearHomeProjectEnv } from "../lib/project-env.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
@@ -69,11 +70,20 @@ async function main(argv) {
       return 0;
     }
     if (previous !== PROVIDER) return 0;
+    // The kernel relays the warning of the hook's last line: everything is said in one.
+    const said = [];
     try {
-      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its keys from .claude/settings.local.json (env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories)` });
+      if (removeLaunchSettings(home)) said.push(`this home starts on ${backend}, no longer on bb: the bb provider removed its keys from .claude/settings.local.json (env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories)`);
     } catch (error) {
-      print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories there by hand` });
+      said.push(`the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories there by hand`);
     }
+    // And what a pi launch wrote into the env of the home's bb project (contract r23,
+    // A12(2)): bb is asked, and a bb that cannot be asked is a warning, never a failed
+    // start on the other backend.
+    const env = await clearHomeProjectEnv(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 15_000 });
+    if (env.warning !== null) said.push(env.warning);
+    else if (env.removed.length > 0) said.push(`this home starts on ${backend}, no longer on bb: the bb provider removed the launch env it kept in the home's bb project (${env.removed.length} variable${env.removed.length > 1 ? "s" : ""})`);
+    if (said.length > 0) print({ warning: said.join(". ") });
     return 0;
   }
   if (command === "retire-hook" && rest.length === 0) {

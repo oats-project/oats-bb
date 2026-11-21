@@ -44,7 +44,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 | stop | `{home, endpoint or null, graceSeconds, launchSent?}` | `{stopped: true}` |
 | check | `{home or null, soul or null, settings?, launch?}` | `{status, problems: [{code, message}], warnings: [{code, message}]}` |
 
-- **launch `env`** is a list of `{name, value, source, capability?, secret?}`. The provider
+- **launch `env`** is a list of `{name, value, source, capability?, secret?}`. (For Claude;
+  what a pi launch carries of it is under "pi" below.) The provider
   writes an entry only when its `source` is `kernel`, `capability` or `launch-config` and it
   is not marked `secret`; any other entry refuses the launch (`E_BACKEND_LAUNCH_ENV`). So a
   source word the provider does not know is refused, never written. `unset` names are
@@ -56,7 +57,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 - A launch never resumes: a bb thread is resumed by an input into its own conversation. (A
   launch input that carried a non-null `resume` would be refused, `E_SESSION_START_FAILED`.)
 - **launch `args`** holds the launch configuration's and the capabilities' arguments only.
-  The provider carries one, `--permission-mode`; any other refuses the launch
+  For Claude the provider carries one, `--permission-mode` (for pi, none: "pi" below); any other refuses the launch
   (`E_BACKEND_LAUNCH_ARG`).
 - **A launch in a sandboxed mode is refused.** With `yolo` not true and no
   `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
@@ -222,11 +223,75 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 
 ## Codes
 `E_BACKEND_WIRE`, `E_BACKEND_LAUNCH_ENV`, `E_BACKEND_LAUNCH_ARG`, `E_BACKEND_SANDBOXED_MODE`, `E_BACKEND_HARNESS`, `E_BACKEND_VERSION`,
-`E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_UNREACHABLE`,
+`E_BACKEND_EXPOSED`, `E_BACKEND_TRUST`, `E_BACKEND_NOT_READY`, `E_BACKEND_PI_LISTENER`, `E_BACKEND_UNREACHABLE`,
 `E_BACKEND_SETTINGS`, `E_BACKEND_SANDBOX_HOST`, `E_BACKEND_SANDBOX_PATH`,
 `E_BACKEND_SANDBOX_TREES`, `E_BACKEND_SANDBOX_PROTECTED`, `E_BACKEND_SANDBOX_UNAVAILABLE`, `E_SESSION_UNAVAILABLE`, `E_SESSION_START_FAILED`,
 `E_SESSION_PROMPT_OPEN`, `E_SESSION_INPUT_QUEUED`, `E_SESSION_INPUT_FAILED`,
 `E_SESSION_STOP_FAILED`.
+
+## pi (contract r23: A12 to A14)
+The harness `pi` is the same wire, with these differences. All of it is pinned against
+the real bb and pi by `test/contract/pi.test.mjs`.
+
+- **launch** runs `bb thread spawn --provider pi --model <model>`, the launch input's
+  `model` as it is (`<pi provider>/<id>`; bb splits it). `args`: every entry is refused
+  (`E_BACKEND_LAUNCH_ARG`), `--permission-mode` included. `yolo` must be true
+  (`E_BACKEND_SANDBOXED_MODE` otherwise, whatever the command takes for Claude: bb's pi
+  has full mode only). Nothing of `.claude` is read or written, and `sandbox`, `trees`,
+  `protected` and `unset` are not read.
+- **launch `env`, for pi.** The provider carries exactly `OATS_INSTANCE` and
+  `OATS_INSTANCE_HOME` (entries of source `kernel`, not marked secret) and `PATH`, which
+  it composes from `pathPrepend` and the PATH it was called with: paths only, never the
+  value of an env entry. They go into the env of the home's bb project (`bb machine env
+  set <NAME> --project <id>`, the value on stdin, never an argument), which bb keeps in
+  its database. Every other entry is not carried: one of source `kernel` or `capability`
+  is left out; one of source `launch-config`, of a secret source or mark, or of a source
+  the provider does not know refuses the launch by name (`E_BACKEND_LAUNCH_ENV`). A
+  `PATH` with no executable `pi` on it, or with pi and not the program pi's script asks
+  `env` for, refuses the launch too, naming which is missing.
+- **The project's env is the provider's, whole.** A pi launch reads the names bb holds
+  for the project (`bb machine env list --project <id>`), unsets every one that is not
+  among the three it carries, and sets those. A project with a root other than the home
+  refuses a pi launch (`E_SESSION_START_FAILED`) before anything is changed. The env
+  reaches no process before the spawn and the next launch rewrites it, so a launch that
+  is refused after writing it is still a refusal: nothing was started. A Claude launch
+  makes no `bb machine env` call.
+- **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
+  whose last turn failed and of one whose agent is gone. The provider decides at every
+  call from this host's processes: a process whose environment carries
+  `BB_THREAD_ID=<the thread's id>` (bb gives it to a thread's agent and to what the agent
+  starts) makes the thread present, `state: unknown`, `running: null`; none makes it a
+  lost session (`present: false`), as before. A turn bb holds in line reads `running:
+  true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
+  `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be
+  made, that thread's answer is `E_SESSION_UNAVAILABLE`.
+- **input, to a thread in `error`** (contract r23, A14): told like any other thread, with
+  no look at processes and no refusal. Where the thread's process is gone, bb answers
+  sent, starts the harness again in the same conversation and runs the turn once (pinned
+  for pi and for Claude). That home reads as lost, so the kernel counts the input as a
+  resume before it calls the provider: the cap is the kernel's.
+- **check, and every launch, for pi.** bb's provider state is read for the harness of
+  the launch: `providerId=pi` for a pi launch, `claude-code` otherwise and on a read with
+  no planned launch. A pi launch also needs the pi configuration bb's server runs with
+  (`settings.oats.bb.piAgentDir`, default `.pi/agent` in the home of the provider's user)
+  to list `@awebai/oats-pi` in its `settings.json` `packages` (`E_BACKEND_NOT_READY`)
+  and not to list `@awebai/pi` (`E_BACKEND_PI_LISTENER`), unless `AWEB_DELIVERY` is among
+  the names of bb's machine env (`bb machine env list --json`, read only then; bb shows
+  no value). That variable reaches every pi bb runs on that server, other projects'
+  threads included, and no process bb did not start. The provider reads the directory
+  and bb's env, and never changes either. With no planned launch, all of pi's findings
+  are one warning, `session-provider-pi-not-ready`, and none where bb reports pi
+  `not_installed` or reports no pi provider. A `piAgentDir` that is not an absolute path
+  is `E_BACKEND_SETTINGS` for every launch and every check, whatever the harness.
+- **Hooks.** The retire hook unsets every name of the env of each bb project rooted at
+  the home (`meta.env` is how many), after its threads are archived. The launch hook
+  does the same when the home starts on another backend and `OATS_PREVIOUS_BACKEND` is
+  `bb`, and only then. A bb that cannot be asked is a warning in both, in the hook's one
+  last line.
+- **What the provider does not do.** It signals no process. A catalog pi bb starts for
+  a model listing (`bb provider models pi --project <id>`) works in the home in a bridge
+  worker of its own; no stop of a thread ends it, and it leaves by itself (about 70 s at
+  the pinned bb).
 
 ## Time
 The kernel gives launch 120 s, stop 20 s plus its `graceSeconds`, and the other verbs,
@@ -245,7 +310,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn`, `bb thread tell`, `bb thread interactions list`,
   `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
-  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. The
+  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. For pi:
+  `bb machine env list` (with and without `--project`), `bb machine env set <NAME>
+  --project <id>` and `bb machine env unset <NAME> --project <id>`, of whose answers only
+  the `variables` names are read. The
   contract test also sets bb's limit (`bb concurrency-limit global`), to pin what a held
   turn looks like and that a stop withdraws it. A list is read row by
   row: a project needs an `id` and its `sources` (each with its `type`, and a local one
@@ -258,7 +326,8 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - HTTP, loopback only, read-only, bounded in size and time, strictly decoded:
   `GET <server>/health`, `GET <daemon>/status` (`connected`, and a `serverUrl` that is this
   server),
-  `GET <server>/api/v1/system/providers/state?providerId=claude-code`.
+  `GET <server>/api/v1/system/providers/state?providerId=claude-code` (`providerId=pi`
+  for a pi launch, and both on a read with no planned launch).
 
 ## Hooks
 - `launch`: runs at every start of a home that has the capability. On this provider it does
@@ -269,9 +338,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   nothing in the home decides it. Where that variable is absent it removes nothing, and
   warns that they may be stale if a `sandbox` block, or the deny of bb's directory-move tool, stands in the file. In every case it deletes, unread and best effort, what an earlier
   version of the provider kept in the home (`.oats-bb/`, `.oats-bb-sandbox.json`).
+  On the same word it removes the env of the home's bb project (what a pi launch wrote; "pi" above).
   It returns no env and no arguments.
-- `retire`: archives the home's live bb threads, after the kernel's stop, and deletes those
-  two old names too (best effort). The hook is not
+- `retire`: archives the home's live bb threads, after the kernel's stop, removes the env of
+  the home's bb project, and deletes those two old names too (best effort). The hook is not
   told the home's backend, and nothing in the home proves it has no thread (its agent can
   write there, and the provider keeps nothing of its own there), so bb is asked for every
   home, and a bb that cannot be asked is a warning for every home, a tmux home too;

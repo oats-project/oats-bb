@@ -1,7 +1,7 @@
 One directory per feature of the plugin (`../../README.md`, "One module per feature"), each with
 its `verbs.json`: the `oats` verbs the fake answers for that feature, and the file of each
 (`container/fake-oats.mjs`). The files named below are in `roster/` (`status.json`,
-`status-recorded.json`, `threads.json`), `workspace/` (`souls.json`, `capabilities.json`,
+`status-recorded.json`, `threads.json`, `version.json`), `workspace/` (`souls.json`, `capabilities.json`,
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
 stop, start, restart and retire answers).
 
@@ -39,6 +39,8 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
     plan in `details`), then the apply of the fresh plan.
   - `start.json`, `restart.json`, `retire-plan.json`, `retire-apply.json`: `weekly-digest-helper`,
     an agent on a worktree with one untracked file and one child.
+  - `version.json`: `oats version --json`, printed in the run's deployment for the run's own call (no
+    RPC of the plugin asks for it yet).
   - `servers.json`: two servers registered with `oats server add` (no host is behind them).
   - `status-recorded.json`: the whole `oats status --json` the kernel printed for the plugin's own
     read, one document per state under a key of this file: `working`,

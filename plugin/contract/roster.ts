@@ -59,6 +59,12 @@ export const host = defineRpcContract({
       z.object({ root: z.string(), workspace: z.string().nullable(), agents: z.array(agent), rows: z.array(z.record(z.string(), z.unknown())) }),
     ),
   },
+  /** `oats version --json`: the kernel's release, the version of its JSON answers and its features. */
+  version: {
+    experimental_retryable: true,
+    input: hostRead,
+    output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()) })),
+  },
   /** Watches the deployment's event log; each batch is one `changed` signal. Null: nothing to watch yet. */
   watch: {
     input: z.object({ deployment: z.string().min(1) }).strict(),

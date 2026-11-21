@@ -105,7 +105,27 @@ export function parseStatus(document: unknown): Result<Status> {
   return ok({ root: parsed.value.root, workspace: parsed.value.workspace?.key ?? null, agents, rows });
 }
 
-/** The roster's command. */
+// ---- oats version --json ----
+export const versionArgv = (): string[] => ["version", "--json"];
+
+const versionDocument = z.looseObject({
+  version: z.string().min(1),
+  desktopApi: z.number().nullish(),
+  features: z.array(z.string()).nullish(),
+});
+
+/** The kernel on this machine: its release, the version of its JSON answers, and what it says it can do. */
+export type Version = { version: string; desktopApi: number | null; features: string[] };
+
+export function parseVersion(document: unknown): Result<Version> {
+  const parsed = shaped(versionDocument, document, "oats version");
+  if (!parsed.ok) return parsed;
+  // A kernel that lists no features has none the plugin may rely on.
+  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [] });
+}
+
+/** The roster's commands, and the one read of the kernel's version that every feature shares. */
 export const verbs = (oats: Runner) => ({
+  version: (signal?: AbortSignal): Promise<Result<Version>> => oats.run(versionArgv(), parseVersion, oats.timeouts.read, signal),
   status: (signal?: AbortSignal): Promise<Result<Status>> => oats.run(statusArgv(), parseStatus, oats.timeouts.read, signal),
 });

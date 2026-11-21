@@ -134,6 +134,9 @@ What the features share, beyond the entries:
   `server/<feature>.ts` and reads the row with a schema of its own; each answers the snapshot's
   `at` with it. Nobody starts a second status process. The server publishes `oats/changed` when
   anything the kernel printed changes, a field outside `Agent` included.
+- **One read of the kernel's version.** `core.versionOf()` answers `oats version --json`
+  (`version`, `desktopApi`, `features`), read once for every feature and client and reused like a
+  page's answer. A feature that depends on a kernel feature asks there.
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
   state, its word and how long the agent has waited: the tree, the line under a thread's header and
   the instance panel print what it answers, so they say the same thing.

@@ -323,6 +323,13 @@ export function createCore(bb: BbPluginApi) {
     });
     return value;
   }
+  /**
+   * The kernel on the machine (`oats version --json`): its release, the version of its JSON answers
+   * and the features it lists. One read for every feature and every client, reused like a page's
+   * answer; a feature that depends on a kernel feature asks here and never runs it a second time.
+   */
+  const versionOf = (): Promise<Value<"version">> => page("version", (signal) => call("version", {}, HOST_TIMEOUT.read, signal));
+
   /** The thread an act left the agent in: the kernel's answer, else the row of the next snapshot. */
   async function threadOf(instance: string, named: string | null, act: string): Promise<string> {
     if (named !== null) return named;
@@ -408,6 +415,7 @@ export function createCore(bb: BbPluginApi) {
     agentOf,
     rowOf,
     rowsOf,
+    versionOf,
     threadOf,
     clientSnapshot,
     clientRefresh,

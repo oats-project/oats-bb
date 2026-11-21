@@ -7,6 +7,7 @@ import { count } from "../format";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
+import { openSoul } from "./pages";
 import { useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Button, Chip, Dot, ErrorLine, Heading, Lines, Note, Page, plainClick } from "../ui";
@@ -172,7 +173,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
                     data-testid="oats-soul-row"
                     aria-current={candidate.name === picked ? "true" : undefined}
                     className={`flex w-full min-w-0 items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent ${candidate.name === picked ? "bg-accent" : ""}`}
-                    onClick={() => navigate.toPluginPanel("souls", { subPath: candidate.name })}
+                    onClick={() => openSoul(navigate, candidate.name)}
                   >
                     <span className="min-w-0 flex-1 truncate">{shown(candidate.name)}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">{n === null ? "" : count(n, "agent")}</span>

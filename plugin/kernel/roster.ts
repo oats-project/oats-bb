@@ -42,11 +42,13 @@ function threadIdOf(source: z.output<typeof row>): string | null {
 const identityMeta = z.looseObject({ alias: text, team: text });
 
 /**
- * `rows[n]` is the kernel's own row of `agents[n]`, whole, as `oats status --json` printed it: a
- * feature that draws more of a row than `Agent` holds reads it there with a schema of its own
- * (the server keeps the rows beside the snapshot), so nobody runs a second `oats status`.
+ * `rows[n]` is what the kernel printed for `agents[n]`, whole, as `oats status --json` printed it:
+ * its own `row`, and the row of its `agent` group (the soul's: name, key, description) without the
+ * group's instances. A feature that draws more than `Agent` holds reads it there with a schema of
+ * its own (the server keeps the rows beside the snapshot), so nobody runs a second `oats status`.
  */
-export type Status = { root: string; workspace: string | null; agents: Agent[]; rows: Record<string, unknown>[] };
+export type RawRow = { row: Record<string, unknown>; agent: Record<string, unknown> };
+export type Status = { root: string; workspace: string | null; agents: Agent[]; rows: RawRow[] };
 
 function toAgent(group: { name: string }, source: z.output<typeof row>): Agent {
   // The messaging identity: the row's own `identity`, else what a messaging capability recorded.
@@ -95,17 +97,44 @@ export function parseStatus(document: unknown): Result<Status> {
   const parsed = shaped(roster, document, "oats status");
   if (!parsed.ok) return parsed;
   const agents: Agent[] = [];
-  const rows: Record<string, unknown>[] = [];
+  const rows: RawRow[] = [];
   for (const group of parsed.value.agents) {
-    for (const source of group.instances) {
+    const { instances, ...agent } = group;
+    for (const source of instances) {
       agents.push(toAgent(group, source));
-      rows.push(source);
+      rows.push({ row: source, agent });
     }
   }
   return ok({ root: parsed.value.root, workspace: parsed.value.workspace?.key ?? null, agents, rows });
 }
 
-/** The roster's command. */
+// ---- oats version --json ----
+export const versionArgv = (): string[] => ["version", "--json"];
+
+const versionDocument = z.looseObject({
+  version: z.string().min(1),
+  desktopApi: z.number().nullish(),
+  features: z.array(z.string()).nullish(),
+});
+
+/**
+ * The kernel on this machine: its release, the version of its JSON answers, what it says it can do
+ * (`features`), and the version of each of its answers that has one (`apis`: every `<name>Api`
+ * number it prints, `desktopApi` and `automationsApi` among them).
+ */
+export type Version = { version: string; desktopApi: number | null; features: string[]; apis: Record<string, number> };
+
+export function parseVersion(document: unknown): Result<Version> {
+  const parsed = shaped(versionDocument, document, "oats version");
+  if (!parsed.ok) return parsed;
+  const apis: Record<string, number> = {};
+  for (const [name, value] of Object.entries(parsed.value)) if (name.endsWith("Api") && typeof value === "number") apis[name] = value;
+  // A kernel that lists no features has none the plugin may rely on.
+  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [], apis });
+}
+
+/** The roster's commands, and the one read of the kernel's version that every feature shares. */
 export const verbs = (oats: Runner) => ({
+  version: (signal?: AbortSignal): Promise<Result<Version>> => oats.run(versionArgv(), parseVersion, oats.timeouts.read, signal),
   status: (signal?: AbortSignal): Promise<Result<Status>> => oats.run(statusArgv(), parseStatus, oats.timeouts.read, signal),
 });

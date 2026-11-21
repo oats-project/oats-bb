@@ -131,12 +131,23 @@ What the features share, beyond the entries:
 - **One status read.** The server runs one `oats status --json` for everybody and keeps the
   kernel's own rows beside the snapshot. A feature that draws more of a row than `Agent` holds
   (`model/types.ts`, pinned) asks `core.rowOf(instance)` or `core.rowsOf()` in its
-  `server/<feature>.ts` and reads the row with a schema of its own; each answers the snapshot's
-  `at` with it. Nobody starts a second status process. The server publishes `oats/changed` when
+  `server/<feature>.ts` and reads with a schema of its own what the kernel printed: the
+  instance's `row`, its `agent` group's row (the soul's, without the instances) and the roster's
+  `root`, each with the snapshot's `at`. Nobody starts a second status process. The server publishes `oats/changed` when
   anything the kernel printed changes, a field outside `Agent` included.
+- **One read of the kernel's version.** `core.versionOf()` answers `oats version --json`
+  (`version`, `desktopApi`, `features`, and `apis`: each `<name>Api` number), read once for every feature and client and reused like a
+  page's answer. A feature that depends on a kernel feature asks there.
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
   state, its word and how long the agent has waited: the tree, the line under a thread's header and
   the instance panel print what it answers, so they say the same thing.
+- **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
+  with a view of one agent (the instance panel) names its component with `setAgentTab`
+  (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
+  on every other. `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+- **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
+  with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
+  `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
 - **A server test of a feature's verbs** starts the whole backend with `startBackend()`
   (`test/support/backend.ts`): bb's fake plugin host, the real host entry, the fake `oats`.
 

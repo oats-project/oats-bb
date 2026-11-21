@@ -6,6 +6,10 @@ import { createFakePluginHost, makeHostResponse, type FakePluginHost } from "@ge
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { hostContract, REALTIME_CHANGED } from "../contract/index.js";
+import { host as lifecycleHost } from "../contract/lifecycle.js";
+import { host as rosterHost } from "../contract/roster.js";
+import { host as spawnHost } from "../contract/spawn.js";
+import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
@@ -364,9 +368,11 @@ describe("the host-call limits", () => {
     expect(HOST_TIMEOUT.act).toBeGreaterThan(timeouts.act);
     expect(HOST_TIMEOUT.long).toBeGreaterThan(timeouts.long);
     expect(HOST_TIMEOUT.long).toBeLessThanOrEqual(30 * 60_000); // bb's cap for a host call
-    // Which verbs bb retries, and so which limit each needs.
-    const retryable = Object.entries(hostContract).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams"]);
+    // Which verbs bb retries, and so which limit each needs: the reads, never an act. Of the roster,
+    // the pages, spawn and the lifecycle; another feature holds the list of its own verbs in its tests.
+    const mine = { ...rosterHost, ...workspaceHost, ...spawnHost, ...lifecycleHost };
+    const retryable = Object.entries(mine).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
+    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams", "version"]);
   });
 });
 

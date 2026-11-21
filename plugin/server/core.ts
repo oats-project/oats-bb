@@ -9,6 +9,9 @@ import { hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotS
 import { codes, type KernelError } from "../kernel/result.js";
 import type { Agent } from "../model/types.js";
 
+/** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
+export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
+
 /** The slow poll, while at least one client is connected. */
 export const POLL_MS = 15_000;
 /** Never more than one `oats status` in this many milliseconds. */
@@ -101,8 +104,8 @@ export function createCore(bb: BbPluginApi) {
   let settingsGeneration = 0;
   let watchAsserted = false;
   let cached: Snapshot | null = null;
-  /** The kernel's own rows behind `cached`, by instance; null when `cached` is not a roster. */
-  let rawRows: ReadonlyMap<string, Readonly<Record<string, unknown>>> | null = null;
+  /** What the kernel printed behind `cached`: its root, and each instance's rows; null when `cached` is not a roster. */
+  let rawRows: { root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
   let comparable = "";
   let lastStart = 0;
   let running: Promise<Snapshot> | null = null;
@@ -187,7 +190,8 @@ export function createCore(bb: BbPluginApi) {
     lastStart = Date.now();
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
-    let rows: Map<string, Readonly<Record<string, unknown>>> | null = null;
+    let rows: Map<string, RawRow> | null = null;
+    let root = "";
     try {
       const where = await base(lifetime.signal);
       if ("ok" in where) {
@@ -197,6 +201,7 @@ export function createCore(bb: BbPluginApi) {
         if (answer.ok) {
           const workspace = answer.value.workspace ? lastSegment(answer.value.workspace) : lastSegment(where.target.deployment);
           next = { ok: true, at, deployment: { root: where.target.deployment, workspace, machine: where.target.machine }, agents: answer.value.agents };
+          root = answer.value.root;
           rows = new Map();
           // By instance, the first row of a name: the row `agentOf` finds.
           answer.value.agents.forEach((agent, index) => {
@@ -220,10 +225,10 @@ export function createCore(bb: BbPluginApi) {
     }
     // A change is a change of anything the kernel printed: a feature may draw a field of a raw row
     // that the snapshot's agents do not hold.
-    const key = JSON.stringify({ ...next, at: null, rows: rows === null ? null : [...rows] });
+    const key = JSON.stringify({ ...next, at: null, root, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
-    rawRows = rows;
+    rawRows = rows === null ? null : { root, rows };
     comparable = key;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
@@ -291,25 +296,26 @@ export function createCore(bb: BbPluginApi) {
   }
 
   /**
-   * The kernel's own rows of the current snapshot, by instance, whole, as `oats status --json`
-   * printed them, with the snapshot's `at`. For a feature that draws more of a row than `Agent`
-   * holds: it reads the row with a schema of its own, and nobody runs a second `oats status`.
+   * What the kernel printed for the current snapshot, whole, as `oats status --json` printed it:
+   * the roster's `root`, and by instance its own `row` and the row of its `agent` group (without
+   * the group's instances), with the snapshot's `at`. For a feature that draws more than `Agent`
+   * holds: it reads them with a schema of its own, and nobody runs a second `oats status`.
    * A snapshot that is no roster is refused, as for `agentOf`.
    */
-  async function rowsOf(): Promise<{ at: string; rows: ReadonlyMap<string, Readonly<Record<string, unknown>>> }> {
+  async function rowsOf(): Promise<{ at: string; root: string; rows: ReadonlyMap<string, RawRow> }> {
     const now = await current();
     if (!now.ok) throw refusal({ code: now.code, message: now.message });
     // `rawRows` is set with `cached`, in one step: it is this snapshot's unless a newer read landed, and then both are newer.
-    const held = cached !== null && cached.ok && rawRows !== null ? { at: cached.at, rows: rawRows } : null;
+    const held = cached !== null && cached.ok && rawRows !== null ? { at: cached.at, ...rawRows } : null;
     if (held === null) throw refusal({ code: codes.hostUnreachable, message: "The OATS roster is being read again: try once more." });
     return held;
   }
-  /** The kernel's own row of one instance of the current snapshot; an instance it does not name is refused. */
-  async function rowOf(instance: string): Promise<{ at: string; row: Readonly<Record<string, unknown>> }> {
-    const { at, rows } = await rowsOf();
-    const row = rows.get(instance);
-    if (row === undefined) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
-    return { at, row };
+  /** The same for one instance of the current snapshot; an instance it does not name is refused. */
+  async function rowOf(instance: string): Promise<{ at: string; root: string } & RawRow> {
+    const { at, root, rows } = await rowsOf();
+    const found = rows.get(instance);
+    if (found === undefined) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
+    return { at, root, ...found };
   }
 
   /** One answer per page for all clients, reused for PAGE_TTL_MS; a failed read is not kept. */
@@ -323,6 +329,13 @@ export function createCore(bb: BbPluginApi) {
     });
     return value;
   }
+  /**
+   * The kernel on the machine (`oats version --json`): its release, the version of its JSON answers
+   * and the features it lists. One read for every feature and every client, reused like a page's
+   * answer; a feature that depends on a kernel feature asks here and never runs it a second time.
+   */
+  const versionOf = (): Promise<Value<"version">> => page("version", (signal) => call("version", {}, HOST_TIMEOUT.read, signal));
+
   /** The thread an act left the agent in: the kernel's answer, else the row of the next snapshot. */
   async function threadOf(instance: string, named: string | null, act: string): Promise<string> {
     if (named !== null) return named;
@@ -408,6 +421,7 @@ export function createCore(bb: BbPluginApi) {
     agentOf,
     rowOf,
     rowsOf,
+    versionOf,
     threadOf,
     clientSnapshot,
     clientRefresh,

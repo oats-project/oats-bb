@@ -38,6 +38,7 @@ export const handlers = (core: HostCore): Handlers<typeof host> => {
     },
 
     status: (base, context) => core.run(base, context, (oats) => oats.status(context.signal)),
+    version: (base, context) => core.run(base, context, (oats) => oats.version(context.signal)),
 
     watch: ({ deployment }, context) => {
       core.bind(context);

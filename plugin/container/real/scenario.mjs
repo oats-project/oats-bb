@@ -702,6 +702,10 @@ try {
 if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
 
 step("the recorded answers");
+// The kernel's version, as it prints it in the deployment: the one answer here that no RPC of the plugin asks for yet.
+const version = oats("version", "--json");
+check(version.exit === 0, "oats version --json", version.stderr);
+if (version.exit === 0) fixtures.keep("roster/version.json", version.stdout);
 // status.json stays the design's sample; its bb rows take the session-side fields the kernel printed.
 const SAMPLES = join(HERE, "..", "..", "test", "fixtures");
 fixtures.keep("roster/status.json", sampleStatus(readFileSync(join(SAMPLES, "roster", "status.json"), "utf8"), readFileSync(join(SAMPLES, "roster", "threads.json"), "utf8"), fixtures.kept("roster/status-recorded.json")));

@@ -41,6 +41,14 @@ export function Dot({ state }: { state: AgentState }) {
   );
 }
 
+/**
+ * A mark that something of a row needs a look (a failed run): a dot in the colour of a refusal,
+ * which holds 3:1 on a row in both themes. Its accessible name is the label.
+ */
+export function Mark({ label }: { label: string }) {
+  return <span role="img" aria-label={label} title={label} data-testid="oats-mark" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
+}
+
 export function Chip({ children, title }: { children: ReactNode; title?: string }) {
   return (
     <span

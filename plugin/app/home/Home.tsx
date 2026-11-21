@@ -8,10 +8,11 @@ import {
   useBbNavigate,
   useSdk,
 } from "@get-bb/plugin-sdk/app";
-import type { ExperimentalBadge, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { ExperimentalBadge, ExperimentalThreadTabProps, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { needsYouLabel } from "../format";
+import { getAgentTab } from "./agent-tab";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
@@ -335,10 +336,16 @@ export function HomePage() {
   );
 }
 
-/** The same view in a thread's fixed side-panel tab, on desktop. */
-export function HomeTab() {
+/**
+ * The same view in a thread's fixed side-panel tab, on desktop. On an agent's own thread it is that
+ * agent's view instead, when a feature named one (agent-tab.ts).
+ */
+export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
+  const AgentTab = getAgentTab();
+  const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
+  if (AgentTab !== null && node !== undefined) return <AgentTab agent={node.agent} threadId={threadId} />;
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
       <Sections oats={oats} where="tab" visible={visible} />

@@ -1,7 +1,7 @@
 # The Automations fixtures
 
 Every `.json` here is what a real kernel printed for one `oats` call, whole (an envelope
-`{schemaVersion, ok, result | error}`; `version.json` is the bare document), printed with one
+`{schemaVersion, ok, result | error}`), printed with one
 space of indentation. `recorded.json` names the call behind each file (its argv and exit code) and
 the kernel's version. The substitutions are the real run's and there is no other edit: the
 deployment is `/abs/deployment`, the run's directory `/abs/real`, the container user's home
@@ -63,7 +63,6 @@ bound, and recorded the failed poll.
 | `trigger-add*.json`, `trigger-show.json`, `trigger-enable.json`, `trigger-disable.json`, `trigger-describe*.json`, `trigger-remove.json` | the verb in the name | the answer, and the refusals |
 | `trigger-test.json`, `trigger-test-elsewhere.json` | `trigger test` of a pull-request trigger | what would fire now; one placed elsewhere |
 | `trigger-test-source-unconfirmed.json`, `trigger-test-source.json`, `trigger-test-source-failed.json` | `trigger test` of a capability source's trigger, without and with `--run-source` | nothing ran (`E_TRIGGER_SOURCE_RUN`); the source's answer; the source's refusal |
-| `version.json` | `oats version --json` | the kernel's features |
 
 The rows of `schedule-list.json`:
 

@@ -247,7 +247,7 @@ keep("schedule-remove-workspace.json", "E_AUTOMATION_WORKSPACE", "schedule", "re
 keep("schedule-remove-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "remove", "weekly-cleanup", "--json");
 keep("trigger-remove.json", "ok", "trigger", "remove", "old-prs", "--json");
 
-const version = keep("version.json", "ok", "version", "--json");
+const version = must("version", "--json");
 for (const line of fixtures.write()) log(line);
 writeFileSync(join(OUT, "recorded.json"), `${JSON.stringify({ oats: version.version, at: new Date().toISOString(), calls: recorded }, null, 1)}\n`);
 log(`${Object.keys(recorded).length} answers of OATS ${version.version} written to ${OUT}`);

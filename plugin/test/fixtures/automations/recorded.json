@@ -484,13 +484,6 @@
     "--json"
    ],
    "exit": 0
-  },
-  "version.json": {
-   "argv": [
-    "version",
-    "--json"
-   ],
-   "exit": 0
   }
  }
 }

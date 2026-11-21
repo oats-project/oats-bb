@@ -113,12 +113,19 @@ for (const harness of ["pi", "claude"]) {
     await waitFor("the told turn", async () => (await landed(`MARK-${harness}-TOLD`)) === 1, { timeoutMs: 90_000 });
     await idle(threadId);
 
+    // A command the agent starts and leaves running, outside the home: it inherits bb's
+    // BB_THREAD_ID, and is not the thread's harness.
+    await sh(`cat > ${harness === "pi" ? "pi-mock-next-cmd" : "mock-next-cmd"}`, { input: "cd / && setsid nohup sleep 900 >/dev/null 2>&1 & echo started" });
+    assert.equal((await input(home, `MARK-${harness}-STRAY`)).ok, true);
+    await waitFor("the stray command", async () => (await carriers(threadId)).includes("sleep"), { timeoutMs: 90_000 });
+    await idle(threadId);
+
     // A failed turn: bb says error, the agent's process is still loaded, and the kernel
     // reads the home as present (never LOST); an input recovers it, and no resume is counted.
     await sh(`touch ${failFile}`);
     assert.equal((await input(home, `MARK-${harness}-FAILS`)).ok, true);
     await waitFor("the thread to be in error", async () => (await threadStatus(threadId)) === "error", { timeoutMs: 60_000 });
-    assert.ok((await carriers(threadId)).length >= 1);
+    assert.ok((await carriers(threadId)).includes(HARNESS[harness].process));
     assert.equal((await inspect(home)).present, true);
     await sh(`rm ${failFile}`);
     const recovered = await input(home, `MARK-${harness}-RECOVERED`);
@@ -135,7 +142,9 @@ for (const harness of ["pi", "claude"]) {
     assert.equal((await input(home, `MARK-${harness}-FAILS-AGAIN`)).ok, true);
     await waitFor("the thread to be in error again", async () => (await threadStatus(threadId)) === "error", { timeoutMs: 60_000 });
     await sh(`bb thread stop ${threadId} --json >/dev/null`);
-    await waitFor("no process of the thread", async () => (await carriers(threadId)).length === 0, { timeoutMs: 20_000 });
+    await waitFor("no harness of the thread", async () => !(await carriers(threadId)).includes(HARNESS[harness].process), { timeoutMs: 20_000 });
+    // The stray command is still there, with the thread's id: alone, it does not keep the home present.
+    assert.ok((await carriers(threadId)).includes("sleep"), "the stray command is still there");
     await waitFor("no process in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
     await sh(`rm ${failFile}`);
     assert.equal(await threadStatus(threadId), "error");
@@ -150,7 +159,8 @@ for (const harness of ["pi", "claude"]) {
     assert.equal(await resumeCount(home), 1, "the kernel counted the resume once");
     const after = await inspect(home);
     assert.deepEqual([after.present, after.session.endpoint.threadId], [true, threadId], "the same thread, present again");
-    assert.ok((await carriers(threadId)).length >= 1, "bb started the harness again");
+    assert.ok((await carriers(threadId)).includes(HARNESS[harness].process), "bb started the harness again");
+    await sh("pkill -f 'sleep 90[0]' || true");
 
     // The kernel's stop and retire: nothing left in the home, the thread archived.
     // The kernel's stop is a plan, then its apply at that plan's revision.

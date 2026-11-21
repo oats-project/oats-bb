@@ -108,7 +108,7 @@ async function bash(threadId, command) {
 // The threads the tests launched, stopped after each test: an idle thread keeps its pi.
 const started = [];
 afterEach(async () => {
-  await sh("rm -f pi-mock-error pi-mock-next-cmd mock-error mock-next-cmd");
+  await sh("rm -f pi-mock-error pi-mock-next-cmd mock-error mock-next-cmd; pkill -f 'sleep 90[0]' || true");
   for (const id of started.splice(0)) await sh(`bb thread stop ${id} --json >/dev/null 2>&1 || true`);
 });
 before(() => box.start(), { timeout: 900_000 });
@@ -219,6 +219,12 @@ test("P2 every pi launch rewrites the project's env whole; the retire hook and a
 
 test("P4 a failed turn: with its pi alive the thread is there and at rest, and an input recovers it; with its pi gone it is a lost session, and an input makes bb start pi again for one turn", async () => {
   const { home, endpoint } = await launched("p4");
+  // A command the agent starts and leaves running: it inherits bb's BB_THREAD_ID, and is not
+  // the thread's harness. (Its working directory is not the home: the kernel's own rule keeps
+  // a resume off a home in which a process still works.)
+  assert.match(await bash(endpoint.threadId, "cd / && setsid nohup sleep 900 >/dev/null 2>&1 & echo started"), /started/);
+  const carriersNow = await carriers(endpoint.threadId);
+  assert.ok(["pi", "sleep"].every((name) => carriersNow.includes(name)), carriersNow.join(" "));
   await sh("touch pi-mock-error");
   const failing = await provider("input", { home, endpoint, text: "this turn fails MARK-P4-FAIL" });
   assert.deepEqual(failing.result, { submitted: true, verified: true });
@@ -245,7 +251,10 @@ test("P4 a failed turn: with its pi alive the thread is there and at rest, and a
   await sh(`bb thread stop ${endpoint.threadId} --json >/dev/null`);
   await nothingIn(home, "after bb's stop of the errored thread");
   assert.equal(await threadStatus(endpoint.threadId), "error", "bb's word did not change: only the process did");
-  assert.deepEqual(await carriers(endpoint.threadId), []);
+  // What the agent left running outlives its harness, and still carries the thread's id:
+  // it does not make the thread present.
+  const left = await carriers(endpoint.threadId);
+  assert.ok(left.includes("sleep") && !left.includes("pi"), left.join(" "));
   const lost = (await provider("inspect", { home, endpoint })).result;
   assert.deepEqual([lost.present, lost.state, lost.running], [false, "stopped", false]);
   await sh("rm pi-mock-error");

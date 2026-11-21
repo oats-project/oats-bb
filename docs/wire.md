@@ -264,10 +264,12 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   otherwise in doubt, as every failure after a launch's first effect is (above).
 - **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
   whose last turn failed and of one whose agent is gone. The provider decides at every
-  call from this host's processes: a process whose environment carries
-  `BB_THREAD_ID=<the thread's id>` (bb gives it to a thread's agent and to what the agent
-  starts, so a command the agent left running counts too, and an input to such a thread
-  is not a resume the kernel counts) makes the thread present, `state: unknown`, `running: null`; none makes it a
+  call from this host's processes: the thread's harness, which is a process whose
+  environment carries `BB_THREAD_ID=<the thread's id>` and which is named `pi` (a thread
+  whose `providerId` is `pi`) or `claude` (`claude-code`), by its process name or the
+  first word of its command line (the second, behind `node`, `bun` or `deno`). bb gives
+  the variable to what the harness starts too: a command the agent left running carries
+  it, is not the harness, and alone does not count. A live harness makes the thread present, `state: unknown`, `running: null`; none makes it a
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be

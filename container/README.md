@@ -163,7 +163,18 @@ directory> pi install npm:@awebai/oats-pi`, never install `@awebai/pi` there, an
 
 The provider's settings go in the `oats-local.yaml` of the deployment inside the
 container: `trust: container`, `version` equal to `bb-version` (its default), and, for pi
-agents, `piAgentDir: /state/home/.bb-pi` ([pi](#pi)). They are
+agents, the directory this image's bb runs pi with ([pi](#pi)):
+
+```yaml
+settings:
+  oats.bb:
+    trust: container
+    piAgentDir: /state/home/.bb-pi
+```
+
+Without that line the provider reads pi's default directory, which this image leaves
+empty, and refuses a pi launch (`E_BACKEND_NOT_READY`, whose message names the line).
+They are
 described in the provider's README: [Settings](../README.md#settings) and
 [A team image: two pins](../README.md#a-team-image-two-pins).
 

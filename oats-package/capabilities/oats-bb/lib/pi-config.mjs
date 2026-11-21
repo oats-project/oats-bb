@@ -89,7 +89,7 @@ export async function piConfigurationProblems(agentDir, globalEnvNames) {
   }
   const problems = [];
   if (!found.bridge) {
-    problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi would load none of the home's skills, and nothing would say so: ${PI_BRIDGE} is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:${PI_BRIDGE}), or point settings.oats.bb.piAgentDir at the directory bb's server uses. Read: ${join(agentDir, "settings.json")}` });
+    problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi would load none of the home's skills, and nothing would say so: ${PI_BRIDGE} is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:${PI_BRIDGE}), or point settings.oats.bb.piAgentDir at the directory bb's server uses (in the team image for bb: /state/home/.bb-pi). Read: ${join(agentDir, "settings.json")}` });
   }
   if (found.listener && !(await globalEnvNames()).includes(DELIVERY_VARIABLE)) {
     // The remedy before the path, which may be long: the kernel relays 500 characters.

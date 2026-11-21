@@ -2,11 +2,12 @@
 // does not answer is an error, never "stopped".
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { inspectAnswer } from "../../oats-package/capabilities/oats-bb/lib/threads.mjs";
-import { processLook, threadsWithProcess } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
+import { processLook, threadProcesses } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
 import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
@@ -42,12 +43,22 @@ for (const [status, expected] of [
   });
 }
 
-// The provider reads a process's environment from Linux's /proc: these tests start a real
-// process that carries a thread's id, as bb's agent does.
+// The provider reads a process's environment and name from Linux's /proc: these tests start a
+// real process that carries a thread's id and goes by a harness's name, as bb's harness does.
 const NO_PROC = existsSync("/proc/self/environ") ? false : "no /proc on this host";
-/** A process that carries BB_THREAD_ID=<id>, as a bb thread's agent does, until the test ends. */
-async function threadProcess(t, id) {
-  const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], { env: { BB_THREAD_ID: id }, stdio: "ignore" });
+const HARNESS_NAME = { pi: "pi", "claude-code": "claude" };
+/** A process that carries BB_THREAD_ID=<id>, until the test ends. `name`: what it runs as (a
+ *  link to node under that name, as `pi` and `claude` are found on a PATH); with none it is a
+ *  plain node, as a command the agent started and left running is some other program. */
+async function threadProcess(t, id, name = null) {
+  let command = process.execPath;
+  if (name !== null) {
+    const bin = mkdtempSync(join(tmpdir(), "oats-bb-harness-"));
+    t.after(() => rmSync(bin, { recursive: true, force: true }));
+    command = join(bin, name);
+    symlinkSync(process.execPath, command);
+  }
+  const child = spawn(command, ["-e", "setTimeout(() => {}, 600000)"], { env: { BB_THREAD_ID: id }, stdio: "ignore" });
   t.after(() => new Promise((done) => { if (child.exitCode !== null || child.signalCode !== null) return done(); child.once("exit", done); child.kill("SIGKILL"); }));
   await new Promise((done, failed) => { child.once("spawn", done); child.once("error", failed); });
   return child;
@@ -55,7 +66,7 @@ async function threadProcess(t, id) {
 // An id no other test file's process carries: the files run side by side on one host.
 const liveId = (name) => `thr_${name}_${process.pid}`;
 
-test("a thread whose last turn failed, with its agent process still loaded, is there and at rest: for pi and for Claude alike", { skip: NO_PROC }, async (t) => {
+test("a thread whose last turn failed, with its harness still loaded, is there and at rest: for pi and for Claude alike", { skip: NO_PROC }, async (t) => {
   for (const providerId of ["pi", "claude-code"]) {
     const id = liveId(`failed_${providerId.replace("-", "_")}`);
     const open = { label: "Open in bb", url: `${SERVER}/projects/proj_a/threads/${id}` };
@@ -63,8 +74,8 @@ test("a thread whose last turn failed, with its agent process still loaded, is t
     // No process of the thread: lost.
     const lost = await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input);
     assert.deepEqual(lost.answer.result, { present: false, state: "stopped", running: false, open }, providerId);
-    // Its agent is still loaded: an input recovers it, and the kernel must not resume beside it.
-    const child = await threadProcess(t, id);
+    // Its harness is still loaded: an input recovers it, and the kernel must not resume beside it.
+    const child = await threadProcess(t, id, HARNESS_NAME[providerId]);
     const there = await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input);
     assert.deepEqual(there.answer.result, { present: true, state: "unknown", running: null, open }, providerId);
     assert.deepEqual(there.bb.calls().map((c) => c.argv), [["thread", "list", "--include-hidden", "--json"]], "bb is asked nothing more");
@@ -75,17 +86,34 @@ test("a thread whose last turn failed, with its agent process still loaded, is t
   }
 });
 
-test("a process of another thread, or one whose BB_THREAD_ID only begins with the id, is not this thread's", { skip: NO_PROC }, async (t) => {
+test("a command the agent left running carries the thread's id and is not its harness: alone, it leaves a thread in error lost", { skip: NO_PROC }, async (t) => {
+  for (const providerId of ["pi", "claude-code"]) {
+    const id = liveId(`stray_${providerId.replace("-", "_")}`);
+    const input = { endpoint: { ...endpoint, threadId: id } };
+    const read = async () => (await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input)).answer.result.present;
+    // A dev server, a watcher, a sleep: some other program, with the variable it inherited.
+    await threadProcess(t, id);
+    assert.equal(await read(), false, `${providerId}: a stray child alone`);
+    // The other harness's name is not this thread's harness either.
+    await threadProcess(t, id, HARNESS_NAME[providerId === "pi" ? "claude-code" : "pi"]);
+    assert.equal(await read(), false, `${providerId}: a process named as the other harness`);
+    // Beside them, the harness itself: present.
+    await threadProcess(t, id, HARNESS_NAME[providerId]);
+    assert.equal(await read(), true, `${providerId}: its own harness`);
+  }
+});
+
+test("a harness of another thread, or one whose BB_THREAD_ID only begins with the id, is not this thread's", { skip: NO_PROC }, async (t) => {
   const id = liveId("exact");
-  await threadProcess(t, `${id}_other`);
+  await threadProcess(t, `${id}_other`, "claude");
   const { answer } = await inspectWith(t, [threadRow(id, "proj_a", "error")], { endpoint: { ...endpoint, threadId: id } });
   assert.equal(answer.result.present, false);
 });
 
-test("inspectMany looks at the host's processes once, and each home's thread in error reads by its own process", { skip: NO_PROC }, async (t) => {
+test("inspectMany looks at the host's processes once, and each home's thread in error reads by its own harness", { skip: NO_PROC }, async (t) => {
   const { dir, home } = scratch(t);
   const [alive, lost] = [liveId("many_alive"), liveId("many_lost")];
-  await threadProcess(t, alive);
+  await threadProcess(t, alive, "claude");
   const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(alive, "proj_a", "error"), threadRow(lost, "proj_b", "error")] } });
   const at = (projectId, threadId) => ({ home: `${home}/${projectId}`, endpoint: { server: SERVER, projectId, threadId } });
   const { results } = (await call("inspectMany", { homes: [at("proj_a", alive), at("proj_b", lost)] }, { settings, bb })).result;
@@ -104,18 +132,46 @@ test("where the processes cannot be looked at, a thread in error is an error: ne
   assert.deepEqual(inspectAnswer(threadRow("thr_a", "proj_a", "error", { queuedWork: "waiting" }), processLook({ proc: join(dir, "no-such-proc") })), { present: true, state: "unknown", running: true });
 });
 
-test("the process look reads BB_THREAD_ID from each process's environment, and passes over what it cannot read", (t) => {
+test("the process look reads each process's thread id and names, as bb-app 0.50.1's harnesses show them, and passes over what it cannot read", (t) => {
   const { dir } = scratch(t);
   const proc = join(dir, "proc");
-  const entry = (pid, environ) => { mkdirSync(join(proc, pid), { recursive: true }); if (environ !== null) writeFileSync(join(proc, pid, "environ"), environ); };
-  entry("101", "PATH=/bin\0BB_THREAD_ID=thr_one\0HOME=/x\0");
-  entry("102", "NOT_BB_THREAD_ID=thr_no\0XBB_THREAD_ID=thr_no2\0");
-  entry("103", ""); // a zombie
-  entry("104", null); // ended meanwhile
-  entry("105", "BB_THREAD_ID=\0"); // names none
-  entry("106", "BB_THREAD_ID=thr_two");
-  entry("self", "BB_THREAD_ID=thr_not_a_pid\0");
-  assert.deepEqual([...threadsWithProcess({ proc })].sort(), ["thr_one", "thr_two"]);
+  const entry = (pid, environ, comm = null, cmdline = null) => {
+    mkdirSync(join(proc, pid), { recursive: true });
+    if (environ !== null) writeFileSync(join(proc, pid, "environ"), environ);
+    if (comm !== null) writeFileSync(join(proc, pid, "comm"), `${comm}\n`);
+    if (cmdline !== null) writeFileSync(join(proc, pid, "cmdline"), cmdline);
+  };
+  // pi sets its own title: its name and its whole command line are that one word.
+  entry("101", "PATH=/bin\0BB_THREAD_ID=thr_pi\0HOME=/x\0", "pi", "pi\0");
+  // Claude Code: argv[0] is the path of the claude on bb's PATH.
+  entry("102", "BB_THREAD_ID=thr_claude\0", "claude", "/home/node/.npm-global/bin/claude\0--output-format\0stream-json\0");
+  // A script run by an interpreter: the name is the second word.
+  entry("103", "BB_THREAD_ID=thr_script\0", "node", "/usr/local/bin/node\0/opt/pi/bin/pi\0--mode\0rpc\0");
+  // What an agent leaves running: the variable, and another name. A later word named pi is not looked at.
+  entry("104", "BB_THREAD_ID=thr_pi\0", "sleep", "sleep\x00900\x00");
+  entry("105", "BB_THREAD_ID=thr_stray\0", "node", "node\0server.js\0pi\0");
+  entry("111", "BB_THREAD_ID=thr_stray\0", "tail", "tail\0pi\0"); // an argument named pi, of a program that runs no script
+  entry("106", "NOT_BB_THREAD_ID=thr_no\0XBB_THREAD_ID=thr_no2\0", "pi", "pi\0");
+  entry("107", "", "pi", "pi\0"); // a zombie
+  entry("108", null, "pi", "pi\0"); // ended meanwhile
+  entry("109", "BB_THREAD_ID=\0", "pi", "pi\0"); // names none
+  entry("110", "BB_THREAD_ID=thr_bare"); // its name cannot be read
+  entry("self", "BB_THREAD_ID=thr_not_a_pid\0", "pi", "pi\0");
+  const threads = threadProcesses({ proc });
+  assert.deepEqual([...threads.keys()].sort(), ["thr_bare", "thr_claude", "thr_pi", "thr_script", "thr_stray"]);
+  assert.deepEqual([...threads.get("thr_pi")].sort(), ["pi", "sleep"]);
+  const look = processLook({ proc });
+  const has = (id, providerId) => look.has({ id, providerId });
+  assert.equal(has("thr_pi", "pi"), true);
+  assert.equal(has("thr_pi", "claude-code"), false, "pi is not a Claude thread's harness");
+  assert.equal(has("thr_claude", "claude-code"), true);
+  assert.equal(has("thr_script", "pi"), true);
+  assert.equal(has("thr_stray", "pi"), false);
+  assert.equal(has("thr_bare", "pi"), false, "a process whose name cannot be read is not taken for the harness");
+  assert.equal(has("thr_none", "pi"), false);
+  // A provider of bb's whose harness this module does not know: either name.
+  assert.equal(has("thr_claude", "codex"), true);
+  assert.equal(has("thr_stray", undefined), false);
 });
 
 // A turn bb's concurrency limit holds in line starts by itself when a slot frees: a thread

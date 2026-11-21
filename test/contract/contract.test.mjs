@@ -284,6 +284,13 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await once("T2-MIDTOOL");
   assert.equal(await landed("T2-TOOLSTART"), 1);
 
+  // a command the agent starts and leaves running: it inherits bb's BB_THREAD_ID, and is not
+  // the thread's harness
+  await armTool("cd / && setsid nohup sleep 900 >/dev/null 2>&1 & echo started");
+  await tell("T2-STRAY marker");
+  await once("T2-STRAY");
+  assert.ok((await carriers(id)).includes("sleep"), "the stray command carries the thread's id");
+
   // error: the model endpoint refuses a turn; bb shows error, and keeps the thread's Claude
   // loaded: a process that carries the thread's id is still there, so the thread reads as
   // there and at rest (never a lost session, which the kernel would resume beside that
@@ -292,7 +299,7 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await tell("T2-FAILS marker");
   await waitStatus(id, "error");
   assert.ok((await claudesIn(home)) >= 1, "bb released the Claude of a thread whose turn failed: the error rule may no longer be needed for Claude");
-  assert.ok((await carriers(id)).length >= 1, "a process of the thread carries BB_THREAD_ID");
+  assert.ok((await carriers(id)).includes("claude"), "the thread's Claude carries BB_THREAD_ID, under the name the provider looks for");
   const errored = await provider("inspect", { home, endpoint });
   assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: null });
   await sh("rm mock-error");
@@ -305,7 +312,10 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await tell("T2-FAILS-AGAIN marker");
   await waitStatus(id, "error");
   await sh(`bb thread stop ${id} --json >/dev/null`);
-  await waitFor("no process of the thread", async () => (await carriers(id)).length === 0, { timeoutMs: 20_000 });
+  await waitFor("no Claude of the thread", async () => !(await carriers(id)).includes("claude"), { timeoutMs: 20_000 });
+  // what the agent left running outlives it, and still carries the thread's id: it does not
+  // make the thread present
+  assert.ok((await carriers(id)).includes("sleep"), "the stray command is still there");
   assert.equal(await threadStatus(id), "error");
   const lost = await provider("inspect", { home, endpoint });
   assert.deepEqual({ present: lost.result.present, state: lost.result.state, running: lost.result.running }, { present: false, state: "stopped", running: false });
@@ -315,7 +325,8 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   // that stops doing this fails here: the rule rests on it (contract r23, A14(3))
   await tell("T2-RESUMED marker");
   await once("T2-RESUMED");
-  assert.ok((await carriers(id)).length >= 1, "the thread's Claude runs again");
+  assert.ok((await carriers(id)).includes("claude"), "the thread's Claude runs again");
+  await sh("pkill -f 'sleep 90[0]' || true");
 });
 
 const SANDBOX = {

@@ -25,9 +25,10 @@ const atRest = (thread) => ({ present: true, state: "unknown", running: hasQueue
  *  it back to idle. Read as a lost session, the kernel would resume it beside that
  *  process, and refuses to: the home would be stuck. So which of the two it is is decided
  *  here, at every call, from the processes themselves, never from bb's word alone:
- *  `processes.has(id)` says whether a process of the thread lives on this host
- *  (lib/processes.mjs).
- *  - one lives: the thread is there and at rest, and an input recovers it;
+ *  `processes.has(thread)` says whether the thread's harness lives on this host: the
+ *  process named pi or claude that carries the thread's id, never a command the agent left
+ *  running (lib/processes.mjs).
+ *  - it lives: the thread is there and at rest, and an input recovers it;
  *  - none: a lost session, as the kernel reads one, which it may resume with an input;
  *  - it cannot be told (the look throws): an error, never either of the two. */
 export function inspectAnswer(thread, processes) {
@@ -37,7 +38,7 @@ export function inspectAnswer(thread, processes) {
   if (status === "error") {
     // A turn bb holds in line starts by itself, whatever is loaded now.
     if (hasQueuedWork(thread)) return atRest(thread);
-    return processes.has(thread.id) ? atRest(thread) : { ...MISSING };
+    return processes.has(thread) ? atRest(thread) : { ...MISSING };
   }
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }

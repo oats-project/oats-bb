@@ -43,8 +43,9 @@ For every bb agent, Claude Code included:
 
 - **A thread whose last turn failed is no longer read as a lost session while its agent
   process is still loaded.** bb says `error` both of a failed turn and of an agent that is
-  gone. The provider now looks at the host's processes at every inspect: with a process
-  of the thread alive, the thread reads as present and at rest, and an input recovers it;
+  gone. The provider now looks at the host's processes at every inspect: with the thread's
+  harness alive (the process named `pi` or `claude` that carries the thread's id; a
+  command the agent left running does not count), the thread reads as present and at rest, and an input recovers it;
   before, such a home read LOST and could be neither resumed nor sent to. With none, it
   is a lost session as before. This reads Linux's `/proc`; on a host without it (macOS) a
   thread in `error` is answered `E_SESSION_UNAVAILABLE`.

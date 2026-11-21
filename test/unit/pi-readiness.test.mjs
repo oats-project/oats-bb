@@ -1,6 +1,12 @@
 // Nothing in bb's pi may hold the agent's mail stream (contract r23, A12(3)): a pi launch is
 // refused unless the pi configuration bb's server runs with lists @awebai/oats-pi and not
 // @awebai/pi. The provider reads that configuration, and never changes it.
+//
+// One host-only flake, seen once under load: a test here answered E_BACKEND_EXPOSED. The
+// provider's exposure check connects to the fake bb's port on every address of this host
+// that is not loopback, and another process of the machine happened to listen there on
+// the same port number. It is the check working, on a busy host; the tests run alone, or
+// on a runner with nothing else listening, do not meet it.
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -78,7 +84,7 @@ test("with a long piAgentDir the remedy is still whole, in the refusal and in th
   writeFileSync(join(long, "settings.json"), JSON.stringify({ packages: [] }));
   const noBridge = await launch({}, { piAgentDir: long });
   assert.equal(noBridge.error.code, "E_BACKEND_NOT_READY");
-  assert.match(noBridge.error.message, /Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
+  assert.match(noBridge.error.message, /Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses \(in the team image for bb: \/state\/home\/\.bb-pi\)\. Read: /);
   writeFileSync(join(long, "settings.json"), "{ not json");
   const unreadable = await launch({}, { piAgentDir: long });
   assert.equal(unreadable.error.code, "E_BACKEND_NOT_READY");
@@ -136,7 +142,7 @@ for (const [name, write] of [
     write(backend);
     const answer = await launch();
     assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
-    assert.match(answer.error.message, /^bb's pi would load none of the home's skills, and nothing would say so: @awebai\/oats-pi is not in bb's pi configuration\. Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses\. Read: /);
+    assert.match(answer.error.message, /^bb's pi would load none of the home's skills, and nothing would say so: @awebai\/oats-pi is not in bb's pi configuration\. Install it there \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\), or point settings\.oats\.bb\.piAgentDir at the directory bb's server uses \(in the team image for bb: \/state\/home\/\.bb-pi\)\. Read: /);
     assert.ok(answer.error.message.endsWith(`Read: ${join(backend.piAgentDir, "settings.json")}`), "the file read is named, last");
     assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
     assert.equal(spawned(bb), false);

@@ -148,8 +148,8 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | starting, active, stopping | true | unknown | true |
 | pending, idle | true | unknown | null |
 | pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
-| error, and a process of the thread is still loaded on this host | true | unknown | null |
-| error, and no process of the thread is left | false | stopped | false |
+| error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | null |
+| error, and its harness process is gone (whatever else the agent left running) | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |
 
 **A known limit: many archived threads.** Every start archives the home's previous
@@ -170,12 +170,13 @@ at the pinned bb), and the next input starts a turn and brings the thread back t
 that thread is there and at rest. Read as a lost session, the kernel would try to resume
 it beside the process that is still there, and refuses to. So the provider decides at
 every inspect, from the processes of this host and never from bb's word alone: a thread
-in `error` is there while some process carries its id (bb gives a thread's agent, and
-what that agent starts, `BB_THREAD_ID`), and a lost session once none does, which the
-kernel may resume with an input. Any process that carries the id counts, a command the
-agent started and left running included: where one outlives an agent that died, the
-thread still reads as there, and an input to it is told (bb starts the agent again)
-without the kernel counting a resume. What failed is the harness's to report (a "Turn failed"
+in `error` is there while its harness process lives, and a lost session once it does not,
+which the kernel may resume with an input. The harness is the process that carries the
+thread's id (bb gives a thread's harness, and what it starts, `BB_THREAD_ID`) and is
+named `pi`, for a thread of bb's pi provider, or `claude`, for one of its claude-code
+provider. A command the agent started and left running (a dev server, a `sleep`)
+carries the id too and is not the harness: alone, it does not keep the thread there, so
+every input to a thread whose harness died is a resume the kernel counts. What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
 a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess; to get such

@@ -11,14 +11,16 @@ import {
 import type { ExperimentalBadge, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { Node } from "../../model/types";
 import { flatten } from "../../model/view";
-import { age, clean, needsYouLabel } from "../format";
+import { needsYouLabel } from "../format";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
+import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
 import { attempt, errorMessage, useRead } from "../store";
 import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
 import { PAGES } from "../workspace/pages";
+import { shown } from "../ui/text";
 
 /** The home's navigation badge: how many agents need the person. */
 export function useHomeBadge(): ExperimentalBadge | null {
@@ -90,7 +92,7 @@ function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginS
     );
   };
 
-  const since = age(node.agent.waiting?.since ?? null, now);
+  const { since } = agentStatus(node.agent, node.thread, now);
   const text = node.agent.waiting?.message ?? asked?.title ?? "needs your input";
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== text ? asked.title : null;
@@ -103,19 +105,19 @@ function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginS
         </a>
         {since === null ? null : <span className="shrink-0 text-xs text-muted-foreground">{since}</span>}
       </div>
-      <p className="text-xs text-muted-foreground">{clean(soul)}</p>
-      <p data-testid="oats-needs-question" className="whitespace-pre-wrap break-words">
-        {clean(text)}
+      <p className="text-xs text-muted-foreground">{shown(soul)}</p>
+      <p data-testid="oats-needs-question" className="break-words">
+        {shown(text)}
       </p>
       {detail === null ? null : (
-        <p data-testid="oats-needs-detail" className="whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-xs">
-          {clean(detail)}
+        <p data-testid="oats-needs-detail" className="break-words rounded-md bg-muted px-2 py-1 text-xs">
+          {shown(detail)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
         {(asked?.choices ?? []).map((choice, index) => (
           <Button key={index} data-testid="oats-needs-choice" disabled={answering} onClick={() => answer(choice)}>
-            {clean(choice.label)}
+            {shown(choice.label)}
           </Button>
         ))}
         <a
@@ -126,7 +128,7 @@ function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginS
           Open
         </a>
       </div>
-      {error === null ? null : <ErrorLine>{clean(error)}</ErrorLine>}
+      {error === null ? null : <ErrorLine>{error}</ErrorLine>}
     </li>
   );
 }
@@ -145,7 +147,7 @@ function AgentRows({ nodes, oats, testId }: { nodes: readonly Node[]; oats: Read
               <span className="min-w-0 flex-1 truncate">
                 <ThreadTitle threadId={thread.id} />
               </span>
-              <span className="shrink-0 truncate text-xs text-muted-foreground">{clean(oats.soulOf(node.agent))}</span>
+              <span className="shrink-0 truncate text-xs text-muted-foreground">{shown(oats.soulOf(node.agent))}</span>
             </a>
           </li>,
         ];
@@ -211,7 +213,7 @@ function ReplyBox({ oats }: { oats: Ready }) {
         >
           {nodes.map((node) => (
             <option key={node.thread.id} value={node.thread.id}>
-              {`${clean(node.thread.displayTitle)} · ${clean(node.agent.instance)}`}
+              {`${shown(node.thread.displayTitle)} · ${shown(node.agent.instance)}`}
             </option>
           ))}
         </select>
@@ -232,7 +234,7 @@ function ReplyBox({ oats }: { oats: Ready }) {
           {sending ? "Sending…" : "Send"}
         </Button>
       </div>
-      {error === null ? null : <ErrorLine>{clean(error)}</ErrorLine>}
+      {error === null ? null : <ErrorLine>{error}</ErrorLine>}
     </form>
   );
 }
@@ -253,7 +255,7 @@ function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
   return (
     <section className="flex flex-col gap-2">
       <Heading>Workspace</Heading>
-      <p className="text-xs text-muted-foreground">{`${clean(oats.deployment.workspace)} · ${clean(oats.deployment.machine)}`}</p>
+      <p className="text-xs text-muted-foreground">{`${shown(oats.deployment.workspace)} · ${shown(oats.deployment.machine)}`}</p>
       <ul className="grid grid-cols-2 gap-2">
         {PAGES.map((page) => (
           <li key={page.path}>
@@ -289,7 +291,7 @@ function useNow(everyMs = 30_000): number {
 function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {
   const now = useNow();
   if (oats.phase === "loading") return <Note>Reading OATS…</Note>;
-  if (oats.phase === "failed") return <ErrorLine onRetry={oats.retry}>{clean(failureLine(oats))}</ErrorLine>;
+  if (oats.phase === "failed") return <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>;
   const { view } = oats;
   return (
     <>

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
+import { refusalLines } from "./ui/text";
 
 // bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
 // themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and
@@ -85,11 +86,31 @@ export function Note({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
 }
 
-/** A kernel refusal or a failed call, printed unchanged. */
-export function ErrorLine({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
+/**
+ * A refusal or a failure as text, through the display filter (ui/text.ts): its code, then its
+ * message, each line of the kernel's on a line of its own.
+ */
+export function Lines({ text }: { text: string }) {
+  const lines = refusalLines(text);
+  if (lines.length <= 1) return <>{lines[0] ?? ""}</>;
+  return (
+    <>
+      {lines.map((line, index) => (
+        <span key={index} className="block">
+          {line}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A kernel refusal or a failed call: the kernel's code and message, through the display filter. */
+export function ErrorLine({ children, onRetry }: { children: string; onRetry?: () => void }) {
   return (
     <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive-text">
-      <span className="min-w-0 whitespace-pre-wrap break-words">{children}</span>
+      <span className="min-w-0 break-words">
+        <Lines text={children} />
+      </span>
       {onRetry === undefined ? null : <Button onClick={onRetry}>Retry</Button>}
     </div>
   );

@@ -164,7 +164,12 @@ test("a refused apply shows the kernel's code and message unchanged, keeps the d
   await pick("stop");
   await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  expect((await slot.findByRole("alert")).textContent).toBe(refusal);
+  // The kernel's code and each of its lines, on a line of its own: no line break is drawn (ui/text.ts).
+  const alert = await slot.findByRole("alert");
+  expect(Array.from(alert.querySelectorAll("span.block")).map((line) => line.textContent)).toEqual([
+    "E_PLAN_STALE: the plan revision rev-1 is no longer current",
+    "read the plan again",
+  ]);
   expect(slot.getByRole("dialog")).toBeTruthy();
 
   refuse = false;

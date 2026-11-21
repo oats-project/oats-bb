@@ -27,8 +27,9 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
+| `scenes/<feature>.mjs` | by `live-ui.mjs` | each feature's live scenes: what a page is asked and where its screenshots are taken (below) |
 | `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
-| `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked (`test/fixtures/`) and logs each call; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
+| `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked and logs each call; the verbs it knows and their files are each feature's `test/fixtures/<feature>/verbs.json`; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
 The bb version: `ci.sh` reads the one line of `bb-version` at the repository's root when that file
 exists and hands it to `setup.sh` as `BB_VERSION`; with no such file, or run by hand in a
@@ -46,8 +47,16 @@ The live checks of the backend:
 - **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
 - **A15b** the same as A15 when bb itself is stopped.
 
-The live checks of the app (`live-ui.mjs`), each at 1280x800 and 390x800, in bb's light theme and
-again in its dark theme:
+The live checks of the app, each at 1280x800 and 390x800, in bb's light theme and again in its dark
+theme. `live-ui.mjs` is the harness: it makes bb's threads, sets what the fake `oats` answers, opens
+the pages and counts the checks. What a page is asked is in `scenes/<feature>.mjs`, one file per
+feature of the plugin (`../README.md`, "One module per feature"): its default export is a list of
+scenes `{ stage, name, run }`. A stage is a state of the fake `oats`: `fixtures` (A13: the fixtures
+as they are), `detached` (A16) and `no-oats` (A14). For each stage, in each theme and at each
+viewport, one page runs that stage's scenes, feature by feature. A feature whose scenes need
+another state exports `stages` beside its list (`live-ui.mjs` says how). A new screen or state of
+the app gets its scene in its feature's file in the same change: the contrast check only sees what
+a scene draws.
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
   that needs you (its row is the open one, with its dot and its "?"), the home (its badge

@@ -3,13 +3,14 @@
 import { ThreadTitle, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { askPlan, run } from "../lifecycle/acts";
-import { clean, count } from "../format";
+import { count } from "../format";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { useRead } from "../store";
 import type { Contract, Result } from "../store";
-import { Button, Chip, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
+import { Button, Chip, Dot, ErrorLine, Heading, Lines, Note, Page, plainClick } from "../ui";
+import { shown } from "../ui/text";
 
 type Soul = Result<"souls">["souls"][number];
 type Ready = Extract<Oats, { phase: "ready" }>;
@@ -61,7 +62,7 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
                 <span className="min-w-0 flex-1 truncate">
                   <ThreadTitle threadId={thread.id} />
                 </span>
-                <span className="shrink-0 truncate text-xs text-muted-foreground">{clean(agent.instance)}</span>
+                <span className="shrink-0 truncate text-xs text-muted-foreground">{shown(agent.instance)}</span>
               </a>
             </li>
           );
@@ -69,7 +70,7 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
         if (detached.has(agent)) {
           return (
             <li key={agent.instance} data-testid="oats-soul-agent-detached" className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 truncate">{clean(agent.instance)}</span>
+              <span className="min-w-0 flex-1 truncate">{shown(agent.instance)}</span>
               <span className="text-xs text-muted-foreground">thread missing</span>
               <Button data-testid="oats-detached-start" onClick={() => void run("start", agent.instance, rpc, navigate)}>
                 Start
@@ -82,8 +83,8 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
         }
         return (
           <li key={agent.instance} data-testid="oats-soul-agent-elsewhere" className="flex items-center gap-2 px-2 py-1.5">
-            <span className="min-w-0 flex-1 truncate">{clean(agent.instance)}</span>
-            <span className="text-xs text-muted-foreground">{`on ${clean(agent.backend)}`}</span>
+            <span className="min-w-0 flex-1 truncate">{shown(agent.instance)}</span>
+            <span className="text-xs text-muted-foreground">{`on ${shown(agent.backend)}`}</span>
           </li>
         );
       })}
@@ -95,9 +96,9 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   return (
     <article data-testid="oats-soul-detail" className="flex min-w-0 flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h2 className="break-words text-base font-semibold">{clean(soul.name)}</h2>
-        {soul.description === "" ? null : <p className="whitespace-pre-wrap break-words">{clean(soul.description)}</p>}
-        <p className="break-words text-xs text-muted-foreground">{`from ${clean(soul.origin)}`}</p>
+        <h2 className="break-words text-base font-semibold">{shown(soul.name)}</h2>
+        {soul.description === "" ? null : <p className="break-words">{shown(soul.description)}</p>}
+        <p className="break-words text-xs text-muted-foreground">{`from ${shown(soul.origin)}`}</p>
       </header>
       <section className="flex flex-col gap-2">
         <Heading n={soul.capabilities.length}>Capabilities</Heading>
@@ -106,7 +107,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {soul.capabilities.map((id) => (
-              <Chip key={id}>{clean(id)}</Chip>
+              <Chip key={id}>{shown(id)}</Chip>
             ))}
           </div>
         )}
@@ -118,7 +119,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         ) : oats.phase === "loading" ? (
           <Note>Reading OATS…</Note>
         ) : (
-          <ErrorLine onRetry={oats.retry}>{clean(failureLine(oats))}</ErrorLine>
+          <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
         )}
       </section>
       <section className="flex flex-col gap-2">
@@ -126,8 +127,8 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         {soul.spawnable ? (
           <NewAgent key={soul.name} soul={soul} />
         ) : (
-          <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive-text">
-            {clean(soul.problem ?? "This soul cannot be spawned.")}
+          <p data-testid="oats-soul-problem" role="alert" className="break-words text-destructive-text">
+            <Lines text={soul.problem ?? "This soul cannot be spawned."} />
           </p>
         )}
       </section>
@@ -144,7 +145,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   if (souls.data === undefined) {
     return (
       <Page testId="oats-souls-page">
-        {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{clean(souls.error)}</ErrorLine> : <Note>Reading OATS…</Note>}
+        {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : <Note>Reading OATS…</Note>}
       </Page>
     );
   }
@@ -155,7 +156,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
 
   return (
     <Page testId="oats-souls-page">
-      {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{clean(souls.error)}</ErrorLine> : null}
+      {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : null}
       <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start">
         {/* At phone width one of the two shows at a time: the list, or the picked soul with Back. */}
         <nav aria-label="Souls" className={`flex-col gap-1 md:flex md:w-64 md:shrink-0 ${picked === null ? "flex" : "hidden"}`}>
@@ -173,7 +174,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
                     className={`flex w-full min-w-0 items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent ${candidate.name === picked ? "bg-accent" : ""}`}
                     onClick={() => navigate.toPluginPanel("souls", { subPath: candidate.name })}
                   >
-                    <span className="min-w-0 flex-1 truncate">{clean(candidate.name)}</span>
+                    <span className="min-w-0 flex-1 truncate">{shown(candidate.name)}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">{n === null ? "" : count(n, "agent")}</span>
                   </button>
                 </li>
@@ -189,7 +190,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
               <Button data-testid="oats-back" className="self-start md:hidden" onClick={() => navigate.toPluginPanel("souls")}>
                 ← Souls
               </Button>
-              {soul === undefined ? <Note>{`This deployment has no soul named ${clean(picked)}.`}</Note> : <SoulDetail soul={soul} oats={oats} />}
+              {soul === undefined ? <Note>{`This deployment has no soul named ${shown(picked)}.`}</Note> : <SoulDetail soul={soul} oats={oats} />}
             </>
           )}
         </div>

@@ -1,11 +1,12 @@
 // Capabilities, Teams and Machines: what `oats capabilities`, `oats teams` and `oats server list`
 // answer for this deployment. Lists only: nothing here acts, and the Machines page runs no check.
 import type { ReactNode } from "react";
-import { clean, count } from "../format";
+import { count } from "../format";
 import { failureLine, useOats } from "../oats";
 import { useRead } from "../store";
 import type { Read, Result } from "../store";
 import { Chip, ErrorLine, Heading, Note, Page } from "../ui";
+import { shown } from "../ui/text";
 
 /** A page that is one read: its loading line, its error with Retry, then its rows. */
 function ReadPage<T>({
@@ -19,7 +20,7 @@ function ReadPage<T>({
 }) {
   return (
     <Page testId={testId}>
-      {read.status === "error" ? <ErrorLine onRetry={read.retry}>{clean(read.error)}</ErrorLine> : null}
+      {read.status === "error" ? <ErrorLine onRetry={read.retry}>{read.error}</ErrorLine> : null}
       {read.data === undefined ? (read.status === "loading" ? <Note>Reading OATS…</Note> : null) : children(read.data)}
     </Page>
   );
@@ -39,11 +40,11 @@ export function CapabilitiesPage() {
             {capabilities.map((capability) => (
               <li key={capability.id} data-testid="oats-capability-row" className={ROW}>
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                  <span className="min-w-0 break-words font-semibold">{clean(capability.id)}</span>
+                  <span className="min-w-0 break-words font-semibold">{shown(capability.id)}</span>
                   <span className="text-xs text-muted-foreground">{`used by ${count(capability.souls, "soul")}`}</span>
                 </div>
-                {capability.description === "" ? null : <p className="whitespace-pre-wrap break-words">{clean(capability.description)}</p>}
-                <p className="break-words text-xs text-muted-foreground">{`from ${clean(capability.origin)}`}</p>
+                {capability.description === "" ? null : <p className="break-words">{shown(capability.description)}</p>}
+                <p className="break-words text-xs text-muted-foreground">{`from ${shown(capability.origin)}`}</p>
               </li>
             ))}
           </ul>
@@ -66,7 +67,7 @@ export function TeamsPage() {
             {teams.map((team) => (
               <li key={team.label} data-testid="oats-team-row" className={ROW}>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="min-w-0 break-words font-semibold">{clean(team.label)}</span>
+                  <span className="min-w-0 break-words font-semibold">{shown(team.label)}</span>
                   {team.isDefault ? <Chip>default</Chip> : null}
                   {team.team !== null && oats.phase === "ready" ? (
                     <span className="text-xs text-muted-foreground">
@@ -75,7 +76,7 @@ export function TeamsPage() {
                   ) : null}
                 </div>
                 {/* A shared team with no provider id yet: nothing can be counted under it. */}
-                <p className="break-all text-xs text-muted-foreground">{team.team === null ? "not mapped" : clean(team.team)}</p>
+                <p className="break-all text-xs text-muted-foreground">{team.team === null ? "not mapped" : shown(team.team)}</p>
               </li>
             ))}
           </ul>
@@ -94,9 +95,9 @@ function Servers({ machines }: { machines: readonly Result<"machines">["machines
       <ul className="flex flex-col">
         {machines.map((machine) => (
           <li key={machine.id} data-testid="oats-machine-row" className={ROW}>
-            <span className="min-w-0 break-words font-semibold">{clean(machine.id)}</span>
-            {machine.route === null ? null : <p className="break-all text-xs text-muted-foreground">{clean(machine.route)}</p>}
-            {machine.note === null ? null : <p className="whitespace-pre-wrap break-words text-xs">{clean(machine.note)}</p>}
+            <span className="min-w-0 break-words font-semibold">{shown(machine.id)}</span>
+            {machine.route === null ? null : <p className="break-all text-xs text-muted-foreground">{shown(machine.route)}</p>}
+            {machine.note === null ? null : <p className="break-words text-xs">{shown(machine.note)}</p>}
           </li>
         ))}
       </ul>
@@ -115,19 +116,19 @@ export function MachinesPage() {
             <Heading>This machine</Heading>
             {oats.phase === "ready" ? (
               <>
-                <p className="break-words font-semibold">{clean(oats.deployment.machine)}</p>
+                <p className="break-words font-semibold">{shown(oats.deployment.machine)}</p>
                 <p className="text-xs text-muted-foreground">
                   {`${count(oats.agents.filter((agent) => agent.backend === "bb").length, "agent")} in bb · ${count(
                     oats.agents.filter((agent) => agent.backend !== "bb").length,
                     "agent",
                   )} elsewhere`}
                 </p>
-                <p className="break-all text-xs text-muted-foreground">{clean(oats.deployment.root)}</p>
+                <p className="break-all text-xs text-muted-foreground">{shown(oats.deployment.root)}</p>
               </>
             ) : oats.phase === "loading" ? (
               <Note>Reading OATS…</Note>
             ) : (
-              <ErrorLine onRetry={oats.retry}>{clean(failureLine(oats))}</ErrorLine>
+              <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
             )}
           </section>
           <Servers machines={machines.filter((machine) => !machine.isThisMachine)} />

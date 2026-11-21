@@ -1,14 +1,8 @@
-// The helpers the slots print with.
+// The helpers the slots print with (the display filter has its own tests: text.test.ts).
 import { describe, expect, test } from "vitest";
-import { age, clean, count, homeTail, needsYouLabel } from "../../app/format";
+import { age, count, homeTail, needsYouLabel } from "../../app/format";
 
 describe("format", () => {
-  test("clean drops control characters and bidi overrides, and keeps newlines, tabs and markup as text", () => {
-    expect(clean("a\u001b[31mred\u0007\u0000b")).toBe("a[31mredb");
-    expect(clean("line 1\n\tline 2")).toBe("line 1\n\tline 2");
-    expect(clean("\u202egnp.exe\u2066x\u2069")).toBe("gnp.exex");
-    expect(clean("<b>bold</b> & é 日本")).toBe("<b>bold</b> & é 日本");
-  });
   test("homeTail keeps the last two segments", () => {
     expect(homeTail("/abs/deployment/agents/oats-developer/instances/dev-a")).toBe("…/instances/dev-a");
     expect(homeTail("/home/dev-a")).toBe("/home/dev-a");

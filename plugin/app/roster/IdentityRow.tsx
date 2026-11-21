@@ -5,9 +5,10 @@ import {
   useBbNavigate,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { clean, count, homeTail } from "../format";
+import { count, homeTail } from "../format";
 import { useOats } from "../oats";
 import { Chip, plainClick } from "../ui";
+import { shown } from "../ui/text";
 
 /** The fixed thread tab that shows the OATS home on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -46,20 +47,20 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap border-b border-border pl-3"
     >
       <Chip title="soul">
-        <span data-testid="oats-chip-soul">{clean(oats.soulOf(agent))}</span>
+        <span data-testid="oats-chip-soul">{shown(oats.soulOf(agent))}</span>
       </Chip>
       <Chip title="instance">
-        <span data-testid="oats-chip-instance">{clean(agent.instance)}</span>
+        <span data-testid="oats-chip-instance">{shown(agent.instance)}</span>
       </Chip>
       {identity === null ? null : (
-        <Chip title={agent.team === null ? "aweb identity" : `aweb identity, team ${clean(agent.team)}`}>
-          <span data-testid="oats-chip-alias">{`✓ ${clean(identity)}`}</span>
+        <Chip title={agent.team === null ? "aweb identity" : `aweb identity, team ${shown(agent.team)}`}>
+          <span data-testid="oats-chip-alias">{`✓ ${shown(identity)}`}</span>
         </Chip>
       )}
       {agent.parent !== null ? (
         <Chip title="parent">
           {parentThread === undefined ? (
-            <span data-testid="oats-chip-parent">{`parent · ${clean(agent.parent)}`}</span>
+            <span data-testid="oats-chip-parent">{`parent · ${shown(agent.parent)}`}</span>
           ) : (
             <a
               data-testid="oats-chip-parent"
@@ -71,13 +72,13 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
                 navigate.toThread(parentThread.id);
               }}
             >
-              {`parent · ${clean(agent.parent)}`}
+              {`parent · ${shown(agent.parent)}`}
             </a>
           )}
         </Chip>
       ) : agent.human !== null ? (
         <Chip title="started by">
-          <span data-testid="oats-chip-parent">{`parent · ${clean(agent.human)}`}</span>
+          <span data-testid="oats-chip-parent">{`parent · ${shown(agent.human)}`}</span>
         </Chip>
       ) : null}
       {children > 0 ? (
@@ -85,8 +86,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           <span data-testid="oats-chip-children">{count(children, "child", "children")}</span>
         </Chip>
       ) : null}
-      <Chip title={agent.home}>
-        <span data-testid="oats-chip-home">{`home · ${clean(homeTail(agent.home))}`}</span>
+      <Chip title={shown(agent.home)}>
+        <span data-testid="oats-chip-home">{`home · ${shown(homeTail(agent.home))}`}</span>
       </Chip>
       {/* Pinned to the row's end while the chips before it scroll under it: the way to the home is
           always on screen. Its own background covers what scrolls behind, up to the row's edge. */}

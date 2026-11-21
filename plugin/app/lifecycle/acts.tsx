@@ -4,10 +4,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
-import { clean } from "../format";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
 import { Button, ErrorLine, Modal, Note } from "../ui";
+import { shown } from "../ui/text";
 
 export type PlanVerb = "stop" | "retire";
 export type RunVerb = "start" | "restart";
@@ -137,7 +137,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
 
   return (
     <Modal
-      title={`${words.title} ${clean(request.instance)}?`}
+      title={`${words.title} ${shown(request.instance)}?`}
       onCancel={cancel}
       footer={
         <>
@@ -163,7 +163,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
       <div data-testid="oats-plan" className="flex flex-col gap-2">
         {state.phase === "reading" ? <Note>Reading the plan from OATS…</Note> : null}
         {state.phase === "unreadable" ? (
-          <ErrorLine onRetry={() => setAttempt((n) => n + 1)}>{clean(state.error)}</ErrorLine>
+          <ErrorLine onRetry={() => setAttempt((n) => n + 1)}>{state.error}</ErrorLine>
         ) : null}
         {state.phase === "ready" ? (
           <>
@@ -172,13 +172,13 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
             ) : (
               <ul className="flex flex-col gap-1">
                 {state.lines.map((line, index) => (
-                  <li key={index} className="whitespace-pre-wrap break-words">
-                    {clean(line)}
+                  <li key={index} className="break-words">
+                    {shown(line)}
                   </li>
                 ))}
               </ul>
             )}
-            {state.error === null ? null : <ErrorLine>{clean(state.error)}</ErrorLine>}
+            {state.error === null ? null : <ErrorLine>{state.error}</ErrorLine>}
           </>
         ) : null}
       </div>
@@ -205,13 +205,13 @@ export function ActsOverlay() {
         data-testid="oats-act-running"
         className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-lg"
       >
-        {`${RUN[request.verb].doing} ${clean(request.instance)} through OATS…`}
+        {`${RUN[request.verb].doing} ${shown(request.instance)} through OATS…`}
       </div>
     );
   }
   return (
     <Modal
-      title={`${RUN[request.verb].failed} ${clean(request.instance)} failed`}
+      title={`${RUN[request.verb].failed} ${shown(request.instance)} failed`}
       onCancel={() => set(null)}
       footer={
         <>
@@ -228,7 +228,7 @@ export function ActsOverlay() {
         </>
       }
     >
-      <ErrorLine>{clean(request.message)}</ErrorLine>
+      <ErrorLine>{request.message}</ErrorLine>
     </Modal>
   );
 }

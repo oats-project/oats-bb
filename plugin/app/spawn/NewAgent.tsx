@@ -3,11 +3,11 @@
 import { useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import { instanceName } from "../../contract";
-import { clean } from "../format";
 import { newKey } from "../lifecycle/acts";
 import { errorMessage } from "../store";
 import type { Contract, Result } from "../store";
 import { Button, ErrorLine } from "../ui";
+import { shown } from "../ui/text";
 
 type Soul = Result<"souls">["souls"][number];
 type Summary = Result<"spawnPreview">["summary"];
@@ -19,8 +19,8 @@ function SummaryView({ summary }: { summary: Summary }) {
         <span className="text-xs text-muted-foreground">{title}</span>
         <ul className={`flex flex-col gap-0.5 ${tone}`}>
           {items.map((item, index) => (
-            <li key={index} className="whitespace-pre-wrap break-words">
-              {clean(item)}
+            <li key={index} className="break-words">
+              {shown(item)}
             </li>
           ))}
         </ul>
@@ -147,7 +147,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
           {busy === "spawn" ? "Spawning…" : "Spawn in bb"}
         </Button>
       </div>
-      {error === null ? null : <ErrorLine>{clean(error)}</ErrorLine>}
+      {error === null ? null : <ErrorLine>{error}</ErrorLine>}
       {summary === null ? null : <SummaryView summary={summary} />}
     </form>
   );

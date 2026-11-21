@@ -18,10 +18,11 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 import { codes } from "../../kernel/result";
 import type { Node } from "../../model/types";
-import { clean, count, needsYouLabel } from "../format";
+import { count, needsYouLabel } from "../format";
 import { failureLine, useOats } from "../oats";
 import { Button, Dot, plainClick } from "../ui";
 import { PAGES } from "../workspace/pages";
+import { refusalLines, shown } from "../ui/text";
 
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
@@ -99,7 +100,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
                 <ThreadTitle threadId={thread.id} />
               </span>
               <span className="truncate text-xs text-muted-foreground">
-                {clean(oats.soulOf(node.agent))}
+                {shown(oats.soulOf(node.agent))}
                 {node.state === "stopped" ? " · stopped" : ""}
               </span>
             </span>
@@ -151,7 +152,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           </p>
         ) : (
           <div data-testid="oats-status-line" role="alert" className="flex flex-col items-start gap-1 px-2 py-1.5 text-xs">
-            <span className="break-words text-muted-foreground">{clean(failureLine(oats))}</span>
+            <span className="break-words text-muted-foreground">{refusalLines(failureLine(oats)).join(" ")}</span>
             <span className="flex flex-wrap items-center gap-2">
               <Button onClick={oats.retry}>Retry</Button>
               {oats.code === codes.chooseHost ? (
@@ -172,8 +173,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">{clean(deployment.workspace)}</span>
-        {` · ${clean(deployment.machine)} · ${count(agents.length, "agent")}`}
+        <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
+        {` · ${shown(deployment.machine)} · ${count(agents.length, "agent")}`}
       </p>
       <ul className="flex flex-col">
         {PAGES.map((page) => (

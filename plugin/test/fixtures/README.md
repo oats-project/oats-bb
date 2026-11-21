@@ -1,3 +1,10 @@
+One directory per feature of the plugin (`../../README.md`, "One module per feature"), each with
+its `verbs.json`: the `oats` verbs the fake answers for that feature, and the file of each
+(`container/fake-oats.mjs`). The files named below are in `roster/` (`status.json`,
+`status-recorded.json`, `threads.json`), `workspace/` (`souls.json`, `capabilities.json`,
+`teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
+stop, start, restart and retire answers).
+
 Pinned by the spec.
 - `status.json`: `oats status --json` reduced to the fields the plugin reads, in the shape agreed
   with the kernel side (interface v3 a7a47d060d2ae33d: a row carries `session: {provider, threadId}`): the design's seven sample agents on bb and

@@ -97,7 +97,7 @@ test("Spawn calls spawn once with { soul, name, task, key } and, on ok, navigate
   expect(input.key).toMatch(/^[0-9a-f]{32}$/);
 });
 
-test("a refusal's message is shown unchanged, nothing is navigated, and a retry of the same form reuses the key", async () => {
+test("a refusal's code and message are shown, line by line, nothing is navigated, and a retry of the same form reuses the key", async () => {
   const refusal = "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists\n  retire it first: oats retire ranker-v4-probe";
   let refuse = true;
   const slot = await souls("oats-developer", {
@@ -109,7 +109,12 @@ test("a refusal's message is shown unchanged, nothing is navigated, and a retry 
   await slot.findByTestId("oats-spawn-form");
   fill(slot, "ranker-v4-probe", "Sweep.");
   fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  expect((await slot.findByRole("alert")).textContent).toBe(refusal);
+  // The kernel's code and each of its lines, on a line of its own: no line break is drawn (ui/text.ts).
+  const alert = await slot.findByRole("alert");
+  expect(Array.from(alert.querySelectorAll("span.block")).map((line) => line.textContent)).toEqual([
+    "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists",
+    "retire it first: oats retire ranker-v4-probe",
+  ]);
   expect(slot.inspection.navigateCalls).toEqual([]);
 
   refuse = false;

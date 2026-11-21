@@ -2,12 +2,14 @@
 // a host with no name and no scheduler, and the page with `oats` gone. The lists are what the real
 // kernel printed (test/fixtures/automations/); their times are the recording's, so "2 d ago" moves
 // with the day the checks run.
-import { fill, testId, textOf, texts, visible } from "../browser.mjs";
+import { fill, FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 
 const ROW = testId("oats-automation-row");
 const count = (selector) => `document.querySelectorAll(${JSON.stringify(selector)}).length`;
-/** Presses the first element of `selector`. */
-const click = (selector) => `(() => { const found = document.querySelector(${JSON.stringify(selector)}); if (!found) throw new Error("nothing to press: " + ${JSON.stringify(selector)}); found.click(); return true; })()`;
+const rowOf = (id) => `${ROW}[data-id="${id}"]`;
+/** Presses the first element of `selector` (the one whose text is `text`, where given). */
+const click = (selector, text = null) =>
+  `(() => { const found = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => ${text === null ? "true" : `e.innerText.trim() === ${JSON.stringify(text)}`}); if (!found) throw new Error("nothing to press: " + ${JSON.stringify(`${selector}${text === null ? "" : ` "${text}"`}`)}); found.click(); return true; })()`;
 /**
  * Takes a scene's image with the thing its name claims in view: a row's page is longer than the
  * window, most of all at the phone's width, and an image must show the state it is named for.
@@ -121,6 +123,84 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "acting on a row",
+    run: async ({ page, at, viewport, check }) => {
+      const result = testId("oats-automations-result");
+      const dialog = '[role="dialog"]';
+      const said = (selector, seconds = 30) => page.until(`(() => ${textOf(selector)})()`, seconds);
+      const gone = (selector) => page.until(`(() => document.querySelector(${JSON.stringify(selector)}) === null ? "gone" : "")()`, 15);
+
+      // a row's menu: the Desktop's acts for what the row is
+      await open(page, "", ROW);
+      await page.evaluate(click(`${rowOf("local/daily-review")} [aria-label="Actions for local/daily-review"]`));
+      const items = await page.until(`(() => { const t = ${texts(`${rowOf("local/daily-review")} [role="menuitem"]`)}; return t.length > 0 ? JSON.stringify(t) : ""; })()`, 15);
+      check(items === JSON.stringify(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Delete…"]), `${at} a local schedule's menu holds Open, Test, Run now, Turn off here, Open file, Edit summary and Delete…`, String(items));
+      await page.shot(`automations-${viewport.name}-menu`, { targets: true });
+
+      // Run now, from the menu: what happened, in words, above the list
+      await page.evaluate(click(`${rowOf("local/daily-review")} [role="menuitem"]`, "Run now"));
+      const ran = await said(result);
+      check(ran === "local/daily-review: Agent launched Dismiss", `${at} Run now says "Agent launched", by the schedule's id`, ran);
+      await page.shot(`automations-${viewport.name}-run-launched`, { targets: true });
+
+      // the switch says what it is and what a press does
+      const toggle = await page.evaluate(`(() => { const s = document.querySelector(${JSON.stringify(`${rowOf("local/weekly-cleanup")} [role="switch"]`)}); return s === null ? "" : [s.getAttribute("aria-checked"), s.innerText.replace(/\s+/g, " ").trim(), s.title].join(" | "); })()`);
+      check(toggle === "false | This computer Off | Off here: click to turn it on", `${at} a row that is off here has its switch off, and says a press turns it on`, toggle);
+
+      // Edit summary: the dialog takes the focus on its field, keeps what it holds, and Escape returns the focus
+      await page.evaluate(click(`${rowOf("local/daily-review")} [aria-label="Actions for local/daily-review"]`));
+      await page.until(`(() => document.querySelector(${JSON.stringify(`${rowOf("local/daily-review")} [role="menuitem"]`)}) ? "open" : "")()`, 15);
+      await page.evaluate(click(`${rowOf("local/daily-review")} [role="menuitem"]`, "Edit summary"));
+      const summary = await said(`${dialog} h2`);
+      check(summary === "Summary of daily-review", `${at} Edit summary opens a dialog named for the schedule`, summary);
+      const field = await page.until(`(() => document.activeElement?.name === "description" ? document.activeElement.value : "")()`, 15);
+      check(field === "Review open pull requests every weekday morning", `${at} the dialog's focus starts on its field, which holds the summary`, String(field));
+      await page.shot(`automations-${viewport.name}-edit-summary`, { targets: true });
+      await page.press("Escape");
+      check((await gone(dialog)) === "gone", `${at} Escape closes the dialog`);
+
+      // Delete: asks first, the focus on Cancel
+      await open(page, "/schedules/local/weekly-cleanup", testId("oats-automation-delete"));
+      await page.evaluate(click(testId("oats-automation-delete")));
+      const asks = await said(dialog);
+      check(/^Delete schedule .*weekly-cleanup is removed from this computer and stops running here\./.test(asks ?? ""), `${at} Delete… asks first, in the Desktop's sentence`, asks);
+      const onCancel = await page.until(`(() => ${FOCUSED} === "oats-confirm-cancel" ? "cancel" : "")()`, 15);
+      check(onCancel === "cancel", `${at} the confirmation's focus starts on Cancel`, await page.evaluate(FOCUSED));
+      await page.shot(`automations-${viewport.name}-delete-confirm`, { targets: true });
+      await page.press("Enter");
+      check((await gone(dialog)) === "gone", `${at} Cancel closes it, and nothing is deleted`);
+
+      // Test: a schedule, then a pull-request trigger with what would fire and what is held
+      await page.evaluate(click(testId("oats-automation-test-button")));
+      const ready = await said(testId("oats-automation-test"));
+      check(/^Test result Ready: it would run here\./.test(ready ?? ""), `${at} a schedule's Test says it would run here`, ready);
+      await open(page, "/triggers/oats-real/proposal-review", testId("oats-automation-test-button"));
+      await page.evaluate(click(testId("oats-automation-test-button")));
+      const fires = await said(testId("oats-automation-test"));
+      check(/gh acts as ana Would fire now: #41 → oats-developer-review-pr-41 #42 → oats-developer-review-pr-42 #43 → oats-developer-review-pr-43 \(held: concurrency\.max 2 reached \(2 live\)\)$/.test(fires ?? ""), `${at} a pull-request trigger's Test says who gh acts as, what would fire and what is held`, fires);
+      await page.shot(`automations-${viewport.name}-test-result`, { targets: true });
+
+      // Test of a capability source's trigger: first what will run, then Run test
+      await open(page, "/triggers/oats-real/harvest-review", testId("oats-automation-test-button"));
+      await page.evaluate(click(testId("oats-automation-test-button")));
+      const confirm = await said(testId("oats-automation-test-confirm"));
+      check(/^Test this trigger This runs acme\.graph's source command on this computer, now, once\. Nothing is recorded and nothing is spawned\./.test(confirm ?? ""), `${at} a capability source's Test first says what will run on this computer`, confirm);
+      await page.shot(`automations-${viewport.name}-test-confirm`, { targets: true });
+      await page.evaluate(click(testId("oats-automation-test-run")));
+      const answered = await said(testId("oats-automation-test"));
+      check(/^Test result The source answered: 2 events, 1 filtered, 2 skipped, 2 refused/.test(answered ?? ""), `${at} Run test says what the source answered`, answered);
+      await page.shot(`automations-${viewport.name}-test-source-result`, { targets: true });
+
+      // Check run state, from the run-state card
+      await open(page, "/schedules/local/status-check", testId("oats-automation-reconcile"));
+      await page.evaluate(click(testId("oats-automation-reconcile")));
+      const checked = await said(result);
+      check(/^Run state is still unknown\./.test(checked ?? ""), `${at} Check run state says the state is still unknown, and what to do`, checked);
+      await page.shot(`automations-${viewport.name}-run-state-checked`, { targets: true });
+    },
+  },
+  {
     stage: "automations-host-unnamed",
     name: "a host with no name",
     run: async ({ page, at, viewport, check }) => {
@@ -138,6 +218,16 @@ export default [
       const header = await page.evaluate(textOf(testId("oats-automations-scheduler")));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
       await page.shot(`automations-${viewport.name}-scheduler-off`, { targets: true });
+      // Enable scheduler: says what it installs on this computer before it does; here the kernel refuses (no service manager)
+      await page.evaluate(click(testId("oats-automations-enable-scheduler")));
+      const asks = await page.until(`(() => ${textOf('[role="dialog"]')})()`, 15);
+      check(/^Enable scheduler .*OATS installs its scheduler's timer on this computer, for the account bb's machine runs as/.test(asks ?? ""), `${at} Enable scheduler says what it installs on this computer before it does`, asks);
+      await page.shot(`automations-${viewport.name}-enable-scheduler-confirm`, { targets: true });
+      await page.evaluate(click(testId("oats-confirm-act")));
+      const refused = await page.until(`(() => { const t = ${textOf('[role="dialog"]')}; return /was not enabled/.test(t) ? t : ""; })()`, 30);
+      check(/The scheduler was not enabled .*systemctl --user daemon-reload failed: Failed to connect to bus: No medium found .*E_SCHEDULE_HOST/.test(refused ?? ""), `${at} on a computer with no service manager the kernel's refusal is shown, its code after`, refused);
+      await page.shot(`automations-${viewport.name}-enable-scheduler-refused`, { targets: true });
+      await page.evaluate(click(testId("oats-confirm-close")));
     },
   },
   {
@@ -310,7 +400,8 @@ export const stages = {
   "automations-scheduler-off": {
     label: "AU2",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      fake({ status: { stdout: statusWithRealIds(threads) }, ...lists("schedule-list-scheduler-off.json", "trigger-list.json") });
+      // The kernel's own answer on a computer with no service manager, as recorded.
+      fake({ status: { stdout: statusWithRealIds(threads) }, ...lists("schedule-list-scheduler-off.json", "trigger-list.json"), "schedule host install": { file: "automations/host-install-refused.json" } });
       await settled(untilSnapshot);
     },
   },

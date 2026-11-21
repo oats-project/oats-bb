@@ -63,8 +63,11 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - "Scheduler off" in the header means the host timer is not installed, active and registered:
   nothing scheduled runs on this computer until it is (`oats schedule host install` in the
   deployment).
-- The page only reads for now. To change, run or test one: `oats schedule …` and `oats trigger …`
-  in the deployment.
+- A row's switch turns it on or off on this computer. Its ⋯ menu and its page have Test (runs
+  nothing; for a trigger on a capability's source it asks first, then Run test runs that source's
+  command once), Run now, Edit summary, Check run state and, for a local schedule, Delete….
+  Enable scheduler installs the host timer after saying what it installs.
+- To create or edit one: `oats schedule add|update …` and `oats trigger add …` in the deployment.
 
 ## When the plugin shows one line instead of the tree
 

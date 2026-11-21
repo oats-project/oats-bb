@@ -200,6 +200,66 @@ export type AutomationScheduler = z.infer<typeof automationScheduler>;
 export type AutomationList = z.infer<typeof automationList>;
 export type TriggerStatus = z.infer<typeof triggerStatus>;
 
+// ---- the answers of the acts ----
+
+/** What a capability source did when a confirmed test ran it. */
+export const automationTestSource = z.object({
+  capability: text,
+  name: text,
+  ok: z.boolean(),
+  /** how many events the trigger selects, and how many valid ones it does not */
+  events: z.number().int(),
+  filtered: z.number().int(),
+  refused: z.array(z.object({ text: text, rule: text })),
+  skipped: z.array(z.object({ subject: text, why: text })),
+  /** its meaning fails */
+  invalid: automationProblem.nullable(),
+  /** the poll failed: the kernel's cause, error and code, and the source's own refusal */
+  cause: text,
+  error: text,
+  code: text,
+  says: says.nullable(),
+});
+
+/** `oats schedule test` or `oats trigger test`, as the Test result card reads it. It ran nothing but, when confirmed, a capability's source command. */
+export const automationTest = z.object({
+  ok: z.boolean(),
+  problems: z.array(z.string()),
+  warnings: z.array(z.string()),
+  /** what would fire now; null where the answer does not say (a schedule's) */
+  wouldFire: z
+    .array(
+      z.object({
+        key: text,
+        label: z.string(),
+        /** the name the spawn would be asked to derive; null when unknown */
+        instance: text,
+        nameCut: z.boolean(),
+        held: z.boolean(),
+        /** the kernel's reason for holding it, when it gives one */
+        heldReason: text,
+        /** a capability source's: text, never a link */
+        url: text,
+      }),
+    )
+    .nullable(),
+  nextDue: text,
+  soul: z.object({ resolves: z.boolean(), error: text }).nullable(),
+  /** the account this machine's gh acts as */
+  account: text,
+  source: automationTestSource.nullable(),
+});
+
+/** `oats schedule run`: the run it made, as the kernel recorded it. */
+export const scheduleRunReceipt = z.object({ run: automationRun.nullable() });
+/** `oats schedule reconcile`: what the kernel now knows of a run whose state was unknown, and what to do when it still is. */
+export const scheduleReconciled = z.object({ reconciled: text, remedy: text });
+
+export type AutomationTestSource = z.infer<typeof automationTestSource>;
+export type AutomationTest = z.infer<typeof automationTest>;
+export type ScheduleRunReceipt = z.infer<typeof scheduleRunReceipt>;
+export type ScheduleReconciled = z.infer<typeof scheduleReconciled>;
+
 // ---- the verbs ----
 
 /** The plugin's own code for an OATS that has no automations lists (feature `automations`, automationsApi 1: OATS 0.29). */

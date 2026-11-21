@@ -10,12 +10,12 @@
     {
      "path": "definitions",
      "status": "ok",
-     "bytes": 4938
+     "bytes": 5323
     },
     {
      "path": "state",
      "status": "ok",
-     "bytes": 8708
+     "bytes": 9488
     }
    ]
   },
@@ -42,8 +42,8 @@
      "tz": "Europe/Madrid",
      "message": "Anything new on your review?"
     },
-    "createdAt": "2026-11-21T18:18:44.907Z",
-    "updatedAt": "2026-11-21T18:18:44.907Z",
+    "createdAt": "2026-11-21T18:35:29.142Z",
+    "updatedAt": "2026-11-21T18:35:29.142Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -59,22 +59,22 @@
     },
     "nextRun": "2026-11-23T08:00:00.000Z",
     "lastRun": {
-     "scheduledFor": "2026-11-21T18:18:00.000Z",
-     "startedAt": "2026-11-21T18:18:49.110Z",
-     "instance": "oats-developer-review-202611211818",
-     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+     "scheduledFor": "2026-11-21T18:35:00.000Z",
+     "startedAt": "2026-11-21T18:35:41.726Z",
+     "instance": "oats-developer-review-202611211835",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
      "launched": true,
      "kind": "spawn",
      "materialized": "workspace",
      "wakeSchedule": {
-      "id": "wake-oats-developer-review-202611211818",
+      "id": "wake-oats-developer-review-202611211835",
       "cron": "*/30 * * * *",
       "tz": "Europe/Madrid",
       "kind": "wake",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
       "message": "Anything new on your review?",
-      "createdAt": "2026-11-21T18:18:51.628Z",
-      "updatedAt": "2026-11-21T18:18:51.628Z",
+      "createdAt": "2026-11-21T18:35:45.835Z",
+      "updatedAt": "2026-11-21T18:35:45.835Z",
       "scope": "/abs/deployment",
       "scheduleApi": 2,
       "scheduleHistoryApi": 3,
@@ -83,7 +83,7 @@
        "capture": "unknown",
        "migrationRequired": true
       },
-      "nextRun": "2026-11-21T18:30:00.000Z",
+      "nextRun": "2026-11-21T19:00:00.000Z",
       "lastRun": null,
       "history": {
        "status": "ok",
@@ -92,7 +92,7 @@
       },
       "recentRuns": [],
       "running": false,
-      "name": "wake-oats-developer-review-202611211818",
+      "name": "wake-oats-developer-review-202611211835",
       "origin": {
        "kind": "local",
        "path": "oats-schedules.json",
@@ -105,7 +105,7 @@
       "runsHere": true,
       "reason": null,
       "enabledHere": true,
-      "qualifiedId": "local/wake-oats-developer-review-202611211818",
+      "qualifiedId": "local/wake-oats-developer-review-202611211835",
       "soul": null,
       "task": null,
       "teams": [],
@@ -113,14 +113,14 @@
       "harness": null,
       "model": null,
       "concurrency": null,
-      "nextDue": "2026-11-21T18:30:00.000Z",
+      "nextDue": "2026-11-21T19:00:00.000Z",
       "enabled": true
      },
      "outcome": "active",
-     "runId": "eb44306a72ebece5bcd23068",
+     "runId": "4d1ae0550bb63e779de9c23b",
      "session": {
-      "instance": "oats-developer-review-202611211818",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "instance": "oats-developer-review-202611211835",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
       "incarnation": null,
       "server": null,
       "delivery": "launched"
@@ -133,23 +133,23 @@
     },
     "recentRuns": [
      {
-      "runId": "eb44306a72ebece5bcd23068",
-      "scheduledFor": "2026-11-21T18:18:00.000Z",
-      "startedAt": "2026-11-21T18:18:49.110Z",
-      "instance": "oats-developer-review-202611211818",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+      "runId": "4d1ae0550bb63e779de9c23b",
+      "scheduledFor": "2026-11-21T18:35:00.000Z",
+      "startedAt": "2026-11-21T18:35:41.726Z",
+      "instance": "oats-developer-review-202611211835",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
       "launched": true,
       "kind": "spawn",
       "materialized": "workspace",
       "wakeSchedule": {
-       "id": "wake-oats-developer-review-202611211818",
+       "id": "wake-oats-developer-review-202611211835",
        "cron": "*/30 * * * *",
        "tz": "Europe/Madrid",
        "kind": "wake",
-       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
        "message": "Anything new on your review?",
-       "createdAt": "2026-11-21T18:18:51.628Z",
-       "updatedAt": "2026-11-21T18:18:51.628Z",
+       "createdAt": "2026-11-21T18:35:45.835Z",
+       "updatedAt": "2026-11-21T18:35:45.835Z",
        "scope": "/abs/deployment",
        "scheduleApi": 2,
        "scheduleHistoryApi": 3,
@@ -158,7 +158,7 @@
         "capture": "unknown",
         "migrationRequired": true
        },
-       "nextRun": "2026-11-21T18:30:00.000Z",
+       "nextRun": "2026-11-21T19:00:00.000Z",
        "lastRun": null,
        "history": {
         "status": "ok",
@@ -167,7 +167,7 @@
        },
        "recentRuns": [],
        "running": false,
-       "name": "wake-oats-developer-review-202611211818",
+       "name": "wake-oats-developer-review-202611211835",
        "origin": {
         "kind": "local",
         "path": "oats-schedules.json",
@@ -180,7 +180,7 @@
        "runsHere": true,
        "reason": null,
        "enabledHere": true,
-       "qualifiedId": "local/wake-oats-developer-review-202611211818",
+       "qualifiedId": "local/wake-oats-developer-review-202611211835",
        "soul": null,
        "task": null,
        "teams": [],
@@ -188,19 +188,19 @@
        "harness": null,
        "model": null,
        "concurrency": null,
-       "nextDue": "2026-11-21T18:30:00.000Z",
+       "nextDue": "2026-11-21T19:00:00.000Z",
        "enabled": true
       },
       "outcome": "launched",
       "settled": false,
-      "recordedAt": "2026-11-21T18:18:51.829Z",
+      "recordedAt": "2026-11-21T18:35:46.435Z",
       "transitions": [
        "launched"
       ],
       "legacy": false,
       "session": {
-       "instance": "oats-developer-review-202611211818",
-       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+       "instance": "oats-developer-review-202611211835",
+       "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
        "incarnation": null,
        "server": null,
        "delivery": "launched"
@@ -245,8 +245,8 @@
     "agent": "oats-developer",
     "backend": "bb",
     "task": "Check the build queue.",
-    "createdAt": "2026-11-21T18:18:45.742Z",
-    "updatedAt": "2026-11-21T18:18:45.742Z",
+    "createdAt": "2026-11-21T18:35:30.359Z",
+    "updatedAt": "2026-11-21T18:35:30.359Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -257,15 +257,15 @@
     },
     "nextRun": "2026-11-21T19:00:00.000Z",
     "lastRun": {
-     "scheduledFor": "2026-11-21T18:18:00.000Z",
-     "startedAt": "2026-11-21T18:18:51.827Z",
+     "scheduledFor": "2026-11-21T18:35:00.000Z",
+     "startedAt": "2026-11-21T18:35:46.432Z",
      "kind": "spawn",
      "launched": false,
-     "error": "oats-developer-hourly-check-202611211818 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "error": "oats-developer-hourly-check-202611211835 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
      "errorCode": "E_BACKEND_SANDBOXED_MODE",
      "unconfirmed": false,
      "outcome": "launch-failed",
-     "runId": "b169fd068476831f680fc99a",
+     "runId": "2442382b930416dc4eae8e76",
      "session": {
       "instance": null,
       "home": null,
@@ -281,17 +281,17 @@
     },
     "recentRuns": [
      {
-      "runId": "b169fd068476831f680fc99a",
-      "scheduledFor": "2026-11-21T18:18:00.000Z",
-      "startedAt": "2026-11-21T18:18:51.827Z",
+      "runId": "2442382b930416dc4eae8e76",
+      "scheduledFor": "2026-11-21T18:35:00.000Z",
+      "startedAt": "2026-11-21T18:35:46.432Z",
       "kind": "spawn",
       "launched": false,
-      "error": "oats-developer-hourly-check-202611211818 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+      "error": "oats-developer-hourly-check-202611211835 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
       "errorCode": "E_BACKEND_SANDBOXED_MODE",
       "unconfirmed": false,
       "outcome": "launch-failed",
       "settled": false,
-      "recordedAt": "2026-11-21T18:20:29.862Z",
+      "recordedAt": "2026-11-21T18:37:25.731Z",
       "transitions": [
        "launch-failed"
       ],
@@ -411,6 +411,92 @@
     "enabled": true
    },
    {
+    "id": "notes-checkpoint",
+    "cron": "0 23 * * *",
+    "tz": "UTC",
+    "kind": "operation",
+    "operation": "knowledge:checkpoint",
+    "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
+    "createdAt": "2026-11-21T18:35:36.603Z",
+    "updatedAt": "2026-11-21T18:35:36.603Z",
+    "scope": "/abs/deployment",
+    "scheduleApi": 2,
+    "scheduleHistoryApi": 3,
+    "executionStatus": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    },
+    "nextRun": "2026-11-21T23:00:00.000Z",
+    "lastRun": {
+     "scheduledFor": "2026-11-21T18:35:00.000Z",
+     "startedAt": "2026-11-21T18:35:52.395Z",
+     "kind": "command",
+     "launched": true,
+     "outcome": "launched",
+     "runId": "dd6acd5ec6731e68e4c90cb5",
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "launched"
+     }
+    },
+    "history": {
+     "status": "ok",
+     "stored": 1,
+     "truncated": false
+    },
+    "recentRuns": [
+     {
+      "runId": "dd6acd5ec6731e68e4c90cb5",
+      "scheduledFor": "2026-11-21T18:35:00.000Z",
+      "startedAt": "2026-11-21T18:35:52.395Z",
+      "kind": "command",
+      "launched": true,
+      "outcome": "launched",
+      "settled": false,
+      "recordedAt": "2026-11-21T18:37:25.731Z",
+      "transitions": [
+       "launched"
+      ],
+      "legacy": false,
+      "session": {
+       "instance": null,
+       "home": null,
+       "incarnation": null,
+       "server": null,
+       "delivery": "launched"
+      }
+     }
+    ],
+    "running": false,
+    "name": "notes-checkpoint",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/notes-checkpoint",
+    "soul": null,
+    "task": null,
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": null,
+    "nextDue": "2026-11-21T23:00:00.000Z",
+    "enabled": true
+   },
+   {
     "id": "status-check",
     "cron": "*/15 * * * *",
     "tz": "UTC",
@@ -421,8 +507,8 @@
      "status",
      "--json"
     ],
-    "createdAt": "2026-11-21T18:18:45.878Z",
-    "updatedAt": "2026-11-21T18:18:47.260Z",
+    "createdAt": "2026-11-21T18:35:30.550Z",
+    "updatedAt": "2026-11-21T18:35:38.812Z",
     "description": "Check that the roster answers",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
@@ -437,16 +523,16 @@
       "migrationRequired": true
      }
     },
-    "nextRun": "2026-11-21T18:30:00.000Z",
+    "nextRun": "2026-11-21T18:45:00.000Z",
     "lastRun": {
-     "scheduledFor": "2026-11-21T18:18:00.000Z",
-     "startedAt": "2026-11-21T18:18:55.828Z",
+     "scheduledFor": "2026-11-21T18:35:00.000Z",
+     "startedAt": "2026-11-21T18:35:50.757Z",
      "kind": "command",
      "launched": false,
      "unconfirmed": true,
      "error": "command answered no valid envelope; its side effects are unconfirmed",
      "outcome": "unknown",
-     "runId": "b054933377e51caa97f3f553",
+     "runId": "9fabf84f972661b148b6f4f6",
      "session": {
       "instance": null,
       "home": null,
@@ -462,16 +548,16 @@
     },
     "recentRuns": [
      {
-      "runId": "b054933377e51caa97f3f553",
-      "scheduledFor": "2026-11-21T18:18:00.000Z",
-      "startedAt": "2026-11-21T18:18:55.828Z",
+      "runId": "9fabf84f972661b148b6f4f6",
+      "scheduledFor": "2026-11-21T18:35:00.000Z",
+      "startedAt": "2026-11-21T18:35:50.757Z",
       "kind": "command",
       "launched": false,
       "unconfirmed": true,
       "error": "command answered no valid envelope; its side effects are unconfirmed",
       "outcome": "unknown",
       "settled": true,
-      "recordedAt": "2026-11-21T18:20:29.862Z",
+      "recordedAt": "2026-11-21T18:37:25.731Z",
       "transitions": [
        "unknown"
       ],
@@ -487,9 +573,9 @@
     ],
     "running": false,
     "attempt": {
-     "scheduledFor": "2026-11-21T18:18:00.000Z",
-     "startedAt": "2026-11-21T18:18:55.828Z",
-     "wallClock": "2026-11-21T18:18:56.230Z",
+     "scheduledFor": "2026-11-21T18:35:00.000Z",
+     "startedAt": "2026-11-21T18:35:50.757Z",
+     "wallClock": "2026-11-21T18:35:51.329Z",
      "error": "command answered no valid envelope; its side effects are unconfirmed",
      "exited": true,
      "exitStatus": 0,
@@ -515,18 +601,18 @@
     "harness": null,
     "model": null,
     "concurrency": null,
-    "nextDue": "2026-11-21T18:30:00.000Z",
+    "nextDue": "2026-11-21T18:45:00.000Z",
     "enabled": true
    },
    {
-    "id": "wake-oats-developer-review-202611211818",
+    "id": "wake-oats-developer-review-202611211835",
     "cron": "*/30 * * * *",
     "tz": "Europe/Madrid",
     "kind": "wake",
-    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211818",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611211835",
     "message": "Anything new on your review?",
-    "createdAt": "2026-11-21T18:18:51.628Z",
-    "updatedAt": "2026-11-21T18:18:51.628Z",
+    "createdAt": "2026-11-21T18:35:45.835Z",
+    "updatedAt": "2026-11-21T18:35:45.835Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -535,7 +621,7 @@
      "capture": "unknown",
      "migrationRequired": true
     },
-    "nextRun": "2026-11-21T18:30:00.000Z",
+    "nextRun": "2026-11-21T19:00:00.000Z",
     "lastRun": null,
     "history": {
      "status": "ok",
@@ -544,7 +630,7 @@
     },
     "recentRuns": [],
     "running": false,
-    "name": "wake-oats-developer-review-202611211818",
+    "name": "wake-oats-developer-review-202611211835",
     "origin": {
      "kind": "local",
      "path": "oats-schedules.json",
@@ -557,7 +643,7 @@
     "runsHere": true,
     "reason": null,
     "enabledHere": true,
-    "qualifiedId": "local/wake-oats-developer-review-202611211818",
+    "qualifiedId": "local/wake-oats-developer-review-202611211835",
     "soul": null,
     "task": null,
     "teams": [],
@@ -565,7 +651,7 @@
     "harness": null,
     "model": null,
     "concurrency": null,
-    "nextDue": "2026-11-21T18:30:00.000Z",
+    "nextDue": "2026-11-21T19:00:00.000Z",
     "enabled": true
    },
    {
@@ -577,8 +663,8 @@
     "backend": "bb",
     "task": "Close what the week left open.",
     "yolo": true,
-    "createdAt": "2026-11-21T18:18:46.286Z",
-    "updatedAt": "2026-11-21T18:18:46.674Z",
+    "createdAt": "2026-11-21T18:35:31.102Z",
+    "updatedAt": "2026-11-21T18:35:37.537Z",
     "scope": "/abs/deployment",
     "scheduleApi": 2,
     "scheduleHistoryApi": 3,
@@ -658,7 +744,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-schedules/nightly-digest.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml"
     },
@@ -707,7 +793,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "services/billing/reconcile.oats-schedule.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/services/billing/reconcile.oats-schedule.yaml"
     },
@@ -749,7 +835,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-schedules/release-check.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-schedules/release-check.yaml"
     },
@@ -795,7 +881,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-schedules/weekly-report.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-schedules/weekly-report.yaml"
     },
@@ -829,7 +915,7 @@
    "command": "oats trigger list"
   },
   "snapshot": {
-   "takenAt": "2026-11-21T18:18:44.476Z",
+   "takenAt": "2026-11-21T18:35:28.544Z",
    "problems": 0
   },
   "scheduler": {
@@ -837,7 +923,7 @@
    "active": true,
    "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
    "problems": [],
-   "lastTick": "2026-11-21T18:20:29.461Z",
+   "lastTick": "2026-11-21T18:37:25.324Z",
    "maxConcurrent": 5,
    "triggersMaxConcurrent": null,
    "tickIntervalSec": 60,

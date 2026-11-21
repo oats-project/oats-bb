@@ -125,6 +125,11 @@ const sandboxed = { kind: "spawn", cron: "0 * * * *", tz: "UTC", enabled: true, 
 const savedSandboxed = keepEither("schedule-add-sandboxed-saved.json", "schedule-add-sandboxed-refused.json", "schedule", "add", "hourly-check", "--file", spec({ ...sandboxed, id: "hourly-check" }), "--json");
 must("schedule", "add", "status-check", "--file", spec({ id: "status-check", kind: "command", cron: "*/15 * * * *", tz: "UTC", enabled: true, argv: ["oats", "status", "--json"], cwd: DEPLOY }), "--json");
 must("schedule", "add", "weekly-cleanup", "--file", spec({ id: "weekly-cleanup", kind: "spawn", cron: "0 18 * * 5", tz: "Europe/Madrid", enabled: true, agent: "oats-product-expert", backend: "bb", yolo: true, task: "Close what the week left open." }), "--json");
+// A provider operation runs in an agent's home: an agent of the soul that keeps the notes, on bb.
+writeFileSync(join(REAL, "task-notes.md"), "Keep the team's notes. Say hello, then stop.\n");
+const keeper = must("spawn", "note-keeper", "--backend", "bb", "--yolo", "--name", "team-notes-keeper", "--task-file", join(REAL, "task-notes.md"), "--json");
+keep("inspect-home.json", "ok", "inspect", "--home", keeper.home, "--json");
+must("schedule", "add", "notes-checkpoint", "--file", spec({ id: "notes-checkpoint", kind: "operation", cron: "0 23 * * *", tz: "UTC", enabled: true, operation: "knowledge:checkpoint", home: keeper.home }), "--json");
 keep("schedule-disable.json", "ok", "schedule", "disable", "weekly-cleanup", "--json");
 keep("schedule-enable.json", "ok", "schedule", "enable", "weekly-cleanup", "--json");
 must("schedule", "disable", "weekly-cleanup", "--json");
@@ -146,6 +151,7 @@ if (savedSandboxed.ok !== false) keepEither("schedule-test-sandboxed.json", "sch
 keep("schedule-run.json", "ok", "schedule", "run", "daily-review", "--json");
 if (savedSandboxed.ok !== false) keepEither("schedule-run-launch-failed.json", "schedule-run-launch-refused.json", "schedule", "run", "hourly-check", "--json");
 keep("schedule-run-command.json", "ok", "schedule", "run", "status-check", "--json");
+keep("schedule-run-operation.json", "ok", "schedule", "run", "notes-checkpoint", "--json");
 keep("schedule-run-elsewhere.json", "E_AUTOMATION_NOT_HERE", "schedule", "run", "oats-real/weekly-report", "--json");
 keep("schedule-run-disabled.json", "E_SCHEDULE_DISABLED", "schedule", "run", "weekly-cleanup", "--json");
 

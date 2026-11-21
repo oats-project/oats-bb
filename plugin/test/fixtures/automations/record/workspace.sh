@@ -2,6 +2,8 @@
 # Runs inside the container, after container/real/workspace.sh made the real run's workspace and
 # deployment in $REAL: adds what the Automations fixtures need and nothing the kernel does not
 # read as its own input.
+#   - a member capability that fills the knowledge layer with one operation (acme.notes), and its
+#     soul (note-keeper): what a schedule that runs a provider operation names;
 #   - a member capability, acme.graph, that declares the trigger source `harvest-branches` (a script
 #     that answers the events in $REAL/source.json), and a soul that composes it (graph-reviewer);
 #   - workspace schedules and triggers in the member repository, placed on this host and elsewhere;
@@ -83,6 +85,38 @@ capabilities:
 launch: { harness: claude, model: claude-opus-5-5 }
 Y
 printf '# graph-reviewer\n\nA soul of the Automations fixtures. Do what TASK.md says, then stop.\n' > souls/graph-reviewer/AGENTS.md
+
+# A capability that fills the knowledge layer and declares one operation, and a soul that keeps it:
+# what a schedule that runs a provider operation names.
+mkdir -p capabilities/acme-notes/bin souls/note-keeper
+cat > capabilities/acme-notes/oats.json <<Y
+{
+  "capability": "acme.notes",
+  "command": "acme-notes",
+  "version": "1.0.0",
+  "compatibility": { "oats": ">=0.50.0" },
+  "description": "Notes an agent keeps (the Automations fixtures' knowledge layer, with one operation).",
+  "layer": "knowledge",
+  "requires": [],
+  "commands": { "checkpoint": "bin/notes.mjs checkpoint" },
+  "operations": { "checkpoint": { "kind": "action", "command": "checkpoint", "context": "home", "description": "Record this instance's checkpoint" } }
+}
+Y
+cat > capabilities/acme-notes/bin/notes.mjs <<Y
+// The one operation of the Automations fixtures' knowledge layer: it answers that it ran.
+process.stdout.write(JSON.stringify({ schemaVersion: 1, ok: true, result: { checkpoint: "recorded" } }) + "\\n");
+Y
+cat > souls/note-keeper/soul.yaml <<Y
+schemaVersion: 2
+name: note-keeper
+description: "Keeps the team's notes."
+work: directory
+knowledge: {}
+capabilities:
+  acme.notes: { from: here }
+launch: { harness: claude, model: claude-opus-5-5 }
+Y
+printf '# note-keeper\n\nA soul of the Automations fixtures. Do what TASK.md says, then stop.\n' > souls/note-keeper/AGENTS.md
 
 cat > oats-schedules/nightly-digest.yaml <<Y
 kind: oats-schedule

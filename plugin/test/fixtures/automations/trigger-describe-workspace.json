@@ -3,14 +3,14 @@
  "ok": false,
  "error": {
   "code": "E_AUTOMATION_WORKSPACE",
-  "message": "oats-real/proposal-review is defined in Git (local//abs/real/src/oats-real:oats-triggers/proposal-review.yaml @ ad1a68d1fa01); change the file there",
+  "message": "oats-real/proposal-review is defined in Git (local//abs/real/src/oats-real:oats-triggers/proposal-review.yaml @ 04755d41aa40); change the file there",
   "details": {
    "id": "oats-real/proposal-review",
    "origin": {
     "kind": "workspace",
     "repoKey": "local//abs/real/src/oats-real",
     "path": "oats-triggers/proposal-review.yaml",
-    "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+    "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
     "url": null,
     "localPath": "/abs/deployment/oats-real/oats-triggers/proposal-review.yaml"
    }

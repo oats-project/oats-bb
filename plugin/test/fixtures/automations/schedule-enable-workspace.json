@@ -34,7 +34,7 @@
     "kind": "workspace",
     "repoKey": "local//abs/real/src/oats-real",
     "path": "oats-schedules/nightly-digest.yaml",
-    "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+    "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
     "url": null,
     "localPath": "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml"
    },

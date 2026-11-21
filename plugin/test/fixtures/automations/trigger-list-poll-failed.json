@@ -57,7 +57,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:19:00.977Z",
+     "at": "2026-11-21T18:37:25.324Z",
      "instance": "graph-reviewer-graph-watch-harvest-a",
      "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-harvest-a",
      "event": "opened",
@@ -65,7 +65,7 @@
      "subject": "harvest/a",
      "key": "local/graph-watch:harvest/a:h1"
     },
-    "nextDue": "2026-11-21T18:22:46.098Z",
+    "nextDue": "2026-11-21T18:39:46.189Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -77,8 +77,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:18:57.470Z",
-    "updatedAt": "2026-11-21T18:18:58.266Z"
+    "createdAt": "2026-11-21T18:35:54.118Z",
+    "updatedAt": "2026-11-21T18:35:55.185Z"
    },
    {
     "kind": "trigger",
@@ -137,8 +137,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:18:57.578Z",
-    "updatedAt": "2026-11-21T18:18:58.110Z"
+    "createdAt": "2026-11-21T18:35:54.304Z",
+    "updatedAt": "2026-11-21T18:35:54.969Z"
    },
    {
     "kind": "trigger",
@@ -185,7 +185,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:19:00.977Z",
+     "at": "2026-11-21T18:35:58.535Z",
      "instance": "oats-developer-triage-41",
      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
      "event": "opened",
@@ -193,7 +193,7 @@
      "subject": "41",
      "key": "local/pr-triage:github.com/acme/app#41:opened:2026-11-20T10:41:00Z"
     },
-    "nextDue": "2026-11-21T18:23:46.098Z",
+    "nextDue": "2026-11-21T18:40:46.189Z",
     "enabled": true,
     "spawn": {
      "soul": "oats-developer",
@@ -205,8 +205,8 @@
     },
     "triggerApi": 1,
     "scope": "/abs/deployment",
-    "createdAt": "2026-11-21T18:18:57.190Z",
-    "updatedAt": "2026-11-21T18:18:57.190Z"
+    "createdAt": "2026-11-21T18:35:53.720Z",
+    "updatedAt": "2026-11-21T18:35:53.720Z"
    },
    {
     "kind": "trigger",
@@ -216,7 +216,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-triggers/docs-review.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-triggers/docs-review.yaml"
     },
@@ -275,7 +275,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-triggers/harvest-closed.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-triggers/harvest-closed.yaml"
     },
@@ -312,7 +312,7 @@
      "perKey": 1
     },
     "lastRun": null,
-    "nextDue": "2026-11-21T18:22:46.098Z",
+    "nextDue": "2026-11-21T18:39:46.189Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -328,7 +328,7 @@
      "code": "E_TRIGGER_INVALID",
      "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)",
      "field": "on.events",
-     "at": "2026-11-21T18:21:46.098Z"
+     "at": "2026-11-21T18:38:46.189Z"
     }
    },
    {
@@ -339,7 +339,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-triggers/harvest-review.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-triggers/harvest-review.yaml"
     },
@@ -379,7 +379,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:20:29.461Z",
+     "at": "2026-11-21T18:37:25.324Z",
      "instance": "graph-reviewer-harvest-review-harvest-a",
      "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-harvest-a",
      "event": "opened",
@@ -387,7 +387,7 @@
      "subject": "harvest/a",
      "key": "oats-real/harvest-review:harvest/a:h1"
     },
-    "nextDue": "2026-11-21T18:22:46.098Z",
+    "nextDue": "2026-11-21T18:39:46.189Z",
     "enabled": true,
     "spawn": {
      "soul": "graph-reviewer",
@@ -408,7 +408,7 @@
      "kind": "workspace",
      "repoKey": "local//abs/real/src/oats-real",
      "path": "oats-triggers/proposal-review.yaml",
-     "commit": "ad1a68d1fa014169d0f3cd7f6dcdf7af635040e3",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
      "url": null,
      "localPath": "/abs/deployment/oats-real/oats-triggers/proposal-review.yaml"
     },
@@ -451,7 +451,7 @@
      "perKey": 1
     },
     "lastRun": {
-     "at": "2026-11-21T18:19:00.977Z",
+     "at": "2026-11-21T18:35:58.535Z",
      "instance": "oats-developer-review-pr-41",
      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
      "event": "opened",
@@ -459,7 +459,7 @@
      "subject": "41",
      "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z"
     },
-    "nextDue": "2026-11-21T18:23:46.098Z",
+    "nextDue": "2026-11-21T18:40:46.189Z",
     "enabled": true,
     "spawn": {
      "soul": "oats-developer",
@@ -474,7 +474,7 @@
    }
   ],
   "snapshot": {
-   "takenAt": "2026-11-21T18:18:44.476Z",
+   "takenAt": "2026-11-21T18:35:28.544Z",
    "problems": 0
   },
   "scheduler": {
@@ -482,7 +482,7 @@
    "active": true,
    "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
    "problems": [],
-   "lastTick": "2026-11-21T18:21:46.098Z",
+   "lastTick": "2026-11-21T18:38:46.189Z",
    "maxConcurrent": 5,
    "triggersMaxConcurrent": null,
    "tickIntervalSec": 60,

@@ -13,8 +13,8 @@
     "status",
     "--json"
    ],
-   "createdAt": "2026-11-21T18:18:45.878Z",
-   "updatedAt": "2026-11-21T18:18:47.260Z",
+   "createdAt": "2026-11-21T18:35:30.550Z",
+   "updatedAt": "2026-11-21T18:35:38.812Z",
    "description": "Check that the roster answers",
    "scope": "/abs/deployment",
    "scheduleApi": 2,
@@ -24,7 +24,7 @@
     "capture": "unknown",
     "migrationRequired": true
    },
-   "nextRun": "2026-11-21T18:30:00.000Z",
+   "nextRun": "2026-11-21T18:45:00.000Z",
    "lastRun": null,
    "history": {
     "status": "ok",
@@ -53,7 +53,7 @@
    "harness": null,
    "model": null,
    "concurrency": null,
-   "nextDue": "2026-11-21T18:30:00.000Z",
+   "nextDue": "2026-11-21T18:45:00.000Z",
    "enabled": true
   }
  }

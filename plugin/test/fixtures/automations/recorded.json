@@ -1,6 +1,6 @@
 {
  "oats": "0.70.0",
- "at": "2026-11-21T18:21:48.721Z",
+ "at": "2026-11-21T18:38:48.575Z",
  "calls": {
   "schedule-list-empty.json": {
    "argv": [
@@ -67,6 +67,15 @@
     "hourly-check",
     "--file",
     "/abs/real/spec-4.json",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "inspect-home.json": {
+   "argv": [
+    "inspect",
+    "--home",
+    "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
     "--json"
    ],
    "exit": 0
@@ -198,6 +207,15 @@
    ],
    "exit": 0
   },
+  "schedule-run-operation.json": {
+   "argv": [
+    "schedule",
+    "run",
+    "notes-checkpoint",
+    "--json"
+   ],
+   "exit": 0
+  },
   "schedule-run-elsewhere.json": {
    "argv": [
     "schedule",
@@ -221,7 +239,7 @@
     "trigger",
     "add",
     "--file",
-    "/abs/real/spec-7.json",
+    "/abs/real/spec-8.json",
     "--json"
    ],
    "exit": 0
@@ -231,7 +249,7 @@
     "trigger",
     "add",
     "--file",
-    "/abs/real/spec-8.json",
+    "/abs/real/spec-9.json",
     "--json"
    ],
    "exit": 1

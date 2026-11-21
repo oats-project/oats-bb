@@ -92,7 +92,7 @@ export async function piConfigurationProblems(agentDir, globalEnvNames) {
   }
   if (found.listener && !(await globalEnvNames()).includes(DELIVERY_VARIABLE)) {
     // The remedy before the path, which may be long: the kernel relays 500 characters.
-    problems.push({ code: "E_BACKEND_PI_LISTENER", status: "needs-configuration", message: `bb's pi would take this agent's mail: ${PI_AWEB_EXTENSION} is in the pi configuration bb's server runs with, and every pi bb starts (its hidden model-listing pi too) connects to aweb as the agent. Give bb's server a configuration of its own without it (PI_CODING_AGENT_DIR, and settings.oats.bb.piAgentDir), or silence it in bb's processes only: printf session | bb machine env set ${DELIVERY_VARIABLE}. Read: ${join(agentDir, "settings.json")}` });
+    problems.push({ code: "E_BACKEND_PI_LISTENER", status: "needs-configuration", message: `bb's pi would take this agent's mail: ${PI_AWEB_EXTENSION} is in bb's pi configuration, and every pi bb starts (a hidden one too) connects to aweb as the agent. Give bb's server a pi configuration without it (PI_CODING_AGENT_DIR, and settings.oats.bb.piAgentDir), or silence it in bb's processes only: printf session | bb machine env set ${DELIVERY_VARIABLE}. Read: ${join(agentDir, "settings.json")}` });
   }
   return problems;
 }

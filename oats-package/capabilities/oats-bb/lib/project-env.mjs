@@ -14,7 +14,9 @@
 //
 // The home's bb project is the provider's (it makes it, rooted at the home), and so is its
 // env, whole: a pi launch makes it exactly those three, removing every other name; the
-// retire hook and a move to another backend remove all of it. No record of it is kept in
+// retire hook and a move to another backend remove all of it. A Claude launch of the same
+// home removes those three (bb hands a project's env to every thread of it, and starts
+// `claude` by a project PATH) and leaves any other name. No record of it is kept in
 // the home. One project is one home: a project with a second root would hand the env to
 // whatever runs there, and a pi launch refuses it.
 import { accessSync, closeSync, constants, openSync, readSync } from "node:fs";
@@ -133,6 +135,17 @@ export async function writeProjectEnv(bb, projectId, env) {
   for (const [name, value] of Object.entries(env)) {
     const set = await bb.envSet(projectId, name, value);
     if (!set.ok) throw fail("E_SESSION_START_FAILED", `the launch env could not be written to bb project ${projectId}: bb machine env set ${name} failed (${set.message})`);
+  }
+}
+
+/** For a Claude launch: remove from the project's env the three names a pi launch of this
+ *  home may have left there, and nothing else (a Claude launch owns no project env: any
+ *  other name is left as it is). Throws E_SESSION_START_FAILED naming the variable. */
+export async function removePiEnv(bb, projectId) {
+  for (const name of await bb.projectEnvNames(projectId)) {
+    if (!PI_ENV_NAMES.includes(name)) continue;
+    const removed = await bb.envUnset(projectId, name);
+    if (!removed.ok) throw fail("E_SESSION_START_FAILED", `what a pi launch left in the env of bb project ${projectId} could not be removed: bb machine env unset ${name} failed (${removed.message})`);
   }
 }
 

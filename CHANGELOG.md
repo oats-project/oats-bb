@@ -32,8 +32,9 @@ What is different for a pi agent:
   (`E_BACKEND_LAUNCH_ENV`). Every launch argument is refused for pi
   (`E_BACKEND_LAUNCH_ARG`).
 - **The home's bb project is the provider's**: a pi launch removes every other variable
-  of its env; the retire, and a move to another backend, remove them all. A bb project
-  that is also rooted at another directory refuses a pi launch.
+  of its env; the retire, and a move to another backend, remove them all; a Claude launch
+  of the same home removes the three names. A bb project that is also rooted at another
+  directory refuses a pi launch.
 - **A retire within about a minute of a model listing in bb** (opening a thread's model
   picker) is refused by the kernel, naming a `pi` process in the home, and succeeds when
   run again: bb's listing starts a pi there that no bb command ends.

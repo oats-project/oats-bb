@@ -255,12 +255,15 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   refuses a pi launch (`E_SESSION_START_FAILED`) before anything is changed. The env
   reaches no process before the spawn and the next launch rewrites it, so a launch that
   is refused after writing it is still a refusal: nothing was started. A Claude launch
-  makes no `bb machine env` call.
+  of a home whose project exists reads the project's env and unsets those three names
+  where it finds them (a pi launch of the same home left them, and bb starts `claude` by a
+  project `PATH`); it sets none, and leaves every other name.
 - **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
   whose last turn failed and of one whose agent is gone. The provider decides at every
   call from this host's processes: a process whose environment carries
   `BB_THREAD_ID=<the thread's id>` (bb gives it to a thread's agent and to what the agent
-  starts) makes the thread present, `state: unknown`, `running: null`; none makes it a
+  starts, so a command the agent left running counts too, and an input to such a thread
+  is not a resume the kernel counts) makes the thread present, `state: unknown`, `running: null`; none makes it a
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be

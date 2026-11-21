@@ -55,15 +55,32 @@ test("a pi launch writes its env into the home's bb project, each value on stdin
 });
 
 test("the project's env is the provider's, whole: a name the launch does not carry is removed, whoever set it", async (t) => {
-  const { bb, run } = await setup(t, { "machine env list": { stdout: envList(["OATS_INSTANCE", "STALE_FROM_AN_EARLIER_LAUNCH", "A_PERSONS_OWN"]) } });
-  assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a")] })).ok, true);
+  const { home, bb, run } = await setup(t, { "machine env list": { stdout: envList(["OATS_INSTANCE", "STALE_FROM_AN_EARLIER_LAUNCH", "A_PERSONS_OWN"]) } });
+  assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)] })).ok, true);
   assert.deepEqual(envCalls(bb), [
     ["list --project proj_a --json", ""],
     ["unset STALE_FROM_AN_EARLIER_LAUNCH --project proj_a --json", ""],
     ["unset A_PERSONS_OWN --project proj_a --json", ""],
     ["set OATS_INSTANCE --project proj_a --json", "dev-a"],
+    ["set OATS_INSTANCE_HOME --project proj_a --json", home],
   ]);
 });
+
+for (const [name, env] of [
+  ["no OATS_INSTANCE_HOME at all", () => [entry("OATS_INSTANCE", "dev-a")]],
+  ["one that a capability set, which is not carried", (home) => [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home, { source: "capability", capability: "some.capability" })]],
+  ["one marked secret, which is not carried", (home) => [entry("OATS_INSTANCE_HOME", home, { secret: true })]],
+  ["one that names another directory than the launch's home", () => [entry("OATS_INSTANCE_HOME", "/another/home")]],
+]) {
+  test(`a pi launch with ${name} is refused before bb is asked: the thread would load none of the home's skills, and nothing would say so`, async (t) => {
+    const { home, bb, run } = await setup(t);
+    const answer = await run({ env: env(home) });
+    assert.equal(answer.error.code, "E_BACKEND_LAUNCH_ENV");
+    assert.match(answer.error.message, /a pi launch must carry OATS_INSTANCE_HOME, from the kernel, naming the launch's home/);
+    assert.ok(!answer.error.message.includes("/another/home"), "a value is never part of a message");
+    assert.deepEqual(bb.calls(), []);
+  });
+}
 
 test("only OATS_INSTANCE, OATS_INSTANCE_HOME and PATH ever go into bb's project env: what a capability or the kernel adds beside them is left out", async (t) => {
   const { home, bb, run, withPi } = await setup(t);
@@ -183,8 +200,8 @@ test("which file is pi: an executable named pi in an absolute directory of the P
 });
 
 test("a launch that carries no PATH sets none, and is not asked where pi is", async (t) => {
-  const { bb, run } = await setup(t);
-  assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a")] })).ok, true);
+  const { home, bb, run } = await setup(t);
+  assert.equal((await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)] })).ok, true);
   assert.ok(!envCalls(bb).some(([what]) => what.startsWith("set PATH")));
 });
 
@@ -218,11 +235,34 @@ test("one home is one bb project: a project that is also rooted elsewhere refuse
   assert.equal((await run({ harness: "claude", model: "claude-opus-5-5" })).ok, true, "a Claude launch writes nothing into the project");
 });
 
-test("a Claude launch does not touch the project's env", async (t) => {
+test("a Claude launch owns no project env: it only reads it, and where a pi launch of the home left its three names, removes those and nothing else", async (t) => {
   const { home, bb, run } = await setup(t);
   assert.equal((await run({ harness: "claude", model: "claude-opus-5-5" })).ok, true);
-  assert.deepEqual(envCalls(bb), []);
+  assert.deepEqual(envCalls(bb), [["list --project proj_a --json", ""]], "nothing there: nothing set, nothing removed");
   assert.equal(existsSync(join(home, ".claude/settings.local.json")), true);
+  // The home ran pi before: bb gives a project's env to every thread of it, and starts
+  // `claude` by a project PATH, which a pi launch composed for pi.
+  const after = await setup(t, { "machine env list": { stdout: envList(["A_PERSONS_OWN", "OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]) } });
+  assert.equal((await after.run({ harness: "claude", model: "claude-opus-5-5" })).ok, true);
+  assert.deepEqual(envCalls(after.bb), [
+    ["list --project proj_a --json", ""],
+    ["unset OATS_INSTANCE --project proj_a --json", ""],
+    ["unset OATS_INSTANCE_HOME --project proj_a --json", ""],
+    ["unset PATH --project proj_a --json", ""],
+  ]);
+  const order = names(after.bb);
+  assert.ok(order.lastIndexOf("machine env unset") < order.indexOf("thread spawn"), "before the spawn");
+});
+
+test("a Claude launch whose project is made by this launch reads no env, and one bb will not let it clean refuses with nothing started", async (t) => {
+  const fresh = await setup(t, (h) => ({ "project list": { stdout: [] }, "project create": { stdout: projectRow("proj_new", h) }, "thread spawn": { stdout: { id: "thr_new", projectId: "proj_new", status: "starting" } } }));
+  assert.equal((await fresh.run({ harness: "claude", model: "claude-opus-5-5" })).ok, true);
+  assert.deepEqual(envCalls(fresh.bb), []);
+  const stuck = await setup(t, { "machine env list": { stdout: envList(["PATH"]) }, "machine env unset": { error: { code: "invalid_request", message: "HTTP 400: no" } } });
+  const answer = await stuck.run({ harness: "claude", model: "claude-opus-5-5" });
+  assert.equal(answer.error.code, "E_SESSION_START_FAILED");
+  assert.match(answer.error.message, /what a pi launch left in the env of bb project proj_a could not be removed: bb machine env unset PATH failed/);
+  assert.ok(!names(stuck.bb).includes("thread spawn"));
 });
 
 // The retire hook, and the launch hook of a home that leaves bb.

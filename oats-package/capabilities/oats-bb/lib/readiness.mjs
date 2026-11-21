@@ -197,7 +197,8 @@ async function piWarnings(settings, { server, bb, http = getJson, deadline = Dat
   const found = [...(problem !== null ? [problem] : []), ...await piConfiguration(settings, bb)];
   if (found.length === 0) return [];
   const [first, ...rest] = found;
-  return [{ code: "session-provider-pi-not-ready", message: `a pi launch on this bb would be refused (${first.code}${rest.length ? `, and ${rest.length} more: ${rest.map((entry) => entry.code).join(", ")}` : ""}); a Claude launch is not held up by it. ${first.message}` }];
+  // Short, and before the finding's own words: those end with the path that was read, which is what a cut may take.
+  return [{ code: "session-provider-pi-not-ready", message: `a pi launch would be refused here (${[first, ...rest].map((entry) => entry.code).join(", ")}); Claude launches are not held up. ${first.message}` }];
 }
 
 /** Whether the value is an address a bb server can have: an http or https URL with a host. */

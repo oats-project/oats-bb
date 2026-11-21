@@ -478,13 +478,13 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
   assert.ok((await claudesIn()) >= 1);
   for (const marker of ["MARK-K28-CLAUDE-ONE", "MARK-K28-CLAUDE-TWO"]) assert.equal(await claudeLanded(marker), 1, marker);
   assert.equal(await landed("MARK-K28-PI"), 1);
-  // What the pi launch left in the project's env stays under the Claude thread: a Claude
-  // launch does not touch it. They are this same home's three values; Claude's own launch
-  // env is its settings file's, written by this launch.
-  assert.deepEqual(await projectEnv(first.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  // What the pi launch left in the project's env is gone: bb gives a project's env to every
+  // thread of it, and starts `claude` by a project PATH. Claude's own launch env is its
+  // settings file's, written by this launch.
+  assert.deepEqual(await projectEnv(first.projectId), []);
   assert.deepEqual(Object.keys(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).env).sort(), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
   // The retire leaves nothing: no thread live, no env, no process.
   const retired = await hook("retire-hook", home);
-  assert.deepEqual(retired.meta, { retired: true, archived: [third.threadId], env: 3 });
+  assert.deepEqual(retired.meta, { retired: true, archived: [third.threadId] });
   await nothingIn(home, "after the retire");
 });

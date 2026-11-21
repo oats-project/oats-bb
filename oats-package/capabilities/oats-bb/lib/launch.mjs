@@ -6,10 +6,10 @@ import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, fail, isObject, someOf } from "./errors.mjs";
-import { piLaunchEnv, piPathRefusal, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
+import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
-import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome } from "./threads.mjs";
+import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, samePath } from "./threads.mjs";
 
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
@@ -58,6 +58,11 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // answer a thread that ends at once.
   const noPi = pi ? piPathRefusal(launchEnv.PATH) : null;
   if (noPi !== null) throw fail(noPi.code, noPi.message);
+  // The home's skills reach pi only where OATS_INSTANCE_HOME names the home: a launch that
+  // carries none that does would start a thread with none of them, and nothing would say so.
+  if (pi && !samePath(launchEnv.OATS_INSTANCE_HOME, home)) {
+    throw fail("E_BACKEND_LAUNCH_ENV", "a pi launch must carry OATS_INSTANCE_HOME, from the kernel, naming the launch's home: without it @awebai/oats-pi loads none of the home's skills in the thread, and nothing says so. This launch carried none that does (an entry of another source than the kernel, or one marked secret, is not carried). Nothing was started");
+  }
   // bb's full mode has no sandbox: nothing is written for it (and what an earlier,
   // sandboxed launch wrote is removed).
   const allowances = readSandbox(input.sandbox, { sandboxed: mode !== "full" });
@@ -154,6 +159,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
       effect = `the home's previous thread ${replaced.id} is archived`;
     }
     project = mine.find((candidate) => candidate.id === previous?.projectId) ?? mine[0] ?? null;
+    const existing = project !== null;
     if (project === null) {
       const before = effect;
       effect = "it asked bb to create the home's project";
@@ -177,6 +183,11 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     // this launch's. It reaches no process before the spawn, and the next launch rewrites
     // it whole, so a launch refused after it is still a refusal: nothing was started.
     if (pi) await writeProjectEnv(bb, project.id, launchEnv);
+    // A Claude launch of a home that ran pi before: the three names the pi launch left in
+    // the project's env go. bb gives a project's env to every thread of it, and starts
+    // `claude` by a project PATH: one composed for pi may hold no claude ("bb could not find
+    // the Claude Code CLI"). A project this launch made holds none.
+    else if (existing) await removePiEnv(bb, project.id);
     try { if (!pi) writeLaunchSettings(home, settingsToWrite); }
     catch (error) {
       if (effect === null) {

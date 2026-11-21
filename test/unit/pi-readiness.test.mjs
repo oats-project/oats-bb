@@ -26,7 +26,7 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "machine env unset": { stdout: envList([]) },
     ...script,
   });
-  const launch = (extra = {}, settings = {}) => call("launch", { home, instance: "dev-a", harness: "pi", model: "mock/echo", yolo: true, env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra }, { settings: backend.settings(settings), bb });
+  const launch = (extra = {}, settings = {}) => call("launch", { home, instance: "dev-a", harness: "pi", model: "mock/echo", yolo: true, env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra }, { settings: backend.settings(settings), bb });
   const check = (planned, settings = {}) => call("check", { home, soul: null, ...(planned ? { launch: planned } : {}) }, { settings: backend.settings(settings), bb });
   return { dir, home, backend, bb, launch, check };
 }
@@ -43,8 +43,8 @@ for (const [name, packages] of [
     const before = readFileSync(join(backend.piAgentDir, "settings.json"), "utf8");
     const answer = await launch();
     assert.equal(answer.error.code, "E_BACKEND_PI_LISTENER");
-    assert.match(answer.error.message, /^bb's pi would take this agent's mail: @awebai\/pi is in the pi configuration bb's server runs with, and every pi bb starts \(its hidden model-listing pi too\) connects to aweb as the agent/);
-    assert.match(answer.error.message, /Give bb's server a configuration of its own without it \(PI_CODING_AGENT_DIR, and settings\.oats\.bb\.piAgentDir\)/);
+    assert.match(answer.error.message, /^bb's pi would take this agent's mail: @awebai\/pi is in bb's pi configuration, and every pi bb starts \(a hidden one too\) connects to aweb as the agent/);
+    assert.match(answer.error.message, /Give bb's server a pi configuration without it \(PI_CODING_AGENT_DIR, and settings\.oats\.bb\.piAgentDir\)/);
     assert.match(answer.error.message, /or silence it in bb's processes only: printf session \| bb machine env set AWEB_DELIVERY\./);
     assert.ok(answer.error.message.includes(backend.piAgentDir), "the directory read is named");
     assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
@@ -56,6 +56,25 @@ for (const [name, packages] of [
     assert.equal(readFileSync(join(backend.piAgentDir, "settings.json"), "utf8"), before, "the provider only reads the configuration");
   });
 }
+
+test("with a long piAgentDir the remedy is still whole, in the refusal and in the warning of a read with no planned launch: what a cut takes is the path", async (t) => {
+  const { dir, launch, check } = await setup(t);
+  const long = join(dir, "a-pi-configuration-directory-with-a-long-name".repeat(4), "agent");
+  mkdirSync(long, { recursive: true });
+  writeFileSync(join(long, "settings.json"), JSON.stringify({ packages: [BRIDGE, "npm:@awebai/pi"] }));
+  const REMEDY = /Give bb's server a pi configuration without it \(PI_CODING_AGENT_DIR, and settings\.oats\.bb\.piAgentDir\), or silence it in bb's processes only: printf session \| bb machine env set AWEB_DELIVERY\. Read: /;
+  const refused = await launch({}, { piAgentDir: long });
+  assert.equal(refused.error.code, "E_BACKEND_PI_LISTENER");
+  assert.match(refused.error.message, REMEDY);
+  assert.ok(refused.error.message.length <= 480);
+  const warning = (await check(null, { piAgentDir: long })).result.warnings.find((entry) => entry.code === "session-provider-pi-not-ready");
+  assert.match(warning.message, /^a pi launch would be refused here \(E_BACKEND_PI_LISTENER\); Claude launches are not held up\. /);
+  assert.match(warning.message, REMEDY);
+  assert.ok(warning.message.length <= 480, String(warning.message.length));
+  // And with the team image's own directory the whole warning fits, the file it read included.
+  const beforeThePath = warning.message.indexOf("Read: ") + "Read: ".length;
+  assert.ok(beforeThePath + "/state/home/.bb-pi/settings.json".length <= 480, String(beforeThePath));
+});
 
 test("AWEB_DELIVERY in bb's machine env stands for an @awebai/pi that is listed: it silences the extension in the processes bb runs", async (t) => {
   // The first read is bb's machine env (readiness); the second the home's project env (the launch).
@@ -168,7 +187,7 @@ test("a read with no planned launch says, as one warning, what a pi launch would
   const plain = (await check()).result;
   assert.equal(plain.status, "ready", "a deployment that runs Claude alone is ready");
   const warning = plain.warnings.find((entry) => entry.code === "session-provider-pi-not-ready");
-  assert.match(warning.message, /^a pi launch on this bb would be refused \(E_BACKEND_NOT_READY, and 1 more: E_BACKEND_PI_LISTENER\); a Claude launch is not held up by it\. /);
+  assert.match(warning.message, /^a pi launch would be refused here \(E_BACKEND_NOT_READY, E_BACKEND_PI_LISTENER\); Claude launches are not held up\. /);
   assert.ok(warning.message.length <= 480);
   assert.equal(plain.warnings.filter((entry) => entry.code === "session-provider-pi-not-ready").length, 1);
   // The check of a planned Claude launch says nothing of pi, and reads nothing of it.

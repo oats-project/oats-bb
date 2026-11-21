@@ -138,7 +138,7 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 |---|---|
 | launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600); for a pi launch, the three variables into the env of the home's bb project instead ([pi](#pi)). Runs `bb thread spawn --provider claude-code` (or `--provider pi`) `--environment <home> --prompt-file <home>/TASK.md`. Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error`, also looks at this host's processes for one of the thread's. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
-| input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Refuses a thread in `error` with no process of its own left (`E_SESSION_INPUT_FAILED`, below the table). Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
+| input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
 | stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. |
 | retire (hook) | For each of the home's live threads: withdraws what bb holds in line for it, stops it, and archives it once the stop is confirmed (a thread it could not stop is left, and named in a warning). Then stops the home's threads that were archived before, and removes the env of the home's bb project (what a pi launch wrote there). It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
 | stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home, and its archived threads: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so the next start launches (if bb does not archive it, the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
@@ -172,7 +172,10 @@ it beside the process that is still there, and refuses to. So the provider decid
 every inspect, from the processes of this host and never from bb's word alone: a thread
 in `error` is there while some process carries its id (bb gives a thread's agent, and
 what that agent starts, `BB_THREAD_ID`), and a lost session once none does, which the
-kernel may resume with an input. What failed is the harness's to report (a "Turn failed"
+kernel may resume with an input. Any process that carries the id counts, a command the
+agent started and left running included: where one outlives an agent that died, the
+thread still reads as there, and an input to it is told (bb starts the agent again)
+without the kernel counting a resume. What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
 a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess.
@@ -460,7 +463,9 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   on bb before (`OATS_PREVIOUS_BACKEND`), as for the `settings.local.json` keys. A
   project that is also rooted at another directory is refused by a pi launch
   (`E_SESSION_START_FAILED`): its env would reach whatever runs there. A Claude launch
-  does not touch a project's env. bb shows no value of its env back, and no record of it
+  owns no project env: it only removes those three names where a pi launch of the same
+  home left them (bb gives a project's env to every thread of it, and starts `claude` by
+  a project `PATH`, which a pi launch composed for pi), and leaves any other name alone. bb shows no value of its env back, and no record of it
   is kept in the home.
 
 **The home's skills load through @awebai/oats-pi**, the OATS bridge for pi, and only

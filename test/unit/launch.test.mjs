@@ -55,7 +55,8 @@ test("launch spawns one thread in the home's project and answers its endpoint", 
 test("launch runs the readiness checks before it reads or changes anything in bb", async (t) => {
   const { backend, bb, run } = await setup(t);
   await run();
-  assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread list --archived", "thread spawn"]);
+  // ("machine env": the read of the project's env, for what a pi launch of this home may have left there.)
+  assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread list --archived", "machine env", "thread spawn"]);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
   assert.deepEqual(backend.daemonRequests, ["/status"]);
 });

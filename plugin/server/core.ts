@@ -165,7 +165,9 @@ export function createCore(bb: BbPluginApi) {
           : `No OATS deployment found on ${found.machine}: ${values.deployment} holds no oats-local.yaml. Correct the deployment directory in the OATS plugin's settings.`,
       );
     }
-    return { hostId, deployment: found.deployment, machine: found.machine };
+    // The machine is shown by the name bb gives it (the one a person sees in bb), never by the
+    // host's own name, which in a container is a raw id.
+    return { hostId, deployment: found.deployment, machine: chosen.name ?? found.machine };
   }
 
   async function base(signal: AbortSignal): Promise<{ target: Target; input: { deployment: string; oatsBin: string } } | Failure> {

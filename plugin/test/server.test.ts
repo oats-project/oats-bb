@@ -67,7 +67,7 @@ describe("snapshot", () => {
     expect(first.ok).toBe(true);
     expect(first.deployment.root).toBe(fake.deployment);
     expect(first.deployment.workspace).toBe("oats");
-    expect(first.deployment.machine).toBeTypeOf("string");
+    expect(first.deployment.machine).toBe("falcon"); // the name bb gives the machine, not the host's own
     expect(first.agents).toHaveLength(8);
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);

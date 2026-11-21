@@ -68,6 +68,7 @@ together.
 | `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
+| `bb-plugin-command.sh` | by `setup.sh` and `scenario.mjs` | runs a command one of bb's plugins adds to its CLI (`bb concurrency-limit status`), waiting up to 60 s for bb to have it; `bb-plugin-command.test.sh` is its test, run by `container/unit.sh` |
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
@@ -76,7 +77,10 @@ together.
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays
   the automatic one: one running thread per processor, 2 in this container. The run is written for
-  that limit (part B).
+  that limit (part B). The limit is a plugin's, bundled with bb, and bb loads its plugins after it
+  starts: for a few seconds a bb with a machine connected can answer `unknown command
+  'concurrency-limit'`. `setup.sh` waits for that command before the run starts, and fails with
+  what it waited for when it never comes.
 - **The kernel**: the registry's tarball of `@awebai/oats@<KERNEL_NPM>` (`npm pack`, which prints
   its integrity: `setup.sh` prints it with the release's gitHead and checks it against
   `KERNEL_INTEGRITY`), then `npm install -g` of that file, and the installed version is checked.

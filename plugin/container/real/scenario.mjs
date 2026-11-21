@@ -68,6 +68,11 @@ async function until(what, read, seconds = 60) {
 
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const bbJson = (...args) => JSON.parse(bb(...args, "--json"));
+/**
+ * A command one of bb's plugins adds to its CLI (the concurrency limit's), waited for when bb does
+ * not have it yet (bb-plugin-command.sh, 60 s). One that never answers throws, with bb's error.
+ */
+const bbPlugin = (...args) => execFileSync("sh", [join(HERE, "bb-plugin-command.sh"), "60", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 /** bb's threads, archived ones included; a deleted thread is not among them. */
 const bbThreads = () => bbJson("thread", "list", "--include-archived");
 const bbThread = (id) => bbThreads().find((thread) => thread.id === id);
@@ -575,7 +580,7 @@ try {
   const queuedSpawn = child("knowledge-harvester", queued, null, taskOf(queued, "Wait in bb's line."));
   const queuedThread = queuedSpawn?.session?.endpoint?.threadId;
   row = await untilRow(queued, "its turn held in bb's line", (r) => r.session?.threadId === queuedThread && bbThread(queuedThread)?.status === "pending");
-  say(`     ${bb("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
+  say(`     ${bbPlugin("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
   show("oats status", brief(row));
   check(inLine(queuedThread).length === 1 && bbThread(queuedThread)?.queuedWork === "waiting", "bb holds the agent's first turn in line", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
   show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status, queuedWork: bbThread(queuedThread)?.queuedWork, inLine: inLine(queuedThread).length });

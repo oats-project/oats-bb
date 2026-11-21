@@ -1,4 +1,5 @@
-// A5: the spawn argv has no shell and carries `--backend bb`; a soul not in the list, and names
+// A5: the spawn argv has no shell and carries `--backend bb` and `--yolo` (bb's full mode, on
+// every spawn: the preview and the apply alike); a soul not in the list, and names
 // with a space, a slash, an upper-case letter or a leading dash, are refused before any process
 // starts; the task file is 0600 and gone after the call, on success and on failure.
 import { existsSync } from "node:fs";
@@ -25,12 +26,12 @@ afterEach(async () => {
 });
 
 describe("A5 spawn", () => {
-  it("previews with an argv array that carries --backend bb, the name as one element and the task as a file", async () => {
+  it("previews with an argv array that carries --backend bb and --yolo, the name as one element and the task as a file", async () => {
     const task = "Fix the flaky CI job.\n$(touch /tmp/should-not-exist) ; rm -rf ~ `id` \"quoted\" --yolo\n";
     const preview = await oats.spawnPreview({ soul: "oats-developer", name: "flaky-ci-2-developer", task }, context());
     expect(preview.ok).toBe(true);
     const [call] = await fake.calls();
-    expect(call?.argv).toEqual(["spawn", "oats-developer", "--backend", "bb", "--name", "flaky-ci-2-developer", "--task-file", call?.taskFile?.path, "--preview", "--json"]);
+    expect(call?.argv).toEqual(["spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "flaky-ci-2-developer", "--task-file", call?.taskFile?.path, "--preview", "--json"]);
     // No shell read the task: it arrived byte for byte, in the file.
     expect(call?.taskFile?.text).toBe(task);
     expect(call?.taskFile?.mode).toBe("600");
@@ -50,15 +51,17 @@ describe("A5 spawn", () => {
     expect(preview.ok).toBe(true);
     if (!preview.ok) return;
     const spawned = await oats.spawn({ soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", key: "spawn-1f0c9a7e", revision: preview.value.revision }, context());
-    expect(spawned).toEqual({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" } });
+    expect(spawned).toEqual({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" } });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn"]);
     const apply = calls[1]!;
     expect(apply.argv).toEqual([
-      "spawn", "oats-developer", "--backend", "bb", "--name", "flaky-ci-2-developer", "--task-file", apply.taskFile?.path,
+      "spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "flaky-ci-2-developer", "--task-file", apply.taskFile?.path,
       "--expect-decision", preview.value.revision, "--idempotency-key", "spawn-1f0c9a7e", "--json",
     ]);
     expect(apply.argv).not.toContain("--preview");
+    // The kernel binds the apply to the preview's decision: both ask for full mode, in the same place.
+    expect(apply.argv.slice(0, 7)).toEqual(calls[0]!.argv.slice(0, 7));
     // A file of its own for each process, 0600, gone afterwards.
     expect(apply.taskFile).toMatchObject({ mode: "600", text: "Fix it." });
     expect(apply.taskFile?.path.startsWith(fake.tempDir)).toBe(true);

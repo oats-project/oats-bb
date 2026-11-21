@@ -57,21 +57,21 @@ describe("a real kernel's status, read by the parser", () => {
   });
 
   it("working: running true, state unknown, on its bb thread", () => {
-    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: true, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("working")).toEqual([{ ...one, threadId: "thr_ad488edeab", running: true, runtimeState: "unknown", waiting: null }]);
   });
 
   it("idle: running null, state unknown, the same thread", () => {
-    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: null, runtimeState: "unknown", waiting: null }]);
+    expect(agentsOf("idle")).toEqual([{ ...one, threadId: "thr_ad488edeab", running: null, runtimeState: "unknown", waiting: null }]);
   });
 
   it("waiting for a person: the claim of `oats instance attention`, with the agent's message", () => {
     expect(agentsOf("needsYou")).toEqual([
       {
         ...one,
-        threadId: "thr_pkixkg8mvn",
+        threadId: "thr_ad488edeab",
         running: null,
         runtimeState: "unknown",
-        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-21T05:51:26.629Z" },
+        waiting: { reason: "attention", message: "Keep the retry, or fail the job?", since: "2026-11-21T15:45:46.677Z" },
       },
     ]);
   });
@@ -80,27 +80,27 @@ describe("a real kernel's status, read by the parser", () => {
     expect(agentsOf("question")).toEqual([
       {
         ...one,
-        threadId: "thr_pkixkg8mvn",
+        threadId: "thr_ad488edeab",
         running: true,
         runtimeState: "unknown",
-        waiting: { reason: "question", message: "Retry the flaky job once more, or mark it as failed?", since: "2026-11-21T05:51:48.937Z" },
+        waiting: { reason: "question", message: "Retry the flaky job once more, or mark it as failed?", since: "2026-11-21T15:46:10.438Z" },
       },
     ]);
   });
 
   it("stopped by OATS: running false, state stopped, the thread kept", () => {
-    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_pkixkg8mvn", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("stoppedByOats")).toEqual([{ ...one, threadId: "thr_ad488edeab", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("its thread deleted in bb: running false, state stopped, still naming the thread that is gone", () => {
-    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_piw73uvy5i", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_4m85rand5n", running: false, runtimeState: "stopped", waiting: null }]);
   });
 
   it("a parent with two children: each child names its parent, in the kernel's order", () => {
     expect(agentsOf("parentWithTwoChildren").map((agent) => [agent.instance, agent.soul, agent.parent, agent.running, agent.threadId])).toEqual([
-      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_trijn6gyv6"],
-      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_9rz67f2pnh"],
-      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_wqeixc6256"],
+      ["harvest-knowledge-helper", "knowledge-harvester", "redesign-ui-lead", null, "thr_2tmxyug2qs"],
+      ["desktop-mockups-developer", "oats-desktop-developer", "redesign-ui-lead", true, "thr_z3u3qec7bs"],
+      ["redesign-ui-lead", "oats-product-expert", null, true, "thr_py96mk7bwc"],
     ]);
   });
 });
@@ -120,7 +120,7 @@ describe("a real kernel's status, joined to bb's threads by the model", () => {
     ["stoppedByOats", "stopped"],
   ] as const)("%s is drawn in the tree as %s", (recordedState, drawnState) => {
     const result = drawn(recordedState);
-    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_pkixkg8mvn", drawnState]]);
+    expect(result.roots.map((node) => [node.agent.instance, node.thread.id, node.state])).toEqual([["flaky-ci-2-developer", "thr_ad488edeab", drawnState]]);
     expect(result.detached).toEqual([]);
     expect(result.elsewhere).toEqual([]);
   });

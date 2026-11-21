@@ -243,6 +243,8 @@ async function a13(browser, viewport, threads, theme) {
     await page.goto("/plugins/oats/souls/oats-developer");
     check(Boolean(await page.until(visible(testId("oats-soul-detail")), 30)), `${at} a soul's page renders, with the spawn form`, await page.evaluate(textOf(testId("oats-souls-page"))));
     check((await page.evaluate(visible(testId("oats-soul-row")))) === !viewport.mobile, `${at} ${viewport.mobile ? "the list gives way to the soul, with Back" : "the list stays beside the soul"}`);
+    // the one line that says which mode a spawn asks for (text, no control); its contrast is checked at this screenshot
+    check((await page.evaluate(textOf(testId("oats-spawn-mode")))) === "Runs in bb's full mode: no sandbox." && (await page.evaluate(visible(testId("oats-spawn-mode")))), `${at} the New agent form says it runs in bb's full mode, with no sandbox`, await page.evaluate(textOf(testId("oats-soul-detail"))));
     await page.shot(`a13-${viewport.name}-soul`);
     // the spawn form: a name it refuses, then a name and a task it takes, and the preview
     await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));

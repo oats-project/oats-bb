@@ -77,7 +77,9 @@ if ! bb machine list > /dev/null 2>&1; then
 fi
 
 # bb's own limit stays: one running thread per processor (2 here); the run uses it (scenario.mjs, B1).
-bb concurrency-limit status
+# The limit is a plugin's, bundled with bb, and bb loads its plugins after a machine is connected:
+# the run starts only once that plugin's command answers (bb-plugin-command.sh waits for it).
+sh "$PLUGIN/container/real/bb-plugin-command.sh" 60 concurrency-limit status || { echo "setup: bb's concurrency limit is not there: the run needs it (scenario.mjs, B1)" >&2; bb plugin list >&2 || true; exit 1; }
 
 echo "== the provider, the workspace and the deployment"
 REAL="$REAL" BB_VERSION="$(bb --version)" sh "$PLUGIN/container/real/workspace.sh"

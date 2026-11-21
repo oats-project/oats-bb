@@ -68,6 +68,7 @@ together.
 | `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
+| `bb-plugin-command.sh` | by `setup.sh` and `scenario.mjs` | runs a command one of bb's plugins adds to its CLI (`bb concurrency-limit status`), waiting up to 60 s for bb to have it; `bb-plugin-command.test.sh` is its test, run by `container/unit.sh` |
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
@@ -76,7 +77,10 @@ together.
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays
   the automatic one: one running thread per processor, 2 in this container. The run is written for
-  that limit (part B).
+  that limit (part B). The limit is a plugin's, bundled with bb, and bb loads its plugins after it
+  starts: for a few seconds a bb with a machine connected can answer `unknown command
+  'concurrency-limit'`. `setup.sh` waits for that command before the run starts, and fails with
+  what it waited for when it never comes.
 - **The kernel**: the registry's tarball of `@awebai/oats@<KERNEL_NPM>` (`npm pack`, which prints
   its integrity: `setup.sh` prints it with the release's gitHead and checks it against
   `KERNEL_INTEGRITY`), then `npm install -g` of that file, and the installed version is checked.
@@ -100,12 +104,13 @@ together.
   harness, and the provider runs Claude Code only). `oats-expert` works in a worktree; the others
   in a directory. Its commits have fixed dates, so the same trees give the same commit ids.
 - **The deployment** (`oats onboard`): `settings.oats.bb` holds `trust: container` and the bb
-  version, and a default launch configuration for Claude Code sets `yolo: true` (bb's full mode).
-  The plugin's spawn, start and restart name no mode (no `--yolo`, no launch configuration), so the
-  deployment's default decides it, and the provider launches in bb's full mode only: without that
-  default the kernel refuses each of them with the provider's `E_BACKEND_SANDBOXED_MODE` (the
-  plugin shows it unchanged; a spawn preview says nothing of it). The image has no bubblewrap
-  either, so a sandboxed mode could not run a command here.
+  version, and there is **no launch configuration**: nothing on the host chooses bb's full mode.
+  The provider launches in full mode only, and the plugin asks for it on every spawn (`--yolo`),
+  so the run shows that the plugin's Spawn needs no default of the host: its preview's decision
+  and its spawn's answer have `yolo: true` and name no launch configuration. The agents the
+  scenario makes on the command line (part B's children) are spawned with `--yolo` too. Start and
+  Restart name no mode and keep what the home recorded at its spawn; the run checks that none of
+  the plugin's `session` calls carries `--yolo`.
 - **The mock model**: Claude Code's user settings point `ANTHROPIC_BASE_URL` at
   `mock-anthropic.mjs` on loopback, and bb's server gets a placeholder key in its own environment
   (bb reports its claude-code provider ready only with a credential). No login, nothing spent. The

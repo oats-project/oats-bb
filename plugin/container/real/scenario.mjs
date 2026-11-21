@@ -68,6 +68,11 @@ async function until(what, read, seconds = 60) {
 
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const bbJson = (...args) => JSON.parse(bb(...args, "--json"));
+/**
+ * A command one of bb's plugins adds to its CLI (the concurrency limit's), waited for when bb does
+ * not have it yet (bb-plugin-command.sh, 60 s). One that never answers throws, with bb's error.
+ */
+const bbPlugin = (...args) => execFileSync("sh", [join(HERE, "bb-plugin-command.sh"), "60", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 /** bb's threads, archived ones included; a deleted thread is not among them. */
 const bbThreads = () => bbJson("thread", "list", "--include-archived");
 const bbThread = (id) => bbThreads().find((thread) => thread.id === id);
@@ -330,7 +335,12 @@ try {
   const task = taskOf(A.instance, "Fix the flaky CI job.");
   const preview = act("spawn preview", "spawnPreview", { soul: A.soul, name: A.instance, task });
   check(preview?.summary.problems.length === 0 && /^claude · /.test(preview?.summary.launch ?? ""), "the preview names the launch and no problem", JSON.stringify(preview));
-  evidence.keep("spawn-preview.json", recorded(["spawn", A.soul], ["--preview"]).stdout);
+  const previewRecord = recorded(["spawn", A.soul], ["--preview"]);
+  evidence.keep("spawn-preview.json", previewRecord.stdout);
+  // The deployment has no full-mode default (workspace.sh): the mode is the plugin's own `--yolo`.
+  const previewed = JSON.parse(previewRecord.stdout).result;
+  check(previewRecord.argv.includes("--yolo") && previewed.decision?.effective?.yolo === true && previewed.launchConfig == null, "the plugin's preview asks for bb's full mode (--yolo), and the kernel's decision has yolo true from no launch configuration", JSON.stringify({ argv: previewRecord.argv, effective: previewed.decision?.effective, launchConfig: previewed.launchConfig }));
+  show("the kernel's decision", { yolo: previewed.decision?.effective?.yolo, launchConfig: previewed.launchConfig, backend: previewed.decision?.effective?.backend });
 
   step("A2 spawn: the new thread's id");
   const spawned = act("spawn", "spawn", { soul: A.soul, name: A.instance, task, key: "spawn-1f0c9a7e" });
@@ -338,6 +348,8 @@ try {
   const spawnAnswer = JSON.parse(spawnRecord.stdout).result;
   fixtures.keep("spawn.json", spawnRecord.stdout);
   check(spawned?.instance === A.instance && /^thr_/.test(spawned?.threadId ?? "") && spawned.threadId === spawnAnswer.session.endpoint.threadId, "the spawn answers the instance and the bb thread the kernel named");
+  check(spawnRecord.argv.includes("--yolo") && spawnAnswer.yolo === true && spawnAnswer.launchConfig == null && spawnAnswer.launched === true, "the spawn launched in bb's full mode by the plugin's own --yolo: the answer has yolo true and names no launch configuration", JSON.stringify({ argv: spawnRecord.argv, yolo: spawnAnswer.yolo, launchConfig: spawnAnswer.launchConfig, launched: spawnAnswer.launched }));
+  show("the spawn's answer", { yolo: spawnAnswer.yolo, launchConfig: spawnAnswer.launchConfig, launched: spawnAnswer.launched });
   let threadId = spawned.threadId;
   let row = await untilRow(A.instance, "working (running true)", (r) => r.running === true);
   check(row?.backend === "bb" && row.session?.provider === "oats.bb" && row.session.threadId === threadId && row.runtimeState === "unknown" && typeof row.open?.url === "string", "oats status: on bb, the same thread, running true / unknown, with a link to open it", brief(row));
@@ -541,7 +553,8 @@ try {
   function child(soul, name, parent, text) {
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, text);
-    const run = oats("spawn", soul, "--backend", "bb", "--name", name, ...(parent ? ["--parent", parent] : []), "--task-file", file, "--json");
+    // No launch configuration on this host chooses a mode: as the plugin does, the command line asks for full mode.
+    const run = oats("spawn", soul, "--backend", "bb", "--yolo", "--name", name, ...(parent ? ["--parent", parent] : []), "--task-file", file, "--json");
     const answer = run.exit === 0 ? JSON.parse(run.stdout).result : undefined;
     check(answer?.session?.endpoint?.threadId !== undefined, `oats spawn ${soul} --name ${name}${parent ? ` --parent ${parent}` : ""}`, run.stdout || run.stderr);
     return answer;
@@ -575,7 +588,7 @@ try {
   const queuedSpawn = child("knowledge-harvester", queued, null, taskOf(queued, "Wait in bb's line."));
   const queuedThread = queuedSpawn?.session?.endpoint?.threadId;
   row = await untilRow(queued, "its turn held in bb's line", (r) => r.session?.threadId === queuedThread && bbThread(queuedThread)?.status === "pending");
-  say(`     ${bb("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
+  say(`     ${bbPlugin("concurrency-limit", "status").trim().replace(/\n/g, "\n     ")}`);
   show("oats status", brief(row));
   check(inLine(queuedThread).length === 1 && bbThread(queuedThread)?.queuedWork === "waiting", "bb holds the agent's first turn in line", JSON.stringify({ inLine: inLine(queuedThread), thread: bbThread(queuedThread) }));
   show("bb thread", { id: queuedThread, status: bbThread(queuedThread)?.status, queuedWork: bbThread(queuedThread)?.queuedWork, inLine: inLine(queuedThread).length });
@@ -663,6 +676,10 @@ try {
   const machines = act("the machines", "machines");
   check(machines?.machines.length === 3 && machines.machines[0].isThisMachine === true, "this machine, then the two servers", JSON.stringify(machines));
   fixtures.keep("servers.json", recorded(["server", "list"]).stdout);
+
+  // Start and Restart name no mode: they keep what the home recorded at its spawn.
+  const sessions = records().filter((record) => record.argv[0] === "session");
+  check(sessions.length > 0 && sessions.every((record) => !record.argv.includes("--yolo")), `none of the plugin's ${sessions.length} start and restart calls names a mode (no --yolo)`, JSON.stringify(sessions.map((record) => record.argv)));
 
   check(browser.errors.length === 0, "no uncaught exception in the page", browser.errors.slice(0, 3).join(" | "));
 } finally {

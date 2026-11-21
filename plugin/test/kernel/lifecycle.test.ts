@@ -105,13 +105,15 @@ describe("stop", () => {
 
 describe("start and restart", () => {
   const home = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
-  it("starts the home the kernel named and answers the new thread", async () => {
-    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_3ufx45khmp" } });
-    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_guaerjwvwg" } });
+  it("starts the home the kernel named and answers the new thread, and names no mode (no --yolo): the home's recorded choice stands", async () => {
+    expect(await oats.start(home)).toEqual({ ok: true, value: { threadId: "thr_7nx8uibthg" } });
+    expect(await oats.restart(home)).toEqual({ ok: true, value: { threadId: "thr_d5zug5fnva" } });
     expect((await fake.calls()).map((call) => call.argv)).toEqual([
       ["session", "start", "--home", home, "--json"],
       ["session", "restart", "--home", home, "--json"],
     ]);
+    // Only a spawn asks for bb's full mode. A home spawned elsewhere without it is refused here by the kernel.
+    expect((await fake.calls()).flatMap((call) => call.argv)).not.toContain("--yolo");
   });
 
   it("answers no thread when the kernel's answer names none", async () => {
@@ -124,6 +126,17 @@ describe("start and restart", () => {
   it("answers the kernel's refusal unchanged", async () => {
     await fake.behave({ "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SESSION_RUNNING", message: "weekly-digest-helper already runs" } }) } });
     expect(await oats.start(home)).toEqual({ ok: false, error: { code: "E_SESSION_RUNNING", message: "weekly-digest-helper already runs" } });
+  });
+
+  it("a home spawned elsewhere without full mode: the provider's refusal of its start and restart is answered unchanged", async () => {
+    const error = { code: "E_BACKEND_SANDBOXED_MODE", message: "weekly-digest-helper was not started: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only" };
+    await fake.behave({ "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error }) }, "session restart": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error }) } });
+    expect(await oats.start(home)).toEqual({ ok: false, error });
+    expect(await oats.restart(home)).toEqual({ ok: false, error });
+    expect((await fake.calls()).map((call) => call.argv)).toEqual([
+      ["session", "start", "--home", home, "--json"],
+      ["session", "restart", "--home", home, "--json"],
+    ]);
   });
 });
 

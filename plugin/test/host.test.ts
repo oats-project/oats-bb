@@ -137,13 +137,13 @@ describe("the host verbs", () => {
 
   it("A5: spawn runs souls and the apply, with the task in a 0600 file of the worker's temporary directory", async () => {
     const spawned = await harness.experimental_call("spawn", { ...base(), soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" });
-    expect(spawned).toMatchObject({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" } });
+    expect(spawned).toMatchObject({ ok: true, value: { instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" } });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb)).toEqual(["souls", "spawn"]);
     expect(calls[1]?.taskFile).toMatchObject({ mode: "600", text: "Fix it." });
     expect(calls[1]?.taskFile?.path.startsWith(fake.tempDir)).toBe(true);
     expect(calls[1]?.argv).toContain("c557d8ec9a272ba1c1739dc3");
-    expect(calls[1]?.argv.slice(0, 6)).toEqual(["spawn", "oats-developer", "--backend", "bb", "--name", "flaky-ci-2-developer"]);
+    expect(calls[1]?.argv.slice(0, 7)).toEqual(["spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "flaky-ci-2-developer"]);
   });
 
   it("answers the plan and the kernel's refusal of a stale apply", async () => {

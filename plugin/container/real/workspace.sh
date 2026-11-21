@@ -9,10 +9,9 @@
 #   - a workspace repository with souls that have NO messaging capability: oats.core and oats.bb
 #     only. Their names are the ones the plugin's fixtures use.
 #   - the deployment $REAL/deploy, onboarded into that workspace, with the host's facts for bb
-#     (`trust: container`, the pinned version) and a default launch configuration for Claude Code
-#     with `yolo: true` (bb's full mode): the plugin's spawn, start and restart name no mode, and
-#     the provider launches in full mode only, so without this default the kernel refuses them
-#     with E_BACKEND_SANDBOXED_MODE (README.md, "The deployment").
+#     (`trust: container`, the pinned version) and NO launch configuration: nothing on the host
+#     chooses bb's full mode, so a spawn launches in it only because it asks (`--yolo`: the
+#     plugin's on every spawn, the scenario's own for the agents it makes on the command line).
 set -eu
 REAL=${REAL:-/home/node/real}
 BB_VERSION=${BB_VERSION:-$(bb --version)}
@@ -110,11 +109,6 @@ settings:
   oats.bb:
     trust: container
     version: $BB_VERSION
-launch-configs:
-  claude-full:
-    harness: claude
-    yolo: true
-    default: true
 Y
 # The soul whose work is a worktree needs a clone of its member repository.
 git clone -q "$WORKSPACE" "$REAL/deploy/oats-real"

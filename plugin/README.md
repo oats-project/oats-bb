@@ -4,7 +4,9 @@ The OATS plugin for bb, in `plugin/` of the `oats-bb` repository.
 
 Your OATS agents in bb: who each one is (soul, instance, aweb alias, parent, children), which ones
 need you, and the workspace they come from (souls, capabilities, teams, machines). From bb you can
-spawn, stop, start, restart and retire an agent. The plugin draws and asks; it owns nothing: every
+spawn, stop, start, restart and retire an agent. An agent spawned from bb runs in **bb's full
+mode, with no sandbox** between the agent and the account bb runs as: the plugin asks for it on
+every spawn ([How it is built](#how-it-is-built), "Spawn runs in bb's full mode"). The plugin draws and asks; it owns nothing: every
 OATS fact it shows is an answer of the `oats` CLI's `--json` verbs, every bb fact comes from bb's
 SDK, and everything it does goes through `oats`. It never reads `instance.json`, receipts, event
 files' contents or bb's database, and it never infers whether an agent runs.
@@ -108,6 +110,14 @@ a thread was deleted.
   file in the host worker's temporary directory, removed when the call ends; an instance must be in
   the current snapshot, and its home is the one the kernel named. The plugin adds no power a caller
   of bb's own API lacks.
+- **Spawn runs in bb's full mode, always.** Every spawn the plugin makes, the preview and the
+  apply alike, is `oats spawn <soul> --backend bb --yolo`: bb's full mode, with no sandbox between
+  the agent and the account bb runs as. The bb session provider launches in no other mode, so a
+  spawn that named none would depend on the host having a full-mode default launch configuration
+  and be refused without one (`E_BACKEND_SANDBOXED_MODE`). There is no tick box: the New agent
+  form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
+  ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
+  and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
   (`--expect-decision`), so Spawn reads the kernel's preview and applies exactly that decision with
   the key; asked again with the same key, it replays the same spawn. A spawn or a retire that runs

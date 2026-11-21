@@ -227,11 +227,12 @@ describe("the pages", () => {
 describe("acts", () => {
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
-    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" });
+    expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
     const calls = await fake.calls();
     expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
     expect(apply.argv).toContain("--backend");
+    expect(apply.argv).toContain("--yolo");
     expect(apply.argv[apply.argv.indexOf("--idempotency-key") + 1]).toBe("spawn-1f0c9a7e");
     expect(apply.argv[apply.argv.indexOf("--expect-decision") + 1]).toMatch(/^[0-9a-f]{24}$/);
   });
@@ -242,7 +243,11 @@ describe("acts", () => {
     await rpc("spawn", input);
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn"]);
-    expect(calls[2]!.argv.slice(8)).toEqual(calls[1]!.argv.slice(8));
+    // The same decision and key (each call has a task file of its own, before them in the argv).
+    const bound = (argv: string[]) => argv.slice(argv.indexOf("--expect-decision"));
+    expect(bound(calls[2]!.argv)).toEqual(bound(calls[1]!.argv));
+    expect(bound(calls[1]!.argv)).toHaveLength(5);
+    expect(calls[2]!.argv.slice(0, 8)).toEqual(calls[1]!.argv.slice(0, 8));
     expect(await refusalOf(rpc("spawn", { ...input, name: "another-developer" }))).toMatchObject({ code: "invalid" });
   });
 
@@ -254,7 +259,7 @@ describe("acts", () => {
     const preview = JSON.parse(await readFile(join(FIXTURES, "spawn-preview.json"), "utf8"));
     preview.result.decision.revision = "aaaaaaaaaaaaaaaaaaaaaaaa";
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(preview) } });
-    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_pkixkg8mvn" });
+    expect(await rpc("spawn", input)).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn --preview", "spawn"]);
     expect(calls[3]!.argv[calls[3]!.argv.indexOf("--expect-decision") + 1]).toBe("aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -307,8 +312,8 @@ describe("acts", () => {
     await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
     expect(await verbs()).toEqual(["status"]);
 
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_3ufx45khmp" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_guaerjwvwg" });
+    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_7nx8uibthg" });
+    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_d5zug5fnva" });
     const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
     expect(sessions.map((call) => call.argv)).toEqual([
       ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],

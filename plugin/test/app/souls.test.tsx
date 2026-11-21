@@ -47,6 +47,16 @@ test("the picked soul: description, origin, capabilities, and its agents by wher
   expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("kernel-fix-developeron tmux");
 });
 
+test("the New agent form says, in words and with no control, that the agent runs in bb's full mode", async () => {
+  const slot = await souls("oats-developer");
+  await slot.findByTestId("oats-spawn-form");
+  const line = slot.getByTestId("oats-spawn-mode");
+  expect(line.textContent).toBe("Runs in bb's full mode: no sandbox.");
+  expect(line.querySelector("input, button, select, textarea, a")).toBeNull();
+  // It is under the heading and above the form's fields.
+  expect(line.compareDocumentPosition(slot.getByTestId("oats-spawn-form")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 test("Preview shows what oats spawn --preview would do, and spawns nothing", async () => {
   const slot = await souls("oats-developer", {
     spawnPreview: () => ({
@@ -150,6 +160,7 @@ test("spawnable: false shows the problem and no form", async () => {
   );
   expect(slot.queryByTestId("oats-spawn-form")).toBeNull();
   expect(slot.queryByTestId("oats-spawn-submit")).toBeNull();
+  expect(slot.queryByTestId("oats-spawn-mode")).toBeNull();
 });
 
 test("an agent whose thread is archived shows as thread missing, with Start and Retire", async () => {

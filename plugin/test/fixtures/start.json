@@ -8,7 +8,7 @@
   "harness": "claude",
   "backend": "bb",
   "model": "claude-opus-5-5",
-  "launchConfig": "claude-full",
+  "launchConfig": null,
   "yolo": true,
   "target": null,
   "sandbox": {
@@ -30,11 +30,11 @@
    "provider": "oats.bb",
    "endpoint": {
     "server": "http://127.0.0.1:38886",
-    "projectId": "proj_ahb83tbpid",
-    "threadId": "thr_3ufx45khmp"
+    "projectId": "proj_q6kupp5a6i",
+    "threadId": "thr_7nx8uibthg"
    }
   },
-  "startedAt": "2026-11-21T05:56:08.681Z",
+  "startedAt": "2026-11-21T15:51:37.574Z",
   "restartCount": 1,
   "reused": "new",
   "warnings": []

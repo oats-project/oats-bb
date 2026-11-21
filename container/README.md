@@ -7,8 +7,9 @@ operator needs to run one bb server inside an
 
 | File | What it is |
 |---|---|
-| `Dockerfile`, `package.json`, `package-lock.json` | The team image for bb: an OATS team image plus `bb-app`, at the version in the repository's [`bb-version`](../bb-version) file. |
+| `Dockerfile`, `package.json`, `package-lock.json` | The team image for bb: an OATS team image plus `bb-app`, at the version in the repository's [`bb-version`](../bb-version) file, and, for bb's pi threads, pi and the OATS pi bridge (`@awebai/oats-pi`), each at an exact version. |
 | `agent-child.json` | The declaration: it tells the team image's supervisor how to run bb as its optional child. The image carries it at `/etc/agent-child.json`. |
+| `bb-server.sh`, `pi-settings.json` | What the declaration runs (`/usr/local/bin/bb-server`: it gives bb's pi its own configuration, then runs `bb-app`), and that configuration's settings (`/opt/bb/pi/settings.json`). See [pi](#pi). |
 | `compose.agent.child.yaml` | The Compose fragment that switches the child on: `AGENT_CHILD: "bb"`. |
 | `relay.mjs` | The operator's route to bb, over SSH. It runs on the operator's machine, never in an image. |
 
@@ -37,12 +38,13 @@ Two things, together:
      -t oats-agent-bb:reviewed container
    ```
 
-   It adds only `bb-app`, installed from the committed `package.json` and
+   It adds `bb-app`, pi (`@earendil-works/pi-coding-agent`) and `@awebai/oats-pi`, and
+   nothing else, installed from the committed `package.json` and
    `package-lock.json` with `npm ci --ignore-scripts`: no lifecycle script, no rebuild, no
    OS package. bb's native modules are the prebuilt ones in its locked packages. The image
    keeps the team image's entrypoint, user, `HOME` and environment, and bb runs the Claude
-   Code the team image already holds; this image adds no second one. It is about 280 MB
-   larger than the team image.
+   Code the team image already holds; this image adds no second one. It is about 600 MB
+   larger than the team image (about 280 MB of it is bb, the rest pi).
 
    Select it with `AGENT_IMAGE` in the team's Compose variables.
 
@@ -68,15 +70,24 @@ plugin's build agree with it. So one change moves them all:
 - the plugin's `bb-app` dev dependency (`plugin/package.json`), and its `engines.bb`
   range if the new version falls outside it.
 
-Review the two files of this directory and build a new image.
+Review the files of this directory and build a new image.
+
+**Changing pi's or the bridge's version.** Change the dependency in `container/package.json`,
+regenerate the lock the same way, and, for `@awebai/oats-pi`, the version in
+`pi-settings.json`: the build fails unless the settings name the version that was
+installed. Run the provider's pi contract test (`test/contract/pi.test.mjs`, which has its
+own image and its own pins) at the same versions.
 
 ## What runs
 
 After the wake broker is ready and before sshd and `oats host run`, the supervisor starts
-`bb-app --no-in-app-updates --server-bind-host 127.0.0.1`, with two additions to its own
+`bb-server --no-in-app-updates --server-bind-host 127.0.0.1`, which sets up bb's pi
+configuration ([pi](#pi)) and then becomes
+`bb-app --no-in-app-updates --server-bind-host 127.0.0.1`, with three additions to its own
 environment:
 
 - `BB_TELEMETRY=false`: telemetry is off.
+- `PI_CODING_AGENT_DIR=/state/home/.bb-pi`: the pi configuration bb's pi runs with.
 - `CLAUDE_CODE_OAUTH_TOKEN`, read from `/etc/agent-login/claude-token` when that file
   exists, so bb's Claude threads use the team's inference token. The file holds the token
   on one line; a line break or a space inside it refuses the start. bb reads its
@@ -103,10 +114,56 @@ are: ready when `http://127.0.0.1:38887/status` says `connected: true`, and 8 se
 stop before it is killed. A thread's process ends with its bb; the thread itself is kept, the next bb lists
 it idle, and a message to it starts a new turn.
 
+## pi
+
+bb can run pi agents as threads (the provider's README, [pi](../README.md#pi)). Two
+things must hold for that, and the image makes both hold:
+
+- the home's skills reach pi only through `@awebai/oats-pi`, in the pi configuration
+  bb's server runs with;
+- nothing in bb's pi may hold an agent's mail stream, so the aweb extension for pi
+  (`@awebai/pi`) must not be in that configuration: bb starts hidden pi processes that
+  load every extension of it.
+
+So bb's server runs pi with a configuration of its own, not the agents' `~/.pi/agent`:
+
+- `/opt/bb/pi` in the image, root-owned: `settings.json`, which lists
+  `npm:@awebai/oats-pi@<the locked version>` and nothing else, and that package where pi
+  looks for one it installed (`npm/node_modules/@awebai/oats-pi`, a link to the locked
+  copy). An agent cannot change either.
+- `/state/home/.bb-pi`, on the state volume: the directory pi runs with
+  (`PI_CODING_AGENT_DIR`). pi writes into its configuration directory (a lock beside its
+  trust file, its own state), and the image's file system is read-only, so the directory
+  cannot be the image's. `bb-server` links the image's `settings.json` and `npm` into it
+  at every start of bb, replacing whatever stands there: a restart of the container puts
+  the image's back.
+
+In the deployment's `oats-local.yaml`, set `settings.oats.bb.piAgentDir:
+/state/home/.bb-pi`: the provider's readiness reads that directory, and refuses a pi
+launch unless it lists `@awebai/oats-pi` and not `@awebai/pi`. With this image it does,
+out of the box. An agent can still write into `/state/home/.bb-pi` between two starts
+(`pi install` there); the provider's readiness then refuses the next pi launch, naming
+what it found. The team image also sets `AWEB_DELIVERY=session` for everything in the
+container, bb and every pi it starts included.
+
+**pi's model credential is not in this image.** pi keeps its logins and its model
+configuration (`auth.json`, `models.json`) in the directory it runs with, so they would
+go into `/state/home/.bb-pi`, or, for a provider pi reads from its environment, into
+the bb server's environment: an `envFromFile` entry of `agent-child.json`, naming a file
+directly under `/etc/agent-login/`, as `CLAUDE_CODE_OAUTH_TOKEN` is for Claude. Which
+provider and which file is a decision this image does not make yet; until then a pi
+thread in a team container has no model unless the operator gives pi one.
+
+On an operator's own host (no team image), do the same by hand: start bb's server with
+`PI_CODING_AGENT_DIR=<a directory of bb's own>`, run `PI_CODING_AGENT_DIR=<that
+directory> pi install npm:@awebai/oats-pi`, never install `@awebai/pi` there, and set
+`piAgentDir` to it.
+
 ## The deployment's settings
 
 The provider's settings go in the `oats-local.yaml` of the deployment inside the
-container: `trust: container`, and `version` equal to `bb-version` (its default). They are
+container: `trust: container`, `version` equal to `bb-version` (its default), and, for pi
+agents, `piAgentDir: /state/home/.bb-pi` ([pi](#pi)). They are
 described in the provider's README: [Settings](../README.md#settings) and
 [A team image: two pins](../README.md#a-team-image-two-pins).
 
@@ -195,4 +252,15 @@ is unchanged): a bb restart after `kill` and after `kill -9`, each followed by a
 in a thread made before it, on a mock model; and the relay with the real `ssh`, the bb web
 page and API through it.
 
-**NOT RUN:** arm64; Tailscale Serve; the desktop and phone apps; push notifications.
+Run by hand for pi (amd64, the base built from the workflow's pinned OATS commit, a
+read-only root file system, a volume at `/state`, as the agent user): both builds, whose
+own checks pass (pi and the bridge at the locked versions, the settings naming the
+bridge's); `bb-server` making `/state/home/.bb-pi` with its two links, and bb ready; the
+provider's check of a planned pi launch with `piAgentDir: /state/home/.bb-pi` reading
+ready; a pi launch through the provider on a mock model, whose first turn carried the
+home's skill; and `AWEB_DELIVERY=session` and `PI_CODING_AGENT_DIR` in every pi bb
+started. Not under the supervisor: that is this workflow's acceptance.
+
+**NOT RUN:** arm64; Tailscale Serve; the desktop and phone apps; push notifications; pi
+with a real model or behind the team's egress boundary (which names pi looks up at start
+is not known).

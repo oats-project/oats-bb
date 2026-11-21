@@ -104,12 +104,13 @@ together.
   harness, and the provider runs Claude Code only). `oats-expert` works in a worktree; the others
   in a directory. Its commits have fixed dates, so the same trees give the same commit ids.
 - **The deployment** (`oats onboard`): `settings.oats.bb` holds `trust: container` and the bb
-  version, and a default launch configuration for Claude Code sets `yolo: true` (bb's full mode).
-  The plugin's spawn, start and restart name no mode (no `--yolo`, no launch configuration), so the
-  deployment's default decides it, and the provider launches in bb's full mode only: without that
-  default the kernel refuses each of them with the provider's `E_BACKEND_SANDBOXED_MODE` (the
-  plugin shows it unchanged; a spawn preview says nothing of it). The image has no bubblewrap
-  either, so a sandboxed mode could not run a command here.
+  version, and there is **no launch configuration**: nothing on the host chooses bb's full mode.
+  The provider launches in full mode only, and the plugin asks for it on every spawn (`--yolo`),
+  so the run shows that the plugin's Spawn needs no default of the host: its preview's decision
+  and its spawn's answer have `yolo: true` and name no launch configuration. The agents the
+  scenario makes on the command line (part B's children) are spawned with `--yolo` too. Start and
+  Restart name no mode and keep what the home recorded at its spawn; the run checks that none of
+  the plugin's `session` calls carries `--yolo`.
 - **The mock model**: Claude Code's user settings point `ANTHROPIC_BASE_URL` at
   `mock-anthropic.mjs` on loopback, and bb's server gets a placeholder key in its own environment
   (bb reports its claude-code provider ready only with a credential). No login, nothing spent. The

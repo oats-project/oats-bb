@@ -232,6 +232,7 @@ describe("acts", () => {
     expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
     expect(apply.argv).toContain("--backend");
+    expect(apply.argv).toContain("--yolo");
     expect(apply.argv[apply.argv.indexOf("--idempotency-key") + 1]).toBe("spawn-1f0c9a7e");
     expect(apply.argv[apply.argv.indexOf("--expect-decision") + 1]).toMatch(/^[0-9a-f]{24}$/);
   });
@@ -242,7 +243,11 @@ describe("acts", () => {
     await rpc("spawn", input);
     const calls = (await fake.calls()).filter((call) => call.verb.startsWith("spawn"));
     expect(calls.map((call) => call.verb)).toEqual(["spawn --preview", "spawn", "spawn"]);
-    expect(calls[2]!.argv.slice(8)).toEqual(calls[1]!.argv.slice(8));
+    // The same decision and key (each call has a task file of its own, before them in the argv).
+    const bound = (argv: string[]) => argv.slice(argv.indexOf("--expect-decision"));
+    expect(bound(calls[2]!.argv)).toEqual(bound(calls[1]!.argv));
+    expect(bound(calls[1]!.argv)).toHaveLength(5);
+    expect(calls[2]!.argv.slice(0, 8)).toEqual(calls[1]!.argv.slice(0, 8));
     expect(await refusalOf(rpc("spawn", { ...input, name: "another-developer" }))).toMatchObject({ code: "invalid" });
   });
 

@@ -20,7 +20,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.
 - **Spawn** from a soul's page (Souls, pick a soul, name, task, Preview, Spawn in bb). The name is
-  lower-case letters, digits and dashes. The new agent opens in its own thread.
+  lower-case letters, digits and dashes. The new agent opens in its own thread. It runs in bb's
+  full mode, with no sandbox between it and the account bb runs as: the plugin asks for that on
+  every spawn (`--yolo`), and the form says so in one line.
 - **Answer an agent in bb**: in its thread, or on the OATS home's "Needs you" cards. A card
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types

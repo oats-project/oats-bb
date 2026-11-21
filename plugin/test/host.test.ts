@@ -143,7 +143,7 @@ describe("the host verbs", () => {
     expect(calls[1]?.taskFile).toMatchObject({ mode: "600", text: "Fix it." });
     expect(calls[1]?.taskFile?.path.startsWith(fake.tempDir)).toBe(true);
     expect(calls[1]?.argv).toContain("c557d8ec9a272ba1c1739dc3");
-    expect(calls[1]?.argv.slice(0, 6)).toEqual(["spawn", "oats-developer", "--backend", "bb", "--name", "flaky-ci-2-developer"]);
+    expect(calls[1]?.argv.slice(0, 7)).toEqual(["spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "flaky-ci-2-developer"]);
   });
 
   it("answers the plan and the kernel's refusal of a stale apply", async () => {

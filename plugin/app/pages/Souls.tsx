@@ -267,7 +267,12 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
       <section className="flex flex-col gap-2">
         <Heading>New agent</Heading>
         {soul.spawnable ? (
-          <SpawnForm key={soul.name} soul={soul} />
+          <>
+            <p data-testid="oats-spawn-mode" className="text-xs text-muted-foreground">
+              Runs in bb's full mode: no sandbox.
+            </p>
+            <SpawnForm key={soul.name} soul={soul} />
+          </>
         ) : (
           <p data-testid="oats-soul-problem" role="alert" className="whitespace-pre-wrap break-words text-destructive-text">
             {clean(soul.problem ?? "This soul cannot be spawned.")}

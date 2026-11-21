@@ -1,10 +1,14 @@
 // The words of an instance's or a soul's readiness. The OATS Desktop's
 // (packages/desktop/renderer/readiness-view.mjs, packages/client/launch-view.mjs `declaredIn` at
-// awebai/oats 95c7b43b). No bb and no React import.
+// awebai/oats 95c7b43b). Every line here is composed from parts of the kernel's that went through
+// the display filter one by one: the line itself is not filtered again. No bb and no React import.
 import type { PanelReadiness, PanelReadinessItem } from "../../kernel/panel-readiness";
+import { shown } from "../ui/text";
 
 export const TITLE = { instance: "Instance readiness", soul: "Soul readiness" } as const;
 export const REFRESH = "Refresh readiness";
+export const REFRESHING = "Refreshing…";
+export const UPDATED = "Readiness updated";
 export const LOADING = "Loading readiness…";
 export const NOT_PERMISSION = "Independent kernel observations, not launch permission. Unknown is not granted; an empty required set is not Ready.";
 export const CHECKS_AND_POLICY = "Checks and policy";
@@ -19,13 +23,13 @@ export function summaryLine(summary: PanelReadiness["summary"]): string {
   return `${summary.fail} failing · ${summary.unknown} unknown · ${summary.required} required checks`;
 }
 /** "Observed: <instant>. This is not an atomic snapshot or a permission lease." */
-export const observedLine = (at: string | null): string => `${at === null ? "Observed." : `Observed: ${at}.`} This is not an atomic snapshot or a permission lease.`;
+export const observedLine = (at: string | null): string => `${at === null ? "Observed." : `Observed: ${shown(at)}.`} This is not an atomic snapshot or a permission lease.`;
 
 const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
 /** A check's state as it is drawn: one failing only because providers need a sign-in is its own state, not broken. */
 export function checkState(check: PanelReadiness["checks"][number]): string {
   const failing = check.items.filter((item) => item.status === "fail");
-  return check.status === "fail" && failing.length > 0 && failing.every(signIn) ? "sign in needed" : check.status;
+  return check.status === "fail" && failing.length > 0 && failing.every(signIn) ? "sign in needed" : shown(check.status);
 }
 /** "Installed", "Configured", "Member", "Providers". */
 export const checkLabel = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
@@ -33,7 +37,7 @@ export const checkLabel = (key: string): string => key.charAt(0).toUpperCase() +
 /** "oats.core · pass · required · 2 warnings". */
 export function itemLine(item: PanelReadinessItem): string {
   const warned = item.provider?.warnings.length ?? 0;
-  return `${item.subject} · ${signIn(item) ? "sign in needed" : item.status} · ${item.required ? "required" : "optional"}${warned === 0 ? "" : ` · ${warned} warning${warned === 1 ? "" : "s"}`}`;
+  return `${shown(item.subject)} · ${signIn(item) ? "sign in needed" : shown(item.status)} · ${item.required ? "required" : "optional"}${warned === 0 ? "" : ` · ${warned} warning${warned === 1 ? "" : "s"}`}`;
 }
 
 /** Where something is declared (the kernel's `at`), in words: "oats-local.yaml › teams › eng, on this computer". */
@@ -56,16 +60,16 @@ export function itemFacts(item: PanelReadinessItem): { label: string; value: str
     ...item.evidence.map((fact): [string, string] => [fact.name, fact.value]),
     ["Remedy (display only)", item.remedy],
   ];
-  const out = facts.filter((fact): fact is [string, string] => fact[1] !== null).map(([label, value]) => ({ label, value }));
+  const out = facts.filter((fact): fact is [string, string] => fact[1] !== null).map(([label, value]) => ({ label: shown(label), value: shown(value) }));
   // The kernel's reason is the first problem's message: said once, with its code.
   for (const problem of [...(item.provider?.problems ?? []), ...item.problems]) {
-    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: problem.code });
+    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code) });
   }
   return out;
 }
 /** The problems that say more than the item's reason: "<message> (<code>)". */
 export const itemProblems = (item: PanelReadinessItem): string[] =>
-  [...(item.provider?.problems ?? []), ...item.problems].filter((problem) => problem.message !== item.reason).map((problem) => `${problem.message}${problem.code === null ? "" : ` (${problem.code})`}`);
+  [...(item.provider?.problems ?? []), ...item.problems].filter((problem) => problem.message !== item.reason).map((problem) => `${shown(problem.message)}${problem.code === null ? "" : ` (${shown(problem.code)})`}`);
 
 const PROVIDER_SAYS: Record<string, string> = {
   ready: "The provider says: ready.",
@@ -74,13 +78,13 @@ const PROVIDER_SAYS: Record<string, string> = {
   unavailable: "The provider says: unavailable right now.",
 };
 /** A provider's own answer to its binding check, as it gave it. */
-export const providerSays = (status: string): string => (Object.hasOwn(PROVIDER_SAYS, status) ? (PROVIDER_SAYS[status] ?? "") : `The provider answered: ${status}.`);
+export const providerSays = (status: string): string => (Object.hasOwn(PROVIDER_SAYS, status) ? (PROVIDER_SAYS[status] ?? "") : `The provider answered: ${shown(status)}.`);
 /** "Warning: <message> (<code>)". */
-export const warningLine = (warning: { code: string | null; message: string }): string => `Warning: ${warning.message}${warning.code === null ? "" : ` (${warning.code})`}`;
+export const warningLine = (warning: { code: string | null; message: string }): string => `Warning: ${shown(warning.message)}${warning.code === null ? "" : ` (${shown(warning.code)})`}`;
 
 /** "Child spawns: allowed · enforced · default: no spawn option: children allowed". */
 export function policyLine(policy: NonNullable<PanelReadiness["policy"]>[number]): string {
-  const what = policy.key === "childSpawns" ? "Child spawns" : policy.key === "worktrees" ? "Worktrees" : policy.key;
+  const what = policy.key === "childSpawns" ? "Child spawns" : policy.key === "worktrees" ? "Worktrees" : shown(policy.key);
   const allowed = policy.allowed === null ? "unknown" : policy.allowed ? "allowed" : "not allowed";
-  return `${what}: ${allowed} · ${policy.enforced ? "enforced" : "advisory, not enforced"} · ${policy.origin}${policy.detail === null ? "" : `: ${policy.detail}`}${policy.mode === null ? "" : ` · mode ${policy.mode}`}`;
+  return `${what}: ${allowed} · ${policy.enforced ? "enforced" : "advisory, not enforced"} · ${shown(policy.origin)}${policy.detail === null ? "" : `: ${shown(policy.detail)}`}${policy.mode === null ? "" : ` · mode ${shown(policy.mode)}`}`;
 }

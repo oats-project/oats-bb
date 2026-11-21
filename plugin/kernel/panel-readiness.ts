@@ -6,9 +6,10 @@
 // never launch permission.
 import { z } from "zod";
 import { shaped } from "./envelope.js";
-import { checkHome } from "./input.js";
-import { memberLabel, panelWarning } from "./panel-soul.js";
-import { codes, err, ok, type Result } from "./result.js";
+import { checkHome, checkSoul } from "./input.js";
+import { panelWarning, record, rows, text, warningsOf, type Row } from "./panel-read.js";
+import { memberLabel } from "./panel-soul.js";
+import { ok, type Result } from "./result.js";
 
 /** The four checks, in the order they are shown. */
 export const CHECKS = ["installed", "configured", "member", "providers"] as const;
@@ -61,16 +62,11 @@ export function panelReadinessArgv(home: string): Result<string[]> {
 }
 /** `soul` must be a soul key `oats souls` lists: nothing else reaches the argv. */
 export function panelSoulReadinessArgv(soul: string, known: readonly string[]): Result<string[]> {
-  if (!known.includes(soul) || soul.startsWith("-")) return err(codes.invalidInput, `"${soul}" is not a soul \`oats souls\` lists for this deployment`);
-  return ok(["readiness", "--soul", soul, "--policy", "--json"]);
+  const checked = checkSoul(soul, known);
+  return checked.ok ? ok(["readiness", "--soul", checked.value, "--policy", "--json"]) : checked;
 }
 
-type Row = Record<string, unknown>;
-const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
-const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
-const rows = (value: unknown): Row[] => (Array.isArray(value) ? value.map(record).filter((row): row is Row => row !== null) : []);
 const count = z.number().int().min(0);
-const CAPABILITY_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 const check = z.looseObject({ status: z.string().min(1), items: z.array(z.looseObject({ subject: z.string(), status: z.string().min(1) })) });
 const answer = z.looseObject({
@@ -129,14 +125,7 @@ export function parsePanelReadiness(document: unknown): Result<PanelReadiness> {
     at: text(value.at),
     summary: { ready: value.summary.ready, required: value.summary.required, fail: value.summary.fail, unknown: value.summary.unknown },
     checks: CHECKS.map((key) => ({ key, status: value.checks[key].status, items: value.checks[key].items.map(itemOf) })),
-    warnings: rows(value.warnings)
-      .filter((warning) => text(warning.message) !== null)
-      .map((warning) => ({
-        code: text(warning.code),
-        capability: typeof warning.capability === "string" && CAPABILITY_NAME.test(warning.capability) ? warning.capability : null,
-        path: text(warning.path),
-        message: warning.message as string,
-      })),
+    warnings: warningsOf(value.warnings),
     policy:
       policy === null
         ? null

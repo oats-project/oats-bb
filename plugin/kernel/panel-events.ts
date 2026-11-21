@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { shaped } from "./envelope.js";
 import { checkHome, checkInstance } from "./input.js";
+import { record, type Row } from "./panel-read.js";
 import { ok, type Result } from "./result.js";
 
 /** The rows asked for: the Desktop's window. */
@@ -27,6 +28,13 @@ export const panelEvent = z.object({
   setup: z.array(z.object({ capability: z.string(), ok: z.boolean(), log: z.string().nullable() })).nullable(),
   /** a refused child spawn's policy */
   policy: z.object({ allowed: z.boolean(), origin: z.string() }).nullable(),
+  /**
+   * on a blocked `launch-prompt` row: what the launch's screen differed in from the confirmation the
+   * kernel answers. `nearest` is the entry it was compared with, `index` the first differing
+   * position, `expected` the kernel's own text from there and `found` what the terminal showed
+   * (each at most 40 characters; "" when that text ended).
+   */
+  differed: z.object({ nearest: z.string(), index: z.number().int(), expected: z.string(), found: z.string() }).nullable(),
 });
 export const panelEvents = z.object({
   count: z.number().int(),
@@ -52,8 +60,6 @@ export function panelEventsArgv(instance: string, home: string): Result<string[]
   return at.ok ? ok(["instance", "events", name.value, "--home", at.value, "--limit", String(EVENTS_LIMIT), "--json"]) : at;
 }
 
-type Row = Record<string, unknown>;
-const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
 const count = z.number().int().min(0);
 const stamp = z.string().min(1);
 const claim = z.looseObject({ producer: z.string().min(1), waiting: z.boolean(), since: stamp, reason: z.string().nullish() });
@@ -146,6 +152,24 @@ function policyOf(kind: string, data: Row): PanelEvent["policy"] {
   return { allowed: policy.allowed, origin: origin.kind };
 }
 
+/** The most of each side of a difference the kernel sends. */
+const DIFFERED_UNITS = 40;
+/**
+ * What a blocked launch's screen differed in (`differed: {nearest, firstDifference: {index,
+ * expected, found}}` on the `launch-prompt` row that records the miss). Anything else, in any
+ * part, drops this one fact, never the row.
+ */
+function differedOf(kind: string, data: Row): PanelEvent["differed"] {
+  if (kind !== "launch-prompt" || data.status !== "blocked") return null;
+  const differed = record(data.differed);
+  const first = differed === null ? null : record(differed.firstDifference);
+  if (differed === null || first === null || typeof differed.nearest !== "string" || differed.nearest === "" || differed.nearest.length > 256) return null;
+  const { index, expected, found } = first;
+  if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) return null;
+  if (typeof expected !== "string" || typeof found !== "string" || expected.length > DIFFERED_UNITS || found.length > DIFFERED_UNITS) return null;
+  return { nearest: differed.nearest, index, expected, found };
+}
+
 export function parsePanelEvents(document: unknown): Result<PanelEvents> {
   const parsed = shaped(answer, document, "oats instance events");
   if (!parsed.ok) return parsed;
@@ -163,7 +187,7 @@ export function parsePanelEvents(document: unknown): Result<PanelEvents> {
     },
     events: value.events.map((row) => {
       const data = record(row.data) ?? {};
-      return { at: row.at, kind: row.kind, producer: row.producer, incarnation: incarnationOf(row.incarnation), facts: factsOf(row.kind, data), setup: setupOf(row.kind, data), policy: policyOf(row.kind, data) };
+      return { at: row.at, kind: row.kind, producer: row.producer, incarnation: incarnationOf(row.incarnation), facts: factsOf(row.kind, data), setup: setupOf(row.kind, data), policy: policyOf(row.kind, data), differed: differedOf(row.kind, data) };
     }),
     waitingOnYou: value.waitingOnYou ? { producer: value.waitingOnYou.producer, since: value.waitingOnYou.since, message: value.waitingOnYou.message ?? null } : null,
     waitingClaims: (value.waitingClaims ?? []).map(({ producer, waiting, since, reason }) => ({ producer, waiting, since, reason: reason ?? null })),

@@ -142,7 +142,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   const state = <ReadState read={read} now={now} failure={failure} />;
   return (
     <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-      {tab === "instance" ? <InstancePage oats={oats} agent={agent} node={node} read={read} now={now} state={state} /> : <SoulPage oats={oats} agent={agent} read={read} state={state} />}
+      {tab === "instance" ? <InstancePage oats={oats} agent={agent} node={node} read={read} now={now} state={state} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
     </div>
   );
 }
@@ -224,8 +224,8 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
 
       {readState}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
-      <Readiness instance={agent.instance} of="instance" />
-      <Activity instance={agent.instance} />
+      <Readiness instance={agent.instance} of="instance" now={now} />
+      <Activity instance={agent.instance} now={now} />
     </>
   );
 }
@@ -364,7 +364,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
   );
 }
 
-function SoulPage({ oats, agent, read, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; state: ReactNode }) {
+function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode }) {
   const navigate = useBbNavigate();
   const answer = read.data;
   // Read again when the instance was started again or what it was built from moved: the same instance, another record.
@@ -387,8 +387,8 @@ function SoulPage({ oats, agent, read, state: readState }: { oats: Roster; agent
         )}
       </header>
       {readState}
-      <SoulBody read={soul} />
-      {key === null ? null : <Readiness instance={agent.instance} of="soul" />}
+      <SoulBody read={soul} now={now} />
+      {key === null ? null : <Readiness instance={agent.instance} of="soul" now={now} />}
       {answer === undefined || answer.agentsRoot === null ? null : (
         <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>

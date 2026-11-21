@@ -51,6 +51,8 @@ function parsed<Value>(file: string, parse: (document: unknown) => { ok: true; v
 export const recordedSoul = (): PanelSoul | null => parsed("inspect-home.json", parsePanelSoul);
 export const recordedEvents = (): PanelEvents => parsed("events.json", parsePanelEvents);
 export const recordedReadiness = (of: "instance" | "soul"): PanelReadiness => parsed(of === "instance" ? "readiness-home.json" : "readiness-soul.json", parsePanelReadiness);
+/** The home's readiness as the kernel answered it when it could not run bb: not ready. */
+export const recordedNotReady = (): PanelReadiness => parsed("readiness-home-not-ready.json", parsePanelReadiness);
 
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
   // An agent of the panel's recorded roster, else one of the pinned sample: whichever a slot test's snapshot holds.

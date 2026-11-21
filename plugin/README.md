@@ -104,13 +104,26 @@ Configured, Member, Providers) with their items, what a provider itself answers,
 observations, never launch permission. **Reported lifecycle activity** (`oats instance events`):
 nothing is read until **Load activity** is pressed; then the last event and what is reported of
 waiting, and behind "Recent lifecycle events" each recorded row, newest first, with its time, its
-producer and its recorded facts (Spawned, Launched, Restarted, Stopped, Waiting claim, …);
-**Refresh activity** reads it again. It is the history of the instance's address as the kernel
-recorded it, not its current state.
+producer and its recorded facts (Spawned, Launched, Restarted, Stopped, Waiting claim, …); a
+launch that was blocked at a prompt also shows where its screen first differed from the
+confirmation OATS answers (what OATS expected and what the terminal showed, each under whose text it
+is). **Refresh activity** reads it again. It is the history of the instance's address as the kernel
+recorded it, not its current state. When the tab is left and come back to, what was read is shown
+again as the last observation ("Last observation retained; refresh required."), and nothing is read
+until Refresh activity.
 
-A fact the kernel does not report is not drawn: the panel never says "Not reported" and never
-guesses. The words are the Desktop's (`app/panel/words.ts` and `app/ui/words.ts` name where each
-comes from), and it is drawn with the patterns of `app/ui.tsx`.
+A read that is refused says the OATS Desktop's own sentence for that refusal where it has one
+(`app/panel/refusal-words.ts`: "The readiness read timed out.", "Choose one exact instance home."),
+then the code, with the kernel's message under Details and Retry; a read again that fails keeps what
+was read, under a line with the same sentence and code.
+
+On the Instance tab's facts and its header, a fact the kernel does not report is not drawn, and the
+panel never guesses. Three places do say that the kernel reported nothing, as the Desktop does: a
+core slot of an older kernel's inspection ("Not reported"), a recorded event's fact that is null
+("Signal: not reported") and a row whose incarnation the kernel does not name. The words are the
+Desktop's (`app/panel/words.ts`, `soul-words.ts`, `events-words.ts`, `readiness-words.ts`,
+`refusal-words.ts` and `app/ui/words.ts` name where each comes from), and it is drawn with the
+patterns of `app/ui.tsx`.
 
 How it reads: `panelInstance` (`contract/panel.ts`) answers one instance's facts from what the one
 status read kept, as the kernel printed it (`core.rowOf`: the instance's row, its agent group's row

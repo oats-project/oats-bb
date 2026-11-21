@@ -3,11 +3,12 @@
 // it is there, the capability warnings, and the commit it was spawned from. As the OATS Desktop's
 // Soul tab and the instance snapshot of its soul inspector.
 import type { PanelSoul, PanelSource } from "../../kernel/panel-soul";
-import { Card, Chip, Disclosure, Fact, Facts, Section } from "../ui";
+import { Card, Chip, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import type { PanelRead } from "./read";
 import { AS_SPAWNED, NO_CAPABILITIES, NO_OTHER_CAPABILITIES, coreNote, emptySlot, layerLabel, modulesAsSpawned, soulMeta, sourceKind, sourceText, spawnedFrom, whyTag } from "./soul-words";
 import { CommandState } from "./state";
+import { Warnings } from "./Warnings";
 
 function Source({ source }: { source: PanelSource }) {
   return (
@@ -80,29 +81,7 @@ function Spawned({ soul }: { soul: PanelSoul }) {
           </ul>
         )}
       </Section>
-      {soul.warnings.length === 0 ? null : (
-        <Section title="Warnings" n={soul.warnings.length} testId="oats-panel-soul-warnings">
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {soul.warnings.map((warning, index) => (
-              <li key={index} data-testid="oats-panel-soul-warning" className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-foreground">
-                  <span>Warning</span>
-                  {warning.capability === null ? null : <span className="break-all font-mono font-normal">{shown(warning.capability)}</span>}
-                </span>
-                <span className="break-words text-foreground">{shown(warning.message)}</span>
-                {warning.code === null && warning.path === null ? null : (
-                  <Disclosure summary="Details" testId="oats-panel-soul-warning-details">
-                    <Facts>
-                      <Fact label="Code">{warning.code === null ? null : shown(warning.code)}</Fact>
-                      <Fact label="Path">{warning.path === null ? null : shown(warning.path)}</Fact>
-                    </Facts>
-                  </Disclosure>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
+      <Warnings warnings={soul.warnings} testId="oats-panel-soul-warnings" />
       <p data-testid="oats-panel-modules" className="m-0 text-xs text-muted-foreground">
         {modulesAsSpawned(soul.modules)}
       </p>
@@ -111,10 +90,10 @@ function Spawned({ soul }: { soul: PanelSoul }) {
 }
 
 /** `read` is the panel's read of `oats inspect --home` for the instance shown. */
-export function SoulBody({ read }: { read: PanelRead<"panelSoul"> }) {
+export function SoulBody({ read, now }: { read: PanelRead<"panelSoul">; now: number }) {
   return (
     <div data-testid="oats-panel-soul-body" className="flex min-w-0 flex-col gap-4">
-      <CommandState read={read} reading="Reading the soul as this instance was spawned from it…" failed="The soul as spawned could not be read" />
+      <CommandState read={read} of="soul" reading="Reading the soul as this instance was spawned from it…" failed="The soul as spawned could not be read" now={now} />
       {/* An inspection that names no soul: the header above says what the roster knows; nothing here. */}
       {read.data === undefined || read.data.soul === null ? null : <Spawned soul={read.data.soul} />}
     </div>

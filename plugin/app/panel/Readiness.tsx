@@ -3,101 +3,113 @@
 // answer, the capability warnings and the policy behind a fold. Read when shown and again on
 // Refresh readiness, never in the background. As the OATS Desktop's readiness view
 // (packages/desktop/renderer/readiness-view.mjs, compact).
+import { useEffect, useRef, useState } from "react";
 import type { PanelReadiness } from "../../kernel/panel-readiness";
 import { Button, Disclosure, Fact, Facts, Section } from "../ui";
-import { shown } from "../ui/text";
 import { usePanelReadiness } from "./read";
 import {
-  CHECKS_AND_POLICY, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, TITLE, VIEW_POLICY, checkLabel, checkState, itemFacts, itemLine, itemProblems, observedLine, policyLine, providerSays,
-  summaryLine, warningLine,
+  CHECKS_AND_POLICY, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, itemFacts, itemLine, itemProblems, observedLine,
+  policyLine, providerSays, summaryLine, warningLine,
 } from "./readiness-words";
 import { CommandState } from "./state";
+import { Warnings } from "./Warnings";
 
-function Checks({ readiness }: { readiness: PanelReadiness }) {
+function Checks({ readiness, of }: { readiness: PanelReadiness; of: "instance" | "soul" }) {
   return (
     <>
       <p className="m-0 text-xs text-muted-foreground">{NOT_PERMISSION}</p>
-      <p className="m-0 break-words text-xs text-muted-foreground">{shown(observedLine(readiness.at))}</p>
+      <p className="m-0 break-words text-xs text-muted-foreground">{observedLine(readiness.at)}</p>
       {readiness.checks.map((check) => (
         <div key={check.key} data-testid={`oats-panel-check-${check.key}`} className="flex min-w-0 flex-col gap-1 border-t border-border pt-2">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
             <strong className="text-foreground">{checkLabel(check.key)}</strong>
-            <span className="text-xs text-muted-foreground">{shown(checkState(check))}</span>
+            <span className="text-xs text-muted-foreground">{checkState(check)}</span>
           </div>
           {check.items.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{NO_ITEMS}</p> : null}
           {check.items.map((item, index) => (
-            <Disclosure key={index} summary={shown(itemLine(item))} testId="oats-panel-check-item">
+            <Disclosure key={index} summary={itemLine(item)} testId="oats-panel-check-item">
               <Facts>
                 {itemFacts(item).map((fact, at) => (
                   <Fact key={at} label={fact.label}>
-                    {shown(fact.value)}
+                    {fact.value}
                   </Fact>
                 ))}
               </Facts>
-              {item.provider === null ? null : <p className="m-0 text-foreground">{shown(providerSays(item.provider.status))}</p>}
+              {item.provider === null ? null : <p className="m-0 text-foreground">{providerSays(item.provider.status)}</p>}
               {(item.provider?.warnings ?? []).map((warning, at) => (
                 <p key={at} className="m-0 break-words text-xs text-muted-foreground">
-                  {shown(warningLine(warning))}
+                  {warningLine(warning)}
                 </p>
               ))}
               {itemProblems(item).map((problem, at) => (
                 <p key={at} className="m-0 break-words text-xs text-foreground">
-                  {shown(problem)}
+                  {problem}
                 </p>
               ))}
             </Disclosure>
           ))}
         </div>
       ))}
-      {readiness.warnings.length === 0 ? null : (
-        <div data-testid="oats-panel-readiness-warnings" className="flex min-w-0 flex-col gap-1 border-t border-border pt-2">
-          <strong className="text-foreground">Warnings</strong>
-          {readiness.warnings.map((warning, index) => (
-            <p key={index} className="m-0 break-words text-xs text-foreground">
-              {shown([warning.capability, warning.message].filter((part) => part !== null).join(": "))}
-              {warning.code === null ? null : <span className="text-muted-foreground">{` (${shown(warning.code)})`}</span>}
-            </p>
-          ))}
-        </div>
-      )}
+      <Warnings warnings={readiness.warnings} testId={`oats-panel-readiness-warnings-${of}`} />
       {readiness.policy === null ? null : (
         <Disclosure summary={VIEW_POLICY} testId="oats-panel-policy">
           <p className="m-0 text-xs text-muted-foreground">{POLICY_NOTE}</p>
           {readiness.policy.map((policy) => (
             <p key={policy.key} className="m-0 break-words text-xs text-foreground">
-              {shown(policyLine(policy))}
+              {policyLine(policy)}
             </p>
           ))}
         </Disclosure>
       )}
       {readiness.notes.map((note, index) => (
-        <p key={index} className="m-0 break-words text-xs text-muted-foreground">
-          {shown(note)}
-        </p>
+        <NoteLine key={index}>{note}</NoteLine>
       ))}
     </>
   );
 }
 
-export function Readiness({ instance, of }: { instance: string; of: "instance" | "soul" }) {
+function NoteLine({ children }: { children: string }) {
+  return <p className="m-0 break-words text-xs text-muted-foreground">{children}</p>;
+}
+
+export function Readiness({ instance, of, now }: { instance: string; of: "instance" | "soul"; now: number }) {
   const read = usePanelReadiness(instance, of);
+  // A person's Refresh says what it does: "Refreshing…" while it reads, then that it is updated.
+  const [refreshed, setRefreshed] = useState<"no" | "reading" | "updated">("no");
+  const wasFetching = useRef(false);
+  useEffect(() => {
+    if (wasFetching.current && !read.fetching && refreshed === "reading") setRefreshed(read.status === "ready" ? "updated" : "no");
+    wasFetching.current = read.fetching;
+  }, [read.fetching, read.status, refreshed]);
   return (
     <Section title={TITLE[of]} testId={`oats-panel-readiness-${of}`}>
-      <CommandState read={read} reading={LOADING} failed="Readiness could not be read" />
+      <CommandState read={read} of="readiness" reading={LOADING} failed="Readiness could not be read" at={read.data?.at ?? null} now={now} />
       {read.data === undefined ? null : (
         <>
           <p data-testid="oats-panel-readiness-summary" className="m-0 font-semibold text-foreground">
             {summaryLine(read.data.summary)}
           </p>
           <Disclosure summary={CHECKS_AND_POLICY} testId="oats-panel-readiness-checks">
-            <Checks readiness={read.data} />
+            <Checks readiness={read.data} of={of} />
           </Disclosure>
         </>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button data-testid="oats-panel-readiness-refresh" disabled={read.fetching} onClick={read.retry}>
+        <Button
+          data-testid="oats-panel-readiness-refresh"
+          disabled={read.fetching}
+          onClick={() => {
+            setRefreshed("reading");
+            read.retry();
+          }}
+        >
           {REFRESH}
         </Button>
+        {refreshed === "no" || read.data === undefined ? null : (
+          <span role="status" data-testid="oats-panel-readiness-status" className="text-xs text-muted-foreground">
+            {refreshed === "reading" ? REFRESHING : UPDATED}
+          </span>
+        )}
       </div>
     </Section>
   );

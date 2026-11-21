@@ -9,7 +9,7 @@
 //   - then a restart, a stop and a start of the child through the plugin, and one more question on
 //     its board: its recorded history.
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REAL = process.env.REAL ?? "/home/node/real";
@@ -93,6 +93,18 @@ export default async (run) => {
     check(call.argv.join(" ") === args.join(" "), `the plugin asked \`oats ${args.join(" ")}\``, call.argv.join(" "));
     fixtures.keep(file, call.stdout);
   }
+
+  step("C panel 3b: readiness of the child's home where the kernel cannot run bb: not ready, in the kernel's own words");
+  // Not through the plugin: its host runs `oats` with bb's own PATH, where bb always is. The kernel
+  // is asked as the plugin asks it, with a PATH that has no bb on it, and its answer is kept for
+  // the plugin's parser and screens (test/panel/readiness-kernel.test.ts, the live scenes).
+  const withoutBb = (process.env.PATH ?? "").split(":").filter((dir) => !existsSync(join(dir, "bb"))).join(":");
+  const notReady = spawnSync(process.execPath, [realpathSync(OATS), "readiness", "--home", home, "--policy", "--json"], { cwd: run.DEPLOY, encoding: "utf8", env: { ...process.env, PATH: withoutBb } });
+  const unready = notReady.status === 0 ? JSON.parse(notReady.stdout).result : null;
+  const provider = unready?.checks.providers.items[0];
+  check(unready?.summary.ready === false && unready.summary.fail === 1 && unready.summary.required === 4, "the kernel answers not ready: 1 of 4 required checks fails", notReady.stdout.slice(0, 300) + notReady.stderr.slice(0, 300));
+  check(provider?.status === "fail" && provider.result?.status === "needs-configuration" && provider.result.problems[0]?.code === "E_BACKEND_VERSION", "the session provider's own answer: needs-configuration, E_BACKEND_VERSION", JSON.stringify(provider));
+  fixtures.keep("panel/readiness-home-not-ready.json", notReady.stdout);
 
   step("C panel 4: the child's recorded lifecycle events, after a restart, a stop and a start through the plugin");
   act("restart the child", "restart", { instance: CHILD });

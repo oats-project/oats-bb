@@ -1,5 +1,7 @@
 // The panel's reads of one instance (app/store.ts says how the plugin's reads work): the facts of
 // the roster's row, kept fresh, and the reads that run a command of their own, read when shown.
+// "When shown" is the first time a part is on the page: whether a part shown again (a tab turned
+// back to) reads again is bb's query client's call, and none of these reads is on a timer.
 import { useEffect, useRef, useState } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import type { PluginRpcResult, StandardSchemaV1InferInput } from "@get-bb/plugin-sdk/app";

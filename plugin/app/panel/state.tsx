@@ -4,7 +4,9 @@
 // there and current.
 import { codes } from "../../kernel/result";
 import { Button, Loading, Notice, Stale } from "../ui";
+import { readAge } from "../ui/words";
 import type { Read } from "../store";
+import { refusalSentence } from "./refusal-words";
 
 /**
  * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
@@ -15,12 +17,37 @@ export function codeOf(error: string): string | null {
   return lead !== undefined && (lead.startsWith("E_") || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
 }
 
-export function CommandState({ read, reading, failed }: { read: Read<unknown> & { retry(): void; fetching: boolean }; reading: string; failed: string }) {
+/**
+ * `of` names the read, for the Desktop's own sentence for its refusal (refusal-words.ts); `at` is
+ * the instant of what is still shown, where its answer names one; `now` is the clock.
+ */
+export function CommandState({
+  read,
+  of,
+  reading,
+  failed,
+  at = null,
+  now,
+}: {
+  read: Read<unknown> & { retry(): void; fetching: boolean };
+  of: "readiness" | "activity" | "soul";
+  reading: string;
+  failed: string;
+  at?: string | null;
+  now: number;
+}) {
   if (read.status === "loading") return <Loading>{reading}</Loading>;
   if (read.status !== "error") return null;
   const code = codeOf(read.error);
+  const sentence = refusalSentence(of, code, read.error);
   const retry = <Button onClick={read.retry}>Retry</Button>;
-  // A failed reread keeps what was read; the kernel names no instant for it, so no age is said.
-  if (read.data !== undefined) return <Stale age={null} refreshing={read.fetching} held={`It could not be read again${code === null ? "" : ` (${code})`}.`} action={retry} />;
-  return <Notice title={failed} tone="error" code={code} details={read.error} actions={retry} />;
+  // A failed reread keeps what was read, with its age where the kernel's answer names its instant.
+  if (read.data !== undefined) {
+    return <Stale age={at === null ? null : readAge(at, now)} refreshing={read.fetching} held={`${sentence ?? "It could not be read again."}${code === null ? "" : ` (${code})`}`} action={retry} />;
+  }
+  return (
+    <Notice title={failed} tone="error" code={code} details={read.error} actions={retry}>
+      {sentence === null ? null : <p className="m-0">{sentence}</p>}
+    </Notice>
+  );
 }

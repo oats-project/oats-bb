@@ -10,6 +10,7 @@
 // unreported.
 import { z } from "zod";
 import { shaped } from "./envelope.js";
+import { record, text, type Row } from "./panel-read.js";
 import type { Result } from "./result.js";
 
 /** One capability of the instance that is no longer what it was spawned with, as the kernel reports it. */
@@ -62,10 +63,6 @@ export type PanelModuleDrift = z.output<typeof panelModuleDrift>;
 
 const frame = z.looseObject({ instance: z.string().min(1), home: z.string().min(1) });
 
-type Row = Record<string, unknown>;
-const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
-/** A fact that is text and not empty; anything else is unreported. */
-export const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const lastSegment = (path: string): string | null => text(path.replace(/\/+$/, "").split("/").pop());
 
 /**

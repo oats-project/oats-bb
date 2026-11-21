@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { shaped } from "./envelope.js";
 import { checkHome } from "./input.js";
+import { panelWarning, record, rows, text, warningsOf, type Row } from "./panel-read.js";
 import { ok, type Result } from "./result.js";
 
 /** The three core capabilities (a soul's `layers`), in the order every surface shows them. */
@@ -46,12 +47,6 @@ export const panelCapability = z.object({
   overrides: z.string().nullable(),
   source: panelSource.nullable(),
 });
-export const panelWarning = z.object({
-  code: z.string().nullable(),
-  capability: z.string().nullable(),
-  path: z.string().nullable(),
-  message: z.string(),
-});
 export const panelSoul = z.object({
   /** the soul's name, and the commit the instance was spawned from */
   name: z.string(),
@@ -76,10 +71,6 @@ export function panelSoulArgv(home: string): Result<string[]> {
   return checked.ok ? ok(["inspect", "--home", checked.value, "--json"]) : checked;
 }
 
-type Row = Record<string, unknown>;
-const record = (value: unknown): Row | null => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : null);
-const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
-const rows = (value: unknown): Row[] => (Array.isArray(value) ? value.map(record).filter((row): row is Row => row !== null) : []);
 const isSlot = (value: unknown): value is (typeof CORE_SLOTS)[number] => CORE_SLOTS.includes(value as (typeof CORE_SLOTS)[number]);
 
 /** A member's display label from its repository key: its last segment, without `.git`. */
@@ -89,9 +80,6 @@ export const memberLabel = (key: string): string =>
     .filter(Boolean)
     .pop()
     ?.replace(/\.git$/, "") || key;
-
-/** The kernel's capability-name grammar: a warning names its capability only when it is one. */
-const CAPABILITY_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 const inspection = z.looseObject({ souls: z.array(z.unknown()) });
 
@@ -179,13 +167,6 @@ export function parsePanelSoul(document: unknown): Result<PanelSoul | null> {
     core,
     capabilities: ordered,
     modules: capabilities.length,
-    warnings: rows(inspected.warnings)
-      .filter((warning) => text(warning.message) !== null)
-      .map((warning) => ({
-        code: text(warning.code),
-        capability: typeof warning.capability === "string" && CAPABILITY_NAME.test(warning.capability) ? warning.capability : null,
-        path: text(warning.path),
-        message: warning.message as string,
-      })),
+    warnings: warningsOf(inspected.warnings),
   });
 }

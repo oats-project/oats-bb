@@ -3,7 +3,11 @@
 // agent's own page.
 //   panel         the Instance tab of an agent that needs you, its folds open, its Soul tab, and a
 //                 stopped agent; its readiness, its recorded activity and its soul as spawned,
-//                 each also while it is read and when the kernel refuses it
+//                 each also while it is read, when the kernel refuses it, and when a read again
+//                 fails after one answered; readiness that is not ready, a provider that needs a
+//                 sign-in and capability warnings; an incomplete and an empty activity window and
+//                 a blocked launch's row; a soul with a filled core slot, a capability turned off,
+//                 warnings, and only its core capabilities
 //   panel-states  the states the first stage has none of: running (with a messaging id, an owning
 //                 human and a sibling), idle, failed, unreachable with the kernel's runtime error,
 //                 an agent with no thread in bb, a soul OATS does not name; the agent's page for a
@@ -27,6 +31,11 @@
 // the open and only here: the fields a state is made of, and copies of the child's row under other
 // names for the states that need an agent of their own. Those rows are not fixtures: no test reads
 // them.
+// The first stage's last two scenes change the recorded answers of `oats readiness`, `oats instance
+// events` and `oats inspect` the same way (`derived`), for what the real run's deployment has none
+// of: a provider that needs a sign-in, a capability warning, a truncated window, a blocked launch,
+// a filled core slot. Readiness that is not ready is a recording
+// (test/fixtures/panel/readiness-home-not-ready.json).
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -35,6 +44,13 @@ import { fileURLToPath } from "node:url";
 import { testId, textOf, visible } from "../browser.mjs";
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "panel", "status-soul-moved.json");
+const FIXTURES = dirname(FIXTURE);
+/** A recorded answer of the panel's fixtures, changed for a scene: what the fake `oats` prints for a verb. */
+function derived(file, change) {
+  const document = JSON.parse(readFileSync(join(FIXTURES, file), "utf8"));
+  change(document.result);
+  return { stdout: JSON.stringify(document) };
+}
 const FAKE_CONFIG = join(homedir(), ".local/bin/fake-oats.json");
 const CHILD = { instance: "panel-worktree-helper", recorded: "thr_gx4sgexjgw", thread: "thr_mockups" };
 const PARENT = { instance: "redesign-ui-lead", recorded: "thr_uz64t6aahn", thread: "thr_redesign" };
@@ -160,8 +176,8 @@ async function open(page, viewport, threads, agent) {
  * right edge, the page does not scroll sideways, and every control of it is high enough to press.
  * `past` is how far bb's side panel itself reaches past the window: at 1280 with bb's sidebar, a
  * thread and the side panel open, bb 0.50.1 widens the thread's column once its composer has
- * loaded and pushes the side panel off the window (up to 33 px). That cut is bb's, on every tab of
- * its side panel; it is printed with the check, not hidden and not held against the panel.
+ * loaded and pushes the side panel off the window (by 1 to about 100 px in the runs so far, as what the
+ * page holds moves it). That cut is bb's, on every tab of its side panel; it is printed with the check, not hidden and not held against the panel.
  */
 async function fits(page, viewport) {
   const need = viewport.mobile ? 44 : 32;
@@ -348,18 +364,24 @@ const second = [
         setVerb("readiness --home", refusal("E_HOME_MISMATCH", "the home is not this deployment's"));
         setVerb("instance events", refusal("E_AMBIGUOUS_INSTANCE", "two homes hold an instance of this name"));
         setVerb("inspect --home", refusal("E_UNSUPPORTED_MODE", "this home has no modules"));
+        setVerb("readiness --soul", refusal("E_SOUL_UNKNOWN", "no soul of this name"));
         check(await open(page, viewport, threads, CHILD), `${at} the panel is open again`);
         await page.evaluate(click(inPanel("oats-tab-soul")));
         const notice = (section) => `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-panel")} `)} + ${JSON.stringify(section)} + ${JSON.stringify(` ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
         const soulRefused = await page.until(notice(testId("oats-panel-soul-body")), 30);
         check((soulRefused ?? "").startsWith("The soul as spawned could not be read | alert | ") && soulRefused.includes("E_UNSUPPORTED_MODE") && soulRefused.includes("Details") && soulRefused.includes("Retry"), `${at} the soul as spawned, refused: a notice in words, the kernel's code, Details and Retry`, soulRefused);
+        // the soul's readiness, refused, under the soul's refused read
+        const soulReadinessRefused = await page.until(notice(testId("oats-panel-readiness-soul")), 30);
+        check((soulReadinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && soulReadinessRefused.includes("Select one local soul and its exact agents root.") && soulReadinessRefused.includes("E_SOUL_UNKNOWN"), `${at} the soul's readiness, refused: the Desktop's sentence for the code, then the code`, soulReadinessRefused);
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the Soul tab's refused reads");
         await page.shot(`panel-${viewport.name}-soul-refused`);
         await page.evaluate(click(inPanel("oats-tab-instance")));
         const readinessRefused = await page.until(notice(testId("oats-panel-readiness-instance")), 30);
-        check((readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("E_HOME_MISMATCH"), `${at} readiness, refused: a notice with the kernel's code`, readinessRefused);
+        check((readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("The instance home no longer matches its admitted identity.") && readinessRefused.includes("E_HOME_MISMATCH"), `${at} readiness, refused: the Desktop's sentence for the code, then the kernel's code`, readinessRefused);
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const activityRefused = await page.until(notice(testId("oats-panel-activity")), 30);
-        check((activityRefused ?? "").startsWith("The recorded activity could not be read | alert | ") && activityRefused.includes("E_AMBIGUOUS_INSTANCE"), `${at} the activity, refused: a notice with the kernel's code`, activityRefused);
+        check((activityRefused ?? "").startsWith("The recorded activity could not be read | alert | ") && activityRefused.includes("Choose one exact instance home.") && activityRefused.includes("E_AMBIGUOUS_INSTANCE"), `${at} the activity, refused: the Desktop's sentence for the code, then the kernel's code`, activityRefused);
         await page.evaluate(scroll("oats-panel-readiness-instance"));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "refused reads");
@@ -371,7 +393,184 @@ const second = [
         const again = await page.until(`${textOf(inPanel("oats-panel-readiness-instance") + " " + testId("oats-panel-readiness-summary"))}`, 30);
         check(again === "Ready — every required check passes or is not applicable.", `${at} Retry reads readiness again`, again);
       } finally {
-        for (const verb of ["readiness --home", "instance events", "inspect --home"]) setVerb(verb, null);
+        for (const verb of ["readiness --home", "readiness --soul", "instance events", "inspect --home"]) setVerb(verb, null);
+        await page.evaluate(click(inPanel("oats-tab-instance")));
+      }
+    },
+  },
+  {
+    stage: "panel",
+    name: "readiness that is not ready, a sign-in needed, warnings; an incomplete and an empty activity window, a blocked launch; a read again that fails",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const VERBS = ["readiness --home", "readiness --soul", "instance events", "inspect --home"];
+      const summaryOf = (of) => textOf(`${inPanel(`oats-panel-readiness-${of}`)} ${testId("oats-panel-readiness-summary")}`);
+      const flat = (selector, open = false) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return ""; if (${open}) e.querySelectorAll("details").forEach((d) => { d.open = true; }); return e.innerText.replace(/\\s+/g, " ").trim(); })()`;
+      const staleOf = (section) => flat(`${inPanel(section)} ${testId("oats-stale")}`);
+      try {
+        // not ready: the kernel's own answer when it cannot run bb (a recording)
+        setVerb("readiness --home", { file: "panel/readiness-home-not-ready.json" });
+        // the soul's: a provider that is set up and not signed in, and one capability warning
+        setVerb("readiness --soul", derived("readiness-soul.json", (result) => {
+          const item = result.checks.providers.items[0];
+          Object.assign(item, { status: "fail", required: true, reason: "sign in to bb on this computer", result: { status: "authorization-required", problems: [{ code: "E_BACKEND_SIGNED_OUT", message: "sign in to bb on this computer" }], warnings: [] } });
+          result.checks.providers.status = "fail";
+          Object.assign(result.summary, { ready: false, required: 4, fail: 1 });
+          result.warnings = [{ code: "hook-event-unsupported", capability: "oats.bb", path: "oats.json", message: "one declared hook never runs here: bb has no session-end event" }];
+        }));
+        check(await open(page, viewport, threads, CHILD), `${at} the panel is open`);
+        await page.evaluate(click(inPanel("oats-tab-instance")));
+        const notReady = await page.until(`${summaryOf("instance")} === "1 failing · 0 unknown · 4 required checks"`, 30);
+        check(Boolean(notReady), `${at} Instance readiness, not ready: how many fail, are unknown and are required`, await page.evaluate(summaryOf("instance")));
+        await page.evaluate(openFold("oats-panel-readiness-checks"));
+        const failing = await page.evaluate(flat(inPanel("oats-panel-check-providers"), true));
+        check(
+          ["Providers fail", "oats.bb session backend bb · fail · required · 2 warnings", "Producer session provider check", "Reason the bb version could not be read (cannot run bb: spawn bb ENOENT: install bb-app or set settings.oats.bb.cli)", "Problem code E_BACKEND_VERSION", "The provider says: needs configuration.", "Warning: bubblewrap (bwrap) is not on this host's PATH"].every((part) => failing.includes(part)),
+          `${at} the failing check, open: the item's line, its producer, the kernel's reason, the problem's code, the provider's own answer and its warnings`,
+          failing,
+        );
+        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "readiness that is not ready");
+        await page.shot(`panel-${viewport.name}-readiness-not-ready`);
+
+        // Refresh readiness says that it read again
+        await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
+        const updated = await page.until(`${textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`)} === "Readiness updated"`, 30);
+        check(Boolean(updated), `${at} Refresh readiness says Readiness updated once it read again`);
+
+        // the activity: an incomplete window, and a blocked launch's row
+        setVerb("instance events", derived("events.json", (result) => {
+          result.truncated = true;
+          result.integrity.unreadableRows = 1;
+          result.events.push({ ...result.events[1], at: "2026-11-21T18:40:00.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
+        }));
+        await page.evaluate(click(inPanel("oats-panel-activity-load")));
+        const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Launch prompt · 2026-11-21T18:40:00.000Z")`, 30);
+        check(Boolean(blocked), `${at} the activity's summary leads with the last row: a launch prompt`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
+        await page.evaluate(openFold("oats-panel-activity-list"));
+        const incompleteLine = await page.evaluate(textOf(inPanel("oats-panel-activity-incomplete")));
+        check(incompleteLine === "Incomplete evidence: 1 unreadable rows · 0 foreign rows · window or source truncated.", `${at} an incomplete window says what is missing`, incompleteLine);
+        const differed = await page.evaluate(flat(inPanel("oats-panel-event-differed")));
+        check(differed === "Where the screen first differed from the confirmation OATS answers: OATS expected: Do you trust the files in this folder? The terminal showed: (no visible text) Nearest entry claude-folder-trust-2, first difference at 12", `${at} a blocked launch's row: what OATS expected and what the terminal showed, each under whose text it is`, differed);
+        await page.evaluate(scroll("oats-panel-activity"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "an incomplete activity window");
+        await page.shot(`panel-${viewport.name}-activity-incomplete`);
+
+        // the tab left and come back to: what was read is the last observation, and nothing is read
+        await page.evaluate(click(inPanel("oats-tab-soul")));
+        await page.until(visible(inPanel("oats-panel-soul-body")), 15);
+        await page.evaluate(click(inPanel("oats-tab-instance")));
+        const kept = await page.until(`${textOf(inPanel("oats-panel-activity-status"))}`, 15);
+        check(kept === "Last observation retained; refresh required." && (await page.evaluate(textOf(inPanel("oats-panel-activity-load")))) === "Refresh activity", `${at} back on the tab, the activity read earlier is said to be the last observation, with Refresh activity`, kept);
+
+        // an empty window
+        setVerb("instance events", derived("events.json", (result) => Object.assign(result, { count: 0, returned: 0, events: [], waitingOnYou: null, waitingClaims: [] })));
+        await page.evaluate(click(inPanel("oats-panel-activity-load")));
+        const none = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))} === "No recorded lifecycle events in this observed window. · Waiting on you: unknown"`, 30);
+        check(Boolean(none), `${at} an empty window: No recorded lifecycle events in this observed window.`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
+        await page.evaluate(openFold("oats-panel-activity-list"));
+        check((await page.evaluate(textOf(inPanel("oats-panel-activity-none")))) === "No recorded lifecycle events in this observed window.", `${at} and its fold says the same, with no row`);
+        await page.evaluate(scroll("oats-panel-activity"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "an empty activity window");
+        await page.shot(`panel-${viewport.name}-activity-empty`);
+
+        // a read again that fails keeps what was read: readiness (with its age) and the activity
+        setVerb("readiness --home", refusal("E_HOME_MISMATCH", "the home is not this deployment's"));
+        setVerb("instance events", refusal("E_NOT_IN_SCOPE", "the instance is outside this deployment"));
+        await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
+        const staleReadiness = await page.until(staleOf("oats-panel-readiness-instance"), 30);
+        check(/^Showing what was read .+\. The instance home no longer matches its admitted identity\. \(E_HOME_MISMATCH\) ?Retry$/.test(staleReadiness ?? ""), `${at} readiness read again and refused: what was read stays, with its age, the Desktop's sentence, the code and Retry`, staleReadiness);
+        check((await page.evaluate(summaryOf("instance"))) === "1 failing · 0 unknown · 4 required checks", `${at} and the summary read before is still shown`);
+        await page.evaluate(click(inPanel("oats-panel-activity-load")));
+        const staleActivity = await page.until(staleOf("oats-panel-activity"), 30);
+        check((staleActivity ?? "").includes("The selected instance is outside this workspace scope. (E_NOT_IN_SCOPE)") && staleActivity.endsWith("Retry"), `${at} the activity read again and refused: what was read stays, with the Desktop's sentence, the code and Retry`, staleActivity);
+        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "reads that failed after one answered");
+        await page.shot(`panel-${viewport.name}-reads-stale`);
+
+        // the Soul tab: its readiness needs a sign-in and has a warning, its fold open
+        await page.evaluate(click(inPanel("oats-tab-soul")));
+        const signIn = await page.until(`${summaryOf("soul")} === "1 failing · 0 unknown · 4 required checks"`, 30);
+        check(Boolean(signIn), `${at} Soul readiness, not ready`, await page.evaluate(summaryOf("soul")));
+        await page.evaluate(openFold("oats-panel-readiness-checks"));
+        const providers = await page.evaluate(flat(inPanel("oats-panel-check-providers"), true));
+        check(["Providers sign in needed", "oats.bb session backend bb · sign in needed · required", "Sign in needed: the provider is set up but is not signed in.", "Problem code E_BACKEND_SIGNED_OUT"].every((part) => providers.includes(part)), `${at} a provider that is not signed in: sign in needed, in the check's state, the item's line and the provider's sentence`, providers);
+        const warnings = await page.evaluate(flat(inPanel("oats-panel-readiness-warnings-soul")));
+        check(/^warnings 1 Warning oats\.bb one declared hook never runs here: bb has no session-end event \S? ?Details$/i.test(warnings), `${at} readiness' capability warnings: the capability, the kernel's message, Details`, warnings);
+        await page.evaluate(scroll("oats-panel-readiness-soul"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the soul's readiness, its fold open");
+        await page.shot(`panel-${viewport.name}-soul-readiness-open`);
+      } finally {
+        for (const verb of VERBS) setVerb(verb, null);
+        await page.evaluate(click(inPanel("oats-tab-instance")));
+      }
+    },
+  },
+  {
+    stage: "panel",
+    name: "the Soul tab of a soul with a filled core slot, a capability turned off and warnings; one with only its core capabilities; its read again that fails",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const flat = (selector, open = false) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return ""; if (${open}) e.querySelectorAll("details").forEach((d) => { d.open = true; }); return e.innerText.replace(/\\s+/g, " ").trim(); })()`;
+      const okf = (result) => {
+        result.layers.knowledge = { id: "oats.okf", from: "workspace" };
+        result.capabilities.push({ ...result.capabilities[1], id: "oats.okf", layer: "knowledge", from: { kind: "package", package: "oats.okf", version: "0.9.2" } });
+      };
+      try {
+        setVerb("inspect --home", derived("inspect-home.json", (result) => {
+          okf(result);
+          result.capabilitiesOff = [{ id: "oats.review", reason: "off" }];
+          result.warnings = [{ code: "hook-event-unsupported", capability: "oats.okf", path: "oats.json", message: "one declared hook never runs here: bb has no session-end event" }];
+        }));
+        check(await open(page, viewport, threads, CHILD), `${at} the panel is open`);
+        await page.evaluate(click(inPanel("oats-tab-soul")));
+        await page.until(`${textOf(inPanel("oats-panel-core-knowledge"))}.includes("oats.okf")`, 30);
+        const knowledge = await page.evaluate(flat(inPanel("oats-panel-core-knowledge")));
+        check(knowledge.includes("oats.okf 0.9.2") && knowledge.endsWith("Resolved the workspace default at spawn"), `${at} Core capabilities: the knowledge slot's provider with its source, and why it is there`, knowledge || (await page.evaluate(textOf(inPanel("oats-panel-core")))));
+        const off = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-capabilities")} ${testId("oats-panel-capability")}`)})]; const row = rows[rows.length - 1]; const struck = [...row.querySelectorAll("span")].some((e) => getComputedStyle(e).textDecorationLine === "line-through"); return JSON.stringify([rows.length, row.innerText.replace(/\\s+/g, " ").trim(), struck]); })()`);
+        check(off === JSON.stringify([3, "oats.review turned off by soul", true]), `${at} Capabilities: one the soul turned off is last, struck through, with "turned off by soul" beside it`, off);
+        const warnings = await page.evaluate(flat(inPanel("oats-panel-soul-warnings"), true));
+        check(/^warnings 1 Warning oats\.okf one declared hook never runs here: bb has no session-end event \S? ?Details Code hook-event-unsupported Path oats\.json$/i.test(warnings), `${at} Warnings: the capability, the kernel's message, and its code and path under Details`, warnings);
+        check((await page.evaluate(textOf(inPanel("oats-panel-modules")))) === "Modules as spawned · 3", `${at} Modules as spawned · 3`);
+        await page.evaluate(scroll("oats-panel-core"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "a soul with a core capability, one turned off and a warning");
+        await page.shot(`panel-${viewport.name}-soul-composed`);
+
+        // only its core capabilities
+        setVerb("inspect --home", derived("inspect-home.json", (result) => {
+          okf(result);
+          result.capabilities = result.capabilities.filter((capability) => capability.id === "oats.okf");
+        }));
+        check(await open(page, viewport, threads, CHILD), `${at} the panel is open again`);
+        await page.evaluate(click(inPanel("oats-tab-soul")));
+        await page.until(`/only the core ones/.test(${textOf(inPanel("oats-panel-capabilities"))})`, 30);
+        const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
+        check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only);
+        await page.evaluate(scroll("oats-panel-core"));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "a soul with only its core capabilities");
+        await page.shot(`panel-${viewport.name}-soul-core-only`);
+
+        // read again (the instance was started again) and refused: what was read stays
+        setVerb("inspect --home", refusal("E_UNSUPPORTED_MODE", "this home has no modules"));
+        const restarted = recorded(threads);
+        restarted.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance).startedAt = new Date().toISOString();
+        record(restarted);
+        const stale = await page.until(flat(`${inPanel("oats-panel-soul-body")} ${testId("oats-stale")}`), 30);
+        check((stale ?? "").includes("It could not be read again. (E_UNSUPPORTED_MODE)") && stale.endsWith("Retry"), `${at} the soul read again and refused: what was read stays, with the code and Retry`, stale);
+        check(/only the core ones/.test(await page.evaluate(textOf(inPanel("oats-panel-capabilities")))), `${at} and the soul read before is still shown`);
+        await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-soul-body")} ${testId("oats-stale")}`)}).scrollIntoView({ block: "center" })`);
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the soul, read again and refused");
+        await page.shot(`panel-${viewport.name}-soul-stale`);
+      } finally {
+        setVerb("inspect --home", null);
+        // the stage's roster again: the recording, with bb's ids for its threads
+        record(recorded(threads));
         await page.evaluate(click(inPanel("oats-tab-instance")));
       }
     },

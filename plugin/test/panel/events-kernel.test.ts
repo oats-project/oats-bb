@@ -48,7 +48,7 @@ describe("the activity read", () => {
         { key: "agent", value: "oats-expert" }, { key: "work", value: "worktree" }, { key: "branch", value: "agents/panel-worktree-helper" }, { key: "model", value: "claude-opus-5-5" },
         { key: "parentInstance", value: "redesign-ui-lead" }, { key: "relation", value: "child" }, { key: "harness", value: "claude" }, { key: "launched", value: true },
       ],
-      setup: null, policy: null,
+      setup: null, policy: null, differed: null,
     });
     expect(answer.value.events[1]?.facts).toEqual([{ key: "backend", value: "bb" }, { key: "launchConfig", value: null }, { key: "harness", value: "claude" }]);
     expect(answer.value.events[2]?.facts).toEqual([{ key: "waitingOnYou", value: true }, { key: "reason", value: "attention" }, { key: "message", value: "How should I merge the pull request?" }]);
@@ -81,6 +81,16 @@ describe("the activity read", () => {
       "status", "class", "action", "claudeVersion", "signatureId",
     ]);
     expect(only("upgrade-refused", { step: "hook oats.aweb", reason: "the hook failed" }).facts).toEqual([{ key: "reason", value: "the hook failed" }, { key: "step", value: "hook oats.aweb" }]);
+  });
+
+  it("a blocked launch's row says what its screen differed in; anything else of it drops that fact alone", () => {
+    const differed = { nearest: "dev-channel-1", firstDifference: { index: 12, expected: "Do you trust this folder?", found: "" } };
+    expect(only("launch-prompt", { status: "blocked", class: "development-channel", differed }).differed).toEqual({ nearest: "dev-channel-1", index: 12, expected: "Do you trust this folder?", found: "" });
+    expect(only("launch-prompt", { status: "completed", differed }).differed).toBeNull();
+    expect(only("stopped", { status: "blocked", differed }).differed).toBeNull();
+    expect(only("launch-prompt", { status: "blocked", differed: { nearest: "x", firstDifference: { index: -1, expected: "a", found: "b" } } }).differed).toBeNull();
+    expect(only("launch-prompt", { status: "blocked", differed: { nearest: "x", firstDifference: { index: 0, expected: "a".repeat(41), found: "b" } } }).differed).toBeNull();
+    expect(only("launch-prompt", { status: "blocked", differed: "x" })).toMatchObject({ differed: null, facts: [{ key: "status", value: "blocked" }] });
   });
 
   it("a row of an earlier instance at this address, and one whose incarnation is not reported", () => {

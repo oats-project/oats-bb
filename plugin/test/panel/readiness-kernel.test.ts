@@ -47,6 +47,18 @@ describe("the readiness read", () => {
     expect(answer.value.warnings).toEqual([]);
   });
 
+  it("the recorded home when the kernel cannot run bb: not ready, the provider's own answer and its problem", () => {
+    const answer = parsePanelReadiness(recorded("readiness-home-not-ready.json"));
+    expect(answer.ok && answer.value.summary).toEqual({ ready: false, required: 4, fail: 1, unknown: 0 });
+    if (!answer.ok) return;
+    expect(answer.value.checks.map((check) => `${check.key} ${check.status}`)).toEqual(["installed pass", "configured not-applicable", "member pass", "providers fail"]);
+    const reason = "the bb version could not be read (cannot run bb: spawn bb ENOENT: install bb-app or set settings.oats.bb.cli)";
+    expect(answer.value.checks[3]?.items[0]).toMatchObject({
+      subject: "oats.bb session backend bb", status: "fail", required: true, reason, remedy: null,
+      provider: { status: "needs-configuration", problems: [{ code: "E_BACKEND_VERSION", message: reason }] },
+    });
+  });
+
   it("the recorded soul: three required checks, and a policy that is not enforced yet", () => {
     const answer = parsePanelReadiness(recorded("readiness-soul.json"));
     expect(answer.ok && answer.value.summary).toEqual({ ready: true, required: 3, fail: 0, unknown: 0 });

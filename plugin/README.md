@@ -180,11 +180,8 @@ runs, and `record/` there makes the recording again (its README says what was ar
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations` (registered and empty until its piece lands) and `panel` (the instance
-panel). Each has one module, or one directory, in every layer, and the entry of a layer
-
-retire), `automations` and `panel` (the instance panel, registered and empty until its piece lands). Each has one module, or one directory, in every layer, and the entry of a layer
-only composes them:
+retire), `automations` and `panel` (the instance panel). Each has one module, or one directory, in
+every layer, and the entry of a layer only composes them:
 
 | Layer | A feature's own | Composed by | Shared by all |
 |---|---|---|---|

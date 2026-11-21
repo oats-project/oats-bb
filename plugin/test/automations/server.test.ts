@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { automationList, host, triggerStatus } from "../../contract/automations";
 import { LISTS_TTL_MS } from "../../server/automations";
 import { startBackend, type Backend } from "../support/backend";
+import { alive } from "../support/fake-oats";
 
 let backend: Backend | undefined;
 afterEach(async () => {
@@ -70,6 +71,31 @@ describe("automations", () => {
     expect(LISTS_TTL_MS).toBeLessThanOrEqual(30_000);
   });
 
+  it("with lists that are slow and a roster that keeps changing, one pair of list processes runs at a time and one read waits behind it", async () => {
+    backend = await startBackend({ verbs: { "schedule list": { file: "automations/schedule-list.json", sleepMs: 6_000 }, "trigger list": { file: "automations/trigger-list.json", sleepMs: 6_000 } } });
+    const running = backend;
+    const living = async () => {
+      const calls = (await running.fake.calls()).filter((call) => call.verb.endsWith(" list"));
+      return (await Promise.all(calls.map((call) => alive(call.pid)))).filter(Boolean).length;
+    };
+    const first = running.rpc<Lists>("automations");
+    for (let wait = 0; wait < 100 && (await living()) < 2; wait += 1) await new Promise((resolve) => setTimeout(resolve, 100)); // the first pair runs
+    const asks: Promise<Lists>[] = [];
+    let most = 0;
+    for (let change = 0; change < 3; change += 1) {
+      await running.rpc("refresh"); // a new read of OATS: the roster the lists were made beside is no longer the newest
+      asks.push(running.rpc<Lists>("automations"));
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      most = Math.max(most, await living());
+    }
+    expect(most).toBe(2);
+    const [second, third, fourth] = await Promise.all(asks);
+    expect((await first).at).not.toBe(second!.at);
+    expect([third!.at, fourth!.at]).toEqual([second!.at, second!.at]);
+    expect(await argvs(running, "schedule list")).toHaveLength(2);
+    expect(await argvs(running, "trigger list")).toHaveLength(2);
+  }, 40_000);
+
   it("Retry reads the lists again: a new read of OATS makes the next lists new", async () => {
     backend = await startBackend();
     const first = await backend.rpc<Lists>("automations");
@@ -82,10 +108,10 @@ describe("automations", () => {
   }, 20_000);
 
   it("a list the kernel refuses is that list's refusal, with the kernel's code and message; the other list is still answered", async () => {
-    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" } });
     backend = await startBackend({ verbs: { "schedule list": { stdout: refusal } } });
     const lists = await backend.rpc<Lists>("automations");
-    expect(lists.schedule).toEqual({ ok: false, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" });
+    expect(lists.schedule).toEqual({ ok: false, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" });
     expect(lists.trigger.ok).toBe(true);
   });
 

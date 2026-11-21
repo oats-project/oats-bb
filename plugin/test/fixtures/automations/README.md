@@ -100,3 +100,17 @@ The rows of `trigger-list.json`:
 
 - An **unreadable** row, and a workspace row with a web address (`origin.url`: the kernel gives one
   for `github.com` members only, and the member here is a local repository).
+
+## What is not recorded
+
+Three answers the live scenes use are written in `container/scenes/automations.mjs`, not recorded,
+because each needs a deployment the recording could not go on from:
+
+- `schedule list` refused with `E_SCHEDULE_INVALID` (a definitions file that is not one) and
+  `trigger status` refused with `E_TRIGGER_UNKNOWN` (a trigger removed after the list was read).
+  Both carry the kernel's own sentence (OATS 0.70.0: `lib/schedule.mjs` `readDefinitions`,
+  `lib/triggers.mjs` `requireTrigger`) with the recording's paths.
+- `oats version --json` of an OATS from before the lists (0.28.0): its shape with no `automations`
+  feature and no `automationsApi`.
+
+The unit tests' refusals are written inline, as every feature's are.

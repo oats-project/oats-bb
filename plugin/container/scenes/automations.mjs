@@ -156,7 +156,7 @@ export default [
     name: "a list the kernel refuses",
     run: async ({ page, at, viewport, check }) => {
       const failed = await open(page, "", testId("oats-automations-failed"));
-      check(failed === "Schedules could not be read oats-schedules.json: jobs must be an object E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
+      check(failed === "Schedules could not be read /abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}} E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
       const tabs = await page.evaluate(texts('[role="tab"]'));
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules", "Triggers 7"]), `${at} the other list is still read`, JSON.stringify(tabs));
       await page.shot(`automations-${viewport.name}-failed`, { targets: true });
@@ -187,7 +187,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const failed = await page.until(`(() => ${textOf(testId("oats-automation-status-failed"))})()`, 30);
-      check(failed === "This trigger's state could not be read no trigger state can be read while the scheduler's lock is held What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_SCHEDULER_BUSY Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
+      check(failed === "This trigger's state could not be read no trigger \"oats-real/proposal-review\" in /abs/deployment What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_TRIGGER_UNKNOWN Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
       const last = await page.evaluate(textOf(testId("oats-automation-run")));
       check(/#41 · opened · oats-developer-review-pr-41$/.test(last), `${at} the row's own last fire still shows under it`, last);
       await shotOf(page, testId("oats-automation-status-failed"), `automations-${viewport.name}-trigger-state-failed`);
@@ -231,7 +231,7 @@ export default [
       refuse();
       await page.evaluate(click(testId("oats-automations-refresh")));
       const failed = await page.until(`(() => ${textOf(testId("oats-automations-failed"))})()`, 40);
-      check(/^Schedules could not be read oats-schedules\.json: jobs must be an object Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      check(/^Schedules could not be read \/abs\/deployment\/oats-schedules\.json must be \{version: 1\|2, jobs: \{\}\} Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
       await page.shot(`automations-${viewport.name}-failed-over-list`, { targets: true });
       slow();
     },
@@ -250,7 +250,15 @@ export default [
 const lists = (schedule, trigger) => ({ "schedule list": { file: `automations/${schedule}` }, "trigger list": { file: `automations/${trigger}` } });
 const settled = (untilSnapshot) => untilSnapshot((snapshot) => snapshot.ok === true);
 
-const REFUSAL = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" } });
+// Three answers no recording holds, since each needs a deployment the recording cannot be left in
+// (test/fixtures/automations/README.md says so). The two refusals are the kernel's own sentences
+// (OATS 0.70.0, lib/schedule.mjs readDefinitions and lib/triggers.mjs requireTrigger), with the
+// recording's paths: a definitions file that is not one, and a trigger removed after the list was read.
+const refusal = (code, message) => JSON.stringify({ schemaVersion: 1, ok: false, error: { code, message } });
+const REFUSAL = refusal("E_SCHEDULE_INVALID", "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}");
+const TRIGGER_GONE = refusal("E_TRIGGER_UNKNOWN", 'no trigger "oats-real/proposal-review" in /abs/deployment');
+// The third: what `oats version --json` of an OATS from before the lists prints (no `automations`, no `automationsApi`).
+const OLD_OATS = JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", version: "0.28.0", desktopApi: 1, scheduleApi: 2, features: ["schedule", "session-start"] });
 // What the "automations-slow" stage's scene changes while it runs: the lists slow, then the schedules refused.
 let slow = () => undefined;
 let refuse = () => undefined;
@@ -264,11 +272,11 @@ export const stages = {
       await settled(untilSnapshot);
     },
   },
-  // `oats trigger status` refused by the kernel while the lists answer.
+  // `oats trigger status` refused by the kernel while the lists answer: the trigger was removed after the list was read.
   "automations-status-failed": {
     label: "AU8",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      fake({ status: { stdout: statusWithRealIds(threads) }, "trigger status": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULER_BUSY", message: "no trigger state can be read while the scheduler's lock is held" } }) } });
+      fake({ status: { stdout: statusWithRealIds(threads) }, "trigger status": { stdout: TRIGGER_GONE } });
       await settled(untilSnapshot);
     },
   },
@@ -276,7 +284,7 @@ export const stages = {
   "automations-old-oats": {
     label: "AU6",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      fake({ status: { stdout: statusWithRealIds(threads) }, version: { stdout: JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", version: "0.28.0", desktopApi: 1, scheduleApi: 2, features: ["schedule", "session-start"] }) } });
+      fake({ status: { stdout: statusWithRealIds(threads) }, version: { stdout: OLD_OATS } });
       await settled(untilSnapshot);
     },
   },

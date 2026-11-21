@@ -294,6 +294,15 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
     expect(page().text("oats-automations-foot")).toMatch(/^Workspace schedules as of the last sync \(2 h ago\) · Only members you can read in Git contribute\.$/);
   });
 
+  it("the panel is named by its tab, and in words on a row's page, where no tab is drawn", () => {
+    const view = page();
+    const panel = () => view.getByRole("tabpanel");
+    expect(document.getElementById(panel().getAttribute("aria-labelledby")!)?.textContent).toMatch(/^Schedules/);
+    expect(panel().getAttribute("aria-label")).toBeNull();
+    view.open("local/daily-review");
+    expect([panel().getAttribute("aria-labelledby"), panel().getAttribute("aria-label")]).toEqual([null, "Schedules"]);
+  });
+
   it("what cannot be shown at all is said in place of the list, with the tabs still there", () => {
     const gate: Gate = { title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", code: "OATS_NO_AUTOMATIONS" };
     const view = page({ gate, schedule: { list: undefined, loading: false, error: null, readAt: null } });

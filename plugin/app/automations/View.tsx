@@ -89,9 +89,10 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
   }, [openId]);
 
   const scheduler = list?.scheduler ?? null;
+  const onRowPage = row !== null && list !== undefined && gate === null;
   return (
     <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
-      {row !== null && list !== undefined && gate === null ? null : (
+      {onRowPage ? null : (
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
           <span className="min-w-0 flex-1" />
@@ -107,7 +108,8 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
           </span>
         </div>
       )}
-      <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={`${PANEL}-tab-${kind}`} className="flex flex-col gap-4">
+      {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
+      <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${kind}`} aria-label={onRowPage ? title : undefined} className="flex flex-col gap-4">
         {gate !== null ? (
           <div data-testid="oats-automations-gate">
             <Notice title={gate.title} code={gate.code}>

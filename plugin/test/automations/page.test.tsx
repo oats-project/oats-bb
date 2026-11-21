@@ -67,10 +67,10 @@ describe("the lists", () => {
 
   it("a list the kernel refused shows the kernel's code and message with Retry; the other tab still lists", async () => {
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" }, trigger: { ok: true as const, list: triggers() } }),
     });
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toBe("Schedules could not be readoats-schedules.json: jobs must be an objectE_SCHEDULE_INVALIDRetry");
+    expect(alert.textContent).toBe("Schedules could not be read/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}E_SCHEDULE_INVALIDRetry");
     expect(slot.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules", "Triggers7"]);
     fireEvent.click(within(alert).getByText("Retry"));
     await waitFor(() => expect(calls(slot)).toEqual(["automations", "refresh", "automations"]));

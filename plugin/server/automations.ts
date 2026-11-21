@@ -24,8 +24,10 @@ function failed(error: unknown): ListAnswer {
 }
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
-  /** The lists, and the roster read they were made beside (its `at`). */
-  let held: { at: number; roster: string; value: Promise<Lists> } | null = null;
+  /** The lists, the roster read they were made beside (its `at`), and whether that read has ended. */
+  let held: { at: number; roster: string; value: Promise<Lists>; settled: boolean } | null = null;
+  /** The one read that waits behind a read still running: every ask of a newer roster shares it. */
+  let queued: Promise<Lists> | null = null;
 
   const read = (kind: "scheduleList" | "triggerList"): Promise<ListAnswer> =>
     core.call(kind, {}, HOST_TIMEOUT.read, core.signal).then(
@@ -43,6 +45,20 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const lack: ListAnswer = { ok: false, code: snapshot.code, message: snapshot.message };
       return { at: snapshot.at, hostId: null, oats: null, schedule: lack, trigger: lack };
     }
+    // Never two reads at once: with a kernel whose lists are slow and a roster that keeps changing,
+    // each ask would start another pair of processes. One read runs and one waits behind it.
+    if (held !== null && !held.settled) {
+      const after = () => {
+        queued = null;
+        return start(roster);
+      };
+      queued ??= held.value.then(after, after);
+      return queued;
+    }
+    return start(roster);
+  };
+  /** Reads both lists now, beside that roster read. */
+  const start = (roster: string): Promise<Lists> => {
     const value = (async (): Promise<Lists> => {
       // The kernel's own word on what it can do; when it cannot be asked, the lists' refusals say why.
       const version = await core.versionOf().catch(() => null);
@@ -52,7 +68,12 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
       return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, oats, schedule, trigger };
     })();
-    held = { at: Date.now(), roster, value };
+    const entry = { at: Date.now(), roster, value, settled: false };
+    const done = () => {
+      entry.settled = true;
+    };
+    value.then(done, done);
+    held = entry;
     return value;
   };
 

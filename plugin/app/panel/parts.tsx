@@ -3,13 +3,17 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { CopyButton } from "../ui";
-import { DETAIL_WITHHELD, UNSAFE, shown } from "../ui/text";
+import { DETAIL_WITHHELD, NOT_NOTE_TEXT, UNSAFE, shown } from "../ui/text";
 import { markText } from "./words";
+
+/** Every character that is no text (a control, a bidi override): drawn as U+FFFD, as the display filter draws one. */
+const NOT_TEXT = new RegExp(NOT_NOTE_TEXT.source, "gu");
 
 /**
  * A path, whole (a long one breaks between its segments), then what belongs to it and its Copy,
- * named for what it copies. What is drawn goes through the display filter; what is copied is the
- * path as the kernel gave it.
+ * named for what it copies. The path drawn is the path copied, character for character, but for a
+ * character that is no text, and a path that looks like a secret, which is withheld whole; what is
+ * copied is the path as the kernel gave it.
  */
 export function PathLine({ path, copyName, tag, testId }: { path: string; copyName: string; tag?: ReactNode; testId: string }) {
   return (
@@ -26,7 +30,7 @@ export function PathLine({ path, copyName, tag, testId }: { path: string; copyNa
                     /<wbr />
                   </>
                 )}
-                {shown(segment)}
+                {segment.replace(NOT_TEXT, "\uFFFD")}
               </Fragment>
             ))}
       </span>

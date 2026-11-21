@@ -10,6 +10,15 @@
 //                 be read again, and the page when it could never be read; and that a panel opened
 //                 again reads again.
 //
+// Two things the panel draws have no scene, because the live checks cannot hold them on screen:
+// the instance's read in flight ("Reading this instance…") and the instance's read failing while
+// the roster is read ("This instance could not be read", "It could not be read again"). The
+// server answers `panelInstance` from the roster it holds in memory, in a few milliseconds and
+// with no process to slow down or to fail: the first is over before a page can be read, and the
+// second happens only between a failed status and the client's next snapshot. Both are drawn with
+// the shared Loading, Notice and Stale, which the pattern book's scenes hold under the contrast
+// check, and unit tests hold their words (test/panel/panel.test.tsx).
+//
 // Both stages have the fake `oats` print the roster recorded from the real kernel for the panel
 // (test/fixtures/panel/status-soul-moved.json: a child on its own worktree, idle in bb, whose board
 // asked a question and whose soul's repository moved on; and its parent, stopped), with its thread
@@ -18,7 +27,7 @@
 // names for the states that need an agent of their own. Those rows are not fixtures: no test reads
 // them.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,7 +51,7 @@ function recorded(threads) {
 }
 
 /** The second stage's roster: the recording, changed as the header of this file says. `model` is the running child's. */
-function states(threads, model = RUNNING_MODEL) {
+function states(threads, model = RUNNING_MODEL, idleClaim = null) {
   const roster = recorded(threads);
   const groupOf = (instance) => roster.agents.find((group) => group.instances.some((row) => row.instance === instance));
   const rowOf = (instance) => groupOf(instance).instances.find((row) => row.instance === instance);
@@ -58,7 +67,7 @@ function states(threads, model = RUNNING_MODEL) {
   // its parent: the kernel cannot reach its session
   Object.assign(rowOf(PARENT.instance), { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer at http://127.0.0.1:38886 (connection refused)" });
   delete rowOf(PARENT.instance).sessionEnd;
-  groupOf(CHILD.instance).instances.push(copy(IDLE, { running: null, runtimeState: "unknown" }));
+  groupOf(CHILD.instance).instances.push(copy(IDLE, { running: null, runtimeState: "unknown", waitingOnYou: idleClaim }));
   // an agent with no thread in bb: a tmux row
   const tmux = copy(TMUX, { running: true, runtimeState: "running", backend: "tmux", tmux: { session: "oats-agents", socket: "/tmp/tmux-1000/oats" }, open: null });
   delete tmux.session;
@@ -73,6 +82,18 @@ function states(threads, model = RUNNING_MODEL) {
 function setStatus(behaviour) {
   const config = JSON.parse(readFileSync(FAKE_CONFIG, "utf8"));
   writeFileSync(FAKE_CONFIG, JSON.stringify({ ...config, verbs: { ...config.verbs, status: behaviour } }));
+}
+/**
+ * A change the kernel records, as live-ui.mjs's own `record` makes one for the fixtures: the fake
+ * answers `roster` from now on, and one line is appended to the deployment's event log, which is
+ * what the kernel does and what the plugin's watch sees. → the instant the change was recorded.
+ */
+const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl");
+function record(roster) {
+  setStatus({ stdout: JSON.stringify(roster) });
+  const at = Date.now();
+  appendFileSync(EVENTS, `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+  return at;
 }
 /** Asks the plugin's server to read OATS again now, as its Retry does. */
 function refresh() {
@@ -275,6 +296,25 @@ const more = [
       await fitted(page, viewport, check, at, "soul-unnamed");
       await page.shot(`panel-${viewport.name}-soul-unnamed`);
       await page.evaluate(click(inPanel("oats-tab-instance")));
+    },
+  },
+  {
+    stage: "panel-states",
+    name: "freshness: a claim the kernel records is in the panel's header within 3 s, and gone within 3 s of its end",
+    run: async ({ page, at, viewport, threads, check }) => {
+      try {
+        check(await open(page, viewport, threads, IDLE), `${at} the idle agent's panel is open`);
+        check(Boolean(await page.until(`${said} === "Idle"`, 30)), `${at} before the claim its header says Idle`);
+        const claimed = record(states(threads, RUNNING_MODEL, { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" }));
+        const needs = (await page.until(`${said}.startsWith("Needs you")`, 15)) ? Date.now() - claimed : null;
+        check(needs !== null && needs <= 3000, `${at} the header says Needs you ${needs === null ? "never" : `${needs} ms`} after the kernel recorded the claim (3 s at most)`, await page.evaluate(said));
+        check((await page.evaluate(textOf(inPanel("oats-panel-waiting-message")))) === "Keep the retry, or fail the job?", `${at} and the Needs input section says the agent's message`);
+        const cleared = record(states(threads));
+        const idle = (await page.until(`${said} === "Idle"`, 15)) ? Date.now() - cleared : null;
+        check(idle !== null && idle <= 3000, `${at} and Idle again ${idle === null ? "never" : `${idle} ms`} after the kernel recorded its end (3 s at most)`, await page.evaluate(said));
+      } finally {
+        setStatus({ stdout: JSON.stringify(states(threads)) });
+      }
     },
   },
   {

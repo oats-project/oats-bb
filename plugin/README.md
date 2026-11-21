@@ -99,9 +99,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 A fact the kernel does not report is not drawn: the panel never says "Not reported" and never
 guesses. The words are the Desktop's (`app/panel/words.ts` and `app/ui/words.ts` name where each
-comes from), and it is drawn with the patterns of `app/ui.tsx`. The
-Developer tab, the board, the mail, the teams, the recorded events and the readiness are not in
-this version yet.
+comes from), and it is drawn with the patterns of `app/ui.tsx`.
 
 How it reads: `panelInstance` (`contract/panel.ts`) answers one instance's facts from what the one
 status read kept, as the kernel printed it (`core.rowOf`: the instance's row, its agent group's row

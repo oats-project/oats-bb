@@ -8,10 +8,10 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { codes, isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, Node } from "../../model/types";
+import type { Agent, AgentState, BbThread, Node } from "../../model/types";
+import { state as stateOf } from "../../model/view";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
-import { agentStatus } from "../roster/status";
 import { onWindowReset } from "../store";
 import type { Read, Result } from "../store";
 import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
@@ -82,13 +82,19 @@ function claimOf(agent: Agent): Agent["waiting"] {
   return live ? agent.waiting : null;
 }
 
-/** The state to draw for an agent with no bb thread: the kernel's words alone. */
-function stateWithoutThread(agent: Agent): AgentState {
-  if (claimOf(agent) !== null) return "needs-you";
-  if (agent.runtimeState === "unreachable") return "unreachable";
-  if (agent.runtimeState === "stopped" || agent.running === false) return "stopped";
-  if (agent.runtimeState === "shell") return "error";
-  return agent.running === true ? "working" : "idle";
+/** A thread that holds no question: what the tree's rule is given for an agent with no bb thread. */
+const NO_THREAD: BbThread = { id: "", projectId: null, displayTitle: "", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false };
+
+/**
+ * The state the panel draws: the tree's own rule (model/view.ts `state`), so the two say one word
+ * for one state, over the claim the panel shows. A claim it does not show (a stopped agent's, a
+ * tmux agent's the kernel cannot vouch for) is no reason to say Needs you; a question bb holds on
+ * the thread still is. And an agent the kernel calls not running, with no more said (a tmux
+ * agent's dead pane), is Stopped: the tree's rule has no word of its own for it.
+ */
+function drawnState(agent: Agent, node: Node | undefined): AgentState {
+  const drawn = stateOf({ ...agent, waiting: claimOf(agent) }, node?.thread ?? NO_THREAD);
+  return drawn === "idle" && agent.running === false ? "stopped" : drawn;
 }
 
 /**
@@ -140,9 +146,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
 
 /**
  * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
- * of the plugin's own: drawn after the words. The rule is app/ui/text.ts's (`refusalLines`), word
- * for word; that file exports it as `refusalCode` on a branch that is not on main yet, and this
- * copy goes when it is.
+ * of the plugin's own: drawn after the words. The rule is that of app/ui/text.ts `refusalLines`.
  */
 function codeOf(error: string): string | null {
   const lead = /^([A-Z][A-Z0-9_]*): /.exec(error)?.[1];
@@ -175,9 +179,7 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
 function InstancePage({ oats, agent, node, read, now, state: readState }: { oats: Roster; agent: Agent; node: Node | undefined; read: InstanceRead; now: number; state: ReactNode }) {
   const facts = read.data?.facts;
   const claim = claimOf(agent);
-  const drawn = node === undefined ? stateWithoutThread(agent) : agentStatus(agent, node.thread, now).state;
-  // The header never says "Needs you" for a wait the panel does not show.
-  const state = drawn === "needs-you" && claim === null && node?.thread.hasPendingInteraction !== true ? stateWithoutThread(agent) : drawn;
+  const state = drawnState(agent, node);
   // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
   // An agent that needs you for a question bb shows, with no claim, has no instant to count from.
   const since = state === "needs-you" ? (claim === null ? null : waitingSince(claim.since, now)) : state === "working" ? shortAge(facts?.startedAt ?? null, now) : null;
@@ -275,9 +277,11 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
                       testId="oats-panel-folder"
                       tag={
                         sharedWork(facts.work) ? (
-                          <Chip tone="muted" title={SHARED_TITLE}>
-                            shared
-                          </Chip>
+                          <span role="note" aria-label={`shared: ${SHARED_TITLE}`}>
+                            <Chip tone="muted" title={SHARED_TITLE}>
+                              shared
+                            </Chip>
+                          </span>
                         ) : undefined
                       }
                     />

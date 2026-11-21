@@ -126,8 +126,9 @@ test("a shared tree is tagged shared; a copy the browser refuses says so; a mode
   vi.stubGlobal("navigator", { clipboard: { writeText: () => Promise.reject(new Error("denied")) } });
   const shared = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, work: "attached" }) });
   expect(text(await shared.findByTestId("oats-panel-work-sentence"))).toBe("Works in redesign-ui-lead's tree, sharing its branch and changes.");
-  const tag = within(shared.getByTestId("oats-panel-paths")).getByText("shared");
-  expect(tag.getAttribute("title")).toBe("A link to the shared tree; changes here are visible to every instance that shares it.");
+  const tag = within(shared.getByTestId("oats-panel-paths")).getByRole("note");
+  expect(text(tag)).toBe("shared");
+  expect(tag.getAttribute("aria-label")).toBe("shared: A link to the shared tree; changes here are visible to every instance that shares it.");
   const copy = copyOf(shared.getByTestId("oats-panel-home"));
   fireEvent.click(copy);
   await waitFor(() => expect(text(copy)).toBe("Copy failed"));
@@ -340,6 +341,19 @@ test("an agent whose session fell back to a shell says Failed, and one the kerne
   const unreachable = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable" }) });
   await unreachable.findByTestId("oats-panel-work");
   expect(stateOf(unreachable)).toBe("Unreachable");
+  unreachable.unmount();
+  // The same words for an agent with no thread: a fallback shell is Failed there too, and a pane that is gone Stopped.
+  const byName = (change: Partial<Agent>) => {
+    const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, waiting: null, ...change } : agent));
+    return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
+  };
+  const tmuxShell = byName({ running: false, runtimeState: "shell" });
+  await tmuxShell.findByTestId("oats-panel-work");
+  expect(stateOf(tmuxShell)).toBe("Failed");
+  tmuxShell.unmount();
+  const tmuxGone = byName({ running: false, runtimeState: null });
+  await tmuxGone.findByTestId("oats-panel-work");
+  expect(stateOf(tmuxGone)).toBe("Stopped");
 });
 
 test("an agent with no thread that waits on a person says Needs you, as its Needs input section does", async () => {
@@ -394,6 +408,11 @@ test("what the kernel's row holds is drawn through the display filter, and copie
   fireEvent.click(copyOf(slot.getByTestId("oats-panel-messaging-id")));
   await waitFor(() => expect(writes).toEqual([id]));
   slot.unmount();
+  // The path drawn is the path copied: spaces and an empty segment stay as they are.
+  const odd = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, work: "directory", home: "/abs/My Dir /x y/ /z" }) });
+  await odd.findByTestId("oats-panel-work");
+  expect(text(odd.getByTestId("oats-panel-home"))).toBe("/abs/My Dir /x y/ /z");
+  odd.unmount();
   // A path that looks like a secret as a whole is withheld whole, also where no segment of it does.
   const secret = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, messagingId: "https://ana:hunter2@aweb.example/ana" }) });
   expect(text(await secret.findByTestId("oats-panel-messaging-id"))).toBe("[withheld]");

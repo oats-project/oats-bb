@@ -13,8 +13,19 @@ backend. It contains:
 
 **It needs:**
 - OATS 0.70.0 or later;
-- oats.aweb 1.45.0 or later;
-- bb-app 0.50.1 exactly (`bb-version`); another version is refused with `E_BACKEND_VERSION`;
+- for a bb home with aweb messaging, oats.aweb 1.48.0 or later (being released next). 1.45.0
+  is the first version whose spawn hook runs for a bb home at all, but 1.45.0 to 1.47.0 leave
+  gaps for a bb home with aweb:
+  - a launch under `delivery: channel` is held to the channel package's requirement, as a tmux
+    launch is;
+  - an older `aweb-channel` or `@awebai/pi` on the host can open its own mail stream beside
+    the wake broker's;
+  - a retire may leave the home registered with the broker.
+
+  This release's real run didn't cover aweb: its souls have no messaging capability;
+- bb-app 0.50.1, the version this release is tested against (`bb-version`, and the default of
+  the `version` setting). A running bb that differs from the deployment's `version` setting is
+  refused with `E_BACKEND_VERSION`;
 - Claude Code. pi and Codex are not supported yet.
 
 Install: [README.md, "Install"](README.md#install).

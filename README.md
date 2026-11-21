@@ -39,9 +39,12 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 > - OATS 0.70.0 or later (the manifests' `compatibility.oats` floor): the first OATS
 >   release that speaks this provider's wire, version 1.3 (see [docs/wire.md](docs/wire.md)),
 >   and that protects a provider home's own files from its agent.
-> - oats.aweb 1.45.0 or later: the release that registers a provider home with the host
->   wake broker without a `--backend`. With an older oats.aweb, spawning a bb home fails
->   in its spawn hook.
+> - For a bb home with aweb messaging, oats.aweb 1.48.0 or later. That release requires
+>   the channel packages of `tmux` launches only, holds an installed `aweb-channel` or
+>   `@awebai/pi` to versions that don't open their own stream beside the wake broker's on a
+>   provider launch, and removes a provider home's broker registration at retire. 1.45.0
+>   is the first version whose spawn hook runs for a bb home at all (an older oats.aweb
+>   fails there), and 1.45.0 to 1.47.0 leave those gaps.
 >
 > **bb agents run in full mode (`--yolo`), and nothing else is launched.** A launch in
 > one of bb's sandboxed modes (`auto`, `accept-edits`; that is `--no-yolo`, or no choice)

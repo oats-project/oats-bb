@@ -60,7 +60,8 @@ For every bb agent, Claude Code included:
   `PATH`, and a pi launch of the same home leaves those three. A project-level `PATH` an
   operator set by hand in an OATS home's bb project does not survive a launch (put what bb
   needs in the bb server's own environment). A bb that cannot give that env fails the
-  launch (a refusal where nothing was changed yet, otherwise an outcome in doubt).
+  launch (a refusal where nothing but those unsets was changed yet, otherwise an outcome in
+  doubt).
 - **The retire hook and the launch hook ask bb for one more thing**, the env of the home's
   bb project: a bb that cannot be asked adds a warning, as before for its threads.
 

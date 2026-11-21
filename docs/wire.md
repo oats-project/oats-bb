@@ -259,8 +259,9 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   wherever it finds them, whoever set them (a pi launch of the same home leaves them, and
   bb starts `claude` by a project `PATH`); it sets none, and leaves every other name. A
   read or an unset that bb refuses there fails the launch: a refusal
-  (`E_SESSION_START_FAILED`) when nothing came before it, otherwise in doubt, as every
-  failure after a launch's first effect is (above).
+  (`E_SESSION_START_FAILED`) when nothing but those unsets came before it (some of the
+  three names may then be gone already: the env reaches no process before the spawn),
+  otherwise in doubt, as every failure after a launch's first effect is (above).
 - **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
   whose last turn failed and of one whose agent is gone. The provider decides at every
   call from this host's processes: a process whose environment carries

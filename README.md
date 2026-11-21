@@ -468,8 +468,8 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   not the home's alone, so the retire hook and a move away remove only those three names
   from it, and leave what a person keeps there. A Claude launch
   sets no project env. It reads the project's env (one more bb call, whose failure
-  fails the launch: a refusal where the launch had changed nothing yet, otherwise an
-  outcome in doubt, as for any failure after its first effect) and unsets those three names wherever it finds them, whoever set
+  fails the launch: a refusal where the launch had changed nothing but those unsets,
+  otherwise an outcome in doubt, as for any failure after its first effect) and unsets those three names wherever it finds them, whoever set
   them, leaving any other name: bb gives a project's env to every thread of it and starts
   `claude` by a project `PATH`, and a pi launch of the same home composed that one for
   pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive

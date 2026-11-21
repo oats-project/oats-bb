@@ -159,6 +159,8 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 
 | For | Component | What it holds |
 |---|---|---|
+| something to open and read ("Details", "Paths") | `Disclosure` | closed until pressed; its summary as high as a control |
+| a kernel's own word in a sentence | `Code` | a code, a flag, a file's name, filtered |
 | a state | `State`, `StateMark` | the mark AND the word (`STATE` in `app/ui/words.ts`); the Desktop's "!" for an agent that waits; a mark that stands alone carries the accessible name |
 | where an agent is | `StatusLine` | the state, since when, the question or the reason, the act that applies |
 | a state that is not an agent's | `Toned` | a dot (ok, warn, bad, muted) AND its words |

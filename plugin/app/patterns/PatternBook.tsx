@@ -32,7 +32,7 @@ export function PatternBook() {
     <Page testId="oats-patterns-page">
       <section data-testid="oats-patterns-states" className="flex flex-col gap-2">
         <Heading>State</Heading>
-        <ul className="flex flex-wrap gap-x-6 gap-y-2">
+        <ul data-testid="oats-patterns-state-list" className="flex flex-wrap gap-x-6 gap-y-2">
           {STATES.map((state) => (
             <li key={state} className="flex items-center gap-3">
               <State state={state} />

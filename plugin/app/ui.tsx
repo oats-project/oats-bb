@@ -11,7 +11,7 @@ export { Confirm } from "./ui/confirm";
 export type { ConfirmProps } from "./ui/confirm";
 export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
 export type { MenuItem, TabItem } from "./ui/controls";
-export { Card, DisabledReason, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";
+export { Card, Code, DisabledReason, Disclosure, Empty, Fact, Facts, Field, INPUT, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";
 
 // bb's tokens for coloured text on a surface: as a dot's fill they keep 3:1 against it in both
 // themes, on a row that is open or hovered too, which bb's fill tokens do not (`attention` and

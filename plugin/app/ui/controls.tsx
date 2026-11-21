@@ -234,7 +234,7 @@ export function Menu({ label, items, children = "⋯" }: { label: string; items:
 }
 
 /** Copies `text`: the button says what it copies, then "Copied" (or that it could not) for two seconds, announced. */
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+export function CopyButton({ text, label = "Copy", name }: { text: string; label?: string; /** the accessible name, where the label alone does not say what is copied: "Copy home path" */ name?: string }) {
   const [said, setSaid] = useState<"Copied" | "Couldn't copy" | null>(null);
   useEffect(() => {
     if (said === null) return;
@@ -245,6 +245,8 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
     <button
       type="button"
       data-testid="oats-copy"
+      aria-label={name === undefined || said !== null ? undefined : name}
+      title={name}
       className={`${TARGET} inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-card px-3 text-sm text-foreground hover:bg-accent`}
       onClick={() => {
         // The clipboard is absent on a plain-http origin (a phone on the LAN): say so, never throw.

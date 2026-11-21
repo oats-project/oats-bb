@@ -24,7 +24,7 @@ export default [
       check(Boolean(await page.until(visible(testId("oats-patterns-states")), 30)), `${at} the pattern book renders`);
       const drawn = JSON.parse(
         await page.evaluate(
-          `JSON.stringify([...document.querySelectorAll('${testId("oats-patterns-states")} li')].map((li) => [li.querySelector('${testId("oats-state")}').getAttribute("data-state"), li.querySelector('${testId("oats-state")}').innerText.replace(/^!\\s*/, "").trim(), li.querySelector('[role="img"]').getAttribute("aria-label"), li.querySelector('${testId("oats-state")} [aria-hidden="true"]') !== null]))`,
+          `JSON.stringify([...document.querySelectorAll('${testId("oats-patterns-state-list")} li')].map((li) => [li.querySelector('${testId("oats-state")}').getAttribute("data-state"), li.querySelector('${testId("oats-state")}').innerText.replace(/^!\\s*/, "").trim(), li.querySelector('[role="img"]').getAttribute("aria-label"), li.querySelector('${testId("oats-state")} [aria-hidden="true"]') !== null]))`,
         ),
       );
       check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the six states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));

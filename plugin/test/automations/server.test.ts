@@ -44,6 +44,13 @@ describe("automations", () => {
     expect(await argvs(backend, "trigger list")).toEqual([]);
   });
 
+  it("an OATS that lists the feature with another api is not asked either: the lists' shape is the api's", async () => {
+    backend = await startBackend({ verbs: { version: { stdout: JSON.stringify({ schemaVersion: 1, version: "9.0.0", automationsApi: 2, features: ["automations"] }) } } });
+    const lists = await backend.rpc<Lists>("automations");
+    expect(lists.schedule).toMatchObject({ ok: false, code: "OATS_NO_AUTOMATIONS" });
+    expect(await argvs(backend, "schedule list")).toEqual([]);
+  });
+
   it("one read serves every client that asks while the roster stands as it was read", async () => {
     backend = await startBackend();
     const first = await backend.rpc<Lists>("automations");

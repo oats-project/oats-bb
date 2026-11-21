@@ -5,15 +5,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import { NO_AUTOMATIONS } from "../../contract/automations";
 import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
 import { codes } from "../../kernel/result";
-import { attempt, useRead } from "../store";
+import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
 import { fileOf } from "./Detail";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
-import { automationsSupported } from "./version";
-import type { OatsVersion } from "./version";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
 import { capabilitySource, TITLES } from "./words";
@@ -35,13 +34,12 @@ export function routeOf(subPath: string): { kind: AutomationKind; openId: string
 }
 export const subPathOf = (kind: AutomationKind, openId: string | null = null): string => (openId === null ? SEGMENT[kind] : `${SEGMENT[kind]}/${openId}`);
 
-/** Why a list cannot be shown at all, in the Desktop's words where it has them. */
-export function gateOf(kind: AutomationKind, answer: { code: string } | null, oats: OatsVersion | null): Gate | null {
+/** Why a list cannot be shown at all, in the Desktop's words where it has them: no `oats` on the machine, or an OATS from before the lists (the server says which). */
+export function gateOf(kind: AutomationKind, answer: { code: string } | null): Gate | null {
   const title = TITLES[kind];
-  if (answer !== null && answer.code === codes.notFound) return { title: `${title} need the OATS CLI`, detail: null };
-  if (oats !== null && !automationsSupported(oats)) {
-    return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and this computer's own, and where each one runs.` };
-  }
+  if (answer === null) return null;
+  if (answer.code === codes.notFound) return { title: `${title} need the OATS CLI`, detail: null };
+  if (answer.code === NO_AUTOMATIONS) return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and this computer's own, and where each one runs.` };
   return null;
 }
 
@@ -86,30 +84,26 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     }),
   ) as Record<AutomationKind, ListRead>;
 
-  // Refresh and Retry: the page says it is reading again until the answer is another one, or fails.
-  const [rereadFrom, setRereadFrom] = useState<string | null>(null);
-  const seen = read.data?.at ?? "";
-  const refreshing = rereadFrom !== null && rereadFrom === seen && read.status !== "error";
-  useEffect(() => {
-    if (rereadFrom === null) return;
-    if (rereadFrom !== seen || read.status === "error") {
-      setRereadFrom(null);
-      return;
-    }
-    // An answer that never comes does not leave the page saying so for ever.
-    const timer = setTimeout(() => setRereadFrom(null), 60_000);
-    return () => clearTimeout(timer);
-  }, [rereadFrom, seen, read.status]);
+  // Refresh and Retry: the page says it is reading again from the press until that read settles,
+  // whatever it answers (a server that does not answer twice says so twice).
+  const [refreshing, setRefreshing] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => () => void (mounted.current = false), []);
   const refresh = () => {
-    setRereadFrom(seen);
-    read.retry();
+    if (refreshing) return;
+    setRefreshing(true);
+    void read.refresh().finally(() => {
+      if (mounted.current) setRefreshing(false);
+    });
   };
   const answer = read.data?.[kind];
-  const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null, read.data?.oats ?? null);
+  const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null);
 
-  // A trigger's recorded state, read once per open and again when the lists are: an answer for a
-  // row that is no longer the open one changes nothing.
-  const [status, setStatus] = useState<{ id: string; value: TriggerStatus } | null>(null);
+  // A trigger's recorded state, read when its page opens and again when the lists are. An answer
+  // for a row that is no longer the open one changes nothing. A read that fails is said, over the
+  // state read before, with how old that is.
+  const [status, setStatus] = useState<{ id: string; value: TriggerStatus | null; readAt: string | null; error: { code: string | null; message: string } | null } | null>(null);
+  const [statusRetry, setStatusRetry] = useState(0);
   const asked = useRef(0);
   const at = read.data?.at;
   const call = useRef(rpc);
@@ -122,16 +116,21 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     const ticket = ++asked.current;
     attempt(() => call.current.call("triggerStatus", { id: openId })).then(
       (value) => {
-        if (asked.current === ticket) setStatus({ id: openId, value });
+        if (asked.current === ticket) setStatus({ id: openId, value, readAt: new Date().toISOString(), error: null });
       },
-      () => {
-        // The row's own last fire still shows.
+      (error: unknown) => {
+        if (asked.current !== ticket) return;
+        const said = errorMessage(error);
+        const lead = /^([A-Z][A-Z0-9_]*): /.exec(said);
+        const failure = lead === null ? { code: null, message: said } : { code: lead[1]!, message: said.slice(lead[0].length) };
+        setStatus((before) => (before !== null && before.id === openId ? { ...before, error: failure } : { id: openId, value: null, readAt: null, error: failure }));
       },
     );
     return () => {
       asked.current += 1;
     };
-  }, [kind, openId, at]);
+  }, [kind, openId, at, statusRetry]);
+  const mine = status !== null && status.id === openId ? status : null;
 
   const hostId = read.data?.hostId ?? null;
   const onOpenFile = useCallback(
@@ -165,7 +164,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         refreshing={refreshing}
         openId={openId}
         onOpen={onOpen}
-        status={status !== null && status.id === openId ? status.value : null}
+        status={mine?.value ?? null}
+        statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value === null ? null : mine.readAt, onRetry: () => setStatusRetry((n) => n + 1) }}
         onOpenFile={onOpenFile}
         canOpenCapability={canOpenCapability}
         onOpenCapability={onOpenCapability}

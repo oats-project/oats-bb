@@ -423,6 +423,30 @@ describe("a row's page (D-279)", () => {
     );
   });
 
+  it("what a member's file or the kernel names is drawn through the filter in the cards too, and a command that could not be pasted is not shown", () => {
+    const list = schedules();
+    const odd = {
+      ...list,
+      rows: list.rows.map((row) =>
+        row.id === "local/status-check"
+          ? { ...row, scope: "/srv/\u202egnp.exe", template: { package: "acme\u202etools", template: "digest\u0007", from: null, version: "1.0\u200b", commit: "abc1234def" } }
+          : row.id === "oats-real/nightly-digest"
+            ? { ...row, origin: { ...row.origin, commit: "0123456\u202e89abcdef" } }
+            : row,
+      ),
+    };
+    const view = page({ schedule: ready(odd) });
+    view.open("local/status-check");
+    const from = view.getByTestId("oats-automation-from");
+    expect(from.textContent).not.toMatch(/[\u202e\u0007\u200b]/);
+    expect(Array.from(from.querySelectorAll("[title]")).map((element) => element.getAttribute("title")).join(" ")).not.toMatch(/[\u202e\u0007\u200b]/);
+    expect(view.getByTestId("oats-automation-reconcile-command").textContent).toBe("The command that checks it from a terminal (oats schedule reconcile) cannot be shown: this schedule's id or its directory holds characters that are not text.");
+    fireEvent.click(view.getByTestId("oats-automation-back"));
+    view.open("oats-real/nightly-digest");
+    const commit = view.getByTestId("oats-automation-from");
+    expect(`${commit.textContent} ${Array.from(commit.querySelectorAll("[title]")).map((element) => element.getAttribute("title")).join(" ")}`).not.toContain("\u202e");
+  });
+
   it("Open file opens the definition where this client can, and says where it is", () => {
     const opened: string[] = [];
     const view = page({ onOpenFile: (row) => opened.push(row.id) });

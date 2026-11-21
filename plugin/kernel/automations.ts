@@ -274,7 +274,7 @@ export function eventLabel(entry: unknown, source: string | null): string | null
   return displayLine(entry.key);
 }
 /** An event kind in words ("ready for review"). */
-const eventWords = (value: unknown): string | null => displayLine(value)?.replace(/_/g, " ") ?? null;
+export const eventWords = (value: unknown): string | null => displayLine(value)?.replace(/_/g, " ") ?? null;
 
 /** What a trigger source itself said (`source: { code, message? }` of a failed poll): its own, untrusted words. */
 function sourceSays(raw: unknown): { code: string | null; message: string | null } | null {

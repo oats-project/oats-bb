@@ -174,6 +174,18 @@ export default [
     },
   },
   {
+    stage: "automations-status-failed",
+    name: "a trigger whose state cannot be read",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
+      const failed = await page.until(`(() => ${textOf(testId("oats-automation-status-failed"))})()`, 30);
+      check(failed === "This trigger's state could not be read no trigger state can be read while the scheduler's lock is held What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_SCHEDULER_BUSY Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
+      const last = await page.evaluate(textOf(testId("oats-automation-run")));
+      check(/#41 · opened · oats-developer-review-pr-41$/.test(last), `${at} the row's own last fire still shows under it`, last);
+      await page.shot(`automations-${viewport.name}-trigger-state-failed`, { targets: true });
+    },
+  },
+  {
     stage: "automations-old-oats",
     name: "an OATS without the automations lists",
     run: async ({ page, at, viewport, check }) => {
@@ -241,6 +253,14 @@ export const stages = {
     label: "AU5",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
       fake({ status: { stdout: statusWithRealIds(threads) }, ...lists("schedule-list.json", "trigger-list-poll-failed.json"), "trigger status": { file: "automations/trigger-status-poll-failed.json" }, capabilities: { file: "automations/capabilities.json" } });
+      await settled(untilSnapshot);
+    },
+  },
+  // `oats trigger status` refused by the kernel while the lists answer.
+  "automations-status-failed": {
+    label: "AU8",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({ status: { stdout: statusWithRealIds(threads) }, "trigger status": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULER_BUSY", message: "no trigger state can be read while the scheduler's lock is held" } }) } });
       await settled(untilSnapshot);
     },
   },

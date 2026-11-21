@@ -9,7 +9,7 @@ import { gateOf, routeOf, subPathOf } from "../../app/automations/Page";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { AT, OATS } from "./handlers";
-import { schedules, triggers } from "./fixtures";
+import { schedules, statusOf, triggers } from "./fixtures";
 
 afterEach(resetApp);
 
@@ -99,6 +99,27 @@ describe("the lists", () => {
     expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(11);
   });
 
+  it("Retry while the server does not answer says it is reading again, and cannot be pressed twice at once", async () => {
+    let release: (() => void) | undefined;
+    let asked = 0;
+    const slot = await page("", {
+      automations: async () => {
+        asked += 1;
+        if (asked > 1) await new Promise<void>((resolve) => (release = resolve));
+        throw new Error("the plugin's server is restarting");
+      },
+    });
+    const alert = await slot.findByRole("alert");
+    fireEvent.click(within(alert).getByText("Retry"));
+    await waitFor(() => expect((slot.getByTestId("oats-automations-retry") as HTMLButtonElement).disabled).toBe(true));
+    expect((slot.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(release).toBeDefined());
+    release!();
+    // It failed the same way: the notice stands, and Retry can be pressed again.
+    await waitFor(() => expect((slot.getByTestId("oats-automations-retry") as HTMLButtonElement).disabled).toBe(false));
+    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readthe plugin's server is restartingRetry");
+  });
+
   it("a server that does not answer says so, with Retry", async () => {
     const slot = await page("", {
       automations: () => {
@@ -126,15 +147,14 @@ describe("what cannot be shown at all (D-285)", () => {
     expect(slot.queryByRole("alert")).toBeNull();
   });
 
-  it("an OATS without the automations lists: the page says which OATS it needs and why to update", () => {
-    const old = { version: "0.28.0", features: ["schedule"], automationsApi: null };
-    expect(gateOf("schedule", null, old)).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs." });
-    expect(gateOf("trigger", null, old)).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
-    // The feature alone is not the contract: its api must be the one this page reads.
-    expect(gateOf("schedule", null, { version: "9.0.0", features: ["automations"], automationsApi: 2 })).not.toBeNull();
-    expect(gateOf("schedule", null, { version: "0.70.0", features: ["automations"], automationsApi: 1 })).toBeNull();
-    expect(gateOf("schedule", null, null)).toBeNull();
+  it("the gate is the server's word: its code for an OATS without the lists, or for no oats; any other refusal is no gate", () => {
+    expect(gateOf("schedule", { code: "OATS_NO_AUTOMATIONS" })).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs." });
+    expect(gateOf("trigger", { code: "OATS_NO_AUTOMATIONS" })).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
+    expect(gateOf("trigger", { code: "OATS_NOT_FOUND" })).toEqual({ title: "Triggers need the OATS CLI", detail: null });
+    expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID" })).toBeNull();
+    expect(gateOf("schedule", null)).toBeNull();
   });
+
 });
 
 describe("a row's page", () => {
@@ -153,16 +173,46 @@ describe("a row's page", () => {
     expect(slot.inspection.rpcCalls.filter((call) => call.method === "triggerStatus").map((call) => call.input)).toEqual([{ id: "oats-real/proposal-review" }]);
   });
 
-  it("when that read fails, the row's own last fire still shows", async () => {
+  it("a state that cannot be read is said: a person's words, the kernel's message, its code after, Retry; the row's own last fire still shows", async () => {
+    let fail = true;
     const slot = await page("triggers/oats-real/proposal-review", {
-      triggerStatus: () => {
-        throw new Error("E_TRIGGER_UNKNOWN: gone");
+      triggerStatus: ({ id }) => {
+        if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+        return statusOf(id);
       },
     });
-    const history = await slot.findByTestId("oats-automation-history");
-    await waitFor(() => expect(calls(slot)).toContain("triggerStatus"));
-    expect(history.textContent).toMatch(/^Recent fireson this computer.+#41 · opened · oats-developer-review-pr-41$/);
+    const notice = await slot.findByTestId("oats-automation-status-failed");
+    expect(notice.textContent).toBe("This trigger's state could not be read`oats` did not answer within 20 s and was stoppedWhat is live and what waits is not known; the trigger's last fire, as the list has it, is below.OATS_TIMEOUTRetry");
+    expect(within(notice).getByRole("alert")).toBeTruthy();
+    expect(slot.getByTestId("oats-automation-history").textContent).toMatch(/#41 · opened · oats-developer-review-pr-41$/);
+    // Retry reads it again.
+    fail = false;
+    fireEvent.click(slot.getByTestId("oats-automation-status-retry"));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-history-note").textContent).toBe("on this computer · 2 of 2 live now · 2 fired in all · 1 waiting"));
+    expect(slot.queryByTestId("oats-automation-status-failed")).toBeNull();
   });
+
+  it("a state read before stays, marked with its age, when a later read of it fails", async () => {
+    let asked = 0;
+    let reads = 0;
+    const slot = await page("triggers/oats-real/proposal-review", {
+      // Each read of the lists is another answer of the server.
+      automations: () => ({ at: `2026-11-21T20:4${++reads}:00.000Z`, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
+      triggerStatus: ({ id }) => {
+        asked += 1;
+        if (asked > 1) throw new Error("E_TRIGGER_FAILED: the trigger state cannot be read");
+        return statusOf(id);
+      },
+    });
+    await waitFor(() => expect(slot.getByTestId("oats-automation-history-note").textContent).toContain("2 of 2 live now"));
+    // OATS changed: the lists are read again, and with them the state.
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    const notice = await slot.findByTestId("oats-automation-status-failed");
+    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readShowing what was read just now.E_TRIGGER_FAILEDRetry");
+    expect(slot.getByTestId("oats-automation-history-note").textContent).toContain("2 of 2 live now");
+  });
+
+
 
   it("a route to a row the list does not hold goes back to the list", async () => {
     const slot = await page("schedules/local/gone");

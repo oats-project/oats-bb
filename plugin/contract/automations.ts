@@ -202,6 +202,9 @@ export type TriggerStatus = z.infer<typeof triggerStatus>;
 
 // ---- the verbs ----
 
+/** The plugin's own code for an OATS that has no automations lists (feature `automations`, automationsApi 1: OATS 0.29). */
+export const NO_AUTOMATIONS = "OATS_NO_AUTOMATIONS";
+
 /** One list as a client gets it: the kernel's answer, or why there is none (the kernel's code and message, or one of the plugin's own). */
 export const automationListAnswer = z.union([
   z.object({ ok: z.literal(true), list: automationList }),

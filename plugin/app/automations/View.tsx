@@ -40,6 +40,8 @@ export type ViewProps = {
   onOpen: (id: string | null) => void;
   /** The open trigger's recorded state, once read. */
   status: TriggerStatus | null;
+  /** Why that state could not be read (again), where it could not. */
+  statusFailure?: DetailProps["statusFailure"];
   /** What the page adds for a row: its acts, and the cards they bring. */
   rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "sideStart" | "sideEnd" | "identityAction" | "summaryAction">;
   /** The act of the notice of a scheduler that is off (Enable scheduler). */
@@ -54,7 +56,7 @@ const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, rowParts, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, onOpenFile, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -148,6 +150,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                 host={list.host}
                 now={now}
                 status={row.kind === "trigger" ? status : null}
+                statusFailure={row.kind === "trigger" ? statusFailure : null}
                 onBack={() => onOpen(null)}
                 onOpenFile={onOpenFile}
                 canOpenCapability={canOpenCapability}

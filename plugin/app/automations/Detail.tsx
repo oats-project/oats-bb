@@ -5,9 +5,10 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
-import { displayLine, shown, shownBlock } from "../ui/text";
-import { Button, Card, Empty, Section, Toned } from "../ui";
-import { eventLabel } from "../../kernel/automations";
+import { cleanLine, displayLine, shown, shownBlock } from "../ui/text";
+import { readAge } from "../ui/words";
+import { Button, Card, Empty, Lines, Notice, Section, Toned } from "../ui";
+import { eventLabel, eventWords } from "../../kernel/automations";
 import { OriginTag, StateTags } from "./List";
 import { FactList, Quote } from "./parts";
 import type { FactRow, QuoteLine } from "./parts";
@@ -273,7 +274,7 @@ function HistoryLine({ iso, now, children, testId }: { iso: string | null; now: 
  * waiting (newest first, at most 10), the instances live now, then what fired. Until that answer
  * is here, and when it fails, the row's own last fire shows.
  */
-function History({ row, status, source, now }: { row: AutomationRow; status: TriggerStatus | null; source: CapabilitySource | null; now: number }) {
+function History({ row, status, failure, source, now }: { row: AutomationRow; status: TriggerStatus | null; failure: DetailProps["statusFailure"]; source: CapabilitySource | null; now: number }) {
   const trigger = row.kind === "trigger";
   const st = trigger ? status : null;
   const lead =
@@ -296,7 +297,7 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
   // A trigger's fires are named by what fired; a schedule's runs lead with their outcome.
   const fromRow = (run: AutomationRun) =>
     trigger
-      ? { at: runTime(run), parts: [eventLabel(run, row.on?.source ?? null), run.event === null ? null : (displayLine(run.event)?.replace(/_/g, " ") ?? null), displayLine(run.instance), outcomeWords(run.outcome)], run }
+      ? { at: runTime(run), parts: [eventLabel(run, row.on?.source ?? null), eventWords(run.event), displayLine(run.instance), outcomeWords(run.outcome)], run }
       : { at: runTime(run), parts: [outcomeWords(run.outcome), run.event === null ? null : run.event.replace(/_/g, " "), run.number ? `#${run.number}` : null, run.instance], run };
   const items =
     st !== null && st.fired.length > 0
@@ -308,6 +309,27 @@ function History({ row, status, source, now }: { row: AutomationRow; status: Tri
       <p data-testid="oats-automation-history-note" className={NOTE}>
         {["on this computer", lead].filter(Boolean).join(" · ")}
       </p>
+      {failure == null ? null : (
+        // The state could not be read (again): said in words, the kernel's message and its code after, over what was read before.
+        <div data-testid="oats-automation-status-failed">
+          <Notice
+            tone="error"
+            title="This trigger's state could not be read"
+            code={failure.code}
+            {...(failure.readAt === null ? {} : { age: readAge(failure.readAt, now) })}
+            actions={
+              <Button data-testid="oats-automation-status-retry" onClick={failure.onRetry}>
+                Retry
+              </Button>
+            }
+          >
+            <p>
+              <Lines text={failure.message} />
+            </p>
+            {status === null ? <p>What is live and what waits is not known; the trigger's last fire, as the list has it, is below.</p> : null}
+          </Notice>
+        </div>
+      )}
       {poll !== null && source !== null && (pollFailure || poll.events !== null) ? (
         <>
           <p data-testid="oats-automation-last-poll" className={`${LINE} ${poll.ok ? "text-foreground" : "text-destructive-text"}`}>
@@ -445,14 +467,20 @@ function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunS
             ]}
           />
           {action}
-          {/* The command is drawn as it is pasted: its id and its directory are the kernel's own, quoted for a shell (words.ts). */}
-          <p className={NOTE}>
-            {"From a terminal: "}
-            <code className="break-all rounded border border-border bg-background px-1 font-mono text-foreground">{reconcileCommand(row)}</code>
-            {". If its effects can’t be proven, check by hand, then "}
-            <code className="break-all rounded border border-border bg-background px-1 font-mono text-foreground">{reconcileCommand(row, { clear: true })}</code>
-            {" records it as launch failed and frees its slot."}
-          </p>
+          {/* The command works when pasted, so it is drawn as it is or not at all: only when the id and the directory the kernel gave are lines of plain text. */}
+          {cleanLine(row.id) && (row.scope === null || cleanLine(row.scope)) ? (
+            <p data-testid="oats-automation-reconcile-command" className={NOTE}>
+              {"From a terminal: "}
+              <code className="break-all rounded border border-border bg-background px-1 font-mono text-foreground">{reconcileCommand(row)}</code>
+              {". If its effects can’t be proven, check by hand, then "}
+              <code className="break-all rounded border border-border bg-background px-1 font-mono text-foreground">{reconcileCommand(row, { clear: true })}</code>
+              {" records it as launch failed and frees its slot."}
+            </p>
+          ) : (
+            <p data-testid="oats-automation-reconcile-command" className={NOTE}>
+              The command that checks it from a terminal (oats schedule reconcile) cannot be shown: this schedule's id or its directory holds characters that are not text.
+            </p>
+          )}
         </>
       ) : null}
       {run.pendingWake !== null ? (
@@ -468,8 +496,10 @@ export type DetailProps = {
   row: AutomationRow;
   host: AutomationHost;
   now: number;
-  /** A trigger's recorded state, once `oats trigger status` answered; null before, and when it failed. */
+  /** A trigger's recorded state, once `oats trigger status` answered; null before, and when it never did. */
   status: TriggerStatus | null;
+  /** Why that state could not be read, or read again: the kernel's code and message, when `status` was read, and how to ask again. */
+  statusFailure?: { code: string | null; message: string; readAt: string | null; onRetry: () => void } | null;
   onBack: () => void;
   /** Opens the row's defining file; absent where this client cannot. */
   onOpenFile?: (row: AutomationRow) => void;
@@ -491,7 +521,7 @@ export type DetailProps = {
 /** Whether the row's defining file can be opened: from this machine (a local item, a cloned member), else as its web page. */
 export const fileOf = (row: AutomationRow): { path: string | null; url: string | null } => ({ path: row.origin.localPath, url: row.origin.localPath === null ? row.origin.url : null });
 
-export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapability, onOpenCapability, actions, runStateAction, sideStart, sideEnd, identityAction, summaryAction }: DetailProps) {
+export function Detail({ row, host, now, status, statusFailure = null, onBack, onOpenFile, canOpenCapability, onOpenCapability, actions, runStateAction, sideStart, sideEnd, identityAction, summaryAction }: DetailProps) {
   const title = TITLES[row.kind];
   const page = useRef<HTMLDivElement>(null);
   // Opening the page puts focus on Back, where Escape and Enter both lead out again.
@@ -507,7 +537,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
   const bad = row.unreadable ?? row.invalid;
   const check = row.unreadable === null && source !== null ? (status?.invalid?.at ? status.invalid : row.invalid) : null;
   const checked = check === null ? null : relativeTime(check.at, now);
-  const template: FactRow = ["Template", templateProvenance(row.template), row.template === null ? null : [templateLabel(row.template) ?? row.template.from, row.template.version, row.template.commit].filter(Boolean).join(" ")];
+  const template: FactRow = ["Template", shown(templateProvenance(row.template)), row.template === null ? null : shown([templateLabel(row.template) ?? row.template.from, row.template.version, row.template.commit].filter(Boolean).join(" "))];
   const stamp = (label: string, iso: string | null): FactRow => [label, relativeTime(iso, now)?.label, relativeTime(iso, now)?.title];
   return (
     <div
@@ -559,7 +589,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
             <WhenCard row={row} now={now} source={source} canOpenCapability={canOpenCapability} onOpenCapability={onOpenCapability} />
             {row.run === "spawn" ? <SpawnsCard row={row} /> : null}
           </div>
-          <History row={row} status={status} source={source} now={now} />
+          <History row={row} status={status} failure={row.kind === "trigger" ? statusFailure : null} source={source} now={now} />
         </div>
         <div className="flex min-w-0 flex-col gap-3">
           {sideStart}
@@ -594,7 +624,7 @@ export function Detail({ row, host, now, status, onBack, onOpenFile, canOpenCapa
                   ["Member", row.origin.member === null ? null : shown(row.origin.member)],
                   ["Repo", row.origin.repoKey === null ? null : shown(row.origin.repoKey)],
                   ["Path", row.origin.path === null ? null : shown(row.origin.path)],
-                  ["Commit", row.origin.commit === null ? null : shown(row.origin.commit.slice(0, 7)), row.origin.commit],
+                  ["Commit", row.origin.commit === null ? null : shown(row.origin.commit.slice(0, 7)), shown(row.origin.commit)],
                   template,
                 ]}
               />

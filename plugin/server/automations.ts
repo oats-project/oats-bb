@@ -5,7 +5,7 @@
 // reaches the host.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import type { automationListAnswer, rpc } from "../contract/automations.js";
+import { NO_AUTOMATIONS, type automationListAnswer, type rpc } from "../contract/automations.js";
 import { codes } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusedWith, type Core } from "./core.js";
 
@@ -14,9 +14,6 @@ export const LISTS_TTL_MS = 30_000;
 
 type ListAnswer = z.infer<typeof automationListAnswer>;
 type Lists = z.infer<(typeof rpc)["automations"]["output"]>;
-
-/** The plugin's own code for an OATS that has no automations lists (feature `automations`, automationsApi 1: OATS 0.29). */
-export const UNSUPPORTED = "OATS_NO_AUTOMATIONS";
 
 /** A refusal as the client is told it: the kernel's code and message, or the plugin's own. */
 function failed(error: unknown): ListAnswer {
@@ -44,7 +41,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const version = await core.versionOf().catch(() => null);
       const oats = version === null ? null : { version: version.version, features: version.features, automationsApi: version.apis.automationsApi ?? null };
       const supported = oats === null || (oats.features.includes("automations") && oats.automationsApi === 1);
-      const none: ListAnswer = { ok: false, code: UNSUPPORTED, message: `OATS ${oats?.version ?? ""} has no automations lists: they need OATS 0.29 or later.` };
+      const none: ListAnswer = { ok: false, code: NO_AUTOMATIONS, message: `OATS ${oats?.version ?? ""} has no automations lists: they need OATS 0.29 or later.` };
       const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
       return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, oats, schedule, trigger };
     })();

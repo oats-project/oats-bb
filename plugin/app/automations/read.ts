@@ -2,10 +2,10 @@
 // sidebar's mark share it), reread when the server says OATS changed, and once a minute while
 // something shows them: a run that fails writes no event the server watches for.
 import { useEffect, useRef } from "react";
-import { experimental_useRpcQuery as useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { experimental_useRpcQuery as useRpcQuery, useRpc } from "@get-bb/plugin-sdk/app";
 import { rpcContract } from "../../contract";
-import { onWindowReset, useRead } from "../store";
-import type { Read, Result } from "../store";
+import { attempt, onWindowReset, useRead } from "../store";
+import type { Contract, Read, Result } from "../store";
 import { FAILED_RUN_TEXT, lastRunFailed } from "./words";
 
 /** The Desktop rereads the lists for its mark at most this often; so does the sidebar's row. */
@@ -19,8 +19,9 @@ onWindowReset(() => {
   rereadAt = 0;
 });
 
-export function useAutomations(every: number = REREAD_MS): Read<Result<"automations">> & { retry(): void } {
+export function useAutomations(every: number = REREAD_MS): Read<Result<"automations">> & { retry(): void; refresh(): Promise<void> } {
   const read = useRead("automations");
+  const rpc = useRpc<Contract>();
   // The same shared copy, held for its `refetch`.
   const query = useRpcQuery({ contract: rpcContract, method: "automations", input: null });
   const refetch = useRef(query.refetch);
@@ -36,7 +37,16 @@ export function useAutomations(every: number = REREAD_MS): Read<Result<"automati
     }, every);
     return () => clearInterval(timer);
   }, [every]);
-  return read;
+  /** Asks the server to read OATS again now, then reads the lists: settles when that read did, whatever it answered. */
+  const refresh = async (): Promise<void> => {
+    try {
+      await attempt(() => rpc.call("refresh", null));
+    } catch {
+      // The lists' own read says what is wrong with the server.
+    }
+    await refetch.current();
+  };
+  return { ...read, refresh };
 }
 
 /**

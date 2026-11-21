@@ -7,10 +7,11 @@ import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
 import { codes } from "../../kernel/result";
-import { attempt, useRead } from "../store";
+import { attempt } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
 import { fileOf } from "./Detail";
+import { useAutomations } from "./read";
 import { automationsSupported } from "./version";
 import type { OatsVersion } from "./version";
 import { KINDS, View } from "./View";
@@ -61,8 +62,8 @@ function useNow(): number {
   return now;
 }
 
-export function AutomationsPage({ subPath, oats = null }: PluginNavPanelProps & { oats?: OatsVersion | null }) {
-  const read = useRead("automations");
+export function AutomationsPage({ subPath }: PluginNavPanelProps) {
+  const read = useAutomations();
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const now = useNow();
@@ -80,7 +81,7 @@ export function AutomationsPage({ subPath, oats = null }: PluginNavPanelProps & 
     }),
   ) as Record<AutomationKind, ListRead>;
   const answer = read.data?.[kind];
-  const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null, oats);
+  const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null, read.data?.oats ?? null);
 
   // A trigger's recorded state, read once per open and again when the lists are: an answer for a
   // row that is no longer the open one changes nothing.

@@ -1,7 +1,7 @@
 // Automations' verbs through the whole backend: bb's fake plugin host, the real host entry, and
 // the fake `oats` printing what the real kernel printed.
 import { afterEach, describe, expect, it } from "vitest";
-import { automationList, triggerStatus } from "../../contract/automations";
+import { automationList, host, triggerStatus } from "../../contract/automations";
 import { LISTS_TTL_MS } from "../../server/automations";
 import { startBackend, type Backend } from "../support/backend";
 
@@ -11,7 +11,7 @@ afterEach(async () => {
   backend = undefined;
 });
 
-type Lists = { at: string; hostId: string | null; schedule: { ok: boolean; list?: unknown; code?: string; message?: string }; trigger: { ok: boolean; list?: unknown; code?: string; message?: string } };
+type Lists = { at: string; hostId: string | null; oats: { version: string; features: string[]; automationsApi: number | null } | null; schedule: { ok: boolean; list?: unknown; code?: string; message?: string }; trigger: { ok: boolean; list?: unknown; code?: string; message?: string } };
 const argvs = async (running: Backend, verb: string) => (await running.fake.calls()).filter((call) => call.verb === verb).map((call) => call.argv);
 
 describe("automations", () => {
@@ -24,6 +24,24 @@ describe("automations", () => {
     expect(await argvs(backend, "schedule list")).toEqual([["schedule", "list", "--json"]]);
     expect(await argvs(backend, "trigger list")).toEqual([["trigger", "list", "--json"]]);
     expect((await backend.fake.calls()).filter((call) => call.verb.endsWith(" list")).map((call) => call.cwd)).toEqual([backend.fake.deployment, backend.fake.deployment]);
+  });
+
+  it("says what this OATS is, from the server's one version read", async () => {
+    backend = await startBackend();
+    const lists = await backend.rpc<Lists>("automations");
+    expect(lists.oats).toMatchObject({ version: "0.70.0", automationsApi: 1 });
+    expect(lists.oats!.features).toEqual(expect.arrayContaining(["automations", "automation-descriptions", "trigger-sources"]));
+  });
+
+  it("an OATS that does not list the feature is not asked for the lists", async () => {
+    const old = JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", version: "0.28.0", desktopApi: 1, scheduleApi: 2, features: ["schedule"] });
+    backend = await startBackend({ verbs: { version: { stdout: old } } });
+    const lists = await backend.rpc<Lists>("automations");
+    expect(lists.oats).toEqual({ version: "0.28.0", features: ["schedule"], automationsApi: null });
+    expect(lists.schedule).toEqual({ ok: false, code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." });
+    expect(lists.trigger).toMatchObject({ ok: false, code: "OATS_NO_AUTOMATIONS" });
+    expect(await argvs(backend, "schedule list")).toEqual([]);
+    expect(await argvs(backend, "trigger list")).toEqual([]);
   });
 
   it("one read serves every client that asks while the roster stands as it was read", async () => {
@@ -60,6 +78,14 @@ describe("automations", () => {
     const lists = await backend.rpc<Lists>("automations");
     expect(lists.trigger).toMatchObject({ ok: false, code: "OATS_BAD_ANSWER" });
     expect(lists.schedule.ok).toBe(true);
+  });
+});
+
+describe("the host verbs", () => {
+  it("are all reads: bb may retry each, so each runs under the read limit", () => {
+    const retryable = Object.entries(host).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
+    expect(retryable.sort()).toEqual(["scheduleList", "triggerList", "triggerStatus"]);
+    expect(Object.keys(host).sort()).toEqual(retryable);
   });
 });
 

@@ -8,7 +8,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { gateOf, routeOf, subPathOf } from "../../app/automations/Page";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
-import { AT } from "./handlers";
+import { AT, OATS } from "./handlers";
 import { schedules, triggers } from "./fixtures";
 
 afterEach(resetApp);
@@ -67,7 +67,7 @@ describe("the lists", () => {
 
   it("a list the kernel refused shows the kernel's code and message with Retry; the other tab still lists", async () => {
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json: jobs must be an object" }, trigger: { ok: true as const, list: triggers() } }),
     });
     const alert = await slot.findByRole("alert");
     expect(alert.textContent).toBe("E_SCHEDULE_INVALID: oats-schedules.json: jobs must be an objectRetry");
@@ -79,7 +79,7 @@ describe("the lists", () => {
   it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, without a code", async () => {
     const message = 'This bb server has 2 machines (falcon, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };
-    const slot = await page("", { automations: () => ({ at: AT, hostId: null, schedule: refused, trigger: refused }) });
+    const slot = await page("", { automations: () => ({ at: AT, hostId: null, oats: null, schedule: refused, trigger: refused }) });
     expect((await slot.findByRole("alert")).textContent).toBe(`${message}Retry`);
   });
 
@@ -96,11 +96,18 @@ describe("the lists", () => {
 describe("what cannot be shown at all (D-285)", () => {
   it("no oats on the machine: the page says the list needs the OATS CLI", async () => {
     const refused = { ok: false as const, code: "OATS_NOT_FOUND", message: "`oats` could not be run (ENOENT)" };
-    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", schedule: refused, trigger: refused }) });
+    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
     expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Schedules need the OATS CLI");
     resetApp();
-    const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", schedule: refused, trigger: refused }) });
+    const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
     expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need the OATS CLI");
+  });
+
+  it("an OATS without the automations lists, as the server answers for one", async () => {
+    const none = { ok: false as const, code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." };
+    const slot = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: { version: "0.28.0", features: ["schedule"], automationsApi: null }, schedule: none, trigger: none }) });
+    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need OATS 0.29 or laterUpdate OATS to see the workspace's triggers and this computer's own, and where each one runs.");
+    expect(slot.queryByRole("alert")).toBeNull();
   });
 
   it("an OATS without the automations lists: the page says which OATS it needs and why to update", () => {

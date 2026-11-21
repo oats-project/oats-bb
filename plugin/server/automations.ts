@@ -13,7 +13,10 @@ import { HOST_TIMEOUT, invalid, refusedWith, type Core } from "./core.js";
 export const LISTS_TTL_MS = 30_000;
 
 type ListAnswer = z.infer<typeof automationListAnswer>;
-type Lists = { at: string; hostId: string | null; schedule: ListAnswer; trigger: ListAnswer };
+type Lists = z.infer<(typeof rpc)["automations"]["output"]>;
+
+/** The plugin's own code for an OATS that has no automations lists (feature `automations`, automationsApi 1: OATS 0.29). */
+export const UNSUPPORTED = "OATS_NO_AUTOMATIONS";
 
 /** A refusal as the client is told it: the kernel's code and message, or the plugin's own. */
 function failed(error: unknown): ListAnswer {
@@ -36,12 +39,15 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   const lists = async (): Promise<Lists> => {
     const roster = (await core.clientSnapshot()).at;
     if (held !== null && held.roster === roster && Date.now() - held.at < LISTS_TTL_MS) return held.value;
-    const value = Promise.all([read("scheduleList"), read("triggerList")]).then(([schedule, trigger]) => ({
-      at: new Date().toISOString(),
-      hostId: core.target()?.hostId ?? null,
-      schedule,
-      trigger,
-    }));
+    const value = (async (): Promise<Lists> => {
+      // The kernel's own word on what it can do; when it cannot be asked, the lists' refusals say why.
+      const version = await core.versionOf().catch(() => null);
+      const oats = version === null ? null : { version: version.version, features: version.features, automationsApi: version.apis.automationsApi ?? null };
+      const supported = oats === null || (oats.features.includes("automations") && oats.automationsApi === 1);
+      const none: ListAnswer = { ok: false, code: UNSUPPORTED, message: `OATS ${oats?.version ?? ""} has no automations lists: they need OATS 0.29 or later.` };
+      const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
+      return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, oats, schedule, trigger };
+    })();
     held = { at: Date.now(), roster, value };
     return value;
   };

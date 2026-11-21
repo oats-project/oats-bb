@@ -214,11 +214,19 @@ export const automationId = z.string().regex(/^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63
 export const rpc = defineRpcContract({
   /**
    * Both lists, read together: each tab counts its rows, and one that fails does not hide the
-   * other. `hostId` is the bb machine that holds the deployment (a row's file opens there).
+   * other. `hostId` is the bb machine that holds the deployment (a row's file opens there). An
+   * OATS that does not list the feature `automations` is not asked for them.
    */
   automations: {
     input: z.null(),
-    output: z.object({ at: z.string(), hostId: z.string().nullable(), schedule: automationListAnswer, trigger: automationListAnswer }),
+    output: z.object({
+      at: z.string(),
+      hostId: z.string().nullable(),
+      /** what this OATS says of itself (`oats version --json`); null when it could not be asked */
+      oats: z.object({ version: z.string(), features: z.array(z.string()), automationsApi: z.number().nullable() }).nullable(),
+      schedule: automationListAnswer,
+      trigger: automationListAnswer,
+    }),
   },
   /** One trigger's recorded state. The id must be a trigger of the current list. */
   triggerStatus: { input: z.object({ id: automationId }).strict(), output: triggerStatus },

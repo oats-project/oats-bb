@@ -6,13 +6,18 @@ import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { clearHomeProjectEnv } from "./project-env.mjs";
-import { liveInHome, readEndpoint } from "./threads.mjs";
+import { isSettled, liveInHome, readEndpoint } from "./threads.mjs";
 
 // The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
 // settle is the grace, and the calls around it stay inside the 20 s.
 const MAX_GRACE_SECONDS = 300;
 const DEFAULT_GRACE_SECONDS = 10;
 const ISO_UTC = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,9})?Z$/;
+
+// The kernel's word, in the stop input's `reason`, for a stop made by the host's shutdown
+// (`oats host run`), which a resume undoes. Exactly this: any other value, and none, is a
+// stop that stays.
+const HOST_STOP = "host";
 
 const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
 
@@ -37,11 +42,28 @@ const warnOnStderr = (message) => { process.stderr.write(`oats bb: warning: ${bo
  *  thread's agent again at the next message to it (bb's composer, `bb thread tell`), and
  *  refuses every message to an archived one. → null, or what to say where bb did not
  *  archive it: the thread is stopped all the same, so that never fails the stop. A thread
- *  bb no longer has, or had archived already, is as good as archived. */
+ *  bb no longer has, or had archived already, is as good as archived.
+ *  What to say is one line, the thread and the remedy before bb's own words: those may be
+ *  long, or several lines, and a cut must fall in them. */
 async function archiveStopped(bb, threadId) {
   const answer = await bb.archive(threadId);
   if (answer.ok || answer.code === "thread_not_found") return null;
-  return `bb thread ${threadId} is stopped, and bb did not archive it (${answer.message}): a message to it in bb starts its agent again. Archive it in bb (bb thread archive ${threadId})`;
+  return `bb thread ${threadId} is stopped, and bb did not archive it: a message to it in bb starts its agent again. Archive it in bb (bb thread archive ${threadId}). bb said: ${String(answer.message).replace(/\s+/g, " ").trim()}`;
+}
+
+/** The stop's archive, for a thread confirmStop has just seen settled: archive it, then
+ *  look once more. A message typed in bb between that last look and the archive starts a
+ *  turn, and an archived thread takes no further one: so a thread found in a turn, or
+ *  with work in line, after its archive goes through the whole rule again (confirmStop
+ *  stops an archived thread like any other), and a stop never answers "stopped" over an
+ *  agent that runs in a thread nothing reads any more. → archiveStopped's answer. */
+async function archiveAndConfirm(bb, threadId, options) {
+  const refused = await archiveStopped(bb, threadId);
+  if (refused !== null) return refused;
+  const after = await bb.thread(threadId);
+  if (after === null || after.deletedAt) return null;
+  if (!isSettled(after) || (await bb.queue(threadId)).length > 0) await confirmStop(bb, threadId, options);
+  return null;
 }
 
 /** → { stopped: true } once nothing of the thread can run: bb acknowledged the stop, shows
@@ -88,7 +110,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
         if (seen === "gone" || !(Number.isFinite(sentAt) && typeof thread.createdAt === "number" && thread.createdAt >= sentAt)) continue;
         // Where bb does not archive it, the thread is still stopped: a warning, and the
         // next launch names it.
-        const refused = await archiveStopped(bb, thread.id);
+        const refused = await archiveAndConfirm(bb, thread.id, options);
         if (refused !== null) unarchived.push(refused);
       }
       await stopArchived(bb, archived, relistOf(bb, projects.map((project) => project.id)), options);
@@ -103,15 +125,11 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     // thread is stopped, and shows nothing that says so. (A thread bb no longer has is
     // not asked for; nor is the thread of a home stopped with the host, which the kernel
     // resumes by an input to it.)
-    const refused = seen === "gone" || withHost(input) ? null : await archiveStopped(bb, endpoint.threadId);
+    const refused = seen === "gone" || input.reason === HOST_STOP ? null : await archiveAndConfirm(bb, endpoint.threadId, options);
     if (refused !== null) warn(refused);
     return { stopped: true };
   } catch (error) { throw failed(error); }
 }
-
-/** Whether the kernel says this stop is the host's (`oats host run`'s shutdown), which a
- *  resume undoes: exactly `reason: "host"`. Any other value, and none, is a stop that stays. */
-export const withHost = (input) => isObject(input) && input.reason === "host";
 
 /** The seconds to wait for bb to settle after `bb thread stop`. */
 export function graceOf(input) {
@@ -149,8 +167,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
         left.push(thread.id);
         continue;
       }
-      const answer = await bb.archive(thread.id);
-      (answer.ok || answer.code === "thread_not_found" ? archived : left).push(thread.id);
+      ((await archiveStopped(bb, thread.id)) === null ? archived : left).push(thread.id);
     }
     // The home's threads archived before now (in bb's UI, or by an earlier start) may
     // hold a process too: all are stopped. The hook is told no thread to count from.

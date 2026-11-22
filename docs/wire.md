@@ -109,11 +109,17 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   an endpoint archives that thread; a stop with `endpoint: null` archives the threads it
   takes to be the failed launch's (below), never one that may be a person's. A thread bb
   no longer has is not asked for, and one bb had archived already is left as it is.
+  - The thread is looked at once more after its archive (`bb thread show`, `bb thread
+    queue list`): a message typed in bb between the stop's last look and the archive
+    starts a turn, and nothing reads an archived thread afterwards. One found in a turn,
+    or with work in line, goes through the stop's whole rule again, within the same
+    grace; a stop never answers `stopped` over an agent that runs in an archived thread.
   - Nothing of the conversation is lost: it stays in bb, readable, as an archived thread
     (bb's thread list under Archived; `bb thread list --archived --project <id>`).
   - An archive bb refuses, or does not answer for, fails no stop: the thread is stopped,
     the answer is `{stopped: true}`, and the provider writes one warning line on its
-    standard error, naming the thread and the remedy (`bb thread archive <id>`). The wire
+    standard error, naming the thread and the remedy (`bb thread archive <id>`) before
+    bb's own words (made one line, and cut where they are long). The wire
     has no other place for it: a stop's result is exactly `{stopped: true}`, and the
     kernel does not read a provider's standard error. Such a thread stays live in bb: a
     message to it there starts its agent again, and the next launch archives it (it is the
@@ -424,3 +430,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   write there, and the provider keeps nothing of its own there), so bb is asked for every
   home, and a bb that cannot be asked is a warning for every home, a tmux home too;
   threads left that way are what readiness reports as `session-provider-orphaned`.
+  **A limit: a retired agent whose home was kept (`oats retire --keep-dir`, or a retire
+  that ended quarantined) can be started again from bb:** its archived thread can be
+  unarchived in bb, and a message then starts the harness in the kept home with NO OATS
+  around it: no status row, no hooks OATS runs for it, no stop by OATS. Where its aweb
+  identity was not released (a team leave waiting for its controller, a retained seat, an
+  alias held), it can send mail as the retired agent. Retire bb agents the ordinary way,
+  which removes the home: then nothing can start.

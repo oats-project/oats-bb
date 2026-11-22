@@ -46,6 +46,9 @@ const arm = (call) => sh("cat > pi-mock-next-cmd", { input: call });
 const turns = async () => (await piRequests()).filter((request) => request.url.includes("chat/completions") && request.tools.length > 0);
 /** How many turns a person's message opened: it is the request's last message. */
 const landed = async (marker) => (await turns()).filter((request) => request.lastRole === "user" && request.lastText.includes(marker)).length;
+/** Whether the turn that `marker` opened was sent with `earlier` among its conversation's
+ *  earlier messages: the same conversation, not only the same thread id. */
+const carried = async (marker, earlier) => (await turns()).some((request) => request.lastRole === "user" && request.lastText.includes(marker) && request.users.some((text) => text.includes(earlier)));
 const idle = (id, timeoutMs = 120_000) => waitFor(`${id} to be idle`, async () => (await threadStatus(id)) === "idle", { timeoutMs });
 
 /** A fresh home in the container, as the kernel leaves one for a pi agent: TASK.md, its
@@ -329,6 +332,7 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   await waitFor("the restarted thread's turn", async () => (await landed("MARK-P6-RESTART")) === 1, { timeoutMs: 90_000 });
   await idle(endpoint.threadId);
   assert.equal(await landed("MARK-P6-RESTART"), 1);
+  assert.equal(await carried("MARK-P6-RESTART", "MARK-P6-IDLE"), true, "the restarted turn carries the conversation from before the stop");
   assert.ok((await pisIn(home)) >= 1, "the thread's pi runs again");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.present, true);
   assert.equal(await landed("MARK-P6-STOPPED"), 0);
@@ -345,6 +349,7 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   await waitFor("the resumed thread's turn", async () => (await landed("MARK-P6-HOST-RESUMED")) === 1, { timeoutMs: 90_000 });
   await idle(endpoint.threadId);
   assert.equal(await landed("MARK-P6-HOST-RESUMED"), 1);
+  assert.equal(await carried("MARK-P6-HOST-RESUMED", "MARK-P6-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await pisIn(home)) >= 1, "the thread's pi runs again");
 });
 

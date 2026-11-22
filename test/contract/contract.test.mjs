@@ -78,6 +78,12 @@ async function modelRequests() {
 }
 /** How many model requests introduced the text: it is in the request's last message. */
 const landed = async (marker) => (await modelRequests()).filter((r) => r.lastText.includes(marker)).length;
+/** Whether the turn that `marker` opened was sent with `earlier` in its conversation: the
+ *  whole request, as the mock kept it. The same conversation, not only the same thread id. */
+const carried = async (marker, earlier) => {
+  const [request] = (await modelRequests()).filter((r) => r.lastText.includes(marker));
+  return request !== undefined && (await sh(`grep -c '${earlier}' mock-req-${request.n}.json || true`)).trim() !== "0";
+};
 const armTool = (command) => sh("cat > mock-next-cmd", { input: command });
 
 /** A fresh home in the container, as the kernel leaves one: TASK.md, and Claude's project
@@ -318,6 +324,7 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null);
   await tell("T2-UNARCHIVED marker");
   await once("T2-UNARCHIVED");
+  assert.equal(await carried("T2-UNARCHIVED", "T2-IDLE"), true, "the restarted turn carries the conversation from before the stop");
   assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.present, true);
   assert.equal(await landed("T2-STOPPED"), 0);
@@ -332,6 +339,7 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   assert.deepEqual({ present: hostStopped.result.present, state: hostStopped.result.state, running: hostStopped.result.running }, { present: true, state: "unknown", running: null });
   await tell("T2-HOST-RESUMED marker");
   await once("T2-HOST-RESUMED");
+  assert.equal(await carried("T2-HOST-RESUMED", "T2-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
 
   // mid-tool: a turn that runs an 8 s tool; the tell is steered into the turn

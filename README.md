@@ -164,6 +164,15 @@ hundred, by the machine's processors and by the command) makes the stop fail, an
 many, and the remedy. Remove old archived threads of that project in bb: for each,
 `bb thread stop <id>`, then `bb thread delete --yes <id>`.
 
+> **A known limit: a retired agent whose home was kept can be started again from bb.**
+> A retired agent whose home was kept (`oats retire --keep-dir`, or a retire that ended
+> quarantined) can be started again from bb: its archived thread can be unarchived in bb,
+> and a message then starts the harness in the kept home with NO OATS around it: no
+> status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
+> released (a team leave waiting for its controller, a retained seat, an alias held), it
+> can send mail as the retired agent. Retire bb agents the ordinary way, which removes
+> the home: then nothing can start.
+
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself, and the provider's
 stop archives the thread, so the provider reads it missing from then on.

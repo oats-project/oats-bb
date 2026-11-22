@@ -36,7 +36,7 @@ instance's name as words).
 | The thread's row, an agent that waits with no claim of the kernel's | (no such case: the Desktop has no session of its own) | **bb shows its question in this thread** | The question is bb's own pending interaction; the kernel recorded no claim. |
 | The thread's row, an agent whose session ended in a shell | "Its session ended" in the instance panel | **Failed** · **Its session ended**, with Restart | The Desktop's words; the state's word beside them is the plugin's (first table). |
 | The thread's row, an agent the kernel cannot reach | the kernel's message | **Unreachable** · **OATS cannot reach its session**, with Retry; the kernel's message (often a URL or an error's code) under **Details**, after "OATS says:" | A person's words on the line; the kernel's text one press away (the standard, section 2). |
-| A row of an agent with no bb thread | the row is the instance, whatever runs it | "<state> · <soul> · **runs in tmux**", or "… · **its bb thread is gone**" | In bb an agent is a thread; one without a thread is said to be so, and opens its own page. |
+| A row of an agent with no bb thread | the row is the instance, whatever runs it | "<state> · <soul> · **runs in tmux**"; for one whose thread bb has archived or deleted, what happened ("Outside OATS", below). "its bb thread is gone" is said of none. | In bb an agent is a thread; one without a thread is said to be so, and opens its own page. |
 | Nobody waits | "Nothing needs you." | the same | none. |
 | The act that makes an agent | **New agent** | the same, a button at the roster's foot | none. |
 | The plugin's pages in the sidebar | one **Workspace** row (a page with tabs) | the heading **Workspace** over a row per page | bb's pages are routes, not tabs of one page; the Workspace page with its tabs is a later piece. |
@@ -53,6 +53,22 @@ A time is said only where the kernel recorded one; the plugin invents none.
 | Idle | none | the kernel records none | |
 | Failed | none; the reason in its place: "Its session ended" | the kernel records none (a session that died wrote nothing) | |
 | Unreachable | none; the reason in its place: "OATS cannot reach its session", with the kernel's own message under Details | the kernel records none | |
+
+## Outside OATS: an agent that something happened to outside OATS
+
+The Desktop has no such states: it runs the agent's session itself. Each sentence rests on one
+fact of the kernel's row and one answer of bb's (`app/outside/say.ts`, `words.ts`). The state's
+word comes first, then one sentence with one remedy.
+
+| What happened | The thread's line says | The sidebar's row says, after the soul | The fact it rests on |
+|---|---|---|---|
+| OATS stopped it, and bb has its thread archived | **Stopped** · **Its conversation is archived in bb**, with Start | **its conversation is archived in bb**; the row opens the archived thread | the row: `runtimeState: "stopped"`, `sessionEnd` not `lost`; bb: the thread of `session.threadId` has `archivedAt` set. Start makes a new thread; bb shows the archived one to read. |
+| OATS stopped it, and its thread was deleted in bb | **Stopped** · **Its conversation was deleted in bb. Start it from OATS for a new one.** | **its conversation was deleted in bb** | the same row; bb has no thread of that id, active or archived. |
+| OATS recorded it stopped and a harness runs in it | under the recorded state, the notice **Running outside OATS** with the kernel's own message (for example "a harness runs in dev-a on bb, and OATS recorded this instance stopped: stop it with `oats instance stop dev-a`, or start it from OATS"), its code `running-outside-oats`, Stop and Start | **running outside OATS**, and a mark named "Running outside OATS" | the row's `outsideOats`, where the kernel lists `provider-outside-oats`. The title is the plugin's (a notice has a title); the sentence is the kernel's, unchanged. |
+| OATS lost its session, and bb has the thread archived | **Archived in bb** · **OATS lost its session, and its process still runs. Stop it, then start it from OATS.**, with Stop | **Archived in bb** in the state's place, then **OATS lost its session** | the row: `runtimeState: "stopped"`, `sessionEnd: "lost"`; bb: `archivedAt` set. bb's Archive never touches the harness: the process stays loaded until OATS stops it. The word in the state's place is what happened, not "Stopped": its process runs. |
+| OATS lost its session, and bb has no such thread | **Deleted in bb** · **Its conversation is gone. Start it from OATS for a new one.**, with Start | **Deleted in bb**, then **its conversation is gone** | the same row; bb has no thread of that id. bb's Delete ends the harness. |
+| Its session ended (failed), on an open thread | **Failed** · **Its session ended. Restart it, or send a message here.**, with Restart | **Failed** (the roster's) | the row: `runtimeState: "shell"`; the thread is open. A message in bb's composer starts it again and the next status read sees it running: no warning. "Its session ended" is the Desktop's. |
+| A row the tree draws on no thread, in any other state | (no thread to draw a line on) | where its thread is: **its conversation is archived in bb**, **its conversation was deleted in bb**, **it has no bb thread**, **its bb thread is not shown** (hidden in bb, or another row's) | bb's answer alone. Nothing until bb has answered. |
 
 ## The instance panel
 

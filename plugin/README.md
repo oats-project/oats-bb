@@ -90,9 +90,58 @@ Stop an OATS agent with **Stop agent (OATS)** in the thread's menu: it stops the
 OATS (the kernel's plan, then one confirmation), so a stopped agent stays stopped. bb's own
 composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts on its
 own when one of them is used: an agent whose thread was archived or deleted in bb stays in the
-roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its soul's
-page says "thread missing", with Start and Retire. Nothing is retired because
+roster, as a row that says which of the two happened and what to do ([Outside OATS](#outside-oats)),
+and its soul's page says "thread missing", with Start and Retire. Nothing is retired because
 a thread was deleted.
+
+## Outside OATS
+
+bb's own acts reach an OATS agent without OATS: a message typed in bb's composer starts an agent
+OATS stopped, bb's Archive takes a running agent's thread away and leaves its process running, and
+bb's Delete ends it. The plugin cannot hide those acts. It says what happened, on the sidebar's
+row, on the thread's own line and on the home's card, with the one act that mends it; the state's
+word comes first.
+
+| What OATS says | What bb says of its thread | The row and the thread's line say | Acts |
+|---|---|---|---|
+| stopped | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | Start |
+| stopped | open | the roster's own line | Start |
+| stopped | deleted | "Stopped · Its conversation was deleted in bb. Start it from OATS for a new one." | Start |
+| recorded stopped, with the kernel's `outsideOats` | any | under the state OATS recorded, a notice in the warning tone: "Running outside OATS", the kernel's own message, its code. On the sidebar's row: "running outside OATS" and a warning mark. The home's card of such an agent (bb has a question open for it) carries the same notice. | Stop, Start |
+| its session lost | archived | "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS." | Stop (then Start) |
+| its session lost | deleted | "Deleted in bb · Its conversation is gone. Start it from OATS for a new one." | Start |
+| failed (its session ended) | open | "Failed · Its session ended. Restart it, or send a message here." No warning: status sees a message that starts it. | Restart |
+| unreachable | any | what status says and its reason; nothing about a message | Retry |
+
+What it reads, and nothing else (nothing is derived from words): the agent's status row
+(`running`, `runtimeState`, `session.threadId`, and from the raw row `sessionEnd`, which is `lost`
+for a session OATS did not stop, and `outsideOats`), and bb's own answer for the row's thread id.
+bb's sidebar lists its active threads only, so an archived thread and a deleted one look the same
+there: the plugin asks bb by id for the archived ones (`threads.list`, one request for all the
+rows that need it, asked again at each roster read and each minute), and a thread bb has neither
+active nor archived is deleted. Archived is told from deleted by bb's answer, never by the
+kernel's message. Until bb has answered, a row claims nothing of its thread.
+
+`outsideOats` is read only where the kernel lists the feature `provider-outside-oats` (OATS
+0.70.5; `oats version --json`), only in the kernel's exact shape (`code: "running-outside-oats"`,
+`backend`, a one-line `message`), and only on a row OATS recorded stopped. On an OATS without the
+feature nothing is said of it: its absence there says nothing. The row's own state stays what OATS
+recorded ("Stopped"); the report stands under it. Both of its acts go through OATS: Stop asks the
+provider to stop the session again, Start stops it and launches a new one.
+
+The words are in `app/outside/words.ts`, with the fact each rests on in `WORDS.md`. The feature is
+one pure function (`said`, `app/outside/say.ts`: a row and bb's answer in, what to say out), a hook
+that gives it its two inputs (`useOutside(oats)`), and three drawings (`OutsideWarning`: the
+notice; `OutsideMark`: the row's mark; `OutsideThreadRow`: the thread's own row on a thread bb has
+archived, which the roster draws on no thread). It registers no slot: the roster's row and line
+(`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the home's card (`app/home/Home.tsx`) call it.
+Its one read, `outsideFacts`, starts no process: the server answers the two facts of each row from
+the one status read it keeps, and the feature from the one version read.
+
+Not there yet: the line of a thread that belonged to a RETIRED agent (the roster no longer names
+the instance a thread was); the row of `outsideOats` recorded live, and the proof against a real
+kernel at 0.70.5 (they come with the kernel floor: `test/fixtures/outside/README.md` says what is
+shaped meanwhile).
 
 ## The instance panel
 
@@ -281,7 +330,8 @@ runs, and `record/` there makes the recording again (its README says what was ar
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations` and `panel` (the instance panel). Each has one module, or one directory, in
+retire), `automations`, `panel` (the instance panel) and `outside` (what is said when something
+happened to an agent outside OATS; no slot and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
 
 | Layer | A feature's own | Composed by | Shared by all |

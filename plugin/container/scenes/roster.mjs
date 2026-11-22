@@ -179,16 +179,16 @@ export default [
       const failed = threads.get("thr_harvest");
       await page.goto(`/projects/${failed.projectId}/threads/${failed.id}`);
       const ended = await statusOf(page, "error");
-      check(ended !== null && ended.line === "Failed · Its session ended" && ended.act === "Restart", `${at} the thread of an agent whose session fell back to a shell says "Failed", "Its session ended", with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
+      check(ended !== null && ended.line === "Failed · Its session ended. Restart it, or send a message here." && ended.act === "Restart", `${at} the thread of an agent whose session fell back to a shell says "Failed", that its session ended and what brings it back (the outside feature's sentence), with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
       await page.shot(`a16-${viewport.name}-thread-failed`, { targets: true });
 
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const factsOf = (id) => `(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
       const words = await page.until(`(() => { const rows = [${factsOf(unreachable.id)}, ${factsOf(failed.id)}]; return rows[0].startsWith("Unreachable · ") && rows[1].startsWith("Failed · ") ? JSON.stringify(rows) : ""; })()`, 30);
       check(Boolean(words), `${at} in the sidebar the two rows say "Unreachable" and "Failed", each beside its mark`, words ?? (await page.evaluate(`JSON.stringify([${factsOf(unreachable.id)}, ${factsOf(failed.id)}])`)));
-      // And the agent whose bb thread is gone stays in the roster (S3).
+      // And the agent whose bb thread is gone stays in the roster (S3): bb has no thread of its id, and the row says so (the outside feature's words).
       const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
-      check(gone === "Stopped · oats-expert · its bb thread is gone", `${at} the agent whose bb thread is gone stays in the roster, and says so`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
+      check(gone === "Stopped · oats-expert · its conversation was deleted in bb", `${at} the agent whose bb thread is gone stays in the roster, and says that its conversation was deleted in bb`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
       // At 1280 the image of the failed thread already shows the sidebar's rows; at 390 they are in bb's drawer.
       if (viewport.mobile) await page.shot(`a16-${viewport.name}-states`);
     },

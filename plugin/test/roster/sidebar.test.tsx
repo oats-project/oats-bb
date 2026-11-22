@@ -74,11 +74,12 @@ test("two failures are two words: Failed for a session that ended, Unreachable f
   expect(facts("thr_digest")).toBe("Unreachable · oats-expert");
 });
 
-test("an agent with no bb thread stays in the roster: one that runs in tmux, and one whose thread is gone; each opens its own page", async () => {
+test("an agent with no bb thread stays in the roster: one that runs in tmux, and one whose thread bb does not list; each opens its own page", async () => {
   const { slot, navigated } = await sidebar({}, null, { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_digest") });
   const rows = await slot.findAllByTestId("oats-agent-row-threadless");
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
-    ["weekly-digest-helper", "Stopped · oats-expert · its bb thread is gone"],
+    // Where its thread is (archived in bb, or deleted) is bb's own answer, which the outside feature asks and says (test/outside/places.test.tsx); bb says nothing here.
+    ["weekly-digest-helper", "Stopped · oats-expert"],
     ["kernel-fix-developer", "Working · oats-developer · runs in tmux"],
   ]);
   expect(rows[1]!.textContent).toContain("Kernel fix developer");

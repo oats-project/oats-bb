@@ -15,6 +15,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
+import { lineActs, OutsideThreadRow, OutsideWarning, useOutside } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
@@ -55,6 +56,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const pluginId = usePluginId();
   const soulsShown = usePageShown("souls");
   const now = useNow();
+  const outside = useOutside(oats);
   // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.
@@ -81,7 +83,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     );
   }
   const node = oats.nodeByThread.get(threadId);
-  if (node === undefined) return null; // not an OATS agent: take no space
+  // Not an agent the roster draws on this thread: nothing, unless it is the archived thread of one (the outside feature's row).
+  if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
   const read = agentStatus(agent, node.thread, now);
@@ -119,6 +122,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // The kernel has since refused this agent as one it does not know: the row says that, with no act,
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
+  // What happened to it outside OATS, if anything (app/outside): its sentence and its acts take the line's, and the kernel's report stands under it.
+  const said = gone ? null : outside.of(agent);
+  const saidActs = lineActs(said, agent.instance, held);
 
   // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
   // the act that applies (B2): the line's height does not change with the state.
@@ -136,10 +142,10 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         <StatusLine
           state={status.state}
           since={status.since}
-          detail={status.detail}
+          detail={said?.sentence ?? status.detail}
           action={
             <>
-              {act}
+              {saidActs === undefined ? act : saidActs}
               {panelButton}
             </>
           }
@@ -147,6 +153,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       )}
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
       {gone ? null : <KernelSays text={status.kernel} />}
+      <OutsideWarning said={said} instance={agent.instance} held={held} />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">

@@ -20,6 +20,8 @@ import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
+import { OutsideMark, useOutside } from "../outside";
+import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
@@ -75,6 +77,7 @@ function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen
 export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
   const now = useNow();
+  const outside = useOutside(oats);
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
@@ -132,6 +135,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
+      // What happened to it outside OATS (app/outside): a few words after its soul, and the mark of the kernel's report.
+      const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
       return [
         threadRow(
           thread,
@@ -140,7 +145,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, [shown(oats.soulOf(node.agent)), said?.note].filter(Boolean).join(" · "))}
+            {said?.warning ? <OutsideMark /> : null}
           </>,
         ),
         ...agentRows(node.children),
@@ -148,13 +154,17 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     });
 
   /**
-   * An agent OATS has that bb has no thread for: it runs in tmux, or its bb thread is gone. It stays
-   * in the roster, with what it is in words, and opens its own page (its soul's, where no feature
-   * gives agents a page), where its acts are.
+   * An agent OATS has that the tree draws on no bb thread: it runs in tmux, or bb has its thread
+   * archived, deleted or hidden. It stays in the roster, with what it is in words, and opens its own
+   * page (its soul's, where no feature gives agents a page), where its acts are; one whose
+   * conversation bb keeps archived opens that thread, to read it. `said` is what the outside
+   * feature says of it (app/outside): where its thread is, and what happened to it.
    */
-  const threadlessRow = (agent: Agent, where: string) => {
+  const threadlessRow = (agent: Agent, where: string | null, said: Said | null = null) => {
     const status = agentStatus(agent, null, now);
-    const drawn = rowState(status, gone.has(agent.instance));
+    const isGone = gone.has(agent.instance);
+    const own = rowState(status, isGone);
+    const drawn = isGone || said?.state == null ? own : { state: said.state.mark, word: said.state.word };
     const name = agentName(agent.instance);
     return (
       <li key={agent.instance}>
@@ -165,13 +175,16 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           title={shown(agent.instance)}
           className={`${ROW} w-full pl-2 text-left`}
           onClick={() => {
+            // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
+            if (said?.archived === true && agent.threadId !== null) navigate.toThread(agent.threadId);
             // With no page for one agent (no feature names one): its soul's page, where that page is shown.
-            if (!openAgentPage(navigate, agent.instance) && pagesNow.has("souls")) openSoul(navigate, oats.soulOf(agent));
+            else if (!openAgentPage(navigate, agent.instance) && pagesNow.has("souls")) openSoul(navigate, oats.soulOf(agent));
             onNavigate();
           }}
         >
           <StateMark state={drawn.state} hidden />
-          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+          {lines(name, status.state === "needs-you", drawn.word, [shown(oats.soulOf(agent)), where].filter(Boolean).join(" · "))}
+          {said?.warning ? <OutsideMark /> : null}
         </button>
       </li>
     );
@@ -241,7 +254,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
           {agentRows(view.roots)}
-          {view.detached.map((agent) => threadlessRow(agent, "its bb thread is gone"))}
+          {view.detached.map((agent) => {
+            const said = outside.of(agent);
+            return threadlessRow(agent, said?.note ?? null, said);
+          })}
           {view.elsewhere.map((agent) => threadlessRow(agent, "runs in tmux"))}
         </ul>
       )}

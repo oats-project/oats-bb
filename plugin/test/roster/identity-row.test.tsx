@@ -111,7 +111,7 @@ test("a stopped agent says Stopped and offers Start, through OATS; one whose ses
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestartInstance panel");
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session ended. Restart it, or send a message here.RestartInstance panel"); // the sentence of a failed agent on an open thread is the outside feature's (app/outside)
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // A person's words on the line; what the kernel said is one press away, under Details, never the line's words.

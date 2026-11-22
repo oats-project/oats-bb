@@ -112,8 +112,18 @@ open, a confirmation before its act, in progress, done, refused and with another
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
   ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "Its session
-  ended", Restart); and the agent whose bb thread is gone, which stays in the roster and says so.
+  ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
+  roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
+- **OUT** (`scenes/outside.mjs`, a stage of its own) every row of the table of "Outside OATS"
+  (`../README.md`) in one roster, on the sidebar's rows and on each thread's line, and the home's
+  card: stopped with its thread archived, stopped on an open thread, the kernel's `outsideOats`, a
+  session lost with its thread archived and with its thread deleted, failed, unreachable. What bb
+  says of a thread is true in bb: the stage archives the threads it says are archived (and
+  unarchives them when it ends), and the deleted one is an id bb has no thread of. bb's question
+  on the thread of the agent OATS recorded stopped is a real one (the mock model asks it), answered
+  when its scene ends. One scene opens an archived thread from its row and asserts what bb 0.50.1
+  itself shows there: the conversation, no composer, "Thread is archived" and its own Unarchive.
 
 **The theme** is bb's own appearance choice, not the browser's colour scheme. bb 0.50.1 keeps it in
 the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: what its Settings,

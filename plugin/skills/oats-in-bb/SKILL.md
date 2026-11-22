@@ -50,6 +50,12 @@ agents, their homes, identities and mail are OATS's and aweb's.
   Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
+- When something happened to an agent outside OATS, its row and its thread's line say what and
+  what to do: "Its conversation is archived in bb" (a stopped agent: Start makes a new thread, and
+  its row opens the old one to read); "Archived in bb" (its thread was archived while it ran: its
+  process still runs; Stop it, then Start it); "Deleted in bb" (Start it for a new thread);
+  "Running outside OATS" in a warning (OATS recorded it stopped and it runs, because a message was
+  sent in its thread: Stop or Start it through OATS). Never answer such an agent in bb's composer.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.
   "Idle" means the kernel does not say the agent is working: it may be waiting or done.
 

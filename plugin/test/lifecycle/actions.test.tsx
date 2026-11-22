@@ -168,7 +168,7 @@ test("Stop shows the kernel's plan; Confirm calls stopPlan then stopApply with t
   expect(slot.queryByRole("dialog")).toBeNull();
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  expect(dialog.textContent).toContain("Stop redesign-ui-lead?");
+  expect(dialog.textContent).toContain("Stop Redesign ui lead?");
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Stops the bb thread thr_redesignKeeps the home and its identity"));
   expect(calls(slot, "stopPlan", "stopApply").map((call) => call.method)).toEqual(["stopPlan"]); // asked once, nothing applied
 
@@ -276,7 +276,7 @@ test("Retire shows the kernel's plan and applies it with its revision", async ()
   });
   expect(label("retire")).toBe("Retire agent (OATS)");
   await pick("retire");
-  expect((await slot.findByRole("dialog")).textContent).toContain("Retire weekly-digest-helper?");
+  expect((await slot.findByRole("dialog")).textContent).toContain("Retire Weekly digest helper?");
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the homeKeeps the branch agents/weekly-digest-helper"));
   fireEvent.click(slot.getByTestId("oats-plan-confirm"));
   await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
@@ -318,7 +318,7 @@ test("a Start that fails while a plan dialog is open does not replace it: the fa
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the home"));
   fail(new Error("E_SESSION_START_FAILED: the harness did not come up"));
   await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire weekly-digest-helper?"); // still the plan
+  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?"); // still the plan
   expect(slot.queryByRole("alert")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-plan-cancel"));
   expect((await slot.findByRole("alert")).textContent).toBe("E_SESSION_START_FAILED: the harness did not come up");
@@ -337,7 +337,7 @@ test("a Start that succeeds after the person opened a plan dialog leaves their s
   await slot.findByRole("dialog");
   done({ threadId: "thr_digest_2" });
   await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire weekly-digest-helper?");
+  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?");
   expect(slot.inspection.navigateCalls).toEqual([]);
 });
 
@@ -377,8 +377,8 @@ test("the confirmation names the agent from the kernel's plan, not from the row 
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => ({ revision: "r1", lines: ["Stop design-lead-2: running"], instance: "design-lead-2" }) });
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop design-lead-2?"));
-  expect(dialog.textContent).not.toContain("redesign-ui-lead?");
+  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Design lead 2?"));
+  expect(dialog.textContent).not.toContain("Redesign ui lead?");
 });
 
 test("until the plan is read the confirmation names no agent", async () => {
@@ -389,7 +389,7 @@ test("until the plan is read the confirmation names no agent", async () => {
   const dialog = await slot.findByRole("dialog");
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop an agent");
   release();
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop redesign-ui-lead?"));
+  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?"));
 });
 
 test("an agent the kernel no longer knows: its refusal is a notice in the confirmation, nothing can be confirmed, and its row says so until the next roster", async () => {
@@ -401,7 +401,7 @@ test("an agent the kernel no longer knows: its refusal is a notice in the confir
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
   const notice = await within(dialog).findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("redesign-ui-lead is not in OATS any more");
+  expect(notice.querySelector("h3")!.textContent).toBe("Redesign ui lead is not in OATS any more");
   expect(notice.textContent).toContain("Nothing was changed.");
   expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
   expect((within(dialog).getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(true);

@@ -48,7 +48,7 @@ test("a row is two lines: its name, then its state in a word and its soul; the m
   const facts = (id: string) => within(row(id)).getByTestId("oats-row-facts").textContent;
   const mark = (id: string) => row(id).querySelector("[data-mark]")!;
 
-  expect(row("thr_release").textContent).toContain("Release 0.70");
+  expect(row("thr_release").textContent).toContain("Release 070 maintainer"); // the instance name as words, never bb's title for the thread (R1)
   expect(facts("thr_release")).toBe("Needs you · oats-maintainer");
   expect(facts("thr_ci")).toBe("Needs you · oats-developer"); // a claim, and a bb pending interaction
   expect(facts("thr_redesign")).toBe("Working · oats-product-expert");

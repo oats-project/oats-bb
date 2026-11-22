@@ -2,6 +2,7 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { agentName } from "../ui/words";
 import {
   experimental_useAppPanel as useAppPanel,
   experimental_usePluginId as usePluginId,
@@ -130,7 +131,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         {agent.parent !== null ? (
           <RowFact label="Under" testId="oats-fact-parent">
             {parentThread === undefined ? (
-              shown(agent.parent)
+              agentName(agent.parent)
             ) : (
               <a
                 href={parentThread.href}
@@ -141,7 +142,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
                   navigate.toThread(parentThread.id);
                 }}
               >
-                {shown(agent.parent)}
+                {agentName(agent.parent)}
               </a>
             )}
           </RowFact>

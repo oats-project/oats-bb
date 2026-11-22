@@ -53,7 +53,7 @@ test("the picked soul: description, origin, capabilities, and its agents by wher
   fireEvent.click(inTree);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_ci" }]);
   // on tmux: labelled with the backend
-  expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("kernel-fix-developeron tmux");
+  expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("Kernel fix developeron tmux");
 });
 
 test("the New agent form says, in words and with no control, that the agent runs in bb's full mode", async () => {
@@ -181,7 +181,7 @@ test("an agent whose thread is archived shows as thread missing, with Start and 
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
   const slot = await souls("oats-developer", { start: () => ({ threadId: "thr_restarted" }) }, fixtureAgents(), threads);
   const missing = await slot.findByTestId("oats-soul-agent-detached");
-  expect(missing.textContent).toBe("flaky-ci-developerthread missingStartRetire");
+  expect(missing.textContent).toBe("Flaky ci developerthread missingStartRetire");
   expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-detached-start"));
   await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_restarted" }]));
@@ -303,13 +303,13 @@ test("a soul's page while OATS cannot be read: the notice with the age above its
   const notice = await stale.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(notice.textContent).toContain("Showing what was read 40 min ago.");
-  expect(stale.getByTestId("oats-soul-detail").textContent).toContain("flaky-ci-developer");
+  expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
   const never = await souls("oats-developer", { snapshot: failed(null) });
   const alone = await never.findByRole("alert");
   expect(alone.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("flaky-ci-developer");
+  expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("Flaky ci developer");
   expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
 

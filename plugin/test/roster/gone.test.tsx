@@ -75,7 +75,7 @@ test("a stop plan the kernel refuses for an agent it does not know: the notice, 
   expect(line()).toBe("StoppedStart");
   act(() => ask().plan("stop"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("weekly-digest-helper is not in OATS any more");
+  expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");
   expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
   await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
   expect(mark()).toBe("stopped");
@@ -87,7 +87,7 @@ test("a retire plan refused the same way says the same", async () => {
   const { slot, ask, facts } = await places({ retirePlan: refuse(kernelSays("retirePlan")) });
   act(() => ask().plan("retire"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("weekly-digest-helper is not in OATS any more");
+  expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");
   await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
 });
 
@@ -111,7 +111,7 @@ for (const [name, verb, key] of [
     const dialog = await slot.findByRole("dialog");
     expect(dialog.querySelector("h2")!.textContent).toBe(`${name} did not happen`); // no agent named from the row
     await waitFor(() => expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain("directory instance home was removed or exchanged"));
-    expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain(`OATS was asked to ${verb} weekly-digest-helper.`);
+    expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain(`OATS was asked to ${verb} Weekly digest helper.`);
     expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain("E_WORK_INSPECTION_FAILED");
     expect(within(dialog).getByTestId("oats-act-again")).toBeTruthy();
     expect(facts()).toBe("Stopped · oats-expert");
@@ -157,7 +157,7 @@ test("an act asked while OATS itself cannot be read: the confirmation opens on t
   expect(notice.textContent!.indexOf("OATS_NOT_FOUND")).toBeGreaterThan(notice.textContent!.indexOf("Install OATS there"));
   fail = false;
   fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop weekly-digest-helper?"));
+  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Weekly digest helper?"));
 });
 
 test("the marks last until the next roster is read", async () => {

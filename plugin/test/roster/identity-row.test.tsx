@@ -66,7 +66,7 @@ test("the status line comes first and says where the agent is in words: a workin
   expect(slot.queryByTestId("oats-status-act")).toBeNull();
   // Each fact has its label; the instance is not repeated (the thread's title is it), and there is no "✓".
   expect(fact(slot, "oats-fact-soul")).toBe("Souloats-desktop-developer");
-  expect(fact(slot, "oats-fact-parent")).toBe("Underredesign-ui-lead");
+  expect(fact(slot, "oats-fact-parent")).toBe("UnderRedesign ui lead");
   expect(fact(slot, "oats-fact-identity")).toBe("Identity in default:oats.aweb.aidesktop-mockups-developer");
   expect(block.textContent).not.toContain("✓");
   // The parent is a link to its thread; the soul opens the soul's page.
@@ -142,7 +142,7 @@ test("a parent that is not in bb is named, without a link", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "ranker-v3-probe" ? { ...agent, parent: "kernel-fix-developer" } : agent));
   const slot = await render("thr_research", agents);
   const parent = await slot.findByTestId("oats-fact-parent");
-  expect(parent.textContent).toBe("Underkernel-fix-developer");
+  expect(parent.textContent).toBe("UnderKernel fix developer");
   expect(parent.querySelector("a")).toBeNull();
 });
 

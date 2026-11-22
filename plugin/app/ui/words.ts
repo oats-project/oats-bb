@@ -4,6 +4,7 @@
 // instance-display-name.mjs; packages/desktop/renderer/loading.mjs `observedAgeText`), and the plugin's own where bb's nature changes one (plugin/WORDS.md
 // holds each such pair). Pure: no bb, no React, never throws.
 import type { AgentState } from "../../model/types";
+import { shown } from "./text";
 
 /**
  * A state, as a person reads it and as a screen reader says it. `word` stands beside the mark,
@@ -106,3 +107,12 @@ export function readAge(at: string | number, now: number = Date.now()): string |
  * in: with its age (`readAge`), or without one when the age is not known.
  */
 export const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
+
+/**
+ * An agent's NAME, the one every place of the plugin draws (a row, the thread's row, a page, a
+ * confirmation): its instance name as words (`instanceDisplayName`, the Desktop's rule), through
+ * the display filter; the instance itself where that leaves nothing. bb's title for the agent's
+ * thread is bb's, never the name. The instance stays where it identifies the agent (a tooltip, a
+ * command, the kernel).
+ */
+export const agentName = (instance: string): string => instanceDisplayName(shown(instance)) || shown(instance);

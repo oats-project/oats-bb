@@ -26,7 +26,7 @@ import { agentStatus, rowState } from "./status";
 import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
-import { instanceDisplayName } from "../ui/words";
+import { agentName } from "../ui/words";
 import { Unreadable } from "./unreadable";
 import { useNow } from "./now";
 
@@ -134,7 +134,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -149,7 +149,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const threadlessRow = (agent: Agent, where: string) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
-    const name = instanceDisplayName(shown(agent.instance));
+    const name = agentName(agent.instance);
     return (
       <li key={agent.instance}>
         <button

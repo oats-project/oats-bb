@@ -537,6 +537,52 @@ test("T5 stop, then inspect and input: the stop archives the thread, so the prov
   assert.equal(await landed("T5-ARCHIVED"), 0);
 });
 
+// The kernel sends the homes OATS stopped in the same inspectMany as the running ones
+// (contract r28, A19). So a thread that is stopped and archived, or deleted, is answered in
+// its own entry, and never fails the call: a failed call would send every running home of
+// that call back to an inspect of its own, at every status read.
+test("inspectMany answers a running, a stopped-and-archived and a deleted thread entry by entry, in one call that is ok", async () => {
+  const running = await launched("many-running");
+  const stopped = await launched("many-stopped");
+  const deleted = await launched("many-deleted");
+  for (const { endpoint } of [running, stopped, deleted]) await waitStatus(endpoint.threadId, "idle");
+  // The second home is stopped by the provider, which archives its thread.
+  assert.deepEqual((await provider("stop", { home: stopped.home, endpoint: stopped.endpoint, graceSeconds: 10 })).result, { stopped: true });
+  assert.notEqual((await bbJson(`thread show ${stopped.endpoint.threadId}`)).thread.archivedAt, null);
+  // The third home's thread is deleted in bb (stopped first: bb keeps a deleted thread's Claude otherwise).
+  await sh(`bb thread stop ${deleted.endpoint.threadId} --json >/dev/null && bb thread delete --yes ${deleted.endpoint.threadId} --json`);
+  const gone = JSON.parse(await sh(`bb thread show ${deleted.endpoint.threadId} --json`, { ok: false }));
+  assert.ok(gone.ok === false || gone.thread?.deletedAt, `bb still shows the deleted thread: ${JSON.stringify(gone).slice(0, 200)}`);
+
+  const open = (endpoint) => ({ label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` });
+  const answer = await provider("inspectMany", { homes: [running, stopped, deleted].map(({ home, endpoint }) => ({ home, endpoint })) });
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  assert.deepEqual(answer.result, { results: [
+    { present: true, state: "unknown", running: true, open: open(running.endpoint) },
+    { present: false, state: "stopped", running: false },
+    { present: false, state: "stopped", running: false },
+  ] });
+  // And in any order, among entries that are another matter: a home bb never saw; a
+  // record that names a thread of another project than its own (answered from that
+  // thread: it is live, and its harness does not work in this home); and a record whose
+  // project holds another home's live thread (that entry's own error, "one home is one
+  // thread", and nobody else's).
+  const mixed = await provider("inspectMany", { homes: [
+    { home: deleted.home, endpoint: deleted.endpoint },
+    { home: "/home/node/homes/many-never", endpoint: { server: SERVER, projectId: "proj_never0000", threadId: "thr_never0000" } },
+    { home: stopped.home, endpoint: { ...stopped.endpoint, threadId: running.endpoint.threadId } },
+    { home: stopped.home, endpoint: { ...stopped.endpoint, projectId: running.endpoint.projectId } },
+    { home: running.home, endpoint: running.endpoint },
+  ] });
+  assert.equal(mixed.ok, true, JSON.stringify(mixed));
+  assert.deepEqual(mixed.result.results.map((result) => (result.error ? result.error.code : [result.present, result.state, result.running])),
+    [[false, "stopped", false], [false, "stopped", false], [true, "unknown", false], "E_SESSION_UNAVAILABLE", [true, "unknown", true]]);
+  // The single inspect of each agrees.
+  for (const [subject, present] of [[running, true], [stopped, false], [deleted, false]]) {
+    assert.equal((await provider("inspect", { home: subject.home, endpoint: subject.endpoint })).result.present, present);
+  }
+});
+
 // Contract r24, A15(1), its safety edge: the stop archives the home's own thread, and
 // never a thread a person opened in the home's bb project for other work.
 test("a person's own thread in the home's bb project is never archived by the provider's stop, with or without an endpoint", async () => {

@@ -46,5 +46,23 @@
   },
   "schedule host install": {
     "file": "host-install.json"
+  },
+  "schedule add": {
+    "file": "schedule-add-wake.json"
+  },
+  "schedule add form-spawn": {
+    "file": "schedule-add-spawn.json"
+  },
+  "schedule add form-operation": {
+    "file": "schedule-add-operation.json"
+  },
+  "schedule show": {
+    "file": "schedule-show.json"
+  },
+  "schedule show local/status-check": {
+    "file": "schedule-show-command.json"
+  },
+  "schedule show local/legacy-herdr": {
+    "file": "schedule-show-invalid.json"
   }
 }

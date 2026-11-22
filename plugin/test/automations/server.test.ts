@@ -129,8 +129,8 @@ describe("automations", () => {
 describe("the host verbs", () => {
   it("bb may retry the reads, and never an act", () => {
     const retryable = Object.entries(host).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["scheduleList", "triggerList", "triggerStatus"]);
-    expect(Object.keys(host).filter((name) => !retryable.includes(name)).sort()).toEqual(["automationDescribe", "automationEnable", "automationTest", "scheduleReconcile", "scheduleRemove", "scheduleRun", "schedulerEnable"]);
+    expect(retryable.sort()).toEqual(["scheduleDraft", "scheduleHomeOperations", "scheduleList", "scheduleSoulBackends", "triggerList", "triggerStatus"]);
+    expect(Object.keys(host).filter((name) => !retryable.includes(name)).sort()).toEqual(["automationDescribe", "automationEnable", "automationTest", "scheduleAdd", "scheduleReconcile", "scheduleRemove", "scheduleRun", "scheduleUpdate", "schedulerEnable"]);
   });
 });
 

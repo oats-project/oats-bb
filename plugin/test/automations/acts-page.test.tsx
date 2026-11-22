@@ -555,21 +555,74 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     expect(focused()).toBe("oats-automation-open");
   });
 
-  it("a list that could not be read again holds its own rows' acts, not the other list's", async () => {
+  it("Enable scheduler is held by the list that is shown: off over a Schedules list that could not be read again, pressable on Triggers", async () => {
+    const off = value(parseHostInstall(answer("host-install.json"))).scheduler;
+    const stopped = { ...off, installed: false, active: false };
     let asked = 0;
-    const slot = await page("triggers", {
-      automations: () => {
-        asked += 1;
-        const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" };
-        return { at: AT, hostId: "host_falcon", oats: OATS, schedule: asked > 1 ? refused : { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+    const lists = () => {
+      asked += 1;
+      const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" };
+      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: asked > 1 ? refused : { ok: true as const, list: { ...schedules(), scheduler: stopped } }, trigger: { ok: true as const, list: { ...triggers(), scheduler: stopped } } };
+    };
+    const slot = await page("", { automations: lists });
+    const enable = async () => (await slot.findByTestId("oats-automations-enable-scheduler")) as HTMLButtonElement;
+    expect((await enable()).disabled).toBe(false);
+    fireEvent.click(slot.getByTestId("oats-automations-refresh"));
+    await slot.findByTestId("oats-automations-held");
+    expect((await enable()).disabled).toBe(true);
+    // The Triggers list was read: there the same act is not held.
+    await go(slot, "triggers");
+    await row(slot, "local/pr-triage");
+    expect((await enable()).disabled).toBe(false);
+  });
+
+  it("a delete the kernel refuses because the row is already gone: closed, the focus is on the row that was beside it", async () => {
+    const all = schedules();
+    let rows = all.rows;
+    const slot = await page("", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      scheduleRemove: () => {
+        rows = rows.filter((entry) => entry.id !== "local/hourly-check");
+        throw new Error('E_SCHEDULE_UNKNOWN: no schedule "hourly-check" in /abs/deployment');
       },
     });
-    await row(slot, "local/pr-triage");
-    fireEvent.click(slot.getByTestId("oats-automations-refresh"));
-    await waitFor(() => expect(asked).toBeGreaterThan(1));
-    // The Schedules list could not be read again; the Triggers list, the one shown, was: its acts are not held.
-    await waitFor(() => expect((within(slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/pr-triage")!).getByRole("switch") as HTMLButtonElement).disabled).toBe(false));
+    const shown = (await slot.findAllByTestId("oats-automation-row")).map((entry) => entry.dataset.id!);
+    const beside = shown[shown.indexOf("local/hourly-check") + 1]!;
+    (await menu(slot, "local/hourly-check")).press("Delete…");
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("was not deleted"));
+    await waitFor(() => expect(slot.getAllByTestId("oats-automation-row").map((entry) => entry.dataset.id)).not.toContain("local/hourly-check"));
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-close"));
+    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-testid="oats-automation-row"]')?.dataset.id).toBe(beside));
   });
+
+  it("the row beside a deleted one is the next one the list shows, under its search", async () => {
+    const all = schedules();
+    let rows = all.rows;
+    const slot = await page("", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/hourly-check")), { removed: "hourly-check" }),
+    });
+    const ids = () => slot.getAllByTestId("oats-automation-row").map((entry) => entry.dataset.id!);
+    await row(slot, "local/hourly-check");
+    const all11 = ids();
+    fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "check th" } });
+    await waitFor(() => expect(ids().length).toBeLessThan(all11.length));
+    const shown = ids();
+    const beside = shown[shown.indexOf("local/hourly-check") + 1] ?? shown[shown.indexOf("local/hourly-check") - 1]!;
+    // The search hides the row that is beside it in the whole list: the neighbour is another row.
+    expect(shown).toContain("local/hourly-check");
+    expect(beside).not.toBe(all11[all11.indexOf("local/hourly-check") + 1]);
+    (await menu(slot, "local/hourly-check")).press("Delete…");
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("was deleted"));
+    await waitFor(() => expect(ids()).not.toContain("local/hourly-check"));
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-close"));
+    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-testid="oats-automation-row"]')?.dataset.id).toBe(beside));
+  });
+
 
   it("a delete or a summary the kernel refuses is followed by a new read of the lists", async () => {
     let reads = 0;

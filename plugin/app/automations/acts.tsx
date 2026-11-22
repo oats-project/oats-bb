@@ -653,7 +653,8 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
         phase={dialog.phase}
         onConfirm={() => void confirmDelete()}
         onClose={close}
-        returnFocus={() => (dialog.phase.kind === "done" ? (beside.current?.() ?? null) : null)}
+        // Asked only when what opened the dialog is gone: the row was deleted, or the kernel refused because it already was.
+        returnFocus={() => (dialog.phase.kind === "done" || dialog.phase.kind === "failed" ? (beside.current?.() ?? null) : null)}
       />
     ) : dialog.kind === "scheduler" ? (
       <Confirm

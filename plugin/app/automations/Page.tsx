@@ -184,12 +184,14 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
     hostId,
-    // The row after the deleted one, else the one before it, in the order the list shows them (its
-    // groups, each in the kernel's order): the control a person would reach next.
+    // The row after the deleted one, else the one before it: the control a person would reach next.
+    // Among the rows the list shows (its filter and search applied) when the list is on screen;
+    // from a row's own page, in the order the list will show them (its groups, each in the kernel's order).
     neighbourOf: (row) => {
-      const shown = GROUPS.flatMap((group) => (reads[row.kind].list?.rows ?? []).filter((entry) => entry.group === group.id));
-      const at = shown.findIndex((entry) => entry.id === row.id);
-      const besideId = at === -1 ? null : (shown[at + 1] ?? shown[at - 1])?.id ?? null;
+      const drawn = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]')).map((entry) => entry.dataset.id ?? "");
+      const shown = drawn.length > 0 ? drawn : GROUPS.flatMap((group) => (reads[row.kind].list?.rows ?? []).filter((entry) => entry.group === group.id)).map((entry) => entry.id);
+      const at = shown.indexOf(row.id);
+      const besideId = at === -1 ? null : (shown[at + 1] ?? shown[at - 1] ?? null);
       return () => {
         const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
         return (rows.find((entry) => entry.dataset.id === besideId) ?? rows[0])?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;

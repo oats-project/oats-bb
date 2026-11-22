@@ -101,6 +101,14 @@ export function createCore(bb: BbPluginApi) {
       description: "The bb machine (its name or id) that holds the OATS homes. Empty: this server's only machine.",
       default: "",
     },
+    // Read by the app alone (app/workspace/pages.ts `pagesShown`): the server keeps no page.
+    pages: {
+      type: "string",
+      label: "Pages shown",
+      description:
+        "The plugin's pages that are shown, by id, separated by commas. The default is home. The others are not finished yet and are left out until they are: automations, souls, capabilities, teams, machines.",
+      default: "home",
+    },
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });
   const lifetime = new AbortController();

@@ -6,7 +6,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
-import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { ALL_PAGES, handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
 afterEach(resetApp);
@@ -385,7 +385,7 @@ test("the row of the plugin's page that is shown is the selected one (D-037), an
   expect(current()).toEqual([]);
   const { shownPage } = await import("../../app/workspace/pages");
   const Teams = shownPage("teams", () => null);
-  const page = render(<Teams />);
+  const page = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(current()).toEqual(["teams"]));
   expect(slot.getByTestId("oats-page-link-teams").className).toContain("bg-accent");
   page.unmount();
@@ -418,4 +418,68 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
   const header = await slot.findByTestId("oats-panel-state");
   expect(header.querySelector("[data-state]")!.getAttribute("data-state")).toBe("stopped");
   expect(header.textContent).toContain("Stopped");
+});
+
+// The plugin's setting `pages`: a release shows only the pages that are finished (its default: the
+// home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
+// waits still opens the home; "New agent" is there only where it has somewhere to open.
+test("with the release's default (pages: home) the sidebar has the roster, who waits and no page link; with every page, all of them", async () => {
+  const withPages = async (pages: string) => {
+    const app = await loadApp();
+    return renderSlot<PluginThreadListProps, Contract>(
+      app.threadLists[0]!,
+      { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages } },
+    );
+  };
+  const pilot = await withPages("home");
+  await pilot.findByTestId("oats-tree");
+  expect(pilot.queryByTestId("oats-pages")).toBeNull();
+  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  expect(pilot.queryByTestId("oats-new-agent")).toBeNull(); // nowhere to open yet: the form's own page names itself
+  fireEvent.click(pilot.getByTestId("oats-needs-line"));
+  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  pilot.unmount();
+  resetApp();
+  const all = await withPages(ALL_PAGES);
+  await all.findByTestId("oats-tree");
+  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
+  expect(all.getByTestId("oats-new-agent")).toBeTruthy();
+  all.unmount();
+  resetApp();
+  // With the home itself left out, the count is said and opens nothing.
+  const none = await withPages("souls");
+  await none.findByTestId("oats-tree");
+  expect(none.getByTestId("oats-needs-line").tagName).toBe("P");
+  expect(none.getByTestId("oats-page-link-souls")).toBeTruthy();
+});
+
+test("the path of a page that is not shown answers one line and the way back; the page itself is not drawn", async () => {
+  const { shownPage } = await import("../../app/workspace/pages");
+  const Teams = shownPage("teams", () => <p data-testid="the-page">teams</p>);
+  const hidden = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home" } });
+  expect(hidden.getByTestId("oats-page-not-shown").textContent).toBe("This page is not shown in this release of the OATS plugin.Back to Home");
+  expect(hidden.queryByTestId("the-page")).toBeNull();
+  fireEvent.click(hidden.getByTestId("oats-page-not-shown-back"));
+  expect(hidden.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  hidden.unmount();
+  const shown_ = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home, Teams" } });
+  expect(shown_.getByTestId("the-page")).toBeTruthy();
+});
+
+test("\"New agent\" opens the form's own page once the spawn feature names it, whatever pages are shown", async () => {
+  const { setNewAgent } = await import("../../app/workspace/pages");
+  const app = await loadApp();
+  setNewAgent((navigate) => navigate.toPluginPanel("new-agent"));
+  try {
+    const slot = renderSlot<PluginThreadListProps, Contract>(
+      app.threadLists[0]!,
+      { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home" } },
+    );
+    fireEvent.click(await slot.findByTestId("oats-new-agent"));
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
+  } finally {
+    setNewAgent(null);
+  }
 });

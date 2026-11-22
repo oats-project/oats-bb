@@ -204,3 +204,16 @@ test("with no roster ever read the row says that OATS cannot be read, with Retry
   fireEvent.click(slot.getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
 });
+
+// The plugin's setting `pages`: where the Souls page is not shown in this release the soul is said
+// by its name alone: no link leads to a page that is not there.
+test("the soul is a link to its page where that page is shown, and its name alone where it is not", async () => {
+  const shownSlot = await row("thr_mockups", { settings: { pages: "home, souls" } });
+  expect((await shownSlot.findByTestId("oats-fact-soul")).querySelector("a")).not.toBeNull();
+  shownSlot.unmount();
+  resetApp();
+  const hidden = await row("thr_mockups", { settings: { pages: "home" } });
+  const fact = await hidden.findByTestId("oats-fact-soul");
+  expect(fact.textContent).toBe("Souloats-desktop-developer");
+  expect(fact.querySelector("a")).toBeNull();
+});

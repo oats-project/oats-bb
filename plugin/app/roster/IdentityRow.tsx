@@ -18,7 +18,7 @@ import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { openSoul } from "../workspace/pages";
+import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
 import { agentStatus, rowState } from "./status";
 import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
@@ -52,6 +52,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const panel = useAppPanel();
   const rpc = useRpc<Contract>();
   const pluginId = usePluginId();
+  const soulsShown = usePageShown("souls");
   const now = useNow();
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
@@ -116,17 +117,22 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <RowFact label="Soul" testId="oats-fact-soul">
-          <a
-            href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
-            className={LINK}
-            onClick={(event) => {
-              if (!plainClick(event)) return;
-              event.preventDefault();
-              openSoul(navigate, soul);
-            }}
-          >
-            {shown(soul)}
-          </a>
+          {/* A link to the soul's page where that page is shown in this release; else its name alone: no link leads nowhere. */}
+          {soulsShown ? (
+            <a
+              href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
+              className={LINK}
+              onClick={(event) => {
+                if (!plainClick(event)) return;
+                event.preventDefault();
+                openSoul(navigate, soul);
+              }}
+            >
+              {shown(soul)}
+            </a>
+          ) : (
+            shown(soul)
+          )}
         </RowFact>
         {agent.parent !== null ? (
           <RowFact label="Under" testId="oats-fact-parent">

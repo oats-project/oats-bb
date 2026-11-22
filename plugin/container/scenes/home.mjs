@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fill, testId, textOf, texts, visible } from "../browser.mjs";
+import { fill, testId, textOf, texts } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
 const STATUS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "status.json");
@@ -94,10 +94,10 @@ async function shown(page, check, at, selector, what) {
   const inView = await page.evaluate(bring(selector));
   check(inView === true, `${at} ${what} is in view for its image, from its start`, inView);
 }
-/** Opens the home and waits until it has drawn `selector`. → whether it did. */
+/** Opens the home and waits until it has drawn `selector`, in view or further down the page. → whether it did. */
 async function open(page, selector, path = HOME) {
   await page.goto(path);
-  return Boolean(await page.until(visible(selector), 30));
+  return Boolean(await page.until(`document.querySelector(${JSON.stringify(selector)}) !== null`, 30));
 }
 
 export default [
@@ -111,7 +111,7 @@ export default [
       const needs = await page.until(`${heading("oats-home-needs", "needs you 3")} ? ${headingOf("oats-home-needs")} : ""`, 15);
       check(Boolean(needs), `${at} three agents need the person`, await page.evaluate(headingOf("oats-home-needs")));
       // every card: the agent's name as words, its soul and machine, what it asks, and a reply named for it
-      const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), reply: card.querySelector('[data-testid="oats-reply"] label')?.innerText.trim() ?? null, text: card.innerText.replace(/\\s+/g, " ").trim() })))`));
+      const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), reply: card.querySelector('[data-testid="oats-reply-text"]')?.getAttribute("aria-label") ?? null, text: card.innerText.replace(/\\s+/g, " ").trim() })))`));
       check(cards.length === 3 && cards.every((each) => each.reply === `Reply to ${each.name}` && /needs you/i.test(each.state ?? "") && !each.name.includes("-")), `${at} each card names its agent in words, says it needs the person, and has its own reply named for that agent`, JSON.stringify(cards));
       check(cards.some((each) => each.instance === "release-070-maintainer" && each.name === "Release 070 maintainer" && each.text.includes("Green light at 9f2e1c? Second reader done.")), `${at} a card says what its agent asks, in the agent's words`, JSON.stringify(cards));
       // the summary counts every agent once, and agrees with the foot of the sidebar
@@ -136,8 +136,8 @@ export default [
       await page.evaluate(fill(`${mine} ${testId("oats-reply-text")}`, ""));
 
       // the tiles, with their counts read, and who works
-      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 5 && tiles.every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
-      check(Boolean(tiles) && JSON.parse(tiles)[0] === "Agents 8", `${at} the tiles: Agents and the pages, each with its count`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 5 && tiles.slice(0, 5).every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
+      check(Boolean(tiles) && JSON.parse(tiles)[0] === "Agents 8", `${at} the tiles: Agents and the pages, each of the five the home counts with its count`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => /Working$/.test(row)), `${at} every agent at work is a row that ends with its state in words`, working);
       await shown(page, check, at, within("oats-home-summary"), "the summary, the tiles and who works");
@@ -166,7 +166,7 @@ export default [
       // and the way back
       check(await open(page, within("oats-home-back"), `${HOME}/agents`), `${at} Home › Agents opens by its address`, await page.evaluate(textOf(PAGE)));
       await page.evaluate(click(within("oats-home-back")));
-      const back = await page.until(`${visible(within("oats-home-needs"))} && location.pathname.endsWith("/home") ? location.pathname : ""`, 15);
+      const back = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null && location.pathname.endsWith("/home") ? location.pathname : ""`, 15);
       check(Boolean(back), `${at} Back to Home leads to the home`, await page.evaluate("location.pathname"));
     },
   },

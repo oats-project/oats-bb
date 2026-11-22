@@ -17,7 +17,7 @@ import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { Unreadable } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Card, DisabledReason, Empty, Field, INPUT, LINK, Loading, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { Button, Card, DisabledReason, Empty, INPUT, LINK, Loading, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
 import { pageLinks } from "../workspace/pages";
@@ -156,9 +156,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   return (
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance}>
       <Card testId="oats-needs-card-body">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-          <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
+            <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
+          </div>
+          <Button data-testid="oats-needs-open" aria-label={`Open ${name}`} onClick={(event) => open.onClick(event)}>
+            Open
+          </Button>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
         {message === null ? null : (
@@ -171,44 +176,51 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {shown(detail)}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2">
-          {(asked?.choices ?? []).map((choice, index) => (
-            <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
-              {shown(choice.label)}
-            </Button>
-          ))}
-          <Button data-testid="oats-needs-open" onClick={(event) => open.onClick(event)}>
-            Open
-          </Button>
-        </div>
+        {asked === null || asked.choices.length === 0 ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            {asked.choices.map((choice, index) => (
+              <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
+                {shown(choice.label)}
+              </Button>
+            ))}
+          </div>
+        )}
         {thread === undefined ? (
           // Nothing can be sent from bb to an agent that has no thread in it.
           <p data-testid="oats-needs-elsewhere" className="m-0 text-xs text-muted-foreground">
             {tmuxNote(elsewhere(entry))}
           </p>
         ) : (
+          // The reply is on the card of the agent it goes to, and names it: one line that grows, Send beside it.
           <form
             data-testid="oats-reply"
-            className="flex min-w-0 flex-col gap-2"
+            className="flex min-w-0 flex-col gap-1"
             onSubmit={(event) => {
               event.preventDefault();
               send();
             }}
           >
-            <Field label={replyLabel(name)}>
-              <textarea data-testid="oats-reply-text" rows={2} className={`${INPUT} py-2`} placeholder={replyPlaceholder(name)} value={text} disabled={busy !== null || held} onChange={(event) => setText(event.target.value)} />
-            </Field>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 items-end gap-2">
+              <textarea
+                data-testid="oats-reply-text"
+                aria-label={replyLabel(name)}
+                rows={text.includes("\n") || text.length > 80 ? 3 : 1}
+                className={`${INPUT} min-w-0 flex-1 resize-none py-2`}
+                placeholder={replyPlaceholder(name)}
+                value={text}
+                disabled={busy !== null || held}
+                onChange={(event) => setText(event.target.value)}
+              />
               <Button type="submit" variant="primary" data-testid="oats-reply-send" disabled={busy !== null || held || text.trim() === ""}>
                 {busy === "send" ? SENDING : SEND}
               </Button>
-              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
-              {said === null ? null : (
-                <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
-                  {said}
-                </span>
-              )}
             </div>
+            {held ? <DisabledReason>{HELD}</DisabledReason> : null}
+            {said === null ? null : (
+              <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
+                {said}
+              </span>
+            )}
           </form>
         )}
         {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}

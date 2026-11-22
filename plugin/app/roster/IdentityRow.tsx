@@ -16,7 +16,7 @@ import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
+import { Button, Disclosure, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
@@ -137,6 +137,12 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
             </>
           }
         />
+      )}
+      {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
+      {gone || status.kernel === null || shown(status.kernel) === "" ? null : (
+        <Disclosure summary="Details" testId="oats-status-kernel">
+          <p className="text-xs text-muted-foreground">{`OATS says: ${shown(status.kernel)}`}</p>
+        </Disclosure>
       )}
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}

@@ -59,10 +59,12 @@ describe("the words", () => {
     expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("waiting 27 min (since 14:03)");
     expect(waitingSince(null, now)).toBeNull();
     expect(waitingSince("not a date", now)).toBeNull();
-    // The age of a read, as the Desktop says it: seconds, rounded minutes, then the local time.
-    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["just now", "45s ago", "3 min ago", "59 min ago"]);
-    expect(readAge(new Date(2026, 10, 21, 11, 5).getTime(), now)).toBe("at 11:05");
-    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "just now"]); // not readable: no age, as the Desktop
+    // The age of a read: always relative and in one form, never a bare clock time and never "just
+    // now" (a kept read is not fresh): under a minute, minutes to the nearest, whole hours, whole days.
+    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["less than a minute ago", "less than a minute ago", "3 min ago", "59 min ago"]);
+    expect([readAge(ago(61 * 60_000), now), readAge(ago(3 * 3_600_000 + 50 * 60_000), now), readAge(ago(23 * 3_600_000 + 59 * 60_000), now)]).toEqual(["1 h ago", "3 h ago", "23 h ago"]);
+    expect([readAge(ago(24 * 3_600_000), now), readAge(ago(2 * 86_400_000 + 5 * 3_600_000), now)]).toEqual(["1 d ago", "2 d ago"]);
+    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "less than a minute ago"]); // not readable: no age
   });
 });
 

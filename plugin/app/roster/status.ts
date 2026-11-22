@@ -14,17 +14,27 @@ export type AgentStatus = {
   /** For an agent that waits on a person: "waiting 12 min (since 14:03)"; null otherwise, or when the kernel names no instant. */
   since: string | null;
   /**
-   * What the state is about, for the states that have something to say: the agent's question or
-   * the reason in words (needs you), that its session ended (failed), what the kernel says of it
-   * (unreachable). Raw text from an agent or the kernel: `StatusLine` draws it through the filter.
+   * What the state is about, in a person's words, for the states that have something to say: the
+   * agent's question or the reason (needs you), that its session ended (failed), that OATS cannot
+   * reach its session (unreachable). The question is an agent's text: `StatusLine` draws it
+   * through the filter.
    */
   detail: string | null;
+  /**
+   * The kernel's own text behind the words, where it gave one (what it says of a session it cannot
+   * reach: often a raw URL or an errno): a place shows it one press away, under Details, never as
+   * the line's words. null where the kernel said nothing more.
+   */
+  kernel: string | null;
 };
+
+/** The reason an unreachable agent's line says, in a person's words (the kernel's own text goes under Details). */
+export const UNREACHABLE = "OATS cannot reach its session";
 
 /** `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now` is the clock in epoch milliseconds. */
 export function agentStatus(agent: Agent, thread: BbThread | null, now: number): AgentStatus {
   const drawn = state(agent, thread);
-  const base = { state: drawn, word: STATE[drawn].word };
+  const base = { state: drawn, word: STATE[drawn].word, kernel: null };
   switch (drawn) {
     case "needs-you": {
       // The kernel's claim, through the one gate; with none, the question is bb's own.
@@ -35,7 +45,7 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
     case "error":
       return { ...base, since: null, detail: "Its session ended" };
     case "unreachable":
-      return { ...base, since: null, detail: agent.runtimeError === null ? null : `OATS says: ${agent.runtimeError}` };
+      return { ...base, since: null, detail: UNREACHABLE, kernel: agent.runtimeError };
     case "working":
       // The one time the kernel records for an agent that works: when its session started, said as
       // what it is (not "since": the turn it works on may be newer).

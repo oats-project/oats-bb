@@ -96,7 +96,7 @@ test("an agent that needs you: since when and its question, on its own thread", 
   expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?Instance panel$/);
 });
 
-test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says what OATS says, with Retry", async () => {
+test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
   // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
   const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }), panelEvents: () => ({ ...recordedEvents(), events: [] }) });
   expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
@@ -114,7 +114,11 @@ test("a stopped agent says Stopped and offers Start, through OATS; one whose ses
   expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestartInstance panel");
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
-  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("Unreachable· OATS says: bb did not answerRetryInstance panel");
+  // A person's words on the line; what the kernel said is one press away, under Details, never the line's words.
+  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("Unreachable· OATS cannot reach its sessionRetryInstance panel");
+  const kernel = unreachable.getByTestId("oats-status-kernel") as HTMLDetailsElement;
+  expect(kernel.open).toBe(false);
+  expect(kernel.querySelector("p")!.textContent).toBe("OATS says: bb did not answer");
 });
 
 test("for a root agent with children: who started it, not a link, and the number of children", async () => {

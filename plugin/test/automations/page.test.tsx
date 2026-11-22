@@ -95,8 +95,15 @@ describe("the lists", () => {
     expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(11);
     fireEvent.click(slot.getByTestId("oats-automations-refresh"));
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingShowing what was read .+\.Retry$/);
+    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingHeld until the list can be read again: what each row is now is not known\.Showing what was read .+\.Retry$/);
     expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(11);
+    // What a row is now is not known: its acts are held (the switch, the menu's acts), and Open and Open file are not.
+    const row = slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/daily-review")!;
+    const toggle = within(row).getByRole("switch") as HTMLButtonElement;
+    expect([toggle.disabled, toggle.title]).toEqual([true, "Held until the list can be read again: what each row is now is not known."]);
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for local/daily-review" }));
+    const items = within(row).getAllByRole("menuitem") as HTMLButtonElement[];
+    expect(items.map((item) => [item.textContent, item.disabled || item.getAttribute("aria-disabled") === "true"])).toEqual([["Open", false], ["Test", true], ["Run now", true], ["Turn off here", true], ["Open file", false], ["Edit summary", true], ["Delete…", true]]);
   });
 
   it("Retry while the server does not answer says it is reading again, and cannot be pressed twice at once", async () => {

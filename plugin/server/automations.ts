@@ -8,7 +8,7 @@ import type { z } from "zod";
 import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc } from "../contract/automations.js";
 import { PULL_REQUEST } from "../model/automations.js";
 import { codes, isKernelCode } from "../kernel/result.js";
-import { HOST_TIMEOUT, invalid, refusedWith, type Core } from "./core.js";
+import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core } from "./core.js";
 
 /** The longest one read of the lists serves: the page, the sidebar's mark and a second window ask at once. */
 export const LISTS_TTL_MS = 30_000;
@@ -84,7 +84,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /** The row of the current list an act names: by its qualified id, or a bare local one. An id the list does not name reaches no process. */
   const rowOf = async (kind: AutomationKind, id: string): Promise<AutomationRow> => {
     const answer = (await lists())[kind];
-    const row = answer.ok ? answer.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`) : undefined;
+    // A list that could not be read names nothing: the act is refused with why the list could not be read, never as "no such row".
+    if (!answer.ok) throw refusal({ code: answer.code, message: answer.message });
+    const row = answer.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`);
     if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`);
     return row;
   };

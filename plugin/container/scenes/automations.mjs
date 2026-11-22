@@ -529,7 +529,9 @@ const scenes = [
       refuse();
       await page.evaluate(click(testId("oats-automations-refresh")));
       const failed = await page.until(`(() => ${textOf(testId("oats-automations-failed"))})()`, 40);
-      check(/^Schedules could not be read \/abs\/deployment\/oats-schedules\.json must be \{version: 1\|2, jobs: \{\}\} Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      check(/^Schedules could not be read \/abs\/deployment\/oats-schedules\.json must be \{version: 1\|2, jobs: \{\}\} Held until the list can be read again: what each row is now is not known\. Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      const heldSwitch = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(`${ROW}[data-id="local/daily-review"] [role="switch"]`)}); return s && s.disabled ? s.title : ""; })()`, 15);
+      check(heldSwitch === "Held until the list can be read again: what each row is now is not known.", `${at} over a list that could not be read again a row's switch is held, and says why`, String(heldSwitch));
       await page.shot(`automations-${viewport.name}-failed-over-list`, { targets: true });
       slow();
     },

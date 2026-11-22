@@ -473,6 +473,58 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     await waitFor(() => expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull());
   });
 
+  it("a schedule and a trigger may share an id: what a test put on one's page is not on the other's", async () => {
+    const list = triggers();
+    const twin = { ...rowOf(list, "local/pr-triage"), id: "local/daily-review", name: "daily-review" };
+    const slot = await page("schedules/local/daily-review", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows: [...list.rows, twin] } } }),
+      automationTest: () => value(parseTest(answer("schedule-test.json"), "schedule", null)),
+    });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await slot.findByTestId("oats-automation-test");
+    await go(slot, "triggers/local/daily-review");
+    await slot.findByTestId("oats-automation-test-button");
+    await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Triage every new pull request of the app"));
+    expect(slot.queryByTestId("oats-automation-test")).toBeNull();
+    expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
+  });
+
+  it("a result left on the page takes no focus from a confirmation that arrives after it", async () => {
+    const slot = await page("", { scheduleRun: () => value(parseScheduleRun(answer("schedule-run.json"))) });
+    (await menu(slot, "local/daily-review")).press("Run now");
+    await result(slot);
+    await waitFor(() => expect(focused()).toBe("oats-automations-result"));
+    await go(slot, "triggers/oats-real/harvest-review");
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await slot.findByTestId("oats-automation-test-confirm");
+    expect(slot.getByTestId("oats-automations-result")).toBeTruthy();
+    await waitFor(() => expect(focused()).toBe("oats-automation-test-confirm-arrived"));
+  });
+
+  it("a test's answer is for the row as it was tested: a re-read that shows another source drops it", async () => {
+    let source = "github.pull_request";
+    const lists = () => {
+      const list = triggers();
+      const rows = list.rows.map((entry) => (entry.id === "oats-real/proposal-review" && entry.on !== null ? { ...entry, on: { ...entry.on, source } } : entry));
+      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+    };
+    const slot = await page("triggers/oats-real/proposal-review", { automations: lists, automationTest: () => value(parseTest(answer("trigger-test.json"), "trigger", "github.pull_request")) });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await slot.findByTestId("oats-automation-test");
+    source = "acme.graph:harvest-branches";
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    await waitFor(() => expect(slot.queryByTestId("oats-automation-test")).toBeNull());
+  });
+
+  it("a delete or a summary the kernel refuses is followed by a new read of the lists", async () => {
+    let reads = 0;
+    const slot = await page("schedules/local/weekly-cleanup", { refresh: () => ((reads += 1), { at: AT }), scheduleRemove: refuse("E_SCHEDULE_UNKNOWN: no schedule \"weekly-cleanup\" in /abs/deployment") });
+    fireEvent.click(await slot.findByTestId("oats-automation-delete"));
+    fireEvent.click(within(await slot.findByRole("dialog")).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(slot.getByRole("dialog").textContent).toContain("was not deleted"));
+    await waitFor(() => expect(reads).toBe(1));
+  });
+
   it("while a summary is saved the focus stays on the dialog", async () => {
     const save = held(() => ({ row: rowOf(schedules(), "local/daily-review") }));
     const slot = await page("", { automationDescribe: save.handler });

@@ -3,6 +3,10 @@
 // sub-piece of its own); the plugin's lists hold them as the kernel's own `oats schedule list` and
 // `oats trigger list` do, and a trigger's state is read for the id the list names.
 //
+// One act is not run here against the real kernel: a confirmed test of a capability source's
+// trigger (`oats trigger test --run-source`), since this run's workspace holds no capability with a
+// trigger source; its argv and its answer rest on the recording, which ran it for real.
+//
 // The feature's fixtures are not made here: they are a recording of their own, on a deployment
 // with workspace automations, a trigger source and runs (test/fixtures/automations/record/).
 import { writeFileSync } from "node:fs";
@@ -83,6 +87,21 @@ export default async (run) => {
   const launched = [...status().rows.values()].find((row) => !before.has(row.instance));
   check(ran?.run?.outcome === "launched" && launched !== undefined && launched.backend === "bb" && launched.instance === ran.run.instance && argv(["schedule", "run"]) === JSON.stringify(["schedule", "run", "local/real-run-digest", "--json"]),
     "Run now launched a bb agent: the run's outcome is `launched`, and `oats status` holds the new instance on bb", JSON.stringify({ run: ran?.run && { outcome: ran.run.outcome, instance: ran.run.instance }, launched: launched && { instance: launched.instance, backend: launched.backend } }));
+
+  // Check run state: the kernel's reconcile answers for a schedule whatever its last run is.
+  const reconciled = act("check the schedule's run state", "scheduleReconcile", { id: "local/real-run-digest" });
+  check(reconciled !== undefined && "reconciled" in reconciled && argv(["schedule", "reconcile"]) === JSON.stringify(["schedule", "reconcile", "local/real-run-digest", "--json"]),
+    "the kernel answers the check of a run's state", JSON.stringify(reconciled));
+
+  // The trigger: off and on on this computer, and its summary.
+  const trigger = (id) => JSON.parse(oats("trigger", "show", id, "--json").stdout).result?.trigger;
+  const triggerOff = act("turn the trigger off on this computer", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: false });
+  check(triggerOff?.row?.enabledHere === false && trigger("real-run-prs")?.enabled === false && argv(["trigger", "disable"]) === JSON.stringify(["trigger", "disable", "local/real-run-prs", "--json"]),
+    "the kernel holds the trigger as off", JSON.stringify(triggerOff?.row && { enabledHere: triggerOff.row.enabledHere }));
+  const triggerOn = act("turn it on again", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: true });
+  check(triggerOn?.row?.enabledHere === true && trigger("real-run-prs")?.enabled === true, "the kernel holds the trigger as on again", JSON.stringify(triggerOn?.row && { enabledHere: triggerOn.row.enabledHere }));
+  const triggerDescribed = act("change the trigger's summary", "automationDescribe", { kind: "trigger", id: "local/real-run-prs", description: "The real run's trigger" });
+  check(triggerDescribed?.row?.description === "The real run's trigger" && trigger("real-run-prs")?.description === "The real run's trigger", "the kernel holds the trigger's new summary", JSON.stringify(triggerDescribed?.row?.description));
 
   // A schedule that never ran is deleted through the plugin.
   added("a person adds a second schedule", "schedule", "add", "real-run-spare", "--file",

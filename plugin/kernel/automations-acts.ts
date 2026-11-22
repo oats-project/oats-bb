@@ -19,6 +19,12 @@ const idArgv = (kind: AutomationKind, words: string[], id: string, tail: string[
   return checked.ok ? ok([kind, ...words, checked.value, ...tail, "--json"]) : checked;
 };
 
+/** A list of the kernel's problems or warnings as sentences: each a string, or an object's message, else its code. */
+const strings = (value: unknown): string[] =>
+  list(value)
+    .map((entry) => (typeof entry === "string" ? entry : record(entry) ? (text(entry.message) ?? text(entry.code)) : null))
+    .filter((entry): entry is string => entry !== null && entry !== "");
+
 // ---- on and off, on this computer ----
 /** A local item's own `enabled`; a workspace item's entry in this host's `triggers.disabled` or `schedules.disabled`. */
 export const enableArgv = (kind: AutomationKind, id: string, enabled: boolean): Result<string[]> => idArgv(kind, [enabled ? "enable" : "disable"], id);
@@ -83,10 +89,7 @@ export function parseTest(document: unknown, kind: AutomationKind, source: strin
   const answer = kind === "schedule" && record(document) && record(document.test) ? document.test : document;
   if (!record(answer)) return err(codes.badAnswer, `\`oats ${kind} test\` answered a document the plugin cannot read`);
   const ran = kind === "trigger" ? testSourceOf(answer.source) : null;
-  const strings = (value: unknown): string[] =>
-    list(value)
-      .map((entry) => (typeof entry === "string" ? entry : record(entry) ? (text(entry.message) ?? text(entry.code)) : null))
-      .filter((entry): entry is string => entry !== null && entry !== "");
+
   // The source's failure is in `problems` as well, word for word: it is said once, by `source`.
   const failed = record(answer.source) ? answer.source : null;
   const failure = ran !== null && !ran.ok && failed !== null ? ((record(failed.invalid) ? text(failed.invalid.message) : null) ?? (record(failed.error) ? text(failed.error.message) : null)) : null;
@@ -166,7 +169,7 @@ export function parseHostInstall(document: unknown): Result<{ scheduler: Automat
       lastTick: scheduler.lastTick ?? null,
       maxConcurrent: Number.isInteger(scheduler.maxConcurrent) ? (scheduler.maxConcurrent as number) : null,
     },
-    warnings: (warnings ?? []).map((warning) => (typeof warning === "string" ? warning : record(warning) ? (text(warning.message) ?? text(warning.code)) : null)).filter((warning): warning is string => warning !== null),
+    warnings: strings(warnings),
   });
 }
 

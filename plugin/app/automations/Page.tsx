@@ -19,6 +19,8 @@ import { capabilitySource, refusalParts, TITLES } from "./words";
 import type { FileTarget } from "./words";
 
 export const PATH = "automations";
+/** Why a list's acts are held while it is one that could not be read again (the UX standard, Stale). */
+export const HELD = "Held until the list can be read again: what each row is now is not known.";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
 
 /** The route under the page: which tab, and which row's page is open. */
@@ -176,7 +178,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     rpc,
     refresh,
     summaries: descriptions,
-    openId,
+    open: openId === null ? null : { kind, id: openId },
+    held: { schedule: reads.schedule.error === null ? null : HELD, trigger: reads.trigger.error === null ? null : HELD },
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
     hostId,
@@ -197,6 +200,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
       {acts.dialog}
       <View
         rowActs={acts}
+        held={reads[kind].error === null ? null : HELD}
         rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
         schedulerAction={acts.schedulerAction}
         result={acts.result}

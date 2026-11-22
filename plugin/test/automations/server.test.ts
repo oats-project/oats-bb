@@ -234,6 +234,18 @@ describe("the acts", () => {
     expect(await acts(backend)).toEqual([]);
   });
 
+  it("an act on a list that cannot be read is refused with why the list cannot be read, never as a row the list does not name, and starts no process", async () => {
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" } });
+    backend = await startBackend({ verbs: { "schedule list": { stdout: refusal } } });
+    await expect(backend.rpc("automationEnable", { kind: "schedule", id: "local/daily-review", enabled: false })).rejects.toThrow("E_SCHEDULE_INVALID: /abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}");
+    await expect(backend.rpc("scheduleRun", { id: "local/daily-review" })).rejects.toThrow(/^E_SCHEDULE_INVALID: /);
+    expect(await argvs(backend, "schedule disable")).toEqual([]);
+    expect(await argvs(backend, "schedule run")).toEqual([]);
+    // The other list answers: its rows can be acted on.
+    await backend.rpc("automationEnable", { kind: "trigger", id: "local/pr-triage", enabled: false });
+    expect(await argvs(backend, "trigger disable")).toHaveLength(1);
+  });
+
   it("the kernel's refusal of an act is shown with its code and message", async () => {
     const refusals = { "schedule run": "schedule-run-disabled.json", "schedule host install": "host-install-refused.json", "trigger test": "trigger-test-source-unconfirmed.json" };
     backend = await startBackend({ verbs: Object.fromEntries(Object.entries(refusals).map(([verb, file]) => [verb, { file: `automations/${file}` }])) });

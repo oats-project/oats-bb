@@ -15,7 +15,7 @@ import { useActs } from "./acts";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
-import { capabilitySource, TITLES } from "./words";
+import { capabilitySource, refusalParts, TITLES } from "./words";
 import type { FileTarget } from "./words";
 
 export const PATH = "automations";
@@ -125,9 +125,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
       },
       (error: unknown) => {
         if (asked.current !== ticket) return;
-        const said = errorMessage(error);
-        const lead = /^([A-Z][A-Z0-9_]*): /.exec(said);
-        const failure = lead === null ? { code: null, message: said } : { code: lead[1]!, message: said.slice(lead[0].length) };
+        const failure = refusalParts(errorMessage(error));
         setStatus((before) => (before !== null && before.id === openId ? { ...before, error: failure } : { id: openId, value: null, readAt: null, error: failure }));
       },
     );

@@ -4,7 +4,7 @@
 // derives a placement: the kernel's `runsHere`, `reason` and `enabledHere` are read as given.
 import type { AutomationHost, AutomationKind, AutomationList, AutomationOn, AutomationRow, AutomationRun, AutomationScheduler, AutomationSoul } from "../../contract/automations";
 import { eventLabel, PULL_REQUEST } from "../../model/automations";
-import { displayLine, MAX_DISPLAY_LINE } from "../ui/text";
+import { displayLine, MAX_DISPLAY_LINE, refusalCode } from "../ui/text";
 
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };
 export const NOUNS: Record<AutomationKind, string> = { schedule: "schedule", trigger: "trigger" };
@@ -449,8 +449,8 @@ export const DESCRIPTION_MAX = 200;
 /** The kernel's rule for a summary: one line of up to 200 characters (code points), no control character. Empty removes it. */
 export const summaryValid = (value: string): boolean => [...value].length <= DESCRIPTION_MAX && !/[\p{Cc}\u2028\u2029]/u.test(value);
 
-/** A refusal as the server words it, `<code>: <message>`, apart: the message for a person, the code after it. */
+/** A refusal as the server words it, `<code>: <message>`, apart: the message for a person, the code after it. One rule for what a code is (ui/text). */
 export function refusalParts(text: string): { code: string | null; message: string } {
-  const lead = /^([A-Z][A-Z0-9_]*): /.exec(text);
-  return lead === null ? { code: null, message: text } : { code: lead[1]!, message: text.slice(lead[0].length) };
+  const code = refusalCode(text);
+  return code === null ? { code: null, message: text } : { code, message: text.slice(code.length + 2) };
 }

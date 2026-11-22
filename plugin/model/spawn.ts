@@ -188,6 +188,8 @@ const COMMON_FACTS: Record<string, Said> = {
   E_INSTANCE_NAME_TAKEN: said("An instance with this name already exists. Choose another name."),
   E_PACKAGE_MISSING: said("A package this soul uses isn’t installed yet.", "sync-workspace"),
   E_PACKAGE_INTEGRITY: said("A package this soul uses no longer matches the lock.", "sync-workspace"),
+  // The bb session provider's own refusal (the harness interface, point 2): the plugin's words, WORDS.md.
+  E_BACKEND_HARNESS: said("bb can’t run the harness this soul would use.", "change-options"),
   E_PLAN_CHANGED: said("The workspace changed while this was loading.", "review-again"),
 };
 const PREVIEW_FACTS: Record<string, Said> = {
@@ -234,6 +236,7 @@ const BY_CODE: Record<string, string> = {
   E_LAUNCH_CONFIG_UNKNOWN: CHOOSE_ANOTHER,
   E_LAUNCH_CONFIG_AMBIGUOUS: "Choose one under Launch configuration in Developer settings.",
   E_HARNESS_UNAVAILABLE: "Install it, or pick another harness above.",
+  E_BACKEND_HARNESS: "Pick one of the harnesses above.",
   E_LAUNCH_PREFERENCE_UNMATCHED: "To spawn now, pick a harness above, or a launch configuration in Developer settings. To fix it for every spawn, correct the preference (Details).",
 };
 // Sentences that go on after a dash, in lower case: the fact's full stop gives way to " — ".

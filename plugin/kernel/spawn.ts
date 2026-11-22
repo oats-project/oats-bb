@@ -2,43 +2,83 @@
 // docs/desktop-cli-api.md "Spawn": the kernel takes `--idempotency-key` only with
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
-import type { SpawnSummary } from "../model/types.js";
+import { previewFacts, type PreviewFacts } from "../model/spawn.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
-export type SpawnInput = { soul: string; name: string };
+/** The relations a spawn can name (`--relation`); with none, the agent is independent. */
+export const RELATIONS = ["child", "sibling", "parent"] as const;
+export type SpawnRelation = { kind: (typeof RELATIONS)[number]; to: string };
+/**
+ * What a spawn is asked with, beside its task: the soul, and what a person chose. `name` left out
+ * is numbered by the kernel; `harness` and `model` left out are resolved by the kernel; `relation`
+ * left out is an independent agent.
+ */
+export type SpawnInput = { soul: string; name?: string | undefined; harness?: string | undefined; model?: string | undefined; relation?: SpawnRelation | undefined };
+type Checked = { soul: string; name: string | null; harness: string | null; model: string | null; relation: SpawnRelation | null };
 
-/** Refuses a soul `oats souls` does not list and a name that is not an instance name. */
-export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Result<SpawnInput> {
-  const name = checkInstance(input.name);
-  if (!name.ok) return name;
+/** A harness's id as a manifest declares it: never an option, never a path. */
+const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
+
+/**
+ * Refuses, before any process: a soul `oats souls` does not list, a name or a relation's instance
+ * that is no instance name, a harness that is no harness id, a model that could be read as an
+ * option, a relation that is not one of the three. Whether the harness is one the provider
+ * declares and the instance one of the roster is the server's to check, which holds both lists.
+ */
+export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Result<Checked> {
+  let name: string | null = null;
+  if (input.name !== undefined) {
+    const checked = checkInstance(input.name);
+    if (!checked.ok) return checked;
+    name = checked.value;
+  }
   const soul = checkSoul(input.soul, knownSouls);
   if (!soul.ok) return soul;
-  return ok({ soul: soul.value, name: name.value });
+  if (input.harness !== undefined && !HARNESS_ID.test(input.harness)) return err(codes.invalidInput, `"${input.harness}" is not a harness id`);
+  let model: string | null = null;
+  if (input.model !== undefined) {
+    const checked = checkModel(input.model);
+    if (!checked.ok) return checked;
+    model = checked.value;
+  }
+  let relation: SpawnRelation | null = null;
+  if (input.relation !== undefined) {
+    if (!RELATIONS.includes(input.relation.kind)) return err(codes.invalidInput, `"${String(input.relation.kind)}" is not a relation: child, sibling or parent`);
+    const to = checkInstance(input.relation.to);
+    if (!to.ok) return to;
+    relation = { kind: input.relation.kind, to: to.value };
+  }
+  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation });
 }
 
 /**
  * What the preview and the apply share. `--yolo` is bb's full mode, with no sandbox between the
  * agent and the account bb runs as: the bb session provider launches in no other mode, so the
  * plugin asks for it on every spawn and depends on no default of the host (README, "Spawn"). The
- * kernel binds the apply to the preview's decision, so both carry it.
+ * kernel binds the apply to the preview's decision, so both carry the same choices, in the same
+ * order. What a person did not choose is not passed: no `--name` (the kernel numbers the agent),
+ * no `--task-file` for an empty instruction (the agent starts and waits), no `--harness` and no
+ * `--model` (the kernel resolves them), no relation (independent). `input` is a checked one
+ * (`checkSpawn`).
  */
-const common = (input: SpawnInput, taskFile: string): string[] => [
+const common = (input: Checked, taskFile: string | null): string[] => [
   "spawn",
   input.soul,
   "--backend",
   "bb",
   "--yolo",
-  "--name",
-  input.name,
-  "--task-file",
-  taskFile,
+  ...(input.name === null ? [] : ["--name", input.name]),
+  ...(taskFile === null ? [] : ["--task-file", taskFile]),
+  ...(input.harness === null ? [] : ["--harness", input.harness]),
+  ...(input.model === null ? [] : ["--model", input.model]),
+  ...(input.relation === null ? [] : ["--relation", input.relation.kind, "--relative-to", input.relation.to]),
 ];
 
-export const spawnPreviewArgv = (input: SpawnInput, taskFile: string): string[] => [...common(input, taskFile), "--preview", "--json"];
+export const spawnPreviewArgv = (input: Checked, taskFile: string | null): string[] => [...common(input, taskFile), "--preview", "--json"];
 
 export type SpawnApply = { revision: string; key: string };
 
@@ -52,7 +92,7 @@ export function checkApply(apply: SpawnApply): Result<SpawnApply> {
 }
 
 /** `apply` is a checked one (`checkApply`). */
-export const spawnArgv = (input: SpawnInput, taskFile: string, apply: SpawnApply): string[] => [
+export const spawnArgv = (input: Checked, taskFile: string | null, apply: SpawnApply): string[] => [
   ...common(input, taskFile),
   "--expect-decision",
   apply.revision,
@@ -64,56 +104,27 @@ export const spawnArgv = (input: SpawnInput, taskFile: string, apply: SpawnApply
 const text = z.string().nullish();
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),
-  modules: z
-    .array(z.looseObject({ name: z.string(), from: z.looseObject({ kind: text, version: text }).nullish() }))
-    .nullish(),
-  teams: z.array(z.looseObject({ label: z.string(), team: text, default: z.boolean().nullish() })).nullish(),
-  harness: text,
-  model: text,
-  modelSource: text,
-  launchConfig: text,
-  warnings: z.array(z.string()).nullish(),
   preflight: z.looseObject({ status: text, budgetMs: z.number().nullish() }).nullish(),
   backendStatus: z.looseObject({ name: text, installed: z.boolean().nullish() }).nullish(),
   launch: z.looseObject({ problem: z.looseObject({ code: text, message: text }).nullish() }).nullish(),
 });
 
-export function parseSpawnPreview(document: unknown): Result<{ summary: SpawnSummary; revision: string }> {
+/**
+ * A preview the kernel answered: its facts in the form's words (model/spawn.ts), for exactly the
+ * name asked, and the decision's revision. A preview that is no decision a spawn could apply is a
+ * refusal here, with the code the Desktop's client gives it (packages/client/spawn-apply.mjs): a
+ * launch the kernel found a problem with (the problem's own code), checks that did not finish in
+ * the kernel's budget (`E_PREFLIGHT_INCOMPLETE`), a session backend that is not installed
+ * (`E_BACKEND_UNAVAILABLE`).
+ */
+export function parseSpawnPreview(document: unknown, name: string | null = null): Result<{ facts: PreviewFacts; revision: string }> {
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
-  const problems: string[] = [];
-  if (value.backendStatus && value.backendStatus.installed === false) {
-    problems.push(`the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
-  }
-  if (value.preflight?.status === "timeout") {
-    problems.push(`the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
-  }
-  if (value.launch?.problem) {
-    problems.push([value.launch.problem.code, value.launch.problem.message].filter(Boolean).join(": "));
-  }
-  const model = value.model ?? "the harness's default model";
-  const launch = value.harness
-    ? [
-        value.harness,
-        value.modelSource ? `${model} (${value.modelSource})` : model,
-        value.launchConfig ? `launch configuration ${value.launchConfig}` : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join(" · ")
-    : null;
-  return ok({
-    revision: value.decision.revision,
-    summary: {
-      modules: (value.modules ?? []).map((module) => (module.from?.version ? `${module.name} ${module.from.version}` : module.name)),
-      teams: (value.teams ?? []).map((team) =>
-        [team.label, team.default ? "(default)" : null, team.team ? null : "(not mapped)"].filter((part) => part !== null).join(" "),
-      ),
-      launch,
-      warnings: value.warnings ?? [],
-      problems,
-    },
-  });
+  if (value.launch?.problem) return err(value.launch.problem.code ?? codes.failed, value.launch.problem.message ?? "the kernel found a problem with this launch and did not say which");
+  if (value.preflight?.status === "timeout") return err("E_PREFLIGHT_INCOMPLETE", `the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
+  if (value.backendStatus && value.backendStatus.installed === false) return err("E_BACKEND_UNAVAILABLE", `the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
+  return ok({ facts: previewFacts(document, { name }), revision: value.decision.revision });
 }
 
 const spawned = z.looseObject({
@@ -134,8 +145,6 @@ export function parseSpawn(document: unknown): Result<{ instance: string; thread
  * resolves it, whose manifest declares the harnesses its session provider can launch.
  */
 export const harnessListArgv = (): string[] => ["capabilities", "show", "oats.bb", "--json"];
-/** A harness's id as a manifest declares it: never an option, never a path. */
-const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const shownCapability = z.looseObject({ sessionProviders: z.looseObject({ bb: z.looseObject({ harnesses: z.unknown().optional() }).nullish() }).nullish() });
 /**
  * `result.sessionProviders.bb.harnesses`, in the manifest's order, each once. A provider from
@@ -172,19 +181,18 @@ export const verbs = (oats: Runner) => ({
 
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the
-   * call. A soul not in the list or a name that is no instance name starts no process and writes
-   * no file.
+   * call. Choices that are refused (`checkSpawn`) start no process and write no file; an empty
+   * instruction writes none either.
    */
   async spawnPreview(
     input: SpawnInput & { task: string },
     context: { knownSouls: readonly string[]; tempDir: string },
     signal?: AbortSignal,
-  ): Promise<Result<{ summary: SpawnSummary; revision: string }>> {
+  ): Promise<Result<{ facts: PreviewFacts; revision: string }>> {
     const checked = checkSpawn(input, context.knownSouls);
     if (!checked.ok) return checked;
-    return withTaskFile(context.tempDir, input.task, (taskFile) =>
-      oats.run(spawnPreviewArgv(checked.value, taskFile), parseSpawnPreview, oats.timeouts.preview, signal),
-    );
+    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name), oats.timeouts.preview, signal);
+    return hasTask(input.task) ? withTaskFile(context.tempDir, input.task, run) : run(null);
   },
 
   /**
@@ -201,8 +209,10 @@ export const verbs = (oats: Runner) => ({
     // The key and the revision are checked before the task file is written.
     const apply = checkApply(input);
     if (!apply.ok) return apply;
-    return withTaskFile(context.tempDir, input.task, (taskFile) =>
-      oats.run(spawnArgv(checked.value, taskFile, apply.value), parseSpawn, oats.timeouts.long, signal),
-    );
+    const run = (taskFile: string | null) => oats.run(spawnArgv(checked.value, taskFile, apply.value), parseSpawn, oats.timeouts.long, signal);
+    return hasTask(input.task) ? withTaskFile(context.tempDir, input.task, run) : run(null);
   },
 });
+
+/** An instruction with nothing but blanks is none: the agent starts and waits for its person (the Desktop's "Empty starts it waiting for you."). */
+export const hasTask = (task: string): boolean => task.trim() !== "";

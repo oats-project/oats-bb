@@ -75,6 +75,9 @@ function useFlight(): { soul: string } | null {
 type Preview = { key: string; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
 
+/** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
+const piece = (text: string): string => `${/^\s/u.test(text) ? " " : ""}${shown(text)}${/\s$/u.test(text) ? " " : ""}`;
+
 /** A fact's value: its parts in a line, then each second line (where it came from, what else) under it. */
 function Parts({ parts }: { parts: SpawnFacts["facts"][number]["parts"] }) {
   const first = parts.filter((part) => part.sub !== true);
@@ -84,7 +87,7 @@ function Parts({ parts }: { parts: SpawnFacts["facts"][number]["parts"] }) {
       <span>
         {first.map((part, index) => (
           <span key={index} className={part.mono ? "break-all font-mono text-xs" : part.muted ? "text-muted-foreground" : undefined}>
-            {shown(part.text)}
+            {piece(part.text)}
           </span>
         ))}
       </span>
@@ -342,7 +345,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
 
   // ---- focus and keys ----
   const fields = useRef<HTMLDivElement>(null);
-  const focusOn = (target: string) => fields.current?.querySelector<HTMLElement>(`[data-field="${target}"]`)?.focus();
+  // A field by its name; the relationship is a radio group, whose stop is the chosen one.
+  const focusOn = (target: string) => fields.current?.querySelector<HTMLElement>(target === "relation" ? '[data-field-group="relation"] [role="radio"][aria-checked="true"]' : `[data-field="${target}"]`)?.focus();
   // The form lands on its first field: the soul, or the instruction when the soul came with the route.
   const landed = useRef(false);
   useEffect(() => {

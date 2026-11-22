@@ -113,14 +113,21 @@ describe("Run now and Check run state (D-277)", () => {
   it("a launch the provider refused says Launch failed, with the kernel's reason and its code", async () => {
     const slot = await page("", { scheduleRun: ran("schedule-run-launch-failed.json") });
     (await menu(slot, "local/hourly-check")).press("Run now");
-    expect(await result(slot)).toMatch(/^local\/hourly-check: Launch failed · oats-developer-hourly-check-\d{12} was not launched: .*full mode only.*E_BACKEND_SANDBOXED_MODEDismiss$/);
+    expect(await result(slot)).toMatch(/^local\/hourly-check: Launch failedoats-developer-hourly-check-\d{12} was not launched: .*full mode only.*E_BACKEND_SANDBOXED_MODEDismiss$/);
     expect(within(slot.getByTestId("oats-automations-result")).getByTestId("oats-result").dataset.tone).toBe("failed");
+  });
+
+  it("a kernel error that looks like a secret is withheld by itself: the result still says which schedule and what happened", async () => {
+    const failed = value(parseScheduleRun(answer("schedule-run-launch-failed.json")));
+    const slot = await page("", { scheduleRun: () => ({ run: { ...failed.run!, error: "x was not launched: git clone https://ana:hunter2@github.com/acme/app failed" } }) });
+    (await menu(slot, "local/hourly-check")).press("Run now");
+    expect(await result(slot)).toBe("local/hourly-check: Launch failed[withheld]E_BACKEND_SANDBOXED_MODEDismiss");
   });
 
   it("a command whose effects are not known says so", async () => {
     const slot = await page("", { scheduleRun: ran("schedule-run-command.json") });
     (await menu(slot, "local/status-check")).press("Run now");
-    expect(await result(slot)).toBe("local/status-check: Launch state unknown — needs attention · command answered no valid envelope; its side effects are unconfirmedDismiss");
+    expect(await result(slot)).toBe("local/status-check: Launch state unknown — needs attentioncommand answered no valid envelope; its side effects are unconfirmedDismiss");
     expect(within(slot.getByTestId("oats-automations-result")).getByTestId("oats-result").dataset.tone).toBe("unknown");
   });
 
@@ -514,6 +521,54 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     source = "acme.graph:harvest-branches";
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
     await waitFor(() => expect(slot.queryByTestId("oats-automation-test")).toBeNull());
+  });
+
+  it("a test still on its way is said above the list once its row's page is left", async () => {
+    const test = held(() => value(parseTest(answer("schedule-test.json"), "schedule", null)));
+    const slot = await page("schedules/local/daily-review", { automationTest: test.handler });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Testing daily-review…"));
+    expect(slot.queryByTestId("oats-automations-doing")).toBeNull();
+    await go(slot, "schedules");
+    expect((await slot.findByTestId("oats-automations-doing")).textContent).toBe("Testing daily-review…");
+    test.release();
+    await waitFor(() => expect(slot.queryByTestId("oats-automations-doing")).toBeNull());
+  });
+
+  it("after a delete the focus is on the row beside the deleted one, named while that row was still there", async () => {
+    const all = schedules();
+    let rows = all.rows;
+    const slot = await page("", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/hourly-check")), { removed: "hourly-check" }),
+    });
+    const shown = (await slot.findAllByTestId("oats-automation-row")).map((entry) => entry.dataset.id!);
+    const beside = shown[shown.indexOf("local/hourly-check") + 1]!;
+    (await menu(slot, "local/hourly-check")).press("Delete…");
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("was deleted"));
+    // The list is read again and the row is gone before Close is pressed.
+    await waitFor(() => expect(slot.getAllByTestId("oats-automation-row").map((entry) => entry.dataset.id)).not.toContain("local/hourly-check"));
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-close"));
+    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-testid="oats-automation-row"]')?.dataset.id).toBe(beside));
+    expect(focused()).toBe("oats-automation-open");
+  });
+
+  it("a list that could not be read again holds its own rows' acts, not the other list's", async () => {
+    let asked = 0;
+    const slot = await page("triggers", {
+      automations: () => {
+        asked += 1;
+        const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" };
+        return { at: AT, hostId: "host_falcon", oats: OATS, schedule: asked > 1 ? refused : { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+    });
+    await row(slot, "local/pr-triage");
+    fireEvent.click(slot.getByTestId("oats-automations-refresh"));
+    await waitFor(() => expect(asked).toBeGreaterThan(1));
+    // The Schedules list could not be read again; the Triggers list, the one shown, was: its acts are not held.
+    await waitFor(() => expect((within(slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/pr-triage")!).getByRole("switch") as HTMLButtonElement).disabled).toBe(false));
   });
 
   it("a delete or a summary the kernel refuses is followed by a new read of the lists", async () => {

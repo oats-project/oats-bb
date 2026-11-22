@@ -42,18 +42,10 @@ export function parseRowAnswer(document: unknown, kind: AutomationKind, what: st
 export const scheduleRunArgv = (id: string): Result<string[]> => idArgv("schedule", ["run"], id);
 
 const runAnswer = z.looseObject({ run: z.unknown().optional(), schedule: z.unknown().optional() });
-/**
- * The run `oats schedule run` made. The receipt's own `run` carries an outcome only for some
- * kinds (a launch's has none); the row beside it holds the same run as its last, with the outcome
- * the kernel recorded, so that one is read when it is the same run.
- */
+/** The run `oats schedule run` made, as its receipt says it: the kernel records the outcome in the receipt's own `run`. */
 export function parseScheduleRun(document: unknown): Result<ScheduleRunReceipt> {
   const parsed = shaped(runAnswer, document, "oats schedule run");
-  if (!parsed.ok) return parsed;
-  const run = runOf(parsed.value.run);
-  const last = record(parsed.value.schedule) ? runOf(parsed.value.schedule.lastRun) : null;
-  const same = run !== null && last !== null && last.startedAt === run.startedAt && last.scheduledFor === run.scheduledFor;
-  return ok({ run: run !== null && run.outcome === null && same ? { ...run, outcome: last.outcome } : run });
+  return parsed.ok ? ok({ run: runOf(parsed.value.run) }) : parsed;
 }
 
 // ---- test ----

@@ -413,8 +413,9 @@ export function fileTarget(row: AutomationRow, hostId: string | null): { target:
 
 // ---- the acts ----
 /**
- * What a run now did, in the Desktop's words (views/schedules.mjs scheduleOutcome): the outcome,
- * then the kernel's error and reason where it gives them.
+ * What a run now did, in the Desktop's words (views/schedules.mjs scheduleOutcome): the outcome.
+ * The Desktop joins the kernel's error and reason to it in one line; here they are lines of their
+ * own (`runWhy`), filtered apart from it.
  */
 const RUN_OUTCOMES: Record<string, string> = {
   launched: "Agent launched",
@@ -427,10 +428,9 @@ const RUN_OUTCOMES: Record<string, string> = {
   skipped: "Skipped",
   delivered: "Wake message delivered",
 };
-export function scheduleOutcome(run: AutomationRun | null): string {
-  if (run === null) return "Not run yet";
-  return [(run.outcome !== null ? RUN_OUTCOMES[run.outcome] : undefined) ?? run.outcome ?? "Attempt recorded", run.error, run.reason].filter(Boolean).join(" · ");
-}
+export const scheduleOutcome = (run: AutomationRun | null): string => (run === null ? "Not run yet" : ((run.outcome !== null ? RUN_OUTCOMES[run.outcome] : undefined) ?? run.outcome ?? "Attempt recorded"));
+/** The kernel's own words on a run that did not go as asked: its error, then its reason. Drawn apart from the outcome, so one that is withheld leaves the outcome said. */
+export const runWhy = (run: AutomationRun | null): string[] => (run === null ? [] : [run.error, run.reason].filter((line): line is string => line !== null && line !== ""));
 /** Whether a run now went through, did not, or left a state nobody knows. */
 export const runTone = (run: AutomationRun | null): "done" | "failed" | "unknown" =>
   run === null || run.outcome === null ? "unknown" : run.outcome === "launch-failed" || run.outcome === "invalid" ? "failed" : run.outcome === "unknown" || run.outcome === "stopped" ? "unknown" : "done";

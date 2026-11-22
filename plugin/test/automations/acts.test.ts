@@ -123,9 +123,9 @@ describe("run now", () => {
     expect(parseScheduleRun(answer("schedule-run-command.json"))).toMatchObject({ ok: true, value: { run: { outcome: "unknown", error: "command answered no valid envelope; its side effects are unconfirmed" } } });
   });
 
-  it("the outcome of another run is never lent to this one", () => {
+  it("a receipt is read as it is: a run with no outcome has none, whatever the schedule's last run says", () => {
     const run = { scheduledFor: "2026-11-21T10:00:00.000Z", startedAt: "2026-11-21T10:00:05.000Z" };
-    expect(parseScheduleRun({ run, schedule: { lastRun: { ...run, startedAt: "2026-11-21T09:00:05.000Z", outcome: "ended" } } })).toMatchObject({ ok: true, value: { run: { outcome: null } } });
+    expect(parseScheduleRun({ run, schedule: { lastRun: { ...run, outcome: "ended" } } })).toMatchObject({ ok: true, value: { run: { outcome: null } } });
     expect(parseScheduleRun({ run: null, schedule: {} })).toEqual({ ok: true, value: { run: null } });
     expect(parseScheduleRun({ schedule: {} })).toEqual({ ok: true, value: { run: null } });
     expect(parseScheduleRun([])).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });

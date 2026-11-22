@@ -276,7 +276,9 @@ const scenes = [
       await page.shot(`automations-${viewport.name}-delete-done`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-close")));
       check((await gone(dialog)) === "gone", `${at} Close closes it`);
-      check((await focusOn("oats-automation-open")) === "there", `${at} after a delete the focus is on a row of the list, not lost`, await page.evaluate(FOCUSED));
+      // The fake's list still holds the row: the focus is on the Open of the row beside it, not on the first row and not lost.
+      const besideRow = `(() => { const rows = [...document.querySelectorAll(${JSON.stringify(ROW)})]; const at = rows.findIndex((row) => row.dataset.id === "local/weekly-cleanup"); const on = document.activeElement?.closest(${JSON.stringify(ROW)}); return at >= 0 && on && (on === rows[at + 1] || (at === rows.length - 1 && on === rows[at - 1])) && document.activeElement.getAttribute("data-testid") === "oats-automation-open" ? "beside" : ""; })()`;
+      check((await page.until(besideRow, 15)) === "beside", `${at} after a delete the focus is on the row beside the deleted one, not lost`, await page.evaluate(FOCUSED));
 
       // Test of a pull-request trigger: what would fire and what is held
       await open(page, "/triggers/oats-real/proposal-review", testId("oats-automation-test-button"));
@@ -346,7 +348,7 @@ const scenes = [
       check(doing === "Running hourly-check…", `${at} while Run now runs the page says so in words`, doing);
       await page.shot(`automations-${viewport.name}-run-running`, { targets: true });
       const failed = await said(result);
-      check(/^local\/hourly-check: Launch failed · .*E_BACKEND_SANDBOXED_MODE/.test(failed ?? ""), `${at} a launch the provider refused says Launch failed, with the kernel's reason`, failed);
+      check(/^local\/hourly-check: Launch failed oats-developer-hourly-check-\d+ was not launched: .*E_BACKEND_SANDBOXED_MODE/.test(failed ?? ""), `${at} a launch the provider refused says Launch failed, with the kernel's reason`, failed);
       const tone = await page.evaluate(`document.querySelector(${JSON.stringify(`${result} ${testId("oats-result")}`)})?.getAttribute("data-tone") ?? ""`);
       check(tone === "failed", `${at} and is drawn as a failure`, tone);
       await page.shot(`automations-${viewport.name}-run-failed`, { targets: true });

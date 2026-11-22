@@ -27,6 +27,7 @@ import {
   ruleWords,
   runState,
   runTone,
+  runWhy,
   scheduleOutcome,
   sourceParams,
   switchTitle,
@@ -265,12 +266,14 @@ export type Acts = {
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
+export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
   rpc: Rpc;
   /** Reads the lists again. */
   refresh: () => void;
   /** This OATS writes summaries (feature automation-descriptions). */
   summaries: boolean;
+  /** The list that is shown. */
+  kind: AutomationRow["kind"];
   /** The row whose page is open, if one is. */
   open: Pick<AutomationRow, "kind" | "id"> | null;
   /** Why a kind's acts are held: its list could not be read again, so what a row is now is not known. Null where they are not. */
@@ -281,8 +284,8 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
   hostId: string | null;
   /** A row was deleted: its page, if open, has nothing to show. */
   onRemoved: (row: AutomationRow) => void;
-  /** Where the focus goes once a row is deleted: the row beside it in the list. */
-  neighbourOf: (row: AutomationRow) => HTMLElement | null;
+  /** Where the focus goes once a row is deleted: the row beside it in the list, named when this is asked (while the row is still there); the answer finds that row's Open. */
+  neighbourOf: (row: AutomationRow) => () => HTMLElement | null;
 }): Acts {
   /** The act on its way, in words; while one is, the controls that would start another are off. */
   const [doing, setDoing] = useState<{ words: string; test: string | null } | null>(null);
@@ -388,7 +391,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
     say(
       `Running ${row.name}…`,
       () => rpc.call("scheduleRun", { id: row.id }),
-      ({ run }) => ({ title: `${row.id}: ${scheduleOutcome(run)}`, tone: runTone(run), lines: [], code: run?.errorCode ?? null }),
+      ({ run }) => ({ title: `${row.id}: ${scheduleOutcome(run)}`, tone: runTone(run), lines: runWhy(run), code: run?.errorCode ?? null }),
       `${row.name} was not run`,
     );
   const reconcile = (row: AutomationRow) =>
@@ -459,6 +462,8 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
   const confirmDelete = async () => {
     if (dialog === null || dialog.kind !== "delete" || dialog.phase.kind !== "ready") return;
     const { row } = dialog;
+    // The neighbour is named now, while the row is still in the list.
+    beside.current = neighbourOf(row);
     setDialog({ ...dialog, phase: { kind: "running", doing: "Deleting…" } });
     try {
       await attempt(() => rpc.call("scheduleRemove", { id: row.id }));
@@ -588,9 +593,9 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
     };
   };
 
-  // In the result's place: the act on its way, in words, then what it did. A test's own words are on its row's page.
+  // In the result's place: the act on its way, in words, then what it did. A test's own words are on its row's page while that page is open, and here once it is left.
   const result: ReactNode =
-    doing !== null && doing.test === null ? (
+    doing !== null && (doing.test === null || doing.test !== openKey) ? (
       <div data-testid="oats-automations-doing">
         <Loading>{shown(doing.words)}</Loading>
       </div>
@@ -630,7 +635,12 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
   useEffect(() => {
     if (saving) summaryForm.current?.closest<HTMLElement>('[role="dialog"]')?.focus();
   }, [saving]);
-  const close = () => setDialog(null);
+  const beside = useRef<(() => HTMLElement | null) | null>(null);
+  const close = () => {
+    // After a delete the focus goes to the row beside the deleted one, never back to a control of the deleted row.
+    if (dialog !== null && dialog.kind === "delete" && dialog.phase.kind === "done") back.current = beside.current;
+    setDialog(null);
+  };
   const dialogNode: ReactNode =
     dialog === null ? null : dialog.kind === "delete" ? (
       <Confirm
@@ -643,7 +653,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
         phase={dialog.phase}
         onConfirm={() => void confirmDelete()}
         onClose={close}
-        returnFocus={() => neighbourOf(dialog.row)}
+        returnFocus={() => (dialog.phase.kind === "done" ? (beside.current?.() ?? null) : null)}
       />
     ) : dialog.kind === "scheduler" ? (
       <Confirm
@@ -700,7 +710,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
     menuOf,
     rowParts,
     schedulerAction: (
-      <Button data-testid="oats-automations-enable-scheduler" disabled={busy || held.schedule !== null} onClick={() => setDialog({ kind: "scheduler", phase: { kind: "ready" } })}>
+      <Button data-testid="oats-automations-enable-scheduler" disabled={busy || held[kind] !== null} onClick={() => setDialog({ kind: "scheduler", phase: { kind: "ready" } })}>
         Enable scheduler
       </Button>
     ),

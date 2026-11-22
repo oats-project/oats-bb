@@ -15,7 +15,7 @@ import { useActs } from "./acts";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
-import { capabilitySource, refusalParts, TITLES } from "./words";
+import { capabilitySource, GROUPS, refusalParts, TITLES } from "./words";
 import type { FileTarget } from "./words";
 
 export const PATH = "automations";
@@ -178,17 +178,22 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     rpc,
     refresh,
     summaries: descriptions,
+    kind,
     open: openId === null ? null : { kind, id: openId },
     held: { schedule: reads.schedule.error === null ? null : HELD, trigger: reads.trigger.error === null ? null : HELD },
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
     hostId,
-    // The row after the deleted one, else the one before it: the control a person would reach next.
+    // The row after the deleted one, else the one before it, in the order the list shows them (its
+    // groups, each in the kernel's order): the control a person would reach next.
     neighbourOf: (row) => {
-      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
-      const at = rows.findIndex((entry) => entry.dataset.id === row.id);
-      const beside = at === -1 ? rows[0] : (rows[at + 1] ?? rows[at - 1]);
-      return beside?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
+      const shown = GROUPS.flatMap((group) => (reads[row.kind].list?.rows ?? []).filter((entry) => entry.group === group.id));
+      const at = shown.findIndex((entry) => entry.id === row.id);
+      const besideId = at === -1 ? null : (shown[at + 1] ?? shown[at - 1])?.id ?? null;
+      return () => {
+        const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
+        return (rows.find((entry) => entry.dataset.id === besideId) ?? rows[0])?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
+      };
     },
     onRemoved: (row) => {
       if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });

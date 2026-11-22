@@ -6,6 +6,12 @@
 // Codex plugin): this container has neither, so the tests install a plugin that registers
 // one (test/contract/title-service/). No credential, no OATS kernel.
 //
+// Not exercised here: bb has a second source of generated titles, the name a thread's own
+// agent gives it (bb's event `thread/name/updated`, source "agent"). bb applies it through
+// the same guard as its service's title (only to a thread that has none), read in bb's
+// server at this version; the mock model names no thread, so a bb that dropped the guard
+// on that path alone would not fail this file.
+//
 // Run: npm run test:contract (needs docker). Again on every bump of bb-app: the provider
 // sets the title once, at the spawn, because bb at this version never replaces one.
 import assert from "node:assert/strict";

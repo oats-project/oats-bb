@@ -85,9 +85,10 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   is named `instance` as it is. The title is given at the spawn and by no other verb:
   inspect and input read and write none. At the pinned bb a thread spawned with a title
   keeps it (bb asks its title service only for a thread with none, and applies a
-  generated title only to a thread with none); what changes it is `bb thread update
-  --title` or `bb thread regenerate-title`, a person's or an agent's own act, which
-  stays until the next launch.
+  generated title only to a thread with none; the same guard holds for a name the
+  thread's own agent gives it, which the contract test does not exercise); what changes
+  it is `bb thread update --title` or `bb thread regenerate-title`, a person's or an
+  agent's own act, which stays until the next launch.
 - **stop is complete only when nothing of the thread can run.** bb's concurrency limit
   holds a turn in line (the thread is `pending`, its list row says `queuedWork`), and
   `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So a stop is

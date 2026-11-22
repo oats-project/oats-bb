@@ -161,7 +161,7 @@ function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: Autom
         )}
       </div>
       {acts === undefined ? null : (
-        <div data-testid="oats-automation-menu" className="flex items-start @4xl:justify-end">
+        <div data-testid="oats-automation-menu" className="flex items-start justify-end">
           <Menu label={`Actions for ${shown(row.id)}`} items={acts.menuOf(row)} />
         </div>
       )}

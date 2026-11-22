@@ -3,9 +3,10 @@
 // Delete, Check run state, Enable scheduler. Each goes through the plugin's server to the kernel's
 // own verb; what it answered or refused is said where the person is looking. The names of the
 // acts and their sentences are the Desktop's (views/automations.mjs, views/schedules.mjs).
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { AutomationKind, AutomationRow, AutomationTest } from "../../contract/automations";
+import type { AutomationRow, AutomationTest } from "../../contract/automations";
+import { DESCRIPTION_MAX, DESCRIPTION_RULE, descriptionValid } from "../../model/automations";
 import { attempt, errorMessage } from "../store";
 import type { Rpc } from "../store";
 import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result, Switch } from "../ui";
@@ -16,7 +17,6 @@ import { FactList, Quote } from "./parts";
 import {
   capabilitySource,
   causeWords,
-  DESCRIPTION_MAX,
   EVENTS_SHOWN,
   fileTarget,
   LEAD_INS,
@@ -29,7 +29,6 @@ import {
   runTone,
   scheduleOutcome,
   sourceParams,
-  summaryValid,
   switchTitle,
   TEST_TIMED_OUT,
 } from "./words";
@@ -45,6 +44,30 @@ type Dialog =
   | { kind: "summary"; row: AutomationRow; value: string; error: string | null; saving: boolean };
 
 const LINE = "min-w-0 break-words text-sm";
+
+/**
+ * What an act just put on the page (its result, a test's answer, a confirmation): the focus moves
+ * to it once, when it arrives, which also brings it into view. A row's page is longer than a
+ * phone's screen and its side column is under the main one, so an answer is not always where the
+ * press was. `seen` remembers the last arrival that took the focus, so drawing it again takes nothing.
+ */
+function Arrive({ token, seen, testId, children }: { token: number; seen: { current: number }; testId: string; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (token <= seen.current) return;
+    seen.current = token;
+    box.current?.focus();
+    box.current?.scrollIntoView?.({ block: "nearest" });
+  }, [token, seen]);
+  return (
+    <div ref={box} tabIndex={-1} data-testid={testId} className="flex flex-col gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
+    </div>
+  );
+}
+
+/** What a capability source's test would run: the source and the parameters its command receives. A confirmation is for these, as they were shown. */
+const signatureOf = (row: AutomationRow): string => JSON.stringify([row.id, row.on?.source ?? null, sourceParams(row.on).lines]);
 const events = (n: number): string => `${n} ${n === 1 ? "event" : "events"}`;
 const tally = (parts: readonly (readonly [number, string])[]): string => parts.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`).join(", ");
 
@@ -183,7 +206,7 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
 }
 
 /** The Test confirm of a capability source's trigger: what pressing Run test does, said before it does it. It offers Run test and Cancel, and nothing that trusts, enables, starts or schedules the trigger. */
-function SourceConfirm({ row, source, host, running, onRun, onCancel }: { row: AutomationRow; source: CapabilitySource; host: string | null; running: boolean; onRun: () => void; onCancel: () => void }) {
+function SourceConfirm({ row, source, host, running, disabled, onRun, onCancel }: { row: AutomationRow; source: CapabilitySource; host: string | null; /** This test is on its way. */ running: boolean; /** An act is on its way, this one or another. */ disabled: boolean; onRun: () => void; onCancel: () => void }) {
   const params = sourceParams(row.on);
   const elsewhere = row.reason === "assigned-elsewhere" || (row.runsOn !== null && row.runsOn !== host);
   return (
@@ -215,7 +238,7 @@ function SourceConfirm({ row, source, host, running, onRun, onCancel }: { row: A
         <Button data-testid="oats-automation-test-cancel" disabled={running} onClick={onCancel}>
           Cancel
         </Button>
-        <Button data-testid="oats-automation-test-run" variant="primary" disabled={running} onClick={onRun}>
+        <Button data-testid="oats-automation-test-run" variant="primary" disabled={disabled} onClick={onRun}>
           Run test
         </Button>
       </div>
@@ -224,8 +247,6 @@ function SourceConfirm({ row, source, host, running, onRun, onCancel }: { row: A
 }
 
 export type Acts = {
-  /** An act is on its way: the controls that would start another are off. */
-  busy: boolean;
   /** What the last act did or why it was refused, above the list or the row's page. */
   result: ReactNode;
   /** A row's switch: on or off on this computer. Nothing for a row another computer runs. */
@@ -240,51 +261,74 @@ export type Acts = {
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, onRemoved }: {
+export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
   rpc: Rpc;
   /** Reads the lists again. */
   refresh: () => void;
   /** This OATS writes summaries (feature automation-descriptions). */
   summaries: boolean;
+  /** The row whose page is open, if one is. */
+  openId: string | null;
   onOpen: (row: AutomationRow) => void;
   onOpenFile?: (target: FileTarget) => void;
   /** The bb machine that holds the deployment, once known. */
   hostId: string | null;
   /** A row was deleted: its page, if open, has nothing to show. */
   onRemoved: (row: AutomationRow) => void;
+  /** Where the focus goes once a row is deleted: the row beside it in the list. */
+  neighbourOf: (row: AutomationRow) => HTMLElement | null;
 }): Acts {
-  const [busy, setBusy] = useState(false);
+  /** The act on its way, in words; while one is, the controls that would start another are off. */
+  const [doing, setDoing] = useState<{ words: string; test: string | null } | null>(null);
+  const busy = doing !== null;
   const [said, setSaid] = useState<Said | null>(null);
   const [tests, setTests] = useState<ReadonlyMap<string, Tested>>(new Map());
-  const [confirming, setConfirming] = useState<string | null>(null);
+  /** The confirmation that is open: for one row, as its source and parameters were shown. */
+  const [confirming, setConfirming] = useState<{ id: string; signature: string } | null>(null);
   const [nothingRan, setNothingRan] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const running = useRef(false);
+  /** Each thing an act puts on the page gets the next number; the one that arrives takes the focus once. */
+  const [arrival, setArrival] = useState(0);
+  const seen = useRef(0);
+  const arrived = () => setArrival((before) => before + 1);
+
+  // A confirmation is for the row whose page it was asked on: Back, or another row's page, drops it.
+  useEffect(() => {
+    setConfirming((before) => (before !== null && before.id !== openId ? null : before));
+  }, [openId]);
 
   const refused = (what: string, error: unknown): Said => {
     const { code, message } = refusalParts(errorMessage(error));
     return { title: what, tone: "failed", lines: [message], code };
   };
-  /** One act at a time: its answer is said, and the lists are read again whatever it answered. */
+  /**
+   * One act at a time. While it runs the page says so in words; then what it answered (`done`) or
+   * why it did not (`failed`), and the lists are read again whatever it answered.
+   */
   const act = useCallback(
-    async <Value,>(call: () => Promise<Value>, done: (value: Value) => Said | null, failed: string) => {
+    async <Value,>(words: string, call: () => Promise<Value>, done: (value: Value) => void, failed: (error: unknown) => void, { test = null, reread = true }: { test?: string | null; reread?: boolean } = {}) => {
       if (running.current) return;
       running.current = true;
-      setBusy(true);
+      setDoing({ words, test });
       setSaid(null);
       setNothingRan(null);
       try {
-        setSaid(done(await attempt(call)));
+        done(await attempt(call));
       } catch (error) {
-        setSaid(refused(failed, error));
+        failed(error);
       } finally {
         running.current = false;
-        setBusy(false);
-        refresh();
+        setDoing(null);
+        arrived();
+        if (reread) refresh();
       }
     },
     [refresh],
   );
+  /** An act whose answer is said above the list or the row's page. */
+  const say = <Value,>(words: string, call: () => Promise<Value>, done: (value: Value) => Said | null, failed: string) =>
+    act(words, call, (value) => setSaid(done(value)), (error) => setSaid(refused(failed, error)));
   const keep = (id: string, tested: Tested | null) =>
     setTests((before) => {
       const next = new Map(before);
@@ -294,52 +338,63 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
     });
 
   const toggle = (row: AutomationRow) =>
-    act(() => rpc.call("automationEnable", { kind: row.kind, id: row.id, enabled: !row.enabledHere }), () => null, row.enabledHere ? `${row.name} was not turned off here` : `${row.name} was not turned on here`);
+    say(
+      row.enabledHere ? `Turning ${row.name} off here…` : `Turning ${row.name} on here…`,
+      () => rpc.call("automationEnable", { kind: row.kind, id: row.id, enabled: !row.enabledHere }),
+      () => null,
+      row.enabledHere ? `${row.name} was not turned off here` : `${row.name} was not turned on here`,
+    );
   const runNow = (row: AutomationRow) =>
-    act(
+    say(
+      `Running ${row.name}…`,
       () => rpc.call("scheduleRun", { id: row.id }),
       ({ run }) => ({ title: `${row.id}: ${scheduleOutcome(run)}`, tone: runTone(run), lines: [], code: run?.errorCode ?? null }),
       `${row.name} was not run`,
     );
   const reconcile = (row: AutomationRow) =>
-    act(
+    say(
+      `Checking the run state of ${row.name}…`,
       () => rpc.call("scheduleReconcile", { id: row.id }),
       ({ reconciled, remedy }) => ({ title: reconciled === "unknown" ? "Run state is still unknown." : `Run state: ${reconciled ?? "checked"}.`, tone: reconciled === "unknown" ? "unknown" : "done", lines: remedy === null ? [] : [remedy], code: null }),
       `The run state of ${row.name} was not checked`,
     );
-  /** A test's answer is kept for its row. A capability source's is never one press: it goes through its confirmation. */
-  const test = async (row: AutomationRow, runSource = false) => {
+  /**
+   * A test's answer is kept for its row and shown on the row's page, so a test from the list's menu
+   * opens that page. A capability source's is never one press: it goes through its confirmation.
+   */
+  const test = (row: AutomationRow, runSource = false) => {
     if (running.current) return;
+    if (openId !== row.id) onOpen(row);
     if (!runSource && capabilitySource(row.on) !== null) {
       setNothingRan(null);
-      setConfirming(row.id);
-      onOpen(row);
+      setConfirming({ id: row.id, signature: signatureOf(row) });
+      arrived();
       return;
     }
-    running.current = true;
-    setBusy(true);
-    setSaid(null);
-    setNothingRan(null);
-    try {
-      const answered = await attempt(() => rpc.call("automationTest", { kind: row.kind, id: row.id, ...(runSource ? { runSource: true as const } : {}) }));
-      // No confirmation was given and the answer is about a source: no capability code ran, and the confirmed test will say it again.
-      if (!runSource && answered.source !== null) {
-        keep(row.id, null);
-        setNothingRan(row.id);
-      } else keep(row.id, { test: answered });
-    } catch (error) {
-      const { code, message } = refusalParts(errorMessage(error));
-      if (!runSource && code === "E_TRIGGER_SOURCE_RUN") {
-        keep(row.id, null);
-        setNothingRan(row.id);
-      } else keep(row.id, code === "OATS_TIMEOUT" ? { error: TEST_TIMED_OUT, code } : { error: message, code });
-    } finally {
-      running.current = false;
-      setBusy(false);
-      setConfirming(null);
+    // Run test stands for what the confirmation showed: a row read again with another source or other parameters is asked again.
+    if (runSource && (confirming === null || confirming.signature !== signatureOf(row))) return setConfirming(null);
+    void act(
+      `Testing ${row.name}…`,
+      () => rpc.call("automationTest", { kind: row.kind, id: row.id, ...(runSource ? { runSource: true as const } : {}) }),
+      (answered) => {
+        setConfirming(null);
+        // No confirmation was given and the answer is about a source: no capability code ran, and the confirmed test will say it again.
+        if (!runSource && answered.source !== null) {
+          keep(row.id, null);
+          setNothingRan(row.id);
+        } else keep(row.id, { test: answered });
+      },
+      (error) => {
+        setConfirming(null);
+        const { code, message } = refusalParts(errorMessage(error));
+        if (!runSource && code === "E_TRIGGER_SOURCE_RUN") {
+          keep(row.id, null);
+          setNothingRan(row.id);
+        } else keep(row.id, code === "OATS_TIMEOUT" ? { error: TEST_TIMED_OUT, code } : { error: message, code });
+      },
       // A test changes nothing; a row that turned out to be another's is read again.
-      if (!runSource) refresh();
-    }
+      { test: row.id, reread: !runSource },
+    );
   };
 
   const canDescribe = (row: AutomationRow) => summaries && row.origin.kind === "local" && row.unreadable === null;
@@ -348,7 +403,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
     if (dialog === null || dialog.kind !== "summary" || dialog.saving) return;
     const { row, value } = dialog;
     // Sent as typed: only "" clears; the kernel keeps boundary spaces, and refuses what breaks its rule.
-    if (!summaryValid(value)) return setDialog({ ...dialog, error: `A summary is one line of up to ${DESCRIPTION_MAX} characters, without control characters.` });
+    if (!descriptionValid(value)) return setDialog({ ...dialog, error: DESCRIPTION_RULE });
     setDialog({ ...dialog, saving: true, error: null });
     try {
       await attempt(() => rpc.call("automationDescribe", { kind: row.kind, id: row.id, description: value }));
@@ -387,7 +442,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
 
   const menuOf = (row: AutomationRow): MenuItem[] => {
     const items: MenuItem[] = [{ id: "open", label: "Open", onSelect: () => onOpen(row) }];
-    items.push({ id: "test", label: "Test", disabled: busy, onSelect: () => void test(row) });
+    items.push({ id: "test", label: "Test", disabled: busy, onSelect: () => test(row) });
     if (row.kind === "schedule" && row.runsHere) items.push({ id: "run", label: "Run now", disabled: busy, onSelect: () => void runNow(row) });
     if (row.group !== "elsewhere") items.push({ id: "toggle", label: row.enabledHere ? "Turn off here" : "Turn on here", disabled: busy, onSelect: () => void toggle(row) });
     const file = fileTarget(row, hostId).target;
@@ -406,7 +461,15 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
   const rowParts: Acts["rowParts"] = (row, now, host) => {
     const source = row.kind === "trigger" ? capabilitySource(row.on) : null;
     const tested = tests.get(row.id);
-    const card = tested === undefined ? null : <TestCard tested={tested} now={now} />;
+    const testing = doing !== null && doing.test === row.id;
+    const card =
+      tested === undefined ? null : (
+        <Arrive token={arrival} seen={seen} testId="oats-automation-test-arrived">
+          <TestCard tested={tested} now={now} />
+        </Arrive>
+      );
+    // The confirmation stands only while the row is what it showed: a re-read with another source or other parameters withdraws it.
+    const confirm = source !== null && confirming !== null && confirming.id === row.id && confirming.signature === signatureOf(row);
     const unknown = row.kind === "schedule" && row.runsHere && runState(row)?.unknown;
     return {
       identityAction: switchOf(row),
@@ -432,7 +495,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
               Run now
             </Button>
           ) : null}
-          <Button data-testid="oats-automation-test-button" variant="primary" disabled={busy} onClick={() => void test(row)}>
+          <Button data-testid="oats-automation-test-button" variant="primary" disabled={busy} onClick={() => test(row)}>
             Test
           </Button>
         </>
@@ -449,21 +512,32 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
         <>
           {/* This press carried no confirmation and the row turned out to watch a capability's source: nothing ran, and that is no failure of the trigger. */}
           {nothingRan === row.id ? (
-            <p role="status" data-testid="oats-automation-nothing-ran" className={LINE}>
-              {NOTHING_RAN}
-            </p>
+            <Arrive token={arrival} seen={seen} testId="oats-automation-nothing-ran-arrived">
+              <p role="status" data-testid="oats-automation-nothing-ran" className={LINE}>
+                {NOTHING_RAN}
+              </p>
+            </Arrive>
           ) : null}
-          {source !== null && confirming === row.id ? <SourceConfirm row={row} source={source} host={host} running={busy} onRun={() => void test(row, true)} onCancel={() => setConfirming(null)} /> : null}
+          {source !== null && confirm ? (
+            <Arrive token={arrival} seen={seen} testId="oats-automation-test-confirm-arrived">
+              <SourceConfirm row={row} source={source} host={host} running={testing} disabled={busy} onRun={() => test(row, true)} onCancel={() => setConfirming(null)} />
+            </Arrive>
+          ) : null}
           {source !== null ? card : null}
         </>
       ),
-      sideEnd: source === null ? card : null,
+      sideEnd: source === null ? (testing ? <Loading>{doing.words}</Loading> : card) : null,
     };
   };
 
+  // In the result's place: the act on its way, in words, then what it did. A test's own words are on its row's page.
   const result: ReactNode =
-    said === null ? null : (
-      <div data-testid="oats-automations-result">
+    doing !== null && doing.test === null ? (
+      <div data-testid="oats-automations-doing">
+        <Loading>{shown(doing.words)}</Loading>
+      </div>
+    ) : said === null ? null : (
+      <Arrive token={arrival} seen={seen} testId="oats-automations-result">
         <Result
           title={shown(said.title)}
           tone={said.tone}
@@ -482,9 +556,16 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
                 </p>
               ))}
         </Result>
-      </div>
+      </Arrive>
     );
 
+  // While a summary is saved its field and buttons are off: the focus is put on the dialog, so it
+  // does not fall to the page behind and Tab stays inside.
+  const summaryForm = useRef<HTMLFormElement>(null);
+  const saving = dialog !== null && dialog.kind === "summary" && dialog.saving;
+  useEffect(() => {
+    if (saving) summaryForm.current?.closest<HTMLElement>('[role="dialog"]')?.focus();
+  }, [saving]);
   const close = () => setDialog(null);
   const dialogNode: ReactNode =
     dialog === null ? null : dialog.kind === "delete" ? (
@@ -498,6 +579,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
         phase={dialog.phase}
         onConfirm={() => void confirmDelete()}
         onClose={close}
+        returnFocus={() => neighbourOf(dialog.row)}
       />
     ) : dialog.kind === "scheduler" ? (
       <Confirm
@@ -532,6 +614,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
         }
       >
         <form
+          ref={summaryForm}
           data-testid="oats-automation-summary"
           className="flex flex-col gap-2"
           onSubmit={(event) => {
@@ -548,7 +631,6 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
     );
 
   return {
-    busy,
     result,
     switchOf,
     menuOf,
@@ -562,4 +644,3 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
   };
 }
 
-export type { AutomationKind };

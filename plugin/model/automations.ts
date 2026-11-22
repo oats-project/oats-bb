@@ -19,3 +19,8 @@ export function eventLabel(entry: unknown, source: string | null): string | null
 }
 /** An event kind in words ("ready for review"). */
 export const eventWords = (value: unknown): string | null => displayLine(value)?.replace(/_/g, " ") ?? null;
+
+/** The kernel's rule for a summary: one line of up to 200 characters (code points), no control character. Empty removes it. */
+export const DESCRIPTION_MAX = 200;
+export const descriptionValid = (value: string): boolean => [...value].length <= DESCRIPTION_MAX && !/[\p{Cc}\u2028\u2029]/u.test(value);
+export const DESCRIPTION_RULE = `A summary is one line of up to ${DESCRIPTION_MAX} characters, without control characters.`;

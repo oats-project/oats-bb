@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { AutomationKind, AutomationRow, AutomationScheduler, AutomationTest, AutomationTestSource, ScheduleReconciled, ScheduleRunReceipt } from "../contract/automations.js";
 import { automationRowOf, checkAutomationId, counted, eventLabel, list, record, refusedEvents, runOf, skippedItems, sourceCheck, sourceSays, text, type Json } from "./automations.js";
 import { displayLine } from "../app/ui/text.js";
+import { DESCRIPTION_RULE, descriptionValid } from "../model/automations.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
@@ -120,16 +121,13 @@ export function parseTest(document: unknown, kind: AutomationKind, source: strin
 }
 
 // ---- a summary ----
-export const DESCRIPTION_MAX = 200;
-/** The kernel's rule for a summary: one line of at most 200 characters (code points), no control character, no line or paragraph separator. Empty removes it. */
-export const descriptionValid = (value: string): boolean => [...value].length <= DESCRIPTION_MAX && !/[\p{Cc}\u2028\u2029]/u.test(value);
 /** A local item's key: bare or `local/`. A workspace item's summary changes in Git, never here. */
 export const automationKeyLocal = (id: string): boolean => !id.includes("/") || id.startsWith("local/");
 
 /** `oats <kind> update <id> --description=<text>`: the summary only, of a local item; sent as typed. */
 export function describeArgv(kind: AutomationKind, id: string, description: string): Result<string[]> {
   if (!automationKeyLocal(id)) return err(codes.invalidInput, `${id} is a workspace ${kind}: its summary is changed in its repository`);
-  if (!descriptionValid(description)) return err(codes.invalidInput, `A summary is one line of up to ${DESCRIPTION_MAX} characters, without control characters.`);
+  if (!descriptionValid(description)) return err(codes.invalidInput, DESCRIPTION_RULE);
   return idArgv(kind, ["update"], id, [`--description=${description}`]);
 }
 
@@ -187,3 +185,5 @@ export const verbs = (oats: Runner) => ({
   scheduleReconcile: (id: string, signal?: AbortSignal): Promise<Result<ScheduleReconciled>> => oats.run(scheduleReconcileArgv(id), parseScheduleReconcile, oats.timeouts.act, signal),
   schedulerEnable: (signal?: AbortSignal): Promise<Result<{ scheduler: AutomationScheduler; warnings: string[] }>> => oats.run(hostInstallArgv(), parseHostInstall, oats.timeouts.act, signal),
 });
+
+export { descriptionValid };

@@ -94,13 +94,29 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const [refreshing, setRefreshing] = useState(false);
   const mounted = useRef(true);
   useEffect(() => () => void (mounted.current = false), []);
-  const refresh = () => {
-    if (refreshing) return;
+  // One read at a time, and one more behind it: an act that ends while the lists are being read
+  // again (after the act before it) is still read back, whichever render its press belongs to.
+  const reading = useRef(false);
+  const again = useRef(false);
+  const reread = useRef(read.refresh);
+  reread.current = read.refresh;
+  const refresh = useCallback(() => {
+    if (reading.current) {
+      again.current = true;
+      return;
+    }
+    reading.current = true;
     setRefreshing(true);
-    void read.refresh().finally(() => {
+    const run = (): Promise<void> => {
+      again.current = false;
+      const next = () => (again.current ? run() : undefined);
+      return reread.current().then(next, next);
+    };
+    void run().finally(() => {
+      reading.current = false;
       if (mounted.current) setRefreshing(false);
     });
-  };
+  }, []);
   const answer = read.data?.[kind];
   const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null);
 
@@ -160,9 +176,17 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     rpc,
     refresh,
     summaries: descriptions,
+    openId,
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
     hostId,
+    // The row after the deleted one, else the one before it: the control a person would reach next.
+    neighbourOf: (row) => {
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
+      const at = rows.findIndex((entry) => entry.dataset.id === row.id);
+      const beside = at === -1 ? rows[0] : (rows[at + 1] ?? rows[at - 1]);
+      return beside?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
+    },
     onRemoved: (row) => {
       if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });
     },

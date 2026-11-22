@@ -445,9 +445,6 @@ export function switchTitle(row: AutomationRow): string {
 export const NOTHING_RAN = "Nothing ran. Testing this trigger runs a capability's source command and needs your confirmation.";
 export const TEST_TIMED_OUT = "The test did not answer in time. Nothing was recorded.";
 export const NAME_CUT = "The purpose was cut and a hash added so the name fits 64 characters.";
-export const DESCRIPTION_MAX = 200;
-/** The kernel's rule for a summary: one line of up to 200 characters (code points), no control character. Empty removes it. */
-export const summaryValid = (value: string): boolean => [...value].length <= DESCRIPTION_MAX && !/[\p{Cc}\u2028\u2029]/u.test(value);
 
 /** A refusal as the server words it, `<code>: <message>`, apart: the message for a person, the code after it. One rule for what a code is (ui/text). */
 export function refusalParts(text: string): { code: string | null; message: string } {

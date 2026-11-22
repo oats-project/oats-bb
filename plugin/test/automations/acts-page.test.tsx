@@ -306,3 +306,101 @@ describe("Enable scheduler (D-270)", () => {
     expect(slot.queryByTestId("oats-automations-enable-scheduler")).toBeNull();
   });
 });
+
+describe("an act says it is on its way, and its answer comes to the person", () => {
+  /** A handler that waits to be released. */
+  function held<Value>(answer: () => Value) {
+    let release = () => undefined as void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    return { handler: async () => (await gate, answer()), release: () => release() };
+  }
+  const focused = () => (document.activeElement as HTMLElement | null)?.dataset.testid ?? null;
+
+  it("while Run now runs the page says so in words; then the result takes the focus", async () => {
+    const run = held(() => value(parseScheduleRun(answer("schedule-run.json"))));
+    const slot = await page("", { scheduleRun: run.handler });
+    (await menu(slot, "local/daily-review")).press("Run now");
+    const doing = await slot.findByTestId("oats-automations-doing");
+    expect([doing.textContent, within(doing).getByRole("status").textContent]).toEqual(["Running daily-review…", "Running daily-review…"]);
+    expect(slot.queryByTestId("oats-automations-result")).toBeNull();
+    run.release();
+    expect(await result(slot)).toBe("local/daily-review: Agent launchedDismiss");
+    expect(slot.queryByTestId("oats-automations-doing")).toBeNull();
+    await waitFor(() => expect(focused()).toBe("oats-automations-result"));
+  });
+
+  it("an act pressed while the lists are read again after the act before it is read back too", async () => {
+    const reread = held(() => ({ at: AT }));
+    let rereads = 0;
+    const slot = await page("", {
+      automationEnable: ({ id }) => ({ row: rowOf(schedules(), id) }),
+      refresh: async () => {
+        rereads += 1;
+        // The first re-read is held open: the second act ends while it is still under way.
+        if (rereads === 1) await reread.handler();
+        return { at: AT };
+      },
+    });
+    const press = async (id: string) => fireEvent.click(within(await row(slot, id)).getByRole("switch"));
+    await press("local/daily-review");
+    await waitFor(() => expect(rereads).toBe(1));
+    await press("local/hourly-check");
+    await waitFor(() => expect(calls(slot, "automationEnable")).toHaveLength(2));
+    reread.release();
+    await waitFor(() => expect(rereads).toBe(2));
+  });
+
+  it("Test from a row's menu opens the row's page, where its answer is shown", async () => {
+    const slot = await page("", { automationTest: () => value(parseTest(answer("schedule-test.json"), "schedule", null)) });
+    (await menu(slot, "local/daily-review")).press("Test");
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "schedules/local/daily-review" } }]);
+    await waitFor(() => expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]));
+  });
+
+  it("on a row's page a test says it is on its way, and its answer takes the focus", async () => {
+    const test = held(() => value(parseTest(answer("schedule-test.json"), "schedule", null)));
+    const slot = await page("schedules/local/daily-review", { automationTest: test.handler });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Testing daily-review…"));
+    expect(slot.inspection.navigateCalls).toEqual([]);
+    test.release();
+    expect((await slot.findByTestId("oats-automation-test")).textContent).toMatch(/^Test resultReady: it would run here\./);
+    await waitFor(() => expect(focused()).toBe("oats-automation-test-arrived"));
+  });
+
+  it("a capability source's confirmation takes the focus, says Testing… only for its own test, and is for the row as it was shown", async () => {
+    const enable = held(() => ({ row: rowOf(triggers(), "oats-real/harvest-review") }));
+    let params = [{ name: "prefix", value: "harvest/" }, { name: "graph", value: "kb" }];
+    const lists = () => {
+      const list = triggers();
+      const rows = list.rows.map((entry) => (entry.id === "oats-real/harvest-review" && entry.on !== null ? { ...entry, on: { ...entry.on, params } } : entry));
+      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+    };
+    const slot = await page("triggers/oats-real/harvest-review", { automations: lists, automationEnable: enable.handler });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    const confirm = await slot.findByTestId("oats-automation-test-confirm");
+    await waitFor(() => expect(focused()).toBe("oats-automation-test-confirm-arrived"));
+    // Another act on its way: the confirmation's buttons are off, and it does not say a test is running.
+    fireEvent.click(within(slot.getByTestId("oats-automation-identity")).getByRole("switch"));
+    await waitFor(() => expect((slot.getByTestId("oats-automation-test-run") as HTMLButtonElement).disabled).toBe(true));
+    expect(confirm.textContent).not.toContain("Testing…");
+    expect(calls(slot, "automationTest")).toEqual([]);
+    // The lists are read again and the trigger's parameters are others: what was shown is no longer what would run.
+    params = [{ name: "prefix", value: "release/" }, { name: "graph", value: "kb" }];
+    enable.release();
+    await waitFor(() => expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull());
+    expect(calls(slot, "automationTest")).toEqual([]);
+  });
+
+  it("while a summary is saved the focus stays on the dialog", async () => {
+    const save = held(() => ({ row: rowOf(schedules(), "local/daily-review") }));
+    const slot = await page("", { automationDescribe: save.handler });
+    (await menu(slot, "local/daily-review")).press("Edit summary");
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-automation-summary-save"));
+    await waitFor(() => expect(dialog.textContent).toContain("Saving the summary…"));
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    save.release();
+    await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  });
+});

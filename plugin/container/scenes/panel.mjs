@@ -185,8 +185,8 @@ async function open(page, viewport, threads, agent) {
  * (`thread-secondary-panel-top-chrome`) and its content straight in the panel's column, whether
  * the panel came up open with the page (bb remembers it, and its tab) or was opened by the press,
  * and 40 to 400 ms later puts the two inside one more element (measured: the node that holds the
- * plugin's panel is removed from bb's `app-layout-content-shell` and a new one added, in 4 to 8
- * of 28 opens at 1280 px per run, whether or not the composer's footer has loaded). The plugin's tab is mounted
+ * plugin's panel is removed from bb's `app-layout-content-shell` and a new one added, in 8 of 28
+ * opens at 1280 px in each of two runs, whether or not the composer's footer has loaded). The plugin's tab is mounted
  * again by that: what a scene opened in it (a fold, whose open state is the DOM's) is closed
  * again, and the next read is of content that is not on the page. The panel is whole once the
  * element that holds both the tab strip and the plugin's panel is that inner one (bb gives it
@@ -283,7 +283,7 @@ const first = [
 
       // the Soul tab, from the soul's name in the header
       await page.evaluate(click(inPanel("oats-panel-soul-link")));
-      check(Boolean(await page.until(`${textOf(inPanel("oats-panel-soul-name"))} === "oats-expert"`, 15)), `${at} the soul's name opens the Soul tab`, await page.evaluate(textOf(inPanel("oats-panel-soul-name"))));
+      check(Boolean(await page.until(`${textOf(inPanel("oats-panel-soul-name"))} === "oats-expert"`, 15)), `${at} the soul's name opens the Soul tab`, JSON.stringify(await page.evaluate(textOf(inPanel("oats-panel-soul-name")))));
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-soul-description")));
         check(read === "OATS expert: answers questions about OATS.", `${at} the Soul tab: the soul's description`, read);
@@ -516,7 +516,7 @@ const second = [
         // Refresh readiness says that it read again
         await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
         const updated = await page.until(`${textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`)} === "Readiness updated"`, 30);
-        check(Boolean(updated), `${at} Refresh readiness says Readiness updated once it read again`, await page.evaluate(textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`)));
+        check(Boolean(updated), `${at} Refresh readiness says Readiness updated once it read again`, JSON.stringify(await page.evaluate(textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`))));
 
         // the activity: an incomplete window, and a blocked launch's row
         setVerb("instance events", derived("events.json", (result) => {
@@ -760,7 +760,7 @@ const more = [
           const opened = await open(page, viewport, threads, IDLE);
           check(opened.ok, `${at} the idle agent's panel is open`, opened.read);
         }
-        check(Boolean(await page.until(`${said} === "Idle"`, 30)), `${at} before the claim its header says Idle`, await page.evaluate(said));
+        check(Boolean(await page.until(`${said} === "Idle"`, 30)), `${at} before the claim its header says Idle`, JSON.stringify(await page.evaluate(said)));
         const claimed = record(states(threads, RUNNING_MODEL, { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" }));
         const needs = (await page.until(`${said}.startsWith("Needs you")`, 15)) ? Date.now() - claimed : null;
         check(needs !== null && needs <= 3000, `${at} the header says Needs you ${needs === null ? "never" : `${needs} ms`} after the kernel recorded the claim (3 s at most)`, await page.evaluate(said));
@@ -814,7 +814,7 @@ const more = [
       try {
         // Opened again: leave the agent's page inside the app, change what OATS says, come back.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        check(Boolean(await page.until(`${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 30)), `${at} the agent's page shows its model`, await page.evaluate(textOf(model)));
+        check(Boolean(await page.until(`${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 30)), `${at} the agent's page shows its model`, JSON.stringify(await page.evaluate(textOf(model))));
         await page.evaluate(click(testId("oats-agent-back")));
         await page.until(`location.pathname.endsWith("/threads/${threads.get(CHILD.thread).id}")`, 15);
         setStatus({ stdout: JSON.stringify(states(threads, "claude-fable-5.2")) });
@@ -854,7 +854,7 @@ const more = [
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
         await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
-        check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, await page.evaluate(textOf(model)));
+        check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, JSON.stringify(await page.evaluate(textOf(model))));
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });
       }

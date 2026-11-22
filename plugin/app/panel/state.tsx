@@ -8,8 +8,8 @@ import { codes } from "../../kernel/result";
 import { Fragment, useEffect, useState } from "react";
 import { Button, Code, Loading, Notice } from "../ui";
 import type { Read } from "../store";
+import { readAge } from "../ui/words";
 import { refusalWords } from "./refusal-words";
-import { staleAge } from "./words";
 
 /**
  * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
@@ -57,6 +57,8 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
   if (read.status === "loading") return <Loading>{reading}</Loading>;
   if (read.status !== "error") return null;
   const code = codeOf(read.error);
+  /** When what is still shown was read: the instant the part names, else when this window received it. */
+  const stale = at ?? read.readAt;
   const words = refusalWords(of, code, read.error);
   const kept = read.data !== undefined;
   // OATS has none of it for this kind of agent: a fact, said once and not drawn as a failure; nothing to press.
@@ -67,7 +69,7 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
       tone="error"
       code={code}
       details={read.error}
-      {...(kept ? { age: staleAge(at ?? read.readAt, Math.max(now, seen)) } : {})}
+      {...(kept ? { age: stale === null ? null : readAge(stale, Math.max(now, seen)) } : {})}
       actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
       {words.sentence === null ? null : <Sentence>{words.sentence}</Sentence>}

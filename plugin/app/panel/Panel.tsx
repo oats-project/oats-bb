@@ -18,8 +18,8 @@ import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { instanceDisplayName, waitingLabel } from "../ui/words";
-import { openSoul } from "../workspace/pages";
+import { instanceDisplayName, readAge, waitingLabel } from "../ui/words";
+import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
@@ -27,7 +27,7 @@ import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, staleAge, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
@@ -178,6 +178,12 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here. */}
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
         </div>
+        {/* The kernel's own text behind the line's words (what it says of a session it cannot reach): under Details, as the thread's row shows it. */}
+        {status.kernel === null || shown(status.kernel) === "" ? null : (
+          <Disclosure summary="Details" testId="oats-panel-state-kernel">
+            <span className="break-words text-xs text-muted-foreground">{`OATS says: ${shown(status.kernel)}`}</span>
+          </Disclosure>
+        )}
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
@@ -235,7 +241,7 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
       tone="error"
       code={code}
       details={refusal}
-      {...(read.data === undefined ? {} : { age: staleAge(read.data.at, now) })}
+      {...(read.data === undefined ? {} : { age: readAge(read.data.at, now) })}
       actions={
         <>
           {words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : null}
@@ -451,6 +457,7 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
 
 function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode }) {
   const navigate = useBbNavigate();
+  const soulsShown = usePageShown("souls");
   const answer = read.data;
   // Read again when the instance was started again or what it was built from moved: the same instance, another record.
   const soul = usePanelSoul(agent.instance, answer === undefined ? "" : JSON.stringify([answer.facts.startedAt, answer.facts.drift]));
@@ -470,19 +477,21 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
             {shown(description)}
           </p>
         )}
-        {/* With the soul it opens, at the top: never below the fold, never cut at the window's foot. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            data-testid="oats-panel-open-soul"
-            disabled={key === null}
-            onClick={() => {
-              if (key !== null) openSoul(navigate, key);
-            }}
-          >
-            Open soul page
-          </Button>
-          {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
-        </div>
+        {/* With the soul it opens, at the top: never below the fold, never cut at the window's foot. Offered only where the Souls page is shown in this release: a link leads somewhere. */}
+        {soulsShown ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              data-testid="oats-panel-open-soul"
+              disabled={key === null}
+              onClick={() => {
+                if (key !== null) openSoul(navigate, key);
+              }}
+            >
+              Open soul page
+            </Button>
+            {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
+          </div>
+        ) : null}
       </header>
       {readState}
       <SoulBody read={soul} now={now} />

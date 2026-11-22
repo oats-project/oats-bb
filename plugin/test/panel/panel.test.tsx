@@ -339,7 +339,7 @@ test("a later read that fails keeps what was read, says how old it is and why, a
   // The one drawing of a failed read: the titled notice, with how old what is still shown is, said once.
   const stale = await slot.findByRole("alert");
   expect(text(within(stale).getByRole("heading"))).toBe("This instance could not be read again");
-  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("Showing what was read 3 min ago."); // 2 min 40 s, in the one shared form (minutes to the nearest one: `readAge`)
   expect(text(stale)).toContain("OATS_TIMEOUT");
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
   fail = false;
@@ -466,7 +466,7 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   await waitFor(() => expect(text(within(stale).getByRole("heading"))).toBe("OATS could not read this deployment"));
   expect(text(stale)).toContain("OATS says: no oats-local.yaml here");
   expect(text(stale)).toContain("E_LOCAL_MISSING");
-  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("Showing what was read 3 min ago."); // as above: the shared `readAge`
   // Everything it read is still there: the name, the state, the claim, the facts.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();
@@ -726,4 +726,32 @@ test("the older-build fold scrolls within its own height: the header does not gr
   const lines = fold.querySelector(".overflow-y-auto")!;
   expect(lines.className).toContain("max-h-32");
   expect(lines.children.length).toBeGreaterThan(12);
+});
+
+test("an agent the kernel cannot reach: the header says it in a person's words, and the kernel's own text is under Details", async () => {
+  const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer at http://127.0.0.1:38886 (connection refused)" }) });
+  await slot.findByTestId("oats-panel-work");
+  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
+  const details = slot.getByTestId("oats-panel-state-kernel");
+  expect(details.querySelector("summary")!.textContent).toContain("Details");
+  expect(details.textContent).toContain("OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)");
+  // closed until asked for: the kernel's text is not the header's words
+  expect((details as HTMLDetailsElement).open ?? details.querySelector("details")?.open).toBeFalsy();
+  slot.unmount();
+  // an agent the kernel says nothing more of has no such fold
+  const plain = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null }) });
+  await plain.findByTestId("oats-panel-work");
+  expect(plain.queryByTestId("oats-panel-state-kernel")).toBeNull();
+});
+
+test("Open soul page is offered only where the Souls page is shown in this release", async () => {
+  const shownSlot = panel({ threadId: CHILD_THREAD }, {}, { settings: { pages: "home, souls" } });
+  fireEvent.click(await shownSlot.findByTestId("oats-panel-soul-link"));
+  expect(text(await shownSlot.findByTestId("oats-panel-open-soul"))).toBe("Open soul page");
+  shownSlot.unmount();
+  const hidden = panel({ threadId: CHILD_THREAD }, {}, { settings: { pages: "home" } });
+  fireEvent.click(await hidden.findByTestId("oats-panel-soul-link"));
+  await hidden.findByTestId("oats-panel-soul-name");
+  expect(hidden.queryByTestId("oats-panel-open-soul")).toBeNull();
+  expect(hidden.queryByTestId("oats-panel-open-soul-why")).toBeNull();
 });

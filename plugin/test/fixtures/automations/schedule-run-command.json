@@ -1,0 +1,132 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "status-check",
+   "cron": "*/15 * * * *",
+   "tz": "UTC",
+   "kind": "command",
+   "cwd": "/abs/deployment",
+   "argv": [
+    "oats",
+    "status",
+    "--json"
+   ],
+   "createdAt": "2026-11-21T20:17:26.064Z",
+   "updatedAt": "2026-11-21T20:17:30.742Z",
+   "description": "Check that the roster answers",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true,
+    "intent": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    }
+   },
+   "nextRun": "2026-11-21T20:30:00.000Z",
+   "lastRun": {
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:39.936Z",
+    "kind": "command",
+    "launched": false,
+    "unconfirmed": true,
+    "error": "command answered no valid envelope; its side effects are unconfirmed",
+    "outcome": "unknown",
+    "runId": "3aaef3c1accc5c3b410a779a",
+    "session": {
+     "instance": null,
+     "home": null,
+     "incarnation": null,
+     "server": null,
+     "delivery": "none"
+    }
+   },
+   "history": {
+    "status": "ok",
+    "stored": 1,
+    "truncated": false
+   },
+   "recentRuns": [
+    {
+     "runId": "3aaef3c1accc5c3b410a779a",
+     "scheduledFor": "2026-11-21T20:17:00.000Z",
+     "startedAt": "2026-11-21T20:17:39.936Z",
+     "kind": "command",
+     "launched": false,
+     "unconfirmed": true,
+     "error": "command answered no valid envelope; its side effects are unconfirmed",
+     "outcome": "unknown",
+     "settled": true,
+     "recordedAt": "2026-11-21T20:17:40.823Z",
+     "transitions": [
+      "unknown"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    }
+   ],
+   "running": false,
+   "attempt": {
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:39.936Z",
+    "wallClock": "2026-11-21T20:17:40.297Z",
+    "error": "command answered no valid envelope; its side effects are unconfirmed",
+    "exited": true,
+    "exitStatus": 0,
+    "exitSignal": null
+   },
+   "name": "status-check",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/status-check",
+   "soul": null,
+   "task": null,
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-21T20:30:00.000Z",
+   "enabled": true
+  },
+  "run": {
+   "scheduledFor": "2026-11-21T20:17:00.000Z",
+   "startedAt": "2026-11-21T20:17:39.936Z",
+   "kind": "command",
+   "launched": false,
+   "unconfirmed": true,
+   "error": "command answered no valid envelope; its side effects are unconfirmed",
+   "outcome": "unknown"
+  },
+  "considered": [
+   {
+    "workspace": "/abs/deployment",
+    "id": "status-check",
+    "minute": "2026-11-21T20:17",
+    "action": "unknown",
+    "error": "command answered no valid envelope; its side effects are unconfirmed"
+   }
+  ]
+ }
+}

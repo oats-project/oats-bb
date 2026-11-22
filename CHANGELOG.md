@@ -1,13 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+pi agents run on bb, beside Claude Code agents, and the OATS plugin for bb gains the
+agent's panel. Package `oats.bb` 0.2.0.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.2.0`, then `oats sync`. The floor
+  stays OATS 0.70.0, and bb-app stays 0.50.1.
+- For pi agents:
+  - oats.aweb 1.48.0 or later, which OATS 0.70.2 pins;
+  - `@awebai/oats-pi` in the pi configuration bb's server runs with, and `@awebai/pi` not
+    there;
+  - `settings.oats.bb.piAgentDir` naming that directory. The team image's is
+    `/state/home/.bb-pi`.
+  
+  A pi agent's dialog raises needs-input from `@awebai/oats-pi` 0.70.2, which the team
+  image now pins.
+- Every bb home: on a host without Linux's `/proc` (macOS), a thread in `error` answers
+  `E_SESSION_UNAVAILABLE` until it is sent a message in bb itself (below; oats-bb#22).
+- Respawn bb homes, or move stopped ones with `oats instance upgrade`, to take 0.2.0.
 
 ### pi agents on bb
 
 The bb session provider runs pi agents as well as Claude Code agents: its manifest offers
 the harnesses `claude` and `pi` (contract r23: A12 to A14). A soul whose harness is pi, spawned
 with `--backend bb --yolo`, runs as a thread of bb's own pi provider. Checked against
-bb-app 0.50.1, pi 1.5.2 and @awebai/oats-pi 0.70.0.
+bb-app 0.50.1, pi 1.5.2 and @awebai/oats-pi 0.70.2 (`test/contract/pi.test.mjs`, with OATS
+0.70.2).
 
 What an operator must set up for pi (the README's "pi" section has the detail):
 
@@ -47,8 +67,10 @@ For every bb agent, Claude Code included:
   harness alive (the process named `pi` or `claude` that carries the thread's id; a
   command the agent left running does not count), the thread reads as present and at rest, and an input recovers it;
   before, such a home read LOST and could be neither resumed nor sent to. With none, it
-  is a lost session as before. This reads Linux's `/proc`; on a host without it (macOS) a
-  thread in `error` is answered `E_SESSION_UNAVAILABLE`.
+  is a lost session as before. This reads Linux's `/proc` (the environment of a process named `pi` or
+  `claude` only, never another program's); on a host without it (macOS) a thread in
+  `error` is answered `E_SESSION_UNAVAILABLE`, and the route back is a message to it in
+  bb itself (oats-bb#22).
   An input to such a lost thread is told, as before: bb starts the harness again in the
   same conversation, and the kernel counts it as a resume of the home.
 - **Readiness speaks for the harness of the planned launch.** A pi launch is not held up
@@ -69,7 +91,29 @@ For every bb agent, Claude Code included:
 The team image for bb (`container/`) adds pi and `@awebai/oats-pi`, pinned, and runs bb's
 pi with a configuration of its own (`/state/home/.bb-pi`, linked to the image's
 `/opt/bb/pi`). Its declared command is now `/usr/local/bin/bb-server`. It ships no model
-credential for pi. Set `piAgentDir: /state/home/.bb-pi` in the deployment.
+credential for pi. Set `piAgentDir: /state/home/.bb-pi` in the deployment. It pins pi 1.5.2
+and `@awebai/oats-pi` 0.70.2.
+
+### The OATS plugin for bb
+
+- **The agent's panel.** On an agent's own thread, the OATS tab of bb's side panel is
+  that agent's panel, as the OATS Desktop's instance panel. Its Instance tab shows the
+  agent's state and since when, and what it waits on you for. It also shows where it works
+  (folder and home, with Copy), its harness, model and thread, its messaging id, and its
+  parent. Its Soul tab shows the soul and the agents root, with Open soul page. The panel
+  only reads: it adds no process beside the plugin's one `oats status`.
+  - The same panel is a page, `/plugins/oats/agent/<instance>`. At phone width, the
+    thread's OATS chip opens it. For an agent with no bb thread, its soul's page has Open.
+- **Text from OATS is filtered as the Desktop filters it.** Text that looks like a token,
+  a password or a credentialed URL shows as `[withheld]`, and a refusal is drawn one line
+  per line. The filter is copied from the Desktop's, and a test pins it to that file.
+- **Changes reach the screen sooner.** Between two `oats status` reads, the plugin waits
+  1 s or as long as the last read took, whichever is longer. It used to wait 5 s. A read
+  that failed is followed by the 1 s floor.
+- **Controls are easier to press.** Buttons are 44 px high at phone width, and the
+  sidebar's rows are as high as a control.
+- The plugin is now one module per feature, with one shared component per pattern. A
+  hidden page, `/plugins/oats/patterns`, draws each pattern for the plugin's own checks.
 
 ## 0.1.0
 

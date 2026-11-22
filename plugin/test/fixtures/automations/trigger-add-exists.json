@@ -1,0 +1,11 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_TRIGGER_EXISTS",
+  "message": "trigger pr-triage already exists in /abs/deployment",
+  "details": {
+   "id": "pr-triage"
+  }
+ }
+}

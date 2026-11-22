@@ -1,6 +1,6 @@
 ---
 name: oats-in-bb
-description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one from a soul's page, reading the sidebar tree and the "needs you" list, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
+description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one from a soul's page, reading the sidebar tree and the "needs you" list, reading OATS schedules and triggers on the Automations page, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
 ---
 
 # OATS agents in bb
@@ -34,7 +34,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Where things are
 
-- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, "N need you", then the agents
+- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, Automations, "N need you", then the agents
   as a tree (children under parents), then bb's other threads.
 - Under an agent's thread header, one line of chips: soul, instance, aweb alias, parent (a link
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
@@ -49,6 +49,22 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.
   "Idle" means the kernel does not say the agent is working: it may be waiting or done.
+
+## Automations
+
+- **Automations** (sidebar, under Machines) lists OATS's own schedules and triggers, local and
+  from the workspace's members. They are the kernel's: never use bb's own automations for an OATS
+  agent. What the page shows is `oats schedule list` and `oats trigger list`.
+- Rows are grouped by where they run: on this computer, needing attention here, elsewhere. A row
+  opens its page: what it sends, when, what it spawns, its recent runs or fires, where it runs and
+  where it comes from. A trigger's page also shows what is live, fired and waiting.
+- A red dot on the sidebar's Automations row means a schedule's last run is launch failed or
+  invalid: open its page, the run says why in the kernel's words.
+- "Scheduler off" in the header means the host timer is not installed, active and registered:
+  nothing scheduled runs on this computer until it is (`oats schedule host install` in the
+  deployment).
+- The page only reads for now. To change, run or test one: `oats schedule …` and `oats trigger …`
+  in the deployment.
 
 ## When the plugin shows one line instead of the tree
 

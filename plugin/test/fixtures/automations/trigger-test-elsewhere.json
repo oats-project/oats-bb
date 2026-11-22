@@ -1,0 +1,98 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "triggerApi": 1,
+  "id": "oats-real/docs-review",
+  "ok": false,
+  "placement": {
+   "runsOn": "docs-server",
+   "owner": "github.com/acme-bot",
+   "host": "bb-box",
+   "runsHere": false,
+   "reason": "assigned-elsewhere",
+   "detail": "runs on docs-server; this host is bb-box",
+   "enabledHere": true
+  },
+  "gh": {
+   "ok": true,
+   "account": "ana",
+   "credentialSource": "keyring",
+   "reachesHostTimer": true,
+   "note": "gh uses the system keyring; the host timer runs in your user session and reaches it",
+   "detail": "github.com ·   ✓ Logged in to github.com account ana (keyring) ·   - Active account: true"
+  },
+  "repo": {
+   "key": "github.com/acme/docs",
+   "readable": true,
+   "fullName": "acme/knowledge",
+   "permissions": {
+    "push": true,
+    "maintain": false,
+    "admin": false
+   },
+   "canMerge": true
+  },
+  "soul": {
+   "resolves": true,
+   "name": "oats-developer",
+   "agent": "oats-developer",
+   "messaging": null
+  },
+  "teams": {
+   "requested": [],
+   "undeclared": [],
+   "messaging": null
+  },
+  "wouldFire": [
+   {
+    "key": "oats-real/docs-review:github.com/acme/docs#41:opened:2026-11-20T10:41:00Z",
+    "repo": "github.com/acme/docs",
+    "number": 41,
+    "subject": "41",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/41",
+    "instance": "oats-developer-docs-review-41",
+    "nameCut": false
+   },
+   {
+    "key": "oats-real/docs-review:github.com/acme/docs#42:opened:2026-11-20T10:42:00Z",
+    "repo": "github.com/acme/docs",
+    "number": 42,
+    "subject": "42",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/42",
+    "instance": "oats-developer-docs-review-42",
+    "nameCut": false,
+    "held": "concurrency.max 1 reached (1 live)"
+   },
+   {
+    "key": "oats-real/docs-review:github.com/acme/docs#43:opened:2026-11-20T10:43:00Z",
+    "repo": "github.com/acme/docs",
+    "number": 43,
+    "subject": "43",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/43",
+    "instance": "oats-developer-docs-review-43",
+    "nameCut": false,
+    "held": "concurrency.max 1 reached (1 live)"
+   },
+   {
+    "key": "oats-real/docs-review:github.com/acme/docs#45:opened:2026-11-20T10:45:00Z",
+    "repo": "github.com/acme/docs",
+    "number": 45,
+    "subject": "45",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/45",
+    "instance": "oats-developer-docs-review-45",
+    "nameCut": false,
+    "held": "concurrency.max 1 reached (1 live)"
+   }
+  ],
+  "problems": [
+   "not run on this host (assigned-elsewhere): runs on docs-server; this host is bb-box"
+  ],
+  "warnings": [],
+  "spawned": false
+ }
+}

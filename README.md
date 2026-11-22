@@ -4,7 +4,7 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-The first release is 0.1.0 ([CHANGELOG.md](CHANGELOG.md)). The work arrives as reviewed pull
+The latest release is 0.2.0 ([CHANGELOG.md](CHANGELOG.md)): pi agents run on bb beside Claude Code agents. The work arrives as reviewed pull
 requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
@@ -63,8 +63,9 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 > and tested against the pinned bb; it runs for no launch until OATS decides to offer
 > those modes.
 >
-> **Released after a real run.** 0.1.0 was released after a run against OATS 0.70.0 from
-> npm with `--backend bb` (the plugin's real run, in CI). bb homes run in bb's full mode, and
+> **Released after a real run.** Each release is cut after the plugin's real run in CI,
+> against OATS 0.70.0 from npm with `--backend bb`. 0.2.0's pi support is also run against
+> the real bb and pi with OATS 0.70.2 (`test/contract/pi.test.mjs`). bb homes run in bb's full mode, and
 > claim no sandbox boundary.
 
 ## Install
@@ -86,7 +87,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/oats-project/oats-bb@v0.1.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.2.0
    defaults:
      capabilities:
        oats.bb: { from: package }
@@ -185,9 +186,13 @@ directory is in the home keeps the home from being resumed: end that process, or
 the home again (`oats session start`). What failed is the harness's to report (a "Turn failed"
 needs-input claim), not this table's. The provider reads a process's environment from
 Linux's `/proc`, as the user bb runs as. On a host without it (macOS) it cannot tell, and
-a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess; to get such
-a thread back, send it a message in bb (`bb thread tell <thread id> <text>`), which
-starts a turn and brings it back to `idle`.
+a thread in `error` is then answered `E_SESSION_UNAVAILABLE`, never a guess. While the
+thread stays in `error` there, OATS cannot act on the home: `oats session start` and
+`oats session input` refuse, because whether the home runs cannot be established. The
+route back is bb's own: send the thread a message in bb (`bb thread tell <thread id>
+<text>`, or in its UI), which starts a turn and brings it back to `idle`; OATS reads it
+again from then. A look that works on macOS is
+[oats-bb#22](https://github.com/oats-project/oats-bb/issues/22).
 
 **An input to a thread in `error` whose process is gone is told, like any other**
 (contract r23, A14): bb answers sent, starts the harness again in the same conversation
@@ -431,7 +436,7 @@ never a failed start.
 A soul whose harness is pi runs on bb as a thread of bb's own pi provider
 (`bb thread spawn --provider pi --model <the launch's model>`; a model is
 `<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.0
+follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.2
 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
@@ -540,8 +545,8 @@ installed, is recent enough. A bb home is delivered by the host wake broker what
 extension opens (`ctx.ui.confirm`, `select`, `input`, `editor`) is a pending interaction
 in bb: input to the thread is refused while it is open (`E_SESSION_PROMPT_OPEN`), and a
 person answers it in bb. Whether such a dialog raises a needs-input claim is
-@awebai/oats-pi's: 0.70.0 sets none, and a release that reports pi's prompts sets one in
-every pi home; a failed
+@awebai/oats-pi's: from 0.70.2 it sets a `question` claim in every pi home while the
+dialog is open (0.70.0 and 0.70.1 set none); a failed
 turn raises its "Turn failed" claim, which the kernel shows because the thread reads as
 there (the table above).
 

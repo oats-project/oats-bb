@@ -1,0 +1,28 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "triggerApi": 1,
+  "scope": "/abs/deployment",
+  "host": {
+   "name": null,
+   "ghUser": {}
+  },
+  "triggers": [],
+  "snapshot": null,
+  "scheduler": {
+   "installed": false,
+   "active": false,
+   "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
+   "problems": [],
+   "lastTick": null,
+   "maxConcurrent": 5,
+   "triggersMaxConcurrent": null,
+   "tickIntervalSec": 60,
+   "workspace": "/abs/deployment",
+   "registered": false,
+   "workspaces": [],
+   "live": 0
+  }
+ }
+}

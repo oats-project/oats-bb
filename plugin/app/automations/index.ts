@@ -13,3 +13,10 @@ export function register(app: PluginAppBuilder): void {
   app.slots.navPanel({ id: "automations", title: "Automations", icon: ICON, path: PATH, experimental_hideFromNavigation: true, component: AutomationsPage });
   addPageLink({ path: PATH, title: "Automations", useMark: useFailedRunMark });
 }
+
+// What other features place: the recurring wake-up of the New agent form (its group, what it asks
+// for, what to say once the kernel answered), and the ways into Schedules and into its form for a soul.
+export { newWake, wakeOf, WAKE_INCOMPLETE } from "../../model/automations";
+export type { WakeDraft } from "../../model/automations";
+export { openScheduleForm, openSchedules } from "./Page";
+export { browserZone, WakeFields, wakeNotice } from "./wake";

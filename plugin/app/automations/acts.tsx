@@ -5,7 +5,7 @@
 // acts and their sentences are the Desktop's (views/automations.mjs, views/schedules.mjs).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { AutomationRow, AutomationTest } from "../../contract/automations";
+import type { AutomationRow, AutomationTest, ScheduleDraft } from "../../contract/automations";
 import { DESCRIPTION_MAX, DESCRIPTION_RULE, descriptionValid } from "../../model/automations";
 import { attempt, errorMessage } from "../store";
 import type { Rpc } from "../store";
@@ -13,6 +13,7 @@ import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result, Swi
 import type { ConfirmProps, MenuItem } from "../ui";
 import { displayLine, shown } from "../ui/text";
 import type { DetailProps } from "./Detail";
+import { cannotKeep } from "./Form";
 import { FactList, Quote } from "./parts";
 import {
   capabilitySource,
@@ -266,7 +267,7 @@ export type Acts = {
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
+export function useActs({ rpc, refresh, summaries, kind, open, held, onEdit, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
   rpc: Rpc;
   /** Reads the lists again. */
   refresh: () => void;
@@ -274,6 +275,8 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
   summaries: boolean;
   /** The list that is shown. */
   kind: AutomationRow["kind"];
+  /** Opens the schedule form on a stored definition the form can keep whole. */
+  onEdit: (draft: ScheduleDraft) => void;
   /** The row whose page is open, if one is. */
   open: Pick<AutomationRow, "kind" | "id"> | null;
   /** Why a kind's acts are held: its list could not be read again, so what a row is now is not known. Null where they are not. */
@@ -442,6 +445,16 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     );
   };
 
+  // Edit is for a local schedule: its stored definition is read back, and the form opens on it
+  // only when it can keep it whole (the Desktop's sentence otherwise).
+  const canEdit = (row: AutomationRow) => row.kind === "schedule" && row.origin.kind === "local";
+  const edit = (row: AutomationRow) =>
+    act(
+      `Reading ${row.name}…`,
+      () => rpc.call("scheduleDraft", { id: row.id }),
+      ({ draft }) => (draft === null ? setSaid({ title: cannotKeep(row.name), tone: "unknown", lines: [], code: null, arrival: arrival() }) : onEdit(draft)),
+      (error) => setSaid({ ...refused(`${row.name} could not be read for editing`, error), arrival: arrival() }),
+    );
   const canDescribe = (row: AutomationRow) => summaries && row.origin.kind === "local" && row.unreadable === null;
   const describe = (row: AutomationRow) => setDialog({ kind: "summary", row, value: row.description ?? "", error: null, saving: false });
   const saveSummary = async () => {
@@ -506,6 +519,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     const file = fileTarget(row, hostId).target;
     if (onOpenFile !== undefined && file !== null) items.push({ id: "file", label: "Open file", onSelect: () => onOpenFile(file) });
     if (canDescribe(row)) items.push({ id: "describe", label: "Edit summary", disabled, onSelect: () => describe(row) });
+    if (canEdit(row)) items.push({ id: "edit", label: "Edit", disabled, onSelect: () => void edit(row) });
     if (canReconcile(row)) items.push({ id: "reconcile", label: "Check run state", disabled, onSelect: () => void reconcile(row) });
     if (canDelete(row)) items.push({ id: "remove", label: "Delete…", destructive: true, disabled, onSelect: () => remove(row) });
     return items;
@@ -544,6 +558,11 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
       actions: (
         <>
           {row.description !== null ? editSummary : null}
+          {canEdit(row) ? (
+            <Button data-testid="oats-automation-edit" disabled={disabled} onClick={() => void edit(row)}>
+              Edit
+            </Button>
+          ) : null}
           {canDelete(row) ? (
             <Button data-testid="oats-automation-delete" disabled={disabled} onClick={() => remove(row)}>
               Delete…

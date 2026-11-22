@@ -44,6 +44,8 @@ export type ViewProps = {
   statusFailure?: DetailProps["statusFailure"];
   /** What the page adds for a row: its acts, and the cards they bring. */
   rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
+  /** Beside Refresh: what the shown list can be added to (New schedule). */
+  headerActions?: ReactNode;
   /** The act of the notice of a scheduler that is off (Enable scheduler). */
   schedulerAction?: ReactNode;
   /** A row's switch and menu in the list, where the page has acts. */
@@ -60,7 +62,7 @@ const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, headerActions, schedulerAction, refreshing = false, result, rowActs, held, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -107,6 +109,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
             </span>
           )}
           <span className="flex items-center gap-2 pb-1">
+            {gate === null ? headerActions : null}
             <Button data-testid="oats-automations-refresh" aria-label={`Refresh ${title.toLowerCase()}`} title="Refresh" disabled={read.loading || refreshing} onClick={onRefresh}>
               Refresh
             </Button>

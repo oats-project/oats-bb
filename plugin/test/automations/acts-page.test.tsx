@@ -40,14 +40,14 @@ const result = async (slot: Slot) => (await slot.findByTestId("oats-automations-
 describe("a row's menu (D-271)", () => {
   it("holds the Desktop's acts for what the row is", async () => {
     const slot = await page();
-    expect((await menu(slot, "local/daily-review")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Delete…"]);
+    expect((await menu(slot, "local/daily-review")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Edit", "Delete…"]);
     resetApp();
     const again = await page();
     // a run whose state is unknown can be checked; a schedule that is off here is turned on, and not run
-    expect((await menu(again, "local/status-check")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Check run state", "Delete…"]);
+    expect((await menu(again, "local/status-check")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Edit", "Check run state", "Delete…"]);
     resetApp();
     const off = await page();
-    expect((await menu(off, "local/weekly-cleanup")).labels).toEqual(["Open", "Test", "Turn on here", "Open file", "Edit summary", "Delete…"]);
+    expect((await menu(off, "local/weekly-cleanup")).labels).toEqual(["Open", "Test", "Turn on here", "Open file", "Edit summary", "Edit", "Delete…"]);
     resetApp();
     // a workspace schedule is changed and removed in its repository; one another computer runs has no switch
     const workspace = await page();

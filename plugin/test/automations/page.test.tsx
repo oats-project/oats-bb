@@ -103,7 +103,7 @@ describe("the lists", () => {
     expect([toggle.disabled, toggle.title]).toEqual([true, "Held until the list can be read again: what each row is now is not known."]);
     fireEvent.click(within(row).getByRole("button", { name: "Actions for local/daily-review" }));
     const items = within(row).getAllByRole("menuitem") as HTMLButtonElement[];
-    expect(items.map((item) => [item.textContent, item.disabled || item.getAttribute("aria-disabled") === "true"])).toEqual([["Open", false], ["Test", true], ["Run now", true], ["Turn off here", true], ["Open file", false], ["Edit summary", true], ["Delete…", true]]);
+    expect(items.map((item) => [item.textContent, item.disabled || item.getAttribute("aria-disabled") === "true"])).toEqual([["Open", false], ["Test", true], ["Run now", true], ["Turn off here", true], ["Open file", false], ["Edit summary", true], ["Edit", true], ["Delete…", true]]);
   });
 
   it("Retry while the server does not answer says it is reading again, and cannot be pressed twice at once", async () => {

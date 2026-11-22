@@ -6,12 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { NO_AUTOMATIONS } from "../../contract/automations";
-import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
+import type { AutomationKind, AutomationRow, ScheduleDraft, TriggerStatus } from "../../contract/automations";
 import { codes } from "../../kernel/result";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
-import { Page } from "../ui";
+import { Button, Page } from "../ui";
 import { useActs } from "./acts";
+import { ScheduleForm } from "./Form";
+import type { FormOpen } from "./Form";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
@@ -19,6 +21,13 @@ import { capabilitySource, GROUPS, refusalParts, TITLES } from "./words";
 import type { FileTarget } from "./words";
 
 export const PATH = "automations";
+/** The route of the form for a new schedule: no id starts with "+". */
+export const NEW = "+new";
+/** Opens the Schedules list. */
+export const openSchedules = (navigate: { toPluginPanel(path: string, options: { subPath: string }): void }): void => navigate.toPluginPanel(PATH, { subPath: "schedules" });
+/** Opens the form for a new schedule that launches an agent of `soul` (Schedule… on a soul's page). */
+export const openScheduleForm = (navigate: { toPluginPanel(path: string, options: { subPath: string }): void }, target: { soul: string; repo?: string | null; agentsRoot?: string | null }): void =>
+  navigate.toPluginPanel(PATH, { subPath: `schedules/${NEW}/${target.soul}` });
 /** Why a list's acts are held while it is one that could not be read again (the UX standard, Stale). */
 export const HELD = "Held until the list can be read again: what each row is now is not known.";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
@@ -77,7 +86,11 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const now = useNow();
-  const { kind, openId } = routeOf(subPath);
+  const route = routeOf(subPath);
+  const { kind } = route;
+  // "+new" under Schedules is the form for a new schedule, for the soul named after it where one is (Schedule… on a soul).
+  const wanted = route.kind === "schedule" && route.openId !== null && (route.openId === NEW || route.openId.startsWith(`${NEW}/`)) ? { soul: route.openId === NEW ? null : route.openId.slice(NEW.length + 1) } : null;
+  const openId = wanted === null ? route.openId : null;
 
   // A list that was read stays on screen while a later read fails or is under way.
   const kept = useRef<Partial<Record<AutomationKind, Kept>>>({});
@@ -174,7 +187,17 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
 
   const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
   const list = reads[kind].list;
+  // The schedule form: open on a stored definition (Edit), or for a new one (the button, or the route).
+  const [editing, setEditing] = useState<ScheduleDraft | null>(null);
+  const [adding, setAdding] = useState(false);
+  const formOpen: FormOpen | null = editing !== null ? { mode: "edit", draft: editing } : wanted !== null ? { mode: "new", soul: wanted.soul } : adding ? { mode: "new", soul: null } : null;
+  const closeForm = () => {
+    setEditing(null);
+    setAdding(false);
+    if (wanted !== null) navigate.toPluginPanel(PATH, { subPath: subPathOf("schedule") });
+  };
   const acts = useActs({
+    onEdit: setEditing,
     rpc,
     refresh,
     summaries: descriptions,
@@ -205,7 +228,27 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   return (
     <Page testId="oats-automations-page">
       {acts.dialog}
+      {formOpen === null ? null : (
+        <ScheduleForm
+          key={formOpen.mode === "edit" ? `edit:${formOpen.draft.id}` : `new:${formOpen.soul ?? ""}`}
+          open={formOpen}
+          rpc={rpc}
+          summaries={descriptions}
+          onSaved={() => {
+            closeForm();
+            refresh();
+          }}
+          onClose={closeForm}
+        />
+      )}
       <View
+        headerActions={
+          kind === "schedule" ? (
+            <Button data-testid="oats-automations-new-schedule" variant="primary" disabled={reads.schedule.error !== null || reads.schedule.list === undefined} onClick={() => setAdding(true)}>
+              New schedule
+            </Button>
+          ) : null
+        }
         rowActs={acts}
         held={reads[kind].error === null ? null : HELD}
         rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}

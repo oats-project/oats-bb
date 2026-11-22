@@ -43,6 +43,7 @@ wait_until() { # wait_until <seconds> <command...>
 # nothing spent. The version is the real run's (real/setup.sh).
 CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION:-2.1.328}
 MOCK_PORT=9999
+ALL_PAGES="home, automations, souls, capabilities, teams, machines"
 claude_ready() { [ "$(claude --version 2>/dev/null | cut -d' ' -f1)" = "$CLAUDE_CODE_VERSION" ]; }
 model_provider() {
   # Its install downloads a native binary; where that download fails, `claude` is there and cannot
@@ -101,6 +102,10 @@ fi
 # plugin installed from git (G1): bb refuses a path install over it, so it goes first.
 bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
+# Every page is shown for the checks (the plugin's setting `pages`; its default, `home` alone, is
+# what a release shows): each page's scenes run. The stage "pages-default" of live-ui.mjs puts the
+# default back for its scenes, and asserts what is then absent.
+bb plugin config oats set pages "$ALL_PAGES" > /dev/null
 bb plugin list | grep -q '^oats@.* running' && pass "the plugin is installed and running" || { fail "the plugin is not running"; bb plugin list; }
 
 # ---- L1

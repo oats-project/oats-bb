@@ -47,7 +47,7 @@ export default [
     name: "a soul's agent whose thread bb does not have",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/souls/oats-expert");
-      const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes("weekly-digest-helper") ? t : ""; })()`, 30);
+      const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes("Weekly digest helper") ? t : ""; /* the agent by its one name, the instance as words */ })()`, 30);
       check(Boolean(line) && /thread missing/.test(line), `${at} the soul's page says "thread missing" for the agent whose thread bb does not have`, line ?? (await page.evaluate(textOf(testId("oats-souls-page")))));
       await page.shot(`a16-${viewport.name}-soul`);
     },

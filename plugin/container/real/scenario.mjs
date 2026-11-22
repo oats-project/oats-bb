@@ -377,7 +377,7 @@ async function shots(scene, { instance, soul, threadId, state }) {
       // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
       const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
       const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
-      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`Soul ${soul}`) && line.row.includes("OATS"), `${at}: the thread's row says "${WORD[state]}", and the soul`, JSON.stringify(line));
+      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}", the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
@@ -393,7 +393,7 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes(${JSON.stringify(instance)}) ? t : ""; })()`, 30);
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
       check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);

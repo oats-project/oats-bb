@@ -27,6 +27,9 @@ export default [
         `${at} eight agents, eight rows: each its mark, its state in a word and its soul, the one in tmux among them; then who waits, New agent and the pages`,
         JSON.stringify(drawn),
       );
+      // No row's second line is cut: each is as wide as its text needs, on as many lines as it takes.
+      const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
+      check(cut.length === 0, `${at} no row's state and soul are cut`, JSON.stringify(cut));
       const others = await page.evaluate(texts(testId("oats-other-row")));
       check(others.some((text) => text.includes("Plain bb thread")), `${at} the thread that is no agent is under Other threads`, JSON.stringify(others));
       await page.shot(`a13-${viewport.name}-sidebar`);

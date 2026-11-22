@@ -118,7 +118,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const lines = (name: ReactNode, strong: boolean, word: string, rest: string) => (
     <span className="flex min-w-0 flex-1 flex-col">
       <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
-      <span data-testid="oats-row-facts" className="truncate text-xs text-muted-foreground">{`${word} · ${rest}`}</span>
+      {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
+      <span data-testid="oats-row-facts" className="break-words text-xs text-muted-foreground">{`${word} · ${rest}`}</span>
     </span>
   );
 

@@ -21,6 +21,7 @@ import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { Button, Card, Code, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
+import { CommandText } from "../panel/parts";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
@@ -291,7 +292,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               <>
                 <p className="m-0">{tmuxWhere(shown(oats.deployment.machine))}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
-                  <Code>{attachCommand(entry.agent.home)}</Code>
+                  <CommandText command={attachCommand(entry.agent.home)} />
                   <CopyButton text={attachCommand(entry.agent.home)} name="Copy the command" />
                 </p>
               </>

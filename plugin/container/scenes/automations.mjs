@@ -86,9 +86,12 @@ export default [
       const onRow = await page.until(`(() => document.activeElement?.dataset?.testid === "oats-automation-open" ? document.activeElement.closest(${JSON.stringify(ROW)}).dataset.id : "")()`, 15);
       check(onRow === "local/daily-review", `${at} Back returns the focus to the row the page was opened from`, String(onRow));
 
-      // a run that did not happen, with the kernel's reason
-      const failed = await open(page, "/schedules/local/hourly-check", testId("oats-automation-run-error"));
-      check(/E_BACKEND_SANDBOXED_MODE/.test(failed), `${at} a launch the provider refused says why, in the kernel's words`, failed);
+      // a run that did not happen: a word on its line, the kernel's reason one press away
+      const failed = await open(page, "/schedules/local/hourly-check", testId("oats-automation-run"));
+      check(/launch failed\s+▸?\s*Details$/.test(failed), `${at} a launch the provider refused says "launch failed", with Details to open`, failed);
+      await page.evaluate(click(`${testId("oats-automation-run-error")} summary`));
+      const why = await page.until(`(() => { const d = document.querySelector(${JSON.stringify(testId("oats-automation-run-error"))}); return d?.open ? d.querySelector("p")?.innerText ?? "" : ""; })()`, 15);
+      check(/E_BACKEND_SANDBOXED_MODE/.test(why ?? ""), `${at} Details holds why, in the kernel's words`, String(why));
       await shotOf(page, testId("oats-automation-run-error"), `automations-${viewport.name}-schedule-launch-failed`);
 
       // an unknown run state, an invalid definition, a placement that needs attention

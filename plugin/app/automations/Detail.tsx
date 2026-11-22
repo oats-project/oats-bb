@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
 import { cleanLine, displayLine, shown, shownBlock } from "../ui/text";
 import { readAge } from "../ui/words";
-import { Button, Card, Empty, Lines, Notice, Section, Toned } from "../ui";
+import { Button, Card, Disclosure, Empty, Lines, Notice, Section, Toned } from "../ui";
 import { eventLabel, eventWords } from "../../model/automations";
 import { OriginTag, StateTags } from "./List";
 import { FactList, Quote } from "./parts";
@@ -264,7 +264,7 @@ function HistoryLine({ iso, now, children, testId }: { iso: string | null; now: 
       <span className="w-24 shrink-0">
         <Time iso={iso} now={now} />
       </span>
-      <span className="min-w-0 flex-1 break-words text-foreground">{children}</span>
+      <div className="min-w-0 flex-1 break-words text-foreground">{children}</div>
     </li>
   );
 }
@@ -398,12 +398,12 @@ function History({ row, status, failure, source, check, now }: { row: Automation
           {items.slice(0, 10).map((item, at) => (
             <HistoryLine key={at} iso={item.at} now={now} testId="oats-automation-run">
               {shown(item.parts.filter(Boolean).join(" · ")) || "Recorded"}
-              {/* Why a run did not happen: the kernel's own words, and its code. */}
+              {/* Why a run did not happen: the line says it in a person's words; the kernel's own, and its code, are one press away. */}
               {item.run !== null && item.run.error !== null ? (
-                <span data-testid="oats-automation-run-error" className="block text-xs text-destructive-text">
-                  {shown(item.run.error)}
-                  {item.run.errorCode !== null && !item.run.error.includes(item.run.errorCode) ? <code className="font-mono">{` ${shown(item.run.errorCode)}`}</code> : null}
-                </span>
+                <Disclosure summary="Details" testId="oats-automation-run-error">
+                  <p className="text-xs text-muted-foreground">{shown(item.run.error)}</p>
+                  {item.run.errorCode !== null && !item.run.error.includes(item.run.errorCode) ? <code className="font-mono text-xs text-muted-foreground">{shown(item.run.errorCode)}</code> : null}
+                </Disclosure>
               ) : null}
             </HistoryLine>
           ))}

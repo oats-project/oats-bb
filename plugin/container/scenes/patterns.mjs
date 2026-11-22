@@ -193,7 +193,7 @@ export default [
   {
     stage: "fixtures",
     name: "a confirmation: before the act, in progress, done, refused, and another agent's plan; its focus order",
-    run: async ({ page, at, viewport, check, sleep }) => {
+    run: async ({ page, at, viewport, check }) => {
       const dialog = () => page.evaluate(`JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-about"), phase: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`);
       await page.evaluate(into("oats-patterns-dialogs"));
       await page.evaluate(`document.querySelector('${testId("oats-patterns-open-retire")}').focus()`);
@@ -290,16 +290,17 @@ export default [
       await page.press("Enter");
       await page.until(`${visible(testId("oats-confirm"))} && document.querySelector('${testId("oats-modal-below")}') !== null`, 10);
       const scrolled = `(() => { const body = document.querySelector('${testId("oats-modal-body")}'); return JSON.stringify({ height: body.clientHeight, above: document.querySelector('${testId("oats-modal-above")}')?.innerText ?? null, below: document.querySelector('${testId("oats-modal-below")}')?.innerText ?? null }); })()`;
-      const scrollTo = async (top) => {
+      // Scrolls the body, WAITS for the lines the place should then say, and reads them with the body's height (what it read is printed when the wait fails).
+      const scrollTo = async (top, above, below) => {
         await page.evaluate(`(() => { const body = document.querySelector('${testId("oats-modal-body")}'); body.scrollTop = ${top === "end" ? "body.scrollHeight" : top}; })()`);
-        await sleep(300);
+        await page.until(`(() => { const read = JSON.parse(${scrolled}); return read.above === ${JSON.stringify(above)} && read.below === ${JSON.stringify(below)}; })()`, 10);
         return JSON.parse(await page.evaluate(scrolled));
       };
       const atTop = JSON.parse(await page.evaluate(scrolled));
       await page.shot(`patterns-${viewport.name}-confirm-long`, { targets: true });
-      const atEnd = await scrollTo("end");
-      const midway = await scrollTo(200);
-      const again = await scrollTo(0);
+      const atEnd = await scrollTo("end", "More above", null);
+      const midway = await scrollTo(200, "More above", "More below");
+      const again = await scrollTo(0, null, "More below");
       check(
         atTop.above === null && atTop.below === "More below" && atEnd.above === "More above" && atEnd.below === null && midway.above === "More above" && midway.below === "More below" && again.above === null && again.below === "More below",
         `${at} a dialog longer than the window says "More below" at its top, both in between, "More above" at its end, and "More below" again back at the top`,

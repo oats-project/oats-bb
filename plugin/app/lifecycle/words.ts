@@ -263,6 +263,11 @@ export type Outcome = {
   code: string | null;
   /** The kernel's own text, one press away under Details. */
   details: string | null;
+  /**
+   * What a person must read first, apart from the result and in the warning tone: a sentence, and
+   * more of it one press away. (A retire that kept the home of an agent on bb.)
+   */
+  warning?: { title: string; details: string };
   /** What the dialog offers beside Close: read a new plan (Review again), ask for the answer to what was sent (Check again), read the agent's status again (Refresh status). */
   offers: readonly ("review" | "check" | "refresh")[];
 };
@@ -305,8 +310,8 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
   if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
   // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.
+  // Said apart from the steps, first and in the warning tone (`warning`), with the release lane's words one press away.
   const keptOnBb = !receipt.removedDir && plan.backend === "bb";
-  if (keptOnBb) lines.push(HOME_KEPT);
   if (receipt.compensation !== null) {
     const { branch, deleted, reason } = receipt.compensation;
     lines.push(deleted ? `Branch ${branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${branch} kept: ${reason ?? "no reason given"}`);
@@ -318,8 +323,9 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     title: "Retirement didn't finish",
     lines: ["Retirement didn't finish. Some steps ran:", ...lines, "Check what was kept before trying again.", ...replay],
     code: "RETIRE_INCOMPLETE",
-    details: [...(keptOnBb ? [HOME_KEPT_DETAILS] : []), ...receipt.incomplete].join("\n") || null,
+    details: receipt.incomplete.join("\n") || null,
     offers: ["review"],
+    ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };
 }
 
@@ -396,6 +402,20 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal)
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
   const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED ? [sentence, ...oatsSays(refusal.message)] : [sentence];
   return { tone: "failed", title: `${name} wasn't ${verb === "retire" ? "retired" : "stopped"}`, lines, code: refusal.code, details: refusal.message, offers: ["review"] };
+}
+
+/**
+ * The answer to "Check again": the same revision and key were sent a second time, to read the
+ * result of an apply whose first answer was lost. Only the kernel's own word settles it. A second
+ * ask that was not answered by the kernel (the roster cannot be read, the plugin's server refused,
+ * the call failed again) leaves what it was: not confirmed, with Check again. And a kernel that
+ * answers "busy" to its own key is still doing the first: that is said, not "nothing was done".
+ */
+export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Refusal): Outcome {
+  const kernels = refusal.code !== null && /^E_[A-Z0-9_]+$/.test(refusal.code);
+  if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal);
+  const still = `The ${verb === "retire" ? "removal" : "stop"} of ${agentName(instance)} is still running. Check again to read its result.`;
+  return { tone: "unknown", title: "Result not confirmed", lines: [kernels ? still : "OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
 }
 
 // ---- Start and Restart ----

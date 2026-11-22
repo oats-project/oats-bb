@@ -868,6 +868,15 @@ test("a retire plan's branch, an agent's own choice, is drawn through the displa
   expect(drawn).not.toContain("\u202E");
   expect(drawn).not.toContain("ghp_");
   expect(texts(slot.getByTestId("oats-plan"), "dd")).toContain("[withheld]"); // the Branch of Current state
+  resetApp();
+  // And in the reason beside a blocked Retire, which names an extra worktree's branch.
+  const blocked = await menu("thr_digest", { retirePlan: () => ({ ...plan, extraTrees: [{ path: "/h/.work-x", branch: UNSAFE, disposition: "refuse", reason: null }] }) });
+  await blocked.pick("retire");
+  await ready(blocked.slot);
+  const reason = blocked.slot.getByTestId("oats-confirm-blocked").textContent!;
+  expect(reason).not.toContain("\u202E");
+  expect(reason).not.toContain("ghp_");
+  expect(reason).toBe("[withheld]");
 });
 
 test("the Start dialog draws the kernel's row (a record the agent can write) through the display filter: its harness, model and home, in the facts, the field's first entry, its hint and its placeholder", async () => {
@@ -1003,4 +1012,85 @@ test("the Start gate is the Desktop's: running is already running; what is not k
   expect(await gated({ running: false, runtimeState: "stopped" })).toBeNull();
   expect(await gated({ running: false, runtimeState: "shell" })).toBeNull();
   expect(await gated({ running: false, runtimeState: null })).toBeNull();
+});
+
+// ---- from the third review round
+
+test("a retire that kept the home of an agent on bb warns first, in the warning tone, that its thread can bring it back with no OATS around it; the release lane's words are one press away", async () => {
+  const incomplete = { ...retireReceiptOf(), removedDir: false, retainedHome: "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", recoveryPath: null, incomplete: ["retire hook oats.aweb: the team certificate could not be removed (exit 1)"] };
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => incomplete });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  const warning = within(slot.getByTestId("oats-act-warning")).getByTestId("oats-notice");
+  expect(warning.getAttribute("data-tone")).toBe("warning");
+  expect(warning.querySelector("h3")!.textContent).toBe("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.");
+  const more = within(warning).getByTestId("oats-notice-details") as HTMLDetailsElement;
+  expect(more.open).toBe(false);
+  expect(texts(more, "p")).toEqual(["No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent."]);
+  // The warning stands before the result's steps.
+  const result = slot.getByTestId("oats-result");
+  expect(warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(result.textContent).not.toContain("unarchived");
+});
+
+test("Check again settles only on the kernel's own word: asked while OATS cannot be read, or refused by the plugin's own server, the result stays not confirmed", async () => {
+  let second: string | null = null;
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => stopPlanOf(),
+    stopApply: () => {
+      throw new Error(second ?? "OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped");
+    },
+  });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  for (const refusal of ["OATS_NOT_FOUND: `oats` could not be run (ENOENT)", "Failed to fetch", "E_LIFECYCLE_BUSY: a stop holds redesign-ui-lead"]) {
+    second = refusal;
+    fireEvent.click(button(slot, "oats-act-check"));
+    await waitFor(() => expect(calls(slot, "stopApply").length).toBeGreaterThan(1));
+    await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+    expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent, refusal).toBe("Result not confirmed");
+    expect(slot.getByTestId("oats-result").textContent).not.toContain("wasn't stopped");
+    expect(slot.getByTestId("oats-act-check")).toBeTruthy();
+  }
+  expect(slot.getByTestId("oats-result").textContent).toContain("The stop of Redesign ui lead is still running. Check again to read its result.");
+  // The kernel's own refusal is its answer.
+  second = "E_SESSION_STOP_FAILED: its harness was signalled and still runs";
+  fireEvent.click(button(slot, "oats-act-check"));
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Redesign ui lead wasn't stopped");
+  const keys = calls(slot, "stopApply").map((call) => (call.input as { key: string }).key);
+  expect(new Set(keys).size).toBe(1); // every ask was for the same apply
+});
+
+test("a start whose check failed says nothing of what a start does: only what could not be checked", async () => {
+  const { slot, pick } = await menu("thr_digest", {
+    startCheck: () => {
+      throw new Error("E_SOMETHING: the roster could not be read");
+    },
+  });
+  await pick("start");
+  await phase(slot, "failed");
+  const dialog = slot.getByRole("dialog");
+  expect(dialog.querySelector("h2")!.textContent).toBe("Start an agent");
+  expect(dialog.textContent).not.toContain("What will happen");
+  expect(dialog.textContent).not.toContain("What is kept");
+});
+
+test("a state the kernel cannot tell says the kernel's own reason, under its name and through the display filter", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: `bb did not answer ${UNSAFE}` }) });
+  await pick("start");
+  await ready(slot);
+  const status = slot.getByTestId("oats-start-status").textContent!;
+  expect(status).toContain("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect(status).toContain("[withheld]");
+  expect(status).not.toContain("ghp_");
+  resetApp();
+  const plain = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }) });
+  await plain.pick("start");
+  await ready(plain.slot);
+  expect(plain.slot.getByTestId("oats-start-status").textContent).toContain("OATS says: bb did not answer");
 });

@@ -102,7 +102,8 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
           <>
             {why === null || phase.kind !== "ready" ? null : (
               <span data-testid="oats-confirm-blocked" className="mr-auto self-center text-xs text-muted-foreground">
-                {why}
+                {/* A reason can hold text of OATS or an agent (a branch's name): filtered here, as every line of the pattern. */}
+                {shown(why)}
               </span>
             )}
             <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>

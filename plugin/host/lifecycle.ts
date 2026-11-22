@@ -1,4 +1,4 @@
-// The lifecycle's host verbs: `oats instance stop`, `oats session start|restart`, `oats retire`,
+// The lifecycle's host verbs: `oats instance stop`, `oats session start|restart` and `oats retire`.
 // A start that names a harness reads the provider's declared list first (spawn's `spawnHarnesses`).
 import type { host } from "../contract/lifecycle.js";
 import type { Oats } from "../kernel/index.js";

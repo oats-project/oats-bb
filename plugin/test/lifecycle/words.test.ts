@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, checkAgainRefused, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -244,16 +244,17 @@ describe("a result", () => {
     expect(outcome).toMatchObject({ tone: "failed", title: "Retirement didn't finish", code: "RETIRE_INCOMPLETE", offers: ["review"] });
     expect(outcome.lines).toContain("Home folder kept at /abs/deployment/agents/oats-expert/instances/weekly-digest-helper.");
     expect(outcome.lines).toContain("Cleanup didn't finish.");
-    // The home was kept: on bb the agent can come back with no OATS around it. The line, and the release lane's words under Details, before the kernel's own.
-    expect(outcome.lines).toContain("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.");
-    expect(outcome.lines.some((line) => line.includes("stays readable"))).toBe(false);
-    expect(outcome.details).toBe(
-      "No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent.\nretire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)",
-    );
-    // An agent that is not on bb has no thread to unarchive: nothing of it is said.
-    const tmux = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan({ backend: "tmux" }));
-    expect(tmux.lines.some((line) => line.includes("unarchived"))).toBe(false);
-    expect(tmux.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
+    expect(outcome.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
+    // The home was kept: on bb the agent can come back with no OATS around it. That is a warning of its own,
+    // apart from the steps: a person's sentence, and the release lane's words one press away.
+    expect(outcome.warning).toEqual({
+      title: "Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.",
+      details: "No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent.",
+    });
+    expect(outcome.lines.some((line) => line.includes("stays readable") || line.includes("unarchived"))).toBe(false);
+    // An agent that is not on bb has no thread to unarchive, and a retire that removed the home leaves nothing to start: no warning.
+    expect(retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan({ backend: "tmux" })).warning).toBeUndefined();
+    expect(retireOutcome(value(parseRetireApply(fixture("retire-apply.json"))), retirePlan()).warning).toBeUndefined();
   });
 
   it("a retire accepted for the background is neither done nor failed", () => {
@@ -294,6 +295,18 @@ describe("a refusal", () => {
     // A busy refusal's own line names what to check: it is quoted under the kernel's name, as the Desktop quotes it.
     expect(applyRefused("stop", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "held by pid 4\nremove the claim" }).lines).toEqual(["Nothing was done: OATS refused this as busy.", "OATS says: held by pid 4"]);
     expect(applyRefused("stop", "dev-1", { code: "E_SOMETHING_NEW", message: "a new refusal" }).lines).toEqual(["OATS answered with an error that the plugin has no description for.", "OATS says: a new refusal"]);
+  });
+
+  it("a second ask for a result that was not confirmed settles only on the kernel's own word", () => {
+    // Not answered by the kernel (the roster cannot be read, the plugin's server refused, the call failed again): still not confirmed.
+    for (const refusal of [{ code: "OATS_NOT_FOUND", message: "m" }, { code: "NO_DEPLOYMENT", message: "m" }, { code: null, message: '"dev-1" is not an agent of this snapshot' }, { code: "PLUGIN_RPC_FAILED", message: "Failed to fetch" }]) {
+      expect(checkAgainRefused("stop", "dev-1", refusal), String(refusal.code)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"], lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."] });
+    }
+    // The kernel answers "busy" to its own key while the first apply still runs: that is said, in the Desktop's sentence.
+    expect(checkAgainRefused("retire", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "a retire holds dev-1" })).toMatchObject({ tone: "unknown", title: "Result not confirmed", lines: ["The removal of Dev 1 is still running. Check again to read its result."], offers: ["check"] });
+    expect(checkAgainRefused("stop", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "m" }).lines).toEqual(["The stop of Dev 1 is still running. Check again to read its result."]);
+    // Any other code of the kernel's is its answer.
+    expect(checkAgainRefused("retire", "dev-1", { code: "E_CHILDREN_RUNNING", message: "m" })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired", offers: ["review"] });
   });
 
   it("an apply whose answer was lost is not confirmed: never done, never nothing happened, and Check again asks for it", () => {

@@ -65,7 +65,6 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const read = launch.safeParse(row);
       return {
         instance: agent.instance,
-        soul: agent.soul,
         machine: core.target()?.machine ?? "",
         home: agent.home,
         harness: read.success ? (read.data.harness ?? null) : null,

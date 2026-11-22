@@ -74,7 +74,6 @@ const choices = { harness: harness.optional(), model: model.optional() };
  */
 const startCheck = z.object({
   instance: z.string(),
-  soul: z.string(),
   machine: z.string(),
   home: z.string(),
   harness: z.string().nullable(),

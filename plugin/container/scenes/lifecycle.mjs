@@ -308,7 +308,9 @@ export default [
         await page.until(phaseIs("failed"), 20);
         const partial = await dialog(page);
         check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept at") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
-        await shot("incomplete");
+        const warned = JSON.parse(await page.evaluate(`(() => { const warning = document.querySelector(${JSON.stringify(`${testId("oats-act-warning")} ${testId("oats-notice")}`)}); const result = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)}); return JSON.stringify({ tone: warning?.getAttribute("data-tone") ?? null, first: Boolean(warning && result && (warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING)), details: warning?.querySelector("details")?.open ?? null }); })()`));
+        check(warned.tone === "warning" && warned.first && warned.details === false, `${at} that the home was kept is a warning of its own, before the steps, with the rest one press away`, JSON.stringify(warned));
+        await shot("incomplete", `${testId("oats-act-warning")} h3`); // the warning is what this image is of
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
       } finally {

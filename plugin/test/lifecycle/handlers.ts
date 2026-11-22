@@ -49,7 +49,6 @@ export const startedIn = (threadId: string, instance?: string) => ({ ...read(par
 /** What the Start and Restart dialogs read before the act, for a stopped agent on Claude Code; `change` what a test is about. */
 export const startCheckOf = (instance: string, change: Partial<Awaited<ReturnType<PluginRpcTestHandlers<typeof rpc>["startCheck"]>>> = {}) => ({
   instance,
-  soul: "oats-expert",
   machine: "falcon",
   home: `/abs/deployment/agents/oats-expert/instances/${instance}`,
   harness: "claude",

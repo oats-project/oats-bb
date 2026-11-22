@@ -1,6 +1,6 @@
 // Spawn's RPC handlers: the preview, and the apply of exactly the previewed decision.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
-import type { rpc } from "../contract/spawn.js";
+import type { rpc, SpawnRequest } from "../contract/spawn.js";
 import { HOST_TIMEOUT, invalid, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
 
@@ -12,33 +12,47 @@ import { soulsOf } from "./workspace.js";
 export const harnessesOf = (core: Core): Promise<string[]> => core.page("spawnHarnesses", async (signal) => (await core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal)).harnesses);
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
-  /** key -> the decision a spawn with that key applies, so that a retry replays it. */
-  const spawns = new Map<string, { soul: string; name: string; revision: string }>();
+  /** key -> the decision a spawn with that key applies, so that a retry replays it. `of` is every choice of the spawn. */
+  const spawns = new Map<string, { of: string; revision: string }>();
+  /**
+   * What a spawn may name: a soul `oats souls` lists, a harness the provider declares, and for a
+   * relationship an agent of the roster. Anything else starts no process.
+   */
+  const checked = async (request: SpawnRequest): Promise<SpawnRequest> => {
+    if (!(await soulsOf(core)).some((row) => row.name === request.soul)) throw invalid(`"${request.soul}" is not a soul \`oats souls\` lists for this deployment`);
+    if (request.harness !== undefined && !(await harnessesOf(core)).includes(request.harness)) throw invalid(`"${request.harness}" is not a harness the bb session provider declares`);
+    if (request.relation !== undefined) await core.agentOf(request.relation.to);
+    return request;
+  };
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
       return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
     },
-    async spawnPreview({ soul, name, task }, context) {
-      if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
-      const { summary } = await core.call("spawnPreview", { soul, name, task }, HOST_TIMEOUT.preview, context.experimental_signal);
+    async spawnPreview(request, context) {
+      const { summary } = await core.call("spawnPreview", await checked(request), HOST_TIMEOUT.preview, context.experimental_signal);
       return { summary };
     },
-    async spawn({ soul, name, task, key }) {
-      if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
+    async spawnPlan(request, context) {
+      const { summary, facts, instance, background } = await core.call("spawnPreview", await checked(request), HOST_TIMEOUT.preview, context.experimental_signal);
+      return { summary, facts, instance, background };
+    },
+    async spawn({ key, ...request }) {
+      await checked(request);
+      const of = JSON.stringify(request);
       let decision = spawns.get(key);
-      if (decision && (decision.soul !== soul || decision.name !== name)) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
+      if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
       if (!decision) {
         // The kernel binds an idempotency key to the decision it confirms: read that decision first.
-        const preview = await core.call("spawnPreview", { soul, name, task }, HOST_TIMEOUT.preview, core.signal);
-        decision = { soul, name, revision: preview.revision };
+        const preview = await core.call("spawnPreview", request, HOST_TIMEOUT.preview, core.signal);
+        decision = { of, revision: preview.revision };
         if (spawns.size >= 200) spawns.delete(spawns.keys().next().value as string);
         spawns.set(key, decision);
       }
       // An act is not ended by its caller going away: only by the plugin's own end.
       let spawned: Value<"spawn">;
       try {
-        spawned = await core.call("spawn", { soul, name, task, key, revision: decision.revision }, HOST_TIMEOUT.long, core.signal);
+        spawned = await core.call("spawn", { ...request, key, revision: decision.revision }, HOST_TIMEOUT.long, core.signal);
       } catch (error) {
         // The decision moved and the kernel created nothing: there is nothing to replay under this
         // key, so the next call with it reads the decision again instead of sending the stale one.

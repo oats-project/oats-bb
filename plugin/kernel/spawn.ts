@@ -2,6 +2,7 @@
 // docs/desktop-cli-api.md "Spawn": the kernel takes `--idempotency-key` only with
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
+import { previewFacts, type PreviewFacts } from "../model/spawn.js";
 import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
@@ -9,22 +10,50 @@ import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
-export type SpawnInput = { soul: string; name: string };
-
-/** Refuses a soul `oats souls` does not list and a name that is not an instance name. */
-export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Result<SpawnInput> {
-  const name = checkInstance(input.name);
-  if (!name.ok) return name;
+export type SpawnRelation = { kind: "child" | "sibling" | "parent"; to: string };
+/** A spawn as the form asks for it: the soul, and each choice only where a person made one. */
+export type SpawnInput = { soul: string; name?: string; harness?: string; model?: string; relation?: SpawnRelation; background?: boolean };
+const RELATIONS: readonly string[] = ["child", "sibling", "parent"];
+/**
+ * Refuses a soul `oats souls` does not list, a name that is not an instance name, a harness the
+ * provider does not declare (`harnesses`: its list, read only when one is named), a model that
+ * could be read as an option and a relation to a name that is no instance's. → the same choices, checked.
+ */
+export function checkSpawn(input: SpawnInput, knownSouls: readonly string[], harnesses: readonly string[] = []): Result<SpawnInput> {
   const soul = checkSoul(input.soul, knownSouls);
   if (!soul.ok) return soul;
-  return ok({ soul: soul.value, name: name.value });
+  const checked: SpawnInput = { soul: soul.value };
+  if (input.name !== undefined) {
+    const name = checkInstance(input.name);
+    if (!name.ok) return name;
+    checked.name = name.value;
+  }
+  if (input.harness !== undefined) {
+    const harness = checkHarness(input.harness, harnesses);
+    if (!harness.ok) return harness;
+    checked.harness = harness.value;
+  }
+  if (input.model !== undefined) {
+    const model = checkModel(input.model);
+    if (!model.ok) return model;
+    checked.model = model.value;
+  }
+  if (input.relation !== undefined) {
+    const to = checkInstance(input.relation.to);
+    if (!to.ok) return to;
+    if (!RELATIONS.includes(input.relation.kind)) return err(codes.invalidInput, `"${String(input.relation.kind)}" is not a relationship: child, sibling or parent`);
+    checked.relation = { kind: input.relation.kind, to: to.value };
+  }
+  if (input.background !== undefined) checked.background = input.background === true;
+  return ok(checked);
 }
 
 /**
  * What the preview and the apply share. `--yolo` is bb's full mode, with no sandbox between the
  * agent and the account bb runs as: the bb session provider launches in no other mode, so the
  * plugin asks for it on every spawn and depends on no default of the host (README, "Spawn"). The
- * kernel binds the apply to the preview's decision, so both carry it.
+ * kernel binds the apply to the preview's decision, so both carry every choice. A choice nobody
+ * made adds no flag: the kernel then resolves it as for any spawn (the harness interface, 2 and 3).
  */
 const common = (input: SpawnInput, taskFile: string): string[] => [
   "spawn",
@@ -32,10 +61,13 @@ const common = (input: SpawnInput, taskFile: string): string[] => [
   "--backend",
   "bb",
   "--yolo",
-  "--name",
-  input.name,
+  ...(input.name === undefined ? [] : ["--name", input.name]),
   "--task-file",
   taskFile,
+  ...(input.harness === undefined ? [] : ["--harness", input.harness]),
+  ...(input.model === undefined ? [] : ["--model", input.model]),
+  ...(input.relation === undefined ? [] : ["--relation", input.relation.kind, "--relative-to", input.relation.to]),
+  ...(input.background === undefined ? [] : [input.background ? "--background" : "--no-background"]),
 ];
 
 export const spawnPreviewArgv = (input: SpawnInput, taskFile: string): string[] => [...common(input, taskFile), "--preview", "--json"];
@@ -68,6 +100,8 @@ const preview = z.looseObject({
     .array(z.looseObject({ name: z.string(), from: z.looseObject({ kind: text, version: text }).nullish() }))
     .nullish(),
   teams: z.array(z.looseObject({ label: z.string(), team: text, default: z.boolean().nullish() })).nullish(),
+  instance: text,
+  background: z.boolean().nullish(),
   harness: text,
   model: text,
   modelSource: text,
@@ -78,7 +112,8 @@ const preview = z.looseObject({
   launch: z.looseObject({ problem: z.looseObject({ code: text, message: text }).nullish() }).nullish(),
 });
 
-export function parseSpawnPreview(document: unknown): Result<{ summary: SpawnSummary; revision: string }> {
+export type SpawnPreview = { summary: SpawnSummary; facts: PreviewFacts; instance: string | null; background: boolean | null; revision: string };
+export function parseSpawnPreview(document: unknown): Result<SpawnPreview> {
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
@@ -104,6 +139,10 @@ export function parseSpawnPreview(document: unknown): Result<{ summary: SpawnSum
     : null;
   return ok({
     revision: value.decision.revision,
+    // What will be created, for the form's standing column; the name is the form's own (it knows whether one was typed).
+    facts: previewFacts(document),
+    instance: value.instance ?? null,
+    background: value.background ?? null,
     summary: {
       modules: (value.modules ?? []).map((module) => (module.from?.version ? `${module.name} ${module.from.version}` : module.name)),
       teams: (value.teams ?? []).map((team) =>
@@ -177,10 +216,10 @@ export const verbs = (oats: Runner) => ({
    */
   async spawnPreview(
     input: SpawnInput & { task: string },
-    context: { knownSouls: readonly string[]; tempDir: string },
+    context: { knownSouls: readonly string[]; harnesses?: readonly string[]; tempDir: string },
     signal?: AbortSignal,
-  ): Promise<Result<{ summary: SpawnSummary; revision: string }>> {
-    const checked = checkSpawn(input, context.knownSouls);
+  ): Promise<Result<SpawnPreview>> {
+    const checked = checkSpawn(input, context.knownSouls, context.harnesses);
     if (!checked.ok) return checked;
     return withTaskFile(context.tempDir, input.task, (taskFile) =>
       oats.run(spawnPreviewArgv(checked.value, taskFile), parseSpawnPreview, oats.timeouts.preview, signal),
@@ -193,10 +232,10 @@ export const verbs = (oats: Runner) => ({
    */
   async spawn(
     input: SpawnInput & { task: string; key: string; revision: string },
-    context: { knownSouls: readonly string[]; tempDir: string },
+    context: { knownSouls: readonly string[]; harnesses?: readonly string[]; tempDir: string },
     signal?: AbortSignal,
   ): Promise<Result<{ instance: string; threadId: string | null }>> {
-    const checked = checkSpawn(input, context.knownSouls);
+    const checked = checkSpawn(input, context.knownSouls, context.harnesses);
     if (!checked.ok) return checked;
     // The key and the revision are checked before the task file is written.
     const apply = checkApply(input);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A8: the Sidebar (experimental_threadList) with the pinned fixtures.
 import { afterEach, expect, test } from "vitest";
-import { act, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
@@ -373,4 +373,18 @@ test("an agent the kernel refused as one it does not know says so in its row, un
   at = "2026-11-19T12:31:00.000Z";
   await slot.behavior.emitRealtime("oats/changed", { at });
   await waitFor(() => expect(facts()).toBe("Needs you · oats-maintainer"));
+});
+
+test("the row of the plugin's page that is shown is the selected one (D-037), and none is while a thread is shown", async () => {
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-workspace-line");
+  const current = () => ["souls", "capabilities", "teams", "machines"].filter((path) => slot.getByTestId(`oats-page-link-${path}`).getAttribute("aria-current") === "page");
+  expect(current()).toEqual([]);
+  const { shownPage } = await import("../../app/workspace/pages");
+  const Teams = shownPage("teams", () => null);
+  const page = render(<Teams />);
+  await waitFor(() => expect(current()).toEqual(["teams"]));
+  expect(slot.getByTestId("oats-page-link-teams").className).toContain("bg-accent");
+  page.unmount();
+  await waitFor(() => expect(current()).toEqual([]));
 });

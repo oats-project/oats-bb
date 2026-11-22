@@ -21,9 +21,8 @@ import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
-import { openSoul } from "../workspace/pages";
 import { agentStatus } from "./status";
-import { pageLinks } from "../workspace/pages";
+import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
 import { instanceDisplayName, readAge } from "../ui/words";
@@ -62,12 +61,13 @@ const NO_ONE: ReadonlySet<string> = new Set();
 const noMark = () => null;
 
 /** One row of the "oats" block: a page of the plugin, and the mark its feature gives it, if any. */
-function PageRow({ page, onOpen }: { page: PageLink; onOpen: () => void }) {
+function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen: () => void }) {
   // The same hook at every render of this row: a row is keyed by its page.
   const mark = (page.useMark ?? noMark)();
   return (
     <li>
-      <button type="button" data-testid={`oats-page-link-${page.path}`} className={`${ROW} w-full pl-2 text-left`} onClick={onOpen}>
+      {/* The page that is shown is the selected row, as bb marks the open thread's (D-037). */}
+      <button type="button" data-testid={`oats-page-link-${page.path}`} aria-current={open ? "page" : undefined} className={`${ROW} w-full pl-2 text-left ${open ? "bg-accent" : ""}`} onClick={onOpen}>
         {page.title}
         {mark === null ? null : <Mark label={mark.label} />}
       </button>
@@ -80,6 +80,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const now = useNow();
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
+  const openPath = useOpenPage();
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
 
@@ -260,7 +261,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       <h2 className={HEADING}>Workspace</h2>
       <ul data-testid="oats-pages" className="flex flex-col">
         {pageLinks().map((page) => (
-          <PageRow key={page.path} page={page} onOpen={() => openPage(page.path)} />
+          <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
         ))}
       </ul>
 

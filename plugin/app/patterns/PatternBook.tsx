@@ -203,6 +203,16 @@ export function PatternBook() {
           </Button>
         </div>
       </section>
+      {/* The last thing on the page, and at its left edge: a menu opened here has no room under it, nor to its left. */}
+      <section data-testid="oats-patterns-edges" className="flex flex-col gap-2">
+        <Heading>A menu at the page's edges</Heading>
+        <div className="flex">
+          <Menu
+            label="Actions at the edge"
+            items={["Run now", "Edit…", "Pause", "Resume", "Duplicate…", "Show its runs", "Remove…"].map((label) => ({ id: label, label, onSelect: () => setPicked(label) }))}
+          />
+        </div>
+      </section>
       {dialog === null ? null : (
         <Confirm
           title={`${dialog.destructive ? "Retire" : "Stop"} ${NAME}?`}

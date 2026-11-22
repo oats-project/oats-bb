@@ -127,9 +127,17 @@ export default [
       await page.evaluate(`document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
       const opened = await page.until(`location.pathname.endsWith("/threads/${target.id}")`, 15);
       check(Boolean(opened), `${at} a thread opens from the tree`, await page.evaluate("location.pathname"));
-      await sleep(1500);
-      check(Boolean(await page.until(visible(testId("oats-identity-row")), 15)), `${at} the open thread keeps its OATS row, from the last roster`);
-      await page.shot(`a14-${viewport.name}-thread`);
+      // The thread's own row is still there, from the last roster, and says that it is: "as of <age>".
+      const line = await page.until(`(() => { const t = ${textOf(`${testId("oats-identity-row")} ${testId("oats-status-line")}`)}; return / as of /.test(t) ? t : ""; })()`, 15);
+      check(/^Working · as of (just now|\d+s ago|\d+ min ago)$/.test(line ?? ""), `${at} the open thread keeps its OATS row, from the last roster, and says how old it is`, line ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
+      await page.shot(`a14-${viewport.name}-thread`, { targets: true });
+
+      // The home keeps what it showed, under the same notice.
+      await page.goto("/plugins/oats/home");
+      const home = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-home-page")} ${testId("oats-unreadable")}`)}); const cards = document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length; return e && cards > 0 ? JSON.stringify({ title: e.querySelector("h3")?.innerText ?? "", text: e.innerText.replace(/\\s+/g, " "), cards }) : ""; })()`, 30);
+      const shown = home ? JSON.parse(home) : null;
+      check(shown !== null && /^OATS is not installed on /.test(shown.title) && /Showing what was read /.test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
+      await page.shot(`a14-${viewport.name}-home`, { targets: true });
     },
   },
 ];

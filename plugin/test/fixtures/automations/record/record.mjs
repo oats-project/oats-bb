@@ -249,6 +249,46 @@ keep("schedule-remove-workspace.json", "E_AUTOMATION_WORKSPACE", "schedule", "re
 keep("schedule-remove-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "remove", "weekly-cleanup", "--json");
 keep("trigger-remove.json", "ok", "trigger", "remove", "old-prs", "--json");
 
+// ---- the form: a schedule created and replaced with `--spec-json`, the way the plugin hands a
+// definition over (one argv element, no file), one of each kind the form makes; what the kernel
+// holds of each afterwards; and its refusals. They come last, so no list above holds them.
+/** Keeps what it printed, a success or a refusal: the kernel decides, and the log says which. */
+function keepAny(file, ...argv) {
+  const run = oats(...argv);
+  fixtures.keep(file, run.stdout);
+  recorded[file] = { argv: argv.map((word) => word.replaceAll(DEPLOY, "/abs/deployment").replaceAll(REAL, "/abs/real")), exit: run.exit };
+  log(`${file}: oats ${argv.join(" ").slice(0, 200)} -> ${run.json.ok === false ? run.json.error?.code : "ok"} (exit ${run.exit})`);
+  return run.json;
+}
+const inline = (definition) => `--spec-json=${JSON.stringify(definition)}`;
+const formWake = { kind: "wake", cron: "*/15 * * * *", tz: "Europe/Madrid", enabled: true, home: keeper.home, message: "Anything to write down?\nSay what, then stop.", description: "Ask the note keeper for news" };
+keepAny("schedule-add-wake.json", "schedule", "add", "form-wake", inline(formWake), "--json");
+const formSpawn = {
+  kind: "spawn", cron: "0 9 * * 1-5", tz: "Europe/Madrid", enabled: false, agent: "oats-developer", task: "Look at the build queue.\nReport what is red.",
+  purpose: "queue", harness: "claude", model: "claude-sonnet", backend: "bb", yolo: true, description: "Look at the build queue on weekdays",
+  wake: { cron: "*/30 * * * *", tz: "Europe/Madrid", message: "Anything red?" },
+};
+keepAny("schedule-add-spawn.json", "schedule", "add", "form-spawn", inline(formSpawn), "--json");
+keepAny("schedule-add-operation.json", "schedule", "add", "form-operation", inline({ kind: "operation", cron: "0 * * * *", tz: "UTC", enabled: true, home: keeper.home, operation: "knowledge:checkpoint" }), "--json");
+keepAny("schedule-add-spec-invalid.json", "schedule", "add", "form-bad", inline({ ...formWake, cron: "every day" }), "--json");
+keepAny("schedule-add-spec-no-home.json", "schedule", "add", "form-nowhere", inline({ ...formWake, home: join(DEPLOY, "no-such-home") }), "--json");
+// What the kernel holds: the definition an Edit starts from.
+keepAny("schedule-show-wake.json", "schedule", "show", "form-wake", "--json");
+keepAny("schedule-show-spawn.json", "schedule", "show", "form-spawn", "--json");
+keepAny("schedule-show-operation.json", "schedule", "show", "form-operation", "--json");
+keepAny("schedule-show-command.json", "schedule", "show", "status-check", "--json");
+keepAny("schedule-show-invalid.json", "schedule", "show", "legacy-herdr", "--json");
+// Edit: the whole definition replaced.
+keepAny("schedule-update.json", "schedule", "update", "form-wake", inline({ ...formWake, cron: "0 * * * *", message: "Anything to write down?", description: "Ask the note keeper every hour" }), "--json");
+keepAny("schedule-update-unknown.json", "schedule", "update", "form-gone", inline(formWake), "--json");
+keepAny("schedule-update-workspace.json", "schedule", "update", "oats-real/nightly-digest", inline(formWake), "--json");
+keepAny("schedule-update-invalid.json", "schedule", "update", "form-wake", inline({ ...formWake, tz: "Mars/Olympus" }), "--json");
+// ---- a recurring wake-up asked at spawn: the spawn's own answer says whether its wake schedule was saved
+writeFileSync(join(REAL, "task-wake.md"), "Say hello, then stop.\n");
+const wakeAt = (wake) => `--wake-json=${JSON.stringify(wake)}`;
+keepAny("spawn-wake.json", "spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "wake-at-spawn-developer", "--task-file", join(REAL, "task-wake.md"), wakeAt({ cron: "*/15 * * * *", tz: "Europe/Madrid", message: "Check your pending work and report anything that needs attention.", enabled: true }), "--json");
+keepAny("spawn-wake-not-saved.json", "spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "wake-bad-cron-developer", "--task-file", join(REAL, "task-wake.md"), wakeAt({ cron: "every day", tz: "Europe/Madrid", message: "Anything?", enabled: true }), "--json");
+
 const version = must("version", "--json");
 for (const line of fixtures.write()) log(line);
 writeFileSync(join(OUT, "recorded.json"), `${JSON.stringify({ oats: version.version, at: new Date().toISOString(), calls: recorded }, null, 1)}\n`);

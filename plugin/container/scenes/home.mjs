@@ -87,9 +87,9 @@ async function sound(page, viewport, check, at, what) {
     JSON.stringify(fit),
   );
 }
-/** Brings a part of the home to the top of what is seen, under the page's own start, for its image. → whether its start is in view. */
+/** Brings a part of the home to the top of what is seen for its image, with half of the gap above it and nothing of the part before it. → whether its start is in view. */
 const bring = (selector) =>
-  `(() => { const part = document.querySelector(${JSON.stringify(selector)}); if (!part) return false; part.scrollIntoView({ block: "start" }); const pane = document.querySelector(${JSON.stringify(PAGE)}); pane.scrollTop = Math.max(0, pane.scrollTop - 16); const box = part.getBoundingClientRect(); return box.top >= 0 && box.top < innerHeight - 80; })()`;
+  `(() => { const part = document.querySelector(${JSON.stringify(selector)}); if (!part) return false; part.scrollIntoView({ block: "start" }); const pane = document.querySelector(${JSON.stringify(PAGE)}); pane.scrollTop = Math.max(0, pane.scrollTop - 8); const box = part.getBoundingClientRect(); return box.top >= 0 && box.top < innerHeight - 80; })()`;
 async function shown(page, check, at, selector, what) {
   const inView = await page.evaluate(bring(selector));
   check(inView === true, `${at} ${what} is in view for its image, from its start`, inView);

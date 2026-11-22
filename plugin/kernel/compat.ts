@@ -13,6 +13,9 @@ export const OATS_FLOOR = "0.70.0";
  */
 export const OATS_TESTED_MINOR = "0.70";
 
+/** The version of the kernel's JSON answers (`desktopApi`) the plugin reads: a kernel that prints a higher one may answer in a shape the plugin does not know. */
+export const DESKTOP_API = 1;
+
 /** `major.minor.patch` of a version text as numbers; null for one that is not three numbers (a pre-release suffix is ignored). */
 export function versionParts(version: string): [number, number, number] | null {
   const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
@@ -31,4 +34,16 @@ export function compatibility(version: string | null | undefined): "older" | "te
   const below = (a: readonly number[], b: readonly number[]) => a[0]! < b[0]! || (a[0] === b[0] && (a[1]! < b[1]! || (a[1] === b[1] && a[2]! < b[2]!)));
   if (below(have, floor)) return "older";
   return have[0]! > tested[0] || (have[0] === tested[0] && have[1]! > tested[1]) ? "newer" : "tested";
+}
+
+/**
+ * Where the kernel on the machine stands, from what `oats version --json` answered (`Version`,
+ * kernel/roster.ts): as `compatibility` says of its release, but "newer-api" first when its JSON
+ * answers are of a later version than the plugin reads (`desktopApi` above DESKTOP_API): that is
+ * the one a place must say most plainly.
+ */
+export function compat(version: { version: string; desktopApi: number | null } | null | undefined): "older" | "tested" | "newer" | "newer-api" | "unknown" {
+  if (version === null || version === undefined) return "unknown";
+  if (version.desktopApi !== null && version.desktopApi > DESKTOP_API) return "newer-api";
+  return compatibility(version.version);
 }

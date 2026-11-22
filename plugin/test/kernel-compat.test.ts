@@ -2,7 +2,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { compatibility, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
+import { compat, compatibility, DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
+import { parseVersion } from "../kernel/roster";
+import { FIXTURES } from "./support/fake-oats.js";
 
 test("the tested minor is the minor of the kernel the real run pins, and the floor is not above it", () => {
   const run = readFileSync(join(__dirname, "..", "container", "real", "run.sh"), "utf8");
@@ -23,4 +25,17 @@ test("where an installed OATS stands: older than the floor, tested, newer than t
   expect(compatibility("0.70.1-rc.2")).toBe("tested");
   for (const unreadable of ["", "latest", "v0.70", null, undefined]) expect(compatibility(unreadable)).toBe("unknown");
   expect(versionParts(" 0.70.3 ")).toEqual([0, 70, 3]);
+});
+
+test("from the kernel's own version answer: a later version of its JSON answers is said first; the recorded kernel is tested", () => {
+  expect(compat({ version: "0.70.0", desktopApi: DESKTOP_API })).toBe("tested");
+  expect(compat({ version: "0.70.0", desktopApi: DESKTOP_API + 1 })).toBe("newer-api");
+  expect(compat({ version: "0.69.0", desktopApi: DESKTOP_API + 1 })).toBe("newer-api");
+  expect(compat({ version: "0.69.0", desktopApi: null })).toBe("older");
+  expect(compat({ version: "0.71.0", desktopApi: 1 })).toBe("newer");
+  expect(compat(null)).toBe("unknown");
+  // What the real kernel printed (recorded): read through the kernel module, it is one the plugin was tested with.
+  const recorded = parseVersion(JSON.parse(readFileSync(join(FIXTURES, "roster", "version.json"), "utf8")).result ?? JSON.parse(readFileSync(join(FIXTURES, "roster", "version.json"), "utf8")));
+  if (!recorded.ok) throw new Error(recorded.error.message);
+  expect(compat(recorded.value)).toBe("tested");
 });

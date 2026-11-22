@@ -97,16 +97,22 @@ function snapshot() {
   const answer = JSON.parse(execFileSync("bb", ["plugin", "rpc", "call", "oats", "snapshot", "--input-file", input, "--json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
   return answer.value ?? answer.result ?? answer;
 }
-/** Waits until the plugin's snapshot is one `matches` holds for. → that snapshot, or undefined after `seconds`. */
+/**
+ * Waits until the plugin's snapshot is one `matches` holds for. → that snapshot; undefined after
+ * `seconds`, and `untilRoster.last` then says what the last try read or why it failed (the server
+ * is between two settings for a moment after one changed), for the check that prints it.
+ */
 async function untilRoster(matches, seconds = 40) {
   const deadline = Date.now() + seconds * 1000;
+  untilRoster.last = "never asked";
   while (Date.now() < deadline) {
     try {
       refresh();
       const read = snapshot();
       if (matches(read)) return read;
-    } catch {
-      // the server is between two settings: asked again below
+      untilRoster.last = JSON.stringify(read).slice(0, 300);
+    } catch (error) {
+      untilRoster.last = `the read failed: ${String(error?.message ?? error).slice(0, 300)}`;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -275,7 +281,7 @@ export default [
         installed({ version: "0.69.4" });
         check(await open(page, within("oats-home-cli")), `${at} an oats older than the plugin works with draws the card`, await page.evaluate(textOf(PAGE)));
         const older = await page.evaluate(cardText);
-        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes("Required 0.70.0 or newer, with desktop API 1") && older.includes("npm install -g @awebai/oats@0.70") && /Copy$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
+        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes("Required 0.70.0 or newer, with desktop API 1") && older.includes("npm install -g @awebai/oats@0.70") && /Copy Check again$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);
@@ -292,9 +298,14 @@ export default [
         installed({ version: "0.71.2" });
         check(await open(page, within("oats-home-cli-line")), `${at} an oats of a later minor draws the one line`, await page.evaluate(textOf(PAGE)));
         const line = await page.evaluate(textOf(within("oats-home-cli-line")));
-        check(line === "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2." && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null`)) === true, `${at} one line, and no card`, line);
+        check(line === "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2. Check again" && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null`)) === true, `${at} one line with Check again, and no card`, line);
         await sound(page, viewport, check, at, "the tested-up-to line");
         await page.shot(`home-${viewport.name}-cli-newer`);
+        // After the install the person asks again, on the page: the notice goes without a reload.
+        setVerb("version", null);
+        await page.evaluate(click(within("oats-home-cli-retry")));
+        const gone = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null`, 20);
+        check(Boolean(gone), `${at} "Check again" reads the installed oats anew: with a tested one the notice goes, on the page as it is`, await page.evaluate(textOf(PAGE)));
       } finally {
         installed(null);
       }
@@ -340,7 +351,7 @@ export default [
         // A first read that fails: no roster was ever read under these settings.
         setVerb("status", FAILS);
         pages(ALL_PAGES);
-        check((await untilRoster((roster) => roster.ok === false && (roster.last === undefined || roster.last === null))) !== undefined, `${at} the server has no roster and its read fails`, JSON.stringify(snapshot()).slice(0, 300));
+        check((await untilRoster((roster) => roster.ok === false && (roster.last === undefined || roster.last === null))) !== undefined, `${at} the server has no roster and its read fails`, untilRoster.last);
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
         check(Boolean(failed) && /Retry/.test(failed) && !/Showing what was read/.test(failed) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null`)) === true, `${at} a first read that failed: one titled notice with Retry, no age of anything kept, and no roster drawn`, failed ?? (await page.evaluate(textOf(PAGE))));
@@ -349,7 +360,7 @@ export default [
       } finally {
         setVerb("status", status ?? null);
         pages(ALL_PAGES);
-        check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} and the roster is read again afterwards`, JSON.stringify(snapshot()).slice(0, 300));
+        check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} and the roster is read again afterwards`, untilRoster.last);
       }
     },
   },

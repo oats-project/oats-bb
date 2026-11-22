@@ -731,22 +731,6 @@ test("the older-build fold scrolls within its own height: the header does not gr
   expect(lines.children.length).toBeGreaterThan(12);
 });
 
-test("an agent the kernel cannot reach: the header says it in a person's words, and the kernel's own text is under Details", async () => {
-  const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer at http://127.0.0.1:38886 (connection refused)" }) });
-  await slot.findByTestId("oats-panel-work");
-  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
-  const details = slot.getByTestId("oats-panel-state-kernel");
-  expect(details.querySelector("summary")!.textContent).toContain("Details");
-  expect(details.textContent).toContain("OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)");
-  // closed until asked for: the kernel's text is not the header's words
-  expect((details as HTMLDetailsElement).open ?? details.querySelector("details")?.open).toBeFalsy();
-  slot.unmount();
-  // an agent the kernel says nothing more of has no such fold
-  const plain = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null }) });
-  await plain.findByTestId("oats-panel-work");
-  expect(plain.queryByTestId("oats-panel-state-kernel")).toBeNull();
-});
-
 test("Open soul page is offered only where the Souls page is shown in this release", async () => {
   const shownSlot = panel({ threadId: CHILD_THREAD }, {}, { settings: { pages: "home, souls" } });
   fireEvent.click(await shownSlot.findByTestId("oats-panel-soul-link"));

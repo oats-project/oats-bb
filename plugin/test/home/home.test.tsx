@@ -732,12 +732,13 @@ test("an oats that speaks a newer desktop API: the card names the plugin as the 
   expect(card.textContent).toContain("The installed oats CLI is 0.74.0, which speaks a newer desktop API (2) than this plugin's (1). Update the OATS plugin to use it.");
   expect(card.querySelector("code")).toBeNull();
   expect(card.textContent).not.toContain("npm");
-  expect(within(card).queryByRole("button")).toBeNull();
+  // no command to copy: the one thing to press asks again, after the plugin was updated
+  expect(within(card).getAllByRole("button").map((button) => button.textContent)).toEqual(["Check again"]);
 });
 
 test("an oats of a later minor than the plugin was tested with: one line, no card, and nothing is turned off", async () => {
   const slot = await withCli({ version: "0.71.2", desktopApi: 1, state: "newer" }, []);
-  expect((await slot.findByTestId("oats-home-cli-line")).textContent).toBe("This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2.");
+  expect((await slot.findByTestId("oats-home-cli-line")).textContent).toBe("This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2.Check again");
   expect(slot.queryByTestId("oats-home-cli")).toBeNull();
   expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(false);
 });
@@ -845,4 +846,74 @@ test("those a person can answer here come first: an agent with no bb thread come
   const order = slot.getAllByTestId("oats-needs-card").map((card) => card.dataset.instance);
   expect(order).toHaveLength(4);
   expect(order[3]).toBe("night-watch-helper");
+});
+
+test("Check again asks the server to read the installed oats anew: after the install the card goes and New agent is on, with no reload", async () => {
+  let installed: { version: string | null; desktopApi: number | null; state: "older" | "tested" } = { version: "0.69.4", desktopApi: 1, state: "older" };
+  const slot = await homePage({ rpc: { ...handlers({}, []), homeCli: () => installed } as Handlers, sidebarThreads: calm() });
+  await slot.findByTestId("oats-home-cli");
+  expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(true);
+  installed = { version: "0.70.3", desktopApi: 1, state: "tested" };
+  const before = slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(slot.queryByTestId("oats-home-cli")).toBeNull());
+  expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(false);
+  // the read's own retry: the server is asked to read OATS again (it drops the version it keeps), then the version is read
+  const calls = slot.inspection.rpcCalls.map((call) => call.method);
+  expect(calls).toContain("refresh");
+  expect(calls.filter((method) => method === "homeCli").length).toBe(before + 1);
+});
+
+test("an agent OATS says is stopped that still carries a claim: the card shows bb's question, and nothing of the dead claim", async () => {
+  // The claim through the one gate (`claimOf`): the row and the panel say nothing of it either.
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped" } : agent));
+  expect(agents.find((agent) => agent.instance === "flaky-ci-developer")!.waiting?.message).toBe("needs your permission to use Bash");
+  const slot = await homePage({
+    rpc: handlers({}, agents),
+    sdk: {
+      threads: {
+        interactions: {
+          list: async () =>
+            [{ id: "pint_s", threadId: "thr_ci", status: "pending", payload: { kind: "user_question", questions: [{ id: "q", prompt: "Which shard do I rerun?", multiSelect: false, allowFreeText: false, options: [{ label: "One", value: "1" }, { label: "Two", value: "2" }] }] } }] as never,
+        },
+      },
+    },
+  });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
+  expect(within(card).getByTestId("oats-needs-question").textContent).toBe("Which shard do I rerun?");
+  expect(within(card).queryByTestId("oats-needs-detail")).toBeNull();
+  expect(card.textContent).not.toContain("needs your permission to use Bash");
+  expect(card.dataset.offer).toBe("choices");
+});
+
+test("an agent that asks again by a claim of its own, after a choice was pressed: the card is about the new question, not the old answer", async () => {
+  let agents = fixtureAgents();
+  let pending = true;
+  const slot = await homePage({
+    rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }),
+    sdk: {
+      threads: {
+        interactions: {
+          list: async () => (pending ? [{ id: "pint_a", threadId: "thr_ci", status: "pending", payload: { kind: "approval", reason: "scripted", subject: { kind: "command", command: "git push" }, availableDecisions: ["allow_once", "deny"] } }] : []) as never,
+          resolve: async () => ((pending = false), {}) as never,
+        },
+      },
+    },
+  });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice")).toHaveLength(2));
+  fireEvent.click(within(card).getAllByTestId("oats-needs-choice")[0]!);
+  expect((await within(card).findByTestId("oats-needs-answered")).textContent).toBe("Answered: Allow. Waiting for the agent to go on.");
+  // It goes on, and asks for the person's attention: bb lists nothing more, the kernel's claim is another one.
+  agents = agents.map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, waiting: { reason: "attention", message: "Which base branch do I use?", since: "2026-11-19T12:50:00.000Z" } } : agent));
+  await act(async () => {
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-19T12:51:00.000Z" });
+  });
+  const now = () => slot.getAllByTestId("oats-needs-card").find((each) => each.dataset.instance === "flaky-ci-developer")!;
+  await waitFor(() => expect(within(now()).getByTestId("oats-needs-question").textContent).toBe("Which base branch do I use?"));
+  expect(within(now()).queryByTestId("oats-needs-answered")).toBeNull();
+  // (The test harness cannot take bb's pending mark off the thread, so the card says the answer is in the thread; with bb's mark gone it offers the reply.)
+  expect(now().dataset.offer).toBe("in-thread");
+  expect(within(now()).getByTestId("oats-reply-text")).toBeTruthy();
 });

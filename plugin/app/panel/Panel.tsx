@@ -18,7 +18,7 @@ import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { instanceDisplayName, readAge, waitingLabel } from "../ui/words";
+import { agentName, readAge, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
@@ -171,7 +171,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
         <div className="flex min-w-0 items-center gap-2.5">
           <SoulMark soul={oats.soulOf(agent)} />
           <h2 data-testid="oats-panel-name" title={shown(agent.instance)} className="m-0 min-w-0 break-words text-base font-semibold">
-            {instanceDisplayName(shown(agent.instance))}
+            {agentName(agent.instance)}
           </h2>
         </div>
         <div data-testid="oats-panel-state">
@@ -179,12 +179,6 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
           <KernelSays text={status.kernel} />
         </div>
-        {/* The kernel's own text behind the line's words (what it says of a session it cannot reach): under Details, as the thread's row shows it. */}
-        {status.kernel === null || shown(status.kernel) === "" ? null : (
-          <Disclosure summary="Details" testId="oats-panel-state-kernel">
-            <span className="break-words text-xs text-muted-foreground">{`OATS says: ${shown(status.kernel)}`}</span>
-          </Disclosure>
-        )}
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
@@ -306,7 +300,7 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
     const thread = oats.nodeByInstance.get(name)?.thread;
     const bbThread = thread === undefined ? undefined : oats.threadById.get(thread.id);
     // An agent by its name as words, as every place names one; the kernel's own name is the title.
-    const words = instanceDisplayName(shown(name));
+    const words = agentName(name);
     if (bbThread === undefined) {
       return (
         <span data-testid={testId} title={shown(name)}>

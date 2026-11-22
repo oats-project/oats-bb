@@ -12,15 +12,16 @@ import type { ReactNode } from "react";
 import { experimental_useTabVisible as useTabVisible, useBbNavigate, useSdk } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, ExperimentalBadge, ExperimentalThreadTabProps, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { needsYouLabel } from "../format";
+import { claimOf } from "../../model/view";
 import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { useNow } from "../roster/now";
-import { Unreadable } from "../roster/unreadable";
+import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { Button, Card, Code, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
-import { instanceDisplayName, waitingLabel } from "../ui/words";
+import { agentName, waitingLabel } from "../ui/words";
 import { CommandText } from "../panel/parts";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
@@ -28,7 +29,7 @@ import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, r
 import { board } from "./board";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
+  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
   NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, THREAD_GONE, WORKING, WORKING_SHOWN,
   answeredWith, attachCommand, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
@@ -69,7 +70,7 @@ function useOpen(oats: Ready): (entry: Entry) => { href?: string; onClick(event:
 /** An agent's name as words, opening it: a link to its thread, or a button to its page. */
 function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
   const open = useOpen(oats)(entry);
-  const name = instanceDisplayName(shown(entry.agent.instance));
+  const name = agentName(entry.agent.instance);
   const look = `${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-left font-semibold text-foreground`;
   return open.href === undefined ? (
     <button type="button" data-testid={testId} title={shown(entry.agent.instance)} className={look} onClick={open.onClick}>
@@ -91,13 +92,27 @@ type Offer = "choices" | "in-thread" | "reply" | "elsewhere";
 /** The reply to one agent: one line that grows with its text, Send beside it, on that agent's card. */
 function Reply({ name, text, onText, busy, held, said, onSend }: { name: string; text: string; onText: (text: string) => void; busy: boolean; held: boolean; said: string | null; onSend: () => void }) {
   const box = useRef<HTMLTextAreaElement>(null);
-  // The box is as high as what is written in it: every line of what will be sent is in view.
+  // The box is as high as what is written in it: every line of what will be sent is in view. It is
+  // measured when its text changes, and when its own width does (the window's, or a fold around it
+  // that is opened: a box inside a closed fold has no width to be measured by).
   useLayoutEffect(() => {
     const element = box.current;
     if (element === null) return;
-    element.style.height = "auto";
-    // `height` is of the box with its border: what the text needs, and the border around it.
-    if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight + (element.offsetHeight - element.clientHeight)}px`;
+    const measure = () => {
+      element.style.height = "auto";
+      // `height` is of the box with its border: what the text needs, and the border around it.
+      if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight + (element.offsetHeight - element.clientHeight)}px`;
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    let width = element.clientWidth;
+    const watch = new ResizeObserver(() => {
+      if (element.clientWidth === width) return;
+      width = element.clientWidth;
+      measure();
+    });
+    watch.observe(element);
+    return () => watch.disconnect();
   }, [text]);
   return (
     <form
@@ -152,17 +167,25 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const sdk = useSdk();
   const open = useOpen(oats)(entry);
   const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
-  const name = instanceDisplayName(shown(entry.agent.instance));
+  const name = agentName(entry.agent.instance);
   const [asked, setAsked] = useState<Question | null>(null);
   const [busy, setBusy] = useState<"answer" | "send" | null>(null);
   const [failure, setFailure] = useState<{ kind: "answer" | "send"; message: string } | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   /** The choice pressed, once bb took it: said on the card until the agent goes on, or asks again. */
-  const [answered, setAnswered] = useState<{ interactionId: string; label: string } | null>(null);
+  const [answered, setAnswered] = useState<{ interactionId: string; label: string; under: string } | null>(null);
   const [text, setText] = useState("");
   const pending = thread?.hasPendingInteraction === true;
   const threadId = thread?.id;
   const updatedAt = thread?.updatedAt;
+  // The claim through the one gate (`claimOf`): an agent OATS says is stopped may still carry a claim, which is then no question of now.
+  const claim = claimOf(entry.agent);
+  /** Which claim the card shows: its instant and its text. A change of it is the agent asking again. */
+  const claimKey = claim === null ? "" : `${claim.since ?? ""} ${claim.reason} ${claim.message ?? ""}`;
+  // It asks again by a claim of its own (no request of bb's): what was answered before is no longer what the card is about.
+  useEffect(() => {
+    setAnswered((last) => (last !== null && last.under !== claimKey && claimKey !== "" ? null : last));
+  }, [claimKey]);
 
   useEffect(() => {
     if (!pending || threadId === undefined) {
@@ -207,7 +230,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     const target = { threadId, interactionId: asked.interactionId };
     const { answer: how } = choice;
     act("answer", () => (how.via === "respond" ? sdk.threads.interactions.respond({ ...target, value: how.value }) : sdk.threads.interactions.resolve({ ...target, resolution: how.resolution })), () => {
-      setAnswered({ interactionId: target.interactionId, label: choice.label });
+      setAnswered({ interactionId: target.interactionId, label: choice.label, under: claimKey });
       setAsked(null);
     });
   };
@@ -220,7 +243,6 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     });
   };
 
-  const claim = entry.agent.waiting;
   // What it asks: the agent's own message, else bb's title for its question, else the reason in words.
   const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
@@ -441,12 +463,19 @@ type Cli = { version: string | null; desktopApi: number | null; state: "older" |
  * minor than the plugin was tested with. Nothing for a tested one, and nothing while the read is
  * out or failed: OATS that cannot be run at all is the roster's notice.
  */
-function CliNotice({ cli }: { cli: Cli | undefined }) {
+function CliNotice({ cli, checking, onCheck }: { cli: Cli | undefined; checking: boolean; onCheck: () => void }) {
   if (cli === undefined || cli.state === "tested") return null;
+  // After an install the person asks again: the server reads `oats version` anew, and the notice follows it.
+  const again = (
+    <Button data-testid="oats-home-cli-retry" disabled={checking} onClick={onCheck}>
+      {checking ? CHECKING : CHECK_AGAIN}
+    </Button>
+  );
   if (cli.state === "newer") {
     return (
-      <p data-testid="oats-home-cli-line" className="m-0 text-muted-foreground">
-        {testedWhy(OATS_TESTED_MINOR, shown(cli.version ?? ""))}
+      <p data-testid="oats-home-cli-line" className="m-0 flex flex-wrap items-center gap-2 text-muted-foreground">
+        <span>{testedWhy(OATS_TESTED_MINOR, shown(cli.version ?? ""))}</span>
+        {again}
       </p>
     );
   }
@@ -459,7 +488,7 @@ function CliNotice({ cli }: { cli: Cli | undefined }) {
   if (cli.state === "newer-api") {
     return (
       <div data-testid="oats-home-cli" data-state={cli.state}>
-        <Notice title={CLI_NEWER_API} tone="warning">
+        <Notice title={CLI_NEWER_API} tone="warning" actions={again}>
           <p className="m-0">{newerApiWhy(cli.version === null ? null : shown(cli.version), cli.desktopApi, DESKTOP_API)}</p>
           {facts}
         </Notice>
@@ -469,7 +498,16 @@ function CliNotice({ cli }: { cli: Cli | undefined }) {
   const command = installCommand(OATS_TESTED_MINOR);
   return (
     <div data-testid="oats-home-cli" data-state={cli.state}>
-      <Notice title={CLI_REQUIRED} tone="warning" actions={<CopyButton text={command} name="Copy install command" />}>
+      <Notice
+        title={CLI_REQUIRED}
+        tone="warning"
+        actions={
+          <>
+            <CopyButton text={command} name="Copy install command" />
+            {again}
+          </>
+        }
+      >
         <p className="m-0">{CLI_REQUIRED_WHY}</p>
         {facts}
         <p className="m-0">
@@ -485,17 +523,35 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // Read once: the installed CLI changes with an install, not with what the agents do.
-  const cli = useRead("homeCli", { enabled: visible, live: false }).data;
-  const notice = <CliNotice cli={cli} />;
+  const cliRead = useRead("homeCli", { enabled: visible, live: false });
+  const cli = cliRead.data;
+  const [checking, setChecking] = useState(false);
+  // The read's own retry: the server drops the version it keeps and asks `oats` again. "Checking…" until an answer is in.
+  const checked = useRef(cli);
+  useEffect(() => {
+    if (checked.current !== cli || cliRead.status === "error") setChecking(false);
+    checked.current = cli;
+  }, [cli, cliRead.status]);
+  const notice = (
+    <CliNotice
+      cli={cli}
+      checking={checking}
+      onCheck={() => {
+        setChecking(true);
+        cliRead.retry();
+      }}
+    />
+  );
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
   if (oats.phase === "loading") return <Loading>{READING}</Loading>;
-  if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
+  if (oats.phase === "failed") return <RosterNotice oats={oats} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
-  const stale = oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
+  // The one Stale drawing, the roster's: nothing while the roster is the one just read.
+  const stale = <RosterNotice oats={oats} />;
   if (agents) {
     return (
       <>

@@ -868,9 +868,6 @@ const more = [
       await page.until(visible(inPanel("oats-panel-session")), 30);
       const again = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-runtime-error"))}).length`);
       check(again === 0, `${at} and the Session card does not say it a second time`, again);
-      // The kernel's own text is behind the header's words: under a Details fold that is closed until asked for.
-      const kernel = await page.evaluate(`(() => { const fold = document.querySelector(${JSON.stringify(inPanel("oats-panel-state-kernel"))}); return fold ? JSON.stringify({ open: fold.open, summary: fold.querySelector("summary").innerText.trim(), text: fold.textContent.replace(/\\s+/g, " ").trim() }) : ""; })()`);
-      check(kernel !== "" && JSON.parse(kernel).open === false && /Details$/.test(JSON.parse(kernel).summary) && JSON.parse(kernel).text.includes("OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)"), `${at} and what the kernel itself says of it is under Details in the header, closed until asked for`, kernel);
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "instance-unreachable");
       await page.shot(`panel-${viewport.name}-instance-unreachable`);

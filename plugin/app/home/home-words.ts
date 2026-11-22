@@ -4,7 +4,7 @@
 import type { Agent, AgentState } from "../../model/types";
 import { count } from "../format";
 import { shown } from "../ui/text";
-import { STATE, instanceDisplayName } from "../ui/words";
+import { STATE, agentName } from "../ui/words";
 
 export const HOME = "Home";
 export const NEEDS_YOU = "Needs you";
@@ -43,7 +43,7 @@ export const soulAndMachine = (soul: string, machine: string): string => `${show
 /** Who started it: the person OATS attributes it to, else its parent by its name as words; null when the kernel names neither. */
 export function startedBy(agent: Pick<Agent, "human" | "parent">): string | null {
   if (agent.human !== null) return `started by ${shown(agent.human)}`;
-  return agent.parent === null ? null : `started by ${instanceDisplayName(shown(agent.parent))}`;
+  return agent.parent === null ? null : `started by ${agentName(agent.parent)}`;
 }
 
 /** The empty workspace: what OATS does, in two lines. */
@@ -92,6 +92,9 @@ export const newerApiWhy = (version: string | null, api: number | null, reads: n
   `The installed oats CLI${version === null ? "" : ` is ${version}, which`} speaks a newer desktop API${api === null ? "" : ` (${api})`} than this plugin's (${reads}). Update the OATS plugin to use it.`;
 /** The one line for a CLI of a later minor than the plugin was tested with: nothing is turned off. */
 export const testedWhy = (testedThrough: string, version: string): string => `This plugin was tested with oats CLIs up to ${testedThrough}; the installed CLI is ${version}.`;
+/** Asks the server to read `oats version` again (after an install), as the Desktop's Retry on its card. */
+export const CHECK_AGAIN = "Check again";
+export const CHECKING = "Checking…";
 export const DETECTED = "Detected";
 export const REQUIRED = "Required";
 export const detected = (version: string | null): string => version ?? "unknown: oats answered no version the plugin can read";

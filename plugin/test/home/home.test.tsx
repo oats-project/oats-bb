@@ -247,7 +247,7 @@ test("each card has its own reply, named for its agent, and sends through bb's o
   ]);
   // No reply stands apart from a card: every box is inside the card of the agent it writes to.
   for (const box of slot.getAllByTestId("oats-reply")) expect(box.closest('[data-testid="oats-needs-card"]')).not.toBeNull();
-  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => !["snapshot", "souls", "capabilities", "teams", "machines"].includes(method))).toEqual([]); // reads only: never an OATS act
+  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => !["snapshot", "souls", "capabilities", "teams", "machines", "automations"].includes(method))).toEqual([]); // reads only (the roster, the tiles' counts, the Automations tile's mark): never an OATS act
 });
 
 test("a failed send says why, on the card, and keeps the text", async () => {
@@ -375,12 +375,14 @@ test("a claim's age follows the clock while the view stays open and nothing chan
     const slot = await homePage();
     const card = (await slot.findAllByTestId("oats-needs-card"))[0]!;
     expect(card.textContent).toContain("waiting under a minute (since "); // the Desktop's words for how long, and since when
-    const before = slot.inspection.rpcCalls.length;
+    // The Automations tile's mark is the automations feature's own read, on that feature's own clock: not the home's.
+    const homes = () => slot.inspection.rpcCalls.filter((call) => call.method !== "automations").length;
+    const before = homes();
     await act(async () => {
       vi.advanceTimersByTime(18 * 60_000);
     });
     expect(slot.getAllByTestId("oats-needs-card")[0]!.textContent).toContain("waiting 18 min (since ");
-    expect(slot.inspection.rpcCalls.length).toBe(before); // the clock alone: no reread
+    expect(homes()).toBe(before); // the clock alone: no reread of the home's
   } finally {
     vi.useRealTimers();
   }
@@ -561,6 +563,12 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(document.activeElement).toBe(back);
   fireEvent.click(back);
   expect(list.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  // Esc, pressed in the list, returns too
+  fireEvent.keyDown(within(tmux).getByTestId("oats-home-agent"), { key: "Escape" });
+  expect(list.inspection.navigateCalls).toHaveLength(2);
+  // and a key pressed elsewhere on the screen is not the list's
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  expect(list.inspection.navigateCalls).toHaveLength(2);
 });
 
 test("in the thread's tab Home › Agents is a view of the tab: Agents opens it and Back to Home closes it", async () => {
@@ -654,4 +662,17 @@ test("while what is shown is the roster as last read, a card's answers and its r
   expect((within(card).getByTestId("oats-needs-open") as HTMLButtonElement).disabled).toBe(false);
   // the one notice of the roster's, once
   expect(slot.getAllByRole("alert")).toHaveLength(1);
+});
+
+test("a page's tile carries the mark its feature gives it: Automations while a run failed", async () => {
+  const { addPageLink } = await import("../../app/workspace/pages");
+  const remove = addPageLink({ path: "automations", title: "Automations", useMark: () => ({ label: "Automations, a run failed" }) });
+  try {
+    const slot = await plainTab();
+    const tile = await slot.findByTestId("oats-tile-automations");
+    expect(within(tile).getByLabelText("Automations, a run failed")).toBeTruthy();
+    expect(tile.textContent).toBe("Automations"); // no count of its own
+  } finally {
+    remove();
+  }
 });

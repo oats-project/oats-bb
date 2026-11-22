@@ -48,7 +48,8 @@ instance's name as words).
 | A card while the roster is the last one read | acts on a held roster are held | the answers and the reply are off, with "Held until OATS is read again: what is shown may have changed." | The Desktop's rule, said as a reason beside the control (the standard: a control that is off says why). |
 | A sent reply, a reply or an answer that failed | (no act on a card) | "Sent to <name>." on the card; a notice on the card titled **The message was not sent** / **The answer was not sent**, with what bb said | In place, on the card it is about. |
 | Who started an agent, in Home › Agents | "started by <human or parent>" | the same; a parent by its name as words | none. |
-| The empty workspace | "OATS runs your agents: each one is a soul at work on a machine of yours." / "Start one, and Home shows what needs you and what you have." | the same two lines, the first as the title | none. |
+| The empty workspace | "OATS runs your agents: each one is a soul at work on a machine of yours." / "Start one, and Home shows what needs you and what you have.", then three keys (New agent, Command palette, Home) | the same two lines, the first as the title, then the button **New agent** | bb has its own keys and command palette, and the plugin adds none: the one act is a button. |
+| The page's name | the window's Home | the heading **Home** on the page; bb's own bar over it says **OATS**, the plugin's entry in bb's navigation, with bb's own close button | bb names a plugin's page by its entry in the navigation; the page says which page of OATS it is. |
 
 ## The instance panel
 

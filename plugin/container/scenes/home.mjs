@@ -138,6 +138,9 @@ export default [
       // the tiles, with their counts read, and who works
       const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 5 && tiles.slice(0, 5).every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
       check(Boolean(tiles) && JSON.parse(tiles)[0] === "Agents 8", `${at} the tiles: Agents and the pages, each of the five the home counts with its count`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      // the Automations tile carries the mark its row in the sidebar carries (a run failed, in these fixtures)
+      const mark = await page.until(`document.querySelector(${JSON.stringify(`${within("oats-tile-automations")} [aria-label]`)})?.getAttribute("aria-label") ?? ""`, 15);
+      check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => /Working$/.test(row)), `${at} every agent at work is a row that ends with its state in words`, working);
       await shown(page, check, at, within("oats-home-summary"), "the summary, the tiles and who works");
@@ -159,12 +162,17 @@ export default [
       check((await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`)) === "oats-home-back", `${at} the keyboard is on Back to Home`, await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`));
       await sound(page, viewport, check, at, "Home › Agents");
       await page.shot(`home-${viewport.name}-agents`);
+      // Esc returns, as Back to Home does
+      await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+      const escaped = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null && location.pathname.endsWith("/home") ? location.pathname : ""`, 15);
+      check(Boolean(escaped), `${at} Esc on Home › Agents leads back to the home`, await page.evaluate("location.pathname"));
+      check(await open(page, within("oats-home-agent-row"), `${HOME}/agents`), `${at} Home › Agents opens by its address`, await page.evaluate(textOf(PAGE)));
       // an agent with no bb thread opens its own page
       await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(within("oats-home-agent-row"))})].find((row) => row.dataset.instance === "kernel-fix-developer").querySelector('[data-testid="oats-home-agent"]').click()`);
       const agentPage = await page.until(`location.pathname.endsWith("/agent/kernel-fix-developer") ? location.pathname : ""`, 15);
       check(Boolean(agentPage), `${at} an agent with no bb thread opens its own page`, await page.evaluate("location.pathname"));
       // and the way back
-      check(await open(page, within("oats-home-back"), `${HOME}/agents`), `${at} Home › Agents opens by its address`, await page.evaluate(textOf(PAGE)));
+      check(await open(page, within("oats-home-back"), `${HOME}/agents`), `${at} Home › Agents opens by its address again`, await page.evaluate(textOf(PAGE)));
       await page.evaluate(click(within("oats-home-back")));
       const back = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null && location.pathname.endsWith("/home") ? location.pathname : ""`, 15);
       check(Boolean(back), `${at} Back to Home leads to the home`, await page.evaluate("location.pathname"));

@@ -17,10 +17,11 @@ import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { Unreadable } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Card, DisabledReason, Empty, INPUT, LINK, Loading, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { Button, Card, DisabledReason, Empty, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
 import { pageLinks } from "../workspace/pages";
+import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board } from "./board";
 import type { Board, Entry } from "./board";
@@ -265,6 +266,28 @@ function AgentRow({ entry, oats, testId, startedByToo = false }: { entry: Entry;
   );
 }
 
+/** The mark a page's feature gives it (Automations, while a run failed). Its own component: the feature's hook reads, so it is drawn only while the home is seen. */
+function PageMark({ useMark }: { useMark: NonNullable<PageLink["useMark"]> }) {
+  const mark = useMark();
+  return mark === null ? null : <Mark label={mark.label} />;
+}
+
+/** One page's tile: its title, its feature's mark, and its count where the home counts it. */
+function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: number | "loading" | "failed" | null; look: string; visible: boolean; onOpen: () => void }) {
+  return (
+    <li>
+      <button type="button" data-testid={`oats-tile-${page.path}`} className={look} onClick={onOpen}>
+        <span className="font-semibold text-foreground">
+          {page.title}
+          {page.useMark === undefined || !visible ? null : <PageMark useMark={page.useMark} />}
+        </span>
+        {/* A page with nothing the home counts says no count. */}
+        {n === null ? null : <span className="text-xs text-muted-foreground">{tileCount(n)}</span>}
+      </button>
+    </li>
+  );
+}
+
 /** The workspace's tiles: Agents (Home › Agents) and the plugin's pages, each with its count. */
 function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onAgents: () => void }) {
   const navigate = useBbNavigate();
@@ -288,18 +311,9 @@ function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onA
           <span className="text-xs text-muted-foreground">{tileCount(made.all.length)}</span>
         </button>
       </li>
-      {pageLinks().map((page) => {
-        const n = counts[page.path] ?? null;
-        return (
-          <li key={page.path}>
-            <button type="button" data-testid={`oats-tile-${page.path}`} className={`${TARGET} ${tile}`} onClick={() => navigate.toPluginPanel(page.path)}>
-              <span className="font-semibold text-foreground">{page.title}</span>
-              {/* A page with nothing the home counts says no count. */}
-              {n === null ? null : <span className="text-xs text-muted-foreground">{tileCount(n)}</span>}
-            </button>
-          </li>
-        );
-      })}
+      {pageLinks().map((page) => (
+        <PageTile key={page.path} page={page} n={counts[page.path] ?? null} look={`${TARGET} ${tile}`} visible={visible} onOpen={() => navigate.toPluginPanel(page.path)} />
+      ))}
     </ul>
   );
 }
@@ -309,6 +323,17 @@ function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: 
   // Opened by a press that then leaves the screen: the keyboard goes on from the way back.
   const back = useRef<HTMLDivElement>(null);
   useEffect(() => back.current?.querySelector("button")?.focus(), []);
+  // Esc returns, as on the Desktop; a key meant for something else (a dialog of bb's over the page) is left to it.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!(event.target instanceof Node) || !back.current?.closest("section")?.contains(event.target)) return;
+      event.preventDefault();
+      onBack();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onBack]);
   return (
     <Section title={EVERY_AGENT} n={made.all.length} testId="oats-home-agents">
       <div ref={back}>

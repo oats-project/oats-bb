@@ -716,8 +716,8 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
     "cd ~ && bb-app --data-dir ~/bbdata-exposed --server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887 --no-in-app-updates > bb-app-exposed.out 2>&1"]);
   const exposed = { ...SETTINGS, server: "http://127.0.0.1:48886", daemon: "http://127.0.0.1:48887" };
-  // It timed out once on a CI runner (oats-bb#30's run 45006374572) with no cause seen: when it does, say what that bb
-  // printed and what it answered, so the next one is read, not rerun.
+  // It has timed out on a CI runner with no cause seen: when it does, say what that bb printed, what it answered and
+  // what its processes wait on, so the next one is read, not rerun.
   await waitFor("the second bb to answer", async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'), { timeoutMs: 240_000, everyMs: 1_000 })
     .catch(async (error) => { throw new Error(`${error.message}. It answered: ${(await said("curl -s -m 2 http://127.0.0.1:48886/health || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-exposed.out 2>&1 || true"))}. Its processes: ${await said(BB_PROCESSES)}`, { cause: error }); });
 

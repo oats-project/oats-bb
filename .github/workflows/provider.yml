@@ -4,8 +4,8 @@ name: provider
 
 # A pull request runs these jobs when it changes what the provider's tests read: the provider, the tests, the
 # scripts, the pin, package.json, plugin/package.json (test/unit/container-pin.test.mjs pins its bb-app),
-# container/** and container.yml (the image's unit tests), and this file. A plugin-only or docs-only pull request
-# does not; plugin.yml proves those. Every push to main runs them all.
+# container/** and container.yml (the image's unit tests), and this file. A plugin-only pull request does not
+# (plugin.yml proves it), nor a docs-only one. Every push to main runs them all.
 on:
   pull_request:
     paths:

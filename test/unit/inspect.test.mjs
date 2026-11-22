@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { inspectAnswer, inspectHome } from "../../oats-package/capabilities/oats-bb/lib/threads.mjs";
 import { processLook, threadProcesses } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
-import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, scratch, threadRow } from "../fixtures/harness.mjs";
+import { NOT_FOUND, UNREACHABLE, bbHarness, call, fakeBbIn, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
 const settings = { version: "0.50.1", trust: "single-user" };
@@ -89,13 +89,17 @@ test("a thread whose last turn failed, with its harness still loaded, is there a
     // Its harness is still loaded in the home, as bb leaves it after a failed turn: there,
     // and it runs (`running` is read as for any thread at rest: a stopped home a person
     // started again in bb, whose turn then failed, still runs).
-    const child = await threadProcess(t, id, HARNESS_NAME[providerId], home);
+    const child = await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: home, provider: providerId });
     assert.deepEqual(await read(), { present: true, state: "unknown", running: true, open }, providerId);
     assert.deepEqual(bb.calls().at(-1).argv, ["thread", "list", "--include-hidden", "--json"]);
     assert.equal(bb.calls().length, 3, "bb is asked nothing more than its thread list, once a call");
     // Decided at every call: once the process is gone, so is the session.
-    await new Promise((done) => { child.once("exit", done); child.kill("SIGKILL"); });
+    await child.end();
     assert.deepEqual(await read(), { present: false, state: "stopped", running: false, open }, providerId);
+    // A harness in the home that bb did not start (one the agent left running): the thread
+    // is there, as before (the kernel must not resume beside it), and it does not run.
+    await threadProcess(t, id, HARNESS_NAME[providerId], home);
+    assert.deepEqual(await read(), { present: true, state: "unknown", running: false, open }, providerId);
   }
 });
 
@@ -103,8 +107,10 @@ test("a thread whose last turn failed, with its harness still loaded, is there a
 // loaded and of one `bb thread stop` released, so it is read from the processes. A false
 // "it runs" would make the kernel take a home stopped with the host for one that came back:
 // only the home's own harness counts, the process named pi or claude that carries the
-// thread's id AND works in the home.
-test("an idle thread reads running true only with its own harness at work in the home, and false without: for pi and for Claude alike", { skip: NO_PROC }, async (t) => {
+// thread's id AND works in the home, AND only one bb itself started for the thread: a child
+// of bb's runner for the thread's provider (test/fixtures/bb-provider-bridge-worker.mjs
+// stands for it here; the real tree is pinned by test/contract).
+test("an idle thread reads running true only with the harness bb started for it at work in the home, and false without: for pi and for Claude alike", { skip: NO_PROC }, async (t) => {
   for (const providerId of ["pi", "claude-code"]) {
     const { dir, home } = scratch(t);
     const id = liveId(`idle_${providerId.replace("-", "_")}`);
@@ -129,11 +135,20 @@ test("an idle thread reads running true only with its own harness at work in the
     // The harness's name, in the home, for another thread: not this thread's.
     await threadProcess(t, `${id}_other`, HARNESS_NAME[providerId], home);
     assert.equal(await running(), false, `${providerId}: another thread's harness in the home`);
-    // The home's own harness: it runs.
-    const own = await threadProcess(t, id, HARNESS_NAME[providerId], home);
-    assert.equal(await running(), true, `${providerId}: its own harness in the home`);
-    // Decided at every call: once it is gone, the thread does not run.
-    await new Promise((done) => { own.once("exit", done); own.kill("SIGKILL"); });
+    // The harness's own name, the id and the home, started by something that is not bb's
+    // runner: what an agent leaves behind when it starts a pi or a claude of its own,
+    // detached, in its home. It outlives a stop of the thread, and is not the thread's.
+    await threadProcess(t, id, HARNESS_NAME[providerId], home);
+    assert.equal(await running(), false, `${providerId}: a harness in the home that bb did not start`);
+    // A child of bb's runner for the other provider, or of bb's runner at work elsewhere: not it either.
+    await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: home, provider: providerId === "pi" ? "claude-code" : "pi" });
+    await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: dir, provider: providerId });
+    assert.equal(await running(), false, `${providerId}: a child of another provider's runner, and one at work elsewhere`);
+    // The harness bb started for the thread, in the home: it runs.
+    const own = await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: home, provider: providerId });
+    assert.equal(await running(), true, `${providerId}: bb's own harness in the home`);
+    // Decided at every call: once it is gone, the thread does not run (what the agent left is still there).
+    await own.end();
     assert.equal(await running(), false, `${providerId}: its harness gone`);
   }
 });
@@ -144,7 +159,7 @@ test("a pending thread with nothing in line reads by the same rule, and a turn b
   const read = async (extra) => (await call("inspect", { home, endpoint: { ...endpoint, threadId: id } }, { settings, bb: fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", "pending", extra)] } }) })).result.running;
   assert.equal(await read({}), false);
   assert.equal(await read({ queuedWork: "waiting" }), true, "held in line: it will run");
-  await threadProcess(t, id, "claude", home);
+  await bbHarness(t, { id, name: "claude", cwd: home, provider: "claude-code" });
   assert.equal(await read({}), true);
 });
 
@@ -163,9 +178,9 @@ test("inspectMany looks at the host's processes once for all its homes, and each
   const [here, elsewhere, none] = [liveId("many_here"), liveId("many_elsewhere"), liveId("many_none")];
   const homes = { a: join(home, "a"), b: join(home, "b"), c: join(home, "c") };
   for (const path of Object.values(homes)) mkdirSync(path);
-  await threadProcess(t, here, "pi", homes.a);
+  await bbHarness(t, { id: here, name: "pi", cwd: homes.a, provider: "pi" });
   // The second home's thread has a harness, at work in the first home: not in its own.
-  await threadProcess(t, elsewhere, "pi", homes.a);
+  await bbHarness(t, { id: elsewhere, name: "pi", cwd: homes.a, provider: "pi" });
   const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(here, "proj_a", "idle", { providerId: "pi" }), threadRow(elsewhere, "proj_b", "idle", { providerId: "pi" }), threadRow(none, "proj_c", "idle", { providerId: "pi" })] } });
   const at = (path, projectId, threadId) => ({ home: path, endpoint: { server: SERVER, projectId, threadId } });
   const { results } = (await call("inspectMany", { homes: [at(homes.a, "proj_a", here), at(homes.b, "proj_b", elsewhere), at(homes.c, "proj_c", none)] }, { settings, bb })).result;
@@ -185,9 +200,14 @@ test("one look at the processes serves every home it is handed to, and none is m
     writeFileSync(join(proc, String(101 + index), "environ"), `BB_THREAD_ID=thr_${index}\0`);
     writeFileSync(join(proc, String(101 + index), "comm"), "pi\n");
     writeFileSync(join(proc, String(101 + index), "cmdline"), "pi\0");
+    writeFileSync(join(proc, String(101 + index), "stat"), `${101 + index} (pi) S 900 1 1 0\n`);
     // The third thread's pi works in the first home, not in its own.
     symlinkSync(index === 2 ? homes[0] : home, join(proc, String(101 + index), "cwd"));
   }
+  // bb's runner for pi threads, their parent.
+  mkdirSync(join(proc, "900"));
+  writeFileSync(join(proc, "900", "comm"), "node\n");
+  writeFileSync(join(proc, "900", "cmdline"), "/usr/local/bin/node\0/opt/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs\0/data/host.mjs\0provider-pi\0/data/bridge-data\0");
   const opened = [];
   const look = processLook({ proc, read: (path, encoding) => { opened.push(path.slice(proc.length + 1)); return readFileSync(path, encoding); } });
   const subject = (index) => ({ home: homes[index], endpoint: { server: SERVER, projectId: `proj_${index}`, threadId: `thr_${index}` } });
@@ -197,11 +217,13 @@ test("one look at the processes serves every home it is handed to, and none is m
   assert.deepEqual(opened, [], "no look for threads that are in a turn");
   // Three idle threads, one look: each process's files are read once, whatever the number of homes.
   assert.deepEqual(homes.map((home, index) => inspectHome(subject(index), rows("idle"), look).running), [true, true, false]);
-  assert.deepEqual(opened.filter((path) => path.endsWith("/comm")).sort(), ["101/comm", "102/comm", "103/comm"]);
-  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ"]);
+  assert.deepEqual(opened.filter((path) => path.endsWith("/comm")).sort(), ["101/comm", "102/comm", "103/comm", "900/comm"]);
+  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ"], "the runner's environment is never opened");
+  assert.deepEqual(opened.filter((path) => path.endsWith("/stat")).sort(), ["101/stat", "102/stat", "103/stat"]);
+  const read = opened.length;
   // And again for threads in error: still the same look.
   assert.deepEqual(homes.map((home, index) => { const answer = inspectHome(subject(index), rows("error"), look); return [answer.present, answer.running]; }), [[true, true], [true, true], [true, false]]);
-  assert.equal(opened.length, 9, "nothing was read a second time");
+  assert.equal(opened.length, read, "nothing was read a second time");
 });
 
 test("a command the agent left running carries the thread's id and is not its harness: alone, it leaves a thread in error lost", { skip: NO_PROC }, async (t) => {
@@ -253,9 +275,11 @@ test("where the processes cannot be looked at, a thread in error is an error: ne
 test("the process look reads each process's thread id and names, as bb-app 0.50.1's harnesses show them, and passes over what it cannot read", (t) => {
   const { dir } = scratch(t);
   const proc = join(dir, "proc");
-  const entry = (pid, environ, comm = null, cmdline = null, cwd = null) => {
+  const entry = (pid, environ, comm = null, cmdline = null, cwd = null, parent = null) => {
     mkdirSync(join(proc, pid), { recursive: true });
     if (cwd !== null) symlinkSync(cwd, join(proc, pid, "cwd"));
+    // As Linux writes it: the name in parentheses (it may hold spaces and parentheses), the state, the parent.
+    if (parent !== null) writeFileSync(join(proc, pid, "stat"), `${pid} (${comm} (x) y) S ${parent} ${pid} ${pid} 0 -1\n`);
     if (environ !== null) writeFileSync(join(proc, pid, "environ"), environ);
     if (comm !== null) writeFileSync(join(proc, pid, "comm"), `${comm}\n`);
     if (cmdline !== null) writeFileSync(join(proc, pid, "cmdline"), cmdline);
@@ -263,9 +287,14 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   // pi sets its own title: its name and its whole command line are that one word.
   const home = join(dir, "home"), elsewhere = join(dir, "elsewhere");
   mkdirSync(elsewhere);
-  entry("101", "PATH=/bin\0BB_THREAD_ID=thr_pi\0HOME=/x\0", "pi", "pi\0", home);
+  // bb's runners (bb-app 0.50.1: its host daemon runs one per thread, and the thread's harness is its child), and init.
+  const runner = (provider) => `/usr/local/bin/node\0--use-system-ca\0/opt/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs\0/data/plugin-host-artifacts/provider-${provider}/8f09/host.mjs\0provider-${provider}\0/data/plugins/provider-${provider}/bridge-data\0`;
+  entry("900", "", "node", runner("pi"));
+  entry("901", "", "node", runner("claude-code"));
+  entry("1", "", "init", "/sbin/init\0");
+  entry("101", "PATH=/bin\0BB_THREAD_ID=thr_pi\0HOME=/x\0", "pi", "pi\0", home, "900");
   // Claude Code: argv[0] is the path of the claude on bb's PATH.
-  entry("102", "BB_THREAD_ID=thr_claude\0", "claude", "/home/node/.npm-global/bin/claude\0--output-format\0stream-json\0", elsewhere);
+  entry("102", "BB_THREAD_ID=thr_claude\0", "claude", "/home/node/.npm-global/bin/claude\0--output-format\0stream-json\0", elsewhere, "901");
   // A script run by an interpreter: the name is the second word.
   entry("103", "BB_THREAD_ID=thr_script\0", "node", "/usr/local/bin/node\0/opt/pi/bin/pi\0--mode\0rpc\0");
   // What an agent leaves running: the variable, and another name. A later word named pi is not looked at.
@@ -278,15 +307,31 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   entry("109", "BB_THREAD_ID=\0", "pi", "pi\0"); // names none
   entry("110", "BB_THREAD_ID=thr_bare"); // its name cannot be read
   entry("self", "BB_THREAD_ID=thr_not_a_pid\0", "pi", "pi\0");
+  // In the home, by the harness's name, with a thread's id, and not bb's: one the agent
+  // started detached (its parent is whatever adopted it), one under the other provider's
+  // runner, one under a program that only mentions the runner's file, one whose parent
+  // cannot be read (it ended meanwhile), one whose own stat cannot be read.
+  entry("112", "BB_THREAD_ID=thr_detached\0", "pi", "pi\0", home, "1");
+  entry("113", "BB_THREAD_ID=thr_wrong_runner\0", "pi", "pi\0", home, "901");
+  entry("902", "", "tail", "tail\0-f\0provider-pi\0bb-provider-bridge-worker.mjs.log\0");
+  entry("114", "BB_THREAD_ID=thr_mention\0", "pi", "pi\0", home, "902");
+  entry("115", "BB_THREAD_ID=thr_orphan\0", "pi", "pi\0", home, "999");
+  entry("116", "BB_THREAD_ID=thr_nostat\0", "pi", "pi\0", home);
+  // Beside bb's own for the same thread, what the agent left does not hide it; and beside one that cannot be told, bb's own still counts.
+  entry("117", "BB_THREAD_ID=thr_pi\0", "pi", "pi\0", home, "1");
+  entry("118", "BB_THREAD_ID=thr_orphan_and_own\0", "pi", "pi\0", home, "999");
+  entry("119", "BB_THREAD_ID=thr_orphan_and_own\0", "pi", "pi\0", home, "900");
+  // A thread of a bb provider this module does not know the harness of: any of bb's runners.
+  entry("120", "BB_THREAD_ID=thr_codex\0", "claude", "claude\0", home, "901");
   // Which files the look opens: a process that is no harness by its name has its name and
   // command line read, and its environment never (it may hold another program's secret).
   const opened = [];
   const read = (path, encoding) => { opened.push(path.slice(proc.length + 1)); return readFileSync(path, encoding); };
   const threads = threadProcesses({ proc, read });
-  assert.deepEqual([...threads.keys()].sort(), ["thr_claude", "thr_pi", "thr_script"], "only threads with a harness-named process");
-  assert.deepEqual(threads.get("thr_pi").map((process) => ({ names: [...process.names], cwd: process.cwd })), [{ names: ["pi"], cwd: home }], "one process: the stray sleep of the same thread adds nothing");
+  assert.deepEqual([...threads.keys()].sort(), ["thr_claude", "thr_codex", "thr_detached", "thr_mention", "thr_nostat", "thr_orphan", "thr_orphan_and_own", "thr_pi", "thr_script", "thr_wrong_runner"], "only threads with a harness-named process");
+  assert.deepEqual(threads.get("thr_pi").map((process) => ({ names: [...process.names], cwd: process.cwd, runner: process.runner })), [{ names: ["pi"], cwd: home, runner: ["pi"] }, { names: ["pi"], cwd: home, runner: [] }], "bb's own and the one the agent left: the stray sleep of the same thread adds nothing");
   assert.deepEqual(threads.get("thr_script").map((process) => process.cwd), [null], "a working directory that cannot be read is null, and the process is still the thread's harness");
-  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ", "106/environ", "107/environ", "108/environ", "109/environ"],
+  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ", "106/environ", "107/environ", "108/environ", "109/environ", "112/environ", "113/environ", "114/environ", "115/environ", "116/environ", "117/environ", "118/environ", "119/environ", "120/environ"],
     "the environment of the sleep (104), the server (105), the tail (111) and the process with no readable name (110) is never opened");
   for (const pid of ["104", "105", "110", "111"]) assert.ok(!opened.includes(`${pid}/environ`), pid);
   assert.ok(opened.includes("104/comm") && opened.includes("104/cmdline"), "its name and command line are what is read");
@@ -305,19 +350,32 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   // Whether a thread's harness works in a home: the harness itself, by its name, with the
   // thread's id, whose working directory is exactly that home.
   const runsIn = (id, providerId, where) => look.runsIn({ id, providerId }, where);
-  assert.equal(runsIn("thr_pi", "pi", home), true, "the thread's pi, at work in the home");
+  assert.equal(runsIn("thr_pi", "pi", home), true, "the thread's pi, a child of bb's runner for pi, at work in the home");
+  // Only a harness bb itself started: by its parent, bb's runner for the thread's provider.
+  assert.equal(runsIn("thr_detached", "pi", home), false, "a pi the agent started detached in its home, adopted by init");
+  assert.equal(runsIn("thr_wrong_runner", "pi", home), false, "a child of bb's runner for another provider");
+  assert.equal(runsIn("thr_mention", "pi", home), false, "a parent that only mentions the runner's file and a provider is not bb's runner");
+  assert.equal(runsIn("thr_orphan", "pi", home), null, "its parent cannot be read: it cannot be told, never a guess");
+  assert.equal(runsIn("thr_nostat", "pi", home), null, "nor where its own parent cannot be read");
+  assert.equal(runsIn("thr_orphan", "pi", elsewhere), false, "a harness that is not in the home decides nothing for it");
+  assert.equal(runsIn("thr_orphan_and_own", "pi", home), true, "bb's own harness counts, whatever else is there");
+  assert.equal(runsIn("thr_codex", "codex", home), true, "an unknown provider: a child of any of bb's runners");
+  assert.equal(has("thr_detached", "pi"), true, "whether a harness lives (a thread in error) is asked of the name and the id alone, as before");
   assert.equal(runsIn("thr_pi", "pi", elsewhere), false, "not in another directory");
   assert.equal(runsIn("thr_pi", "pi", dir), false, "nor in the home's parent");
   assert.equal(runsIn("thr_pi", "claude-code", home), false, "pi is not a Claude thread's harness");
   assert.equal(runsIn("thr_claude", "claude-code", home), false, "a harness at work somewhere else does not run in the home");
   assert.equal(runsIn("thr_claude", "claude-code", elsewhere), true);
+  assert.equal(runsIn("thr_claude", "pi", elsewhere), false);
   assert.equal(runsIn("thr_script", "pi", home), false, "a harness whose working directory cannot be read is not counted");
   assert.equal(runsIn("thr_stray", "pi", home), false, "what the agent left running in the home, with the id, is not the harness");
   assert.equal(runsIn("thr_none", "pi", home), false);
   // The working directory is read only of a harness that carries a thread's id: never of another program.
   const links = [];
   processLook({ proc, link: (path) => { links.push(path.slice(proc.length + 1)); return elsewhere; } }).runsIn({ id: "thr_pi", providerId: "pi" }, home);
-  assert.deepEqual(links.sort(), ["101/cwd", "102/cwd", "103/cwd"]);
+  assert.deepEqual(links.sort(), ["101/cwd", "102/cwd", "103/cwd", "112/cwd", "113/cwd", "114/cwd", "115/cwd", "116/cwd", "117/cwd", "118/cwd", "119/cwd", "120/cwd"]);
+  // And its parent only of such a process: no other program's stat is read.
+  assert.deepEqual(opened.filter((path) => path.endsWith("/stat")).sort(), ["101/stat", "102/stat", "103/stat", "112/stat", "113/stat", "114/stat", "115/stat", "116/stat", "117/stat", "118/stat", "119/stat", "120/stat"]);
 });
 
 // A turn bb's concurrency limit holds in line starts by itself when a slot frees: a thread

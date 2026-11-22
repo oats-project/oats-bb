@@ -2,9 +2,9 @@
 // that archives the home's threads (contract item 3).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { NOT_FOUND, QUEUE_GONE, UNREACHABLE, call, callSeen, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { NOT_FOUND, QUEUE_GONE, UNREACHABLE, bbHarness, call, callSeen, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
 const settings = { version: "0.50.1", trust: "single-user" };
@@ -146,9 +146,49 @@ for (const [name, refusal, said] of [
 test("a stop with the host (reason: host) stops the thread and does not archive it: the kernel resumes it by an input", async (t) => {
   const { answer, calls, stderr } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] }, { reason: "host" });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show"], "stopped and confirmed by the same rule");
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show", "thread show"], "stopped and confirmed by the same rule; then the thread is read once, to look for its harness");
   assert.deepEqual(archives(calls), []);
   assert.equal(stderr, "", "leaving it unarchived is the rule here, not a warning");
+});
+
+// bb shows a thread settled a moment before its harness process is gone, and the kernel
+// reads `running` of a home stopped with the host from that process: an inspect made in
+// that moment would take the home for one that came back. So a stop with the host answers
+// once the harness bb started for the thread has left the home.
+test("a stop with the host waits until the thread's harness has left the home, and says so where it has not by the end of the grace", { skip: existsSync("/proc/self/environ") ? false : "no /proc on this host" }, async (t) => {
+  const { dir, home } = scratch(t);
+  const id = `thr_hoststop_${process.pid}`;
+  const row = { stdout: { thread: threadRow(id, "proj_a", "idle", { providerId: "pi" }), environment: null, pendingTodos: null } };
+  const bb = fakeBbIn(dir, { "thread stop": { stdout: { ok: true, threadId: id } }, "thread show": row });
+  const stopIt = (graceSeconds) => callSeen("stop", { home, endpoint: { ...endpoint, threadId: id }, graceSeconds, reason: "host" }, { settings, bb });
+  // Its harness leaves a moment after bb says the thread is settled: the stop answers after it has.
+  const harness = await bbHarness(t, { id, name: "pi", cwd: home, provider: "pi" });
+  let leftAt = null;
+  const leaving = new Promise((done) => setTimeout(() => harness.end().then(() => { leftAt = Date.now(); done(); }), 1_500));
+  const waited = await stopIt(20);
+  const answeredAt = Date.now();
+  await leaving;
+  assert.deepEqual(waited.doc.result, { stopped: true });
+  assert.ok(leftAt !== null && answeredAt >= leftAt, "the stop answered before the harness had left the home");
+  assert.equal(waited.stderr, "");
+  // A harness that does not leave: the stop is bb's and is confirmed, so it is answered, with what is still there.
+  await bbHarness(t, { id, name: "pi", cwd: home, provider: "pi" });
+  const stuck = await stopIt(1);
+  assert.deepEqual(stuck.doc.result, { stopped: true });
+  assert.match(stuck.stderr, new RegExp(`^oats bb: warning: bb thread ${id} is stopped, and its agent process still works in ${home} 1 s later: until it has left, the home reads as running\n$`));
+});
+
+test("a stop without the host's word does not wait on the processes: it archives, and bb refuses the thread every message", { skip: existsSync("/proc/self/environ") ? false : "no /proc on this host" }, async (t) => {
+  const { dir, home } = scratch(t);
+  const id = `thr_plainstop_${process.pid}`;
+  const row = { stdout: { thread: threadRow(id, "proj_a", "idle", { providerId: "pi" }), environment: null, pendingTodos: null } };
+  const bb = fakeBbIn(dir, { "thread stop": { stdout: { ok: true, threadId: id } }, "thread show": row, "thread archive": archived(id) });
+  await bbHarness(t, { id, name: "pi", cwd: home, provider: "pi" });
+  const started = Date.now();
+  const { doc, stderr } = await callSeen("stop", { home, endpoint: { ...endpoint, threadId: id }, graceSeconds: 20 }, { settings, bb });
+  assert.deepEqual(doc.result, { stopped: true });
+  assert.ok(Date.now() - started < 10_000);
+  assert.equal(stderr, "");
 });
 
 test("only the kernel's exact word spares the archive: any other reason, and none, is a stop that stays stopped", async (t) => {

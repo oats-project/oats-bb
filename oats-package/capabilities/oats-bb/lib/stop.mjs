@@ -4,6 +4,7 @@ import { isAbsolute } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
+import { processLook } from "./processes.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { clearHomeProjectEnv } from "./project-env.mjs";
 import { liveInHome, readEndpoint } from "./threads.mjs";
@@ -18,6 +19,10 @@ const ISO_UTC = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,9})?Z$/;
 // (`oats host run`), which a resume undoes. Exactly this: any other value, and none, is a
 // stop that stays.
 const HOST_STOP = "host";
+
+// How often a stop with the host looks for the harness to have left the home.
+const HARNESS_POLL_MS = 300;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const failed = (error) => recode("E_SESSION_STOP_FAILED", error);
 
@@ -64,6 +69,32 @@ async function archiveAndConfirm(bb, threadId, options) {
   return refused;
 }
 
+/** After a stop with the host, whose thread stays live: wait until the thread's harness
+ *  has left the home. bb shows a thread settled a moment before its harness process is
+ *  gone, and the kernel reads `running` of such a home from that process (lib/threads.mjs):
+ *  an inspect made in that moment would read a home stopped with the host as one that came
+ *  back. Within the stop's grace, counted from here. → null, or what to say where the
+ *  harness is still there at its end (the stop is bb's, and it is confirmed: the answer
+ *  stays "stopped"). Where the processes cannot be looked at, nothing is waited for. */
+async function harnessLeft(bb, threadId, home, { deadline, grace, now }) {
+  if (typeof home !== "string" || !isAbsolute(home)) return null;
+  const thread = await bb.thread(threadId);
+  if (thread === null || thread.deletedAt) return null;
+  const until = Math.min(now() + grace * 1000, deadline);
+  for (;;) {
+    let runs;
+    // A look of its own each time: what it reads is the processes as they are now.
+    try { runs = processLook().runsIn(thread, home); }
+    catch (error) {
+      if (!(error instanceof ProviderError)) throw error;
+      return null;
+    }
+    if (runs !== true) return null;
+    if (now() + HARNESS_POLL_MS >= until) return `bb thread ${threadId} is stopped, and its agent process still works in ${home} ${grace} s later: until it has left, the home reads as running`;
+    await sleep(HARNESS_POLL_MS);
+  }
+}
+
 /** → { stopped: true } once nothing of the thread can run: bb acknowledged the stop, shows
  *  the thread settled (idle, pending or error) or gone, and holds nothing in line for it
  *  (lib/halt.mjs). E_SESSION_STOP_FAILED otherwise, after the grace.
@@ -77,7 +108,8 @@ async function archiveAndConfirm(bb, threadId, options) {
  *  One stop is not archived (contract r25, A16): a stop with the host (`reason: "host"`, the kernel's word for
  *  `oats host run`'s shutdown). Such a home is lost, not stopped: the kernel brings it
  *  back by an input to this same thread, which bb would refuse of an archived one. A
- *  kernel that does not send the key gets the archive, as for any stop.
+ *  kernel that does not send the key gets the archive, as for any stop. Such a stop also
+ *  waits for the thread's harness to have left the home (harnessLeft).
  *
  *  With no endpoint (the kernel compensating a launch whose answer was lost): stop
  *  whatever live thread runs in the home, archive those made since `launchSent`, and stop
@@ -123,7 +155,8 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     // thread is stopped, and shows nothing that says so. (A thread bb no longer has is
     // not asked for; nor is the thread of a home stopped with the host, which the kernel
     // resumes by an input to it.)
-    const refused = seen === "gone" || input.reason === HOST_STOP ? null : await archiveAndConfirm(bb, endpoint.threadId, options);
+    if (seen === "gone") return { stopped: true };
+    const refused = input.reason === HOST_STOP ? await harnessLeft(bb, endpoint.threadId, input.home, options) : await archiveAndConfirm(bb, endpoint.threadId, options);
     if (refused !== null) warn(refused);
     return { stopped: true };
   } catch (error) { throw failed(error); }

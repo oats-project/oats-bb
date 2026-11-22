@@ -108,6 +108,11 @@ async function bash(threadId, command) {
   return result.lastText;
 }
 
+/** The parents of the processes named `name` that carry the thread's id: each one's
+ *  command line, word by word. (bb's process tree, which the provider reads to tell the
+ *  harness bb started for a thread from one its agent left running: lib/processes.mjs.) */
+const harnessParents = async (threadId, name) => (await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "${name}" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then tr '\\0' ' ' < /proc/$(awk '{print $4}' $p/stat)/cmdline; echo; fi; done`)).split("\n").filter(Boolean).map((line) => line.trim().split(" "));
+
 // The threads the tests launched, stopped after each test: an idle thread keeps its pi.
 const started = [];
 afterEach(async () => {
@@ -141,6 +146,15 @@ test("P1 launch: a pi thread in a project rooted at the home, with the launch's 
   const first = (await turns())[since];
   assert.match(first.lastText, /TASK-p1 say hi\./);
   assert.equal((await sh(`ls -a ${home}`)).split("\n").includes(".claude"), false, "a pi launch writes nothing of Claude's");
+  // bb's process tree, which `running` rests on (seen at bb-app 0.50.1; a bb that moves it
+  // fails here, and the provider would then read every thread at rest as not running): the
+  // thread's pi is a direct child of bb-app's bridge worker, run by node under this file
+  // name, with the provider it runs as a word of its own. Nothing of it names the thread.
+  const parents = await harnessParents(endpoint.threadId, "pi");
+  assert.equal(parents.length, 1, JSON.stringify(parents));
+  assert.ok(parents[0].some((word) => word.endsWith("/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs")), parents[0].join(" "));
+  assert.ok(parents[0].includes("provider-pi"), parents[0].join(" "));
+  assert.ok(!parents[0].join(" ").includes(endpoint.threadId), "bb's runner names the thread now: the provider could ask for this thread's runner");
   // Idle after its turn, its pi still loaded in the home: it runs. (bb says `idle` of a
   // stopped thread too: `running` is read from the home's own harness process.)
   const inspected = (await provider("inspect", { home, endpoint })).result;
@@ -343,12 +357,23 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   // Stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
   // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
   // stopped and NOT archived, and the input starts pi again on the same conversation.
-  // (Before it: the thread is idle after a turn, its pi loaded in the home, and reads running.)
+  // Before it, the agent starts a pi of its own in its home and leaves it running detached
+  // (here a process that goes by that name): it inherits the thread's id, and outlives
+  // every stop of the thread. It is not the harness bb started for the thread.
+  assert.match(await bash(endpoint.threadId, "setsid nohup bash -c 'exec -a pi sleep 900' >/dev/null 2>&1 & echo started"), /started/);
+  const detached = async () => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${endpoint.threadId}' && [ "$(tr '\\0' ' ' < $p/cmdline)" = "pi 900 " ]; then readlink $p/cwd; fi; done`)).trim();
+  assert.equal(await detached(), home, "the detached process carries the thread's id, is named pi and works in the home");
+  // (And the thread is idle after a turn, its pi loaded in the home, and reads running.)
   assert.equal(await threadStatus(endpoint.threadId), "idle");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "an idle thread whose harness is loaded in the home runs");
   assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [true]);
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
-  await nothingIn(home, "after the stop with the host");
+  // At once, with no wait: the stop answered only when the harness had left the home, and
+  // what the agent left running there (it is still there) is not taken for it. A home
+  // stopped with the host is never read as one that came back.
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false, "right after a stop with the host the home read as running");
+  assert.equal(await detached(), home, "the detached process outlived the stop");
+  assert.ok(!(await carriers(endpoint.threadId)).includes("pi"), "the thread's own pi is gone");
   assert.equal((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = (await provider("inspect", { home, endpoint })).result;
   // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
@@ -362,6 +387,7 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   assert.equal(await carried("MARK-P6-HOST-RESUMED", "MARK-P6-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await pisIn(home)) >= 1, "the thread's pi runs again");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "and it reads so");
+  await sh("pkill -f '^pi 900' || true");
 });
 
 test("P6 a dialog a pi extension opens is a pending interaction: input refuses E_SESSION_PROMPT_OPEN and sends nothing", async () => {
@@ -602,4 +628,28 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
   const retired = await hook("retire-hook", home);
   assert.deepEqual(retired.meta, { retired: true, archived: [third.threadId] });
   await nothingIn(home, "after the retire");
+});
+
+// What becomes of a thread's harness when bb's host daemon ends under it (seen at bb-app
+// 0.50.1, recorded here): bb-app starts the daemon again, the harness is gone with the old
+// one (no process is left that carries the thread's id: none reparented, so the provider's
+// "a child of bb's runner" has no orphan to miss), the thread still reads idle, and the
+// provider reads it as not running. A tell starts a harness under the new daemon's runner.
+// Last in the file: it ends bb's daemon.
+test("bb's host daemon ended while a thread's pi is loaded: the pi goes with it, the thread reads idle and not running, and a tell starts it again", async () => {
+  const { home, endpoint } = await launched("daemon");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
+  // The daemon alone, by the end of its command line (this shell's own does not end so).
+  const killed = await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in *"/dist/daemon-bundle.mjs ") kill -KILL \${p#/proc/}; echo killed ;; esac; done`);
+  assert.equal(killed.trim(), "killed");
+  await waitFor("the thread's pi to be gone", async () => (await carriers(endpoint.threadId)).length === 0, { timeoutMs: 30_000 });
+  await waitFor("bb to be ready with a new daemon", async () => (await provider("check", { home: null, soul: null, launch: PLANNED })).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
+  assert.equal(await threadStatus(endpoint.threadId), "idle", "bb's word did not change");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false);
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-DAEMON-AFTER" })).result, { submitted: true, verified: true });
+  await waitFor("the turn after the daemon's restart", async () => (await landed("MARK-DAEMON-AFTER")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  const parents = await harnessParents(endpoint.threadId, "pi");
+  assert.ok(parents.length === 1 && parents[0].includes("provider-pi"), JSON.stringify(parents));
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
 });

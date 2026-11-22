@@ -115,6 +115,11 @@ const claudesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do ca
 /** The names of the processes that carry the thread's id (bb's BB_THREAD_ID). */
 const carriers = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then cat $p/comm; fi; done 2>/dev/null || true`)).split("\n").filter(Boolean);
 
+/** The parents of the processes named `name` that carry the thread's id: each one's
+ *  command line, word by word. (bb's process tree, which the provider reads to tell the
+ *  harness bb started for a thread from one its agent left running: lib/processes.mjs.) */
+const harnessParents = async (threadId, name) => (await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "${name}" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then tr '\\0' ' ' < /proc/$(awk '{print $4}' $p/stat)/cmdline; echo; fi; done`)).split("\n").filter(Boolean).map((line) => line.trim().split(" "));
+
 // The threads the tests launched, stopped after each test: bb keeps a thread's Claude
 // loaded while it is idle, and a dozen of them starve the bb servers that later tests
 // start in this container (two CPUs, 4 GB).
@@ -264,6 +269,15 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   // request's body).
   assert.notEqual((await sh("grep -l 'TASK-t1 say hi' mock-req-*.json | head -1")).trim(), "");
 
+  // bb's process tree, which `running` rests on (seen at bb-app 0.50.1; a bb that moves it
+  // fails here, and the provider would then read every thread at rest as not running): the
+  // thread's Claude is a direct child of bb-app's bridge worker, run by node under this
+  // file name, with the provider it runs as a word of its own. Nothing of it names the thread.
+  const parents = await harnessParents(endpoint.threadId, "claude");
+  assert.equal(parents.length, 1, JSON.stringify(parents));
+  assert.ok(parents[0].some((word) => word.endsWith("/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs")), parents[0].join(" "));
+  assert.ok(parents[0].includes("provider-claude-code"), parents[0].join(" "));
+  assert.ok(!parents[0].join(" ").includes(endpoint.threadId), "bb's runner names the thread now: the provider could ask for this thread's runner");
   // Idle after its turn, its Claude still loaded in the home: it runs. (bb says `idle` of a
   // stopped thread too: `running` is read from the home's own harness process.)
   const inspect = await provider("inspect", { home, endpoint });
@@ -334,12 +348,25 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   // stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
   // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
   // stopped and NOT archived, and the input starts Claude again on the same conversation
-  // (before it: the thread is idle after a turn, its Claude loaded in the home, and reads running)
+  // Before it, the agent starts a claude of its own in its home and leaves it running
+  // detached (here a process that goes by that name): it inherits the thread's id, and
+  // outlives every stop of the thread. It is not the harness bb started for the thread.
+  await armTool("setsid nohup bash -c 'exec -a claude sleep 900' >/dev/null 2>&1 & echo started");
+  await tell("T2-DETACH run the tool");
+  await once("T2-DETACH");
+  const detached = async () => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${id}' && [ "$(tr '\\0' ' ' < $p/cmdline)" = "claude 900 " ]; then readlink $p/cwd; fi; done`)).trim();
+  assert.equal(await detached(), home, "the detached process carries the thread's id, is named claude and works in the home");
+  // (and the thread is idle after a turn, its Claude loaded in the home, and reads running)
   assert.equal(await threadStatus(id), "idle");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "an idle thread whose harness is loaded in the home runs");
   assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [true]);
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
-  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  // At once, with no wait: the stop answered only when the harness had left the home, and
+  // what the agent left running there (it is still there) is not taken for it. A home
+  // stopped with the host is never read as one that came back.
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false, "right after a stop with the host the home read as running");
+  assert.equal(await detached(), home, "the detached process outlived the stop");
+  assert.ok(!(await carriers(id)).includes("claude"), "the thread's own Claude is gone");
   assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = await provider("inspect", { home, endpoint });
   // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
@@ -351,6 +378,7 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "and it runs again");
   assert.equal(await carried("T2-HOST-RESUMED", "T2-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
+  await sh("pkill -f '^claude 900' || true");
 
   // mid-tool: a turn that runs an 8 s tool; the tell is steered into the turn
   await armTool("node -e \"setTimeout(()=>console.log('T2-SLEPT'),8000)\"");

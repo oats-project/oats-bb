@@ -155,6 +155,27 @@ export function runBin(args, { stdin = "", env = {}, bin = providerBin } = {}) {
   });
 }
 
+/** A harness as bb starts one: a process named `name` (a link to node under that name)
+ *  that carries BB_THREAD_ID=<id>, works in `cwd`, and is a child of a stand-in for bb's
+ *  runner of `provider` (test/fixtures/bb-provider-bridge-worker.mjs, under bb's own file
+ *  name). Ended with the test. → { pid, end() }: `end()` ends the harness and its runner. */
+export async function bbHarness(t, { id, name, cwd, provider }) {
+  const bin = mkdtempSync(join(tmpdir(), "oats-bb-harness-"));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  symlinkSync(process.execPath, join(bin, name));
+  const worker = spawn(process.execPath, [join(here, "bb-provider-bridge-worker.mjs"), "/data/plugin-host-artifacts/host.mjs", `provider-${provider}`, "/data/bridge-data", join(bin, name), id, cwd], { stdio: ["ignore", "pipe", "inherit"] });
+  const exited = new Promise((done) => worker.once("exit", done));
+  const end = async () => { if (worker.exitCode === null && worker.signalCode === null) worker.kill("SIGTERM"); await exited; };
+  t.after(end);
+  const pid = await new Promise((done, failed) => {
+    let out = "";
+    worker.stdout.on("data", (chunk) => { out += chunk; if (out.includes("\n")) done(Number(out)); });
+    worker.once("error", failed);
+    worker.once("exit", () => failed(new Error("the stand-in for bb's runner ended before it started the harness")));
+  });
+  return { pid, end };
+}
+
 export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input, ...extra });
 
 /** One call on the kernel's wire: the request on stdin, the home's settings in

@@ -37,9 +37,8 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 
 > **What it needs.**
 >
-> - OATS 0.70.5 or later (the manifests' `compatibility.oats` floor; **PLACEHOLDER(A16):
->   the number is set before this is released**): the first OATS release whose host
->   shutdown says so in its stop (`reason: "host"`), so that a home stopped with the host
+> - OATS 0.70.5 or later (the manifests' `compatibility.oats` floor): the first OATS
+>   release whose host shutdown says so in its stop (`reason: "host"`), so that a home stopped with the host
 >   is not archived and is resumed ([Stops](#stops)). The provider's wire, version 1.3
 >   (see [docs/wire.md](docs/wire.md)), and the kernel's protection of a provider home's
 >   own files from its agent are in OATS since 0.70.0.
@@ -68,7 +67,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 >
 > **Released after a real run.** Each release is cut after the plugin's real run in CI,
 > against OATS 0.70.0 from npm with `--backend bb`. The pi support is also run against
-> the real bb and pi with OATS 0.70.3 (`test/contract/pi.test.mjs`). bb homes run in bb's full mode, and
+> the real bb and pi with OATS 0.70.5 (`test/contract/pi.test.mjs`). bb homes run in bb's full mode, and
 > claim no sandbox boundary.
 
 ## Install
@@ -150,11 +149,12 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | bb thread | present | state | running |
 |---|---|---|---|
 | starting, active, stopping | true | unknown | true |
-| pending, idle, and the home's own harness process is at work in the home | true | unknown | true |
-| pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too) | true | unknown | false |
+| pending, idle, and the harness bb started for the thread is at work in the home | true | unknown | true |
+| pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too; a harness the agent itself left running is not it) | true | unknown | false |
+| pending, idle, and what started a harness in the home cannot be read | true | unknown | null |
 | pending, idle, on a host whose processes cannot be read (macOS: no `/proc`) | true | unknown | null |
 | pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
-| error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | true where it works in the home, false where it works elsewhere |
+| error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | as for a thread at rest: true where bb's own harness works in the home, false where it does not |
 | error, and its harness process is gone (whatever else the agent left running) | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |
 
@@ -180,13 +180,18 @@ turn. The kernel records its own stop and answers "stopped" itself, and the prov
 stop archives the thread, so the provider reads it missing from then on.
 
 So whether a thread at rest runs is read from this host's processes, not from bb's word:
-`running` is true where the home's own harness is at work, which is one process named
-`pi` or `claude` that carries the thread's id and has the home as its working directory,
-and false where there is none. A process that merely carries the thread's id, or a
-harness at work in another directory, never counts. This is how OATS tells a home
-stopped with the host (its thread left live, its harness gone) from one whose harness
-came back. The harness is known by its name: a `pi` or a `claude` the agent itself
-started in its home and left running detached reads as the thread's harness. On a host
+`running` is true where the harness bb started for the thread is at work in the home,
+which is one process named `pi` or `claude` that carries the thread's id, has the home
+as its working directory and is a child of bb's own runner for that provider, and false
+where there is none. A process that merely carries the thread's id, a harness at work in
+another directory, or a `pi` or a `claude` the agent itself started and left running
+detached never counts. This is how OATS tells a home stopped with the host (its thread
+left live, its harness gone) from one whose harness came back. Two limits follow. What
+OATS reports as running outside it is a harness bb revived in a stopped home, not every
+process an agent left behind: **an agent's own detached processes outlive a stop of its
+thread, and `oats instance stop` does not end them** (in a team container too). And the
+rule reads bb-app's own process layout (its bridge worker's file name, pinned by the
+contract tests at every bb bump), not its CLI. On a host
 without `/proc` (macOS) the provider cannot look, and answers
 `running: null`: there OATS cannot see a harness started again from bb in a home it holds
 stopped, a home stopped with the host that already runs gets one more turn (its resume
@@ -478,7 +483,7 @@ never a failed start.
 A soul whose harness is pi runs on bb as a thread of bb's own pi provider
 (`bb thread spawn --provider pi --model <the launch's model>`; a model is
 `<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.3
+follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
@@ -704,6 +709,12 @@ thread, as before.
   older kernel), a bb home stopped with the host is archived like any other and is not
   resumed after the host starts again. Start it with `oats session start`, which gives
   it a new thread.
+- A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
+  container does), its shutdown stops each bb home with the host and its sweep resumes
+  them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
+  leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
+  resume` by hand, resumes them by an input, counted against the home's cap. Until then the
+  row reads lost.
 - The window that leaves: a home stopped with the host has its thread live and
   unarchived from the host's shutdown until the first resume sweep after the host is
   back (`oats host run` runs one at its start and each minute; the clients when they
@@ -748,10 +759,15 @@ for a person in bb (a launch without `--yolo` is refused altogether, above).
 Readiness says so wherever bubblewrap is missing
 (`session-provider-sandbox-unsupported`, a warning: it refuses nothing).
 
+An agent's own detached processes outlive a stop of its thread there, as anywhere: a
+command it started with `setsid` or `nohup` is not ended by `oats instance stop`, which
+stops the bb thread and its harness and signals no other process. The container's end is
+what ends them.
+
 ## A trial against an unreleased kernel
 
-The manifests' floor (`compatibility.oats`, `>=0.70.5`; PLACEHOLDER(A16): set before this
-is released) is the first OATS release that marks a host shutdown's stop; the
+The manifests' floor (`compatibility.oats`, `>=0.70.5`) is OATS 0.70.5, the first OATS
+release that marks a host shutdown's stop; the
 session-provider wire 1.3 and the kernel's protection of a provider home's files are in
 OATS since 0.70.0 ([What it needs](#the-session-provider)). A kernel built from an
 unmerged branch reports an older version and refuses the capability

@@ -23,11 +23,21 @@
     agent outside OATS; stop it or start it with OATS.
   - A stop with the host is not archived: where the stop input carries `reason: "host"`
     (the kernel's word for `oats host run`'s shutdown), the thread is stopped and left
-    live, since the kernel resumes such a home by an input to that thread.
-  - **The OATS floor rises to 0.70.5** (`compatibility.oats`; **PLACEHOLDER(A16): the
-    number of the OATS release that sends `reason: "host"`, set before this is
-    released**), so that no supported pairing loses a reboot's resume. With an older
-    kernel (a trial), the key is absent and every stop archives: bb then refuses the input
+    live, since the kernel resumes such a home by an input to that thread. Such a stop
+    answers once the thread's harness has left the home, so the home never reads as
+    running right after it.
+  - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
+    container does), its shutdown stops each bb home with the host and its sweep resumes
+    them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
+    leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
+    resume` by hand, resumes them by an input, counted against the home's cap. Until then the
+    row reads lost.
+  - **The OATS floor rises to 0.70.5** (`compatibility.oats`), the OATS release that
+    sends `reason: "host"`, so that no supported pairing loses a reboot's resume. Update
+    OATS to 0.70.5 or later before pinning this release: an older kernel refuses the
+    package (`E_CAPABILITY_INCOMPATIBLE`). The team image pins `@awebai/oats-pi`
+    0.70.5, and the pi contract test and the kernel run (`npm run test:kernel:pi`) run
+    with OATS 0.70.5. With an older kernel (a trial), the key is absent and every stop archives: bb then refuses the input
     the kernel resumes a host-stopped home by, the home is not resumed when the host
     starts again, and `oats session start` gives it a new thread.
   - The window: a host-stopped home's thread is live and unarchived from the host's
@@ -47,10 +57,14 @@
     by a status read.
   - **inspect says whether a thread at rest runs.** For a thread bb shows `idle` or
     `pending` with nothing in line, `running` was `null`. It is now read from this host's
-    processes: `true` where the home's own harness is at work (a process named `pi` or
-    `claude` that carries the thread's id and has the home as its working directory),
-    `false` where it is not, as after `bb thread stop`. A process that only carries the
-    thread's id never counts. OATS needs it to tell a home stopped with the host from one
+    processes: `true` where the harness bb started for the thread is at work in the home
+    (a process named `pi` or `claude` that carries the thread's id, has the home as its
+    working directory and is a child of bb's own runner for that provider), `false` where
+    it is not, as after `bb thread stop`. A process that only carries the thread's id
+    never counts, nor a `pi` or a `claude` the agent itself started and left running
+    detached: an agent's own detached processes outlive a stop of its thread, and
+    `oats instance stop` does not end them. The rule reads bb-app's own process layout
+    (its bridge worker's file name), pinned by the contract tests at every bb bump. OATS needs it to tell a home stopped with the host from one
     whose harness came back. On a host without `/proc` (macOS) it stays `null`: there a
     harness started again from bb in a stopped home goes unseen, and the stop's archive
     is what keeps it from starting. A thread in `error` whose harness is still loaded

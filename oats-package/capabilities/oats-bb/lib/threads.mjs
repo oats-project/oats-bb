@@ -21,8 +21,10 @@ const HELD = Object.freeze({ present: true, state: "unknown", running: true });
  *  waiting for its next message, and for one `bb thread stop` released: only the process
  *  tells them apart, and the kernel needs it to tell a home stopped with the host from one
  *  that came back (contract r25, A16).
- *  true: the home's own harness runs. false: none does. null: it cannot be told on this
- *  host (no /proc), or no home was given: never a guess. */
+ *  true: the harness bb started for the thread works in the home. false: none does (a
+ *  `pi` or a `claude` the agent itself left running there is not it). null: it cannot be
+ *  told (no /proc on this host; what started a harness in the home cannot be read), or no
+ *  home was given: never a guess. */
 function harnessRuns(thread, processes, home) {
   if (typeof home !== "string") return null;
   try { return processes.runsIn(thread, home); }
@@ -56,7 +58,7 @@ export function inspectAnswer(thread, processes, home) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
   // A turn bb holds in line starts by itself, whatever is loaded now.
-  if (SETTLED.has(status) || status === "error") { if (hasQueuedWork(thread)) return { ...HELD }; }
+  if (isSettled(thread) && hasQueuedWork(thread)) return { ...HELD };
   if (SETTLED.has(status)) return { present: true, state: "unknown", running: harnessRuns(thread, processes, home) };
   if (status === "error") return processes.has(thread) ? { present: true, state: "unknown", running: harnessRuns(thread, processes, home) } : { ...MISSING };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);

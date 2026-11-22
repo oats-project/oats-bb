@@ -140,6 +140,12 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     host is then archived like any other, its resume's input is refused by bb, and the
     home is not resumed. `oats session start` gives it a new thread. The provider never
     refuses a stop for the key's absence.
+  - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
+    container does), its shutdown stops each bb home with the host and its sweep resumes
+    them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
+    leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
+    resume` by hand, resumes them by an input, counted against the home's cap. Until then the
+    row reads lost.
   - The window: a host-stopped home's thread is live and unarchived from the host's
     shutdown until the first resume sweep after the host is back (`oats host run` runs it
     at its start and each minute; the clients when they open): the time the host is off,
@@ -327,13 +333,17 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   `idle` of a thread whose agent is loaded and waits for its next message, and of one
   `bb thread stop` released: the word does not say whether the agent runs. For a thread
   that is `idle` or `pending` with nothing in line, the provider reads it from this host's
-  processes, at every call: `running: true` where the home's own harness is at work,
-  `false` where it is not. The home's own harness is one process that is named `pi` or
-  `claude` (as below, by the thread's `providerId`), carries `BB_THREAD_ID=<the thread's
-  id>`, AND has the home as its working directory (exactly the home, where bb starts a
-  thread's harness; read from `/proc/<pid>/cwd`, and only of such a process). A process
-  that merely carries the id (a command the agent left running) is never counted, nor a
-  harness at work in another directory: a false `true` is the dangerous answer, since the
+  processes, at every call: `running: true` where the harness bb started for the thread
+  is at work in the home, `false` where it is not. That harness is one process that is
+  named `pi` or `claude` (as below, by the thread's `providerId`), carries
+  `BB_THREAD_ID=<the thread's id>`, has the home as its working directory (exactly the
+  home, where bb starts a thread's harness; read from `/proc/<pid>/cwd`), AND is a child
+  of bb's own runner for the thread's provider (its parent, from `/proc/<pid>/stat`, is a
+  process whose command line runs bb-app's `bb-provider-bridge-worker.mjs` with the word
+  `provider-<the thread's providerId>`). The working directory and the parent are read
+  only of such a process. A process that merely carries the id (a command the agent left
+  running) is never counted, nor a harness at work in another directory, nor a `pi` or a
+  `claude` the agent itself started: a false `true` is the dangerous answer, since the
   kernel reads a home stopped with the host whose harness runs as one that came back,
   and sends it no resume. So a thread the provider stopped and left live (`reason:
   "host"`) reads `running: false`, and the same thread after bb started its harness again
@@ -343,12 +353,33 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   started again in bb, whose turn then failed, still runs), `false` where it works
   somewhere else. One look serves an `inspect` or an `inspectMany`, made only when a
   thread needs it.
-  - A limit: the harness is known by its name. A `pi` or a `claude` the agent itself
-    started in its home and left running detached (`setsid claude …`, `nohup pi …`)
-    inherits the thread's id, is named as the harness and works in the home: it reads as
-    the thread's harness, and `running: true`, after the thread's own is gone. (A stop
-    takes the processes of the thread's tools with it; only one the agent detached
-    outlives it.)
+  - **Only a harness bb itself started.** A `pi` or a `claude` the agent starts in its
+    home and leaves running detached (`setsid claude …`, `nohup pi …`) inherits the
+    thread's id, is named as the harness, works in the home, and outlives every stop of
+    the thread. Its parent is whatever adopted it (init, a subreaper), and one the agent
+    did not detach is a child of a shell under the harness: neither is bb's runner, and
+    neither is counted. So a home stopped with the host reads `running: false` whatever
+    its agent left behind, and is resumed. Where what started such a process cannot be
+    read (it or its parent ended meanwhile), the answer is `null`: it cannot be told.
+  - **This rests on bb-app's own layout, not on its CLI** (seen at 0.50.1, pinned by
+    `test/contract`): bb's host daemon runs one `node …/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs
+    <artifact> provider-<id> <data dir>` per thread, with the thread's harness as its
+    direct child; neither that process's command line nor its environment names the
+    thread (the harness's environment does). A bb that moves the file or the word reads
+    as "no harness runs": `running: false` for every thread at rest, so a home stopped
+    with the host is resumed by an input all the same, and a harness started again in a
+    stopped home goes unseen. The contract tests fail on such a bb. Where bb's host
+    daemon ends under a loaded harness, the harness ends with it (pinned): none is left
+    reparented.
+  - A stop with the host (`reason: "host"`) answers only once that harness has left the
+    home (it leaves a moment after bb shows the thread settled), within the stop's grace:
+    an inspect made right after the stop reads `running: false`. Where it has not left by
+    then, the stop still answers `stopped` (bb's stop is confirmed) and warns on its
+    standard error.
+  - What the kernel's `outsideOats` then reports is a harness bb revived in a home OATS
+    holds stopped, not every process an agent left behind. **An agent's own detached
+    processes outlive a stop of its thread, and `oats instance stop` does not end them**
+    (in a team container too): the provider signals no process.
   - **The limit on macOS is the provider's: no `/proc`, so `running` is `null`** for
     every thread at rest (never a guess, and no error: such a thread is still read as
     there). The kernel then cannot see a harness that was started again from bb in a home

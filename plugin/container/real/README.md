@@ -80,7 +80,7 @@ The run also measures freshness (the UX standard, section 6): how long after the
 claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
 the kernel's own record: the time of the event the change wrote, read from `oats instance events
 --json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it), and at its end it compares its images: two scenes of
+said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and at its end it compares its images: two scenes of
 different states must not be the same image. One pair is, and is reported as a known gap (D-113 /
 S1): at 390 px the thread's view says nothing of the agent's state, until the status line of the
 identity row is built.

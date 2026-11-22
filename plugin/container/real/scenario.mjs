@@ -277,7 +277,9 @@ function snapshotRow(instance) {
  * read 3044 ms from before the command, with nothing of the plugin slow). The snapshot is polled
  * first and the event read after, so reading the event costs the measure nothing; the poll starts
  * when the command has returned, so the delay is never less than the truth. With no such event in
- * the kernel's answer the delay runs from `since` instead, and the check's line says so.
+ * the kernel's answer the delay runs from `since` instead, and the check's line says so. The line
+ * says both delays, from the kernel's record and from before the command, and a NOTE reports
+ * either one over 3 s even where the check passes.
  *
  * 3 s at most on a kernel whose `oats status` answers in under a second; the status's own time is
  * measured and said beside the delay. A kernel slower than that cannot be shown in 3 s by the pause
@@ -297,14 +299,25 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     await sleep(100);
   }
   const recorded = recordedAt(instance, home, kind, since);
-  const from = recorded ?? since;
-  const counted = recorded === null ? `counted from before the command: the kernel's events hold no "${kind}" event since then` : `the kernel's "${kind}" event at ${new Date(recorded).toISOString()}`;
-  const seen = seenAt === null ? null : Math.max(0, seenAt - from);
+  // Both delays are said: from the kernel's record (the one the 3 s is on), and from before the
+  // command (what the check counted until now: it holds the command's own run too).
+  const fromRecord = seenAt === null || recorded === null ? null : Math.max(0, seenAt - recorded);
+  const fromCommand = seenAt === null ? null : seenAt - since;
+  const seen = fromRecord ?? fromCommand; // with no event of the kernel's to count from: from before the command
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
   const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
-  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${counted}; ${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
+  const ms = (delay) => (delay === null ? "never" : `${delay} ms`);
+  const counted =
+    recorded === null
+      ? `${ms(fromCommand)} after the moment before the command, which the limit is on here: the kernel's events hold no "${kind}" event since then`
+      : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
+  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${counted} (${limit} ms at most, on the first; the kernel's own oats status took ${statusMs} ms)`);
+  // A delay over 3 s is said even where the check passes: from before the command (a slow command, or
+  // a slow runner), or under the wider limit of a kernel whose status takes over a second.
+  const over = [["after the kernel recorded it", fromRecord], ["after the moment before the command", fromCommand]].filter(([, delay]) => delay !== null && delay > 3000);
+  if (over.length > 0) note(`freshness: ${what} was over 3 s: ${over.map(([from, delay]) => `${delay} ms ${from}`).join(", ")} (the kernel's own oats status took ${statusMs} ms)`);
 }
 /** When the kernel recorded a change: the time of the newest `kind` event of the instance at or after `since` (epoch ms), or null when its events hold none. */
 function recordedAt(instance, home, kind, since) {

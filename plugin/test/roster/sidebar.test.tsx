@@ -484,7 +484,7 @@ test("\"New agent\" opens the form's own page once the spawn feature names it, w
   }
 });
 
-// One count of who waits, for the sidebar's foot, the home and its badge (model/view.ts `needing`):
+// One count of who waits (model/view.ts `needing`), read by the sidebar's foot (the home follows in its owner's change):
 // an agent with no bb thread that waits on a person is counted, as its own row says it does.
 test("the foot counts every agent that waits, the ones with no bb thread included", async () => {
   const claim = { reason: "question", message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
@@ -509,6 +509,9 @@ test("while bb is still reading the settings no page is known to be shown or hid
     expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
     const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
     expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // A cleared field is the default, as for the plugin's other settings.
+    const cleared = pagesOf({ values: { pages: " " }, isLoading: false });
+    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, false]);
     // The values of a read before stay while bb reads them again.
     expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
   } finally {

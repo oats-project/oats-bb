@@ -133,7 +133,7 @@ after(async () => {
 });
 
 /** Stop the extra bb server whose data directory is ~/<dir>: its launcher, which shuts its server, daemon and their
- *  children down before it exits (bb-app 0.50.1's own SIGTERM handling).
+ *  children down before it exits (the pinned bb-app's own SIGTERM handling, seen at 0.50.1).
  *  By the start of its command line (`node …/bb-app --data-dir …/<dir>`), which this shell's own does not have.
  *  The container has two CPUs: a bb a test is done with is stopped, so the next test's bb starts at full speed. */
 async function stopExtraBb(dir) {
@@ -702,7 +702,10 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb thread list --json")), [], "nothing was started");
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb project list --json")), [], "nothing was created");
   assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
-  } finally { await stopExtraBb("bbdata-signed-out"); }
+  } finally {
+    // A stop that fails says so, and never replaces the error the test body threw.
+    await stopExtraBb("bbdata-signed-out").catch((error) => console.error(`the signed-out bb did not stop: ${error.message}`));
+  }
 });
 
 // Last: it starts another bb server, bound to every address, beside the first.

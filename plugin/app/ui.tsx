@@ -1,5 +1,5 @@
 // The plugin's few drawing primitives, on bb's theme tokens only (light and dark follow bb).
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
@@ -162,6 +162,31 @@ export function Modal({
 }) {
   const titleId = useId();
   const card = useRef<HTMLDivElement>(null);
+  // The body scrolls between the title and the buttons where the window is short (a phone): what
+  // is out of sight above or below is SAID, so that nothing is cut by the buttons without a sign.
+  const body = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ above: false, below: false });
+  useEffect(() => {
+    const scroller = body.current;
+    if (scroller === null) return;
+    const measure = () => {
+      const above = scroller.scrollTop > 1;
+      const below = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 1;
+      setMore((now) => (now.above === above && now.below === below ? now : { above, below }));
+    };
+    measure();
+    scroller.addEventListener("scroll", measure, { passive: true });
+    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    watch?.observe(scroller);
+    for (const child of Array.from(scroller.children)) watch?.observe(child);
+    const grown = new MutationObserver(measure);
+    grown.observe(scroller, { childList: true, subtree: true, characterData: true });
+    return () => {
+      scroller.removeEventListener("scroll", measure);
+      watch?.disconnect();
+      grown.disconnect();
+    };
+  }, []);
   const after = useRef(returnFocus);
   after.current = returnFocus;
   useEffect(() => {
@@ -228,7 +253,19 @@ export function Modal({
         <h2 id={titleId} className="text-base font-semibold">
           {title}
         </h2>
-        <div className="min-h-0 overflow-y-auto">{children}</div>
+        {more.above ? (
+          <p data-testid="oats-modal-above" className="text-center text-xs text-muted-foreground">
+            More above
+          </p>
+        ) : null}
+        <div ref={body} data-testid="oats-modal-body" className="min-h-0 overflow-y-auto">
+          {children}
+        </div>
+        {more.below ? (
+          <p data-testid="oats-modal-below" className="text-center text-xs text-muted-foreground">
+            More below
+          </p>
+        ) : null}
         <div className="flex flex-wrap justify-end gap-2">{footer}</div>
       </div>
     </div>

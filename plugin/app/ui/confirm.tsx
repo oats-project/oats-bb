@@ -21,6 +21,11 @@ export type ConfirmProps = {
   /** "What will happen", as sentences about the named agent; and what is kept. Text from OATS is filtered here. */
   happens: readonly string[];
   kept?: readonly string[];
+  /**
+   * What a person must read BEFORE the plan, above it: that the plan changed under their
+   * confirmation, and how. It is the first thing in the dialog, so it is on screen at any width.
+   */
+  notice?: ReactNode;
   /** More of the dialog's own (a field, a tick), under the sentences. */
   children?: ReactNode;
   /** The primary button, named for the act: "Retire", "Stop". `destructive`: the focus starts on Cancel. */
@@ -48,7 +53,7 @@ export type ConfirmProps = {
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, happens, kept = [], children, confirmLabel, destructive = false, blocked = null, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, happens, kept = [], notice, children, confirmLabel, destructive = false, blocked = null, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
@@ -119,6 +124,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
           <Loading>{phase.text ?? "Reading the plan from OATS…"}</Loading>
         ) : phase.kind === "done" ? null : (
           <>
+            {phase.kind === "ready" ? notice : null}
             {sentences("What will happen", happens)}
             {sentences("What is kept", kept)}
             {children}

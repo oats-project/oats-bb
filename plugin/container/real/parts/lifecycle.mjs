@@ -7,9 +7,11 @@
 //   Start    from the row's menu: the agent as the kernel has it now; started on a new thread
 //   Restart  from the thread's own menu: restarted on a new thread
 //   Retire   from the thread's own menu: the plan, confirmed; the kernel has no such agent after it
-// The first view's agent has a child: its Stop plan is read with and without the children (the
-// choice "Include child instances"), and the kernel's answer for the plan without them is kept as
-// a fixture. The second view's Retire also deletes the worktree ("Also delete the worktree").
+// A state is the same in both themes, so that each is real in light and in dark: at 1280 the agent
+// has a child (its Stop plan is read with and without the children, the choice "Include child
+// instances", and the kernel's answer for the plan without them is kept as a fixture; its Retire
+// stops the child first and keeps the worktree); at 390 it has none, and its Retire also deletes
+// the worktree ("Also delete the worktree").
 // After each act the kernel is asked what it holds (`oats status`), never the plugin.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -42,10 +44,10 @@ export default async (run) => {
     return row?.running === false && row.runtimeState === "stopped" ? row : undefined;
   });
 
-  await views("real-lifecycle", async ({ page, at, viewport, shot }) => {
+  await views("real-lifecycle", async ({ page, at, viewport, theme, shot }) => {
     view += 1;
     const name = `dialogs-${view}-helper`;
-    const child = view === 1 ? "dialogs-1-child" : null;
+    const child = viewport.mobile ? null : `dialogs-${view}-child`;
     const called = words(name);
     const ready = () => page.until(phaseIs("ready"), 60);
     const settledAs = (kind, seconds) => page.until(phaseIs(kind), seconds);
@@ -83,7 +85,8 @@ export default async (run) => {
     check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed`);
     await ready();
     let said = await dialog(page);
-    check(said.title === `Stop ${called}?` && said.about === name && /what will happen/i.test(said.body) && /what is kept/i.test(said.body) && said.body.includes("Nothing is deleted."), `${at} the Stop dialog is the kernel's plan for ${name}, as what will happen and what is kept`, JSON.stringify(said));
+    check(said.title === `Stop ${called}?` && said.about === name && /what will happen/i.test(said.body) && /what is kept/i.test(said.body) && said.body.includes("Nothing is deleted.") && said.focus === "oats-confirm-cancel", `${at} the Stop dialog is the kernel's plan for ${name}, as what will happen and what is kept, the focus on Cancel`, JSON.stringify(said));
+    check(said.body.includes("A message sent in its thread starts it again without OATS. To talk to it again, use Start."), `${at} it says what a stop means for the agent's thread`, said.body);
     if (child !== null) {
       check(said.body.includes(`Stops 2 sessions, children first: ${called}, ${words(child)}.`) && said.body.includes("Include child instances On"), `${at} with a child, the plan stops both, children first, and offers the choice`, said.body);
       // Without the children: the kernel is asked again, for the agent alone.
@@ -93,7 +96,7 @@ export default async (run) => {
       check(said.body.includes(`Stops the session of ${called}.`) && said.body.includes(`Not stopped: ${words(child)} (children not included).`) && said.body.includes("Include child instances Off"), `${at} without "Include child instances" the kernel's plan is for ${name} alone, and says who is not stopped`, said.body);
       const alone = recorded(["instance", "stop", name], ["--plan", "--no-recursive"]);
       check(JSON.parse(alone.stdout).result?.recursive === false, "the plugin asked the kernel for the plan with --no-recursive", alone.stdout.slice(0, 300));
-      fixtures.keep("lifecycle/stop-plan-no-recursive.json", alone.stdout);
+      if (theme === "light") fixtures.keep("lifecycle/stop-plan-no-recursive.json", alone.stdout);
       await page.evaluate(`document.querySelector('[data-testid="oats-plan-choice"] [role="switch"]').click()`);
       await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Stops 2 sessions") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
     }
@@ -114,7 +117,7 @@ export default async (run) => {
     check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
     await ready();
     said = await dialog(page);
-    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, and starts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));
@@ -159,14 +162,14 @@ export default async (run) => {
     check(await close(), `${at} Close closes the dialog`);
 
     // ---- Retire, from the thread's own menu
-    const discard = view === 2;
+    const discard = viewport.mobile;
     check(await openThread(restartedOn), `${at} the restarted agent's thread opens from its row`);
     check(await openThreadMenu(page), `${at} the thread's own menu opens`);
     check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed`);
     await ready();
     said = await dialog(page);
     check(
-      said.title === `Retire ${called}?` && said.about === name && said.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && said.body.includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
+      said.title === `Retire ${called}?` && said.about === name && said.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && said.body.includes("Archives its thread in bb.") && said.body.includes("This cannot be undone: a retired agent cannot be started again.") && said.body.includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
       `${at} the Retire dialog is the kernel's plan for ${name}: what goes, what stays, the worktree's choice, the focus on Cancel`,
       JSON.stringify(said),
     );
@@ -181,11 +184,11 @@ export default async (run) => {
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 300);
     said = await dialog(page);
-    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept at"), `${at} the dialog says what the retire did: the home, and the worktree ${discard ? "deleted" : "kept"}`, JSON.stringify(said));
+    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept at") && said.body.includes("Its thread is archived in bb."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
     await until(`${name} to be gone from oats status`, () => (rowOf(name) === undefined ? true : undefined));
     const retire = recorded(["retire", name], ["--plan-revision"]);
     check(retire.argv.includes("--discard-worktree") === discard, `oats retire was asked ${discard ? "with" : "without"} --discard-worktree, under the plan's revision`, JSON.stringify(retire.argv));
-    if (discard) fixtures.keep("lifecycle/retire-apply-discard.json", retire.stdout);
+    if (discard && theme === "light") fixtures.keep("lifecycle/retire-apply-discard.json", retire.stdout);
     await shot("retire-done");
     check(await close(), `${at} Close closes the dialog`);
     if (child !== null) {

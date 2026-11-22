@@ -14,13 +14,16 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - **Stop an OATS agent with "Stop agent (OATS)"** in the thread's menu, never with bb's own Stop,
   Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
   buttons leave OATS thinking the agent should run.
-- **Start, Restart and Retire** are in the same menu, on the thread's status line, in the instance
-  panel and in bb's command palette ("OATS: Stop agent…", Alt+Shift+X; Restart, R; Start, S;
-  Retire, D; rebound in bb's Keyboard settings). Each opens a dialog first and acts only on its
-  own button. Stop and Retire show the kernel's plan as what will happen and what is kept. Retire
-  removes the agent's home; its worktree is kept, moved aside, unless "Also delete the worktree"
-  is ticked; its branch stays. Start and Restart can name a harness the bb provider declares and
-  a model; left alone they keep the recorded ones. The result, or the refusal in words with the
+- **Start, Restart and Retire** are in the same menu and in bb's command palette; the thread's
+  status line also has Start (an agent that does not run) or Restart (one whose session ended).
+  The palette has "OATS: Stop agent…" (Alt+Shift+X), Restart (R), Start (S) and Retire (D), each
+  rebound in bb's Keyboard settings. Each opens a dialog first and acts only on its own button.
+  Stop and Retire show the kernel's plan as what will happen and what is kept. A stopped agent's
+  thread stays open in bb: a message sent in it starts the agent again without OATS. Retire
+  removes the agent's home and archives its thread, and cannot be undone; its worktree is kept,
+  moved aside, unless "Also delete the worktree" is turned on; its branch stays. Start and Restart
+  run in bb's full mode (no sandbox); they can name a harness the bb provider declares and a
+  model, and left alone keep the recorded ones. The result, or the refusal in words with the
   kernel's code and its message under Details, is said in the same dialog.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.

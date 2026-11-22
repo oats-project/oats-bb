@@ -2,12 +2,12 @@
 // The toaster helper (app/ui/notify.ts) and the two additions to the confirmation: the reading
 // line in a place's own words, and a result that is not confirmed.
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import { Button, Confirm, notified, notify } from "../../app/ui";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { Button, Confirm, Modal, Notice, notified, notify } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import { resetWindow } from "../../app/store";
 
-const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toasts }));
 
 afterEach(() => {
@@ -15,6 +15,7 @@ afterEach(() => {
   resetWindow();
   toasts.success.mockClear();
   toasts.error.mockClear();
+  toasts.warning.mockClear();
 });
 
 test("a result goes to bb's toaster with its lines and its Open; it leaves by itself", () => {
@@ -33,6 +34,13 @@ test("a failure stays until it is dismissed, and is told as a failure", () => {
   notify({ tone: "failed", title: "Weekly digest helper wasn't started" });
   expect(toasts.success).not.toHaveBeenCalled();
   expect(toasts.error.mock.calls[0]).toEqual(["Weekly digest helper wasn't started", { duration: Number.POSITIVE_INFINITY }]);
+});
+
+test("a result that is not confirmed is told as a warning, never as a failure or as done, and stays until it is dismissed", () => {
+  notify({ tone: "unknown", title: "Retirement accepted", lines: ["Retirement was accepted and will finish in the background."] });
+  expect(toasts.success).not.toHaveBeenCalled();
+  expect(toasts.error).not.toHaveBeenCalled();
+  expect(toasts.warning.mock.calls[0]).toEqual(["Retirement accepted", { description: "Retirement was accepted and will finish in the background.", duration: Number.POSITIVE_INFINITY }]);
 });
 
 test("text of OATS or an agent goes through the display filter: no line break reaches bb's toast, and what looks like a secret is withheld", () => {
@@ -82,4 +90,37 @@ test("a result that is done says no code and is not an alert; a refusal's code s
   expect(screen.getByTestId("oats-result").getAttribute("role")).toBe("status");
   rerender(<Confirm {...base} shownFor="weekly-digest-helper" phase={{ kind: "failed", title: "Weekly digest helper wasn't started", refusal: "OATS refused this start as busy. Nothing was started.", code: "E_SESSION_START_BUSY" }} />);
   expect(Array.from(screen.getByTestId("oats-result").querySelectorAll("p")).map((node) => node.textContent)).toEqual(["OATS refused this start as busy. Nothing was started.", "E_SESSION_START_BUSY"]);
+});
+
+test("a dialog that holds more than fits says so, above and below, and stops saying it where there is no more", () => {
+  render(
+    <Modal title="Stop Weekly digest helper?" footer={<Button>Cancel</Button>} onCancel={() => undefined}>
+      <p>a long plan</p>
+    </Modal>,
+  );
+  const body = screen.getByTestId("oats-modal-body");
+  expect(screen.queryByTestId("oats-modal-above")).toBeNull();
+  expect(screen.queryByTestId("oats-modal-below")).toBeNull();
+  // The body's content is taller than the room a phone gives it (jsdom lays nothing out: the sizes are given).
+  const sized = (scrollTop: number) => {
+    Object.defineProperties(body, { scrollHeight: { configurable: true, value: 900 }, clientHeight: { configurable: true, value: 400 }, scrollTop: { configurable: true, writable: true, value: scrollTop } });
+    act(() => void fireEvent.scroll(body));
+  };
+  sized(0);
+  expect(screen.queryByTestId("oats-modal-above")).toBeNull();
+  expect(screen.getByTestId("oats-modal-below").textContent).toBe("More below");
+  sized(200);
+  expect(screen.getByTestId("oats-modal-above").textContent).toBe("More above");
+  expect(screen.getByTestId("oats-modal-below")).toBeTruthy();
+  sized(500);
+  expect(screen.getByTestId("oats-modal-above")).toBeTruthy();
+  expect(screen.queryByTestId("oats-modal-below")).toBeNull();
+});
+
+test("a confirmation's notice stands above the plan, and only while the plan is under review", () => {
+  const notice = <Notice title="Something changed since you opened this" tone="warning" />;
+  const { rerender } = render(<Confirm {...base} shownFor="weekly-digest-helper" happens={["Stops its session."]} phase={{ kind: "ready" }} notice={notice} />);
+  expect(screen.getByTestId("oats-confirm").firstElementChild).toBe(screen.getByTestId("oats-notice"));
+  rerender(<Confirm {...base} shownFor="weekly-digest-helper" happens={["Stops its session."]} phase={{ kind: "running", doing: "Stopping…" }} notice={notice} />);
+  expect(screen.queryByTestId("oats-notice")).toBeNull();
 });

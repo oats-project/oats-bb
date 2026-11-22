@@ -31,9 +31,9 @@ describe("stop", () => {
         at: "2026-11-19T12:30:00.000Z",
         recursive: true,
         targets: [
-          { instance: "redesign-ui-lead", soul: "oats-product-expert", depth: 0, session: "there", midTask: true },
-          { instance: "desktop-mockups-developer", soul: "oats-desktop-developer", depth: 1, session: "there", midTask: true },
-          { instance: "harvest-knowledge-helper", soul: "knowledge-harvester", depth: 1, session: "there", midTask: "unknown" },
+          { instance: "redesign-ui-lead", soul: "oats-product-expert", depth: 0, session: "there", backend: "bb", midTask: true },
+          { instance: "desktop-mockups-developer", soul: "oats-desktop-developer", depth: 1, session: "there", backend: "bb", midTask: true },
+          { instance: "harvest-knowledge-helper", soul: "knowledge-harvester", depth: 1, session: "there", backend: "bb", midTask: "unknown" },
         ],
         skipped: [],
         ambiguous: [],
@@ -51,7 +51,7 @@ describe("stop", () => {
       instance: "dialogs-1-helper",
       at: "2026-11-22T17:53:35.622Z",
       recursive: false,
-      targets: [{ instance: "dialogs-1-helper", soul: "oats-expert", depth: 0, session: "there", midTask: "unknown" }],
+      targets: [{ instance: "dialogs-1-helper", soul: "oats-expert", depth: 0, session: "there", backend: "bb", midTask: "unknown" }],
       skipped: ["dialogs-1-child"],
       ambiguous: [],
     });
@@ -217,6 +217,7 @@ describe("retire", () => {
     home: "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper",
     at: "2026-11-21T15:52:01.652Z",
     session: "none",
+    backend: "bb",
     work: { observed: true, branch: "agents/weekly-digest-helper", detached: false, drift: false, changed: 0, untracked: 1 },
     ownWorktree: true,
     workMode: "worktree",
@@ -274,6 +275,7 @@ describe("retire", () => {
     worktree: "retained",
     movedTo: "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
     recoveryPath: "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+    threadsArchived: 1, // the provider archived the home's thread (capabilityMeta["oats.bb"].archived)
     children: [{ instance: "digest-links-helper", ok: true, alreadyIdle: true, code: null, stillRunning: null, detail: null }],
     incomplete: [],
     compensation: null,

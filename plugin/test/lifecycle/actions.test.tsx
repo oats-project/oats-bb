@@ -184,15 +184,19 @@ test("Stop opens a dialog titled with the act and the agent, says what will happ
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
   const [happens, kept] = Array.from(slot.getByTestId("oats-confirm").querySelectorAll(":scope > section"));
   expect(happens!.querySelector("h3")!.textContent).toBe("What will happen");
-  expect(texts(happens as HTMLElement, "li")).toEqual(["Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.", "A session that refuses to stop is left running; nothing is forced."]);
+  expect(texts(happens as HTMLElement, "li")).toEqual([
+    "Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.",
+    "A session that refuses to stop is left running; nothing is forced.",
+    "A message sent in its thread starts it again without OATS. To talk to it again, use Start.", // what a stop means for its thread, today
+  ]);
   expect(kept!.querySelector("h3")!.textContent).toBe("What is kept");
   expect(texts(kept as HTMLElement, "li")).toEqual(["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."]);
   // An agent in the middle of a task is said before the act, and the state of each session.
   expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual(["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."]);
   expect(texts(slot.getByTestId("oats-plan"), "dt")).toEqual(["Redesign ui lead", "Desktop mockups developer", "Harvest knowledge helper"]);
-  // The button is named for the act; a stop is not destructive, so the focus starts on it.
+  // The button is named for the act; a stop ends something a person may want running, so the focus starts on Cancel.
   expect(button(slot, "oats-confirm-act").textContent).toBe("Stop");
-  expect(document.activeElement).toBe(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel")));
   expect(calls(slot, "stopPlan", "stopApply").map((call) => call.method)).toEqual(["stopPlan"]); // asked once, nothing applied
 });
 
@@ -213,8 +217,13 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   await phase(slot, "done");
   const result = slot.getByTestId("oats-result");
   expect(result.querySelector("h3")!.textContent).toBe("3 sessions stopped.");
-  expect(texts(result, "p")).toEqual(["Harvest knowledge helper: Was already stopped", "Desktop mockups developer: Stopped", "Redesign ui lead: Stopped"]);
-  expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+  expect(texts(result, "p")).toEqual([
+    "Harvest knowledge helper: Was already stopped",
+    "Desktop mockups developer: Stopped",
+    "Redesign ui lead: Stopped",
+    "A message sent in its thread starts it again without OATS. To talk to it again, use Start.",
+  ]);
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
   const made = calls(slot, "stopPlan", "stopApply");
   expect(made.map((call) => call.method)).toEqual(["stopPlan", "stopApply"]);
   expect(made[0]!.input).toEqual({ instance: "redesign-ui-lead", recursive: true });
@@ -290,11 +299,13 @@ test("the dialog names the agent from the kernel's plan, never from the row that
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
 });
 
-test("a plan that changed under the confirmation (E_PLAN_STALE) comes back for review as it is now, with the Desktop's sentence, and is applied with a new key", async () => {
+test("a plan that changed under the confirmation (E_PLAN_STALE) comes back for review, NOT armed: what changed is said first, the focus is on Cancel, and only Review again makes it confirmable, with a new key", async () => {
   let stale = true;
-  const fresh = { ...stopPlanOf(), revision: "bbbbbbbbbbbbbbbbbbbbbbbb" };
+  const first = stopPlanOf();
+  // As it is now: one child stopped by itself meanwhile.
+  const fresh = { ...first, revision: "bbbbbbbbbbbbbbbbbbbbbbbb", targets: first.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target)) };
   const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => (stale ? stopPlanOf() : fresh),
+    stopPlan: () => (stale ? first : fresh),
     stopApply: ({ revision }) => {
       if (revision !== fresh.revision) {
         stale = false;
@@ -306,13 +317,43 @@ test("a plan that changed under the confirmation (E_PLAN_STALE) comes back for r
   await pick("stop");
   await ready(slot);
   fireEvent.click(button(slot, "oats-confirm-act"));
-  await waitFor(() => expect(slot.getByTestId("oats-notice").textContent).toBe("Something changed since you opened this. Review it and confirm again."));
-  await ready(slot);
+  const notice = await slot.findByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("Something changed since you opened this");
+  expect(texts(notice, "p")).toEqual(["Harvest knowledge helper: its session was running, and is now not running."]);
+  // The notice is the first thing in the dialog, above the plan as it is now.
+  expect(slot.getByTestId("oats-confirm").firstElementChild).toBe(notice);
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("What will happen");
+  // Not armed: a second Enter confirms nothing.
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Read what changed, then press Review again.");
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel")));
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  expect(calls(slot, "stopApply")).toHaveLength(1);
+  fireEvent.click(button(slot, "oats-plan-review"));
+  await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+  expect(calls(slot, "stopPlan")).toHaveLength(3); // the first, the one after the refusal, and the review
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
   const applies = calls(slot, "stopApply").map((call) => call.input as { revision: string; key: string });
   expect(applies.map((apply) => apply.revision)).toEqual(["9c1f2e3d4b5a69788796a5b4", fresh.revision]);
   expect(applies[0]!.key).not.toBe(applies[1]!.key);
+});
+
+test("a plan that changed in nothing a person is shown says so, and is still reviewed again before it can be confirmed", async () => {
+  let stale = true;
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => ({ ...stopPlanOf(), revision: stale ? "9c1f2e3d4b5a69788796a5b4" : "cccccccccccccccccccccccc" }),
+    stopApply: () => {
+      stale = false;
+      throw new Error("E_PLAN_STALE: the stop plan changed since it was shown; review the fresh plan");
+    },
+  });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  expect(texts(await slot.findByTestId("oats-notice"), "p")).toEqual(["Nothing shown here differs: OATS read the plan again, and it is the one below."]);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
 });
 
 test("a refused apply leads with a person's words, the kernel's code after them and its message under Details; Review again reads a new plan", async () => {
@@ -334,7 +375,7 @@ test("a refused apply leads with a person's words, the kernel's code after them 
   const details = slot.getByTestId("oats-act-details");
   expect((details as HTMLDetailsElement).open).toBe(false);
   expect(texts(details, "span.block")).toEqual(["1 child still runs: digest-links-helper", "stop it first"]);
-  expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
   fireEvent.click(button(slot, "oats-act-review"));
   await ready(slot);
   expect(calls(slot, "retirePlan")).toHaveLength(2);
@@ -434,14 +475,16 @@ test("Retire opens a dialog that says what goes and what stays; it is destructiv
   expect(texts(happens as HTMLElement, "li")).toEqual([
     "Stops its 1 child instance first: Digest links helper. They are kept, with their homes.",
     "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
+    "Archives its thread in bb.",
     "If a child won't stop, nothing is retired.",
+    "This cannot be undone: a retired agent cannot be started again.", // what the Desktop's sheet leaves unsaid
   ]);
   expect(texts(kept as HTMLElement, "li")).toEqual(["Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.", "Branches and pull requests are not changed."]);
   // None of the kernel's own notes is pasted (the first UX read's S9).
   expect(dialog.textContent).not.toContain("SIGTERM");
   expect(dialog.textContent).not.toContain("the ADE reports");
   expect(button(slot, "oats-confirm-act").textContent).toBe("Retire");
-  expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel"));
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel")));
 });
 
 test("Also delete the worktree: the tick changes what goes and what stays, warns in words what is lost, and the apply asks for it", async () => {
@@ -477,6 +520,7 @@ test("Retire without the tick applies the plan and keeps the worktree; the resul
     "Home folder deleted.",
     "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
     "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+    "Its thread is archived in bb.",
   ]);
   expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });
 });
@@ -514,6 +558,8 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
   expect(texts(slot.getByTestId("oats-start"), "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
   expect(dialog.textContent).toContain("This starts a new conversation using the saved briefing and state.");
+  // A start from bb runs in bb's full mode: there is no control for it, and one line says so before the act.
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toContain("Runs in bb's full mode: no sandbox.");
   expect(dialog.textContent).toContain("Continue in this instance’s existing home, with its identity, work and notes.");
   expect(slot.getByTestId("oats-start-status").textContent).toContain("Ready to start.");
   // The harness field starts on the recorded harness; the focus on the form's first field.
@@ -522,7 +568,7 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
   // bb reports no model for the harness in this test: the field says that any id can be typed.
   expect(slot.getByTestId("oats-start").textContent).toContain("No model suggestions reported. Any model ID can be typed.");
-  expect(document.activeElement).toBe(harness);
+  await waitFor(() => expect(document.activeElement).toBe(harness));
   expect(button(slot, "oats-confirm-act").textContent).toBe("Start");
 });
 
@@ -558,7 +604,7 @@ test("with one harness declared no choice is shown, and the focus starts on the 
   await ready(slot);
   expect(slot.queryByTestId("oats-start-harness")).toBeNull();
   expect(texts(slot.getByTestId("oats-start"), "dt, dd").slice(0, 2)).toEqual(["Harness", "Claude Code"]); // the recorded one, as a fact
-  expect(document.activeElement).toBe(slot.getByTestId("oats-start-model"));
+  await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-start-model")));
 });
 
 test("Restart opens its dialog with the Desktop's warning, and nothing restarts until its button is pressed", async () => {
@@ -570,6 +616,7 @@ test("Restart opens its dialog with the Desktop's warning, and nothing restarts 
   await ready(slot);
   expect(dialog.querySelector("h2")!.textContent).toBe("Restart Redesign ui lead");
   expect(dialog.textContent).toContain("Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.");
+  expect(dialog.textContent).toContain("Runs in bb's full mode: no sandbox.");
   expect(calls(slot, "restart")).toEqual([]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
@@ -748,13 +795,13 @@ test("the focus stays in an open dialog: what takes it outside (bb's composer, w
     await ready(slot);
     fireEvent.click(button(slot, "oats-confirm-act"));
     await phase(slot, "done");
-    expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+    await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
     outside.focus(); // as bb's composer does when the agent's new thread opens
-    expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+    await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
     fireEvent.click(button(slot, "oats-confirm-close"));
     // With no dialog open the focus is nobody's to hold.
     outside.focus();
-    expect(document.activeElement).toBe(outside);
+    await waitFor(() => expect(document.activeElement).toBe(outside));
   } finally {
     outside.remove();
   }
@@ -806,4 +853,110 @@ test("AgentActs offers the acts of an agent with no bb thread too: Start and Ret
     labels: ["Stop… (off)", "Restart… (off)", "Retire… (off)"],
     reason: "Comes back when OATS is read again",
   });
+});
+
+// ---- from the first review round
+
+const UNSAFE = "x\u202Egnp.exe-ghp_abcdefghijklmnopqrstuvwxyz0123456789"; // a bidi override, and what looks like a token
+
+test("a retire plan's branch, an agent's own choice, is drawn through the display filter in every place of the dialog", async () => {
+  const plan = retirePlanOf();
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => ({ ...plan, recordedBranch: UNSAFE, work: { ...plan.work, branch: UNSAFE } }) });
+  await pick("retire");
+  await ready(slot);
+  const drawn = slot.getByRole("dialog").textContent!;
+  expect(drawn).not.toContain("\u202E");
+  expect(drawn).not.toContain("ghp_");
+  expect(texts(slot.getByTestId("oats-plan"), "dd")).toContain("[withheld]"); // the Branch of Current state
+});
+
+test("the Start dialog draws the kernel's row (a record the agent can write) through the display filter: its harness, model and home, in the facts, the field's first entry, its hint and its placeholder", async () => {
+  for (const harnesses of [["claude", "pi"], ["claude"]]) {
+    const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { harness: UNSAFE, model: UNSAFE, home: `/abs/${UNSAFE}`, machine: UNSAFE, harnesses }) });
+    await pick("start");
+    await ready(slot);
+    const dialog = slot.getByRole("dialog");
+    const everything = [dialog.textContent!, (slot.getByTestId("oats-start-model") as HTMLInputElement).placeholder, ...Array.from(dialog.querySelectorAll("option")).map((option) => `${option.textContent} ${option.getAttribute("label") ?? ""}`)].join("\n");
+    expect(everything, String(harnesses)).not.toContain("\u202E");
+    expect(everything, String(harnesses)).not.toContain("ghp_");
+    expect(everything).toContain("[withheld]");
+    resetApp();
+  }
+});
+
+test("a start that fails after the person moved on is told through the toaster with Open; one that is not confirmed is told as that, not as a failure", async () => {
+  for (const [refusal, tone] of [
+    ["E_SESSION_START_BUSY: a start is already in progress", "failed"],
+    ["E_SPAWN_INCOMPLETE: launch requires inspection", "unknown"],
+  ] as const) {
+    let fail!: () => void;
+    const held = new Promise<never>((_, reject) => (fail = () => reject(new Error(refusal))));
+    const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held, retirePlan: () => retirePlanOf() });
+    const before = notified().length;
+    await pick("start");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "running");
+    await pick("retire"); // the person moved on to another act's dialog
+    await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?"));
+    fail();
+    await waitFor(() => expect(notified().length).toBe(before + 1));
+    expect(notified().at(-1)).toMatchObject({ tone, open: { label: "Open Weekly digest helper" } });
+    notified().at(-1)!.open!.run();
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+    resetApp();
+  }
+});
+
+test("a retire accepted for the background, told after the person moved on, is not told as a failure", async () => {
+  let answer!: () => void;
+  const held = new Promise<void>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held.then(() => ({ ...retireReceiptOf(), deferred: true })), startCheck: ({ instance }) => startCheckOf(instance) });
+  const before = notified().length;
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  await pick("start");
+  await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Weekly digest helper"));
+  answer();
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "unknown", title: "Retirement accepted" });
+});
+
+test("the dialog gives the focus way to a layer of bb's that holds it for itself (a dialog, a menu, the toaster), and never answers its own focus() twice", async () => {
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+  await pick("stop");
+  await ready(slot);
+  const cancel = button(slot, "oats-confirm-cancel");
+  await waitFor(() => expect(document.activeElement).toBe(cancel));
+  const layers = ['<div role="dialog"><input></div>', '<div role="menu"><button role="menuitem">Copy link</button></div>', '<ol data-sonner-toaster=""><li><button>Dismiss notification</button></li></ol>'].map((html) => {
+    const holder = document.createElement("div");
+    holder.innerHTML = html;
+    document.body.append(holder);
+    return holder;
+  });
+  const plain = document.createElement("input");
+  document.body.append(plain);
+  try {
+    for (const layer of layers) {
+      const inside = layer.querySelector<HTMLElement>("input, button")!;
+      // bb's own trap: when the focus leaves its layer it takes it back (Radix FocusScope). Two such traps must not call each other without end.
+      let pulls = 0;
+      const trap = (event: FocusEvent) => {
+        if (!layer.contains(event.target as Node) && pulls++ < 50) inside.focus();
+      };
+      document.addEventListener("focusin", trap);
+      inside.focus();
+      expect(document.activeElement, layer.innerHTML).toBe(inside);
+      expect(pulls).toBe(0);
+      document.removeEventListener("focusin", trap);
+      cancel.focus();
+    }
+    // Anything that is no layer of its own still gives the focus back.
+    plain.focus();
+    expect(document.activeElement).toBe(cancel);
+  } finally {
+    for (const node of [...layers, plain]) node.remove();
+  }
 });

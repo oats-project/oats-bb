@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopOutcome, stopPlanView, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -33,7 +33,12 @@ describe("a dialog's title", () => {
 describe("a stop plan", () => {
   it("says what will happen and what is kept in the Desktop's sentences, with the agents by their names as words", () => {
     expect(stopPlanView(stopPlan())).toEqual({
-      happens: ["Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.", "A session that refuses to stop is left running; nothing is forced."],
+      happens: [
+        "Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.",
+        "A session that refuses to stop is left running; nothing is forced.",
+        // What a stop means for the thread, as the provider is today: bb's composer stays live under a stopped agent.
+        "A message sent in its thread starts it again without OATS. To talk to it again, use Start.",
+      ],
       kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
       attention: ["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."],
       state: [
@@ -51,7 +56,12 @@ describe("a stop plan", () => {
   it("without the children: one session, who is not stopped, and the tick stays to be set again", () => {
     const plan = stopPlan();
     const view = stopPlanView({ ...plan, recursive: false, targets: plan.targets.slice(0, 1), skipped: plan.targets.slice(1).map((target) => target.instance) });
-    expect(view.happens).toEqual(["Stops the session of Redesign ui lead.", "A session that refuses to stop is left running; nothing is forced.", "Not stopped: Desktop mockups developer, Harvest knowledge helper (children not included)."]);
+    expect(view.happens).toEqual([
+      "Stops the session of Redesign ui lead.",
+      "A session that refuses to stop is left running; nothing is forced.",
+      "Not stopped: Desktop mockups developer, Harvest knowledge helper (children not included).",
+      "A message sent in its thread starts it again without OATS. To talk to it again, use Start.",
+    ]);
     expect(view.choice).toEqual({ label: "Include child instances", checked: false, warning: null });
   });
 
@@ -68,7 +78,13 @@ describe("a stop plan", () => {
 describe("a retire plan", () => {
   it("says what goes and what stays, for the recorded plan of an agent on a worktree with a child", () => {
     expect(retirePlanView(retirePlan(), false)).toEqual({
-      happens: ["Stops its 1 child instance first: Digest links helper. They are kept, with their homes.", "Saves a recovery copy of any uncommitted work, then deletes its home folder.", "If a child won't stop, nothing is retired."],
+      happens: [
+        "Stops its 1 child instance first: Digest links helper. They are kept, with their homes.",
+        "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
+        "Archives its thread in bb.",
+        "If a child won't stop, nothing is retired.",
+        "This cannot be undone: a retired agent cannot be started again.",
+      ],
       kept: ["Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.", "Branches and pull requests are not changed."],
       attention: [],
       state: [
@@ -91,7 +107,14 @@ describe("a retire plan", () => {
   });
 
   it("a session that runs is stopped; one that could not be checked is said so", () => {
-    expect(retirePlanView(retirePlan({ session: "there", children: [] }), false).happens).toEqual(["Stops its session.", "Saves a recovery copy of any uncommitted work, then deletes its home folder."]);
+    expect(retirePlanView(retirePlan({ session: "there", children: [] }), false).happens).toEqual([
+      "Stops its session.",
+      "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
+      "Archives its thread in bb.",
+      "This cannot be undone: a retired agent cannot be started again.",
+    ]);
+    // An agent that is not on bb has no thread to archive; that it cannot be undone is said of every retire.
+    expect(retirePlanView(retirePlan({ backend: "tmux", children: [] }), false).happens).toEqual(["Saves a recovery copy of any uncommitted work, then deletes its home folder.", "This cannot be undone: a retired agent cannot be started again."]);
     expect(retirePlanView(retirePlan({ session: "unknown", children: [] }), false).happens[0]).toBe("Stops its session, if one is running (its state couldn't be checked).");
   });
 
@@ -132,6 +155,51 @@ describe("a retire plan", () => {
   });
 });
 
+describe("a stop and the agent's thread", () => {
+  it("is said by one function of one fact: whether the provider archives the thread of a home it stops", () => {
+    expect(stopThreadSentence(false)).toBe("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+    expect(stopThreadSentence(true)).toBe("Its thread is archived. To talk to it again, start it.");
+  });
+
+  it("the fact is read from the provider's version against the release that archives at stop; no release does yet, so no version does", () => {
+    for (const version of ["0.3.0", "1.0.0", "99.0.0", null]) expect(stopArchivesThread(version)).toBe(false);
+    // With the release named, that one and every later archive; an earlier one, and a version that cannot be read, do not.
+    expect(["0.4.0", "0.4.1", "0.10.0", "1.0.0", "0.4.0-rc.1"].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([true, true, true, true, true]);
+    expect(["0.3.9", "0.3.10", "", "next", "0.4", null].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([false, false, false, false, false, false]);
+    expect(stopPlanView(stopPlan(), true).happens).toContain("Its thread is archived. To talk to it again, start it.");
+  });
+
+  it("is said of an agent on bb, in the plan and in the result, and not of one with no thread", () => {
+    const plan = stopPlan();
+    const tmux = { ...plan, targets: plan.targets.map((target) => ({ ...target, backend: "tmux" })) };
+    expect(stopPlanView(tmux).happens.some((line) => line.includes("thread"))).toBe(false);
+    const receipt = value(parseStopApply(fixture("stop-apply.json").result));
+    expect(stopOutcome(receipt, "redesign-ui-lead", true).lines.at(-1)).toBe("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+    expect(stopOutcome(receipt, "redesign-ui-lead", false).lines.some((line) => line.includes("thread"))).toBe(false);
+  });
+});
+
+describe("a plan that changed under the confirmation", () => {
+  it("says what differs, in sentences: who is in it, whose session runs, who is in the middle of a task", () => {
+    const before = stopPlan();
+    // The recorded case: one child stopped by itself between the plan and its apply.
+    const after = { ...before, targets: before.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target.instance === "desktop-mockups-developer" ? { ...target, midTask: false } : target)) };
+    expect(planChanges(before, after)).toEqual(["Desktop mockups developer no longer reports it is in the middle of a task.", "Harvest knowledge helper: its session was running, and is now not running."]);
+    expect(planChanges(before, { ...before, targets: before.targets.slice(0, 2) })).toEqual(["Harvest knowledge helper is no longer in this plan."]);
+    expect(planChanges({ ...before, targets: before.targets.slice(0, 2) }, before)).toEqual(["Harvest knowledge helper is now in this plan."]);
+    expect(planChanges(before, before)).toEqual([]);
+  });
+
+  it("for a retire: its session, its uncommitted work, its children", () => {
+    const before = retirePlan();
+    expect(planChanges(before, { ...before, session: "there", work: { ...before.work, changed: 2 }, children: [] })).toEqual([
+      "Its session was not running, and is now running.",
+      "Its uncommitted work was: 1 untracked. It is now: 2 changed, 1 untracked.",
+      "Digest links helper is no longer one of its children.",
+    ]);
+  });
+});
+
 describe("a result", () => {
   it("a stop: how many sessions stopped, and each agent's own line", () => {
     expect(stopOutcome(value(parseStopApply(fixture("stop-apply.json").result)), "redesign-ui-lead")).toEqual({
@@ -163,6 +231,7 @@ describe("a result", () => {
         "Home folder deleted.",
         "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
         "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+        "Its thread is archived in bb.",
       ],
       code: null,
       details: null,
@@ -191,7 +260,7 @@ describe("a refusal", () => {
   const gone = fixture("gone.json");
   it("a plan refused for a name the kernel does not know: the agent is not in OATS any more, and there is nothing to try again", () => {
     const outcome = planRefused("retire", "flaky-ci-2-developer", gone.retirePlan.error, true);
-    expect(outcome).toMatchObject({ title: "Flaky ci 2 developer is not in OATS any more", code: "E_SESSION_UNKNOWN", gone: true, offers: [], details: gone.retirePlan.error.message });
+    expect(outcome).toMatchObject({ title: "Flaky ci 2 developer is not in OATS any more", code: "E_SESSION_UNKNOWN", offers: [], details: gone.retirePlan.error.message });
   });
 
   it("a plan that could not be read leads with a person's words; the kernel's are the details", () => {
@@ -216,7 +285,9 @@ describe("a refusal", () => {
       details: "1 child still runs",
       offers: ["review"],
     });
-    expect(applyRefused("stop", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "held by pid 4" }).lines).toEqual(["Nothing was done: OATS refused this as busy.", "Details has what OATS says to check."]);
+    // A busy refusal's own line names what to check: it is quoted under the kernel's name, as the Desktop quotes it.
+    expect(applyRefused("stop", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "held by pid 4\nremove the claim" }).lines).toEqual(["Nothing was done: OATS refused this as busy.", "OATS says: held by pid 4"]);
+    expect(applyRefused("stop", "dev-1", { code: "E_SOMETHING_NEW", message: "a new refusal" }).lines).toEqual(["OATS answered with an error that the plugin has no description for.", "OATS says: a new refusal"]);
   });
 
   it("an apply whose answer was lost is not confirmed: never done, never nothing happened, and Check again asks for it", () => {
@@ -240,10 +311,17 @@ describe("a start", () => {
     expect(startRefused("start", "dev-1", { code: "OATS_TIMEOUT", message: "m" })).toMatchObject({ tone: "unknown", title: "OATS didn't confirm the start" });
     expect(startRefused("start", "dev-1", { code: "NO_THREAD_NAMED", message: "m" })).toMatchObject({ tone: "unknown", title: "Dev 1 was started, but its thread isn't ready yet", lines: ["Open it from its row when it is."] });
     expect(startRefused("restart", "dev-1", { code: "E_BACKEND_HARNESS", message: "m" })).toMatchObject({ title: "OATS refused to restart Dev 1 on this harness", lines: ["Choose another under Harness, or keep the recorded one."] });
-    expect(startRefused("start", "dev-1", { code: "E_BACKEND_SANDBOXED_MODE", message: "the kernel's own" })).toMatchObject({ tone: "failed", title: "OATS refused to start Dev 1", code: "E_BACKEND_SANDBOXED_MODE", details: "the kernel's own" });
+    // A refusal with no sentence of the Desktop's says why in the kernel's own line, under its name; the whole message stays under Details.
+    expect(startRefused("start", "dev-1", { code: "E_BACKEND_SANDBOXED_MODE", message: "the kernel's own\nand its second line" })).toMatchObject({
+      tone: "failed",
+      title: "OATS refused to start Dev 1",
+      lines: ["OATS says: the kernel's own", "Refresh its status before another try."],
+      code: "E_BACKEND_SANDBOXED_MODE",
+      details: "the kernel's own\nand its second line",
+    });
     // The retired home of the recording: a code shared with other failures, shown as a refusal, never as "gone".
     const gone = fixture("gone.json");
-    expect(startRefused("start", "flaky-ci-2-developer", gone.start.error).gone).toBeUndefined();
+    expect(startRefused("start", "flaky-ci-2-developer", gone.start.error).title).toBe("OATS refused to start Flaky ci 2 developer");
   });
 });
 

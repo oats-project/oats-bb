@@ -20,7 +20,8 @@ export type SessionFact = "there" | "none" | "unknown";
 /** The Git observation of a work tree, summarized; `observed: false` when there was none to make. */
 export type WorkFact = { observed: boolean; branch: string | null; detached: boolean; drift: boolean; changed: number; untracked: number };
 /** `midTask` is the kernel's `true`, `false` or `"unknown"` (a provider that reports no activity). */
-export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; midTask: boolean | "unknown" };
+/** `backend` is where the session runs, as the kernel names it ("bb", "tmux"); null when it does not say. */
+export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; backend: string | null; midTask: boolean | "unknown" };
 /** `instance` is the agent the KERNEL's plan is for, as its answer names it (null when it names none): what a confirmation is titled with, never the name that was asked for. */
 export type StopPlan = {
   action: "stop";
@@ -44,6 +45,8 @@ export type RetirePlan = {
   home: string | null;
   at: string | null;
   session: SessionFact;
+  /** Where its session runs ("bb": the retire archives its thread); null when the kernel does not say. */
+  backend: string | null;
   work: WorkFact;
   /**
    * Whether `work/` is the agent's own work tree, the one a retire keeps or deletes: the kernel's
@@ -82,6 +85,8 @@ export type RetireReceipt = {
   worktree: "retained" | "removed" | "absent" | null;
   movedTo: string | null;
   recoveryPath: string | null;
+  /** The bb threads the provider archived with the home (`capabilityMeta["oats.bb"].archived`). */
+  threadsArchived: number;
   children: StoppedRow[];
   /** What the kernel says its cleanup left (`rollbackIncomplete`); empty when it finished. */
   incomplete: string[];
@@ -108,7 +113,7 @@ type Apply = { instance: string; revision: string; key: string };
 // ---- reading the kernel's documents ----
 
 const text = z.string().nullish();
-const session = z.looseObject({ state: text, present: z.boolean().nullish(), established: z.boolean().nullish() }).nullish();
+const session = z.looseObject({ state: text, present: z.boolean().nullish(), established: z.boolean().nullish(), backend: text }).nullish();
 const work = z
   .looseObject({ observed: z.boolean().nullish(), branch: text, detached: z.boolean().nullish(), drift: z.boolean().nullish(), changed: z.number().nullish(), untracked: z.number().nullish() })
   .nullish();
@@ -184,6 +189,7 @@ export function parseStopPlan(document: unknown): Result<StopPlan> {
       soul: target.agent ?? null,
       depth: target.depth ?? 0,
       session: sessionFact(target.session),
+      backend: target.session?.backend ?? null,
       midTask: target.midTask === true ? true : target.midTask === false ? false : "unknown",
     }));
   // The agent the plan is for: the kernel's own target at depth 0.
@@ -300,6 +306,7 @@ export function parseRetirePlan(document: unknown): Result<RetirePlan> {
     home: plan.home ?? null,
     at: plan.at ?? null,
     session: sessionFact(facts.session),
+    backend: facts.session?.backend ?? null,
     work: workFact(facts.work),
     ownWorktree: facts.ownWorktree ?? null,
     workMode: facts.workMode ?? null,
@@ -321,6 +328,7 @@ const retireReceipt = z.looseObject({
   workRecovery: z.looseObject({ path: text }).nullish(),
   childrenStopped: z.array(stoppedRow).nullish(),
   spawnCompensation: z.looseObject({ branch: text, branchDeleted: z.boolean().nullish(), reason: text }).nullish(),
+  capabilityMeta: z.looseObject({ "oats.bb": z.looseObject({ archived: z.array(z.unknown()).nullish() }).nullish() }).nullish(),
 });
 
 /** A retire receipt that says its cleanup is incomplete: the one document `oats retire` prints with exit 1. */
@@ -350,6 +358,7 @@ export function parseRetireApply(document: unknown): Result<RetireReceipt> {
     worktree: kept === "retained" || kept === "removed" || kept === "absent" ? kept : null,
     movedTo: receipt.retention?.movedTo ?? null,
     recoveryPath: receipt.workRecovery?.path ?? null,
+    threadsArchived: receipt.capabilityMeta?.["oats.bb"]?.archived?.length ?? 0,
     children: stoppedRows(receipt.childrenStopped),
     incomplete: receipt.rollbackIncomplete ?? [],
     compensation: compensation?.branch ? { branch: compensation.branch, deleted: compensation.branchDeleted === true, reason: compensation.reason ?? null } : null,

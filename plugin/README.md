@@ -89,8 +89,9 @@ bb settings ui reset sidebar.threadListProvider
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
 on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
 **Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
-the suffix), on the thread's status line and the instance panel (**Start…**, **Restart…**,
-**Stop…**, **Retire…**), and in bb's command palette, each with a shortcut:
+the suffix), on the thread's status line (**Start** for an agent that does not run, **Restart** for
+one whose session ended), on a soul's page for an agent whose thread bb does not have (**Start**,
+**Retire**), and in bb's command palette, each with a shortcut:
 
 | Command | Default shortcut | Acts on |
 |---|---|---|
@@ -110,12 +111,15 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
   reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
   with a worktree of its own, with what would be lost said under it; without it the worktree is
-  kept, moved aside. Retire is destructive: the focus starts on Cancel.
+  kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
+  agent's thread (as the provider is today, a message sent in it starts the agent again without
+  OATS); Retire says that its thread is archived and that a retire cannot be undone.
 - **Start** and **Restart** first read the agent as the kernel has it now ("Checking
   instance…"), and show its harness, machine and home. **Harness** starts on "Keep the recorded
   harness" and passes nothing; one the bb session provider declares is passed as `--harness`. With
   one harness declared there is no choice. **Model for this start** is blank for the recorded or
-  default model, or a model id. Neither act names a mode: the home's recorded choice stands.
+  default model, or a model id. Neither act names a mode (the home's recorded choice stands), and
+  both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
   Restart says that it stops the current harness first. An agent the kernel says is running is
   not started again: the dialog says so and offers its thread.
 - **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
@@ -125,7 +129,8 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   **Open <agent>**.
 - **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
   message under **Details**. What to do next is a button: **Review again** reads a new plan (also
-  when the plan changed under the confirmation: it comes back as it is now), **Check again** asks
+  when the plan changed under the confirmation: it comes back as it is now, with what changed
+  said first, and cannot be confirmed until it was reviewed again), **Check again** asks
   for the answer to what was already sent (same revision, same key: an answer that was lost reads
   "Result not confirmed", never "nothing happened"), **Refresh status** reads the agent again
   before another start. A plan refused for a name the kernel does not know (`E_SESSION_UNKNOWN`,
@@ -144,8 +149,10 @@ How it is built: `kernel/lifecycle.ts` reads a plan and a receipt into typed fac
 worded there), `app/lifecycle/words.ts` makes the sentences from them (the Desktop's, with the
 commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the two dialogs on the
 `Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
-dialog with `openAct(verb, instance)` and places the buttons of one agent with
-`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`).
+dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
+"Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). No place draws `AgentActs` yet: the
+instance panel and the agent's own page take it in their own change.
 
 ## The instance panel
 

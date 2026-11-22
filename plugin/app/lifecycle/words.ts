@@ -13,7 +13,7 @@
 // Pure: no bb, no React, never throws. Text of the kernel's is returned raw: the components that
 // draw it put it through the display filter.
 import type { RetirePlan, RetireReceipt, Started, StopPlan, StopReceipt, StoppedRow } from "../../kernel/lifecycle";
-import { agentName } from "../ui/words";
+import { agentName, FULL_MODE } from "../ui/words";
 
 export type PlanVerb = "stop" | "retire";
 export type RunVerb = "start" | "restart";
@@ -46,18 +46,45 @@ export type PlanView = {
 const SESSION = { there: "Running", none: "Not running", unknown: "Unknown (couldn't be checked)" } as const;
 const ambiguous = (instance: string) => `Not included: ${agentName(instance)} (another instance has the same parent name, so OATS can't tell whose child it is).`;
 
+/**
+ * What a stop means for the agent's bb thread, in the confirmation and in the result: ONE
+ * function of ONE fact, whether the bb session provider archives the thread of a home it stops.
+ * Today it does not: bb's composer stays live under a stopped agent, and a message typed there
+ * starts it again without OATS knowing.
+ */
+export const stopThreadSentence = (archives: boolean): string =>
+  archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+/**
+ * The fact, read from the provider's VERSION (the `version` of `oats capabilities show oats.bb
+ * --json`, the read the harness list makes): the provider archives at stop from the release named
+ * here on. No release does yet (null): the answer is then "does not archive" for every version,
+ * and for a version that is not known.
+ */
+export const ARCHIVES_AT_STOP_FROM: string | null = null;
+export function stopArchivesThread(providerVersion: string | null, from: string | null = ARCHIVES_AT_STOP_FROM): boolean {
+  if (from === null || providerVersion === null) return false;
+  const parts = (version: string) => version.split(/[.+-]/).slice(0, 3).map((part) => Number.parseInt(part, 10));
+  const [have, need] = [parts(providerVersion), parts(from)];
+  if (have.length < 3 || have.some((part) => !Number.isFinite(part))) return false;
+  for (let index = 0; index < 3; index += 1) if (have[index]! !== need[index]!) return have[index]! > need[index]!;
+  return true;
+}
+
 export const STOP_CHOICE = "Include child instances";
 export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
 export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
-export function stopPlanView(plan: StopPlan): PlanView {
+/** `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`). */
+export function stopPlanView(plan: StopPlan, archives = false): PlanView {
   const targets = plan.targets;
   const happens = [
     plan.recursive && targets.length > 1 ? `Stops ${targets.length} sessions, children first: ${names(targets.map((target) => target.instance))}.` : `Stops the session of ${plan.instance === null ? "this agent" : agentName(plan.instance)}.`,
     "A session that refuses to stop is left running; nothing is forced.",
   ];
   if (plan.skipped.length > 0) happens.push(`Not stopped: ${names(plan.skipped)} (children not included).`);
+  // An agent on bb has a thread, and a stop leaves something to know about it.
+  if (targets.some((target) => target.backend === "bb")) happens.push(stopThreadSentence(archives));
   // The tick is offered when the agent has children to include or to leave: a plan with neither has nothing to choose.
   const hasChildren = targets.length > 1 || plan.skipped.length > 0;
   return {
@@ -71,6 +98,11 @@ export function stopPlanView(plan: StopPlan): PlanView {
     confirm: "Stop",
   };
 }
+
+/** A retire of an agent on bb archives its thread (the provider's `capabilityMeta` in the receipt says how many). */
+export const RETIRE_ARCHIVES = "Archives its thread in bb.";
+/** What the Desktop's sheet leaves unsaid, and a person must know before confirming. */
+export const RETIRE_FOR_GOOD = "This cannot be undone: a retired agent cannot be started again.";
 
 /** Whether `work/` is the agent's own tree: the kernel's fact, else (a kernel that does not say) the record's work mode. */
 const treeOf = (plan: RetirePlan) => {
@@ -88,9 +120,6 @@ const workText = (plan: RetirePlan) => {
   return [changed > 0 ? `${changed} changed` : null, untracked > 0 ? `${untracked} untracked` : null].filter((part) => part !== null).join(", ");
 };
 
-/** Whether the retire plan offers "Also delete the worktree": only for the agent's own tree. */
-export const offersDiscard = (plan: RetirePlan): boolean => treeOf(plan).own;
-
 export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): PlanView {
   const tree = treeOf(plan);
   const branch = branchOf(plan);
@@ -101,6 +130,7 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
   else if (plan.session === "unknown") happens.push("Stops its session, if one is running (its state couldn't be checked).");
   if (plan.children.length > 0) happens.push(`Stops its ${plural(plan.children.length, "child instance")} first: ${names(plan.children)}. They are kept, with their homes.`);
   happens.push("Saves a recovery copy of any uncommitted work, then deletes its home folder.");
+  if (plan.backend === "bb") happens.push(RETIRE_ARCHIVES);
   if (tree.notOwn) kept.push("It has no worktree of its own, so no worktree is kept or deleted. A tree it links to is not touched.");
   else if (tree.unchecked) (discardWorktree ? happens : kept).push(discardWorktree ? "Deletes its worktree, if there is one. It couldn't be checked." : "Keeps its worktree, moved aside, if there is one. It couldn't be checked.");
   else if (tree.own) {
@@ -119,6 +149,8 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
   }
   kept.push("Branches and pull requests are not changed.");
   if (plan.children.length > 0) happens.push("If a child won't stop, nothing is retired.");
+  // The last thing said of what will happen: there is no way back from it.
+  happens.push(RETIRE_FOR_GOOD);
   if (!tree.notOwn && plan.work.observed && plan.work.drift) {
     attention.push(`The worktree is on ${plan.work.detached ? "a detached commit" : (plan.work.branch ?? "another branch")}, not the branch it was spawned on${plan.recordedBranch ? ` (${plan.recordedBranch})` : ""}.`);
   }
@@ -172,6 +204,39 @@ export const CHECKING_AGAIN = "Checking again…";
 export const applying = (verb: PlanVerb, instance: string) =>
   verb === "retire" ? `Retiring ${agentName(instance)}. This can take up to a minute while sessions stop.` : `Stopping ${agentName(instance)}. This can take up to a minute.`;
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
+/**
+ * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
+ * in it, whether each session runs, who is in the middle of a task; for a retire also its work and
+ * its children. Empty when nothing a person is shown differs (the kernel's revision moved for a
+ * fact the plan does not draw): the notice then says so.
+ */
+export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan): string[] {
+  const lines: string[] = [];
+  const was = (value: keyof typeof SESSION) => SESSION[value].toLowerCase();
+  if (before.action === "stop" && after.action === "stop") {
+    const earlier = new Map(before.targets.map((target) => [target.instance, target]));
+    const later = new Map(after.targets.map((target) => [target.instance, target]));
+    for (const [instance, target] of later) {
+      const old = earlier.get(instance);
+      if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
+      else {
+        if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
+        if (old.midTask !== true && target.midTask === true) lines.push(`${agentName(instance)} now reports it is in the middle of a task.`);
+        if (old.midTask === true && target.midTask !== true) lines.push(`${agentName(instance)} no longer reports it is in the middle of a task.`);
+      }
+    }
+    for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);
+  } else if (before.action === "retire" && after.action === "retire") {
+    if (before.session !== after.session) lines.push(`Its session was ${was(before.session)}, and is now ${was(after.session)}.`);
+    if (workText(before) !== workText(after)) lines.push(`Its uncommitted work was: ${workText(before).toLowerCase()}. It is now: ${workText(after).toLowerCase()}.`);
+    if (branchOf(before) !== branchOf(after)) lines.push(`Its worktree is now on ${branchOf(after) ?? "no branch"}.`);
+    for (const child of after.children) if (!before.children.includes(child)) lines.push(`${agentName(child)} is now one of its children.`);
+    for (const child of before.children) if (!after.children.includes(child)) lines.push(`${agentName(child)} is no longer one of its children.`);
+  }
+  return lines;
+}
+export const NOTHING_SHOWN_CHANGED = "Nothing shown here differs: OATS read the plan again, and it is the one below.";
+export const REVIEW_FIRST = "Read what changed, then press Review again.";
 export const REPLAYED = "This is the result already recorded for this confirmation; nothing ran again.";
 
 // ---- an outcome: a result, a refusal, or neither known ----
@@ -188,8 +253,6 @@ export type Outcome = {
   details: string | null;
   /** What the dialog offers beside Close: read a new plan (Review again), ask for the answer to what was sent (Check again), read the agent's status again (Refresh status). */
   offers: readonly ("review" | "check" | "refresh")[];
-  /** The agent is not in OATS any more (a plan refused with E_SESSION_UNKNOWN). */
-  gone?: boolean;
 };
 
 /** One row of a stop's results, or of a retire's stopped children: its line, after its name. */
@@ -202,12 +265,13 @@ export function stoppedRowText(row: StoppedRow): string {
 const rowLines = (rows: readonly StoppedRow[]) => rows.map((row) => `${agentName(row.instance)}: ${stoppedRowText(row)}`);
 const quotes = (rows: readonly StoppedRow[]) => rows.flatMap((row) => (row.detail === null ? [] : [`${row.instance}: ${row.detail}`]));
 
-export function stopOutcome(receipt: StopReceipt, instance: string): Outcome {
+/** `onBb`: some session of the plan runs on bb, so the result says what a stop means for its thread (`archives`: as for the plan). */
+export function stopOutcome(receipt: StopReceipt, instance: string, onBb = false, archives = false): Outcome {
   const replay = receipt.replayed ? [REPLAYED] : [];
   const details = quotes(receipt.results).join("\n") || null;
   if (receipt.ok) {
     const title = receipt.results.length > 1 ? `${receipt.results.length} sessions stopped` : `${agentName(instance)} stopped`;
-    return { tone: "done", title: `${title}.`, lines: [...rowLines(receipt.results), ...replay], code: null, details, offers: [] };
+    return { tone: "done", title: `${title}.`, lines: [...rowLines(receipt.results), ...(onBb ? [stopThreadSentence(archives)] : []), ...replay], code: null, details, offers: [] };
   }
   return { tone: "failed", title: "Not every session stopped", lines: [...rowLines(receipt.results), "Nothing was forced.", ...replay], code: "E_SESSION_STOP_FAILED", details, offers: ["review"] };
 }
@@ -226,6 +290,7 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   if (receipt.worktree === "retained") lines.push(`Worktree kept${receipt.movedTo ? ` at ${receipt.movedTo}` : ""}.`);
   if (receipt.worktree === "removed") lines.push("Worktree deleted.");
   if (receipt.recoveryPath !== null) lines.push(`Recovery copy saved at ${receipt.recoveryPath}`);
+  if (receipt.threadsArchived > 0) lines.push("Its thread is archived in bb.");
   if (receipt.compensation !== null) {
     const { branch, deleted, reason } = receipt.compensation;
     lines.push(deleted ? `Branch ${branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${branch} kept: ${reason ?? "no reason given"}`);
@@ -282,6 +347,11 @@ const unidentified = (verb: Verb) =>
     : "OATS couldn't find or read what it needs in this instance's home folder, so nothing was done.";
 
 export type Refusal = { code: string | null; message: string };
+/** The kernel's own line under its name, as the Desktop quotes a refusal: the first line of its message (the display filter draws it). Nothing for an empty message. */
+export const oatsSays = (message: string): string[] => {
+  const line = message.split(/[\n\u2028\u2029]/).find((part) => part.trim() !== "");
+  return line === undefined ? [] : [`OATS says: ${line.trim()}`];
+};
 
 /** A plan that could not be read. `gone`: the kernel does not know the name (E_SESSION_UNKNOWN on a plan, and nothing else). */
 export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, gone: boolean): Outcome {
@@ -294,11 +364,10 @@ export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, 
       code: refusal.code,
       details: refusal.message,
       offers: [],
-      gone: true,
     };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
-  return { tone: "failed", title: `Couldn't check what ${verb === "retire" ? "retiring" : "stopping"} ${name} will do`, lines: [sentence, "Nothing was changed."], code: refusal.code, details: refusal.message, offers: ["review"] };
+  return { tone: "failed", title: `Couldn't check what ${verb === "retire" ? "retiring" : "stopping"} ${name} will do`, lines: [sentence, ...(sentence === UNDESCRIBED ? oatsSays(refusal.message) : []), "Nothing was changed."], code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
 /** An apply that was refused, or whose answer was lost. */
@@ -308,12 +377,14 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal)
     return { tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
-  const lines = refusal.code === "E_LIFECYCLE_BUSY" ? [sentence, "Details has what OATS says to check."] : [sentence];
+  // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
+  const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED ? [sentence, ...oatsSays(refusal.message)] : [sentence];
   return { tone: "failed", title: `${name} wasn't ${verb === "retire" ? "retired" : "stopped"}`, lines, code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
 // ---- Start and Restart ----
 
+export { FULL_MODE };
 export const START = {
   continues: "Continue in this instance’s existing home, with its identity, work and notes.",
   fresh: "This starts a new conversation using the saved briefing and state.",
@@ -367,9 +438,12 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   if (code === "E_UNIDENTIFIED_INSTANCE_HOME") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [unidentified(verb)]);
   if (code === "E_BACKEND_HARNESS" || code === "E_UNSUPPORTED_HARNESS") return of("failed", `OATS refused to ${act} ${name} on this harness`, ["Choose another under Harness, or keep the recorded one."]);
   if (code === "E_MODEL_UNKNOWN") return of("failed", `OATS refused to ${act} ${name} with this model`, [`Change it under “${START.model}”, or leave the field blank.`]);
-  // Any other answer of the kernel's: a person's words first, its own message one press away.
+  // Any other answer of the kernel's: a person's words first, then the kernel's own line under its
+  // name, as the Desktop quotes it ("OATS says: …"); the whole message and the code stay under Details.
   // What it did is not known for sure (the Desktop reads every other code as uncertain): the status is read again first.
-  return of("failed", `OATS refused to ${act} ${name}`, [code === null ? NO_CODE : (TRANSPORT[code] ?? "Details has what OATS says. Refresh its status before another try.")]);
+  if (code === null) return of("failed", `OATS refused to ${act} ${name}`, [NO_CODE]);
+  if (TRANSPORT[code] !== undefined) return of("failed", `OATS refused to ${act} ${name}`, [TRANSPORT[code]!]);
+  return of("failed", `OATS refused to ${act} ${name}`, [...oatsSays(refusal.message), "Refresh its status before another try."]);
 }
 
 // ---- an act that cannot run from where it was asked (a key, a command) ----

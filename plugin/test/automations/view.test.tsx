@@ -348,7 +348,7 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
     expect(fresh.queryByTestId("oats-stale")).toBeNull();
     cleanup();
     const again = page({ refreshing: true, schedule: { ...ready(schedules()), readAt: new Date(NOW - 5e3).toISOString() } });
-    expect(again.getByTestId("oats-stale").textContent).toBe("Refreshing… showing what was read just now.");
+    expect(again.getByTestId("oats-stale").textContent).toBe("Refreshing… showing what was read less than a minute ago.");
     expect(again.rows()).toHaveLength(11);
     expect((again.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
   });

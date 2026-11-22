@@ -67,7 +67,7 @@ test("a running agent says Working, as the tree and the thread do, and since whe
   const running = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: true, waiting: null }) });
   await running.findByTestId("oats-panel-work");
   // started 18:13:36Z, read at 18:29:30Z
-  expect(stateOf(running)).toBe("Working");
+  expect(stateOf(running)).toBe("Working· session started 18:13");
   // started 18:13:36Z, read at 18:29:30Z: a labelled fact of the session
   expect(text(running.getByTestId("oats-panel-started").closest('[data-testid="oats-fact"]')!)).toBe("Started16 min ago");
   running.unmount();
@@ -283,7 +283,7 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
     sidebarThreads: panelThreads(agents),
   });
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
-  expect(stateOf(slot)).toBe("Working");
+  expect(stateOf(slot)).toBe("Working· session started 18:13");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
 });
 
@@ -363,7 +363,7 @@ test("an agent whose session fell back to a shell says Failed, and one the kerne
   shell.unmount();
   const unreachable = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable" }) });
   await unreachable.findByTestId("oats-panel-work");
-  expect(stateOf(unreachable)).toBe("Unreachable");
+  expect(stateOf(unreachable)).toBe("Unreachable· OATS cannot reach its session");
   unreachable.unmount();
   // The same words for an agent with no thread: a fallback shell is Failed there too, and a pane that is gone Stopped.
   const byName = (change: Partial<Agent>) => {
@@ -392,7 +392,7 @@ test("an agent on tmux shows a claim only while the kernel says it runs: one it 
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-work");
-  expect(stateOf(slot)).toBe("Unreachable");
+  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
@@ -673,7 +673,7 @@ test("the panel draws within the part of bb's side panel that is in the window, 
 test("an unreachable agent: what OATS says of its session is in the header, once, and not again in the Session card", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }), facts: (facts) => ({ ...facts, runtimeError: "bb did not answer" }) });
   await slot.findByTestId("oats-panel-session");
-  expect(stateOf(slot)).toBe("Unreachable· OATS says: bb did not answer");
+  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
   expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
 });
 

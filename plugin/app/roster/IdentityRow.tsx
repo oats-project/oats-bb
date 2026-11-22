@@ -2,6 +2,8 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { usePanelEvents } from "../panel/read";
+import { agentName } from "../ui/words";
 import {
   experimental_useAppPanel as useAppPanel,
   experimental_usePluginId as usePluginId,
@@ -10,18 +12,16 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
-import { count } from "../format";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
+import { Button, Disclosure, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { asOf } from "../ui/words";
-import { openSoul } from "../workspace/pages";
+import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus, rowState } from "./status";
-import { failureWords } from "./unreadable";
+import { agentStatus, rowState, stoppedSince } from "./status";
+import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -52,7 +52,14 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const panel = useAppPanel();
   const rpc = useRpc<Contract>();
   const pluginId = usePluginId();
+  const soulsShown = usePageShown("souls");
   const now = useNow();
+  // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
+  // the instance panel reads too. Asked for this thread's agent alone, and only while it is
+  // stopped; a hook, so it is called at every render, before any early return.
+  const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
+  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
+  const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -67,7 +74,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return null; // not an OATS agent: take no space
 
   const { agent } = node;
-  const status = agentStatus(agent, node.thread, now);
+  const read = agentStatus(agent, node.thread, now);
+  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, now) } : read;
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;
@@ -82,18 +90,21 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       if (!openAgentPage(navigate, agent.instance)) navigate.toPluginPanel("home");
     } else if (!panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
   };
+  // While the roster is the last one read the OATS acts are held (the Desktop's rule): the act
+  // stays in its place, off, with the reason; the notice under the line has Retry.
+  const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
   const act =
     status.state === "stopped" ? (
-      <Button data-testid="oats-status-act" onClick={() => void run("start", agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
         Start
       </Button>
     ) : status.state === "error" ? (
-      <Button data-testid="oats-status-act" onClick={() => void run("restart", agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("restart", agent.instance, rpc, navigate)}>
         Restart
       </Button>
-    ) : status.state === "unreachable" ? (
+    ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>
         Retry
       </Button>
@@ -101,34 +112,63 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // The kernel has since refused this agent as one it does not know: the row says that, with no act,
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
-  // What is shown is the last roster read while OATS cannot be read: the line says how old it is.
-  const stale = oats.stale === null ? null : asOf(oats.stale.at, now);
+
+  // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
+  // the act that applies (B2): the line's height does not change with the state.
+  const panelButton = (
+    <Button data-testid="oats-open-panel" title="Open this agent's instance panel" onClick={openPanel}>
+      Instance panel
+    </Button>
+  );
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {gone ? (
-        <StatusLine {...rowState(status, true)} detail={["OATS has no agent of this name now", stale].filter((part) => part !== null).join(" · ")} />
+        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={panelButton} />
       ) : (
-        <StatusLine state={status.state} since={status.since} detail={[status.detail, stale].filter((part) => part !== null).join(" · ") || null} action={act} />
+        <StatusLine
+          state={status.state}
+          since={status.since}
+          detail={status.detail}
+          action={
+            <>
+              {act}
+              {panelButton}
+            </>
+          }
+        />
       )}
+      {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
+      {gone || status.kernel === null || shown(status.kernel) === "" ? null : (
+        <Disclosure summary="Details" testId="oats-status-kernel">
+          <p className="text-xs text-muted-foreground">{`OATS says: ${shown(status.kernel)}`}</p>
+        </Disclosure>
+      )}
+      {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
+      {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <RowFact label="Soul" testId="oats-fact-soul">
-          <a
-            href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
-            className={LINK}
-            onClick={(event) => {
-              if (!plainClick(event)) return;
-              event.preventDefault();
-              openSoul(navigate, soul);
-            }}
-          >
-            {shown(soul)}
-          </a>
+        <RowFact label="instance of" testId="oats-fact-soul">
+          {/* A link to the soul's page where that page is shown in this release; else its name alone: no link leads nowhere. */}
+          {soulsShown ? (
+            <a
+              href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
+              className={LINK}
+              onClick={(event) => {
+                if (!plainClick(event)) return;
+                event.preventDefault();
+                openSoul(navigate, soul);
+              }}
+            >
+              {shown(soul)}
+            </a>
+          ) : (
+            shown(soul)
+          )}
         </RowFact>
         {agent.parent !== null ? (
-          <RowFact label="Under" testId="oats-fact-parent">
+          <RowFact label="Parent" testId="oats-fact-parent">
             {parentThread === undefined ? (
-              shown(agent.parent)
+              agentName(agent.parent)
             ) : (
               <a
                 href={parentThread.href}
@@ -139,34 +179,25 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
                   navigate.toThread(parentThread.id);
                 }}
               >
-                {shown(agent.parent)}
+                {agentName(agent.parent)}
               </a>
             )}
           </RowFact>
         ) : agent.human !== null ? (
-          <RowFact label="Started by" testId="oats-fact-parent">
+          <RowFact label="Owning human" testId="oats-fact-parent">
             {shown(agent.human)}
           </RowFact>
         ) : null}
         {children > 0 ? (
-          <span data-testid="oats-fact-children" className="text-muted-foreground">
-            {count(children, "child", "children")}
-          </span>
+          <RowFact label="Children" testId="oats-fact-children">
+            {String(children)}
+          </RowFact>
         ) : null}
         {identity === null ? null : (
-          <RowFact label={agent.team === null ? "Identity" : `Identity in ${shown(agent.team)}`} testId="oats-fact-identity">
+          <RowFact label="Messaging ID" testId="oats-fact-identity">
             {shown(identity)}
           </RowFact>
         )}
-        <button
-          type="button"
-          data-testid="oats-open-panel"
-          title="Open this agent's panel"
-          className={`${TARGET} ml-auto inline-flex shrink-0 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent`}
-          onClick={openPanel}
-        >
-          OATS
-        </button>
       </div>
     </div>
   );

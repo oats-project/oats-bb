@@ -111,21 +111,26 @@ test("with no roster ever read, every thread's menu has one entry, off, that say
   }
 });
 
-test("while OATS cannot be read after it was, the acts stay for the agents of the last roster, each saying how old that is", async () => {
+// The lead's ruling R4 (2026-11-22) reversed "acts are offered as of <age>": on a roster that is
+// the last one read the OATS acts are HELD, as on the Desktop (D-085).
+test("while OATS cannot be read after it was, the acts stay in the menu, off, each with when it comes back; nothing runs", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const stale = () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last });
-  const { shown, item } = await menu("thr_redesign", { snapshot: stale });
+  const { shown, item, slot } = await menu("thr_redesign", { snapshot: stale });
   expect(shown()).toEqual(["stop", "restart", "retire"]);
-  for (const id of ["stop", "restart", "retire"]) expect(item(id)).toMatchObject({ detail: "as of 2 min ago" });
-  expect(item("stop")!.disabled).toBeUndefined();
+  for (const id of ["stop", "restart", "retire"]) expect(item(id)).toMatchObject({ disabled: true, detail: "Comes back when OATS is read again" });
+  await item("stop")!.run({ requestRename: () => {} });
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(slot.inspection.rpcCalls.map((call) => call.method)).not.toContain("stopPlan");
   resetApp();
   // A thread that was no agent's has none, and no "can't be read" entry either: the roster is known, as of then.
   expect((await menu("thr_plain", { snapshot: stale })).shown()).toEqual([]);
 });
 
-test("with the roster just read the acts carry no age", async () => {
+test("with the roster just read the acts are on, with nothing beside them", async () => {
   const { item } = await menu("thr_redesign");
   expect(item("stop")!.detail).toBeUndefined();
+  expect(item("stop")!.disabled).toBeUndefined();
 });
 
 test("while the first read is in flight the menu says so only once it has taken more than a second", async () => {
@@ -163,7 +168,7 @@ test("Stop shows the kernel's plan; Confirm calls stopPlan then stopApply with t
   expect(slot.queryByRole("dialog")).toBeNull();
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  expect(dialog.textContent).toContain("Stop redesign-ui-lead?");
+  expect(dialog.textContent).toContain("Stop Redesign ui lead?");
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Stops the bb thread thr_redesignKeeps the home and its identity"));
   expect(calls(slot, "stopPlan", "stopApply").map((call) => call.method)).toEqual(["stopPlan"]); // asked once, nothing applied
 
@@ -271,7 +276,7 @@ test("Retire shows the kernel's plan and applies it with its revision", async ()
   });
   expect(label("retire")).toBe("Retire agent (OATS)");
   await pick("retire");
-  expect((await slot.findByRole("dialog")).textContent).toContain("Retire weekly-digest-helper?");
+  expect((await slot.findByRole("dialog")).textContent).toContain("Retire Weekly digest helper?");
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the homeKeeps the branch agents/weekly-digest-helper"));
   fireEvent.click(slot.getByTestId("oats-plan-confirm"));
   await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
@@ -313,7 +318,7 @@ test("a Start that fails while a plan dialog is open does not replace it: the fa
   await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the home"));
   fail(new Error("E_SESSION_START_FAILED: the harness did not come up"));
   await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire weekly-digest-helper?"); // still the plan
+  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?"); // still the plan
   expect(slot.queryByRole("alert")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-plan-cancel"));
   expect((await slot.findByRole("alert")).textContent).toBe("E_SESSION_START_FAILED: the harness did not come up");
@@ -332,7 +337,7 @@ test("a Start that succeeds after the person opened a plan dialog leaves their s
   await slot.findByRole("dialog");
   done({ threadId: "thr_digest_2" });
   await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire weekly-digest-helper?");
+  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?");
   expect(slot.inspection.navigateCalls).toEqual([]);
 });
 
@@ -372,8 +377,8 @@ test("the confirmation names the agent from the kernel's plan, not from the row 
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => ({ revision: "r1", lines: ["Stop design-lead-2: running"], instance: "design-lead-2" }) });
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop design-lead-2?"));
-  expect(dialog.textContent).not.toContain("redesign-ui-lead?");
+  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Design lead 2?"));
+  expect(dialog.textContent).not.toContain("Redesign ui lead?");
 });
 
 test("until the plan is read the confirmation names no agent", async () => {
@@ -384,7 +389,7 @@ test("until the plan is read the confirmation names no agent", async () => {
   const dialog = await slot.findByRole("dialog");
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop an agent");
   release();
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop redesign-ui-lead?"));
+  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?"));
 });
 
 test("an agent the kernel no longer knows: its refusal is a notice in the confirmation, nothing can be confirmed, and its row says so until the next roster", async () => {
@@ -396,7 +401,7 @@ test("an agent the kernel no longer knows: its refusal is a notice in the confir
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
   const notice = await within(dialog).findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("redesign-ui-lead is not in OATS any more");
+  expect(notice.querySelector("h3")!.textContent).toBe("Redesign ui lead is not in OATS any more");
   expect(notice.textContent).toContain("Nothing was changed.");
   expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
   expect((within(dialog).getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(true);

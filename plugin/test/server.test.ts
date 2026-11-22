@@ -221,6 +221,26 @@ describe("snapshot", () => {
     expect(failed.machine).toBe("falcon"); // the machine it looked on, by the name bb gives it
   }, 20_000);
 
+  it("a read in flight across a settings change keeps nothing: a client waits for the new deployment's answer, and an act is refused, never given the old deployment's home", async () => {
+    // The old deployment is read and held in its status call; the settings then name a directory that
+    // holds no deployment; the old read answers after that.
+    expect((await rpc("snapshot")).ok).toBe(true);
+    await fake.behave({ status: { sleepMs: 2_000 } });
+    const before = (await verbs()).length;
+    const reading = rpc("refresh"); // a read is asked; it is in flight under the old settings
+    await expect.poll(async () => (await verbs()).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(before + 1);
+    await server.harness.setSettings({ deployment: join(fake.deployment, "agents") }); // holds no oats-local.yaml
+    // What a client is answered next is the new deployment's: never the old roster.
+    const next = await rpc("snapshot");
+    expect([next.ok, next.code]).toEqual([false, codes.noDeployment]);
+    expect(next.last).toBeNull();
+    // An act asked now is refused with why; no `oats session start` ran for the old deployment's home.
+    await expect(rpc("start", { instance: "redesign-ui-lead" })).rejects.toThrow(/No OATS deployment found/);
+    expect((await verbs()).slice(before)).not.toContain("start");
+    await reading.catch(() => undefined); // the old read's own answer is nobody's
+    expect((await rpc("snapshot")).code).toBe(codes.noDeployment);
+  }, 30_000);
+
   it("asks to choose a machine when the server has several and none is set", async () => {
     await server.harness.dispose();
     hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" }), makeHostResponse({ id: "host_kite", name: "kite" })];

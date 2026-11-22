@@ -13,7 +13,7 @@ ARG BB_APP_VERSION
 ARG PI_VERSION=1.5.2
 ARG CLAUDE_CODE_VERSION=2.1.328
 # The kernel and its pi bridge, one version: the provider's floor.
-ARG OATS_VERSION=0.70.0
+ARG OATS_VERSION=0.70.2
 # The aweb extension for pi: what must NOT be in the pi configuration bb's server runs
 # with. It is installed into a second configuration, for the readiness check to refuse.
 ARG AWEB_PI_VERSION=0.5.0

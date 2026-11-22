@@ -85,18 +85,22 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   const oats = useOats();
   const tab = useShownTab();
   const key = threadId ?? instance ?? "";
-  const last = useRef<Shown | null>(null);
+  // The agent last shown is kept in state, set while drawing when the roster names another one: what
+  // a draw shows is then what the roster says at that draw, and nothing is written to a ref on the way.
+  const [last, setLast] = useState<Shown | null>(null);
+  let held = last;
   if (oats.phase === "ready") {
     const node = threadId !== undefined ? oats.nodeByThread.get(threadId) : instance !== undefined ? oats.nodeByInstance.get(instance) : undefined;
     const agent = node?.agent ?? (instance === undefined ? undefined : oats.agents.find((candidate) => candidate.instance === instance));
     // What the roster says now, also when it says the agent is gone.
-    last.current = agent === undefined ? null : { key, agent, node };
-  } else if (known !== undefined && last.current?.key !== key) {
-    last.current = { key, agent: known, node: undefined };
+    held = agent === undefined ? null : last !== null && last.key === key && last.agent === agent && last.node === node ? last : { key, agent, node };
+    if (held !== last) setLast(held);
+  } else if (known !== undefined && last?.key !== key) {
+    held = { key, agent: known, node: undefined };
+    setLast(held);
   }
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const visible = useVisibleWidth(root);
-  const held = last.current;
   // Another thread or name than the one held: nothing of that agent is known yet.
   if (held === null || held.key !== key) return null;
   const roster: Roster = {

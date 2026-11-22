@@ -675,16 +675,19 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   // In the tab, Home › Agents is a view of the tab itself: it has no address of its own.
   const [agents, setAgents] = useState(false);
   const AgentTab = getAgentTab();
+  const ready = oats.phase === "ready";
+  const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
+  // What the tab remembers of the agent on this thread is noted after the drawing: the agent the
+  // roster names there, or, once the roster was read and names none (it was retired, or the
+  // deployment changed), nothing.
+  useEffect(() => {
+    if (AgentTab === null || !ready) return;
+    if (node !== undefined) rememberAgent(threadId, node.agent);
+    else forgetAgent(threadId);
+  }, [AgentTab, ready, node, threadId]);
   if (AgentTab !== null) {
-    if (oats.phase === "ready") {
-      const node = oats.nodeByThread.get(threadId);
-      if (node !== undefined) {
-        rememberAgent(threadId, node.agent);
-        return <AgentTab agent={node.agent} threadId={threadId} />;
-      }
-      // The roster was read and names no agent on this thread (it was retired, or the deployment
-      // changed): what the tab remembered of it is forgotten.
-      forgetAgent(threadId);
+    if (ready) {
+      if (node !== undefined) return <AgentTab agent={node.agent} threadId={threadId} />;
     } else {
       // The roster cannot be read now: the agent this thread was keeps its view (agent-tab.ts).
       const last = rememberedAgent(threadId);

@@ -106,7 +106,10 @@ function usePanelRead<Method extends PanelMethod>(
       endedAt.set(key, Date.now());
       setEnded((n) => n + 1);
     });
-  reread.current = retry;
+  // Kept for the effect that reads again when what the read depends on changed: noted after the drawing, as every ref here.
+  useEffect(() => {
+    reread.current = retry;
+  });
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };
   if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching, readAt };
   return { status: "ready", data, error: null, retry, fetching, readAt };

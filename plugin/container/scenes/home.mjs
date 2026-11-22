@@ -8,6 +8,9 @@
 //   home-empty   a workspace with no agent
 //   home-stale   OATS cannot be read after it was: the roster as last read, its acts held
 //
+// In `fixtures` also: the installed oats older than the plugin works with, one that speaks a newer
+// desktop API, one of a later minor than the plugin was tested with.
+//
 // A scene that opens, presses or changes something waits on what it then reads, and a failing
 // check prints what it read (`printing`). Every image is measured (`sound`): nothing the home
 // draws is past the window's edge, no word is broken across two lines, no two controls overlap,
@@ -18,6 +21,8 @@ import { fileURLToPath } from "node:url";
 import { fill, testId, textOf, texts } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
+/** The recorded `oats version --json`, for a scene that changes what is installed. */
+const VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "version.json"), "utf8"));
 const STATUS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "status.json");
 const HOME = "/plugins/oats/home";
 const PAGE = testId("oats-home-page");
@@ -198,6 +203,51 @@ export default [
         setVerb("teams", null);
         refresh();
       }
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "the installed oats against what the plugin is built for: the card, the card with no command, the one line",
+    run: async ({ page, at, viewport, check: plain }) => {
+      const check = printing(plain);
+      /** What the fake `oats version --json` answers from now on; the server's kept answer is dropped by a refresh. */
+      const installed = (fields) => {
+        setVerb("version", fields === null ? null : { stdout: JSON.stringify({ ...VERSION, ...fields }) });
+        refresh();
+      };
+      const cardText = `(() => { const card = document.querySelector(${JSON.stringify(within("oats-home-cli"))}); return card ? card.getAttribute("data-state") + " | " + card.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
+      try {
+        // older than the plugin works with
+        installed({ version: "0.69.4" });
+        check(await open(page, within("oats-home-cli")), `${at} an oats older than the plugin works with draws the card`, await page.evaluate(textOf(PAGE)));
+        const older = await page.evaluate(cardText);
+        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes("Required 0.70.0 or newer, with desktop API 1") && older.includes("npm install -g @awebai/oats@0.70") && /Copy$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
+        check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
+        await sound(page, viewport, check, at, "the CLI card");
+        await page.shot(`home-${viewport.name}-cli-older`);
+
+        // its answers are of a later version than the plugin reads
+        installed({ version: "0.74.0", desktopApi: 2 });
+        check(await open(page, within("oats-home-cli")), `${at} an oats that speaks a newer desktop API draws the card`, await page.evaluate(textOf(PAGE)));
+        const newerApi = await page.until(`(() => { const text = ${cardText}; return text.startsWith("newer-api") ? text : ""; })()`, 15);
+        check(Boolean(newerApi) && newerApi.includes("This plugin is older than the installed oats CLI") && newerApi.includes("The installed oats CLI is 0.74.0, which speaks a newer desktop API (2) than this plugin's (1). Update the OATS plugin to use it.") && !newerApi.includes("npm"), `${at} the card names the plugin as the older one, and offers no npm command`, newerApi ?? (await page.evaluate(cardText)));
+        await sound(page, viewport, check, at, "the newer-API card");
+        await page.shot(`home-${viewport.name}-cli-newer-api`);
+
+        // of a later minor than the plugin was tested with
+        installed({ version: "0.71.2" });
+        check(await open(page, within("oats-home-cli-line")), `${at} an oats of a later minor draws the one line`, await page.evaluate(textOf(PAGE)));
+        const line = await page.evaluate(textOf(within("oats-home-cli-line")));
+        check(line === "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2." && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null`)) === true, `${at} one line, and no card`, line);
+        await sound(page, viewport, check, at, "the tested-up-to line");
+        await page.shot(`home-${viewport.name}-cli-newer`);
+      } finally {
+        installed(null);
+      }
+      // the recorded oats again: a tested one says nothing
+      check(await open(page, within("oats-home-needs")), `${at} the home draws again`, await page.evaluate(textOf(PAGE)));
+      const quiet = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-summary"))}) !== null`, 15);
+      check(Boolean(quiet), `${at} with the tested oats the home says nothing of the CLI`, await page.evaluate(textOf(PAGE)));
     },
   },
   {

@@ -106,6 +106,26 @@ the OATS Desktop's Home: what needs you first, then what you have.
 | **Home › Agents** | `/plugins/oats/home/agents` (in the tab, a view of the tab): **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its soul and machine, its state in words and who started it ("started by Ana": the person OATS attributes it to, else its parent), and **Back to Home** (Esc does the same) |
 | an empty workspace | what OATS does in two lines, and **New agent** |
 
+**The installed `oats`.** The home says where the installed `oats` stands against what the plugin
+is built for (`kernel/compat.ts`: the oldest OATS it works with, the newest minor it was tested
+with, the version of the kernel's JSON answers it reads), and only the home says it:
+
+| The installed `oats` | The home shows |
+|---|---|
+| from the floor up to the tested minor | nothing |
+| older than the floor, or its version cannot be read | a card, **Compatible oats CLI required**: what was detected, what is required, and the command to copy (`npm install -g @awebai/oats@<tested minor>`); the home's New agent is off behind it, with why |
+| its JSON answers are of a later version than the plugin reads (`desktopApi`) | a card, **This plugin is older than the installed oats CLI**, with no npm command: the plugin is what to update |
+| of a later minor than the plugin was tested with | one line, "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2."; no act is turned off |
+
+It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the
+`oats version --json` the server reads once for every feature: no process of its own. An `oats`
+that cannot be run at all is the roster's notice, not this one.
+
+**The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
+shows (the plugin's setting `pages`; the default is `home` alone, and then the tiles are **Agents**
+only), and reads a page's count only then. New agent on the empty home is offered where it has
+somewhere to open.
+
 An agent with no thread in bb (it runs in tmux, or its thread was archived or deleted) that needs
 you has its card too: what it asks, "Runs in tmux: answer it in its terminal." in place of the
 reply (nothing can be sent to it from bb), and Open, which leads to the agent's own page.

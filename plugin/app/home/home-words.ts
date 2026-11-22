@@ -56,6 +56,7 @@ export const SEND = "Send";
 export const SENDING = "Sending…";
 export const sentTo = (name: string): string => `Sent to ${name}.`;
 export const NOT_SENT = "The message was not sent";
+export const NOT_ANSWERED = "The answer was not sent";
 /** Why a card's acts are off while the roster shown is not a current one (the standard: acts are held on stale data). */
 export const HELD = "Held until OATS is read again: what is shown may have changed.";
 /** An agent with no bb thread: nothing can be sent to it from bb. */

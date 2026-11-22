@@ -25,16 +25,16 @@ import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, r
 import { board } from "./board";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NOTHING_NEEDS_YOU, NOT_SENT, READING, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
+  BACK_TO_HOME, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, READING, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
   replyLabel, replyPlaceholder, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, tileCount, tmuxNote,
 } from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 
-/** The home's navigation badge: how many agents need the person. */
+/** The home's navigation badge: how many agents need the person, the thread-less ones (on tmux, their thread gone) among them, as the home lists them. */
 export function useHomeBadge(): ExperimentalBadge | null {
   const oats = useOats();
-  const n = oats.phase === "ready" ? oats.view.needsYou.length : 0;
+  const n = oats.phase === "ready" ? board(oats.view, 0).needsYou.length : 0;
   return n === 0 ? null : { count: n, tone: "warning", label: needsYouLabel(n) };
 }
 
@@ -42,12 +42,14 @@ onWindowReset(forgetAgents);
 
 type Ready = Extract<Oats, { phase: "ready" }>;
 
-/** Where an agent opens: its bb thread, or, for an agent with none (on tmux, or its thread gone), its own page. */
-function useOpen(): (entry: Entry) => { href?: string; onClick(event: React.MouseEvent): void } {
+/**
+ * Where an agent opens: its bb thread, or, for an agent with none (on tmux, or its thread gone), its
+ * own page. The roster comes from the one `useOats` of the view: a second call would read it again.
+ */
+function useOpen(oats: Ready): (entry: Entry) => { href?: string; onClick(event: React.MouseEvent): void } {
   const navigate = useBbNavigate();
-  const oats = useOats();
   return (entry) => {
-    const thread = entry.thread === null || oats.phase === "failed" || oats.phase === "loading" ? undefined : oats.threadById.get(entry.thread.id);
+    const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
     if (thread === undefined) return { onClick: () => void openAgentPage(navigate as BbNavigate, entry.agent.instance) };
     return {
       href: thread.href,
@@ -61,8 +63,8 @@ function useOpen(): (entry: Entry) => { href?: string; onClick(event: React.Mous
 }
 
 /** An agent's name as words, opening it: a link to its thread, or a button to its page. */
-function AgentName({ entry, testId }: { entry: Entry; testId: string }) {
-  const open = useOpen()(entry);
+function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
+  const open = useOpen(oats)(entry);
   const name = instanceDisplayName(shown(entry.agent.instance));
   const look = `${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-left font-semibold text-foreground`;
   return open.href === undefined ? (
@@ -85,12 +87,12 @@ const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "R
  */
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const sdk = useSdk();
-  const open = useOpen()(entry);
+  const open = useOpen(oats)(entry);
   const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
   const name = instanceDisplayName(shown(entry.agent.instance));
   const [asked, setAsked] = useState<Question | null>(null);
   const [busy, setBusy] = useState<"answer" | "send" | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ kind: "answer" | "send"; message: string } | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [text, setText] = useState("");
   const pending = thread?.hasPendingInteraction === true;
@@ -127,7 +129,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       },
       (cause: unknown) => {
         setBusy(null);
-        setFailure(errorMessage(cause));
+        setFailure({ kind, message: errorMessage(cause) });
       },
     );
   };
@@ -155,7 +157,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <AgentName entry={entry} testId="oats-needs-name" />
+          <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
           <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
@@ -209,7 +211,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             </div>
           </form>
         )}
-        {failure === null ? null : <Notice title={NOT_SENT} tone="error" code={refusalCode(failure)} details={failure} />}
+        {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}
       </Card>
     </li>
   );
@@ -239,7 +241,7 @@ function AgentRow({ entry, oats, testId, startedByToo = false }: { entry: Entry;
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border py-1 first:border-t-0">
       <span className="flex min-w-0 flex-1 flex-col">
-        <AgentName entry={entry} testId="oats-home-agent" />
+        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
         <span className="break-words text-xs text-muted-foreground">
           {[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), entry.thread === null ? elsewhere(entry).toLowerCase() : null, started].filter((part) => part !== null).join(" · ")}
         </span>

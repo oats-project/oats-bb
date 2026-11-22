@@ -74,7 +74,7 @@ export default [
       const line = await statusOf(page, "working");
       const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        line !== null && /^Working( · session started .+)?$/.test(line.line) && line.act === null && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === null && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
         `${at} the row: the state in words and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
         JSON.stringify({ line, facts }),
       );

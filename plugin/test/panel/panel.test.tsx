@@ -67,7 +67,7 @@ test("a running agent says Working, as the tree and the thread do, and since whe
   const running = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: true, waiting: null }) });
   await running.findByTestId("oats-panel-work");
   // started 18:13:36Z, read at 18:29:30Z
-  expect(stateOf(running)).toBe("Working· session started 18:13");
+  expect(stateOf(running)).toBe("Working· started 18:13");
   // started 18:13:36Z, read at 18:29:30Z: a labelled fact of the session
   expect(text(running.getByTestId("oats-panel-started").closest('[data-testid="oats-fact"]')!)).toBe("Started16 min ago");
   running.unmount();
@@ -283,7 +283,7 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
     sidebarThreads: panelThreads(agents),
   });
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
-  expect(stateOf(slot)).toBe("Working· session started 18:13");
+  expect(stateOf(slot)).toBe("Working· started 18:13");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
 });
 

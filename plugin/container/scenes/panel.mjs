@@ -825,7 +825,7 @@ const more = [
       }
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const running = await page.evaluate(said);
-      check(/^Working(· session started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
+      check(/^Working(· started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
       {
         const started = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-started"))})?.closest(${JSON.stringify(testId("oats-fact"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
         check(/^Started (just now|\d+ (min|h|d) ago|\d{4}-\d\d-\d\d)$/.test(started), `${at} since when it runs is a labelled fact of its session: Started …`, started);

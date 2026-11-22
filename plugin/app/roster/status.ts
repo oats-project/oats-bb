@@ -47,7 +47,7 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
     case "unreachable":
       return { ...base, since: null, detail: UNREACHABLE, kernel: agent.runtimeError };
     case "working":
-      // The one time the kernel records for an agent that works: when its session started, said as
+      // The one time the kernel records for an agent that works: the last time OATS started it, said as
       // what it is (not "since": the turn it works on may be newer).
       return { ...base, since: sessionStarted(agent.startedAt ?? null, now), detail: null };
     default:
@@ -64,11 +64,11 @@ export function rowState(status: AgentStatus, gone: boolean): { state: AgentStat
   return gone ? { state: GONE_MARK, word: GONE_WORD } : { state: status.state, word: status.word };
 }
 
-/** "session started 14:03" (or with its date, as the waiting clock says one); null when the kernel's row names no start that can be read. */
+/** "started 14:03": the last time OATS started it (a spawn, a session start or restart: the row's `startedAt`; a session bb resumed since keeps this time) (or with its date, as the waiting clock says one); null when the kernel's row names no start that can be read. */
 export function sessionStarted(startedAt: string | null, now: number): string | null {
   if (startedAt === null) return null;
   const clock = waitingClock(startedAt, now);
-  return clock === "" ? null : `session started ${clock}`;
+  return clock === "" ? null : `started ${clock}`;
 }
 
 /**

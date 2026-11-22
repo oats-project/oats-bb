@@ -59,10 +59,10 @@ test("an agent that waits says since when and what about; the others say only wh
 // the table): the claim's since for Needs you; the session's start for Working, said as that; the
 // last "stopped" event for Stopped (from the instance's events, for the open thread's row); none
 // for Idle, Failed and Unreachable.
-test("a working agent says when its session started, as that; with no start in the kernel's row, no time", () => {
+test("a working agent says when OATS last started it (the row's startedAt), as \"started <time>\": true before and after a resume by bb; with no start in the kernel's row, no time", () => {
   const now = new Date(2026, 10, 21, 14, 30).getTime();
   const working = fixtureAgents().find((agent) => agent.running === true && agent.waiting === null)!;
-  expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, null, now)).toMatchObject({ state: "working", since: "session started 14:03", detail: null });
+  expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, null, now)).toMatchObject({ state: "working", since: "started 14:03", detail: null });
   expect(agentStatus({ ...working, startedAt: null }, null, now).since).toBeNull();
   expect(agentStatus(working, null, now).since).toBeNull(); // a row with no startedAt
   expect(sessionStarted("not a time", now)).toBeNull();

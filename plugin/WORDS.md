@@ -48,7 +48,7 @@ A time is said only where the kernel recorded one; the plugin invents none.
 | State | The time said | The kernel's fact | Where |
 |---|---|---|---|
 | Needs you | "waiting 12 min (since 14:03)" | the claim's `since` (`oats status`: `waitingOnYou.since`). None when the question is bb's own: OATS recorded no claim. | every place |
-| Working | "session started 14:03" | the row's `startedAt`: when the session started, said as that (the turn it works on may be newer) | every place that draws the status line |
+| Working | "started 14:03" | the row's `startedAt`: the last time OATS started it (a spawn, `session start`, `session restart`). A session bb resumed since (a lost session brought back by a message) keeps this time: the row cannot tell a resume, so the line says what the field is, true before and after one (the turn it works on may be newer). | every place that draws the status line |
 | Stopped | "since 14:03" | the time of the instance's last `stopped` event (`oats instance events`) | the open thread's row: one read for one agent, made again each time the agent is seen to turn stopped; an event older than the session's start is not this stop's, and no time is said. The sidebar's rows and the panel's header say no time. |
 | Idle | none | the kernel records none | |
 | Failed | none; the reason in its place: "Its session ended" | the kernel records none (a session that died wrote nothing) | |

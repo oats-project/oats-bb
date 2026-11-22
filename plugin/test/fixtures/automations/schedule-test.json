@@ -1,0 +1,33 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "test": {
+   "id": "daily-review",
+   "qualifiedId": "local/daily-review",
+   "kind": "spawn",
+   "placement": {
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "runsOn": null,
+    "owner": null,
+    "host": "bb-box"
+   },
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    },
+    "resolves": true,
+    "error": null
+   },
+   "nextDue": "2026-11-23T08:00:00.000Z",
+   "spawned": false,
+   "problems": [],
+   "ok": true
+  }
+ }
+}

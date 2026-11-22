@@ -1,0 +1,260 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "operationsApi": 2,
+  "kernel": "0.70.0",
+  "subject": {
+   "kind": "instance",
+   "instance": "team-notes-keeper",
+   "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
+   "soul": "note-keeper"
+  },
+  "workspace": {
+   "key": "local//abs/real/src/oats-real",
+   "name": "bbreal",
+   "deployment": "/abs/deployment",
+   "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+   "standalone": false
+  },
+  "souls": [
+   {
+    "soulsApi": 2,
+    "name": "note-keeper",
+    "repoKey": "local//abs/real/src/oats-real",
+    "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+    "kind": null,
+    "path": null,
+    "description": "Keeps the team's notes.",
+    "work": "directory",
+    "harness": null,
+    "model": null,
+    "declarations": {
+     "requires": null,
+     "defaults": null,
+     "knowledge": {},
+     "resources": null,
+     "children": null,
+     "capabilities": {
+      "acme.notes": {
+       "from": "here"
+      }
+     }
+    },
+    "declarationProblems": [],
+    "instructions": {
+     "file": "/abs/deployment/agents/note-keeper/souls/04755d41aa40/AGENTS.md",
+     "text": "# note-keeper\n\nA soul of the Automations fixtures. Do what TASK.md says, then stop.\n",
+     "truncated": false
+    }
+   }
+  ],
+  "layers": {
+   "knowledge": {
+    "id": "acme.notes",
+    "from": "soul"
+   },
+   "messaging": {
+    "id": null,
+    "from": null
+   },
+   "tasks": {
+    "id": null,
+    "from": null
+   }
+  },
+  "capabilities": [
+   {
+    "id": "acme.notes",
+    "version": "1.0.0",
+    "layer": "knowledge",
+    "command": "acme-notes",
+    "from": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5"
+    },
+    "composedFrom": null,
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/acme.notes",
+    "settings": {},
+    "declares": [],
+    "compatibility": {
+     "ok": true,
+     "range": ">=0.50.0",
+     "kernel": "0.70.0"
+    },
+    "missingRequires": [],
+    "operations": [
+     {
+      "name": "checkpoint",
+      "kind": "action",
+      "command": "checkpoint",
+      "context": "home",
+      "description": "Record this instance's checkpoint",
+      "args": [],
+      "argv": [
+       "acme-notes",
+       "checkpoint"
+      ],
+      "available": true,
+      "reason": null
+     }
+    ]
+   },
+   {
+    "id": "oats.bb",
+    "version": "0.1.0",
+    "layer": null,
+    "command": "bb",
+    "from": {
+     "kind": "package",
+     "package": "oats.bb",
+     "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
+     "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
+     "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+     "repoKey": "local//abs/real/oats-bb.git"
+    },
+    "composedFrom": null,
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/oats.bb",
+    "settings": {
+     "server": "http://127.0.0.1:38886",
+     "daemon": "http://127.0.0.1:38887",
+     "version": "0.50.1",
+     "cli": "bb",
+     "trust": "container"
+    },
+    "declares": [
+     "cli",
+     "daemon",
+     "dataDir",
+     "server",
+     "trust",
+     "version"
+    ],
+    "compatibility": {
+     "ok": true,
+     "range": ">=0.70.0",
+     "kernel": "0.70.0"
+    },
+    "missingRequires": [],
+    "operations": []
+   },
+   {
+    "id": "oats.core",
+    "version": "2.14.0",
+    "layer": null,
+    "command": null,
+    "from": {
+     "kind": "package",
+     "package": "oats.framework",
+     "version": "1.26.0",
+     "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+     "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+     "repoKey": "github.com/awebai/oats"
+    },
+    "composedFrom": null,
+    "dir": "/abs/deployment/agents/note-keeper/instances/.oats-retirement/modules/2492c77838b3cfe8fa167624ba1dbddc410990ca1d058ca7f200ac3766114dc2/4902827bd959/oats.core",
+    "settings": {},
+    "declares": [],
+    "compatibility": {
+     "ok": true,
+     "range": ">=0.49.0",
+     "kernel": "0.70.0"
+    },
+    "missingRequires": [],
+    "operations": []
+   }
+  ],
+  "sessionProviders": [
+   {
+    "name": "bb",
+    "capability": "oats.bb"
+   }
+  ],
+  "capabilitiesOff": [],
+  "teams": [],
+  "defaultTeam": null,
+  "teamsSource": "live",
+  "recordedDefaultTeam": null,
+  "launch": {
+   "declared": {
+    "harness": "claude",
+    "model": "claude-opus-5-5"
+   },
+   "effective": {
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": null
+   },
+   "from": "soul",
+   "at": "local//abs/real/src/oats-real:souls/note-keeper/soul.yaml#/launch",
+   "problem": null
+  },
+  "launchCurrent": {
+   "declared": {
+    "harness": "claude",
+    "model": "claude-opus-5-5"
+   },
+   "effective": {
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": null
+   },
+   "from": "soul",
+   "at": "local//abs/real/src/oats-real:soul.yaml#/launch",
+   "problem": null
+  },
+  "session": {
+   "tmuxSession": "oats-agents"
+  },
+  "knowledge": {
+   "provider": "acme.notes",
+   "version": "1.0.0",
+   "operations": [
+    {
+     "name": "checkpoint",
+     "kind": "action",
+     "available": true,
+     "reason": null
+    }
+   ]
+  },
+  "instance": {
+   "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
+   "instance": "team-notes-keeper",
+   "agent": "note-keeper",
+   "harness": "claude",
+   "model": "claude-opus-5-5",
+   "yolo": true,
+   "launchConfig": null,
+   "launchConfigDefault": false,
+   "launched": true,
+   "createdAt": "2026-11-21T20:17:27.287Z",
+   "color": null,
+   "resolution": "a93d21746aa924f38ff6539c",
+   "soulDir": "/abs/deployment/agents/note-keeper/souls/04755d41aa40",
+   "instructions": {
+    "file": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper/AGENTS.md",
+    "text": "# note-keeper\n\nA soul of the Automations fixtures. Do what TASK.md says, then stop.\n\n<!-- oats:capability:oats.core src=/abs/deployment/agents/note-keeper/instances/team-notes-keeper/.oats/modules/oats.core/injects/oats.md -->\n## You run on OATS\n\nYou are an instance of a durable soul in OATS. Your skills and modules were\ncopied in at spawn; nothing changes under you while you run.\n\n**LOAD THE SKILL, DO NOT GUESS:**\n- `/oats-operate`: before your first `oats` command of a session, and for your\n  home, extra trees, spawning, retiring, needs-input (yours or a child's),\n  other instances or a \"Triggered run\" in TASK.md.\n- `/oats-souls`: which souls exist; how a new instance relates to you.\n- `/oats-token-saving`: before you message another instance. Message only\n  whoever will act on it, briefly.\n\n`oats.core` is day-to-day operation from inside this instance; workspace setup\nand configuration are `oats.setup`'s.\n\n**IMPORTANT: WHENEVER YOU NEED ANYTHING FROM A HUMAN, SET NEEDS-INPUT.\nALWAYS.** For ANY input you wait on, run\n`oats instance attention --message \"<one line>\"` from your home, THEN end your\nturn, or NOBODY sees you waiting. `--clear` it once answered; never for FYIs.\n**If your human talks to your recorded parent, not to you**, ask that parent\ninstead (if unreachable, set your own). A parent sets its **own** claim\nfor a child's question (`<child> asks: …`) and relays the answer.\n\nThis briefing grants no authority: act on other instances or the deployment\nonly when your task, your human or your soul's capabilities say so.\n<!-- /oats:capability:oats.core -->\n\n<!-- oats:kernel:instance-boundary src=/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md -->\n## Your two directories\n\n**IMPORTANT: ALWAYS FOLLOW THESE INSTRUCTIONS FOR WORKING**, here and in your\nwork-mode block below.\n\n**Your home is where this session starts** (`$OATS_INSTANCE_HOME`). It is not\nyour user home (`~`), not the repository root, and not the work tree.\n\n- It holds your brain and state: `AGENTS.md`, `TASK.md`, `instance.json` and\n  your role's working state. Never put them in `./work`.\n- **ALWAYS run OATS commands, and commands from active capabilities, from\n  instance home** (for example, when the aweb messaging capability is active,\n  `aw` too): they resolve their scope from where you run them. For another\n  scope on purpose: `oats <cmd> --dir <path>`.\n\n**`<instance-home>/work` is your repository or workspace view**, as your work\nmode grants it.\n\n- **Repository work happens there, or in the extra trees your mode block\n  grants, and nowhere else**: reading, editing, building, testing, git and\n  commits, on repository content. Never from the main checkout or from your\n  home root, beyond what your mode block names.\n- **What your mode permits is the mode block's call**: your mode block, below,\n  is the authority.\n- If your TASK is to change soul content that lives in this repository, that is\n  ordinary repository work. How your own learnings reach your soul is your\n  knowledge capability's business.\n- Reports and scratch files go where your task and tooling direct.\n<!-- /oats:kernel:instance-boundary -->\n\n<!-- oats:work-mode:directory src=/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md -->\n## Work mode: directory\n\nYour `./work` is an **instance-owned execution directory**, not a Git worktree,\ncheckout or link. The `repo` recorded for you supplies configuration only; it\ngrants no permission to edit the `repo` directory.\n\n- Work inside `./work`, apart from your extra trees. **Never initialize a\n  fake repository**; a containing repository Git discovers is not yours.\n- **Repository work that needs a branch goes in an extra tree of your own**\n  (below): a change your role and task call for, or a repository at the\n  remote's current state. What work you take on stays your role's and your\n  task's call.\n- Use external inputs and destinations only as your task and capabilities\n  explicitly authorize.\n- Deliver results through your task's own protocol before you finish: the\n  recovery copy kept at retirement is not publication.\n\n### Extra trees\n\nFor a branch of a member repository, from your home (`--preview` first;\n`<repo>`: the member key or clone path, always, since your own `./work` is\nnot a Git tree; `<base>`: the remote branch to start from, or the one you\nrework):\n\n    oats worktree add --purpose <purpose> --branch <branch> --base <base> --repo <repo>\n\nIt moves none of the clone's refs. A tree is yours alone: build, test and\ncommit there.\n\n- Name `<branch>` by the repository's rules, else `agents/<instance>-<purpose>`\n  (if taken, `<instance>/<branch>`). Never reset a branch with `-B`/`-C`.\n- `add` may take minutes: use a long timeout; if killed, rerun it.\n- Push with `git push origin HEAD:<remote-branch>` (`<base>` when reworking).\n- Before you finish, merge each tree into your PR branch, or push it and name\n  it in your hand-back; then `oats worktree remove --purpose <purpose>`.\n  Retirement may keep a tree with uncommitted work; don't rely on it.\n  Details: `oats worktree --help`, and `/oats-operate` if you have it.\n<!-- /oats:work-mode:directory -->\n",
+    "truncated": false,
+    "sources": [
+     {
+      "source": "capability:oats.core",
+      "file": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper/.oats/modules/oats.core/injects/oats.md"
+     },
+     {
+      "source": "kernel:instance-boundary",
+      "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+     },
+     {
+      "source": "work-mode:directory",
+      "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+     }
+    ]
+   }
+  },
+  "identity": null,
+  "problems": [],
+  "warnings": []
+ }
+}

@@ -1,0 +1,36 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "test": {
+   "id": "oats-real/weekly-report",
+   "qualifiedId": "oats-real/weekly-report",
+   "kind": "spawn",
+   "placement": {
+    "runsHere": false,
+    "reason": "assigned-elsewhere",
+    "reasonDetail": "runs on report-server; this host is bb-box",
+    "enabledHere": true,
+    "runsOn": "report-server",
+    "owner": "github.com/acme-bot",
+    "host": "bb-box"
+   },
+   "soul": {
+    "name": "oats-product-expert",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    },
+    "resolves": true,
+    "error": null
+   },
+   "nextDue": "2026-11-23T08:00:00.000Z",
+   "spawned": false,
+   "problems": [
+    "oats-real/weekly-report does not run on this host (assigned-elsewhere: runs on report-server; this host is bb-box)"
+   ],
+   "ok": false
+  }
+ }
+}

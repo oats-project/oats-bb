@@ -1,0 +1,11 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_AUTOMATION_WORKSPACE",
+  "message": "oats-real/nightly-digest is a workspace schedule, defined in Git: remove its file there, or stop it on this host: oats schedule disable oats-real/nightly-digest",
+  "details": {
+   "id": "oats-real/nightly-digest"
+  }
+ }
+}

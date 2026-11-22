@@ -1,0 +1,83 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "triggerApi": 1,
+  "id": "oats-real/proposal-review",
+  "ok": true,
+  "placement": {
+   "runsOn": "bb-box",
+   "owner": "github.com/ana",
+   "host": "bb-box",
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true
+  },
+  "gh": {
+   "ok": true,
+   "account": "ana",
+   "credentialSource": "keyring",
+   "reachesHostTimer": true,
+   "note": "gh uses the system keyring; the host timer runs in your user session and reaches it",
+   "detail": "github.com ·   ✓ Logged in to github.com account ana (keyring) ·   - Active account: true"
+  },
+  "repo": {
+   "key": "github.com/acme/knowledge",
+   "readable": true,
+   "fullName": "acme/knowledge",
+   "permissions": {
+    "push": true,
+    "maintain": false,
+    "admin": false
+   },
+   "canMerge": true
+  },
+  "soul": {
+   "resolves": true,
+   "name": "oats-developer",
+   "agent": "oats-developer",
+   "messaging": null
+  },
+  "teams": {
+   "requested": [],
+   "undeclared": [],
+   "messaging": null
+  },
+  "wouldFire": [
+   {
+    "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
+    "repo": "github.com/acme/knowledge",
+    "number": 41,
+    "subject": "41",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/41",
+    "instance": "oats-developer-review-pr-41",
+    "nameCut": false
+   },
+   {
+    "key": "oats-real/proposal-review:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
+    "repo": "github.com/acme/knowledge",
+    "number": 42,
+    "subject": "42",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/42",
+    "instance": "oats-developer-review-pr-42",
+    "nameCut": false
+   },
+   {
+    "key": "oats-real/proposal-review:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
+    "repo": "github.com/acme/knowledge",
+    "number": 43,
+    "subject": "43",
+    "event": "opened",
+    "url": "https://github.com/acme/knowledge/pull/43",
+    "instance": "oats-developer-review-pr-43",
+    "nameCut": false,
+    "held": "concurrency.max 2 reached (2 live)"
+   }
+  ],
+  "problems": [],
+  "warnings": [],
+  "spawned": false
+ }
+}

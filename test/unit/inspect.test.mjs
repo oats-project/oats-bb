@@ -2,7 +2,7 @@
 // does not answer is an error, never "stopped".
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -124,7 +124,7 @@ test("where the processes cannot be looked at, a thread in error is an error: ne
   const { dir } = scratch(t);
   const row = threadRow("thr_a", "proj_a", "error");
   for (const proc of [join(dir, "no-such-proc"), dir]) {
-    assert.throws(() => inspectAnswer(row, processLook({ proc })), (error) => error.code === "E_SESSION_UNAVAILABLE" && /cannot be read on this host/.test(error.message) && /To get a thread in error back, send it a message in bb \(bb thread tell <thread id> <text>\)/.test(error.message), proc);
+    assert.throws(() => inspectAnswer(row, processLook({ proc })), (error) => error.code === "E_SESSION_UNAVAILABLE" && /cannot be read on this host/.test(error.message) && /To get a thread in error back, send it a message in bb itself \(bb thread tell <thread id> <text>\).*Until then oats session start and oats session input refuse for this home/.test(error.message), proc);
   }
   // A thread that is not in error asks nothing of the processes.
   assert.deepEqual(inspectAnswer(threadRow("thr_a", "proj_a", "idle"), processLook({ proc: join(dir, "no-such-proc") })), { present: true, state: "unknown", running: null });
@@ -157,9 +157,17 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   entry("109", "BB_THREAD_ID=\0", "pi", "pi\0"); // names none
   entry("110", "BB_THREAD_ID=thr_bare"); // its name cannot be read
   entry("self", "BB_THREAD_ID=thr_not_a_pid\0", "pi", "pi\0");
-  const threads = threadProcesses({ proc });
-  assert.deepEqual([...threads.keys()].sort(), ["thr_bare", "thr_claude", "thr_pi", "thr_script", "thr_stray"]);
-  assert.deepEqual([...threads.get("thr_pi")].sort(), ["pi", "sleep"]);
+  // Which files the look opens: a process that is no harness by its name has its name and
+  // command line read, and its environment never (it may hold another program's secret).
+  const opened = [];
+  const read = (path, encoding) => { opened.push(path.slice(proc.length + 1)); return readFileSync(path, encoding); };
+  const threads = threadProcesses({ proc, read });
+  assert.deepEqual([...threads.keys()].sort(), ["thr_claude", "thr_pi", "thr_script"], "only threads with a harness-named process");
+  assert.deepEqual([...threads.get("thr_pi")].sort(), ["pi"], "the stray sleep of the same thread adds nothing");
+  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ", "106/environ", "107/environ", "108/environ", "109/environ"],
+    "the environment of the sleep (104), the server (105), the tail (111) and the process with no readable name (110) is never opened");
+  for (const pid of ["104", "105", "110", "111"]) assert.ok(!opened.includes(`${pid}/environ`), pid);
+  assert.ok(opened.includes("104/comm") && opened.includes("104/cmdline"), "its name and command line are what is read");
   const look = processLook({ proc });
   const has = (id, providerId) => look.has({ id, providerId });
   assert.equal(has("thr_pi", "pi"), true);

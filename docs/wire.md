@@ -277,8 +277,11 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be
-  made, that thread's answer is `E_SESSION_UNAVAILABLE`, whose message says how to get
-  the thread back (a message to it in bb).
+  made (macOS: oats-bb#22), that thread's answer is `E_SESSION_UNAVAILABLE`, whose message
+  says how to get the thread back (a message to it in bb itself: the kernel starts and
+  sends to no home whose session it cannot read). A process's name and command line are
+  read first, and its environment only where one of its names is a harness's: no other
+  program's environment is opened.
 - **input, to a thread in `error`** (contract r23, A14): told like any other thread, with
   no look at processes and no refusal. Where the thread's process is gone, bb answers
   sent, starts the harness again in the same conversation and runs the turn once (pinned

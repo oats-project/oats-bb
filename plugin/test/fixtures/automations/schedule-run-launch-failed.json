@@ -1,0 +1,124 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "hourly-check",
+   "cron": "0 * * * *",
+   "tz": "UTC",
+   "kind": "spawn",
+   "agent": "oats-developer",
+   "backend": "bb",
+   "task": "Check the build queue.",
+   "createdAt": "2026-11-21T20:17:25.920Z",
+   "updatedAt": "2026-11-21T20:17:25.920Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-21T21:00:00.000Z",
+   "lastRun": {
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:36.251Z",
+    "kind": "spawn",
+    "launched": false,
+    "error": "oats-developer-hourly-check-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+    "errorCode": "E_BACKEND_SANDBOXED_MODE",
+    "unconfirmed": false,
+    "outcome": "launch-failed",
+    "runId": "6cf7aab1e86c9bb37cfb5acc",
+    "session": {
+     "instance": null,
+     "home": null,
+     "incarnation": null,
+     "server": null,
+     "delivery": "none"
+    }
+   },
+   "history": {
+    "status": "ok",
+    "stored": 1,
+    "truncated": false
+   },
+   "recentRuns": [
+    {
+     "runId": "6cf7aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T20:17:00.000Z",
+     "startedAt": "2026-11-21T20:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:17:39.780Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    }
+   ],
+   "running": false,
+   "name": "hourly-check",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": null,
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/hourly-check",
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-21T21:00:00.000Z",
+   "enabled": true
+  },
+  "run": {
+   "scheduledFor": "2026-11-21T20:17:00.000Z",
+   "startedAt": "2026-11-21T20:17:36.251Z",
+   "kind": "spawn",
+   "launched": false,
+   "error": "oats-developer-hourly-check-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+   "errorCode": "E_BACKEND_SANDBOXED_MODE",
+   "unconfirmed": false,
+   "outcome": "launch-failed"
+  },
+  "considered": [
+   {
+    "workspace": "/abs/deployment",
+    "id": "hourly-check",
+    "minute": "2026-11-21T20:17",
+    "action": "launch-failed",
+    "error": "oats-developer-hourly-check-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back"
+   }
+  ]
+ }
+}

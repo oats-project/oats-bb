@@ -7,7 +7,7 @@ export type Agent = {
   home: string;
   /** parentInstance */
   parent: string | null;
-  /** attributedHuman; drawn as "parent · <human>" when parent is null */
+  /** attributedHuman; drawn as "Started by <human>" in the thread's row when parent is null */
   human: string | null;
   alias: string | null;
   team: string | null;

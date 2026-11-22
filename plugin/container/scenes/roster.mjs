@@ -2,6 +2,18 @@
 // of the dot, and the sidebar while OATS cannot be read. (container/live-ui.mjs says what a scene is.)
 import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
 
+/** The thread's own row, read once it says `state`: → `{ line, act }` (the status line's words, and its button's), or null. The read waits on the row. */
+const statusOf = async (page, state) => {
+  const line = testId("oats-status-line");
+  const read = await page.until(
+    `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${line}`)}); if (!e || e.getAttribute("data-state") !== ${JSON.stringify(state)}) return ""; const act = e.querySelector(${JSON.stringify(testId("oats-status-act"))}); const words = e.cloneNode(true); words.querySelector(${JSON.stringify(testId("oats-status-act"))})?.remove(); return JSON.stringify({ line: words.innerText.replace(/\\s+/g, " ").trim(), act: act ? act.innerText.trim() : null }); })()`,
+    30,
+  );
+  return read ? JSON.parse(read) : null;
+};
+/** What the page shows of the thread's row when a read of it found nothing: for a failing check's line. */
+const rowText = (page) => page.evaluate(textOf(testId("oats-identity-row")));
+
 export default [
   {
     stage: "fixtures",
@@ -63,12 +75,28 @@ export default [
       // the thread of an agent that needs you: its row is the open one, with the "!" and "Needs you"
       const release = threads.get("thr_release");
       await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
+      // The thread itself says it first (S1), before anything of the sidebar is opened over it: the
+      // state's word, since when the agent has waited, and what it asked.
+      const needs = await statusOf(page, "needs-you");
+      check(
+        needs !== null && /^! Needs you · waiting .+ \(since \d\d:\d\d\) · Green light at 9f2e1c\? Second reader done\.$/.test(needs.line) && needs.act === null,
+        `${at} the thread of an agent that waits says so in its own row: "Needs you", since when, and its question`,
+        needs === null ? await rowText(page) : JSON.stringify(needs),
+      );
+      await page.shot(`a13-${viewport.name}-thread-needs`, { targets: true });
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
       const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.startsWith("Needs you · ") ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
       const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
       check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
-      await page.shot(`a13-${viewport.name}-thread-needs`);
+      await page.shot(`a13-${viewport.name}-sidebar-open-row`);
+
+      // the thread of an agent OATS stopped: "Stopped", and the act that brings it back
+      const digest = threads.get("thr_digest");
+      await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
+      const stopped = await statusOf(page, "stopped");
+      check(stopped !== null && stopped.line === "Stopped" && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped", with Start`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
+      await page.shot(`a13-${viewport.name}-thread-stopped`, { targets: true });
 
       // a thread that is no agent has no row
       const plain = threads.get("thr_plain");
@@ -100,12 +128,26 @@ export default [
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
+      // Two failures are two words (S11), in the thread's own row and in the sidebar's.
       const unreachable = threads.get("thr_mockups");
       await page.goto(`/projects/${unreachable.projectId}/threads/${unreachable.id}`);
+      const cut = await statusOf(page, "unreachable");
+      check(cut !== null && cut.line === "Unreachable" && cut.act === "Retry", `${at} the thread of an agent the kernel cannot reach says "Unreachable", with Retry`, cut === null ? await rowText(page) : JSON.stringify(cut));
+      await page.shot(`a16-${viewport.name}-thread-unreachable`, { targets: true });
+
+      const failed = threads.get("thr_harvest");
+      await page.goto(`/projects/${failed.projectId}/threads/${failed.id}`);
+      const ended = await statusOf(page, "error");
+      check(ended !== null && ended.line === "Failed · Its session ended" && ended.act === "Restart", `${at} the thread of an agent whose session fell back to a shell says "Failed", "Its session ended", with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
+      await page.shot(`a16-${viewport.name}-thread-failed`, { targets: true });
+
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const dot = (id, state) => `document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] [data-state="${state}"]`)}) !== null`;
-      const drawn = await page.until(`${dot(unreachable.id, "unreachable")} && ${dot(threads.get("thr_harvest").id, "error")}`, 30);
-      check(Boolean(drawn), `${at} the tree draws the unreachable agent, on the open thread, and the agent whose session is a shell`, await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")} [data-state]`)})].map((e) => e.getAttribute("data-state")).join(",")`));
+      const factsOf = (id) => `(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+      const words = await page.until(`(() => { const rows = [${factsOf(unreachable.id)}, ${factsOf(failed.id)}]; return rows[0].startsWith("Unreachable · ") && rows[1].startsWith("Failed · ") ? JSON.stringify(rows) : ""; })()`, 30);
+      check(Boolean(words), `${at} in the sidebar the two rows say "Unreachable" and "Failed", each beside its mark`, words ?? (await page.evaluate(`JSON.stringify([${factsOf(unreachable.id)}, ${factsOf(failed.id)}])`)));
+      // And the agent whose bb thread is gone stays in the roster (S3).
+      const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
+      check(gone === "Stopped · oats-expert · its bb thread is gone", `${at} the agent whose bb thread is gone stays in the roster, and says so`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
       await page.shot(`a16-${viewport.name}-states`);
     },
   },

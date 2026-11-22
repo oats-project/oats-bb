@@ -253,15 +253,15 @@ What the features share, beyond the entries:
   page's answer. A feature that depends on a kernel feature asks there.
 - **One state in words.** `agentStatus(agent, thread, now)` (`app/roster/status.ts`) answers the
   state, its word and how long the agent has waited. It is the one function for every place that
-  says a state in words (the tree, the line under a thread's header, the instance panel); today the
-  home's card reads its age from it; the tree draws its dot from the same state and still prints a
-  stopped row's "· stopped" itself.
+  says a state in words: the sidebar's rows, the line under a thread's header and the home's card
+  read it (the instance panel has the Desktop's own words for its header). `claimOf(agent)`
+  (`model/view.ts`) is the one gate for whether a row shows its claim, the Desktop's.
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
   on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
-  `setAgentPage(open)` names how to open one agent's own page (by instance): the identity row's OATS
-  chip opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
+  button opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;

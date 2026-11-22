@@ -77,15 +77,21 @@ function usePanelRead<Method extends PanelMethod>(
   // last one, so the object alone does not say that it was read again). Kept for the part that is
   // shown again.
   if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
-  const [ended, setEnded] = useState<number | null>(null);
+  // The instant is kept by the read's key, not in this part: a read that ends while its part is
+  // off the page (a tab turned away from) is noted when the part is back.
+  const [, drawAgain] = useState(0);
   const answered = query.error === null && data !== undefined;
-  useEffect(() => {
-    if (ended === null) return;
+  const ended = endedAt.get(key);
+  if (ended !== undefined && !fetching) {
     if (answered) receivedAt.set(key, { data, at: ended });
-    setEnded(null);
-  }, [ended, answered, data, key]);
+    endedAt.delete(key);
+  }
   const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
-  const retry = () => void refetch.current().then(() => setEnded(Date.now()));
+  const retry = () =>
+    void refetch.current().then(() => {
+      endedAt.set(key, Date.now());
+      drawAgain((n) => n + 1);
+    });
   reread.current = retry;
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };
   if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching, readAt };
@@ -96,9 +102,12 @@ function usePanelRead<Method extends PanelMethod>(
 const lastReadFor = new Map<string, string>();
 /** Each read's held answer and when it was received, by method and input, in this app window. */
 const receivedAt = new Map<string, { data: unknown; at: number }>();
+/** When the last read asked for here ended, by method and input, until the part that shows it has noted it. */
+const endedAt = new Map<string, number>();
 onWindowReset(() => {
   lastReadFor.clear();
   receivedAt.clear();
+  endedAt.clear();
 });
 
 /** One instance's facts, from the roster the server holds: kept fresh, at no command's cost. */

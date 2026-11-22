@@ -704,3 +704,38 @@ test("a Refresh activity pressed under a refusal that has no Retry says that it 
   act(() => answer?.());
   await waitFor(() => expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(false));
 });
+
+test("a read that answers while its tab is away is noted when the tab is back: the age is that of that read", async () => {
+  let mode: "ok" | "pending" | "fail" = "ok";
+  let answer: (() => void) | null = null;
+  const slot = panel({
+    panelEvents: () => {
+      if (mode === "fail") throw new Error("OATS_FAILED: `oats` exited 1: boom");
+      if (mode === "ok") return recordedEvents();
+      return new Promise((done) => {
+        answer = () => done(recordedEvents());
+      });
+    },
+  });
+  fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
+  await slot.findByTestId("oats-panel-activity-summary");
+  // three hours later a Refresh is asked for, the tab is left, and the read answers the same rows while it is away
+  vi.setSystemTime(NOW + 3 * 3_600_000);
+  mode = "pending";
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  await waitFor(() => expect(answer).not.toBeNull());
+  act(() => showPanelTab("soul"));
+  await slot.findByTestId("oats-panel-soul-body");
+  await act(async () => {
+    answer?.();
+    await new Promise((done) => setTimeout(done, 20));
+  });
+  act(() => showPanelTab("instance"));
+  await waitFor(() => expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(false));
+  // a minute later a Refresh fails: what is shown was read a minute ago
+  vi.setSystemTime(NOW + 3 * 3_600_000 + 60_000);
+  mode = "fail";
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  const notice = await within(slot.getByTestId("oats-panel-activity")).findByRole("alert");
+  expect(text(notice)).toContain("Showing what was read 1 min ago.");
+});

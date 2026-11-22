@@ -33,6 +33,15 @@ REQUIRE_REAL_FLOOR=${REQUIRE_REAL_FLOOR:-1}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
 OUT=$HERE/out
+# Whose artefacts a directory holds. The first to run in a checkout owns `out/`; a run by another
+# (a reviewer attached to an author's tree: another OATS instance, or ARTEFACTS_OWNER) leaves it as
+# it is and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them.
+OWNER=${ARTEFACTS_OWNER:-${OATS_INSTANCE:-$(id -un)}}
+OWNER=$(printf '%s' "$OWNER" | tr -c 'A-Za-z0-9._-' '_')
+if [ -f "$OUT/.owner" ] && [ "$(cat "$OUT/.owner")" != "$OWNER" ]; then
+  echo "real: $OUT holds the artefacts of $(cat "$OUT/.owner"); this run's go to $OUT.$OWNER"
+  OUT=$OUT.$OWNER
+fi
 if [ -n "$KERNEL_NPM" ]; then
   KERNEL_OID="npm:@awebai/oats@$KERNEL_NPM"
 else
@@ -54,6 +63,7 @@ cleanup() {
   mkdir -p "$OUT"
   docker cp "$NAME:/home/node/out/real/." "$OUT/" > /dev/null 2>&1 || echo "real: no artefacts to copy out"
   rm -rf "$OUT/.chromium"
+  printf '%s\n' "$OWNER" > "$OUT/.owner"
   if [ "${KEEP:-0}" = 1 ]; then echo "real: container $NAME kept"; else docker rm -f "$NAME" > /dev/null; fi
   exit $status
 }
@@ -63,7 +73,7 @@ BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 [ -n "$KERNEL_NPM" ] || git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel
 git -C "$REPOSITORY" archive HEAD oats-package | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
 printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docker exec -i -u node "$NAME" sh -c 'cat > /home/node/real/refs.json'

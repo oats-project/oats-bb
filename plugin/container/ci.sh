@@ -3,7 +3,8 @@
 #   container/ci.sh [all|unit|live|real]   (default: all)
 # The container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's
 # home: the checkout is copied in with tar, and the artefacts (test output, logs, screenshots) are
-# copied out to container/out/. bb runs sovereign: no account, BB_TELEMETRY=false, loopback only.
+# copied out to container/out/ (or, when that holds another's artefacts, container/out.<owner>/:
+# see OWNER below). bb runs sovereign: no account, BB_TELEMETRY=false, loopback only.
 #   KEEP=1            leave the container running afterwards, to work in it (docker exec -it …)
 #   NAME=<name>       the container's name (default: bb-plugin-oats-ci-<pid>)
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
@@ -26,6 +27,15 @@ PLUGIN=$(dirname "$HERE")
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-ci-$$}
 OUT=$HERE/out
+# Whose artefacts a directory holds. The first to run in a checkout owns `out/`; a run by another
+# (a reviewer attached to an author's tree: another OATS instance, or ARTEFACTS_OWNER) leaves it as
+# it is and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them.
+OWNER=${ARTEFACTS_OWNER:-${OATS_INSTANCE:-$(id -un)}}
+OWNER=$(printf '%s' "$OWNER" | tr -c 'A-Za-z0-9._-' '_')
+if [ -f "$OUT/.owner" ] && [ "$(cat "$OUT/.owner")" != "$OWNER" ]; then
+  echo "ci: $OUT holds the artefacts of $(cat "$OUT/.owner"); this run's go to $OUT.$OWNER"
+  OUT=$OUT.$OWNER
+fi
 
 docker build -q -t "$IMAGE" "$HERE" > /dev/null
 # shellcheck disable=SC2086 # DOCKER_RUN_ARGS is a list of arguments
@@ -35,6 +45,7 @@ cleanup() {
   rm -rf "$OUT"
   mkdir -p "$OUT"
   docker cp "$NAME:/home/node/out/." "$OUT/" > /dev/null 2>&1 || echo "ci: no artefacts to copy out"
+  printf '%s\n' "$OWNER" > "$OUT/.owner"
   if [ "${KEEP:-0}" = 1 ]; then echo "ci: container $NAME kept"; else docker rm -f "$NAME" > /dev/null; fi
   exit $status
 }
@@ -46,7 +57,7 @@ if [ -f "$PLUGIN/../bb-version" ]; then
   [ -n "$BB_VERSION" ] || { echo "ci: $PLUGIN/../bb-version is empty" >&2; exit 2; }
 fi
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

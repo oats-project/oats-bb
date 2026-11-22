@@ -89,6 +89,92 @@ function threadsByFixtureId() {
   return byId;
 }
 
+/** The last `lines` lines of a file, for a failing check's detail; says so when it cannot be read. */
+function tail(file, lines = 12) {
+  try {
+    return readFileSync(file, "utf8").trimEnd().split("\n").slice(-lines).join("\n");
+  } catch (error) {
+    return `(${file} could not be read: ${error.message})`;
+  }
+}
+/** What bb itself says of a thread: its status and the last entries of its log; for a check's detail. */
+function bbSays(id) {
+  const tell = (...args) => {
+    try {
+      return bb(...args).trim();
+    } catch (error) {
+      return `(bb ${args.slice(0, 2).join(" ")} failed: ${String(error.stderr || error.message).trim().slice(0, 300)})`;
+    }
+  };
+  let status = "?";
+  try {
+    status = JSON.parse(tell("thread", "show", id, "--json")).thread?.status ?? "?";
+  } catch {
+    status = "(bb thread show printed no JSON)";
+  }
+  return `status ${status}; its log's end:\n${tell("thread", "log", id, "--format", "minimal", "--limit", "3").split("\n").slice(-12).join("\n")}`;
+}
+
+/**
+ * The fixture threads, each healthy: its one turn was asked and answered, and bb shows it idle.
+ * → fixture thread id -> bb's thread.
+ *
+ * Each thread is waited for by name. One that has not come to rest in START_SECONDS is said, with
+ * what bb says of it, deleted and made again ONCE: bb starts the eight turns at once on a cold
+ * Claude Code, and now and then one of them is left "pending" for good (seen once in about fifteen
+ * runs, and by another developer one run in four), which is bb's and the provider's start, not
+ * anything the plugin's checks are about. A thread that is not healthy after that fails the run,
+ * with every thread's name and status, what bb says of the ones that are not idle, and the end of
+ * bb's and the mock model's logs.
+ */
+const START_SECONDS = 120;
+const AGAIN_SECONDS = 180;
+async function healthyThreads() {
+  const titleOf = new Map(fixtureThreads.map((thread) => [thread.id, thread.title]));
+  const read = (threads) => {
+    const all = listOf(bbJson("thread", "list"), "threads");
+    return [...threads].map(([fixtureId, thread]) => ({ title: titleOf.get(fixtureId), id: thread.id, status: all.find((candidate) => candidate.id === thread.id)?.status ?? "absent" }));
+  };
+  const rest = async (threads, seconds) => {
+    const deadline = Date.now() + seconds * 1000;
+    let now = read(threads);
+    while (Date.now() < deadline && !now.every((thread) => thread.status === "idle")) {
+      await sleep(2000);
+      now = read(threads);
+    }
+    return now;
+  };
+  let threads = threadsByFixtureId();
+  let now = await rest(threads, START_SECONDS);
+  const stuck = now.filter((thread) => thread.status !== "idle");
+  if (stuck.length > 0) {
+    for (const thread of stuck) {
+      console.log(`NOTE the fixture thread "${thread.title}" (${thread.id}) is ${thread.status} after ${START_SECONDS} s, not idle; bb says: ${bbSays(thread.id)}\n     It is deleted and made again, once.`);
+      try {
+        bb("thread", "delete", thread.id, "--yes");
+      } catch (error) {
+        console.log(`NOTE bb thread delete ${thread.id} failed: ${String(error.stderr || error.message).trim().slice(0, 300)}`);
+      }
+    }
+    threads = threadsByFixtureId(); // makes the ones that are gone, by their titles
+    now = await rest(threads, AGAIN_SECONDS);
+  }
+  const unwell = now.filter((thread) => thread.status !== "idle");
+  check(
+    unwell.length === 0,
+    `the ${now.length} fixture threads are healthy: each one's turn was answered and bb shows it idle${stuck.length > 0 ? ` (${stuck.length} made again after ${START_SECONDS} s: ${stuck.map((thread) => `"${thread.title}"`).join(", ")})` : ""}`,
+    now.map((thread) => `"${thread.title}": ${thread.status}`).join(" | "),
+  );
+  // Why, in full (a check's own detail is one short line): what bb says of each, and the logs' ends.
+  if (unwell.length > 0) {
+    for (const thread of unwell) console.log(`     bb on "${thread.title}" (${thread.id}): ${bbSays(thread.id)}`);
+    console.log(`     bb's own output, its end:\n${tail(join(OUT, "bb.out"))}`);
+    console.log(`     bb's server log, its end:\n${tail(join(homedir(), "bbdata", "logs", "server.1.log"))}`);
+    console.log(`     the mock model's output, its end:\n${tail(join(OUT, "mock.out"))}`);
+  }
+  return threads;
+}
+
 /**
  * status.json as the fake prints it for this run: the same rows, with the bb threads' real ids.
  * `changes`: by instance, fields that replace the row's own (a state no fixture row is in).
@@ -250,15 +336,8 @@ function record(threads, changes = {}) {
 // person does by walking through it. (A setting of bb's own; nothing of the plugin depends on it.)
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
-const threads = threadsByFixtureId();
 // Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
-{
-  const mine = new Set([...threads.values()].map((thread) => thread.id));
-  const statuses = () => listOf(bbJson("thread", "list"), "threads").filter((thread) => mine.has(thread.id)).map((thread) => thread.status);
-  const deadline = Date.now() + 240_000;
-  while (Date.now() < deadline && !statuses().every((status) => status === "idle")) await sleep(2000);
-  check(statuses().every((status) => status === "idle"), `the ${mine.size} fixture threads are healthy: each one's turn was answered and bb shows it idle`, JSON.stringify(statuses()));
-}
+const threads = await healthyThreads();
 const { scenes, stages } = await loadScenes();
 const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {

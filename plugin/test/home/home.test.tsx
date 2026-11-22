@@ -517,3 +517,141 @@ test("while OATS cannot be read after it was, the home keeps what it showed, und
   expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
   expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
 });
+
+// ---- Home › Agents, the empty workspace, the agents with no bb thread, what is held while stale
+
+const TMUX_ASKS: Agent = {
+  ...fixtureAgents()[0]!,
+  instance: "night-watch-helper",
+  backend: "tmux",
+  threadId: null,
+  parent: null,
+  human: "Ana",
+  running: true,
+  runtimeState: "running",
+  waiting: { reason: "attention", message: "Which branch do I watch?", since: "2026-11-19T12:29:00.000Z" },
+};
+
+test("Home › Agents: every agent OATS has, in the sidebar's order, each with its state and who started it, and the way back", async () => {
+  const agents = [...fixtureAgents(), TMUX_ASKS];
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  fireEvent.click(await slot.findByTestId("oats-tile-agents"));
+  // the page's Home › Agents has its own address
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home", options: { subPath: "agents" } }]);
+  slot.unmount();
+
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const list = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "agents" }, { rpc: handlers({}, agents), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+  const section = await list.findByTestId("oats-home-agents");
+  expect(heading(section)).toBe(`Every agent${agents.length}`);
+  const rows = within(section).getAllByTestId("oats-home-agent-row");
+  // every agent, the stopped ones, the ones whose thread is gone and the ones on tmux among them
+  expect(rows.map((row) => row.dataset.instance).sort()).toEqual(agents.map((agent) => agent.instance).sort());
+  for (const row of rows) expect(within(row).getByTestId("oats-state").textContent).not.toBe("");
+  const tmux = rows.find((row) => row.dataset.instance === "night-watch-helper")!;
+  expect(rows.indexOf(tmux)).toBe(rows.length - 1); // after the tree, as in the sidebar
+  expect(within(tmux).getByTestId("oats-home-agent").textContent).toBe("Night watch helper");
+  expect(tmux.textContent).toContain("runs in tmux · started by Ana");
+  expect(within(tmux).getByTestId("oats-state").textContent).toContain("Needs you");
+  // no card and no reply here: the list says who there is
+  expect(list.queryByTestId("oats-needs-card")).toBeNull();
+  const back = list.getByTestId("oats-home-back");
+  expect(back.textContent).toBe("‹ Back to Home");
+  expect(document.activeElement).toBe(back);
+  fireEvent.click(back);
+  expect(list.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+});
+
+test("in the thread's tab Home › Agents is a view of the tab: Agents opens it and Back to Home closes it", async () => {
+  const slot = await plainTab();
+  fireEvent.click(await slot.findByTestId("oats-tile-agents"));
+  expect(heading(await slot.findByTestId("oats-home-agents"))).toBe(`Every agent${fixtureAgents().length}`);
+  expect(slot.queryByTestId("oats-home-needs")).toBeNull();
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  fireEvent.click(slot.getByTestId("oats-home-back"));
+  expect(await slot.findByTestId("oats-home-needs")).toBeTruthy();
+});
+
+test("an agent with no bb thread that needs the person has its card: what it asks, where to answer it, Open to its own page, and no reply", async () => {
+  let opened: string | null = null;
+  const { setAgentPage } = await import("../../app/home/agent-tab");
+  const slot = await homePage({ rpc: handlers({}, [...fixtureAgents(), TMUX_ASKS]) });
+  setAgentPage((_navigate, instance) => void (opened = instance));
+  try {
+    const card = await cardOf(slot, "night-watch-helper");
+    expect(heading(slot.getByTestId("oats-home-needs"))).toBe("Needs you4");
+    expect(within(card).getByTestId("oats-needs-question").textContent).toBe("Which branch do I watch?");
+    expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Runs in tmux: answer it in its terminal.");
+    expect(within(card).queryByTestId("oats-reply")).toBeNull();
+    fireEvent.click(within(card).getByTestId("oats-needs-open"));
+    expect(opened).toBe("night-watch-helper");
+    expect(slot.inspection.navigateCalls).toEqual([]);
+  } finally {
+    setAgentPage(null);
+  }
+});
+
+test("the newest claim comes first; more than eight show eight and then all on a press", async () => {
+  const base = fixtureAgents()[0]!;
+  const many: Agent[] = Array.from({ length: 10 }, (_unused, index) => ({
+    ...base,
+    instance: `asks-${index}-helper`,
+    backend: "tmux",
+    threadId: null,
+    running: true,
+    runtimeState: "running",
+    waiting: { reason: "attention", message: `question ${index}`, since: `2026-11-19T12:${String(10 + index)}:00.000Z` },
+  }));
+  const slot = await homePage({ rpc: handlers({}, many), sidebarThreads: calm() });
+  const needs = await slot.findByTestId("oats-home-needs");
+  expect(heading(needs)).toBe("Needs you10");
+  expect(within(needs).getAllByTestId("oats-needs-card").map((card) => card.dataset.instance)).toEqual([9, 8, 7, 6, 5, 4, 3, 2].map((index) => `asks-${index}-helper`));
+  const more = within(needs).getByTestId("oats-home-needs-all");
+  expect(more.textContent).toBe("Show all 10");
+  fireEvent.click(more);
+  expect(within(needs).getAllByTestId("oats-needs-card")).toHaveLength(10);
+  expect(more.textContent).toBe("Show fewer");
+});
+
+test("more than five at work show five, then all on a press", async () => {
+  const base = fixtureAgents()[0]!;
+  const many: Agent[] = Array.from({ length: 7 }, (_unused, index) => ({ ...base, instance: `works-${index}-helper`, backend: "tmux", threadId: null, running: true, runtimeState: "running", waiting: null }));
+  const slot = await homePage({ rpc: handlers({}, many), sidebarThreads: calm() });
+  const working = await slot.findByTestId("oats-home-working");
+  expect(heading(working)).toBe("Working7");
+  expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(5);
+  fireEvent.click(within(working).getByTestId("oats-home-working-all"));
+  expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(7);
+});
+
+test("a workspace with no agent says what OATS does in two lines and offers New agent", async () => {
+  const slot = await homePage({ rpc: handlers({}, []), sidebarThreads: calm() });
+  const empty = await slot.findByTestId("oats-empty");
+  expect(empty.textContent).toBe("OATS runs your agents: each one is a soul at work on a machine of yours.Start one, and Home shows what needs you and what you have.New agent");
+  expect(slot.queryByTestId("oats-home-needs")).toBeNull();
+  expect(slot.queryByTestId("oats-home-summary")).toBeNull();
+  fireEvent.click(slot.getByTestId("oats-home-new-agent"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+});
+
+test("while what is shown is the roster as last read, a card's answers and its reply are held, and it says why; Open still opens", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const slot = await homePage({
+    rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
+    sdk: {
+      threads: {
+        interactions: { list: async () => [{ id: "p", threadId: "thr_ci", status: "pending", payload: { kind: "provider-pi/extension-ui", title: "Confirm", data: { requestId: "r1", method: "confirm", fullTitle: "Force-push?" } } }] as never },
+      },
+    },
+  });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice")).toHaveLength(2));
+  for (const choice of within(card).getAllByTestId("oats-needs-choice")) expect((choice as HTMLButtonElement).disabled).toBe(true);
+  expect((within(card).getByTestId("oats-reply-text") as HTMLTextAreaElement).disabled).toBe(true);
+  expect((within(card).getByTestId("oats-reply-send") as HTMLButtonElement).disabled).toBe(true);
+  expect(within(card).getByTestId("oats-disabled-reason").textContent).toBe("Held until OATS is read again: what is shown may have changed.");
+  expect((within(card).getByTestId("oats-needs-open") as HTMLButtonElement).disabled).toBe(false);
+  // the one notice of the roster's, once
+  expect(slot.getAllByRole("alert")).toHaveLength(1);
+});

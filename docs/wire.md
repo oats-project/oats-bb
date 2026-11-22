@@ -109,11 +109,12 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   an endpoint archives that thread; a stop with `endpoint: null` archives the threads it
   takes to be the failed launch's (below), never one that may be a person's. A thread bb
   no longer has is not asked for, and one bb had archived already is left as it is.
-  - The thread is looked at once more after its archive (`bb thread show`, `bb thread
-    queue list`): a message typed in bb between the stop's last look and the archive
-    starts a turn, and nothing reads an archived thread afterwards. One found in a turn,
-    or with work in line, goes through the stop's whole rule again, within the same
-    grace; a stop never answers `stopped` over an agent that runs in an archived thread.
+  - After its archive the thread is stopped and confirmed once more, by the stop's whole
+    rule (above): a message typed in bb between the stop's last look and the archive
+    starts a turn, or is held in line, and nothing reads an archived thread afterwards.
+    So a stop never answers `stopped` from a look that came before its archive, whatever
+    bb answered to the archive (one cut off by time may have been made all the same).
+    That second confirmation has a grace of its own, inside the command's time.
   - Nothing of the conversation is lost: it stays in bb, readable, as an archived thread
     (bb's thread list under Archived; `bb thread list --archived --project <id>`).
   - An archive bb refuses, or does not answer for, fails no stop: the thread is stopped,

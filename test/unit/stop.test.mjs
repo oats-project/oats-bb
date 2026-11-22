@@ -17,6 +17,8 @@ const verbs = (calls) => calls.map((c) => {
   return words[1] === "list" && c.argv.includes("--archived") ? "thread list --archived" : words.slice(0, 2).join(" ");
 });
 
+// A stop that is confirmed: what waits in line, the stop, settled, nothing in line, settled.
+const CONFIRMED = ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show"];
 // bb's answer to an archive (bb-app 0.50.1's shape).
 const archived = (id, extra) => ({ stdout: { ok: true, threadId: id, alreadyArchived: false, archivedAt: 9, archivedThreadIds: [id], ...extra } });
 const archives = (calls) => calls.filter((c) => c.argv[1] === "archive").map((c) => c.argv);
@@ -34,7 +36,7 @@ test("stop asks bb, then waits until the thread is idle", async (t) => {
   const { answer, calls } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("stopping"), show("idle")] });
   assert.deepEqual(answer.result, { stopped: true });
   assert.deepEqual(calls[1].argv, ["thread", "stop", "thr_a", "--json"]);
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread show", "thread queue list", "thread show", "thread archive", "thread show", "thread queue list"], "what bb holds in line is read before the stop and again once the thread is settled; then the archive, and one look after it");
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread show", "thread queue list", "thread show", "thread archive", ...CONFIRMED], "what bb holds in line is read before the stop and again once the thread is settled; then the archive, and the thread stopped and confirmed once more");
 });
 
 // Contract r24, A15(1): bb starts a stopped thread's agent again at the next message to it
@@ -44,22 +46,21 @@ test("a stop with an endpoint archives the thread, once it is seen stopped and n
   const { answer, calls, stderr } = await stopWith(t, { "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] });
   assert.deepEqual(answer.result, { stopped: true });
   assert.deepEqual(archives(calls), [["thread", "archive", "thr_a", "--json"]], "that thread, by its id, once");
-  assert.deepEqual(verbs(calls).slice(-4), ["thread show", "thread archive", "thread show", "thread queue list"], "after the last look that showed it settled with nothing in line; then it is looked at once more");
+  assert.deepEqual(verbs(calls).slice(-7), ["thread show", "thread archive", ...CONFIRMED], "after the last look that showed it settled with nothing in line; then it is stopped and confirmed once more");
   assert.equal(stderr, "", "an archive bb made is not warned about");
 });
 
 // The race the archive must not lose: a message typed in bb between the stop's last look
-// and the archive starts a turn, and nothing reads an archived thread afterwards. So the
-// thread is looked at once after its archive, and one found in a turn, or with work in
-// line, is stopped again by the whole rule.
+// and the archive starts a turn, or is held in line, and nothing reads an archived thread
+// afterwards. So after its archive the thread is stopped and confirmed once more, by the
+// whole rule: "stopped" is never taken from a look that came before the archive.
 test("a turn that started between the last look and the archive is stopped again: the stop answers only once the archived thread is at rest", async (t) => {
   const { answer, calls, stderr } = await stopWith(t, {
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } },
     "thread show": [show("idle"), show("idle"), show("active", { archivedAt: 9 }), show("stopping", { archivedAt: 9 }), show("idle", { archivedAt: 9 })],
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread show",
-    "thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show"], "found in a turn after the archive: withdrawn, stopped and confirmed again");
+  assert.deepEqual(verbs(calls), [...CONFIRMED, "thread archive", "thread queue list", "thread stop", "thread show", "thread show", "thread show", "thread queue list", "thread show"], "in a turn after the archive: stopped, waited for and confirmed again");
   assert.equal(archives(calls).length, 1);
   assert.equal(stderr, "");
 });
@@ -67,12 +68,24 @@ test("a turn that started between the last look and the archive is stopped again
 test("a message bb holds in line for the thread after its archive is withdrawn, and the thread stopped again", async (t) => {
   const { answer, calls } = await stopWith(t, {
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("idle"),
-    "thread queue list": [{ stdout: [] }, { stdout: [] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [] }],
+    "thread queue list": [{ stdout: [] }, { stdout: [] }, { stdout: [{ id: "qmsg_late", state: "waiting" }] }, { stdout: [] }],
     "thread queue delete": { stdout: { ok: true } },
   });
   assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(verbs(calls), [...CONFIRMED, "thread archive", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show"]);
   assert.deepEqual(calls.filter((c) => c.argv[2] === "delete").map((c) => c.argv.slice(3, 5)), [["thr_a", "qmsg_late"]]);
-  assert.equal(calls.filter((c) => c.argv[1] === "stop").length, 2);
+});
+
+// The order confirmStop keeps (lib/halt.mjs): a held message bb starts as a turn between
+// the look that showed the thread settled and the read of its queue. Settled, nothing in
+// line, and then in a turn: not stopped.
+test("a held turn bb starts after the archive, between the settled look and the queue's: seen by the look after the queue, and stopped", async (t) => {
+  const { answer, calls } = await stopWith(t, {
+    "thread stop": { stdout: { ok: true, threadId: "thr_a" } },
+    "thread show": [show("idle"), show("idle"), show("idle", { archivedAt: 9 }), show("active", { archivedAt: 9 }), show("idle", { archivedAt: 9 })],
+  });
+  assert.deepEqual(answer.result, { stopped: true });
+  assert.deepEqual(verbs(calls), [...CONFIRMED, "thread archive", "thread queue list", "thread stop", "thread show", "thread queue list", "thread show", "thread show", "thread queue list", "thread show"]);
 });
 
 test("a turn that started before the archive and does not stop: E_SESSION_STOP_FAILED, never stopped over an agent that runs in an archived thread", async (t) => {
@@ -82,6 +95,17 @@ test("a turn that started before the archive and does not stop: E_SESSION_STOP_F
   }, { graceSeconds: 1 });
   assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
   assert.match(answer.error.message, /thr_a is still active 1 s after bb thread stop/);
+});
+
+// "Not acknowledged" is not "not archived": an archive cut off by time may have been made.
+// So the thread is stopped and confirmed again whatever bb answered, and the warning stands.
+test("an archive bb did not acknowledge is followed by the same confirmation: a turn that started meanwhile fails the stop, never 'stopped' with a warning", async (t) => {
+  const { answer, calls } = await stopWith(t, {
+    "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread archive": UNREACHABLE,
+    "thread show": [show("idle"), show("idle"), show("active")],
+  }, { graceSeconds: 1 });
+  assert.equal(answer.error.code, "E_SESSION_STOP_FAILED");
+  assert.equal(archives(calls).length, 1);
 });
 
 test("a thread bb had archived already, or lost between the stop and the archive, is stopped with no warning", async (t) => {
@@ -112,7 +136,7 @@ for (const [name, refusal, said] of [
     assert.match(lines[0], /^oats bb: warning: bb thread thr_a is stopped, and bb did not archive it: a message to it in bb starts its agent again\. Archive it in bb \(bb thread archive thr_a\)\. bb said: /, "the thread and the remedy first");
     assert.match(lines[0], said, "bb's own words, last");
     assert.ok(lines[0].length < 520, "one line the length of a message the kernel relays");
-    assert.equal(verbs(calls).at(-1), "thread archive", "a thread bb did not archive is not looked at again: it is live, and the warning says so");
+    assert.deepEqual(verbs(calls).slice(-6), ["thread archive", ...CONFIRMED], "stopped and confirmed once more all the same: an archive bb did not acknowledge may have been made");
   });
 }
 
@@ -180,7 +204,7 @@ test("stop waits the whole grace the kernel gives, beyond the other verbs' time"
 test("the grace starts when bb has been asked: a slow stop call takes none of it", async (t) => {
   const { answer, calls } = await stopWith(t, { "thread stop": { delayMs: 1100, stdout: { ok: true, threadId: "thr_a" } }, "thread show": [show("stopping"), show("idle")] }, { graceSeconds: 1 });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show", "thread archive", "thread show", "thread queue list"]);
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread show", "thread queue list", "thread show", "thread archive", ...CONFIRMED]);
 });
 
 test("with no endpoint, finding the home's thread and a slow stop take none of the grace", async (t) => {
@@ -216,7 +240,7 @@ test("stop withdraws what bb holds in line for the thread, before it stops it, a
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("pending"),
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread queue delete", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread show", "thread queue list"], "withdrawn first; and after the thread is seen settled, the queue is read and the thread is looked at once more; only then the archive");
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread queue delete", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", ...CONFIRMED], "withdrawn first; and after the thread is seen settled, the queue is read and the thread is looked at once more; only then the archive");
   assert.deepEqual(calls.filter((c) => c.argv[2] === "delete").map((c) => c.argv.slice(3, 5)), [["thr_a", "qmsg_1"], ["thr_a", "qmsg_2"]]);
 });
 
@@ -228,7 +252,7 @@ test("a message that reaches the line while the thread is being stopped is withd
     "thread stop": { stdout: { ok: true, threadId: "thr_a" } }, "thread show": show("idle"),
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread show", "thread queue list"]);
+  assert.deepEqual(verbs(calls), ["thread queue list", "thread stop", "thread show", "thread queue list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", ...CONFIRMED]);
 });
 
 // The race a stop must not lose: the thread is seen idle, a held message is found, and bb
@@ -242,8 +266,8 @@ test("a held turn bb starts just as it is withdrawn: the stop sees the thread ac
     "thread show": [show("idle"), show("active"), show("stopping"), show("idle"), show("idle")],
   });
   assert.deepEqual(answer.result, { stopped: true });
-  assert.equal(calls.filter((c) => c.argv[1] === "stop").length, 2, "stopped again after the withdrawal");
-  assert.deepEqual(verbs(calls).slice(-6), ["thread show", "thread queue list", "thread show", "thread archive", "thread show", "thread queue list"], "the last looks: settled, nothing in line, settled; the archive after them; and one look after it");
+  assert.equal(calls.filter((c) => c.argv[1] === "stop").length, 3, "stopped again after the withdrawal, and once more after the archive");
+  assert.deepEqual(verbs(calls).slice(-9), ["thread show", "thread queue list", "thread show", "thread archive", ...CONFIRMED], "the last looks: settled, nothing in line, settled; the archive after them; and the thread stopped and confirmed once more");
 });
 
 test("a thread that turns active between the queue's look and the last one is not stopped yet: the stop goes on waiting", async (t) => {
@@ -440,7 +464,7 @@ test("a stop with no endpoint archives only the threads made at or after launchS
     const bb = fakeBbIn(dir, rows(home));
     const { doc: answer, stderr } = await callSeen("stop", { home, endpoint: null, graceSeconds: 5, ...extra }, { settings, bb });
     assert.deepEqual(answer.result, { stopped: true });
-    assert.equal(bb.calls().filter((c) => c.argv[1] === "stop").length, 4, "every live thread is stopped");
+    assert.deepEqual([...new Set(bb.calls().filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]))].sort(), ["thr_after", "thr_at", "thr_before", "thr_undated"], "every live thread is stopped");
     assert.equal(stderr, "", "a thread that is left unarchived because it may be a person's is not warned about");
     return bb.calls().filter((c) => c.argv[1] === "archive").map((c) => c.argv[2]);
   };
@@ -495,8 +519,6 @@ async function retireWith(t, script, { launched = true } = {}) {
 }
 // The retire's last read: the env bb holds for the home's project (what a pi launch wrote), to remove it.
 const ENV_READ = "machine env";
-// A stop that is confirmed: what waits in line, the stop, settled, nothing in line, settled.
-const CONFIRMED = ["thread queue list", "thread stop", "thread show", "thread queue list", "thread show"];
 
 test("retire archives the live threads of the home's project, and only those", async (t) => {
   const { run, last, calls } = await retireWith(t, (home) => ({

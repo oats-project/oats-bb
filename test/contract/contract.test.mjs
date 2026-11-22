@@ -488,6 +488,16 @@ test("T5 stop, then inspect and input: the stop archives the thread, so the prov
   await waitStatus(endpoint.threadId, "active");
   await waitFor("the tool to be running", async () => (await sh("cat mock-next-cmd 2>/dev/null || true")) === "");
 
+  // bb's fact that the stop's order rests on (stop and confirm, archive, stop and confirm
+  // again): bb archives a thread that is in a turn, and the turn goes on in the archived
+  // thread. So an archive alone stops nothing, and a turn that starts just before it must
+  // be stopped after it.
+  const midTurn = JSON.parse(await sh(`bb thread archive ${endpoint.threadId} --json`, { ok: false }));
+  assert.equal(midTurn.ok, true, JSON.stringify(midTurn));
+  assert.equal(await threadStatus(endpoint.threadId), "active", "bb ended the turn of a thread it archived: the stop after the archive may no longer be needed");
+  assert.ok((await claudesIn(home)) >= 1);
+  await sh(`bb thread unarchive ${endpoint.threadId} --json`);
+
   const stopped = await provider("stop", { home, endpoint, graceSeconds: 10 });
   assert.deepEqual(stopped.result, { stopped: true });
   // After the stop no process works in the home: bb released the thread's Claude and the

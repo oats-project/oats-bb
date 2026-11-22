@@ -6,7 +6,7 @@ import { ProviderError, bounded, fail, isObject, recode, someOf } from "./errors
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 import { clearHomeProjectEnv } from "./project-env.mjs";
-import { isSettled, liveInHome, readEndpoint } from "./threads.mjs";
+import { liveInHome, readEndpoint } from "./threads.mjs";
 
 // The kernel gives a stop call 20 s plus its graceSeconds (1 to 300): the wait for bb to
 // settle is the grace, and the calls around it stay inside the 20 s.
@@ -51,19 +51,17 @@ async function archiveStopped(bb, threadId) {
   return `bb thread ${threadId} is stopped, and bb did not archive it: a message to it in bb starts its agent again. Archive it in bb (bb thread archive ${threadId}). bb said: ${String(answer.message).replace(/\s+/g, " ").trim()}`;
 }
 
-/** The stop's archive, for a thread confirmStop has just seen settled: archive it, then
- *  look once more. A message typed in bb between that last look and the archive starts a
- *  turn, and an archived thread takes no further one: so a thread found in a turn, or
- *  with work in line, after its archive goes through the whole rule again (confirmStop
- *  stops an archived thread like any other), and a stop never answers "stopped" over an
- *  agent that runs in a thread nothing reads any more. → archiveStopped's answer. */
+/** The stop's archive, for a thread confirmStop has just seen settled: ask bb to archive
+ *  it, then stop and confirm it once more, by the one rule (confirmStop stops an archived
+ *  thread like any other). A message typed in bb between that last look and the archive
+ *  starts a turn, or is held in line, and nothing reads an archived thread afterwards: so
+ *  a stop never answers "stopped" from a look that came before its archive. Whatever bb
+ *  answered to the archive: one cut off by time may have been made all the same. Only a
+ *  thread bb no longer has is left alone. → archiveStopped's answer. */
 async function archiveAndConfirm(bb, threadId, options) {
   const refused = await archiveStopped(bb, threadId);
-  if (refused !== null) return refused;
-  const after = await bb.thread(threadId);
-  if (after === null || after.deletedAt) return null;
-  if (!isSettled(after) || (await bb.queue(threadId)).length > 0) await confirmStop(bb, threadId, options);
-  return null;
+  await confirmStop(bb, threadId, options);
+  return refused;
 }
 
 /** → { stopped: true } once nothing of the thread can run: bb acknowledged the stop, shows

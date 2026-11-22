@@ -18,6 +18,8 @@ export type AgentStatusLineProps = {
   events?: readonly { kind: string; at: string; incarnation?: string }[] | undefined;
   /** When the roster this is drawn from was read, while OATS cannot be read again: the line says "as of <age>". */
   staleAt?: string | null;
+  /** A sentence that takes the place of the state's own question or reason (a feature that knows more of this agent says it); absent: the state's. */
+  detail?: string | null;
   /** The kernel has since refused this agent as one it does not know: the line says that, and nothing of its state. */
   gone?: boolean;
   /** The act that applies, and the place's own buttons: buttons only (the line's frame clips a list). */
@@ -29,7 +31,7 @@ export function agentLineState(agent: Agent, thread: BbThread | null, now: numbe
   return agentStatus(agent, thread, now).state;
 }
 
-export function AgentStatusLine({ agent, thread, now, events, staleAt = null, gone = false, action }: AgentStatusLineProps) {
+export function AgentStatusLine({ agent, thread, now, events, staleAt = null, detail, gone = false, action }: AgentStatusLineProps) {
   const read = agentStatus(agent, thread, now);
   const status = read.state === "stopped" ? { ...read, since: stoppedSince(events, agent.startedAt ?? null, now) } : read;
   const age = staleAt === null ? null : readAge(staleAt, now);
@@ -37,7 +39,7 @@ export function AgentStatusLine({ agent, thread, now, events, staleAt = null, go
   if (gone) return <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={action} />;
   return (
     <>
-      <StatusLine state={status.state} since={status.since} detail={status.detail} asOf={asOf} action={action} />
+      <StatusLine state={status.state} since={status.since} detail={detail ?? status.detail} asOf={asOf} action={action} />
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
       <KernelSays text={status.kernel} />
     </>

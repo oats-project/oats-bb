@@ -27,6 +27,9 @@ test("drawn from a roster kept as last read, the line says so last, with its age
   expect(line()).toBe("Working· as of 2 min ago");
   rerender(<AgentStatusLine {...of("desktop-mockups-developer")} now={now} />);
   expect(line()).toBe("Working");
+  // A place that knows more of the agent gives its own sentence: it takes the state's.
+  rerender(<AgentStatusLine {...of("desktop-mockups-developer")} now={now} detail="Its conversation is archived in bb" />);
+  expect(line()).toBe("Working· Its conversation is archived in bb");
 });
 
 test("a stopped agent's time is its last recorded stop, where the place gives the events; an unreachable one says so in words, with what OATS says under Details", () => {

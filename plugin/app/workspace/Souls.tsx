@@ -5,13 +5,14 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
-import { failureLine, useOats } from "../oats";
+import { useOats } from "../oats";
+import { RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
 import { useRead } from "../store";
 import type { Contract, Result } from "../store";
-import { Button, Chip, Dot, ErrorLine, Heading, Lines, Note, Page, plainClick } from "../ui";
+import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, Page, plainClick } from "../ui";
 import { shown } from "../ui/text";
 
 type Soul = Result<"souls">["souls"][number];
@@ -122,13 +123,8 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
       </section>
       <section className="flex flex-col gap-2">
         <Heading>Agents</Heading>
-        {oats.phase === "ready" ? (
-          <SoulAgents soul={soul} oats={oats} />
-        ) : oats.phase === "loading" ? (
-          <Note>Reading OATS…</Note>
-        ) : (
-          <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
-        )}
+        {/* The agents are the roster's, as last read while OATS cannot be read: the page's notice says so. */}
+        {oats.phase === "ready" ? <SoulAgents soul={soul} oats={oats} /> : oats.phase === "loading" ? <Loading>Reading your agents…</Loading> : null}
       </section>
       <section className="flex flex-col gap-2">
         <Heading>New agent</Heading>
@@ -165,6 +161,8 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   return (
     <Page testId="oats-souls-page">
       {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : null}
+      {/* Each soul's count of agents, and a soul's agents, are the roster's: while OATS cannot be read the page says so once, above both. */}
+      <RosterNotice oats={oats} />
       <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start">
         {/* At phone width one of the two shows at a time: the list, or the picked soul with Back. */}
         <nav aria-label="Souls" className={`flex-col gap-1 md:flex md:w-64 md:shrink-0 ${picked === null ? "flex" : "hidden"}`}>

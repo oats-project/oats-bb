@@ -374,16 +374,18 @@ async function shots(scene, { instance, soul, threadId, state }) {
 
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
-      const chips = await page.evaluate(textOf(testId("oats-identity-row")));
-      check([soul, instance, `home · …/instances/${instance}`, "OATS"].every((chip) => chips.includes(chip)), `${at}: the row's chips: soul, instance, home, OATS`, chips);
-      show("header row", chips);
+      // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
+      const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
+      const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
+      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`Soul ${soul}`) && line.row.includes("OATS"), `${at}: the thread's row says "${WORD[state]}", and the soul`, JSON.stringify(line));
+      show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
       await page.close();
     }
   }
 }
-/** At both widths: the agent is not in the tree, and its soul's page says "thread missing", with Start and Retire. */
+/** At both widths: the agent stays in the roster, as a row that says its bb thread is gone, and its soul's page says "thread missing", with Start and Retire. */
 async function missingShots(scene, { instance, soul }) {
   for (const view of VIEWS) {
     const { viewport, suffix } = view;
@@ -397,12 +399,12 @@ async function missingShots(scene, { instance, soul }) {
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
-      // The tree is read only once the sidebar has its roster: while it still says "Reading OATS…" it
-      // has no rows at all, and "not in the tree" would pass on nothing.
-      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-workspace-line"))}) !== null`, 30)), `${at}: the sidebar has read the roster`);
-      await sleep(1500);
-      const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`);
-      check(!rows.some((text) => text.includes(instance)), `${at}: ${instance} is not in the tree`, JSON.stringify(rows));
+      // The agent stays in the roster (S3): a row of its own that says where it is in a word, its soul,
+      // and that its bb thread is gone. The read waits on that row.
+      const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
+      const facts = await page.until(`(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
+      check(typeof facts === "string" && facts.endsWith(`· ${soul} · its bb thread is gone`), `${at}: ${instance} stays in the roster: its state in a word, its soul, "its bb thread is gone"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      show("row", facts);
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {
       await page.close();
@@ -661,6 +663,40 @@ try {
   check(left.length > 0 && left.every((t) => t.archivedAt != null), "bb: every thread the home still has is archived", threadsNow());
   check(snapshotRow(A.instance) === undefined, "the plugin's snapshot no longer has the agent");
 
+  step("A15 edge: every act on the agent that is gone: what the kernel answers (kept, for the plugin's \"not in OATS any more\")");
+  // The roster on a screen can be older than this: an act asked from it reaches the kernel, which
+  // refuses it for an agent it no longer has. The six refusals are recorded as the kernel prints
+  // them, with the argv the plugin's host entry uses. The plugin says "not in OATS any more" for a
+  // stop plan or a retire plan refused with E_SESSION_UNKNOWN, by that code alone, and shows every
+  // other refusal as the kernel's: its tests read these recordings for both. Each command is refused before it
+  // changes anything: the home is not there, the name is no instance's.
+  const goneActs = {
+    start: ["session", "start", "--home", home, "--json"],
+    restart: ["session", "restart", "--home", home, "--json"],
+    stopPlan: ["instance", "stop", A.instance, "--plan", "--json"],
+    stopApply: ["instance", "stop", A.instance, "--apply", "--plan-revision", "0123456789abcdef01234567", "--idempotency-key", "stop-000000000000", "--json"],
+    retirePlan: ["retire", A.instance, "--plan", "--json"],
+    retireApply: ["retire", A.instance, "--plan-revision", "0123456789abcdef01234567", "--idempotency-key", "retire-000000000000", "--json"],
+  };
+  for (const [verb, argv] of Object.entries(goneActs)) {
+    const run = oats(...argv);
+    let error;
+    try {
+      error = JSON.parse(run.stdout).error;
+    } catch {
+      error = undefined; // no JSON printed: the check below says what was
+    }
+    const refused = run.exit !== 0 && typeof error?.code === "string" && typeof error?.message === "string";
+    check(refused, `oats ${argv.slice(0, 2).join(" ")} on the retired agent (${verb}) is refused, with a code and a message`, `exit ${run.exit}: ${run.stdout || run.stderr}`);
+    if (refused) {
+      show(verb, `${error.code}: ${error.message}`);
+      fixtures.keepIn("lifecycle/gone.json", verb, run.stdout);
+      // What the plugin's rule rests on: a plan for a name the kernel does not know is refused with this code.
+      if (verb === "stopPlan" || verb === "retirePlan") check(error.code === "E_SESSION_UNKNOWN", `the ${verb === "stopPlan" ? "stop" : "retire"} plan of an agent that is gone is refused with E_SESSION_UNKNOWN`, error.code);
+    }
+  }
+  check(!existsSync(home) && rowOf(A.instance) === undefined, "and nothing was made by asking: no home, no row");
+
   // ======================================================================= part B
   /** A child, spawned as its parent would: on the command line, since the plugin's spawn names no parent. With no parent, an agent of its own. */
   function child(soul, name, parent, text) {
@@ -817,16 +853,16 @@ step("the images");
 // Two scenes of different states never produce the same image. The state each scene is in:
 const STATE_OF = { "real-working": "working", "real-idle": "idle", "real-answered": "idle", "real-needs-you": "needs-you", "real-question": "needs-you", "real-stopped": "stopped", "real-missing": "missing" };
 const sceneOf = (name) => Object.keys(STATE_OF).find((scene) => name.startsWith(`${scene}-`));
-// A KNOWN GAP (D-113 / S1): at 390 px the thread's view says nothing of the agent's state (the tree
-// is in bb's drawer, and the identity row carries no state), so the thread images of two states can
-// be one image there. The status line of the identity row ends it; this list is then emptied.
-const knownGap = (names) => names.every((name) => /-390x800-thread(-dark)?\.png$/.test(name));
+// The thread's own row says its agent's state at every width (D-113), so this holds for the thread
+// images too: the gap that was reported here until then (S1) is closed.
+let same = 0;
 for (const names of sameImages(OUT)) {
   const states = new Set(names.map((name) => STATE_OF[sceneOf(name)] ?? name));
   if (states.size === 1) continue; // the same state, read twice (idle, and idle again after an answer)
-  if (knownGap(names)) note(`the same image for different states, a known gap (D-113 / S1: no state in the thread's view at 390 px): ${names.join(" = ")}`);
-  else fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
+  same += 1;
+  fail(`two scenes of different states produced the same image: ${names.join(" = ")}`);
 }
+if (same === 0) pass("no two scenes of different states produced the same image");
 
 step("the recorded answers");
 // The kernel's version, as it prints it in the deployment: the one answer here that no RPC of the plugin asks for yet.

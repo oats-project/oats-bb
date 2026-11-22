@@ -1,5 +1,7 @@
 // The workspace's four pages, as the sidebar and the home link to them: each one's route under
 // the plugin (`/plugins/oats/<path>`) and its title.
+import { createElement, useEffect, useSyncExternalStore } from "react";
+import type { ComponentType } from "react";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 
 export const PAGES = [
@@ -41,3 +43,42 @@ export function addPageLink(link: PageLink): () => void {
 
 /** The rows of the sidebar's block: the four pages, then what the features added. */
 export const pageLinks = (): readonly PageLink[] => [...PAGES, ...added];
+
+// ---- which page is open (D-037: the row of the page shown carries the selection) ----
+// bb gives a plugin no hook for the route it shows, so a page says so itself while it is drawn.
+
+let open: string | null = null;
+const watchers = new Set<() => void>();
+const setOpen = (path: string | null) => {
+  if (open === path) return;
+  open = path;
+  for (const watcher of watchers) watcher();
+};
+
+/**
+ * A page's component, for its `navPanel` registration: while it is drawn, `path` is the open page
+ * and its row in the sidebar's block is the selected one. `component: shownPage("souls", SoulsPage)`.
+ */
+export function shownPage<Props extends object>(path: string, Page: ComponentType<Props>): ComponentType<Props> {
+  return function ShownPage(props: Props) {
+    useEffect(() => {
+      setOpen(path);
+      // Only the page that is still the open one takes the selection away: the next page may have set its own first.
+      return () => {
+        if (open === path) setOpen(null);
+      };
+    }, []);
+    return createElement(Page, props);
+  };
+}
+
+/** The path of the plugin's page that is drawn now, or null: a thread, or a page of bb's own, is shown. */
+export function useOpenPage(): string | null {
+  return useSyncExternalStore(
+    (watcher) => {
+      watchers.add(watcher);
+      return () => watchers.delete(watcher);
+    },
+    () => open,
+  );
+}

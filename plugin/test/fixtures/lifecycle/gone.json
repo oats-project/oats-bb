@@ -1,0 +1,50 @@
+{
+ "start": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_WORK_INSPECTION_FAILED",
+   "message": "directory instance home was removed or exchanged: /abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer; restore the owned home before retrying cleanup"
+  }
+ },
+ "restart": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_WORK_INSPECTION_FAILED",
+   "message": "directory instance home was removed or exchanged: /abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer; restore the owned home before retrying cleanup"
+  }
+ },
+ "stopPlan": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_SESSION_UNKNOWN",
+   "message": "no instance \"flaky-ci-2-developer\" under /abs/deployment/agents"
+  }
+ },
+ "stopApply": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_SESSION_UNKNOWN",
+   "message": "no instance \"flaky-ci-2-developer\" under /abs/deployment/agents"
+  }
+ },
+ "retirePlan": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_SESSION_UNKNOWN",
+   "message": "no instance \"flaky-ci-2-developer\" under /abs/deployment/agents"
+  }
+ },
+ "retireApply": {
+  "schemaVersion": 1,
+  "ok": false,
+  "error": {
+   "code": "E_SESSION_UNKNOWN",
+   "message": "no instance \"flaky-ci-2-developer\" under /abs/deployment/agents"
+  }
+ }
+}

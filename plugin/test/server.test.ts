@@ -67,7 +67,7 @@ describe("snapshot", () => {
     expect(first.ok).toBe(true);
     expect(first.deployment.root).toBe(fake.deployment);
     expect(first.deployment.workspace).toBe("oats");
-    expect(first.deployment.machine).toBeTypeOf("string");
+    expect(first.deployment.machine).toBe("falcon"); // the name bb gives the machine, not the host's own
     expect(first.agents).toHaveLength(8);
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);
@@ -214,6 +214,11 @@ describe("snapshot", () => {
     await first;
     // The next read looks for the deployment again, with the new setting, instead of using the old one.
     await expect.poll(async () => (await rpc("snapshot")).code, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(codes.noDeployment);
+    // And the roster read under the old settings is not this deployment's "last observation":
+    // no client is shown the old one's agents, and no act is lent their homes.
+    const failed = await rpc("snapshot");
+    expect(failed.last).toBeNull();
+    expect(failed.machine).toBe("falcon"); // the machine it looked on, by the name bb gives it
   }, 20_000);
 
   it("asks to choose a machine when the server has several and none is set", async () => {

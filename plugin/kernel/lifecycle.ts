@@ -7,7 +7,8 @@ import { checkHome, checkInstance, checkKey, checkRevision } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 
-export type Plan = { revision: string; lines: string[] };
+/** `instance` is the agent the KERNEL's plan is for, as its answer names it (null when it names none): what a confirmation is titled with, never the name that was asked for. */
+export type Plan = { revision: string; lines: string[]; instance: string | null };
 type Apply = { instance: string; revision: string; key: string };
 
 const text = z.string().nullish();
@@ -83,7 +84,9 @@ export function parseStopPlan(document: unknown): Result<Plan> {
   for (const row of plan.ambiguous ?? []) lines.push(`Not stopped, its parent is ambiguous: ${row.instance}${row.reason ? ` (${row.reason})` : ""}`);
   lines.push("Kept: every home, its work, its transcript and its launch settings. Start brings an agent back.");
   lines.push(...(plan.notes ?? []));
-  return ok({ revision: plan.planRevision, lines });
+  // The agent the plan is for: the kernel's own target at depth 0.
+  const root = plan.targets.find((target) => (target.depth ?? 0) === 0);
+  return ok({ revision: plan.planRevision, lines, instance: root?.instance ?? null });
 }
 
 const stopReceipt = z.looseObject({
@@ -184,7 +187,7 @@ export function parseRetirePlan(document: unknown): Result<Plan> {
   }
   for (const row of facts.ambiguous ?? []) lines.push(`Not touched, its parent is ambiguous: ${row.instance}`);
   lines.push(...(plan.notes ?? []));
-  return ok({ revision: plan.planRevision, lines });
+  return ok({ revision: plan.planRevision, lines, instance: plan.instance });
 }
 
 const retireReceipt = z.looseObject({

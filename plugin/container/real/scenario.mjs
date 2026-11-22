@@ -441,7 +441,7 @@ try {
   hold(A.instance);
   const task = taskOf(A.instance, "Fix the flaky CI job.");
   const preview = act("spawn preview", "spawnPreview", { soul: A.soul, name: A.instance, task });
-  check(preview?.facts.resolved.harness === "claude" && typeof preview?.revision === "string", "the preview names the launch (the harness the kernel resolved) and is a decision a spawn can apply", JSON.stringify(preview));
+  check(preview?.summary.problems.length === 0 && /^claude · /.test(preview?.summary.launch ?? ""), "the preview names the launch and no problem", JSON.stringify(preview));
   const previewRecord = recorded(["spawn", A.soul], ["--preview"]);
   evidence.keep("spawn-preview.json", previewRecord.stdout);
   // The deployment has no full-mode default (workspace.sh): the mode is the plugin's own `--yolo`.

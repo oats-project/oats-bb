@@ -203,6 +203,8 @@ const SPAWN_FACTS: Record<string, Said> = {
   E_INTENT_EXPIRED: said("This spawn request expired. Check the instance list before spawning again."),
   E_PREFLIGHT_INCOMPLETE: said("OATS couldn’t finish checking this spawn. Try again."),
   E_BACKEND_UNAVAILABLE: said("That session backend isn’t installed on this machine.", "change-options"),
+  // The bb session provider's own refusal at the launch: the instance exists, and bb cannot run it yet. The plugin's words (WORDS.md).
+  E_BACKEND_NOT_READY: said("The instance was created, but bb isn’t ready to launch it. Details says what bb needs; then start it from the sidebar instead of spawning again."),
   E_INSTANCE_GONE: said("The instance that was created isn’t there anymore. Check the instance list."),
   E_OUTCOME_UNKNOWN: said("We couldn’t confirm whether the instance was created.", "check-result"),
   E_SPAWN_INCOMPLETE: said("The instance was created but didn’t finish starting. Open it from the instance list instead of spawning again."),
@@ -215,7 +217,7 @@ const SPAWN_FACTS: Record<string, Said> = {
 const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 
 // The plugin's words for the act that follows, after the fact. They name the form's own controls
-// (Developer settings, Spawn, Details), as the Desktop's name the Desktop's (spawn-words.mjs).
+// (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   "review-again": "Check the values and press Spawn again.",
   "check-result": "Check the agents in the sidebar before spawning again.",
@@ -224,20 +226,21 @@ const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   details: "Try again, or see Details.",
   "open-from-list": "Open it from the sidebar.",
 };
-const CHOOSE_ANOTHER = "Choose another in Developer settings.";
+// The form has no Developer settings yet (they come in a later change), so no sentence sends a
+// person there: where the Desktop says "… in Developer settings", these name what the form has.
+const CHOOSE_ANOTHER = "Pick a harness above, or see Details.";
 const BY_CODE: Record<string, string> = {
-  E_BAD_ARGS: "Check the name and Developer settings.",
+  E_BAD_ARGS: "Check the values above.",
   E_CHILD_SPAWNS_DISABLED: "Pick another one, or choose Independent.",
-  E_BRANCH_EXISTS: "Choose another branch in Developer settings.",
-  E_BASE_UNKNOWN: "Check it in Developer settings.",
+  E_BRANCH_EXISTS: "Its name comes from the agent’s: choose another name.",
   E_LAUNCH_ENV_MISSING: CHOOSE_ANOTHER,
   E_LAUNCH_EXECUTABLE: CHOOSE_ANOTHER,
   E_LAUNCH_PROBE_UNSUPPORTED: CHOOSE_ANOTHER,
   E_LAUNCH_CONFIG_UNKNOWN: CHOOSE_ANOTHER,
-  E_LAUNCH_CONFIG_AMBIGUOUS: "Choose one under Launch configuration in Developer settings.",
+  E_LAUNCH_CONFIG_AMBIGUOUS: "Pick a harness above, or make one of them the default with oats launch-config on that machine.",
   E_HARNESS_UNAVAILABLE: "Install it, or pick another harness above.",
   E_BACKEND_HARNESS: "Pick one of the harnesses above.",
-  E_LAUNCH_PREFERENCE_UNMATCHED: "To spawn now, pick a harness above, or a launch configuration in Developer settings. To fix it for every spawn, correct the preference (Details).",
+  E_LAUNCH_PREFERENCE_UNMATCHED: "To spawn now, pick a harness above. To fix it for every spawn, correct the preference (Details).",
 };
 // Sentences that go on after a dash, in lower case: the fact's full stop gives way to " — ".
 const DASHED: Record<string, readonly [SpawnNext, string]> = {

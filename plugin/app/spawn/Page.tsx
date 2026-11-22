@@ -19,6 +19,7 @@ import type { Contract, Result as Answer } from "../store";
 import { Button, DisabledReason, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { agentName } from "../ui/words";
+import { Choice } from "./Choice";
 import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useModelSuggestions } from "./models";
 import * as W from "./words";
 
@@ -28,7 +29,7 @@ type Input = Parameters<ReturnType<typeof useRpc<Contract>>["call"]>[1] extends 
 /** How long the form waits after the last change before it asks for the preview again. */
 export const PREVIEW_DEBOUNCE_MS = 400;
 /** In the model's select: the entry that opens the field for a typed id. */
-const CUSTOM = "\u0000custom";
+const CUSTOM = "__custom__";
 /** The kernel's refusals that are about the name: said under the name itself. */
 const NAME_REFUSALS = new Set(["E_INSTANCE_NAME_INVALID", "E_INSTANCE_NAME_TAKEN"]);
 
@@ -228,7 +229,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       const asked = latest.current;
       if (asked.input === null || asked.key !== key) return;
       Promise.resolve()
-        .then(() => rpc.call("spawnPreview", asked.input!))
+        .then(() => rpc.call("spawnPlan", asked.input!))
         .then(
           (answer) => {
             // An answer for values that are no longer on screen is dropped, never drawn under the new ones.
@@ -345,8 +346,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
 
   // ---- focus and keys ----
   const fields = useRef<HTMLDivElement>(null);
-  // A field by its name; the relationship is a radio group, whose stop is the chosen one.
-  const focusOn = (target: string) => fields.current?.querySelector<HTMLElement>(target === "relation" ? '[data-field-group="relation"] [role="radio"][aria-checked="true"]' : `[data-field="${target}"]`)?.focus();
+  const focusOn = (target: string) => fields.current?.querySelector<HTMLElement>(`[data-field="${target}"]`)?.focus();
   // The form lands on its first field: the soul, or the instruction when the soul came with the route.
   const landed = useRef(false);
   useEffect(() => {
@@ -355,16 +355,13 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     focusOn(chosen === undefined ? "soul" : "task");
   }, [list, chosen]);
   const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-  const chord = (digit: string) => `${mac ? "Meta" : "Control"}+${digit}`;
   const onKeyDown = (event: KeyboardEvent) => {
-    // The Desktop's chords (spawn-dialog-keys.mjs): Mod+Enter spawns, Mod+1 to Mod+6 go to a field, in the form's order.
-    if (!(mac ? event.metaKey : event.ctrlKey) || event.altKey || event.shiftKey) return;
-    const target = event.key === "Enter" ? "spawn" : ({ "1": "task", "2": "harness", "3": "model", "4": "relation", "6": "name" } as Record<string, string>)[event.key];
-    if (target === undefined) return;
+    // Mod+Enter spawns, from any field (the Desktop's chord). Its Mod+digit chords to a field are
+    // not the form's: in a browser tab the browser keeps them; Tab walks the fields in their order.
+    if (event.key !== "Enter" || !(mac ? event.metaKey : event.ctrlKey) || event.altKey || event.shiftKey) return;
     event.preventDefault();
     event.stopPropagation();
-    if (target === "spawn") press();
-    else focusOn(target);
+    press();
   };
 
   // ---- drawing ----
@@ -413,44 +410,49 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 hint={chosen === undefined ? (list !== undefined && list.length === 0 ? W.NO_SOULS : null) : chosen.description === "" ? null : shown(chosen.description)}
                 error={unknownSoul ? W.soulUnknown(shown(soul)) : chosen !== undefined && !chosen.spawnable ? shown(chosen.problem ?? W.SOUL_CANNOT) : null}
               >
-                <select data-testid="oats-spawn-soul" data-field="soul" className={INPUT} value={chosen === undefined ? "" : soul} disabled={list === undefined} onChange={(event) => setSoul(event.target.value)}>
-                  <option value="" disabled>
-                    {list === undefined && souls.status === "loading" ? W.READING_SOULS : W.CHOOSE_SOUL}
-                  </option>
-                  {(list ?? []).map((candidate) => (
-                    <option key={candidate.name} value={candidate.name}>
-                      {shown(candidate.name)}
-                    </option>
-                  ))}
-                </select>
+                <Choice
+                  testId="oats-spawn-soul"
+                  field="soul"
+                  value={chosen === undefined ? "" : soul}
+                  disabled={list === undefined}
+                  placeholder={list === undefined && souls.status === "loading" ? W.READING_SOULS : W.CHOOSE_SOUL}
+                  filterLabel={W.FILTER_SOULS}
+                  options={(list ?? []).map((candidate) => ({ id: candidate.name, label: shown(candidate.name), detail: candidate.spawnable ? shown(candidate.description) : W.SOUL_CANNOT }))}
+                  onChange={setSoul}
+                />
               </Field>
               <Field label={W.TASK_LABEL} optional>
-                <textarea data-testid="oats-spawn-task" data-field="task" aria-keyshortcuts={chord("1")} rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
+                <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
               </Field>
               {harnesses.choice ? (
                 <Field label={W.HARNESS_LABEL}>
-                  <select data-testid="oats-spawn-harness" data-field="harness" aria-keyshortcuts={chord("2")} className={INPUT} value={harness} onChange={(event) => setHarness(event.target.value)}>
-                    <option value="">{resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null)}</option>
-                    {harnesses.options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Choice
+                    testId="oats-spawn-harness"
+                    field="harness"
+                    value={harness}
+                    placeholder={SOUL_DEFAULT}
+                    filterLabel={W.FILTER_HARNESSES}
+                    options={[{ id: "", label: resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null), detail: W.HARNESS_DEFAULT_DETAIL }, ...harnesses.options]}
+                    onChange={setHarness}
+                  />
                 </Field>
               ) : null}
               <Field label={W.MODEL_LABEL} hint={suggestions.note}>
-                <select data-testid="oats-spawn-model" data-field="model" aria-keyshortcuts={chord("3")} className={INPUT} value={modelPick} onChange={(event) => setModelPick(event.target.value)}>
-                  <option value="">{W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined)}</option>
-                  {suggestions.models.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {shown(option.label)}
-                    </option>
-                  ))}
-                  {/* A model picked before the harness changed stays what is sent, and is said. */}
-                  {modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? <option value={modelPick}>{shown(modelPick)}</option> : null}
-                  <option value={CUSTOM}>{W.MODEL_CUSTOM}</option>
-                </select>
+                <Choice
+                  testId="oats-spawn-model"
+                  field="model"
+                  value={modelPick}
+                  placeholder={MODEL_DEFAULT}
+                  filterLabel={W.FILTER_MODELS}
+                  options={[
+                    { id: "", label: W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
+                    ...suggestions.models.map((option) => ({ id: option.id, label: shown(option.label) })),
+                    // A model picked before the harness changed stays what is sent, and is said.
+                    ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),
+                    { id: CUSTOM, label: W.MODEL_CUSTOM, detail: W.MODEL_CUSTOM_PLACEHOLDER },
+                  ]}
+                  onChange={setModelPick}
+                />
               </Field>
               {modelPick === CUSTOM ? (
                 <Field label={W.MODEL_CUSTOM_LABEL}>
@@ -459,28 +461,25 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ) : null}
               <div data-testid="oats-spawn-relation" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
                 <span id="oats-spawn-relation-label">{W.RELATION_LABEL}</span>
-                <div className="flex min-w-0 flex-wrap items-center gap-2" data-field-group="relation">
-                  <div className="min-w-0 max-w-full overflow-x-auto">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {/* The four words stay whole: where they do not fit in a row, the row scrolls. */}
+                  <div className="min-w-0 max-w-full overflow-x-auto [&_[role=radio]]:whitespace-nowrap">
                     <Segmented label={W.RELATION_LABEL} options={W.RELATIONS} value={relation} onChange={setRelation} />
                   </div>
                   {relation === "unrelated" ? null : (
-                    <select
-                      data-testid="oats-spawn-relative"
-                      aria-label={W.whichInstance(relation)}
-                      aria-describedby="oats-spawn-relation-line"
-                      className={`${INPUT} min-w-40 flex-1`}
-                      value={relative}
-                      onChange={(event) => setRelativeTo(event.target.value)}
-                    >
-                      <option value="" disabled>
-                        {W.CHOOSE_INSTANCE}
-                      </option>
-                      {agents.map((agent) => (
-                        <option key={agent.instance} value={agent.instance}>
-                          {`${agentName(agent.instance)} · ${shown(agent.soul)}`}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="min-w-40 flex-1">
+                      <Choice
+                        testId="oats-spawn-relative"
+                        aria-label={W.whichInstance(relation)}
+                        aria-describedby="oats-spawn-relation-line"
+                        value={relative}
+                        disabled={agents.length === 0}
+                        placeholder={W.CHOOSE_INSTANCE}
+                        filterLabel={W.FILTER_INSTANCES}
+                        options={agents.map((agent) => ({ id: agent.instance, label: agentName(agent.instance), detail: shown(agent.soul) }))}
+                        onChange={setRelativeTo}
+                      />
+                    </div>
                   )}
                 </div>
                 <span id="oats-spawn-relation-line" aria-live="polite" data-testid="oats-spawn-relation-line">
@@ -488,7 +487,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 </span>
               </div>
               <Field label={W.NAME_LABEL} optional hint={nameFault !== null || nameRefusal !== null ? null : name === "" ? W.NAME_EMPTY : <>Instance name: <strong className="font-semibold text-foreground">{name}</strong></>} error={nameFault ?? nameRefusal?.sentence ?? null}>
-                <input data-testid="oats-spawn-name" data-field="name" aria-keyshortcuts={chord("6")} className={INPUT} value={typedName} placeholder={W.NAME_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setTypedName(event.target.value)} />
+                <input data-testid="oats-spawn-name" data-field="name" className={INPUT} value={typedName} placeholder={W.NAME_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setTypedName(event.target.value)} />
               </Field>
             </fieldset>
             <p data-testid="oats-spawn-mode" className="text-xs text-muted-foreground">
@@ -509,7 +508,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <Button data-testid="oats-spawn-cancel" onClick={cancel} disabled={phase === "spawning"}>
                 {W.CANCEL}
               </Button>
-              <Button type="submit" variant="primary" data-testid="oats-spawn-submit" aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`} aria-busy={phase !== "idle"} disabled={!canPress}>
+              <Button type="submit" variant="primary" data-testid="oats-spawn-submit" aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`} title={`${W.SPAWN} (${mac ? "⌘" : "Ctrl+"}Enter)`} aria-busy={phase !== "idle"} disabled={!canPress}>
                 {spawnWord}
               </Button>
               {reason === null ? null : <DisabledReason>{reason}</DisabledReason>}
@@ -517,9 +516,6 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 {status ?? (reason === null && reading && settled === null && chosen !== undefined ? W.READING : "")}
               </span>
             </div>
-            <p data-testid="oats-spawn-keys" className="text-xs text-muted-foreground">
-              {W.keysLine(mac ? "⌘" : "Ctrl+", harnesses.choice)}
-            </p>
           </form>
           <aside data-testid="oats-spawn-preview" aria-label="Spawn preview" aria-busy={updating} className="flex min-w-0 flex-col gap-3">
             <h2 className="flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

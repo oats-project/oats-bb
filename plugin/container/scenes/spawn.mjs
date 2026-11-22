@@ -8,14 +8,18 @@ import { fill, FOCUSED, showSidebar, testId, textOf, visible } from "../browser.
 
 const FORM = "/plugins/oats/new-agent";
 const q = (id) => JSON.stringify(testId(id));
-/** Picks `value` in a select as a person does, so that React sees it (the native setter, then a `change` event). */
-export const choose = (selector, value) =>
-  `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!(e instanceof HTMLSelectElement) || ![...e.options].some((o) => o.value === ${JSON.stringify(value)})) return false; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event("change", { bubbles: true })); return true; })()`;
+/**
+ * Picks the option `value` of one of the form's choices (app/spawn/Choice.tsx; `id` is its test
+ * id) as a person does: a press on the field opens its list, a press on the option chooses it.
+ * → whether the field then holds the value.
+ */
+export const choose = (id, value) =>
+  `(async () => { const field = document.querySelector(${q(id)}); if (!field || field.disabled) return false; if (field.getAttribute("aria-expanded") !== "true") field.click(); let option; for (let i = 0; i < 40 && !option; i += 1) { await new Promise((done) => setTimeout(done, 50)); option = [...document.querySelectorAll(${q(`${id}-option`)})].find((e) => e.getAttribute("data-value") === ${JSON.stringify(value)}); } if (!option) return false; option.click(); await new Promise((done) => setTimeout(done, 50)); return document.querySelector(${q(id)}).getAttribute("data-value") === ${JSON.stringify(value)}; })()`;
 const click = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; e.click(); return true; })()`;
-/** The form's own chord, sent to what holds the focus: Ctrl+<key>, as a person on Linux presses it. */
-const chord = (key) => `(() => { (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, ctrlKey: true, bubbles: true, cancelable: true })); return true; })()`;
 /** The souls are read: the soul field lists them. */
-const SOULS_READ = `document.querySelector(${q("oats-spawn-soul")})?.options.length > 1`;
+const SOULS_READ = `document.querySelector(${q("oats-spawn-soul")})?.disabled === false`;
+/** The form's first control. */
+const FIRST = `document.querySelector(${q("oats-spawn-form")}).querySelector("button, select, textarea, input").getAttribute("data-testid")`;
 /** What will be created is read for the values on screen: the facts are drawn, none being read again, and Spawn can be pressed. → the column's text. */
 const READ = `(() => { const c = document.querySelector(${q("oats-spawn-preview")}); return c?.querySelector('[data-testid="oats-fact"]') && !c.querySelector(${q("oats-spawn-updating")}) && document.querySelector(${q("oats-spawn-submit")})?.disabled === false ? c.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
 const reasonOf = textOf(testId("oats-disabled-reason"));
@@ -31,12 +35,35 @@ async function open(page, soul = "") {
 const whole = (page) => page.evaluate(textOf(testId("oats-new-agent-page")));
 
 export default [
+  // A soul's page keeps the earlier form (a name, a task, Preview) until the workspace's pages are rebuilt.
+  {
+    stage: "fixtures",
+    name: "the New agent form: the mode, a name it refuses, a name and a task and their preview",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/plugins/oats/souls/oats-developer");
+      await page.until(visible(testId("oats-spawn-form")), 30);
+      // the one line that says which mode a spawn asks for (text, no control); its contrast is checked at the screenshots below
+      check((await page.evaluate(textOf(testId("oats-spawn-mode")))) === "Runs in bb's full mode: no sandbox." && (await page.evaluate(visible(testId("oats-spawn-mode")))), `${at} the New agent form says it runs in bb's full mode, with no sandbox`, await page.evaluate(textOf(testId("oats-soul-detail"))));
+      // the spawn form: a name it refuses, then a name and a task it takes, and the preview
+      await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));
+      const refused = await page.until(`(() => { const t = ${textOf(testId("oats-spawn-form"))}; return /Lower-case letters, digits and dashes/.test(t) ? t : ""; })()`, 10);
+      check(Boolean(refused), `${at} the form says why it refuses a name`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+      await page.shot(`a13-${viewport.name}-soul-refused`);
+      await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
+      await page.evaluate(fill(testId("oats-spawn-task"), "Try depth 7."));
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))})?.disabled === false`, 10)), `${at} a name and a task enable Preview`);
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))}).click()`);
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))})?.disabled === false && ${visible(testId("oats-preview"))}`, 30)), `${at} Preview shows what OATS would do, and enables the spawn`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))}).scrollIntoView({ block: "center" })`);
+      await page.shot(`a13-${viewport.name}-soul-form`);
+    },
+  },
   {
     stage: "fixtures",
     name: "the New agent form, empty: the soul first and in focus, nothing read, Spawn off with its reason",
     run: async ({ page, at, viewport, check }) => {
       check(await open(page), `${at} /plugins/oats/new-agent is the form, with the souls OATS lists`, await whole(page));
-      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: document.querySelector(${q("oats-spawn-form")}).querySelector("select, textarea, input").getAttribute("data-testid"), labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label")].map((e) => e.innerText.trim()), spawn: document.querySelector(${q("oats-spawn-submit")}).disabled, reason: ${reasonOf}, column: ${textOf(testId("oats-spawn-preview"))}, mode: ${textOf(testId("oats-spawn-mode"))} })`);
+      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: ${FIRST}, labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label")].map((e) => e.innerText.trim()), spawn: document.querySelector(${q("oats-spawn-submit")}).disabled, reason: ${reasonOf}, column: ${textOf(testId("oats-spawn-preview"))}, mode: ${textOf(testId("oats-spawn-mode"))} })`);
       check(
         first === JSON.stringify({ title: "New agent", first: "oats-spawn-soul", labels: ["Soul", "Opening instruction · optional", "Harness", "Model", "Relationship", "Name · optional"], spawn: true, reason: "Choose a soul first.", column: "WHAT WILL BE CREATED Choose a soul to see what will be created.", mode: "Runs in bb's full mode: no sandbox." }),
         `${at} the empty form: titled New agent, the soul first, the Desktop's fields in its order, Spawn off and saying why, the one line about bb's full mode`,
@@ -49,10 +76,10 @@ export default [
   },
   {
     stage: "fixtures",
-    name: "the New agent form, filled: what will be created read from the kernel's preview; the focus order; the keys",
+    name: "the New agent form, filled: what will be created read from the kernel's preview; the focus order; a choice open",
     run: async ({ page, at, viewport, check }) => {
       check(await open(page, "oats-developer"), `${at} /plugins/oats/new-agent/oats-developer is the form with that soul chosen`, await whole(page));
-      const landed = await page.until(`${FOCUSED} === "oats-spawn-task" && JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, soul: document.querySelector(${q("oats-spawn-soul")}).value })`, 10);
+      const landed = await page.until(`${FOCUSED} === "oats-spawn-task" && JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, soul: document.querySelector(${q("oats-spawn-soul")}).getAttribute("data-value") })`, 10);
       check(landed === JSON.stringify({ title: "Spawn oats-developer in oats", soul: "oats-developer" }), `${at} opened with a soul: named as the Desktop names its dialog, the soul chosen, the focus on the instruction`, landed ?? (await page.evaluate(FOCUSED)));
       await page.evaluate(fill(testId("oats-spawn-task"), "Try depth 7 on the ranker and report the win rate."));
       await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
@@ -72,13 +99,15 @@ export default [
         order.push(await page.evaluate(FOCUSED));
       }
       check(JSON.stringify(order) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, Cancel, Spawn`, JSON.stringify(order));
-      // The form's keys, as the Desktop's dialog has them.
-      const jumps = [];
-      for (const key of ["6", "1", "2", "3", "4"]) {
-        await page.evaluate(chord(key));
-        jumps.push(await page.evaluate(FOCUSED));
-      }
-      check(JSON.stringify(jumps) === JSON.stringify(["oats-spawn-name", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent"]), `${at} Ctrl+6, 1, 2, 3 and 4 go to the name, the instruction, the harness, the model and the relationship`, JSON.stringify(jumps));
+      // A choice open: the souls OATS lists, each with its description; Escape closes it, and the focus is back on the field.
+      await page.evaluate(click(testId("oats-spawn-soul")));
+      const souls = await page.until(`document.querySelector(${q("oats-spawn-soul-options")}) && JSON.stringify({ role: document.querySelector(${q("oats-spawn-soul-options")}).getAttribute("role"), options: [...document.querySelectorAll(${q("oats-spawn-soul-option")})].map((e) => [...e.querySelectorAll("span")].map((part) => part.innerText.trim())), chosen: document.querySelector(${q("oats-spawn-soul-option")} + '[aria-selected="true"]')?.getAttribute("data-value") })`, 10);
+      const listed = JSON.parse(souls ?? "{}");
+      check(listed.role === "listbox" && listed.chosen === "oats-developer" && listed.options?.length > 1 && listed.options.every((option) => option.length === 2 && option.every((part) => part !== "")), `${at} the soul field opens to the souls OATS lists, each with its description, the chosen one marked`, souls ?? (await whole(page)));
+      await page.shot(`spawn-${viewport.name}-souls-open`, { targets: true });
+      await page.press("Escape");
+      const closed = await page.until(`!document.querySelector(${q("oats-spawn-soul-options")}) && ${FOCUSED}`, 10);
+      check(closed === "oats-spawn-soul", `${at} Escape closes the list, and the focus is back on the field`, String(closed));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-task"));
       await page.shot(`spawn-${viewport.name}-filled`, { targets: true });
@@ -105,7 +134,7 @@ export default [
       await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-spawn-relation")} [role="radio"]`)})].find((e) => e.innerText.trim() === "Child of").click()`);
       const asked = await page.until(`document.querySelector(${q("oats-spawn-relative")}) && JSON.stringify({ name: document.querySelector(${q("oats-spawn-relative")}).getAttribute("aria-label"), line: ${textOf(testId("oats-spawn-relation-line"))}, reason: ${reasonOf} })`, 10);
       check(asked === JSON.stringify({ name: "Child of which instance?", line: "Pick the instance this one is a child of.", reason: "Pick the instance first, or choose Independent." }), `${at} Child of asks which instance, and Spawn waits for it, saying so`, asked ?? (await whole(page)));
-      await page.evaluate(choose(testId("oats-spawn-relative"), "flaky-ci-developer"));
+      check(await page.evaluate(choose("oats-spawn-relative", "flaky-ci-developer")), `${at} the instance is picked from the roster's agents`, await whole(page));
       const related = await page.until(`(() => { const t = ${READ}; return t ? JSON.stringify({ line: ${textOf(testId("oats-spawn-relation-line"))}, reason: ${reasonOf} }) : ""; })()`, 30);
       check(related === JSON.stringify({ line: "Spawns as a child of Flaky ci developer.", reason: "" }), `${at} with the instance picked the line says whose child it will be, by its name as words, and Spawn is back`, related ?? (await whole(page)));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
@@ -181,7 +210,7 @@ export default [
       const there = await page.until(`${visible(testId("oats-new-agent"))} && document.querySelector(${q("oats-sidebar")}).querySelector(${q("oats-tree")}) !== null && !document.querySelector('[data-testid^="oats-page-link-"]') && ${textOf(testId("oats-new-agent"))}`, 30);
       check(there === "New agent", `${at} with only the home shown, New agent is in the sidebar, on screen, with no page link beside it`, there ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(click(testId("oats-new-agent")));
-      const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: document.querySelector(${q("oats-spawn-form")}).querySelector("select, textarea, input").getAttribute("data-testid"), shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
+      const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
     },

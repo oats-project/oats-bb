@@ -1,0 +1,12 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_INSTANCE_NAME_TAKEN",
+  "message": "instance name \"harvest-knowledge-helper\" is taken in this deployment (/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper); instance names are unique across every soul — pick another --name",
+  "details": {
+   "instance": "harvest-knowledge-helper",
+   "home": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper"
+  }
+ }
+}

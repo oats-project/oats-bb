@@ -83,8 +83,16 @@ describe("what will be created, from the kernel's preview", () => {
 describe("a refusal, in a person's words, with what to do", () => {
   it("at the preview: the Desktop's sentence, then the form's own words for what follows; the kernel's message for Details", () => {
     expect(spawnProblem({ code: "E_INSTANCE_NAME_TAKEN", message: "instance flaky-ci-2-developer exists" })).toEqual({ sentence: "An instance with this name already exists. Choose another name.", next: null, code: "E_INSTANCE_NAME_TAKEN", detail: "instance flaky-ci-2-developer exists" });
-    expect(spawnProblem({ code: "E_BRANCH_EXISTS", message: null }).sentence).toBe("That branch already exists. Choose another branch in Developer settings.");
-    expect(spawnProblem({ code: "E_BAD_ARGS", message: "x" }).sentence).toBe("Some of these values can’t be used. Check the name and Developer settings.");
+    // The form has no Developer settings yet: no sentence names a control that is not there.
+    expect(spawnProblem({ code: "E_BRANCH_EXISTS", message: null }).sentence).toBe("That branch already exists. Its name comes from the agent’s: choose another name.");
+    expect(spawnProblem({ code: "E_BAD_ARGS", message: "x" }).sentence).toBe("Some of these values can’t be used. Check the values above.");
+    expect(spawnProblem({ code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" }).sentence).toBe("The chosen launch configuration can’t start on this machine. Pick a harness above, or see Details.");
+    for (const code of ["E_BAD_ARGS", "E_BRANCH_EXISTS", "E_BASE_UNKNOWN", "E_LAUNCH_ENV_MISSING", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_LAUNCH_PREFERENCE_UNMATCHED"]) {
+      for (const stage of ["preview", "spawn"] as const) expect(spawnProblem({ code, message: null }, stage).sentence, code).not.toMatch(/Developer settings/);
+    }
+    // The bb session provider's own refusals, in the plugin's words.
+    expect(spawnProblem({ code: "E_BACKEND_HARNESS", message: "the bb session provider cannot launch codex" })).toEqual({ sentence: "bb can’t run the harness this soul would use. Pick one of the harnesses above.", next: "change-options", code: "E_BACKEND_HARNESS", detail: "the bb session provider cannot launch codex" });
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "bb reports its pi provider as not_installed" }, "spawn").sentence).toBe("The instance was created, but bb isn’t ready to launch it. Details says what bb needs; then start it from the sidebar instead of spawning again.");
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");
     expect(spawnProblem({ code: "E_PACKAGE_MISSING", message: null }).sentence).toBe("A package this soul uses isn’t installed yet. Run oats sync in the deployment, then try again.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }).sentence).toBe("OATS took too long to work out this soul’s defaults. Try again.");

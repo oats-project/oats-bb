@@ -1,6 +1,8 @@
 // The server's checks of the New agent form's choices (server/spawn.ts), against the whole
 // backend: bb's fake plugin host, the real host entry, the fake `oats` on the recorded answers.
 // The spawn itself (the preview, the apply, the replay of a key) is test/server.test.ts's.
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startBackend, type Backend } from "../support/backend.js";
 
@@ -22,7 +24,7 @@ const spawnCalls = async () => (await backend.fake.calls()).filter((call) => cal
 
 describe("the choices of the New agent form, at the server", () => {
   it("previews with no name and an empty instruction, and answers the facts and the revision, never the kernel's preview", async () => {
-    const preview = (await backend.rpc("spawnPreview", { soul: "oats-developer", task: "" })) as Record<string, unknown>;
+    const preview = (await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" })) as Record<string, unknown>;
     expect(Object.keys(preview).sort()).toEqual(["facts", "revision"]);
     expect(preview.revision).toMatch(/^[0-9a-f]{24}$/);
     expect(JSON.stringify(preview)).not.toContain("settings");
@@ -53,17 +55,38 @@ describe("the choices of the New agent form, at the server", () => {
       { ...base, relation: { kind: "child", to: "no-such-agent" } },
       { ...base, model: "--yolo" },
     ]) {
-      expect(await refusalOf(backend.rpc("spawnPreview", choices)), JSON.stringify(choices)).toMatchObject({ code: "invalid" });
+      expect(await refusalOf(backend.rpc("spawnPlan", choices)), JSON.stringify(choices)).toMatchObject({ code: "invalid" });
       expect(await refusalOf(backend.rpc("spawn", { ...choices, key: "spawn-1f0c9a7e" })), JSON.stringify(choices)).toMatchObject({ code: "invalid" });
     }
-    await expect(backend.rpc("spawnPreview", { ...base, relation: { kind: "owner", to: "flaky-ci-developer" } })).rejects.toThrow();
-    await expect(backend.rpc("spawnPreview", { ...base, flag: "--no-launch" })).rejects.toThrow();
+    await expect(backend.rpc("spawnPlan", { ...base, relation: { kind: "owner", to: "flaky-ci-developer" } })).rejects.toThrow();
+    await expect(backend.rpc("spawnPlan", { ...base, flag: "--no-launch" })).rejects.toThrow();
     expect(await spawnCalls()).toEqual([]);
   });
 
-  it("takes a harness the provider declares and a relation to an agent of the roster", async () => {
-    await backend.rpc("spawnPreview", { soul: "oats-developer", task: "t", harness: "claude", model: "anthropic/claude-opus-5-5", relation: { kind: "sibling", to: "flaky-ci-developer" } });
+  it("takes a harness the provider declares and a relation to an agent of the roster, with the anchor's agents root, from the home the roster's own row names", async () => {
+    await backend.rpc("spawnPlan", { soul: "oats-developer", task: "t", harness: "claude", model: "anthropic/claude-opus-5-5", relation: { kind: "sibling", to: "flaky-ci-developer" } });
     const [call] = await spawnCalls();
-    expect(call!.argv.slice(-10)).toEqual(["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "sibling", "--relative-to", "flaky-ci-developer", "--preview", "--json"]);
+    // The agents root of the anchor's home, as the kernel's status names that home (test/fixtures/roster/status.json).
+    const root = "/abs/deployment/agents";
+    expect(call!.argv.slice(-12)).toEqual(["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "sibling", "--relative-to", "flaky-ci-developer", "--relative-root", root, "--preview", "--json"]);
+    // A caller cannot name the root itself: the contract has no place for it.
+    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "t", relation: { kind: "sibling", to: "flaky-ci-developer", root: "/elsewhere" } })).rejects.toThrow();
+  });
+
+  it("a preview that is no decision a spawn could apply is refused to the form with the kernel's code; a soul's page still gets it as a problem line", async () => {
+    const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: { launch: Record<string, unknown> } };
+    document.result.launch.problem = { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" };
+    await backend.fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    expect(await refusalOf(backend.rpc("spawnPlan", { soul: "oats-developer", task: "" }))).toEqual({ code: "conflict", message: "E_LAUNCH_EXECUTABLE: pi is not on PATH" });
+    const old = (await backend.rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" })) as { summary: { problems: string[] } };
+    expect(Object.keys(old)).toEqual(["summary"]);
+    expect(old.summary.problems).toEqual(["E_LAUNCH_EXECUTABLE: pi is not on PATH"]);
+  });
+
+  it("the agents root of a home: the home without <agent>/instances/<instance>; a home of another shape names none", async () => {
+    const { agentsRootOf } = await import("../../server/spawn.js");
+    expect(agentsRootOf({ home: "/abs/deployment/agents/oats-developer/instances/flaky-ci-developer", soul: "oats-developer", instance: "flaky-ci-developer" })).toBe("/abs/deployment/agents");
+    expect(agentsRootOf({ home: "/srv/homes/flaky-ci-developer", soul: "oats-developer", instance: "flaky-ci-developer" })).toBeNull();
+    expect(agentsRootOf({ home: "/oats-developer/instances/flaky-ci-developer", soul: "oats-developer", instance: "flaky-ci-developer" })).toBeNull();
   });
 });

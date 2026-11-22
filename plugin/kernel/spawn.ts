@@ -3,6 +3,7 @@
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
 import { previewFacts, type PreviewFacts } from "../model/spawn.js";
+import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
@@ -11,7 +12,8 @@ import { withTaskFile } from "./task-file.js";
 
 /** The relations a spawn can name (`--relation`); with none, the agent is independent. */
 export const RELATIONS = ["child", "sibling", "parent"] as const;
-export type SpawnRelation = { kind: (typeof RELATIONS)[number]; to: string };
+/** `root` is the anchor's agents root, as the roster's row of it names it: it tells same-named anchors apart (`--relative-root`). */
+export type SpawnRelation = { kind: (typeof RELATIONS)[number]; to: string; root?: string | undefined };
 /**
  * What a spawn is asked with, beside its task: the soul, and what a person chose. `name` left out
  * is numbered by the kernel; `harness` and `model` left out are resolved by the kernel; `relation`
@@ -50,7 +52,9 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
     if (!RELATIONS.includes(input.relation.kind)) return err(codes.invalidInput, `"${String(input.relation.kind)}" is not a relation: child, sibling or parent`);
     const to = checkInstance(input.relation.to);
     if (!to.ok) return to;
-    relation = { kind: input.relation.kind, to: to.value };
+    const root = input.relation.root;
+    if (root !== undefined && (!root.startsWith("/") || root.includes("\0"))) return err(codes.invalidInput, "a relation's agents root must be the absolute path the kernel named");
+    relation = { kind: input.relation.kind, to: to.value, ...(root === undefined ? {} : { root }) };
   }
   return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation });
 }
@@ -75,7 +79,7 @@ const common = (input: Checked, taskFile: string | null): string[] => [
   ...(taskFile === null ? [] : ["--task-file", taskFile]),
   ...(input.harness === null ? [] : ["--harness", input.harness]),
   ...(input.model === null ? [] : ["--model", input.model]),
-  ...(input.relation === null ? [] : ["--relation", input.relation.kind, "--relative-to", input.relation.to]),
+  ...(input.relation === null ? [] : ["--relation", input.relation.kind, "--relative-to", input.relation.to, ...(input.relation.root === undefined ? [] : ["--relative-root", input.relation.root])]),
 ];
 
 export const spawnPreviewArgv = (input: Checked, taskFile: string | null): string[] => [...common(input, taskFile), "--preview", "--json"];
@@ -104,27 +108,77 @@ export const spawnArgv = (input: Checked, taskFile: string | null, apply: SpawnA
 const text = z.string().nullish();
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),
+  modules: z
+    .array(z.looseObject({ name: z.string(), from: z.looseObject({ kind: text, version: text }).nullish() }))
+    .nullish(),
+  teams: z.array(z.looseObject({ label: z.string(), team: text, default: z.boolean().nullish() })).nullish(),
+  harness: text,
+  model: text,
+  modelSource: text,
+  launchConfig: text,
+  warnings: z.array(z.string()).nullish(),
   preflight: z.looseObject({ status: text, budgetMs: z.number().nullish() }).nullish(),
   backendStatus: z.looseObject({ name: text, installed: z.boolean().nullish() }).nullish(),
   launch: z.looseObject({ problem: z.looseObject({ code: text, message: text }).nullish() }).nullish(),
 });
 
-/**
- * A preview the kernel answered: its facts in the form's words (model/spawn.ts), for exactly the
- * name asked, and the decision's revision. A preview that is no decision a spawn could apply is a
- * refusal here, with the code the Desktop's client gives it (packages/client/spawn-apply.mjs): a
- * launch the kernel found a problem with (the problem's own code), checks that did not finish in
- * the kernel's budget (`E_PREFLIGHT_INCOMPLETE`), a session backend that is not installed
- * (`E_BACKEND_UNAVAILABLE`).
- */
-export function parseSpawnPreview(document: unknown, name: string | null = null): Result<{ facts: PreviewFacts; revision: string }> {
+export type SpawnPreview = {
+  /** The preview as short lines, for a soul's page. */
+  summary: SpawnSummary;
+  /** What will be created, in the form's words (model/spawn.ts), for exactly the name asked. */
+  facts: PreviewFacts;
+  revision: string;
+  /**
+   * Why this preview is no decision a spawn could apply, with the code the Desktop's client gives
+   * it (packages/client/spawn-apply.mjs): a launch the kernel found a problem with (the problem's
+   * own code), checks that did not finish in the kernel's budget (`E_PREFLIGHT_INCOMPLETE`), a
+   * session backend that is not installed (`E_BACKEND_UNAVAILABLE`). Null for one a spawn can apply.
+   */
+  problem: { code: string; message: string } | null;
+};
+
+export function parseSpawnPreview(document: unknown, name: string | null = null): Result<SpawnPreview> {
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
-  if (value.launch?.problem) return err(value.launch.problem.code ?? codes.failed, value.launch.problem.message ?? "the kernel found a problem with this launch and did not say which");
-  if (value.preflight?.status === "timeout") return err("E_PREFLIGHT_INCOMPLETE", `the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
-  if (value.backendStatus && value.backendStatus.installed === false) return err("E_BACKEND_UNAVAILABLE", `the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
-  return ok({ facts: previewFacts(document, { name }), revision: value.decision.revision });
+  const problems: string[] = [];
+  let problem: SpawnPreview["problem"] = null;
+  if (value.backendStatus && value.backendStatus.installed === false) {
+    problems.push(`the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
+    problem = { code: "E_BACKEND_UNAVAILABLE", message: problems.at(-1)! };
+  }
+  if (value.preflight?.status === "timeout") {
+    problems.push(`the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
+    problem = { code: "E_PREFLIGHT_INCOMPLETE", message: problems.at(-1)! };
+  }
+  if (value.launch?.problem) {
+    problems.push([value.launch.problem.code, value.launch.problem.message].filter(Boolean).join(": "));
+    problem = { code: value.launch.problem.code ?? codes.failed, message: value.launch.problem.message ?? "the kernel found a problem with this launch and did not say which" };
+  }
+  const model = value.model ?? "the harness's default model";
+  const launch = value.harness
+    ? [
+        value.harness,
+        value.modelSource ? `${model} (${value.modelSource})` : model,
+        value.launchConfig ? `launch configuration ${value.launchConfig}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" · ")
+    : null;
+  return ok({
+    revision: value.decision.revision,
+    summary: {
+      modules: (value.modules ?? []).map((module) => (module.from?.version ? `${module.name} ${module.from.version}` : module.name)),
+      teams: (value.teams ?? []).map((team) =>
+        [team.label, team.default ? "(default)" : null, team.team ? null : "(not mapped)"].filter((part) => part !== null).join(" "),
+      ),
+      launch,
+      warnings: value.warnings ?? [],
+      problems,
+    },
+    facts: previewFacts(document, { name }),
+    problem,
+  });
 }
 
 const spawned = z.looseObject({
@@ -188,7 +242,7 @@ export const verbs = (oats: Runner) => ({
     input: SpawnInput & { task: string },
     context: { knownSouls: readonly string[]; tempDir: string },
     signal?: AbortSignal,
-  ): Promise<Result<{ facts: PreviewFacts; revision: string }>> {
+  ): Promise<Result<SpawnPreview>> {
     const checked = checkSpawn(input, context.knownSouls);
     if (!checked.ok) return checked;
     const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name), oats.timeouts.preview, signal);

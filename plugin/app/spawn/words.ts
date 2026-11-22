@@ -11,6 +11,12 @@ export const titleFor = (soul: string, workspace: string | null): string => (wor
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
 export const READING_SOULS = "Reading the souls…";
+export const FILTER_SOULS = "Filter souls";
+export const FILTER_HARNESSES = "Filter harnesses";
+export const FILTER_INSTANCES = "Filter instances";
+export const FILTER_MODELS = "Filter models";
+/** Under the harness's first entry (the Desktop's detail). */
+export const HARNESS_DEFAULT_DETAIL = "What this soul launches with unless you choose";
 export const NO_SOULS = "This workspace lists no soul to spawn.";
 export const soulUnknown = (soul: string): string => `OATS lists no soul “${soul}” in this deployment. Choose one of these.`;
 export const SOUL_CANNOT = "This soul can’t be spawned.";
@@ -93,7 +99,3 @@ export const OFF = {
   relation: "Pick the instance first, or choose Independent.",
   refused: "OATS refused these values: “What will be created” says why.",
 } as const;
-
-/** The keys, in one line under the form (the Desktop's chords; `mod` is "⌘" on a Mac, "Ctrl+" elsewhere). */
-export const keysLine = (mod: string, harness: boolean): string =>
-  `Keys: ${mod}Enter spawns · ${mod}1 Opening instruction${harness ? ` · ${mod}2 Harness` : ""} · ${mod}3 Model · ${mod}4 Relationship · ${mod}6 Name`;

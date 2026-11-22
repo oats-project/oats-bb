@@ -18,7 +18,7 @@ import * as workspace from "./workspace.js";
 export { instanceName } from "./shared.js";
 export { agent, snapshot } from "./roster.js";
 export { capability, hostCapability, machine, soul, team } from "./workspace.js";
-export { spawnFacts } from "./spawn.js";
+export { spawnSummary } from "./spawn.js";
 
 export const REALTIME_CHANGED = "oats/changed";
 

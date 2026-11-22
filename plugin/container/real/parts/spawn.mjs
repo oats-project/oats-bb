@@ -3,8 +3,8 @@
 //   1. the harnesses the bb session provider declares, as the plugin reads them for the form and
 //      for the Start and Restart dialogs (`oats capabilities show oats.bb --json`);
 //   2. the refusals the form words, as the real kernel prints them: a name that is taken (at the
-//      preview), a decision that moved (at the apply), and a harness the provider declares that
-//      this container cannot launch (pi, when it is not installed here);
+//      preview), a decision that moved (at the apply), and a spawn on a harness the provider
+//      declares that bb cannot launch in this container (pi, when bb has no pi provider here);
 //   3. one agent spawned THROUGH THE FORM, in a browser: the page opened from the sidebar's New
 //      agent under the release's default pages, a soul chosen, the preview read, Spawn pressed,
 //      the new agent's thread opened; with the images of the form in both themes at both widths.
@@ -29,7 +29,7 @@ export default async (run) => {
   fixtures.keep("spawn/capabilities-show-bb.json", call.stdout);
 
   step("Spawn: a preview with no name and no instruction (what the empty form asks)");
-  const unnamed = act("the preview of an empty form", "spawnPreview", { soul: SOUL, task: "" });
+  const unnamed = act("the preview of an empty form", "spawnPlan", { soul: SOUL, task: "" });
   const unnamedCall = recorded(["spawn", SOUL], ["--preview"]);
   check(JSON.stringify(unnamedCall.argv) === JSON.stringify(["spawn", SOUL, "--backend", "bb", "--yolo", "--preview", "--json"]), "the plugin passed nothing a person did not choose: no --name, no task file, no --harness, no --model, no relation", JSON.stringify(unnamedCall.argv));
   check(unnamed?.facts.identity[0]?.text === "numbered by the kernel" && typeof unnamed?.revision === "string", "the kernel decides it, and the facts say the kernel numbers the agent", JSON.stringify(unnamed?.facts.identity));
@@ -37,7 +37,7 @@ export default async (run) => {
 
   step("Spawn: the refusals the form words, as the kernel prints them");
   const taken = [...run.status().rows.keys()][0];
-  const nameTaken = refused("a preview with a name that is taken", "E_INSTANCE_NAME_TAKEN", "spawnPreview", { soul: SOUL, name: taken, task: "" }, ["spawn", SOUL], ["--preview"]);
+  const nameTaken = refused("a preview with a name that is taken", "E_INSTANCE_NAME_TAKEN", "spawnPlan", { soul: SOUL, name: taken, task: "" }, ["spawn", SOUL], ["--preview"]);
   if (nameTaken !== undefined) fixtures.keep("spawn/spawn-preview-name-taken.json", nameTaken.record.stdout);
   // A decision the kernel does not hold (a revision of its shape that it never answered): what a
   // person meets when something moved between the preview they saw and their press.
@@ -49,26 +49,28 @@ export default async (run) => {
   let piSpawned = false;
   if (Array.isArray(declared) && declared.includes("pi")) {
     step("Spawn: harness pi, as the provider declares it");
-    const pi = rpc("spawnPreview", { soul: SOUL, task: "", harness: "pi" });
+    const pi = rpc("spawnPlan", { soul: SOUL, task: "", harness: "pi" });
     const piCall = recorded(["spawn", SOUL], ["--harness"]);
     check(piCall.argv[piCall.argv.indexOf("--harness") + 1] === "pi" && piCall.argv.includes("--preview"), "picking a listed harness passes --harness <id> on the preview", JSON.stringify(piCall.argv));
-    if (pi.ok) {
-      fixtures.keep("spawn/spawn-preview-pi.json", piCall.stdout);
-      const spawned = act("spawn with harness pi", "spawn", { soul: SOUL, name: "form-pi-developer", task: "", harness: "pi", key: "spawn-form-pi-1" });
-      const row = spawned === undefined ? undefined : await until("the pi agent's row", () => rowOf("form-pi-developer"), 60);
+    // The kernel decides a spawn on pi and then asks the provider whether bb can launch it here.
+    const spawned = pi.ok ? rpc("spawn", { soul: SOUL, name: "form-pi-developer", task: "", harness: "pi", key: "spawn-form-pi-1", revision: pi.value.revision }) : pi;
+    if (spawned.ok) {
+      const row = await until("the pi agent's row", () => rowOf("form-pi-developer"), 60);
       check(row?.backend === "bb" && row?.harness === "pi", "the kernel has the agent on bb, on pi", JSON.stringify(row && { backend: row.backend, harness: row.harness }));
       piSpawned = row?.harness === "pi";
     } else {
+      const refusedCall = recorded(["spawn", SOUL], pi.ok ? ["--harness", "--idempotency-key"] : ["--harness"]);
       let kernel;
       try {
-        kernel = JSON.parse(piCall.stdout).error;
+        kernel = JSON.parse(refusedCall.stdout).error;
       } catch {
         kernel = undefined;
       }
-      show("the kernel's refusal", pi.message);
-      check(kernel !== undefined && pi.message.endsWith(`${kernel.code}: ${kernel.message}`), `this container cannot launch pi, and the plugin shows the kernel's refusal unchanged (${kernel?.code})`, pi.message);
-      if (kernel !== undefined) fixtures.keep("spawn/spawn-preview-pi-refused.json", piCall.stdout);
-      note("NO SPAWN WITH HARNESS pi IN THIS RUN: the container has no pi the kernel can launch; the refusal above is what the form shows");
+      show("the kernel's refusal", spawned.message);
+      check(kernel !== undefined && spawned.message.endsWith(`${kernel.code}: ${kernel.message}`), `this container cannot launch pi (${pi.ok ? "refused at the spawn" : "refused at the preview"}), and the plugin shows the kernel's refusal unchanged (${kernel?.code})`, spawned.message);
+      check(rowOf("form-pi-developer") === undefined || rowOf("form-pi-developer")?.running !== true, "and no pi agent runs");
+      if (kernel !== undefined) fixtures.keep("spawn/spawn-pi-refused.json", refusedCall.stdout);
+      note("NO SPAWN WITH HARNESS pi IN THIS RUN: bb in this container has no pi provider it can launch; the refusal above is what the form shows");
     }
   }
 
@@ -85,11 +87,11 @@ export default async (run) => {
       check(Boolean(button), `${at} under the default pages the sidebar has New agent, and no page link`, await page.evaluate(textOf(testId("oats-sidebar"))));
       await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-new-agent"))}).click()`);
       // The form's own page, its first field the soul, with nothing chosen.
-      const first = await page.until(`(() => { const f = document.querySelector(${JSON.stringify(testId("oats-spawn-form"))}); const c = f?.querySelector("select, textarea, input"); return c && c.options.length > 1 ? JSON.stringify({ path: location.pathname, first: c.getAttribute("data-testid"), title: document.querySelector(${JSON.stringify(testId("oats-spawn-title"))})?.innerText, off: document.querySelector(${JSON.stringify(testId("oats-disabled-reason"))})?.innerText }) : ""; })()`, 30);
+      const first = await page.until(`(() => { const f = document.querySelector(${JSON.stringify(testId("oats-spawn-form"))}); const c = f?.querySelector("button, select, textarea, input"); return c && c.disabled === false ? JSON.stringify({ path: location.pathname, first: c.getAttribute("data-testid"), title: document.querySelector(${JSON.stringify(testId("oats-spawn-title"))})?.innerText, off: document.querySelector(${JSON.stringify(testId("oats-disabled-reason"))})?.innerText }) : ""; })()`, 30);
       check(first === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", title: "New agent", off: "Choose a soul first." }), `${at} New agent opens the form's page: the soul field first, and Spawn off with its reason`, first ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       await shot("empty");
       // A soul, an instruction and a name: the kernel's preview of exactly these.
-      await page.evaluate(choose(testId("oats-spawn-soul"), SOUL));
+      check(await page.evaluate(choose("oats-spawn-soul", SOUL)), `${at} the soul is chosen from the souls OATS lists`, await page.evaluate(textOf(testId("oats-spawn-form"))));
       await page.evaluate(fill(testId("oats-spawn-task"), TASK));
       const name = spawnedBy === null ? NAME : `${NAME}-${viewport.name}`;
       await page.evaluate(fill(testId("oats-spawn-name"), name));
@@ -100,10 +102,11 @@ export default async (run) => {
       if (spawnedBy !== null) return;
       // Spawn, once, in the first view: the new agent's thread opens.
       spawnedBy = at;
-      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))}).click()`);
+      // Mod+Enter, from the instruction: the form's key for Spawn (sent as the page's own key event).
+      await page.evaluate(`(() => { const t = document.querySelector(${JSON.stringify(testId("oats-spawn-task"))}); t.focus(); t.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true })); })()`);
       const opened = await page.until(`/\\/threads\\/thr_/.test(location.pathname) ? location.pathname : ""`, 180);
       const row = rowOf(NAME);
-      check(Boolean(opened) && row?.backend === "bb" && typeof row?.session?.threadId === "string" && String(opened).endsWith(row.session.threadId), `${at} Spawn created ${NAME} on bb and opened its thread`, JSON.stringify({ opened, row: row && { backend: row.backend, thread: row.session?.threadId }, page: await page.evaluate(textOf(testId("oats-new-agent-page"))) }));
+      check(Boolean(opened) && row?.backend === "bb" && typeof row?.session?.threadId === "string" && String(opened).endsWith(row.session.threadId), `${at} Ctrl+Enter spawned ${NAME} on bb and opened its thread`, JSON.stringify({ opened, row: row && { backend: row.backend, thread: row.session?.threadId }, page: await page.evaluate(textOf(testId("oats-new-agent-page"))) }));
     });
   } finally {
     bb("plugin", "config", "oats", "set", "pages", ALL);

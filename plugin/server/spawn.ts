@@ -3,7 +3,8 @@ import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sd
 import type { z } from "zod";
 import type { rpc } from "../contract/spawn.js";
 import { checkHarness, checkModel } from "../kernel/spawn.js";
-import { HOST_TIMEOUT, invalid, refusedWith, type Core, type Value } from "./core.js";
+import type { Agent } from "../model/types.js";
+import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
 
 /**
@@ -13,7 +14,19 @@ import { soulsOf } from "./workspace.js";
  */
 export const harnessesOf = (core: Core): Promise<string[]> => core.page("spawnHarnesses", async (signal) => (await core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal)).harnesses);
 
-type Choices = z.infer<(typeof rpc)["spawnPreview"]["input"]>;
+/**
+ * The agents root an agent's home is in, for `--relative-root` (it tells same-named anchors
+ * apart). The kernel's status names no agents root on a row: it names the home, which OATS lays
+ * out as `<agents root>/<agent>/instances/<instance>` (docs/desktop-cli-api.md). So the root is
+ * that home without its last three parts; a home of another shape names none, and none is passed.
+ */
+export function agentsRootOf(agent: Pick<Agent, "home" | "soul" | "instance">): string | null {
+  const tail = `/${agent.soul}/instances/${agent.instance}`;
+  return agent.home.startsWith("/") && agent.home.endsWith(tail) && agent.home.length > tail.length ? agent.home.slice(0, -tail.length) : null;
+}
+
+type Choices = z.infer<(typeof rpc)["spawnPlan"]["input"]>;
+type HostChoices = Omit<Choices, "relation"> & { relation?: NonNullable<Choices["relation"]> & { root?: string } };
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /** key -> the decision a spawn with that key applies, so that a retry replays it. */
@@ -21,9 +34,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /**
    * The choices, checked against what OATS lists, before any process: the soul is one `oats souls`
    * lists, a named harness one the bb session provider declares, a relation's instance an agent of
-   * the roster. Answers them as the host entry takes them.
+   * the roster. Answers them as the host entry takes them: a relation with its anchor's agents
+   * root, from the roster's own row of it, never from the caller.
    */
-  const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<Choices> => {
+  const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
     if (harness !== undefined) {
       const named = checkHarness(harness, await harnessesOf(core));
@@ -33,9 +47,14 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const named = checkModel(model);
       if (!named.ok) throw invalid(named.error.message);
     }
-    if (relation !== undefined) await core.agentOf(relation.to);
+    let anchor: HostChoices["relation"];
+    if (relation !== undefined) {
+      const to = await core.agentOf(relation.to);
+      const root = agentsRootOf(to);
+      anchor = { ...relation, ...(root === null ? {} : { root }) };
+    }
     // Only what was chosen goes to the host entry: a call carries no key without a value.
-    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(relation === undefined ? {} : { relation }) };
+    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }) };
   };
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
@@ -43,7 +62,14 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
     },
     async spawnPreview(input, context) {
-      return core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
+      const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
+      return { summary };
+    },
+    async spawnPlan(input, context) {
+      const { facts, revision, problem } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
+      // No decision a spawn could apply: refused as the kernel's own refusals are, with its code.
+      if (problem !== null) throw refusal(problem);
+      return { facts, revision };
     },
     async spawn({ key, revision, ...input }) {
       const choices = await checked(input);

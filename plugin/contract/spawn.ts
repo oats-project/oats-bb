@@ -5,6 +5,17 @@ import { answer, hostBase, instanceName, key } from "./shared.js";
 
 const soulName = z.string().min(1).max(128);
 
+/** What `spawnPreview` answers: the kernel's preview as short lines (a soul's page draws them; the form reads `spawnPlan`). */
+export const spawnSummary = z.object({
+  modules: z.array(z.string()),
+  teams: z.array(z.string()),
+  launch: z.string().nullable(),
+  warnings: z.array(z.string()),
+  problems: z.array(z.string()),
+});
+/** A soul, a name and a task: what a soul's page asks a preview and a spawn with. */
+const namedInput = z.object({ soul: soulName, name: instanceName, task: z.string().min(1).max(100_000) });
+
 /**
  * Whom the new agent is started under, or beside (`--relation <kind> --relative-to <instance>`):
  * `to` is an agent of the current roster. Left out, the agent is independent.
@@ -47,8 +58,8 @@ export const spawnFacts = z.object({
   resolved: z.object({ harness: z.string().nullable(), model: z.string().nullable() }),
 });
 export type SpawnFacts = z.infer<typeof spawnFacts>;
-/** A preview's answer: its facts, and the kernel's decision revision for exactly these choices. */
-const preview = z.object({ facts: spawnFacts, revision: z.string() });
+/** The form's preview: its facts, and the kernel's decision revision for exactly these choices. */
+const plan = z.object({ facts: spawnFacts, revision: z.string() });
 
 /**
  * The harnesses a spawn, a start or a restart on bb may name: what the bb session provider
@@ -61,7 +72,15 @@ export type HarnessList = z.infer<typeof harnessList>;
 export const rpc = defineRpcContract({
   /** One read for the New agent form and the Start and Restart dialogs. */
   spawnHarnesses: { input: z.null(), output: harnessList },
-  spawnPreview: { input: spawnInput.strict(), output: preview },
+  /** A soul's page's preview: a soul, a name and a task; the kernel's preview as short lines. */
+  spawnPreview: { input: namedInput.strict(), output: z.object({ summary: spawnSummary }) },
+  /**
+   * The New agent form's preview, for what a person chose: what will be created, as facts (never
+   * the kernel's preview whole), and the revision of the decision. A preview that is no decision a
+   * spawn could apply (a launch with a problem, checks that did not finish, a backend that is not
+   * installed) is refused, with the kernel's code.
+   */
+  spawnPlan: { input: spawnInput.strict(), output: plan },
   /**
    * `revision` is the decision a person saw: the revision a `spawnPreview` of the same choices
    * answered. The kernel then refuses a spawn whose decision moved since (`E_DECISION_STALE`), and
@@ -73,16 +92,22 @@ export const rpc = defineRpcContract({
   },
 });
 
-const hostSpawn = z.object({ ...hostBase, ...spawnInput.shape });
+/** As the server hands a relation to the host entry: with the anchor's agents root (`--relative-root`), from the home the roster's own row of it names; left out when that home names none. */
+const hostRelation = spawnRelation.extend({ root: z.string().min(1).optional() }).strict();
+const hostSpawn = z.object({ ...hostBase, ...spawnInput.shape, relation: hostRelation.optional() });
 
 export const host = defineRpcContract({
   /** `oats capabilities show oats.bb --json`. */
   spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()) })) },
-  /** `revision` is the kernel's decision revision for these choices. */
+  /**
+   * `revision` is the kernel's decision revision for these choices; `summary` is for a soul's
+   * page, `facts` for the form; `problem` is why this preview is no decision a spawn could apply
+   * (the kernel's code and words), or null.
+   */
   spawnPreview: {
     experimental_retryable: true,
     input: hostSpawn.strict(),
-    output: answer(preview),
+    output: answer(z.object({ summary: spawnSummary, facts: spawnFacts, revision: z.string(), problem: z.object({ code: z.string(), message: z.string() }).nullable() })),
   },
   /**
    * The kernel takes an idempotency key only with the decision it confirms: `revision` is the

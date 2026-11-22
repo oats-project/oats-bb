@@ -11,3 +11,12 @@ edit. `../README.md` says how the first two were recorded.
   the Start and Restart dialogs offer. Recorded by `container/real/parts/spawn.mjs` on 2026-11-22
   (OATS 0.70.0 from npm, the bb session provider of this repository's `main` at ad7cc278, which
   declares `claude` and `pi`).
+- `spawn-preview-unnamed.json`: `oats spawn <soul> --backend bb --yolo --preview --json`, what the
+  empty New agent form asks (no name, no instruction): the kernel numbers the agent.
+- `spawn-preview-name-taken.json`: the kernel's refusal of a preview whose `--name` is an agent's
+  (`E_INSTANCE_NAME_TAKEN`).
+- `spawn-decision-stale.json`: the kernel's refusal of an apply whose `--expect-decision` is not
+  the decision it holds (`E_DECISION_STALE`): what a spawn meets when something moved between the
+  preview a person saw and their press. Nothing is created.
+  These three were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
+  npm); the live checks' stages `spawn-slow`, `spawn-name-taken` and `spawn-refused` answer them.

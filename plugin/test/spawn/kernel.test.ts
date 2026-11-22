@@ -42,7 +42,13 @@ describe("A5 spawn", () => {
     // What will be created, in the form's words (model/spawn.ts), for the name that was asked: never the kernel's preview whole.
     expect(preview.value.facts.identity[0]).toEqual({ label: "Name", text: "flaky-ci-2-developer" });
     expect(preview.value.facts.resolved).toEqual({ harness: "pi", model: "github-copilot/claude-fable-5.1" });
-    expect(Object.keys(preview.value).sort()).toEqual(["facts", "revision"]);
+    // And as the short lines a soul's page draws.
+    expect(preview.value.summary.launch).toBe("pi · github-copilot/claude-fable-5.1 (local-default preference)");
+    expect(preview.value.summary.teams).toEqual(["oats (default)"]);
+    expect(preview.value.summary.modules).toContain("oats.aweb 1.43.0");
+    expect(preview.value.summary.warnings).toEqual(["the bb server at http://127.0.0.1:38886 runs bb-app 0.50.1; the capability was tested up to 0.50.1"]);
+    expect(preview.value.summary.problems).toEqual([]);
+    expect(preview.value.problem).toBeNull();
   });
 
   it("applies a previewed decision with the idempotency key", async () => {
@@ -146,12 +152,12 @@ describe("the choices of the New agent form, as arguments", () => {
   });
 
   it("passes a harness, a model and a relation, each as its own elements, the same on the preview and the apply", async () => {
-    const choices = { soul: "oats-developer", name: "x-developer", task: "t", harness: "claude", model: "anthropic/claude-opus-5-5", relation: { kind: "child" as const, to: "flaky-ci-developer" } };
+    const choices = { soul: "oats-developer", name: "x-developer", task: "t", harness: "claude", model: "anthropic/claude-opus-5-5", relation: { kind: "child" as const, to: "flaky-ci-developer", root: "/abs/deployment/agents" } };
     await oats.spawnPreview(choices, context());
     await oats.spawn({ ...choices, key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" }, context());
     const [preview, apply] = await fake.calls();
     const shared = ["spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "x-developer", "--task-file"];
-    const chosen = ["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "child", "--relative-to", "flaky-ci-developer"];
+    const chosen = ["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "child", "--relative-to", "flaky-ci-developer", "--relative-root", "/abs/deployment/agents"];
     expect(preview!.argv).toEqual([...shared, preview!.taskFile!.path, ...chosen, "--preview", "--json"]);
     expect(apply!.argv).toEqual([...shared, apply!.taskFile!.path, ...chosen, "--expect-decision", "c557d8ec9a272ba1c1739dc3", "--idempotency-key", "spawn-1f0c9a7e", "--json"]);
   });
@@ -168,6 +174,8 @@ describe("the choices of the New agent form, as arguments", () => {
       { ...base, relation: { kind: "child" as const, to: "--help" } },
       { ...base, relation: { kind: "child" as const, to: "Two Words" } },
       { ...base, relation: { kind: "owner" as never, to: "flaky-ci-developer" } },
+      { ...base, relation: { kind: "child" as const, to: "flaky-ci-developer", root: "--dir" } },
+      { ...base, relation: { kind: "child" as const, to: "flaky-ci-developer", root: "relative/agents" } },
     ];
     for (const choices of bad) {
       const preview = await oats.spawnPreview(choices, context());
@@ -180,31 +188,32 @@ describe("the choices of the New agent form, as arguments", () => {
   });
 });
 
-describe("a preview that is no decision a spawn could apply is a refusal", () => {
+describe("a preview that is no decision a spawn could apply says why, with the code the Desktop's client gives it", () => {
   const answer = async (change: (result: Record<string, unknown>) => void) => {
     const { readFile } = await import("node:fs/promises");
     const { join } = await import("node:path");
     const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: Record<string, unknown> };
     change(document.result);
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
-    return oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+    const preview = await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+    return preview.ok ? { problem: preview.value.problem, problems: preview.value.summary.problems } : null;
   };
 
   it("a launch the kernel found a problem with: the problem's own code and message", async () => {
     const preview = await answer((result) => {
       (result.launch as Record<string, unknown>).problem = { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" };
     });
-    expect(preview).toEqual({ ok: false, error: { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" } });
+    expect(preview).toEqual({ problem: { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" }, problems: ["E_LAUNCH_EXECUTABLE: pi is not on PATH"] });
   });
 
   it("checks that did not finish in the kernel's budget, and a backend that is not installed", async () => {
     const slow = await answer((result) => {
       result.preflight = { status: "timeout", budgetMs: 20000, elapsedMs: 20000 };
     });
-    expect(slow.ok === false && slow.error.code).toBe("E_PREFLIGHT_INCOMPLETE");
+    expect(slow).toEqual({ problem: { code: "E_PREFLIGHT_INCOMPLETE", message: "the kernel's checks did not finish within 20 s" }, problems: ["the kernel's checks did not finish within 20 s"] });
     const missing = await answer((result) => {
       result.backendStatus = { name: "bb", installed: false, started: false };
     });
-    expect(missing.ok === false && missing.error.code).toBe("E_BACKEND_UNAVAILABLE");
+    expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" }, problems: ["the bb backend is not installed on this machine"] });
   });
 });

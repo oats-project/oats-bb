@@ -9,6 +9,7 @@ import { act, fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { openNewAgent } from "../../app/workspace/pages";
 import { previewFacts } from "../../model/spawn";
+import { agentName } from "../../app/ui/words";
 import { fixtureAgents } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
@@ -20,7 +21,7 @@ const REVISION = "f48a98cea8a3a34508aab024";
 type Choices = { soul: string; name?: string; task: string; harness?: string; model?: string; relation?: { kind: string; to: string } };
 /** The server's answer for a preview: the recorded preview's facts, for the name asked. */
 const answer = (input: Choices) => ({ facts: previewFacts(recorded, { name: input.name ?? null }), revision: REVISION });
-const previews = (over: Partial<Handlers> = {}): Partial<Handlers> => ({ spawnPreview: (input) => answer(input), ...over });
+const previews = (over: Partial<Handlers> = {}): Partial<Handlers> => ({ spawnPlan: (input) => answer(input), ...over });
 
 type Options = { settings?: Record<string, string>; models?: () => unknown };
 async function form(subPath: string, over: Partial<Handlers> = previews(), options: Options = {}) {
@@ -36,6 +37,19 @@ async function form(subPath: string, over: Partial<Handlers> = previews(), optio
 type Slot = Awaited<ReturnType<typeof form>>;
 const calls = (slot: Slot, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method).map((call) => call.input as Record<string, unknown>);
 const set = (slot: Slot, testId: string, value: string) => fireEvent.change(slot.getByTestId(testId), { target: { value } });
+/** Opens a choice and answers its options as a person reads them: [label, detail]. */
+function options(slot: Slot, testId: string): (string | null)[][] {
+  fireEvent.click(slot.getByTestId(testId));
+  const read = slot.getAllByTestId(`${testId}-option`).map((option) => [option.querySelector("span")!.textContent, option.querySelectorAll("span")[1]?.textContent ?? null]);
+  fireEvent.keyDown(slot.getByTestId(`${testId}-options`), { key: "Escape" });
+  return read;
+}
+/** Picks an option of a choice by its value, with a click, as a person does. */
+function choose(slot: Slot, testId: string, value: string) {
+  fireEvent.click(slot.getByTestId(testId));
+  fireEvent.click(slot.getAllByTestId(`${testId}-option`).find((option) => option.getAttribute("data-value") === value)!);
+}
+const valueOf = (slot: Slot, testId: string) => slot.getByTestId(testId).getAttribute("data-value");
 const submit = (slot: Slot) => slot.getByTestId("oats-spawn-submit") as HTMLButtonElement;
 const reason = (slot: Slot) => slot.queryByTestId("oats-disabled-reason")?.textContent ?? null;
 const column = (slot: Slot) => slot.getByTestId("oats-spawn-preview");
@@ -63,31 +77,35 @@ test("the page is registered whatever pages are shown, out of bb's own navigatio
 
 test("opened with no soul: the soul is the first field and holds the focus, nothing is asked of the kernel, and Spawn says why it is off", async () => {
   const slot = await form("");
-  const soul = (await slot.findByTestId("oats-spawn-soul")) as HTMLSelectElement;
-  await waitFor(() => expect(Array.from(soul.options).map((option) => option.textContent)).toEqual(["Choose a soul…", "oats-developer", "broken-soul"]));
+  const soul = await slot.findByTestId("oats-spawn-soul");
+  await waitFor(() => expect((soul as HTMLButtonElement).disabled).toBe(false));
+  expect(soul.textContent).toBe("Choose a soul…▾");
+  // The souls OATS lists, each with its description; one that cannot be spawned says so.
+  expect(options(slot, "oats-spawn-soul")).toEqual([["oats-developer", "Builds and proves one spec."], ["broken-soul", "This soul can’t be spawned."]]);
   expect(slot.getByTestId("oats-spawn-title").textContent).toBe("New agent");
   // The fields, in the Desktop's order after the soul, by their labels.
   expect(Array.from(slot.getByTestId("oats-spawn-form").querySelectorAll("label, #oats-spawn-relation-label")).map((label) => label.textContent)).toEqual(["Soul", "Opening instruction · optional", "Harness", "Model", "Relationship", "Name · optional"]);
-  expect(slot.getByTestId("oats-spawn-form").querySelector("select, textarea, input")).toBe(soul);
+  expect(slot.getByTestId("oats-spawn-form").querySelector("button, select, textarea, input")).toBe(soul);
   await waitFor(() => expect(document.activeElement).toBe(soul));
   expect(submit(slot).disabled).toBe(true);
   expect(submit(slot).textContent).toBe("Spawn");
   expect(reason(slot)).toBe("Choose a soul first.");
   expect(column(slot).textContent).toBe("What will be createdChoose a soul to see what will be created.");
-  expect(calls(slot, "spawnPreview")).toEqual([]);
+  expect(calls(slot, "spawnPlan")).toEqual([]);
   // Choosing one names the page as the Desktop names its dialog, says the soul's description, and reads the preview.
-  set(slot, "oats-spawn-soul", "oats-developer");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  expect(document.activeElement).toBe(soul); // the focus is back on the field
   expect(slot.getByTestId("oats-spawn-title").textContent).toBe("Spawn oats-developer in oats");
   expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Builds and proves one spec.");
-  await waitFor(() => expect(calls(slot, "spawnPreview")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
 });
 
 test("opened from a soul: that soul is chosen, the focus is on the instruction, and an empty form can be spawned: no name, no instruction", async () => {
   const slot = await ready();
-  expect((slot.getByTestId("oats-spawn-soul") as HTMLSelectElement).value).toBe("oats-developer");
+  expect(valueOf(slot, "oats-spawn-soul")).toBe("oats-developer");
   expect(document.activeElement).toBe(slot.getByTestId("oats-spawn-task"));
   expect((slot.getByTestId("oats-spawn-task") as HTMLTextAreaElement).placeholder).toBe("What should this instance do? Empty starts it waiting for you.");
-  expect(calls(slot, "spawnPreview")).toEqual([{ soul: "oats-developer", task: "" }]);
+  expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]);
   expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Left empty, the kernel numbers it.");
   // The one line about the mode: words, no control.
   const mode = slot.getByTestId("oats-spawn-mode");
@@ -99,7 +117,7 @@ test("opened from a soul: that soul is chosen, the focus is on the instruction, 
 
 test("What will be created: the name and the home, where it works, the harness and the model with where they came from, the team, the capabilities; no warning the kernel did not give", async () => {
   const quiet = { ...recorded, warnings: [] };
-  const slot = await ready({ spawnPreview: (input) => ({ facts: previewFacts(quiet, { name: input.name ?? null }), revision: REVISION }) });
+  const slot = await ready({ spawnPlan: (input) => ({ facts: previewFacts(quiet, { name: input.name ?? null }), revision: REVISION }) });
   const facts = Array.from(column(slot).querySelectorAll('[data-testid="oats-fact"]')).map((fact) => [fact.querySelector("dt")!.textContent, fact.querySelector("dd")!.textContent]);
   expect(facts).toEqual([
     ["Name", "numbered by the kernel"],
@@ -118,12 +136,12 @@ test("What will be created: the name and the home, where it works, the harness a
   set(slot, "oats-spawn-name", "Ranker-V4-probe");
   expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Instance name: ranker-v4-probe");
   await waitFor(() => expect(column(slot).querySelector("dd")!.textContent).toBe("ranker-v4-probe"));
-  expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "", name: "ranker-v4-probe" });
+  expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", name: "ranker-v4-probe" });
 });
 
 test("a warning of the kernel's is drawn as a warning, through the display filter", async () => {
   const warned = { ...recorded, warnings: ["the bb server runs bb-app 0.60.0; the capability was tested up to 0.50.1", "the hook printed token: abc123"] };
-  const slot = await form("oats-developer", { spawnPreview: () => ({ facts: previewFacts(warned), revision: REVISION }) });
+  const slot = await form("oats-developer", { spawnPlan: () => ({ facts: previewFacts(warned), revision: REVISION }) });
   await waitFor(() => expect(column(slot).querySelectorAll('[data-testid="oats-notice"][data-tone="warning"]')).toHaveLength(2));
   const notices = Array.from(column(slot).querySelectorAll('[data-testid="oats-notice"]')).map((notice) => notice.textContent);
   expect(notices).toEqual(["OATS warnsthe bb server runs bb-app 0.60.0; the capability was tested up to 0.50.1", "OATS warns[withheld]"]);
@@ -131,38 +149,38 @@ test("a warning of the kernel's is drawn as a warning, through the display filte
 
 test("the harness: the soul's default passes nothing and says what the kernel resolved; a listed one is passed; with one harness there is no field", async () => {
   const slot = await ready();
-  const harness = slot.getByTestId("oats-spawn-harness") as HTMLSelectElement;
-  expect(Array.from(harness.options).map((option) => option.textContent)).toEqual(["The soul's default: pi", "Claude Code", "pi"]);
-  set(slot, "oats-spawn-harness", "claude");
-  await waitFor(() => expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "claude" }));
+  expect(slot.getByTestId("oats-spawn-harness").textContent).toBe("The soul's default: pi▾");
+  expect(options(slot, "oats-spawn-harness")).toEqual([["The soul's default: pi", "What this soul launches with unless you choose"], ["Claude Code", null], ["pi", null]]);
+  choose(slot, "oats-spawn-harness", "claude");
+  expect(slot.getByTestId("oats-spawn-harness").textContent).toBe("Claude Code▾");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "claude" }));
   slot.unmount();
   resetApp();
   const one = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_falcon" }) }));
   expect(one.queryByTestId("oats-spawn-harness")).toBeNull();
-  expect(calls(one, "spawnPreview")).toEqual([{ soul: "oats-developer", task: "" }]);
+  expect(calls(one, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]);
 });
 
 test("the model: Default says what the kernel resolved and passes nothing; a suggestion of bb's or a typed id is passed", async () => {
   const bbModel = (model: string, displayName = model) => ({ id: model, model, displayName, description: "", isDefault: false, defaultReasoningEffort: "medium" });
   const slot = await ready(previews(), { models: () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5")] }) });
-  const model = slot.getByTestId("oats-spawn-model") as HTMLSelectElement;
-  await waitFor(() => expect(Array.from(model.options).map((option) => option.textContent)).toEqual(["Default · github-copilot/claude-fable-5.1", "Claude Sonnet 5 · anthropic/claude-sonnet-5", "Custom…"]));
-  set(slot, "oats-spawn-model", "anthropic/claude-sonnet-5");
-  await waitFor(() => expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "anthropic/claude-sonnet-5" }));
+  await waitFor(() => expect(options(slot, "oats-spawn-model")).toEqual([["Default · github-copilot/claude-fable-5.1", null], ["Claude Sonnet 5 · anthropic/claude-sonnet-5", null], ["Custom…", "Type a model ID"]]));
+  choose(slot, "oats-spawn-model", "anthropic/claude-sonnet-5");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "anthropic/claude-sonnet-5" }));
   // Custom…: a field for the id; until one is typed Spawn is off and says why.
-  fireEvent.change(model, { target: { value: model.options[2]!.value } });
+  choose(slot, "oats-spawn-model", "__custom__");
   const typed = slot.getByTestId("oats-spawn-model-id") as HTMLInputElement;
   expect(typed.placeholder).toBe("Type a model ID");
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Type the model ID, or choose Default."]);
   fireEvent.change(typed, { target: { value: " openai/o3 " } });
-  await waitFor(() => expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "openai/o3" }));
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "openai/o3" }));
   expect(submit(slot).disabled).toBe(false);
 });
 
 test("with no model bb reports, the field is Default and Custom…, and says any id can be typed", async () => {
   const slot = await ready();
   await waitFor(() => expect(slot.getByTestId("oats-spawn-form").textContent).toContain("No model suggestions reported. Any model ID can be typed."));
-  expect(Array.from((slot.getByTestId("oats-spawn-model") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual(["Default · github-copilot/claude-fable-5.1", "Custom…"]);
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default · github-copilot/claude-fable-5.1", "Custom…"]);
 });
 
 test("the relationship: Independent at the start; a relation needs its instance, one of the roster, and is passed with it", async () => {
@@ -172,20 +190,25 @@ test("the relationship: Independent at the start; a relation needs its instance,
   expect(line()).toBe("Independent — not linked to another instance.");
   expect(slot.queryByTestId("oats-spawn-relative")).toBeNull();
   fireEvent.click(slot.getByRole("radio", { name: "Child of" }));
-  const which = slot.getByTestId("oats-spawn-relative") as HTMLSelectElement;
-  expect(which.getAttribute("aria-label")).toBe("Child of which instance?");
-  expect(Array.from(which.options).slice(1).map((option) => option.value)).toEqual(fixtureAgents().map((agent) => agent.instance));
+  const which = slot.getByTestId("oats-spawn-relative");
+  expect([which.getAttribute("aria-label"), which.textContent]).toEqual(["Child of which instance?", "Choose an instance…▾"]);
+  // Every agent of the roster, by its name as words with its soul; eight of them, so the list has a filter.
+  expect(options(slot, "oats-spawn-relative").map(([label]) => label)).toEqual(fixtureAgents().map((agent) => agentName(agent.instance)));
+  fireEvent.click(which);
+  fireEvent.change(slot.getByTestId("oats-spawn-relative-filter"), { target: { value: "flaky ci" } });
+  expect(slot.getAllByTestId("oats-spawn-relative-option").map((option) => option.getAttribute("data-value"))).toEqual(["flaky-ci-developer"]);
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-relative-filter"), { key: "Escape" });
   expect(line()).toBe("Pick the instance this one is a child of.");
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Pick the instance first, or choose Independent."]);
-  set(slot, "oats-spawn-relative", "flaky-ci-developer");
+  choose(slot, "oats-spawn-relative", "flaky-ci-developer");
   expect(line()).toBe("Spawns as a child of Flaky ci developer.");
-  await waitFor(() => expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "", relation: { kind: "child", to: "flaky-ci-developer" } }));
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", relation: { kind: "child", to: "flaky-ci-developer" } }));
   expect(submit(slot).disabled).toBe(false);
 });
 
 test("a name the kernel would refuse never leaves the form: the fault is said under it, and beside Spawn", async () => {
   const slot = await ready();
-  const asked = calls(slot, "spawnPreview").length;
+  const asked = calls(slot, "spawnPlan").length;
   const error = () => slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]')?.textContent ?? null;
   set(slot, "oats-spawn-name", "bad name");
   expect(error()).toBe("A space can’t be in a name. Use letters, digits and dashes.");
@@ -199,14 +222,14 @@ test("a name the kernel would refuse never leaves the form: the fault is said un
   set(slot, "oats-spawn-name", "a".repeat(70));
   expect(error()).toBe("This name has 70 characters. A name has 63 at most: shorten it.");
   await new Promise((resolve) => setTimeout(resolve, 500));
-  expect(calls(slot, "spawnPreview")).toHaveLength(asked);
+  expect(calls(slot, "spawnPlan")).toHaveLength(asked);
   fireEvent.submit(slot.getByTestId("oats-spawn-form"));
   expect(calls(slot, "spawn")).toEqual([]);
 });
 
 test("a name the kernel refuses at the preview is said under the name, in a person's words", async () => {
   const slot = await ready({
-    spawnPreview: (input) => {
+    spawnPlan: (input) => {
       if (input.name === "flaky-ci-developer") throw new Error('E_INSTANCE_NAME_TAKEN: instance name "flaky-ci-developer" is taken');
       return answer(input);
     },
@@ -276,7 +299,7 @@ test("a refused spawn leads with a person's words, the kernel's code after and i
   set(slot, "oats-spawn-task", "Another.");
   expect(slot.queryByTestId("oats-result")).toBeNull();
   refuse = false;
-  await waitFor(() => expect(calls(slot, "spawnPreview").at(-1)).toEqual({ soul: "oats-developer", task: "Another." }));
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "Another." }));
   await waitFor(() => expect(slot.queryByTestId("oats-spawn-updating")).toBeNull());
   fireEvent.click(submit(slot));
   await waitFor(() => expect(calls(slot, "spawn")).toHaveLength(3));
@@ -291,10 +314,10 @@ test("a decision that moved before the spawn: nothing was created, the words say
       },
     }),
   );
-  const before = calls(slot, "spawnPreview").length;
+  const before = calls(slot, "spawnPlan").length;
   fireEvent.click(submit(slot));
   expect((await slot.findByTestId("oats-result")).querySelector("p")!.textContent).toBe("Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.");
-  await waitFor(() => expect(calls(slot, "spawnPreview")).toHaveLength(before + 1));
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toHaveLength(before + 1));
 });
 
 test("an outcome that is not known: the button becomes Check result and asks again with the same key", async () => {
@@ -323,7 +346,7 @@ test("an outcome that is not known: the button becomes Check result and asks aga
 test("a press before the preview of these values answered is kept: it spawns when the preview does, and not when the values changed meanwhile", async () => {
   const waiting: ((value: ReturnType<typeof answer>) => void)[] = [];
   const slot = await form("oats-developer", {
-    spawnPreview: (input) => new Promise((resolve) => waiting.push(() => resolve(answer(input)))),
+    spawnPlan: (input) => new Promise((resolve) => waiting.push(() => resolve(answer(input)))),
     spawn: () => ({ instance: "oats-developer-2", threadId: "thr_new" }),
   });
   await slot.findByTestId("oats-spawn-form");
@@ -350,7 +373,7 @@ test("while the values on screen are being read again the last facts stay, marke
   const waiting = new Map<string, (value: ReturnType<typeof answer>) => void>();
   let hold = false;
   const slot = await ready({
-    spawnPreview: (input) => (hold ? new Promise((resolve) => waiting.set(input.name ?? "", resolve)) : answer(input)),
+    spawnPlan: (input) => (hold ? new Promise((resolve) => waiting.set(input.name ?? "", resolve)) : answer(input)),
   });
   hold = true;
   set(slot, "oats-spawn-name", "first-probe");
@@ -369,7 +392,7 @@ test("while the values on screen are being read again the last facts stay, marke
 test("a preview the kernel refuses: a person's words first, the code after, the kernel's message under Details, Retry; Spawn is off and says where the reason is", async () => {
   let refuse = true;
   const slot = await form("oats-developer", {
-    spawnPreview: (input) => {
+    spawnPlan: (input) => {
       if (refuse) throw new Error("E_BACKEND_HARNESS: the bb session provider cannot launch codex");
       return answer(input);
     },
@@ -395,12 +418,12 @@ test("a soul that cannot be spawned says why under the soul, and Spawn is off; a
   const slot = await form("broken-soul");
   await waitFor(() => expect(slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]')?.textContent).toBe("E_SOUL_INVALID: soul.yaml names a capability that is not installed: oats.missing"));
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "This soul can’t be spawned: its field says why."]);
-  expect(calls(slot, "spawnPreview")).toEqual([]);
+  expect(calls(slot, "spawnPlan")).toEqual([]);
   slot.unmount();
   resetApp();
   const unknown = await form("no-such-soul");
   await waitFor(() => expect(unknown.getByTestId("oats-spawn-form").querySelector('[role="alert"]')?.textContent).toBe("OATS lists no soul “no-such-soul” in this deployment. Choose one of these."));
-  expect((unknown.getByTestId("oats-spawn-soul") as HTMLSelectElement).value).toBe("");
+  expect(valueOf(unknown, "oats-spawn-soul")).toBe("");
   expect(reason(unknown)).toBe("Choose a soul first.");
 });
 
@@ -414,29 +437,47 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
   expect((slot.getByTestId("oats-spawn-form").querySelector("fieldset") as HTMLFieldSetElement).disabled).toBe(true);
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Comes back when OATS is read again"]);
   await new Promise((resolve) => setTimeout(resolve, 500));
-  expect(calls(slot, "spawnPreview")).toEqual([]);
+  expect(calls(slot, "spawnPlan")).toEqual([]);
   fireEvent.submit(slot.getByTestId("oats-spawn-form"));
   expect(calls(slot, "spawn")).toEqual([]);
 });
 
-test("the form's keys: Mod+Enter spawns, Mod+1, 2, 3, 4 and 6 go to the instruction, the harness, the model, the relationship and the name", async () => {
+test("Mod+Enter spawns from any field; the Desktop's Mod+digit chords are not the form's, and nothing on screen offers them", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "oats-developer-2", threadId: "thr_new" }) }));
-  const key = (name: string, on: Element = slot.getByTestId("oats-spawn-soul")) => fireEvent.keyDown(on, { key: name, ctrlKey: true });
-  for (const [digit, field] of [["6", "oats-spawn-name"], ["2", "oats-spawn-harness"], ["3", "oats-spawn-model"], ["1", "oats-spawn-task"]] as const) {
-    key(digit);
-    expect(document.activeElement, digit).toBe(slot.getByTestId(field));
-    expect(slot.getByTestId(field).getAttribute("aria-keyshortcuts")).toBe(`Control+${digit}`);
-  }
-  key("4");
-  expect(document.activeElement).toBe(slot.getByRole("radio", { name: "Independent" }));
-  // Without the modifier a digit is a digit, and 5 and 7 (Teams, Developer settings) are not this form's yet.
-  fireEvent.keyDown(slot.getByTestId("oats-spawn-task"), { key: "6" });
-  key("5");
-  key("7");
-  expect(document.activeElement).toBe(slot.getByRole("radio", { name: "Independent" }));
-  expect(slot.getByTestId("oats-spawn-keys").textContent).toBe("Keys: Ctrl+Enter spawns · Ctrl+1 Opening instruction · Ctrl+2 Harness · Ctrl+3 Model · Ctrl+4 Relationship · Ctrl+6 Name");
-  key("Enter", slot.getByTestId("oats-spawn-task"));
+  const task = slot.getByTestId("oats-spawn-task");
+  task.focus();
+  for (const digit of ["1", "2", "3", "4", "6"]) fireEvent.keyDown(task, { key: digit, ctrlKey: true });
+  expect(document.activeElement).toBe(task);
+  expect(slot.queryByTestId("oats-spawn-keys")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").querySelectorAll("fieldset [aria-keyshortcuts]")).toHaveLength(0);
+  expect([submit(slot).getAttribute("aria-keyshortcuts"), submit(slot).title]).toEqual(["Control+Enter", "Spawn (Ctrl+Enter)"]);
+  // Enter alone in the instruction is a new line, not a spawn.
+  fireEvent.keyDown(task, { key: "Enter" });
+  expect(calls(slot, "spawn")).toEqual([]);
+  fireEvent.keyDown(task, { key: "Enter", ctrlKey: true });
   await waitFor(() => expect(calls(slot, "spawn")).toHaveLength(1));
+});
+
+test("a choice by the keys: an arrow opens it, the arrows move past what cannot be chosen, Enter chooses, Escape closes; the focus is back on the field", async () => {
+  const slot = await form("");
+  const soul = await slot.findByTestId("oats-spawn-soul");
+  await waitFor(() => expect((soul as HTMLButtonElement).disabled).toBe(false));
+  expect([soul.getAttribute("role"), soul.getAttribute("aria-haspopup"), soul.getAttribute("aria-expanded")]).toEqual(["combobox", "listbox", "false"]);
+  fireEvent.keyDown(soul, { key: "ArrowDown" });
+  const list = slot.getByTestId("oats-spawn-soul-options");
+  expect([soul.getAttribute("aria-expanded"), list.getAttribute("role"), document.activeElement]).toEqual(["true", "listbox", list]);
+  const active = () => slot.getAllByTestId("oats-spawn-soul-option").filter((option) => option.getAttribute("data-active") === "true").map((option) => option.getAttribute("data-value"));
+  expect(active()).toEqual(["oats-developer"]);
+  expect(list.getAttribute("aria-activedescendant")).toBe(slot.getAllByTestId("oats-spawn-soul-option")[0]!.id);
+  // The soul that cannot be spawned can still be chosen, to read why: it is not skipped.
+  fireEvent.keyDown(list, { key: "ArrowDown" });
+  expect(active()).toEqual(["broken-soul"]);
+  fireEvent.keyDown(list, { key: "Escape" });
+  expect([slot.queryByTestId("oats-spawn-soul-options"), document.activeElement, valueOf(slot, "oats-spawn-soul")]).toEqual([null, soul, ""]);
+  fireEvent.keyDown(soul, { key: "ArrowDown" });
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-soul-options"), { key: "Enter" });
+  expect([valueOf(slot, "oats-spawn-soul"), document.activeElement]).toEqual(["oats-developer", soul]);
+  expect(calls(slot, "spawn")).toEqual([]); // the list's Enter is not the form's
 });
 
 test("Cancel goes back to where the person was", async () => {

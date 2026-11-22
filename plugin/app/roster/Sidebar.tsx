@@ -1,12 +1,12 @@
-// The sidebar's thread list (experimental_threadList): the "oats" block, then the agents tree,
-// then every other bb thread. With no snapshot, bb's threads are still all listed and usable.
+// The sidebar's thread list (experimental_threadList): the workspace line, the roster (every agent
+// OATS has, as a tree), at its foot who waits and New agent, the plugin's pages under "Workspace",
+// then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
 import type { MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
   experimental_resolveThreadStatus as resolveThreadStatus,
-  experimental_usePluginId as usePluginId,
   useBbNavigate,
   useSidebarThreadDraftIds,
   useSidebarThreadRowStatuses,
@@ -16,15 +16,19 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import { codes } from "../../kernel/result";
-import type { Node } from "../../model/types";
+import type { Agent, Node } from "../../model/types";
+import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
-import { failureLine, useOats } from "../oats";
-import { Button, Dot, Mark, plainClick, TARGET } from "../ui";
-import { pageLinks } from "../workspace/pages";
+import { useOats } from "../oats";
+import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
+import { openAgentPage } from "../home/agent-tab";
+import { agentStatus, rowState } from "./status";
+import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
-import { refusalLines, shown } from "../ui/text";
-
+import { shown } from "../ui/text";
+import { instanceDisplayName, readAge } from "../ui/words";
+import { Unreadable } from "./unreadable";
+import { useNow } from "./now";
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {
@@ -49,15 +53,18 @@ const INDENT = ["pl-2", "pl-6", "pl-10"] as const;
 const ROW = `flex ${TARGET} min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent`;
 const HEADING = "px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
+const NO_ONE: ReadonlySet<string> = new Set();
+
 const noMark = () => null;
 
 /** One row of the "oats" block: a page of the plugin, and the mark its feature gives it, if any. */
-function PageRow({ page, onOpen }: { page: PageLink; onOpen: () => void }) {
+function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen: () => void }) {
   // The same hook at every render of this row: a row is keyed by its page.
   const mark = (page.useMark ?? noMark)();
   return (
     <li>
-      <button type="button" data-testid={`oats-page-link-${page.path}`} className={`${ROW} w-full pl-6 text-left`} onClick={onOpen}>
+      {/* The page that is shown is the selected row, as bb marks the open thread's (D-037). */}
+      <button type="button" data-testid={`oats-page-link-${page.path}`} aria-current={open ? "page" : undefined} className={`${ROW} w-full pl-2 text-left ${open ? "bg-accent" : ""}`} onClick={onOpen}>
         {page.title}
         {mark === null ? null : <Mark label={mark.label} />}
       </button>
@@ -67,8 +74,10 @@ function PageRow({ page, onOpen }: { page: PageLink; onOpen: () => void }) {
 
 export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
+  const now = useNow();
   const navigate = useBbNavigate();
-  const pluginId = usePluginId();
+  const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
+  const openPath = useOpenPage();
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
 
@@ -102,38 +111,64 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     </li>
   );
 
+  /** A row's two lines (D-063): the name, then where the agent is in a word, and its soul. */
+  const lines = (name: ReactNode, strong: boolean, word: string, rest: string) => (
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
+      {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
+      <span data-testid="oats-row-facts" className="break-words text-xs text-muted-foreground">{`${word} · ${rest}`}</span>
+    </span>
+  );
+
   const agentRows = (nodes: readonly Node[]): ReactNode[] =>
     nodes.flatMap((node) => {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
+      const status = agentStatus(node.agent, node.thread, now);
+      const drawn = rowState(status, gone.has(node.agent.instance));
       return [
         threadRow(
           thread,
           INDENT[node.depth],
           "oats-agent-row",
           <>
-            <Dot state={node.state} />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className={`truncate ${thread.isUnread ? "font-semibold" : ""}`}>
-                <ThreadTitle threadId={thread.id} />
-              </span>
-              <span className="truncate text-xs text-muted-foreground">
-                {shown(oats.soulOf(node.agent))}
-                {node.state === "stopped" ? " · stopped" : ""}
-              </span>
-            </span>
-            {node.state === "needs-you" ? (
-              <span className="shrink-0 font-semibold text-foreground" title="needs you" aria-hidden="true">
-                ?
-              </span>
-            ) : thread.isUnread ? (
-              <span className="shrink-0 text-xs text-muted-foreground">new</span>
-            ) : null}
+            <StateMark state={drawn.state} hidden />
+            {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
+            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
       ];
     });
+
+  /**
+   * An agent OATS has that bb has no thread for: it runs in tmux, or its bb thread is gone. It stays
+   * in the roster, with what it is in words, and opens its own page (its soul's, where no feature
+   * gives agents a page), where its acts are.
+   */
+  const threadlessRow = (agent: Agent, where: string) => {
+    const status = agentStatus(agent, null, now);
+    const drawn = rowState(status, gone.has(agent.instance));
+    const name = instanceDisplayName(shown(agent.instance));
+    return (
+      <li key={agent.instance}>
+        <button
+          type="button"
+          data-testid="oats-agent-row-threadless"
+          data-instance={agent.instance}
+          title={shown(agent.instance)}
+          className={`${ROW} w-full pl-2 text-left`}
+          onClick={() => {
+            if (!openAgentPage(navigate, agent.instance)) openSoul(navigate, oats.soulOf(agent));
+            onNavigate();
+          }}
+        >
+          <StateMark state={drawn.state} hidden />
+          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+        </button>
+      </li>
+    );
+  };
 
   const plainRow = (thread: PluginSidebarThread) => {
     const status = resolveThreadStatus({
@@ -158,47 +193,54 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   };
 
   if (oats.phase !== "ready") {
-    // bb stays fully usable: one line saying what is missing, and bb's threads as usual.
+    // No roster to draw (none was ever read, or the first read is in flight): bb stays fully
+    // usable. What is missing is said in a person's words, and bb's threads are listed as bb has them.
     const listed = oats.threads
       .filter((thread) => !thread.isArchived && !thread.isHidden)
       .sort((a, b) => b.updatedAt - a.updatedAt);
     return (
-      <div data-testid="oats-sidebar" className="flex flex-col p-1">
+      <div data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">
         {oats.phase === "loading" ? (
-          <p data-testid="oats-status-line" className="px-2 py-1.5 text-xs text-muted-foreground">
-            Reading OATS…
-          </p>
-        ) : (
-          <div data-testid="oats-status-line" role="alert" className="flex flex-col items-start gap-1 px-2 py-1.5 text-xs">
-            <span className="break-words text-muted-foreground">{refusalLines(failureLine(oats)).join(" ")}</span>
-            <span className="flex flex-wrap items-center gap-2">
-              <Button onClick={oats.retry}>Retry</Button>
-              {oats.code === codes.chooseHost ? (
-                <a className="underline" href={`/settings/plugins/${encodeURIComponent(pluginId)}`}>
-                  Choose a machine
-                </a>
-              ) : null}
-            </span>
+          <div className="px-2">
+            <Loading>Reading your agents…</Loading>
           </div>
+        ) : (
+          <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
         )}
+        <h2 className={HEADING}>Threads</h2>
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>
       </div>
     );
   }
 
-  const { view, deployment, agents } = oats;
+  const { view, deployment } = oats;
   const needs = view.needsYou.length;
+  // Every agent OATS has is a row: the count in the workspace line is the count of rows.
+  const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
+      {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
+      {oats.stale === null ? null : (
+        <>
+          <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+          <p data-testid="oats-last-observation" className="px-2 pt-2 text-xs text-muted-foreground">{`Last observation — ${readAge(oats.stale.at, now) ?? "its time is not known"}`}</p>
+        </>
+      )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
-        {` · ${shown(deployment.machine)} · ${count(agents.length, "agent")}`}
+        {` · ${shown(deployment.machine)} · ${count(shownAgents, "agent")}`}
       </p>
-      <ul className="flex flex-col">
-        {pageLinks().map((page) => (
-          <PageRow key={page.path} page={page} onOpen={() => openPage(page.path)} />
-        ))}
-      </ul>
+      <h2 className={HEADING}>Agents</h2>
+      {shownAgents === 0 ? (
+        <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
+      ) : (
+        <ul data-testid="oats-tree" className="flex flex-col">
+          {agentRows(view.roots)}
+          {view.detached.map((agent) => threadlessRow(agent, "its bb thread is gone"))}
+          {view.elsewhere.map((agent) => threadlessRow(agent, "runs in tmux"))}
+        </ul>
+      )}
+      {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}
       <button
         type="button"
         data-testid="oats-needs-line"
@@ -206,26 +248,21 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         className={`${ROW} w-full pl-2 text-left ${needs > 0 ? "font-semibold" : "text-muted-foreground"}`}
         onClick={() => openPage("home")}
       >
-        {needs > 0 ? <Dot state="needs-you" /> : null}
-        {needs > 0 ? `${needs} need you` : "nothing needs you"}
+        {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
+        {needs > 0 ? `${needs} need you` : "Nothing needs you."}
       </button>
+      <div className="px-2 py-1">
+        <Button data-testid="oats-new-agent" onClick={() => openPage("souls")}>
+          New agent
+        </Button>
+      </div>
 
-      <h2 className={HEADING}>Agents</h2>
-      {view.roots.length === 0 ? (
-        <p className="px-2 py-1 text-xs text-muted-foreground">No OATS agents run in bb yet.</p>
-      ) : (
-        <ul data-testid="oats-tree" className="flex flex-col">
-          {agentRows(view.roots)}
-        </ul>
-      )}
-      <button
-        type="button"
-        data-testid="oats-new-agent"
-        className={`${ROW} w-full pl-2 text-left text-muted-foreground`}
-        onClick={() => openPage("souls")}
-      >
-        + New agent
-      </button>
+      <h2 className={HEADING}>Workspace</h2>
+      <ul data-testid="oats-pages" className="flex flex-col">
+        {pageLinks().map((page) => (
+          <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
+        ))}
+      </ul>
 
       {view.others.length > 0 ? (
         <>

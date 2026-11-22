@@ -1,7 +1,7 @@
 // The plugin's controls that bb's SDK does not give a plugin: tabs, a segmented filter, a search
 // field, a switch, a row's menu and a copy button. Each is the WAI-ARIA pattern of its name, with
 // its keys, on bb's tokens, at the target's height (patterns.tsx).
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { INPUT, TARGET } from "./patterns";
 
@@ -144,15 +144,33 @@ export function Switch({ label, name, title, checked, onChange, disabled = false
   );
 }
 
+/** The left and right edges of what would cut `element`: its nearest ancestor that scrolls or clips, else the window. */
+function clipOf(element: HTMLElement): { left: number; right: number } {
+  for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(parent);
+    if ([overflowX, overflowY].some((overflow) => overflow !== "visible" && overflow !== "")) {
+      const box = parent.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    }
+  }
+  return { left: 0, right: document.documentElement.clientWidth };
+}
+
 export type MenuItem = { id: string; label: string; onSelect: () => void; destructive?: boolean; disabled?: boolean; reason?: string };
 
 /**
  * A row's menu: a button named for what it is the menu of ("Actions for Weekly digest"), and its
  * items. Enter, Space or Down opens it on the first item; the arrows, Home and End move; Escape
  * and Tab close it, and the focus returns to the button. An item that is off says why (`reason`).
+ * The list opens under the button, along the edge `align` names (the button's right edge unless
+ * said); where that would put it past an edge of the window it takes the other edge, and when it
+ * is open the whole list is brought into view, so that none of it is under the fold.
  */
-export function Menu({ label, items, children = "⋯" }: { label: string; items: readonly MenuItem[]; children?: ReactNode }) {
+export function Menu({ label, items, children = "⋯", align = "right" }: { label: string; items: readonly MenuItem[]; children?: ReactNode; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
+  const [edge, setEdge] = useState(align);
+  const [widest, setWidest] = useState<number | null>(null);
+  const list = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -161,9 +179,35 @@ export function Menu({ label, items, children = "⋯" }: { label: string; items:
     setOpen(false);
     if (refocus) button.current?.focus();
   };
+  // Before the list is painted, once per opening: the edge it hangs from and the widest it may be.
+  // Decided in one pass from the button and the room, never flipped back: a list that fits on
+  // neither side hangs from the side with more room and wraps inside it.
+  useLayoutEffect(() => {
+    if (!open) {
+      setEdge(align);
+      setWidest(null);
+      return;
+    }
+    const at = button.current?.getBoundingClientRect();
+    const width = list.current?.getBoundingClientRect().width ?? 0;
+    if (at === undefined || width === 0) return;
+    const room = clipOf(list.current!);
+    // Hung from the button's right edge the list reaches left of it, and the other way round.
+    const space = { right: at.right - room.left, left: room.right - at.left };
+    const other = align === "right" ? "left" : "right";
+    const side = width <= space[align] ? align : width <= space[other] ? other : space[align] >= space[other] ? align : other;
+    setEdge(side);
+    setWidest(Math.max(0, Math.floor(space[side])));
+  }, [open, align]);
+  // Then all of it in view, where it hangs.
+  useLayoutEffect(() => {
+    if (open) list.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [open, edge, widest]);
   useEffect(() => {
     if (!open) return;
-    stops()[0]?.focus();
+    // The focus moves without scrolling: the layout effect has put the whole list in view, and the
+    // browser's own scroll to the first item would bring only that one.
+    stops()[0]?.focus({ preventScroll: true });
     const outside = (event: MouseEvent) => {
       if (root.current !== null && event.target instanceof Node && !root.current.contains(event.target)) setOpen(false);
     };
@@ -193,9 +237,13 @@ export function Menu({ label, items, children = "⋯" }: { label: string; items:
       {open ? (
         <div
           id={menuId}
+          ref={list}
           role="menu"
           aria-label={label}
-          className="absolute right-0 top-full z-40 mt-1 flex min-w-44 flex-col rounded-md border border-border bg-background p-1 text-sm text-foreground shadow-lg"
+          data-edge={edge}
+          // As wide as its longest item, never under 11rem, and never wider than the room: there an item wraps.
+          style={widest === null ? { minWidth: "11rem" } : { minWidth: `${Math.min(176, widest)}px`, maxWidth: `${widest}px` }}
+          className={`absolute ${edge === "right" ? "right-0" : "left-0"} top-full z-40 mt-1 flex w-max flex-col rounded-md border border-border bg-background p-1 text-sm text-foreground shadow-lg`}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();

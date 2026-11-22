@@ -39,7 +39,8 @@ KERNEL_NPM= KERNEL_REPO=<a clone of the OATS repository> KERNEL_REF=<commit> REQ
 
 The container is the one of the other tests (`container/Dockerfile`): `--cpus 2 --memory 6g`, no
 mount, no port, no Docker socket, nothing of the host's home. The trees go in through `tar` and the
-artefacts come out to `plugin/container/real/out/` (ignored by git, and its own directory: the other
+artefacts come out to `plugin/container/real/out/` (or `real/out.<owner>/` when `out/` holds
+another's: container/README.md) (ignored by git, and its own directory: the other
 tests' `container/out/` is emptied at each of their runs): the run's log is what `run.sh`
 prints, and beside it are the screenshots, `fixtures/` (the recorded answers), `answers/` (two more
 kernel answers kept as evidence), `doctor.txt` (the provider's readiness), `install.txt` (the
@@ -80,10 +81,9 @@ The run also measures freshness (the UX standard, section 6): how long after the
 claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
 the kernel's own record: the time of the event the change wrote, read from `oats instance events
 --json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and at its end it compares its images: two scenes of
-different states must not be the same image. One pair is, and is reported as a known gap (D-113 /
-S1): at 390 px the thread's view says nothing of the agent's state, until the status line of the
-identity row is built.
+said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and
+at its end it compares its images: two scenes of different states must not be the same image (the
+thread's own row says its agent's state at every width).
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays

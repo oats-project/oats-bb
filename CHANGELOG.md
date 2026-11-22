@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### The session provider
+
+- **A home's bb thread is titled with the instance's name as words.** bb's header and
+  thread list now show the name the OATS Desktop and the OATS plugin for bb draw:
+  `release-070-maintainer` is "Release 070 maintainer" (every run of `-` one space, the
+  first character upper-cased, nothing else changed). Before, the title was the name as
+  it is. The title is given at every start and restart; a thread that is already
+  running keeps its title until its instance starts again. The home's bb project keeps
+  the name itself.
+  - bb does not replace the title: at bb-app 0.50.1 it writes a title of its own only for
+    a thread that has none (`test/contract/title.test.mjs` pins it). A rename made in bb
+    (by hand, or `bb thread regenerate-title`) stays until the instance starts again.
+
 ## 0.3.0
 
 The OATS plugin for bb shows OATS's Automations, and the agent's panel gains its Soul tab,

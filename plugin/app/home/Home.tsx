@@ -16,10 +16,12 @@ import { forgetAgent, forgetAgents, getAgentTab, rememberAgent, rememberedAgent 
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
+import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
+import { Button, Dot, ErrorLine, Heading, Loading, Note, Page, plainClick } from "../ui";
+import { Unreadable } from "../roster/unreadable";
 import { PAGES } from "../workspace/pages";
 import { shown } from "../ui/text";
 
@@ -278,26 +280,16 @@ function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
   );
 }
 
-/**
- * The clock, read again every half minute while the view is open: an agent that waits while
- * nothing else changes in OATS causes no new snapshot, and its age must still grow.
- */
-function useNow(everyMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), everyMs);
-    return () => clearInterval(timer);
-  }, [everyMs]);
-  return now;
-}
-
 function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {
   const now = useNow();
-  if (oats.phase === "loading") return <Note>Reading OATS…</Note>;
-  if (oats.phase === "failed") return <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>;
+  // The same words as the sidebar's, from the same components: what is read, what cannot be, and
+  // (the roster kept as last read) how old what is shown is.
+  if (oats.phase === "loading") return <Loading>Reading your agents…</Loading>;
+  if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   const { view } = oats;
   return (
     <>
+      {oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <section data-testid="oats-home-needs" className="flex flex-col gap-2">
         <Heading n={view.needsYou.length}>Needs you</Heading>
         {view.needsYou.length === 0 ? (

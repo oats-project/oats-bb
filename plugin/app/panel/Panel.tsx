@@ -8,8 +8,8 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, BbThread, Node } from "../../model/types";
-import { state as stateOf } from "../../model/view";
+import type { Agent, Node } from "../../model/types";
+import { claimOf, state as stateOf } from "../../model/view";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
@@ -74,34 +74,6 @@ export function AgentTab({ agent, threadId }: AgentTabProps) {
 }
 
 /**
- * The claim a panel may show, by the Desktop's gate (packages/client/waiting-on-you.mjs
- * `waitingClaim`). On a session provider (bb) a claim is shown unless the agent is stopped: one
- * that waits on a person is idle there, and a stopped agent's claim belongs to a session that
- * ended. On tmux only while the kernel says the agent runs: a shell, a stopped pane and a session
- * it cannot reach show none.
- */
-function claimOf(agent: Agent): Agent["waiting"] {
-  if (agent.waiting === null) return null;
-  const live = agent.backend === "tmux" ? agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") : agent.running !== false;
-  return live ? agent.waiting : null;
-}
-
-/** A thread that holds no question: what the tree's rule is given for an agent with no bb thread. */
-const NO_THREAD: BbThread = { id: "", projectId: null, displayTitle: "", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false };
-
-/**
- * The state the panel draws: the tree's own rule (model/view.ts `state`), so the two say one word
- * for one state, over the claim the panel shows. A claim it does not show (a stopped agent's, a
- * tmux agent's the kernel cannot vouch for) is no reason to say Needs you; a question bb holds on
- * the thread still is. And an agent the kernel calls not running, with no more said (a tmux
- * agent's dead pane), is Stopped: the tree's rule has no word of its own for it.
- */
-function drawnState(agent: Agent, node: Node | undefined): AgentState {
-  const drawn = stateOf({ ...agent, waiting: claimOf(agent) }, node?.thread ?? NO_THREAD);
-  return drawn === "idle" && agent.running === false ? "stopped" : drawn;
-}
-
-/**
  * The panel of one agent: by its thread (an agent's thread in bb) or by its instance name (an
  * agent with no thread). Draws nothing for a thread or a name that is no agent's: the caller then
  * shows what it shows without an agent. Once an agent was shown, here or by the caller (`known`:
@@ -125,7 +97,9 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   // Another thread or name than the one held: nothing of that agent is known yet.
   if (held === null || held.key !== key) return null;
   const roster: Roster = { soulOf: oats.soulOf, threadById: oats.threadById, nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES };
-  const failure: RosterFailure | null = oats.phase === "failed" ? { code: oats.code, line: failureLine(oats), retry: oats.retry } : null;
+  // OATS cannot be read: never (no roster), or not again (the roster is the last one read).
+  const unread = oats.phase === "failed" ? oats : oats.phase === "ready" ? oats.stale : null;
+  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, line: failureLine(unread), retry: oats.retry };
   return (
     <div data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       <div className="shrink-0 px-3">
@@ -175,7 +149,9 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
-  const state = drawnState(agent, node);
+  // The one rule for a state (model/view.ts `state`, over the one gate for a claim), read as the
+  // sidebar's and the thread's rows read it; an agent with no bb thread has none to give it.
+  const state = stateOf(agent, node?.thread ?? null);
   // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
   // An agent that needs you for a question bb shows, with no claim, has no instant to count from.
   const since = state === "needs-you" ? (claim === null ? null : waitingSince(claim.since, now)) : state === "working" ? shortAge(facts?.startedAt ?? null, now) : null;

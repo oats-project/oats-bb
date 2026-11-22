@@ -38,7 +38,7 @@ test("a pi launch spawns bb's pi provider with the launch's model as it is, in t
   assert.deepEqual(answer.result, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_new" } });
   const spawn = bb.calls().find((c) => c.argv[1] === "spawn");
   assert.deepEqual(spawn.argv, ["thread", "spawn", "--project", "proj_a", "--provider", "pi", "--model", PI_MODEL,
-    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "full", "--title", "dev-a", "--json"]);
+    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "full", "--title", "Dev a", "--json"]);
 });
 
 test("a pi launch asks bb for its pi provider's state, not Claude's", async (t) => {

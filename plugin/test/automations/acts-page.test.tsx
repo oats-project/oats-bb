@@ -2,6 +2,7 @@
 // Acting on a row from the Automations page (D-270 to D-272, D-276 to D-278, D-281, D-282): each
 // act calls the plugin's server once with the row's id, and what the kernel answered or refused is
 // said where the person is looking, in the Desktop's words.
+import type { ComponentType } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -13,9 +14,12 @@ import { answer, rowOf, schedules, triggers } from "./fixtures";
 
 afterEach(resetApp);
 
+/** The page's component as the slot drew it: drawn again at another route, it is the same page. */
+let Drawn: ComponentType<{ subPath: string }> | undefined;
 async function page(subPath = "", over: Partial<Handlers> = {}) {
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "automations")!;
+  Drawn = panel.component as ComponentType<{ subPath: string }>;
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
 }
 type Slot = Awaited<ReturnType<typeof page>>;
@@ -401,8 +405,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
 
   /** bb opening another page of the panel: the same slot, drawn at another route. */
   async function go(slot: Slot, subPath: string) {
-    const app = await loadApp();
-    const Panel = app.navPanels.find((candidate) => candidate.id === "automations")!.component;
+    const Panel = Drawn!;
     slot.lifecycle.rerender(<Panel subPath={subPath} />);
   }
 

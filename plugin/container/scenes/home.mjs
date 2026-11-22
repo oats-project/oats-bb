@@ -139,8 +139,8 @@ async function sound(page, viewport, check, at, what) {
   await page.until(counted, 20);
   const fit = await fits(page, viewport, PAGE);
   check(
-    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0 && fit.overlap.length === 0,
-    `${at} ${what}: nothing the home draws is past the window's edge, no word or id is broken across two lines, no two controls overlap, and every control is high enough to press`,
+    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0 && fit.overlap.length === 0 && fit.turned.length === 0,
+    `${at} ${what}: nothing the home draws is past the window's edge, no word or id is broken across two lines, no two controls overlap, a fold's mark is turned when its fold is open and only then, and every control is high enough to press`,
     JSON.stringify(fit),
   );
 }

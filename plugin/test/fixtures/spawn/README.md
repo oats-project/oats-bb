@@ -21,5 +21,13 @@ edit. `../README.md` says how the first two were recorded.
 - `spawn-pi-refused.json`: the kernel's refusal of a spawn with `--harness pi` where bb has no pi
   provider it can launch (`E_BACKEND_NOT_READY`, the bb session provider's; the spawn is rolled
   back). The preview of the same choices answers: the provider is asked at the launch.
-  These four were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
-  npm); the live checks' stages `spawn-slow`, `spawn-name-taken` and `spawn-refused` answer them.
+- `spawn-preview-named.json`, `spawn-preview-child.json`: the preview of the form filled (a soul,
+  an instruction, the name `form-spawned-developer`), independent and as a child of
+  `harvest-knowledge-helper` (`--relation child --relative-to … --relative-root …`): the second
+  carries `relation` and the anchor the kernel bound. Neither carries a warning: the kernel gave
+  none. The live checks' form stages answer them (`spawn-preview.json`, recorded earlier with a
+  provider that warned of its bb version, stays for the unit tests and for a soul's page).
+- `spawn-preview-model-refused.json`: the kernel's refusal of a preview whose `--model` no harness
+  has (`E_MODEL_UNKNOWN`).
+  These seven were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
+  npm); the live checks' stages (`container/scenes/spawn.mjs`, `stages`) answer them.

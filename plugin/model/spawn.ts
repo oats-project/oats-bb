@@ -4,7 +4,7 @@
 // `previewFacts`, packages/client/spawn-messages.mjs `spawnProblem`, and the Desktop's own words
 // for the act that follows in packages/desktop/renderer/spawn-words.mjs), ported as they are; where
 // a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React.
-import { displayLine } from "../app/ui/text.js";
+import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -152,6 +152,34 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
   const warnings = list(data.warnings).map((warning) => String(warning).split("\n"));
   return { identity, facts, prompts, warnings, modules: previewModules(data.modules), resolved: { harness, model } };
 }
+/**
+ * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
+ * of the plugin's own, each read from the same answer and never assumed: the soul (the Desktop's
+ * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
+ * backend is a control; here it is always bb, and said), and the access the agent runs with (the
+ * plugin asks for bb's full mode on every spawn: the row says what the kernel decided). The
+ * launch-prompt note (`prompts`) is not the form's yet, and is left out.
+ */
+export type FormFacts = Omit<PreviewFacts, "prompts">;
+export function formFacts(preview: unknown, options: { name?: string | null } = {}): FormFacts {
+  const { prompts: _later, ...facts } = previewFacts(preview, options);
+  const data: Json = record(preview) ? preview : {};
+  const rows = [...facts.facts];
+  const after = (label: string, row: PreviewFacts["facts"][number]) => {
+    const at = rows.findIndex((fact) => fact.label === label);
+    rows.splice(at === -1 ? rows.length : at + 1, 0, row);
+  };
+  const soul = text(data.agent);
+  if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
+  const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
+  const backend = text(data.backend);
+  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : null;
+  // After the harness: where its session is, then what it may do.
+  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
+  return { ...facts, facts: rows };
+}
+
 /** Under the column: who resolved it, and what the spawn does if it moves (the Desktop's sentence). */
 export const PREVIEW_FOOT = "Resolved by the installed CLI. Spawn refuses if this changes before you confirm.";
 
@@ -211,6 +239,11 @@ const SPAWN_FACTS: Record<string, Said> = {
   E_SPAWN_INCOMPLETE: said("The instance was created but didn’t finish starting. Open it from the instance list instead of spawning again."),
   E_INPUT_PREPARATION: said("The opening instruction couldn’t be prepared, so nothing was started. Try again."),
   OATS_TIMEOUT: said("OATS took too long to answer. The instance may already exist.", "check-result"),
+  // A spawn whose `oats` ended with no answer the plugin can read, or whose machine stopped answering: whether it created the instance is not known.
+  OATS_FAILED: said("OATS ended without saying whether the instance was created.", "check-result"),
+  OATS_NOT_JSON: said("OATS ended without saying whether the instance was created.", "check-result"),
+  HOST_UNREACHABLE: said("The machine stopped answering before OATS said whether the instance was created.", "check-result"),
+  PLUGIN_RPC_FAILED: said("The plugin’s server stopped answering before OATS said whether the instance was created.", "check-result"),
   E_SANDBOX_PLACEMENT: said("This soul runs in a sandbox, which a confirmed spawn can’t reach yet. Nothing was created. Spawn it with oats spawn in a terminal, or from a schedule.", "details"),
   E_INTERRUPTED: said("The spawn was interrupted while its worktree was being set up, and was rolled back. Nothing was created."),
   E_REQUIRED_HOOK_FAILED: said("A capability couldn’t set up the worktree, so the spawn was rolled back. Nothing was created.", "details"),
@@ -221,7 +254,7 @@ const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 // (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   "review-again": "Check the values and press Spawn again.",
-  "check-result": "Check the agents in the sidebar before spawning again.",
+  "check-result": "Press Check result: it asks OATS again, and starts nothing twice.",
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
   details: "Try again, or see Details.",
@@ -243,6 +276,15 @@ const BY_CODE: Record<string, string> = {
   E_BACKEND_HARNESS: "Pick one of the harnesses above.",
   E_LAUNCH_PREFERENCE_UNMATCHED: "To spawn now, pick a harness above. To fix it for every spawn, correct the preference (Details).",
 };
+/** The tails that send a person to the Harness field: said only where the form has one (several harnesses to choose from). */
+const HARNESS_TAILS: ReadonlySet<string> = new Set(["E_LAUNCH_ENV_MISSING", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_HARNESS_UNAVAILABLE", "E_BACKEND_HARNESS", "E_LAUNCH_PREFERENCE_UNMATCHED"]);
+const NO_HARNESS_FIELD: Record<string, string> = {
+  E_HARNESS_UNAVAILABLE: "Install it on that machine.",
+  E_LAUNCH_CONFIG_AMBIGUOUS: "Make one of them the default with oats launch-config on that machine.",
+  E_LAUNCH_PREFERENCE_UNMATCHED: "Correct the preference (Details).",
+};
+const SEE_DETAILS = "See Details.";
+
 // Sentences that go on after a dash, in lower case: the fact's full stop gives way to " — ".
 const DASHED: Record<string, readonly [SpawnNext, string]> = {
   E_DECISION_STALE: ["review-again", "check the updated values and press Spawn again."],
@@ -257,16 +299,22 @@ export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; de
 /**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
- * installed is said as the kernel words it.
+ * installed is said as the kernel words it, through the display filter (the table's sentence when
+ * the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
+ * Harness field (the provider declares several): a sentence sends a person there only when it does.
  */
-export function spawnProblem(reason: { code: string | null; message: string | null }, stage: "preview" | "spawn" = "preview"): SpawnProblem {
+export function spawnProblem(reason: { code: string | null; message: string | null }, stage: "preview" | "spawn" = "preview", { harnessField = true }: { harnessField?: boolean } = {}): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelWords = code === "E_HARNESS_UNAVAILABLE" && message !== "" ? said(message, "change-options") : null;
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
-  const words = kernelWords ?? facts[code] ?? COMMON_FACTS[code] ?? (stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED);
+  // A failure with no code at all reads the stage's general sentence: only a code says what happened.
+  const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
+  const words = reason.code === null ? general : (kernelWords ?? facts[code] ?? COMMON_FACTS[code] ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
-  const after = words.next === null ? null : words.next === "change-options" ? (BY_CODE[code] ?? null) : NEXT[words.next];
+  const tail = BY_CODE[code] ?? null;
+  const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
   return { sentence, next: words.next, code, detail: message === "" ? null : message };
 }

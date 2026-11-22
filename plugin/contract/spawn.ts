@@ -52,7 +52,6 @@ const previewModule = z.object({ name: z.string(), source: z.string(), why: z.st
 export const spawnFacts = z.object({
   identity: z.array(z.object({ label: z.string(), text: z.string(), title: z.string().optional(), muted: z.boolean().optional() })),
   facts: z.array(z.object({ label: z.string(), parts: z.array(factPart) })),
-  prompts: z.array(z.object({ label: z.string(), text: z.string(), mono: z.boolean().optional() })).nullable(),
   warnings: z.array(z.array(z.string())),
   modules: z.object({ core: z.array(z.object({ layer: z.string(), label: z.string(), module: previewModule.nullable() })), caps: z.array(previewModule) }).nullable(),
   resolved: z.object({ harness: z.string().nullable(), model: z.string().nullable() }),

@@ -2,7 +2,7 @@
 // docs/desktop-cli-api.md "Spawn": the kernel takes `--idempotency-key` only with
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
-import { previewFacts, type PreviewFacts } from "../model/spawn.js";
+import { formFacts, type FormFacts } from "../model/spawn.js";
 import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
@@ -126,7 +126,7 @@ export type SpawnPreview = {
   /** The preview as short lines, for a soul's page. */
   summary: SpawnSummary;
   /** What will be created, in the form's words (model/spawn.ts), for exactly the name asked. */
-  facts: PreviewFacts;
+  facts: FormFacts;
   revision: string;
   /**
    * Why this preview is no decision a spawn could apply, with the code the Desktop's client gives
@@ -176,7 +176,7 @@ export function parseSpawnPreview(document: unknown, name: string | null = null)
       warnings: value.warnings ?? [],
       problems,
     },
-    facts: previewFacts(document, { name }),
+    facts: formFacts(document, { name }),
     problem,
   });
 }

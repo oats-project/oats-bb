@@ -1,0 +1,218 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "modules": [
+   {
+    "name": "oats.bb",
+    "from": {
+     "kind": "package",
+     "package": "oats.bb",
+     "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+     "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+     "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+     "repoKey": "local//abs/real/oats-bb.git"
+    },
+    "layer": null,
+    "private": false,
+    "declares": [
+     "cli",
+     "daemon",
+     "dataDir",
+     "piAgentDir",
+     "server",
+     "trust",
+     "version"
+    ],
+    "changedSince": false,
+    "composedFrom": "workspace"
+   },
+   {
+    "name": "oats.core",
+    "from": {
+     "kind": "package",
+     "package": "oats.framework",
+     "version": "1.26.0",
+     "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+     "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+     "repoKey": "github.com/awebai/oats"
+    },
+    "layer": null,
+    "private": false,
+    "declares": [],
+    "changedSince": false,
+    "composedFrom": "workspace"
+   }
+  ],
+  "teams": [],
+  "defaultTeam": null,
+  "resolution": "40d9a7dfdb0d55d00b9935cf",
+  "declRevision": "07ef52cda0ca184968328540",
+  "payloadRevision": "7d8289b52cbf386b85ee34db",
+  "workspace": "local//abs/real/src/oats-real",
+  "standalone": false,
+  "providers": {},
+  "settings": {
+   "oats.bb": {
+    "server": "http://127.0.0.1:38886",
+    "daemon": "http://127.0.0.1:38887",
+    "version": "0.50.1",
+    "cli": "bb",
+    "trust": "container"
+   },
+   "oats.core": {}
+  },
+  "settingsOrigins": {
+   "oats.bb": {
+    "/server": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/server/default"
+    },
+    "/daemon": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/daemon/default"
+    },
+    "/cli": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/cli/default"
+    },
+    "/trust": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    },
+    "/version": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    }
+   },
+   "oats.core": {}
+  },
+  "spawnPreviewApi": 2,
+  "preview": true,
+  "agent": "oats-developer",
+  "kind": "persistent",
+  "instance": "form-spawned-developer",
+  "home": "/abs/deployment/agents/oats-developer/instances/form-spawned-developer",
+  "repo": "/abs/deployment",
+  "work": "directory",
+  "subject": {
+   "soul": "oats-developer",
+   "agentsRoot": null,
+   "dir": null
+  },
+  "decision": {
+   "instance": "form-spawned-developer",
+   "home": "/abs/deployment/agents/oats-developer/instances/form-spawned-developer",
+   "branch": null,
+   "base": null,
+   "effective": {
+    "repo": "/abs/deployment",
+    "work": "directory",
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": null,
+    "yolo": true,
+    "backend": "bb",
+    "childSpawns": true,
+    "relation": null,
+    "providers": {
+     "oats.bb": {
+      "server": "http://127.0.0.1:38886",
+      "daemon": "http://127.0.0.1:38887",
+      "version": "0.50.1",
+      "cli": "bb",
+      "trust": "container"
+     },
+     "oats.core": {}
+    }
+   },
+   "resolution": "40d9a7dfdb0d55d00b9935cf",
+   "revision": "06b3b4485612cef8084ae301"
+  },
+  "preflight": {
+   "status": "complete",
+   "budgetMs": 20000,
+   "elapsedMs": 20
+  },
+  "backendStatus": {
+   "name": "bb",
+   "installed": true,
+   "started": false
+  },
+  "sandbox": {
+   "domains": [],
+   "write": [
+    {
+     "path": "/abs/deployment/.agents/events",
+     "reason": "oats events"
+    }
+   ],
+   "missing": []
+  },
+  "harness": "claude",
+  "model": "claude-opus-5-5",
+  "modelSource": "soul preference",
+  "launchConfig": null,
+  "launchConfigSource": null,
+  "launchConfigDefault": false,
+  "yolo": true,
+  "backend": "bb",
+  "background": false,
+  "launch": {
+   "declared": {
+    "harness": "claude",
+    "model": "claude-opus-5-5"
+   },
+   "effective": {
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": null
+   },
+   "from": "soul",
+   "at": "local//abs/real/src/oats-real:souls/oats-developer/soul.yaml#/launch",
+   "problem": null
+  },
+  "branch": null,
+  "base": null,
+  "worktree": null,
+  "worktreeHooks": null,
+  "relation": null,
+  "parentInstance": null,
+  "policy": {
+   "childSpawns": {
+    "allowed": true,
+    "origin": {
+     "kind": "default",
+     "detail": "no spawn option: children allowed"
+    }
+   }
+  },
+  "executable": null,
+  "capabilities": [
+   {
+    "name": "oats.bb",
+    "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+   },
+   {
+    "name": "oats.core",
+    "origin": "package:oats.framework@1.26.0"
+   }
+  ],
+  "skills": [
+   {
+    "name": "oats-operate",
+    "source": "module:oats.core"
+   },
+   {
+    "name": "oats-souls",
+    "source": "module:oats.core"
+   },
+   {
+    "name": "oats-token-saving",
+    "source": "module:oats.core"
+   }
+  ],
+  "task": "Say hello, then wait.",
+  "soulFetched": false
+ }
+}

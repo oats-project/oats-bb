@@ -149,6 +149,14 @@ const stateOf = `(() => { const line = document.querySelector(${JSON.stringify(`
 const click = (selector) => `document.querySelector(${JSON.stringify(selector)}).click()`;
 
 /**
+ * The live checks' `check`, for this file's scenes: a check that fails always prints what it read.
+ * The harness prints a failing check's detail unless it is "" (container/live-ui.mjs), and the
+ * text of an element that is not on the page is "": the very case a failure is most often about.
+ * So a detail that is no text, or empty text, is printed as its JSON (`""`, `null`, `false`).
+ */
+const printing = (check) => (ok, what, detail) => check(ok, what, detail === undefined || (typeof detail === "string" && detail !== "") ? detail : JSON.stringify(detail));
+
+/**
  * Shows the panel of `agent` the way a person gets to it: the OATS chip of its thread (the thread's
  * tab at 1280, the agent's own page at the phone's width), or for an agent with no thread in bb the
  * Open button of its row on its soul's page. → `ok`: the panel names the agent, where it should
@@ -233,7 +241,8 @@ const first = [
   {
     stage: "panel",
     name: "the Instance tab of an agent that needs you, its sections open, its Soul tab, a stopped agent",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       const where = viewport.mobile ? "the agent's page" : "the OATS tab of the agent's thread";
       {
         const opened = await open(page, viewport, threads, CHILD);
@@ -283,7 +292,7 @@ const first = [
 
       // the Soul tab, from the soul's name in the header
       await page.evaluate(click(inPanel("oats-panel-soul-link")));
-      check(Boolean(await page.until(`${textOf(inPanel("oats-panel-soul-name"))} === "oats-expert"`, 15)), `${at} the soul's name opens the Soul tab`, JSON.stringify(await page.evaluate(textOf(inPanel("oats-panel-soul-name")))));
+      check(Boolean(await page.until(`${textOf(inPanel("oats-panel-soul-name"))} === "oats-expert"`, 15)), `${at} the soul's name opens the Soul tab`, await page.evaluate(textOf(inPanel("oats-panel-soul-name"))));
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-soul-description")));
         check(read === "OATS expert: answers questions about OATS.", `${at} the Soul tab: the soul's description`, read);
@@ -346,7 +355,8 @@ const second = [
   {
     stage: "panel",
     name: "readiness and the recorded activity on the Instance tab; the soul as spawned and its readiness on the Soul tab",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       {
         const opened = await open(page, viewport, threads, CHILD);
         check(opened.ok, `${at} the panel is open`, opened.read);
@@ -412,7 +422,8 @@ const second = [
   {
     stage: "panel",
     name: "a read in flight and a refused read, of readiness, of the activity and of the soul as spawned",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       const slow = (verb) => setVerb(verb, { file: { "readiness --home": "panel/readiness-home.json", "instance events": "panel/events.json", "inspect --home": "panel/inspect-home.json" }[verb], sleepMs: 6000 });
       try {
         // in flight: the kernel takes its time
@@ -482,7 +493,8 @@ const second = [
   {
     stage: "panel",
     name: "readiness that is not ready, a sign-in needed, warnings; an incomplete and an empty activity window, a blocked launch; a read again that fails",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       const VERBS = ["readiness --home", "readiness --soul", "instance events", "inspect --home"];
       const summaryOf = (of) => textOf(`${inPanel(`oats-panel-readiness-${of}`)} ${testId("oats-panel-readiness-summary")}`);
       const flat = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); return e ? e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
@@ -516,7 +528,7 @@ const second = [
         // Refresh readiness says that it read again
         await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
         const updated = await page.until(`${textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`)} === "Readiness updated"`, 30);
-        check(Boolean(updated), `${at} Refresh readiness says Readiness updated once it read again`, JSON.stringify(await page.evaluate(textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`))));
+        check(Boolean(updated), `${at} Refresh readiness says Readiness updated once it read again`, await page.evaluate(textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-status")}`)));
 
         // the activity: an incomplete window, and a blocked launch's row
         setVerb("instance events", derived("events.json", (result) => {
@@ -596,7 +608,8 @@ const second = [
   {
     stage: "panel",
     name: "the Soul tab of a soul with a filled core slot, a capability turned off and warnings; one with only its core capabilities; its read again that fails",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       const flat = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); return e ? e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
       const okf = (result) => {
         result.layers.knowledge = { id: "oats.okf", from: "workspace" };
@@ -685,7 +698,8 @@ const more = [
   {
     stage: "panel-states",
     name: "running, idle, failed, unreachable; a messaging id, an owning human, a sibling; a soul OATS does not name",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       // running, with a messaging id and a lineage of an owning human and a sibling
       {
         const opened = await open(page, viewport, threads, CHILD);
@@ -754,13 +768,14 @@ const more = [
   {
     stage: "panel-states",
     name: "freshness: a claim the kernel records is in the panel's header within 3 s, and gone within 3 s of its end",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       try {
         {
           const opened = await open(page, viewport, threads, IDLE);
           check(opened.ok, `${at} the idle agent's panel is open`, opened.read);
         }
-        check(Boolean(await page.until(`${said} === "Idle"`, 30)), `${at} before the claim its header says Idle`, JSON.stringify(await page.evaluate(said)));
+        check(Boolean(await page.until(`${said} === "Idle"`, 30)), `${at} before the claim its header says Idle`, await page.evaluate(said));
         const claimed = record(states(threads, RUNNING_MODEL, { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" }));
         const needs = (await page.until(`${said}.startsWith("Needs you")`, 15)) ? Date.now() - claimed : null;
         check(needs !== null && needs <= 3000, `${at} the header says Needs you ${needs === null ? "never" : `${needs} ms`} after the kernel recorded the claim (3 s at most)`, await page.evaluate(said));
@@ -779,7 +794,8 @@ const more = [
   {
     stage: "panel-states",
     name: "the agent's page: an agent with no thread in bb, a name OATS does not list, no name",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
       {
         const opened = await open(page, viewport, threads, TMUX);
         check(opened.ok, `${at} Open, on its soul's page, opens the page of an agent with no thread in bb`, opened.read);
@@ -809,12 +825,13 @@ const more = [
   {
     stage: "panel-states",
     name: "a panel opened again reads again; what it keeps when OATS cannot be read again; the page when OATS could not be read",
-    run: async ({ page, at, viewport, threads, check, sleep }) => {
+    run: async ({ page, at, viewport, threads, check: plain, sleep }) => {
+      const check = printing(plain);
       const model = `${inPanel("oats-panel-model")}`;
       try {
         // Opened again: leave the agent's page inside the app, change what OATS says, come back.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        check(Boolean(await page.until(`${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 30)), `${at} the agent's page shows its model`, JSON.stringify(await page.evaluate(textOf(model))));
+        check(Boolean(await page.until(`${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 30)), `${at} the agent's page shows its model`, await page.evaluate(textOf(model)));
         await page.evaluate(click(testId("oats-agent-back")));
         await page.until(`location.pathname.endsWith("/threads/${threads.get(CHILD.thread).id}")`, 15);
         setStatus({ stdout: JSON.stringify(states(threads, "claude-fable-5.2")) });
@@ -854,7 +871,7 @@ const more = [
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
         await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
-        check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, JSON.stringify(await page.evaluate(textOf(model))));
+        check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, await page.evaluate(textOf(model)));
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });
       }

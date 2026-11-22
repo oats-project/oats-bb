@@ -323,6 +323,34 @@ describe("the pages", () => {
 });
 
 describe("acts", () => {
+  // The acts are HELD while OATS cannot be read (R4): each lifecycle handler refuses with why,
+  // also for an agent of the roster that is still shown, and runs nothing.
+  it("takes no act while OATS cannot be read, also on an agent of the last roster read: each of the six is refused with the failure, and no oats verb runs for it", async () => {
+    const read = await rpc("snapshot");
+    expect(read.ok).toBe(true);
+    await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
+    await rpc("refresh").catch(() => undefined);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    // The roster is kept as last read, and the agent is one of it.
+    const failed = await rpc("snapshot");
+    expect(failed.last?.agents.some((agent: { instance: string }) => agent.instance === "weekly-digest-helper")).toBe(true);
+    const before = (await verbs()).length;
+    const instance = "weekly-digest-helper";
+    const acts: [string, Record<string, string>][] = [
+      ["stopPlan", { instance }],
+      ["stopApply", { instance, revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }],
+      ["start", { instance }],
+      ["restart", { instance }],
+      ["retirePlan", { instance }],
+      ["retireApply", { instance, revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" }],
+    ];
+    for (const [method, input] of acts) {
+      expect(await refusalOf(rpc(method, input)), method).toEqual({ code: "conflict", message: "E_CONFIG_BROKEN: oats-local.yaml cannot be read" });
+    }
+    // Nothing but reads of the roster ran meanwhile.
+    expect((await verbs()).slice(before).filter((verb) => verb !== "status")).toEqual([]);
+  }, 30_000);
+
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
     expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });

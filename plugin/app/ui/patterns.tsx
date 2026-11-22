@@ -84,6 +84,8 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * the question or the reason, and the act that applies, as a button. The thread's identity row,
  * the panel's header and the home's rows draw this one. `since` and `detail` are text from OATS or
  * an agent and go through the display filter here; the line wraps, and nothing in it is cut.
+ * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
+ * with a separator), and a list that opens from the line would be cut.
  */
 export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
   const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");

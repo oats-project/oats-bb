@@ -1,0 +1,36 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "capabilityShowApi": 1,
+  "name": "oats.bb",
+  "kind": "package",
+  "repoKey": "local//abs/real/oats-bb.git",
+  "package": "oats.bb",
+  "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+  "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+  "path": "oats-package/capabilities/oats-bb",
+  "inject": null,
+  "skills": [],
+  "problems": [],
+  "warnings": [],
+  "sessionProviders": {
+   "bb": {
+    "wire": "1.3",
+    "commands": {
+     "launch": "session-launch",
+     "inspect": "session-inspect",
+     "inspectMany": "session-inspect-many",
+     "input": "session-input",
+     "stop": "session-stop",
+     "check": "session-check"
+    },
+    "harnesses": [
+     "claude",
+     "pi"
+    ],
+    "description": "One bb thread per home, in a bb project rooted at the home. No terminal: open the thread in bb."
+   }
+  }
+ }
+}

@@ -84,7 +84,8 @@ export function modelOptions(answer: unknown): ModelOption[] {
 export function useModelSuggestions(harness: string | null): ModelSuggestions {
   const sdk = useSdk();
   // The machine that holds the deployment comes with the harness list, which every place that offers a model has read.
-  const hostId = useRead("spawnHarnesses", { live: false }).data?.hostId ?? null;
+  const list = useRead("spawnHarnesses", { live: false });
+  const hostId = list.data?.hostId ?? null;
   const providerId = harness === null ? undefined : BB_PROVIDER[harness];
   const [answer, setAnswer] = useState<{ of: string; models: ModelOption[] } | null>(null);
   const of = providerId === undefined || hostId === null ? null : `${hostId}\n${providerId}`;
@@ -102,6 +103,8 @@ export function useModelSuggestions(harness: string | null): ModelSuggestions {
       current = false;
     };
   }, [sdk, of, providerId, hostId]);
+  // The machine is not known until the harness list is read: until then nothing is said to be missing.
+  if (providerId !== undefined && hostId === null && list.status === "loading") return { status: "loading", models: [], note: null };
   if (of === null) return { status: "ready", models: [], note: NO_SUGGESTIONS };
   if (answer === null || answer.of !== of) return { status: "loading", models: [], note: null };
   return { status: "ready", models: answer.models, note: answer.models.length === 0 ? NO_SUGGESTIONS : null };

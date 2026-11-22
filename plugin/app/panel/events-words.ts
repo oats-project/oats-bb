@@ -76,7 +76,8 @@ export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => e
  */
 export function summaryLine(events: PanelEvents, now: number): string {
   const last = events.events[events.events.length - 1];
-  return last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${whenText(last.at, now)} · ${INCARNATION[last.incarnation]}`;
+  // What it is, in words: the newest row of the record, not what the agent does now. Which incarnation it is of is the row's to say.
+  return last === undefined ? NO_EVENTS : `Last recorded: ${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
 }
 
 // ---- what a blocked launch's screen differed in

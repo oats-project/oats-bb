@@ -445,7 +445,7 @@ const second = [
       check(/^reported lifecycle activity load activity$/i.test(before), `${at} the activity is not read until asked: Load activity`, before);
       await page.evaluate(click(inPanel("oats-panel-activity-load")));
       const summary = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}`, 30);
-      check(/^Waiting claim · (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d · Current recorded incarnation$/.test(summary ?? ""), `${at} Load activity reads it: the last recorded event, its instant in the plugin's one form, and nothing of what the agent waits for (the header says that)`, summary);
+      check(/^Last recorded: Waiting claim · (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d$/.test(summary ?? ""), `${at} Load activity reads it: "Last recorded:", the newest row's kind and its instant in the plugin's one form; nothing of what the agent waits for (the header says that)`, summary);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-activity-load")));
         check(read === "Refresh activity", `${at} and the button becomes Refresh activity`, read);
@@ -533,14 +533,14 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-soul")));
         const soulRefused = await page.until(noticeOf("oats-panel-soul-body"), 30);
         check(
-          (soulRefused ?? "").startsWith("The soul as spawned could not be read | alert | ") && soulRefused.includes("OATS keeps no record of what this kind of agent was spawned from. There is nothing to do: OATS has none for it.") && soulRefused.includes("E_UNSUPPORTED_MODE") && soulRefused.includes("Details") && !offersRetry(soulRefused),
-          `${at} the soul as spawned, refused: what happened and what to do, the kernel's code, Details, and no Retry that cannot help`,
+          (soulRefused ?? "").startsWith("OATS keeps no record of what this kind of agent was spawned from | status | ") && soulRefused.includes("E_UNSUPPORTED_MODE") && soulRefused.includes("Details") && !offersRetry(soulRefused),
+          `${at} the soul as spawned, where OATS keeps none for this kind of agent: said as a fact, not drawn as a failure, with the kernel's code and Details, and nothing to press`,
           soulRefused,
         );
         {
-          // One answer in the three parts: the notice offers no Retry, and the part keeps its own way to read again.
-          const own = await page.evaluate(textOf(inPanel("oats-panel-soul-again")));
-          check(own === "Read the soul again", `${at} and the part's own way to read again, for whoever mended it: Read the soul again`, own);
+          const tone = await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-soul-body")} ${testId("oats-notice")}`)})?.getAttribute("data-tone") ?? null`);
+          const again = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-soul-again"))}).length`);
+          check(tone === "info" && again === 0, `${at} it is no failure notice, and offers no reading again`, `tone: ${tone}; buttons to read again: ${again}`);
         }
         // the soul's readiness, failed, under the soul's refused read: reading again may go better, so Retry
         const soulReadinessFailed = await page.until(noticeOf("oats-panel-readiness-soul"), 30);
@@ -633,7 +633,7 @@ const second = [
           result.events.push({ ...result.events[1], at: "2026-11-21T18:40:00.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
         }));
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Launch prompt · ")`, 30);
+        const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Last recorded: Launch prompt · ")`, 30);
         check(Boolean(blocked), `${at} the activity's summary leads with the last row: a launch prompt`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
         const incompleteLine = await reads(page, inPanel("oats-panel-activity-incomplete"), ["Incomplete evidence"]);
         check(incompleteLine === "Incomplete evidence: 1 unreadable rows · 0 foreign rows · window or source truncated.", `${at} an incomplete window says what is missing`, incompleteLine);
@@ -883,6 +883,12 @@ const more = [
         // One state per image: the soul as spawned is there before the image is taken.
         const read = await page.until(`${textOf(inPanel("oats-panel-spawned-from"))}`, 30);
         check((read ?? "").startsWith("Spawned from oats-legacy @ "), `${at} and the soul as spawned is read: the soul the header names`, read);
+      }
+      // What "unnamed" is, in the image: Open soul page off, with its reason beside it, under the soul's name.
+      await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-page-soul"))}).scrollTop = 0`);
+      {
+        const seen = await page.evaluate(visible(inPanel("oats-panel-open-soul-why")));
+        check(seen === true, `${at} the reason Open soul page is off is in view for the image`, seen);
       }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "soul-unnamed");

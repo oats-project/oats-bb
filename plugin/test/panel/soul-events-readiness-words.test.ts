@@ -79,7 +79,7 @@ describe("the recorded activity's words", () => {
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
     // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
-    expect(activitySummary(events, NOW)).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · Current recorded incarnation`);
+    expect(activitySummary(events, NOW)).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
     expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No recorded lifecycle events in this observed window.");
   });
   it("says when the evidence is not whole", () => {
@@ -144,21 +144,22 @@ describe("a refused read, in the Desktop's own sentence", () => {
   });
   it("says what to do next, and offers Retry only where reading again can change the answer", () => {
     expect(refusalWords("readiness", "E_HOME_MISMATCH", "")).toEqual({
-      sentence: "This agent's folder is no longer the one OATS recorded for it.", next: "`oats status`, on the machine that holds it, shows where the agent is now.", retry: false,
+      sentence: "This agent's folder is no longer the one OATS recorded for it.", next: "`oats status`, on the machine that holds it, shows where the agent is now.", retry: false, fault: true,
     });
     expect(refusalWords("activity", "E_AMBIGUOUS_INSTANCE", "")).toMatchObject({ next: "Retire or rename one of them with OATS, on the machine that holds them.", retry: false });
     expect(refusalWords("readiness", "E_SOUL_UNKNOWN", "")).toMatchObject({ next: "It may have been removed from the workspace: `oats souls` lists the ones there are.", retry: false });
-    expect(refusalWords("soul", "E_UNSUPPORTED_MODE", "")).toMatchObject({ next: "There is nothing to do: OATS has none for it.", retry: false });
-    expect(refusalWords("readiness", "E_USAGE", "")).toEqual({ sentence: "The OATS installed here is too old for this. Update OATS.", next: null, retry: false });
+    // OATS has none of it for this kind of agent: no fault, nothing to do, nothing to read again.
+    expect(refusalWords("soul", "E_UNSUPPORTED_MODE", "")).toEqual({ sentence: "OATS keeps no record of what this kind of agent was spawned from.", next: null, retry: false, fault: false });
+    expect(refusalWords("readiness", "E_USAGE", "")).toEqual({ sentence: "The OATS installed here is too old for this. Update OATS.", next: null, retry: false, fault: true });
     // the server's words while OATS itself cannot be read: the roster is the last one
     expect(refusalWords("soul", null, '"gone-helper" is not an agent of this OATS deployment\'s last snapshot').retry).toBe(false);
     expect(refusalWords("activity", null, '"gone-helper" is not an agent of this OATS deployment\'s current snapshot')).toEqual({
-      sentence: "OATS no longer lists this agent.", next: "It may have been retired: the sidebar lists the agents OATS has.", retry: false,
+      sentence: "OATS no longer lists this agent.", next: "It may have been retired: the sidebar lists the agents OATS has.", retry: false, fault: true,
     });
     // A slow, failed or unreadable answer, and a refusal nobody has words for yet, may go better next time.
-    expect(refusalWords("readiness", "OATS_TIMEOUT", "")).toEqual({ sentence: "The readiness read timed out.", next: null, retry: true });
+    expect(refusalWords("readiness", "OATS_TIMEOUT", "")).toEqual({ sentence: "The readiness read timed out.", next: null, retry: true, fault: true });
     expect(refusalWords("soul", "E_SOMETHING_NEW", "")).toMatchObject({ next: null, retry: true });
-    expect(refusalWords("activity", null, "boom")).toEqual({ sentence: null, next: null, retry: true });
+    expect(refusalWords("activity", null, "boom")).toEqual({ sentence: null, next: null, retry: true, fault: true });
   });
 });
 

@@ -74,10 +74,11 @@ const NEXT: Sentences = {
   E_AMBIGUOUS_INSTANCE: "Retire or rename one of them with OATS, on the machine that holds them.",
   E_SOUL_UNKNOWN: "It may have been removed from the workspace: `oats souls` lists the ones there are.",
   E_HOME_MISMATCH: "`oats status`, on the machine that holds it, shows where the agent is now.",
-  E_UNSUPPORTED_MODE: "There is nothing to do: OATS has none for it.",
 };
 /** The refusals that reading again cannot change: the notice offers no Retry for them. */
-const FINAL: ReadonlySet<string> = new Set([...Object.keys(NEXT), "E_USAGE"]);
+const FINAL: ReadonlySet<string> = new Set([...Object.keys(NEXT), "E_USAGE", "E_UNSUPPORTED_MODE"]);
+/** The refusals that are no fault: OATS has no such thing for this kind of agent. Said as a fact, not drawn as a failure, with nothing to do. */
+const NO_FAULT: ReadonlySet<string> = new Set(["E_UNSUPPORTED_MODE"]);
 
 export type RefusalWords = {
   /** what happened, in a person's words; null for a failure with no code at all */
@@ -86,6 +87,8 @@ export type RefusalWords = {
   next: string | null;
   /** whether reading again can help: the notice offers Retry only then */
   retry: boolean;
+  /** whether something went wrong; false where OATS simply has none of it for this agent */
+  fault: boolean;
 };
 
 /**
@@ -96,5 +99,5 @@ export function refusalWords(read: keyof typeof TABLES, code: string | null, err
   const gone = code === null && NOT_IN_ROSTER.test(error);
   const known = gone ? "E_SESSION_UNKNOWN" : code;
   const sentence = gone ? GONE[read] : code !== null && Object.hasOwn(TABLES[read], code) ? (TABLES[read][code] ?? null) : code !== null && code.startsWith("E_") ? REFUSED[read] : null;
-  return { sentence, next: known !== null && Object.hasOwn(NEXT, known) ? (NEXT[known] ?? null) : null, retry: known === null || !FINAL.has(known) };
+  return { sentence, next: known !== null && Object.hasOwn(NEXT, known) ? (NEXT[known] ?? null) : null, retry: known === null || !FINAL.has(known), fault: known === null || !NO_FAULT.has(known) };
 }

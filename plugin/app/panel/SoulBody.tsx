@@ -7,7 +7,7 @@ import { Button, Card, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import type { PanelRead } from "./read";
 import { AS_SPAWNED, NO_CAPABILITIES, NO_OTHER_CAPABILITIES, coreNote, emptySlot, layerLabel, MODULES_AS_SPAWNED, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "./soul-words";
-import { CommandState, offersRetry } from "./state";
+import { CommandState, mendable, offersRetry } from "./state";
 import { Warnings } from "./Warnings";
 
 function Source({ source }: { source: PanelSource }) {
@@ -103,7 +103,7 @@ export function SoulBody({ read, now }: { read: PanelRead<"panelSoul">; now: num
     <div data-testid="oats-panel-soul-body" className="flex min-w-0 flex-col gap-4">
       <CommandState read={read} of="soul" reading="Reading the soul…" failed="The soul as spawned could not be read" now={now} />
       {/* After a refusal that reading again cannot change as things are, the notice has no Retry: the way to read again, once it is mended, is here. */}
-      {read.status === "error" && !offersRetry(read, "soul") ? (
+      {read.status === "error" && !offersRetry(read, "soul") && mendable(read, "soul") ? (
         <div>
           <Button data-testid="oats-panel-soul-again" disabled={read.fetching} onClick={read.retry}>
             Read the soul again

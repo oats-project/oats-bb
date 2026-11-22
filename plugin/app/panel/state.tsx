@@ -38,6 +38,8 @@ type CommandRead = Read<unknown> & { retry(): void; fetching: boolean; readAt: n
  * soul again): for the person who mended what was wrong.
  */
 export const offersRetry = (read: CommandRead, of: "readiness" | "activity" | "soul"): boolean => read.status === "error" && refusalWords(of, codeOf(read.error), read.error).retry;
+/** Whether a failed read is something a person could mend and read again: not where OATS simply has none of it for this agent. */
+export const mendable = (read: CommandRead, of: "readiness" | "activity" | "soul"): boolean => read.status === "error" && refusalWords(of, codeOf(read.error), read.error).fault;
 
 /**
  * `of` names the read, for the words of its refusal (refusal-words.ts); `failed` is the notice's
@@ -50,6 +52,8 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
   const code = codeOf(read.error);
   const words = refusalWords(of, code, read.error);
   const kept = read.data !== undefined;
+  // OATS has none of it for this kind of agent: a fact, said once and not drawn as a failure; nothing to press.
+  if (!words.fault && words.sentence !== null) return <Notice title={words.sentence.replace(/\.$/, "")} tone="info" code={code} details={read.error} />;
   return (
     <Notice
       title={kept ? `${failed} again` : failed}

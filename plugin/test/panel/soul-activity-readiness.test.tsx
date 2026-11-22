@@ -127,15 +127,29 @@ test("an inspection that names no soul draws nothing under the header; a refusal
   // A refusal that reading again cannot change says what happened and what to do, and offers no Retry.
   const final = await soulTab({
     panelSoul: () => {
-      throw new Error("E_UNSUPPORTED_MODE: this home has no modules");
+      throw new Error("E_HOME_MISMATCH: the home is not this deployment's");
     },
   });
   const refused = await within(final.getByTestId("oats-panel-soul-body")).findByRole("alert");
-  expect(text(refused)).toContain("OATS keeps no record of what this kind of agent was spawned from.There is nothing to do: OATS has none for it.");
-  expect(text(refused)).toContain("E_UNSUPPORTED_MODE");
+  expect(text(refused)).toContain("This agent's folder is no longer the one OATS recorded for it.oats status, on the machine that holds it, shows where the agent is now.");
+  expect(text(refused)).toContain("E_HOME_MISMATCH");
   expect(within(refused).queryByRole("button", { name: "Retry" })).toBeNull();
   // The way to read again, for whoever mended it, is the part's own button, as in readiness and the activity.
   expect(text(final.getByTestId("oats-panel-soul-again"))).toBe("Read the soul again");
+  final.unmount();
+  resetApp();
+  // OATS has none of it for this kind of agent: a fact, not a failure. Said once, not in red, with nothing to press.
+  const noRecord = await soulTab({
+    panelSoul: () => {
+      throw new Error("E_UNSUPPORTED_MODE: this home has no modules");
+    },
+  });
+  const fact = await within(noRecord.getByTestId("oats-panel-soul-body")).findByTestId("oats-notice");
+  expect([fact.getAttribute("data-tone"), fact.getAttribute("role")]).toEqual(["info", "status"]);
+  expect(text(within(fact).getByRole("heading"))).toBe("OATS keeps no record of what this kind of agent was spawned from");
+  expect(text(fact)).toContain("E_UNSUPPORTED_MODE");
+  expect(within(fact).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(noRecord.queryByTestId("oats-panel-soul-again")).toBeNull();
 });
 
 test("the soul is read again when the instance was started again, and not when nothing of it changed", async () => {
@@ -163,7 +177,7 @@ test("the activity is read only when a person asks: Load activity, then the rows
   fireEvent.click(load);
   // The last recorded event, its instant in the plugin's one form. What the agent waits for is the header's and
   // Needs input's to say, from the roster as it is now: the summary says nothing of it.
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · Current recorded incarnation`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
   expect(text(slot.getByTestId("oats-panel-activity-load"))).toBe("Refresh activity");
   await waitFor(() => expect(text(activity)).toContain("Reported observation loaded. Runtime state is shown separately."));
   const list = slot.getByTestId("oats-panel-activity-list");
@@ -228,7 +242,7 @@ test("the activity read earlier is shown again as the last observation after the
   await slot.findByTestId("oats-panel-soul-body");
   act(() => showPanelTab("instance"));
   expect(text(await slot.findByTestId("oats-panel-activity-load"))).toBe("Refresh activity");
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toContain(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toContain(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Last observation retained; refresh required."));
   expect(calls(slot, "panelEvents")).toHaveLength(1);
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));

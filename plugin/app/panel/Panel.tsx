@@ -469,6 +469,19 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
             {shown(description)}
           </p>
         )}
+        {/* With the soul it opens, at the top: never below the fold, never cut at the window's foot. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            data-testid="oats-panel-open-soul"
+            disabled={key === null}
+            onClick={() => {
+              if (key !== null) openSoul(navigate, key);
+            }}
+          >
+            Open soul page
+          </Button>
+          {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
+        </div>
       </header>
       {readState}
       <SoulBody read={soul} now={now} />
@@ -482,18 +495,6 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
           </Facts>
         </Disclosure>
       )}
-      <div className="mt-auto flex flex-wrap items-center gap-2">
-        <Button
-          data-testid="oats-panel-open-soul"
-          disabled={key === null}
-          onClick={() => {
-            if (key !== null) openSoul(navigate, key);
-          }}
-        >
-          Open soul page
-        </Button>
-        {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
-      </div>
     </>
   );
 }

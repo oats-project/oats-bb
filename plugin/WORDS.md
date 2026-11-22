@@ -22,9 +22,12 @@ instance's name as words).
 | Thing | The Desktop says | The plugin says | Why |
 |---|---|---|---|
 | OATS cannot be read: the notice's title (`app/roster/unreadable.tsx`) | "Couldn't reach <host>" for a server that does not answer; the kernel's message alone for the rest | a title per cause, in a person's words (**OATS is not installed on <machine>**, **OATS did not answer on <machine>**, **OATS could not read this deployment**, **No OATS deployment found on this machine**, **bb could not list its threads**…), then one sentence of what to do, the code after the words, the kernel's message under Details | The plugin reads OATS through bb's host, so it has causes the Desktop has not (no `oats` on the machine, no deployment chosen, bb's own thread list); the standard asks for a person's words first and the code after. |
-| The roster kept while OATS cannot be read | "Last observation — <age>" over the roster, "showing what was read <age>" | the same two, the Desktop's words | none: said here because the acts differ (next row). |
-| Acts on a roster that is the last one read | held ("actions held") | offered, each with the detail "as of <age>" | Every act of the plugin goes to the kernel first, which plans it or refuses it on what it knows now; a confirmation is titled with the agent the kernel's plan names. |
+| The roster kept while OATS cannot be read | "Last observation — <age>" over the roster, "showing what was read <age>", actions held | ONE notice (`app/roster/unreadable.tsx`), with the age said once and in one form: **Showing what was read <age>.** | The Desktop's sentence; its second line with the same age is left out (one form of age, said once: the lead's ruling R4). |
+| Acts on a roster that is the last one read | held | HELD too: Stop, Start, Restart and Retire stay in their place, off. The notice says **Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.**; each act that is off says **Comes back when OATS is read again** (a menu entry's detail, a button's title) | The sentence names Retry first, so that a person does not reach for bb's own Stop out of a dead end (the lead's ruling R4; it reversed "offered, as of <age>"). |
 | An agent the kernel refuses as one it does not know (a stop plan or a retire plan refused with E_SESSION_UNKNOWN) | **Forget…** on a row its server no longer lists | the row says **Not in OATS any more** in its state's place until the next roster; the confirmation says "<name> is not in OATS any more", "Nothing was changed." Any other act on such an agent shows the kernel's refusal as it is. | bb has no server-side roster to forget from: the next read of `oats status`, made right after every act, drops the row. |
+| An agent's name | the instance's name as words ("Oats expert maintainer lanes") | the same, everywhere the plugin draws an agent (`agentName`, `app/ui/words.ts`: the Desktop's `instance-display-name.mjs` through the display filter); bb's title for the thread is never the name | The lead's ruling R1. The provider titles the bb thread with the same words. |
+| The thread row's facts | instance of, Parent, Owning human, Messaging ID (the instance panel's) | the same four labels, and **Children** | One vocabulary for one fact (R3); the team's id is not in a label. |
+| The way to the instance panel, on a thread | (the panel is beside the roster) | the button **Instance panel** | It says what it opens. |
 | The thread's row, an agent that waits with no claim of the kernel's | (no such case: the Desktop has no session of its own) | **bb shows its question in this thread** | The question is bb's own pending interaction; the kernel recorded no claim. |
 | The thread's row, an agent whose session ended in a shell | "Its session ended" in the instance panel | **Failed** · **Its session ended**, with Restart | The Desktop's words; the state's word beside them is the plugin's (first table). |
 | The thread's row, an agent the kernel cannot reach | the kernel's message | **Unreachable** · **OATS says: <the kernel's message>**, with Retry | Who says it is named, since bb also speaks in that place. |
@@ -32,6 +35,19 @@ instance's name as words).
 | Nobody waits | "Nothing needs you." | the same | none. |
 | The act that makes an agent | **New agent** | the same, a button at the roster's foot | none. |
 | The plugin's pages in the sidebar | one **Workspace** row (a page with tabs) | the heading **Workspace** over a row per page | bb's pages are routes, not tabs of one page; the Workspace page with its tabs is a later piece. |
+
+### Since when, by state (the status line of a thread's row)
+
+A time is said only where the kernel recorded one; the plugin invents none.
+
+| State | The time said | The kernel's fact | Where |
+|---|---|---|---|
+| Needs you | "waiting 12 min (since 14:03)" | the claim's `since` (`oats status`: `waitingOnYou.since`). None when the question is bb's own: OATS recorded no claim. | every place |
+| Working | "session started 14:03" | the row's `startedAt`: when the session started, said as that (the turn it works on may be newer) | every place that draws the status line |
+| Stopped | "since 14:03" | the time of the instance's last `stopped` event (`oats instance events`) | the open thread's row (and the panel's header): one read for one agent. The sidebar's rows say no time. |
+| Idle | none | the kernel records none | |
+| Failed | none; the reason in its place: "Its session ended" | the kernel records none (a session that died wrote nothing) | |
+| Unreachable | none; the reason in its place: "OATS says: <the kernel's message>" | the kernel records none | |
 
 ## The instance panel
 

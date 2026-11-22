@@ -2,6 +2,7 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { usePanelEvents } from "../panel/read";
 import { agentName } from "../ui/words";
 import {
   experimental_useAppPanel as useAppPanel,
@@ -19,7 +20,7 @@ import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus, rowState } from "./status";
+import { agentStatus, rowState, stoppedSince } from "./status";
 import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
@@ -53,6 +54,12 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const pluginId = usePluginId();
   const soulsShown = usePageShown("souls");
   const now = useNow();
+  // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
+  // the instance panel reads too. Asked for this thread's agent alone, and only while it is
+  // stopped; a hook, so it is called at every render, before any early return.
+  const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
+  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
+  const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -67,7 +74,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return null; // not an OATS agent: take no space
 
   const { agent } = node;
-  const status = agentStatus(agent, node.thread, now);
+  const read = agentStatus(agent, node.thread, now);
+  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, now) } : read;
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;

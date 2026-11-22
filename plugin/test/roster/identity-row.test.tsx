@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 // A9: the IdentityRow (experimental_threadHeaderRow).
+import { recordedEvents } from "../panel/handlers";
+import { waitingClock } from "../../app/ui/words";
 import { afterEach, expect, test, vi } from "vitest";
 import { fireEvent, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -95,7 +97,8 @@ test("an agent that needs you: since when and its question, on its own thread", 
 });
 
 test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says what OATS says, with Retry", async () => {
-  const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }) });
+  // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
+  const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }), panelEvents: () => ({ ...recordedEvents(), events: [] }) });
   expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   await vi.waitFor(() => expect(stopped.inspection.rpcCalls.filter((call) => call.method === "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]));
@@ -217,4 +220,16 @@ test("the soul is a link to its page where that page is shown, and its name alon
   const fact = await hidden.findByTestId("oats-fact-soul");
   expect(fact.textContent).toBe("instance ofoats-desktop-developer");
   expect(fact.querySelector("a")).toBeNull();
+});
+
+test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
+  const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
+  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}StartInstance panel`));
+  expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
+  slot.unmount();
+  resetApp();
+  // An agent that is not stopped asks for no events.
+  const working = await render("thr_mockups", fixtureAgents());
+  await working.findByTestId("oats-status-line");
+  expect(working.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });

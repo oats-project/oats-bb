@@ -24,6 +24,8 @@ export type Agent = {
   /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `running` decides */
   runtimeState: string | null;
   runtimeError: string | null;
+  /** The row's startedAt: when the session started. Absent or null where the kernel's row names none. */
+  startedAt?: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;
 };
 

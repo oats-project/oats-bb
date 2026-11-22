@@ -5,6 +5,7 @@
 // roster is read. No other act marks an agent gone: its refusal is shown as the kernel's, and the
 // roster read again after the act drops the row. The places are rendered TOGETHER: the link
 // between the refusal and the rows is what is held here.
+import { recordedEvents } from "../panel/handlers";
 import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -48,7 +49,8 @@ async function places(over: Partial<Handlers>) {
       },
     } as never,
     { activeThreadId: THREAD, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
-    { rpc: handlers(over), sidebarThreads: sidebarThreads() },
+    // (The agent's events hold no "stopped": its row says no time, so the lines read below are whole.)
+    { rpc: handlers({ panelEvents: () => ({ ...recordedEvents(), events: [] }), ...over }), sidebarThreads: sidebarThreads() },
   );
   await slot.findByTestId("oats-tree");
   const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === THREAD)!).getByTestId("oats-row-facts").textContent;

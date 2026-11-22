@@ -1,6 +1,6 @@
 // agentStatus(): where an agent is, in words, for every place that says it.
 import { expect, test } from "vitest";
-import { agentStatus } from "../../app/roster/status";
+import { agentStatus, sessionStarted, stoppedSince } from "../../app/roster/status";
 import type { BbThread } from "../../model/types";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 
@@ -53,4 +53,26 @@ test("an agent that waits says since when and what about; the others say only wh
   expect(agentStatus({ ...working, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }, quiet, now)).toEqual({ state: "unreachable", word: "Unreachable", since: null, detail: "OATS says: bb did not answer" });
   // An agent with no bb thread (it runs in tmux): the kernel's word alone.
   expect(agentStatus(working, null, now)).toEqual({ state: "working", word: "Working", since: null, detail: null });
+});
+
+// "Since when", only where the kernel recorded a time (the spec's author, 2026-11-22; WORDS.md has
+// the table): the claim's since for Needs you; the session's start for Working, said as that; the
+// last "stopped" event for Stopped (from the instance's events, for the open thread's row); none
+// for Idle, Failed and Unreachable.
+test("a working agent says when its session started, as that; with no start in the kernel's row, no time", () => {
+  const now = new Date(2026, 10, 21, 14, 30).getTime();
+  const working = fixtureAgents().find((agent) => agent.running === true && agent.waiting === null)!;
+  expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, null, now)).toMatchObject({ state: "working", since: "session started 14:03", detail: null });
+  expect(agentStatus({ ...working, startedAt: null }, null, now).since).toBeNull();
+  expect(agentStatus(working, null, now).since).toBeNull(); // a row with no startedAt
+  expect(sessionStarted("not a time", now)).toBeNull();
+});
+
+test("a stopped agent's time is its last \"stopped\" event's; none when its events hold none", () => {
+  const now = new Date(2026, 10, 21, 14, 30).getTime();
+  const at = (h: number, m: number) => new Date(2026, 10, 21, h, m).toISOString();
+  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }, { kind: "stopped", at: at(10, 0) }, { kind: "launched", at: at(11, 0) }, { kind: "stopped", at: at(13, 41) }], now)).toBe("since 13:41");
+  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }], now)).toBeNull();
+  expect(stoppedSince(undefined, now)).toBeNull();
+  expect(stoppedSince([{ kind: "stopped", at: "not a time" }], now)).toBeNull();
 });

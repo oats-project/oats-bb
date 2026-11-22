@@ -163,18 +163,29 @@ async function open(page, viewport, threads, agent) {
     const thread = threads.get(agent.thread);
     await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
     await page.until(visible(testId("oats-chip-oats")), 30);
-    // bb 0.50.1 mounts its side panel a second time right after its composer's footer has loaded
-    // (the node that holds the panel is replaced in bb's `app-layout-content-shell`): a panel
-    // opened before that starts again, and what a scene opened in it (a fold) is closed again.
-    // So the panel is opened once bb's thread layout has settled.
-    await settled(page, viewport);
     await page.evaluate(click(testId("oats-chip-oats")));
+    // bb's side panel must be whole before anything is opened in it (`panelWhole` says why).
+    if (!viewport.mobile) await page.until(panelWhole, 30);
   }
   const shown = await page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inPanel("oats-panel-name"))})?.getAttribute("title") === ${JSON.stringify(agent.instance)}`, 30);
   // At the phone's width, and for an agent with no thread, that is the agent's own page.
   const onPage = await page.evaluate(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${agent.instance}`)})`);
   return Boolean(shown) && onPage === (viewport.mobile || agent.thread === null);
 }
+
+/**
+ * bb's side panel is whole. bb 0.50.1 remembers that its side panel was open, and on which tab, so
+ * a thread's page can come up with the OATS tab already drawn. It then draws the panel's tab strip
+ * (`thread-secondary-panel-top-chrome`) and its content straight in the panel's column, and 40 to
+ * 400 ms later puts the two inside one more element (measured: the node that holds the plugin's
+ * panel is removed from bb's `app-layout-content-shell` and a new one added, about once in six
+ * opens at 1280 px, whether or not the composer's footer has loaded). The plugin's tab is mounted
+ * again by that: what a scene opened in it (a fold, whose open state is the DOM's) is closed
+ * again, and the next read is of content that is not on the page. The panel is whole once the
+ * element that holds both the tab strip and the plugin's panel is that inner one (bb gives it
+ * `flex-1`; the column itself has `h-full`): from then on bb does not mount the panel again.
+ */
+const panelWhole = `(() => { const strip = document.querySelector('[data-testid="thread-secondary-panel-top-chrome"]'); const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); if (!strip || !panel) return false; let both = strip; while (both && !both.contains(panel)) both = both.parentElement; return Boolean(both) && both.classList.contains("flex-1"); })()`;
 
 /**
  * What is measured of the panel before a screenshot: nothing it draws reaches past the panel's own
@@ -202,10 +213,9 @@ async function fitted(page, viewport, check, at, what) {
   );
 }
 /**
- * bb's composer under a thread has loaded its footer: from then on bb's layout no longer moves and
- * its side panel is not mounted again, so a panel opened after it keeps what a scene opens in it,
- * and the light and the dark image of one scene are taken of the same layout. Nothing to wait for
- * on a page of the plugin's own.
+ * bb's composer under a thread has loaded its footer: from then on bb's layout no longer moves, so
+ * the light and the dark image of one scene are taken of the same layout. Nothing to wait for on a
+ * page of the plugin's own.
  */
 async function settled(page, viewport) {
   if (viewport.mobile) return;
@@ -354,9 +364,11 @@ const second = [
       const rows = ["8 displayed / 8 observed rows. This is address history, not current runtime state.", "Spawned", "Work mode worktree", "no action is authorized by these events."];
       const list = await reads(page, inPanel("oats-panel-activity-list"), rows);
       check(holds(list, rows), `${at} Recent lifecycle events: the window, the rows with their facts, the note`, list.slice(0, 400));
-      // The titles as the page holds them, whether or not their fold is open at this instant.
-      const titles = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-activity-list")} ${testId("oats-panel-event")} strong`)})].map((e) => e.textContent.trim()).join(", ")`);
-      check(titles === "Waiting claim, Launched, Stopped, Launched, Restarted, Waiting claim, Launched, Spawned", `${at} the rows, newest first, by the Desktop's titles`, titles);
+      // The titles as a person reads them, with their fold open: waited for, like the fold's text.
+      const eight = "Waiting claim, Launched, Stopped, Launched, Restarted, Waiting claim, Launched, Spawned";
+      const titlesOf = `(() => { ${unfolded(inPanel("oats-panel-activity-list"))}; return [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-activity-list")} ${testId("oats-panel-event")} strong`)})].map((e) => e.innerText.trim()).join(", "); })()`;
+      const titles = (await page.until(`(() => { const titles = ${titlesOf}; return titles === ${JSON.stringify(eight)} ? titles : ""; })()`, 15)) ?? `(not there after 15 s; read: ${JSON.stringify(await page.evaluate(titlesOf))})`;
+      check(titles === eight, `${at} the rows, newest first, by the Desktop's titles`, titles);
       await page.evaluate(scroll("oats-panel-activity"));
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "activity");
@@ -771,8 +783,12 @@ const more = [
         refresh();
         const stale = await page.until(`(() => { const t = ${textOf(inPanel("oats-stale"))}; return t.includes("could not be read again") ? t : ""; })()`, 40);
         check(/howing what was read (just now|\d+s ago|\d+ min ago)\. OATS could not be read again \(E_LOCAL_MISSING\)\. Retry$/.test(stale ?? ""), `${at} when OATS cannot be read again the panel says how old what it shows is, and why, with Retry`, stale);
-        check((await page.evaluate(textOf(inPanel("oats-panel-name")))) === "Panel worktree helper" && (await page.evaluate(visible(inPanel("oats-panel-work-sentence")))), `${at} and keeps the agent and its facts on screen`);
-        if (viewport.mobile) check((await page.evaluate(textOf(testId("oats-agent-back")))) === "Back to the thread", `${at} and the way back`);
+        const kept = [await page.evaluate(textOf(inPanel("oats-panel-name"))), await page.evaluate(visible(inPanel("oats-panel-work-sentence")))];
+        check(kept[0] === "Panel worktree helper" && kept[1] === true, `${at} and keeps the agent and its facts on screen`, `the name read: ${JSON.stringify(kept[0])}; the work sentence in view: ${kept[1]}`);
+        if (viewport.mobile) {
+          const back = await page.evaluate(textOf(testId("oats-agent-back")));
+          check(back === "Back to the thread", `${at} and the way back`, back);
+        }
         await settled(page, viewport);
       await fitted(page, viewport, check, at, "stale");
         await page.shot(`panel-${viewport.name}-stale`);

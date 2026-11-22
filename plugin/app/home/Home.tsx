@@ -1,29 +1,35 @@
-// The OATS home: Needs you, Working, Finished-not-looked-at. A full page (navPanel `home`, the
-// phone's page and the target of "N need you") and, on desktop, the same view in a thread's fixed
-// tab. Answering is the person's act through bb's SDK; the plugin never types into a session.
+// The OATS home: what needs you, and what you have, on one screen. As the OATS Desktop's Home
+// (packages/desktop/renderer/views/home.mjs): the agents that wait on the person, a summary line,
+// the workspace's tiles, the agents at work, and Home › Agents, every agent OATS has. A full page
+// (navPanel `home`, the phone's page and the target of "N need you") and, on desktop, the same view
+// in a thread's fixed tab. Drawn with the patterns of app/ui.tsx.
+//
+// Answering is the person's act through bb's SDK: a choice bb offers, or a message sent as the
+// person at the screen (bb's own send). The plugin never types into a session. While the roster
+// shown is not a current one, those acts are held and the card says why.
 import { useEffect, useRef, useState } from "react";
-import {
-  ThreadTitle,
-  experimental_useTabVisible as useTabVisible,
-  useBbNavigate,
-  useSdk,
-} from "@get-bb/plugin-sdk/app";
-import type { ExperimentalBadge, ExperimentalThreadTabProps, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import type { Node } from "../../model/types";
-import { flatten } from "../../model/view";
+import type { ReactNode } from "react";
+import { experimental_useTabVisible as useTabVisible, useBbNavigate, useSdk } from "@get-bb/plugin-sdk/app";
+import type { BbNavigate, ExperimentalBadge, ExperimentalThreadTabProps, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { needsYouLabel } from "../format";
-import { forgetAgent, forgetAgents, getAgentTab, rememberAgent, rememberedAgent } from "./agent-tab";
+import { useOats } from "../oats";
+import type { Oats } from "../oats";
+import { useNow } from "../roster/now";
+import { Unreadable } from "../roster/unreadable";
+import { attempt, errorMessage, onWindowReset, useRead } from "../store";
+import { Button, Card, DisabledReason, Empty, Field, INPUT, LINK, Loading, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { refusalCode, shown } from "../ui/text";
+import { instanceDisplayName, waitingLabel } from "../ui/words";
+import { pageLinks } from "../workspace/pages";
+import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
+import { board } from "./board";
+import type { Board, Entry } from "./board";
+import {
+  BACK_TO_HOME, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NOTHING_NEEDS_YOU, NOT_SENT, READING, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
+  replyLabel, replyPlaceholder, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, tileCount, tmuxNote,
+} from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
-import { failureLine, useOats } from "../oats";
-import { useNow } from "../roster/now";
-import { agentStatus } from "../roster/status";
-import type { Oats } from "../oats";
-import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Dot, ErrorLine, Heading, Loading, Note, Page, plainClick } from "../ui";
-import { Unreadable } from "../roster/unreadable";
-import { PAGES } from "../workspace/pages";
-import { shown } from "../ui/text";
 
 /** The home's navigation badge: how many agents need the person. */
 export function useHomeBadge(): ExperimentalBadge | null {
@@ -36,296 +42,357 @@ onWindowReset(forgetAgents);
 
 type Ready = Extract<Oats, { phase: "ready" }>;
 
-function useOpenThread(): (thread: PluginSidebarThread) => { href: string; onClick(event: React.MouseEvent): void } {
+/** Where an agent opens: its bb thread, or, for an agent with none (on tmux, or its thread gone), its own page. */
+function useOpen(): (entry: Entry) => { href?: string; onClick(event: React.MouseEvent): void } {
   const navigate = useBbNavigate();
-  return (thread) => ({
-    href: thread.href,
-    onClick: (event) => {
-      if (!plainClick(event)) return;
-      event.preventDefault();
-      navigate.toThread(thread.id);
-    },
-  });
+  const oats = useOats();
+  return (entry) => {
+    const thread = entry.thread === null || oats.phase === "failed" || oats.phase === "loading" ? undefined : oats.threadById.get(entry.thread.id);
+    if (thread === undefined) return { onClick: () => void openAgentPage(navigate as BbNavigate, entry.agent.instance) };
+    return {
+      href: thread.href,
+      onClick: (event) => {
+        if (!plainClick(event)) return;
+        event.preventDefault();
+        navigate.toThread(thread.id);
+      },
+    };
+  };
 }
 
-/** One agent that needs the person: the question, and where bb lists choices, the answer in place. */
-function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginSidebarThread; soul: string; now: number }) {
+/** An agent's name as words, opening it: a link to its thread, or a button to its page. */
+function AgentName({ entry, testId }: { entry: Entry; testId: string }) {
+  const open = useOpen()(entry);
+  const name = instanceDisplayName(shown(entry.agent.instance));
+  const look = `${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-left font-semibold text-foreground`;
+  return open.href === undefined ? (
+    <button type="button" data-testid={testId} title={shown(entry.agent.instance)} className={look} onClick={open.onClick}>
+      {name}
+    </button>
+  ) : (
+    <a data-testid={testId} title={shown(entry.agent.instance)} className={look} href={open.href} onClick={open.onClick}>
+      {name}
+    </a>
+  );
+}
+
+/** Where an agent with no bb thread is, in words. */
+const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "Runs in tmux" : "Its bb thread is gone");
+
+/**
+ * One agent that needs the person: who, since when, what it asks; where bb lists choices, the
+ * answer in place; and the reply to it, on its own card, named for the agent it goes to.
+ */
+function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const sdk = useSdk();
-  const open = useOpenThread()(thread);
+  const open = useOpen()(entry);
+  const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
+  const name = instanceDisplayName(shown(entry.agent.instance));
   const [asked, setAsked] = useState<Question | null>(null);
-  const [answering, setAnswering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pending = thread.hasPendingInteraction;
+  const [busy, setBusy] = useState<"answer" | "send" | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const pending = thread?.hasPendingInteraction === true;
+  const threadId = thread?.id;
+  const updatedAt = thread?.updatedAt;
 
   useEffect(() => {
-    if (!pending) {
+    if (!pending || threadId === undefined) {
       setAsked(null);
       return;
     }
     const controller = new AbortController();
-    attempt(() => sdk.threads.interactions.list({ threadId: thread.id, signal: controller.signal })).then(
+    attempt(() => sdk.threads.interactions.list({ threadId, signal: controller.signal })).then(
       (list) => {
         if (!controller.signal.aborted) setAsked(question(list as readonly Interaction[]));
       },
       () => {
-        // bb could not list them: the card keeps its claim text and Open.
+        // bb could not list them: the card keeps the claim's text and Open.
         if (!controller.signal.aborted) setAsked(null);
       },
     );
     return () => controller.abort();
-  }, [sdk, thread.id, pending, thread.updatedAt]);
+  }, [sdk, threadId, pending, updatedAt]);
 
-  const answer = (choice: Choice) => {
-    if (asked === null || answering) return;
-    setAnswering(true);
-    setError(null);
-    const target = { threadId: thread.id, interactionId: asked.interactionId };
-    const { answer: how } = choice;
-    attempt(() =>
-      how.via === "respond"
-        ? sdk.threads.interactions.respond({ ...target, value: how.value })
-        : sdk.threads.interactions.resolve({ ...target, resolution: how.resolution }),
-    ).then(
+  const act = (kind: "answer" | "send", run: () => Promise<unknown>, done: () => void) => {
+    if (busy !== null || held) return;
+    setBusy(kind);
+    setFailure(null);
+    setSaid(null);
+    attempt(run).then(
       () => {
-        setAnswering(false);
-        setAsked(null);
+        setBusy(null);
+        done();
       },
       (cause: unknown) => {
-        setAnswering(false);
-        setError(errorMessage(cause));
+        setBusy(null);
+        setFailure(errorMessage(cause));
       },
     );
   };
+  const answer = (choice: Choice) => {
+    if (asked === null || threadId === undefined) return;
+    const target = { threadId, interactionId: asked.interactionId };
+    const { answer: how } = choice;
+    act("answer", () => (how.via === "respond" ? sdk.threads.interactions.respond({ ...target, value: how.value }) : sdk.threads.interactions.resolve({ ...target, resolution: how.resolution })), () => setAsked(null));
+  };
+  const send = () => {
+    const body = text.trim();
+    if (body === "" || threadId === undefined) return;
+    act("send", () => sdk.threads.send({ threadId, mode: "auto", input: [{ type: "text", text: body, mentions: [] }] }), () => {
+      setText("");
+      setSaid(sentTo(name));
+    });
+  };
 
-  const { since } = agentStatus(node.agent, node.thread, now);
-  const text = node.agent.waiting?.message ?? asked?.title ?? "needs your input";
+  const claim = entry.agent.waiting;
+  // What it asks: the agent's own message, else bb's title for its question, else the reason in words.
+  const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
-  const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== text ? asked.title : null;
+  const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== message ? asked.title : null;
   return (
-    <li data-testid="oats-needs-card" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <Dot state="needs-you" />
-        <a {...open} className="min-w-0 flex-1 truncate font-semibold hover:underline">
-          <ThreadTitle threadId={thread.id} />
-        </a>
-        {since === null ? null : <span className="shrink-0 text-xs text-muted-foreground">{since}</span>}
-      </div>
-      <p className="text-xs text-muted-foreground">{shown(soul)}</p>
-      <p data-testid="oats-needs-question" className="break-words">
-        {shown(text)}
-      </p>
-      {detail === null ? null : (
-        <p data-testid="oats-needs-detail" className="break-words rounded-md bg-muted px-2 py-1 text-xs">
-          {shown(detail)}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        {(asked?.choices ?? []).map((choice, index) => (
-          <Button key={index} data-testid="oats-needs-choice" disabled={answering} onClick={() => answer(choice)}>
-            {shown(choice.label)}
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance}>
+      <Card testId="oats-needs-card-body">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <AgentName entry={entry} testId="oats-needs-name" />
+          <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
+        </div>
+        <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
+        {message === null ? null : (
+          <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
+            {shown(message)}
+          </p>
+        )}
+        {detail === null ? null : (
+          <p data-testid="oats-needs-detail" dir="auto" className="m-0 break-words text-xs text-muted-foreground">
+            {shown(detail)}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {(asked?.choices ?? []).map((choice, index) => (
+            <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
+              {shown(choice.label)}
+            </Button>
+          ))}
+          <Button data-testid="oats-needs-open" onClick={(event) => open.onClick(event)}>
+            Open
           </Button>
-        ))}
-        <a
-          {...open}
-          data-testid="oats-needs-open"
-          className="inline-flex min-h-8 items-center rounded-md border border-border bg-card px-3 py-1 text-sm hover:bg-accent"
-        >
-          Open
-        </a>
-      </div>
-      {error === null ? null : <ErrorLine>{error}</ErrorLine>}
+        </div>
+        {thread === undefined ? (
+          // Nothing can be sent from bb to an agent that has no thread in it.
+          <p data-testid="oats-needs-elsewhere" className="m-0 text-xs text-muted-foreground">
+            {tmuxNote(elsewhere(entry))}
+          </p>
+        ) : (
+          <form
+            data-testid="oats-reply"
+            className="flex min-w-0 flex-col gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              send();
+            }}
+          >
+            <Field label={replyLabel(name)}>
+              <textarea data-testid="oats-reply-text" rows={2} className={`${INPUT} py-2`} placeholder={replyPlaceholder(name)} value={text} disabled={busy !== null || held} onChange={(event) => setText(event.target.value)} />
+            </Field>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" variant="primary" data-testid="oats-reply-send" disabled={busy !== null || held || text.trim() === ""}>
+                {busy === "send" ? SENDING : SEND}
+              </Button>
+              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
+              {said === null ? null : (
+                <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
+                  {said}
+                </span>
+              )}
+            </div>
+          </form>
+        )}
+        {failure === null ? null : <Notice title={NOT_SENT} tone="error" code={refusalCode(failure)} details={failure} />}
+      </Card>
     </li>
   );
 }
 
-function AgentRows({ nodes, oats, testId }: { nodes: readonly Node[]; oats: Ready; testId: string }) {
-  const open = useOpenThread();
+/** A list that shows its first `shown` and then offers the rest in place. */
+function Cropped<Item>({ items, shown: most, more, testId, children }: { items: readonly Item[]; shown: number; more: (n: number) => string; testId: string; children: (item: Item) => ReactNode }) {
+  const [all, setAll] = useState(false);
+  const visible = all ? items : items.slice(0, most);
   return (
-    <ul className="flex flex-col">
-      {nodes.flatMap((node) => {
-        const thread = oats.threadById.get(node.thread.id);
-        if (thread === undefined) return [];
-        return [
-          <li key={thread.id}>
-            <a {...open(thread)} data-testid={testId} className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
-              <Dot state={node.state} />
-              <span className="min-w-0 flex-1 truncate">
-                <ThreadTitle threadId={thread.id} />
-              </span>
-              <span className="shrink-0 truncate text-xs text-muted-foreground">{shown(oats.soulOf(node.agent))}</span>
-            </a>
-          </li>,
-        ];
-      })}
-    </ul>
+    <>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">{visible.map(children)}</ul>
+      {items.length <= most ? null : (
+        <div>
+          <Button data-testid={testId} aria-expanded={all} onClick={() => setAll(!all)}>
+            {all ? SHOW_FEWER : more(items.length)}
+          </Button>
+        </div>
+      )}
+    </>
   );
 }
 
-/** Pick an agent, type, send: bb's own send, as the person at the screen. */
-function ReplyBox({ oats }: { oats: Ready }) {
-  const sdk = useSdk();
-  const nodes = flatten(oats.view.roots);
-  const [picked, setPicked] = useState<string>("");
-  const target = useRef<string | null>(null);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<string | null>(null);
-  if (nodes.length === 0) return null;
-  // The agent picked. Until the person picks, the first that needs them, chosen once: the target
-  // must not move under a message being typed when the order changes. It changes only when its
-  // thread leaves the tree.
-  const inTree = (id: string | null) => id !== null && nodes.some((node) => node.thread.id === id);
-  if (!inTree(target.current)) target.current = (oats.view.needsYou[0] ?? nodes[0]!).thread.id;
-  const threadId = inTree(picked) ? picked : target.current!;
-
-  const send = () => {
-    const body = text.trim();
-    if (body === "" || sending) return;
-    setSending(true);
-    setError(null);
-    setSent(null);
-    attempt(() => sdk.threads.send({ threadId, mode: "auto", input: [{ type: "text", text: body, mentions: [] }] })).then(
-      () => {
-        setSending(false);
-        setText("");
-        setSent(threadId);
-      },
-      (cause: unknown) => {
-        setSending(false);
-        setError(errorMessage(cause));
-      },
-    );
-  };
-
+/** One agent as a row: its name, its soul and machine, its state in words, and who started it. */
+function AgentRow({ entry, oats, testId, startedByToo = false }: { entry: Entry; oats: Ready; testId: string; startedByToo?: boolean }) {
+  const started = startedByToo ? startedBy(entry.agent) : null;
   return (
-    <form
-      data-testid="oats-reply"
-      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        send();
-      }}
-    >
-      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Reply to
-        <select
-          data-testid="oats-reply-agent"
-          className="min-h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
-          value={threadId}
-          disabled={sending}
-          onChange={(event) => setPicked(event.target.value)}
-        >
-          {nodes.map((node) => (
-            <option key={node.thread.id} value={node.thread.id}>
-              {`${shown(node.thread.displayTitle)} · ${shown(node.agent.instance)}`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <textarea
-        data-testid="oats-reply-text"
-        aria-label="Message"
-        rows={3}
-        className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-subtle-foreground"
-        placeholder="Write to the agent…"
-        value={text}
-        disabled={sending} // what is typed during a send would be cleared with it
-        onChange={(event) => setText(event.target.value)}
-      />
-      <div className="flex items-center justify-end gap-2">
-        {sent === null ? null : <span role="status" className="text-xs text-muted-foreground">Sent.</span>}
-        <Button type="submit" variant="primary" data-testid="oats-reply-send" disabled={sending || text.trim() === ""}>
-          {sending ? "Sending…" : "Send"}
-        </Button>
-      </div>
-      {error === null ? null : <ErrorLine>{error}</ErrorLine>}
-    </form>
+    <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border py-1 first:border-t-0">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <AgentName entry={entry} testId="oats-home-agent" />
+        <span className="break-words text-xs text-muted-foreground">
+          {[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), entry.thread === null ? elsewhere(entry).toLowerCase() : null, started].filter((part) => part !== null).join(" · ")}
+        </span>
+      </span>
+      <span className="shrink-0 text-sm">
+        <State state={entry.status.state} />
+      </span>
+    </li>
   );
 }
 
-/** The tab's Workspace block: counts that link to the four pages. */
-function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
+/** The workspace's tiles: Agents (Home › Agents) and the plugin's pages, each with its count. */
+function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onAgents: () => void }) {
   const navigate = useBbNavigate();
   const souls = useRead("souls", { enabled: visible });
   const capabilities = useRead("capabilities", { enabled: visible });
   const teams = useRead("teams", { enabled: visible });
   const machines = useRead("machines", { enabled: visible });
-  const counts: Record<(typeof PAGES)[number]["path"], number | undefined> = {
-    souls: souls.data?.souls.length,
-    capabilities: capabilities.data?.capabilities.length,
-    teams: teams.data?.teams.length,
-    machines: machines.data?.machines.length,
+  const counted = (read: { status: string }, n: number | undefined): number | "loading" | "failed" => (read.status === "error" ? "failed" : n === undefined ? "loading" : n);
+  const counts: Record<string, number | "loading" | "failed" | null> = {
+    souls: counted(souls, souls.data?.souls.length),
+    capabilities: counted(capabilities, capabilities.data?.capabilities.length),
+    teams: counted(teams, teams.data?.teams.length),
+    machines: counted(machines, machines.data?.machines.length),
   };
+  const tile = "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md border border-border bg-card px-3 py-2 text-left hover:bg-accent";
   return (
-    <section className="flex flex-col gap-2">
-      <Heading>Workspace</Heading>
-      <p className="text-xs text-muted-foreground">{`${shown(oats.deployment.workspace)} · ${shown(oats.deployment.machine)}`}</p>
-      <ul className="grid grid-cols-2 gap-2">
-        {PAGES.map((page) => (
+    <ul data-testid="oats-home-tiles" className="m-0 grid list-none grid-cols-2 gap-2 p-0 md:grid-cols-3">
+      <li>
+        <button type="button" data-testid="oats-tile-agents" className={`${TARGET} ${tile}`} onClick={onAgents}>
+          <span className="font-semibold text-foreground">Agents</span>
+          <span className="text-xs text-muted-foreground">{tileCount(made.all.length)}</span>
+        </button>
+      </li>
+      {pageLinks().map((page) => {
+        const n = counts[page.path] ?? null;
+        return (
           <li key={page.path}>
-            <button
-              type="button"
-              data-testid={`oats-workspace-${page.path}`}
-              className="flex w-full items-baseline justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-left hover:bg-accent"
-              onClick={() => navigate.toPluginPanel(page.path)}
-            >
-              <span>{page.title}</span>
-              <span className="text-muted-foreground">{counts[page.path] ?? "…"}</span>
+            <button type="button" data-testid={`oats-tile-${page.path}`} className={`${TARGET} ${tile}`} onClick={() => navigate.toPluginPanel(page.path)}>
+              <span className="font-semibold text-foreground">{page.title}</span>
+              {/* A page with nothing the home counts says no count. */}
+              {n === null ? null : <span className="text-xs text-muted-foreground">{tileCount(n)}</span>}
             </button>
           </li>
-        ))}
-      </ul>
-    </section>
+        );
+      })}
+    </ul>
   );
 }
 
-function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {
+/** Home › Agents: every agent OATS has, in the sidebar's order. */
+function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: () => void }) {
+  // Opened by a press that then leaves the screen: the keyboard goes on from the way back.
+  const back = useRef<HTMLDivElement>(null);
+  useEffect(() => back.current?.querySelector("button")?.focus(), []);
+  return (
+    <Section title={EVERY_AGENT} n={made.all.length} testId="oats-home-agents">
+      <div ref={back}>
+        <Button data-testid="oats-home-back" onClick={onBack}>
+          {`‹ ${BACK_TO_HOME}`}
+        </Button>
+      </div>
+      <p className="m-0 text-muted-foreground">{summaryLine(made.counts)}</p>
+      <ul className="m-0 flex list-none flex-col p-0">
+        {made.all.map((entry) => (
+          <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-home-agent-row" startedByToo />
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onAgents: () => void; onBack: () => void }) {
   const now = useNow();
+  const navigate = useBbNavigate();
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
-  if (oats.phase === "loading") return <Loading>Reading your agents…</Loading>;
+  if (oats.phase === "loading") return <Loading>{READING}</Loading>;
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
-  const { view } = oats;
+  const made = board(oats.view, now);
+  const held = oats.stale !== null;
+  const stale = oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
+  if (agents) {
+    return (
+      <>
+        {stale}
+        <EveryAgent made={made} oats={oats} onBack={onBack} />
+      </>
+    );
+  }
+  if (made.all.length === 0) {
+    return (
+      <>
+        {stale}
+        <Empty title={FIRST_RUN[0]} action={<Button variant="primary" data-testid="oats-home-new-agent" onClick={() => navigate.toPluginPanel("souls")}>New agent</Button>}>
+          {FIRST_RUN[1]}
+        </Empty>
+        <Tiles made={made} visible={visible} onAgents={onAgents} />
+      </>
+    );
+  }
   return (
     <>
-      {oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
-      <section data-testid="oats-home-needs" className="flex flex-col gap-2">
-        <Heading n={view.needsYou.length}>Needs you</Heading>
-        {view.needsYou.length === 0 ? (
-          <Note>Nothing waits on you.</Note>
+      {stale}
+      <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
+        {made.needsYou.length === 0 ? (
+          <p data-testid="oats-home-nothing" className="m-0 text-muted-foreground">
+            {NOTHING_NEEDS_YOU}
+          </p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {view.needsYou.flatMap((node) => {
-              const thread = oats.threadById.get(node.thread.id);
-              return thread === undefined ? [] : [<NeedsYouCard key={thread.id} node={node} thread={thread} soul={oats.soulOf(node.agent)} now={now} />];
-            })}
+          <Cropped items={made.needsYou} shown={NEEDS_YOU_SHOWN} more={showAll} testId="oats-home-needs-all">
+            {(entry) => <NeedsYouCard key={entry.agent.instance} entry={entry} oats={oats} held={held} />}
+          </Cropped>
+        )}
+      </Section>
+      <p data-testid="oats-home-summary" className="m-0 text-muted-foreground">
+        {summaryLine(made.counts)}
+      </p>
+      <Tiles made={made} visible={visible} onAgents={onAgents} />
+      {made.working.length === 0 ? null : (
+        <Section title={WORKING} n={made.working.length} testId="oats-home-working">
+          <Cropped items={made.working} shown={WORKING_SHOWN} more={showAllWorking} testId="oats-home-working-all">
+            {(entry) => <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-working-row" />}
+          </Cropped>
+        </Section>
+      )}
+      {made.finished.length === 0 ? null : (
+        <Section title={FINISHED} n={made.finished.length} testId="oats-home-finished">
+          <ul className="m-0 flex list-none flex-col p-0">
+            {made.finished.map((entry) => (
+              <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-finished-row" />
+            ))}
           </ul>
-        )}
-      </section>
-      <section data-testid="oats-home-working" className="flex flex-col gap-2">
-        <Heading n={view.working.length}>Working</Heading>
-        {view.working.length === 0 ? <Note>No agent is working.</Note> : <AgentRows nodes={view.working} oats={oats} testId="oats-working-row" />}
-      </section>
-      <section data-testid="oats-home-finished" className="flex flex-col gap-2">
-        <Heading n={view.finished.length}>Finished, not looked at</Heading>
-        {view.finished.length === 0 ? (
-          <Note>Nothing new to look at.</Note>
-        ) : (
-          <AgentRows nodes={view.finished} oats={oats} testId="oats-finished-row" />
-        )}
-      </section>
-      {where === "page" ? <ReplyBox oats={oats} /> : <Workspace oats={oats} visible={visible} />}
+        </Section>
+      )}
     </>
   );
 }
 
-/** The full page: the phone's home, and where "N need you" leads. */
-export function HomePage() {
+/** The sub-path of Home › Agents on the home's page. */
+const AGENTS = "agents";
+
+/** The full page: the phone's home, and where "N need you" leads. `/plugins/oats/home/agents` is Home › Agents. */
+export function HomePage({ subPath }: PluginNavPanelProps) {
   const oats = useOats();
+  const navigate = useBbNavigate();
+  const agents = subPath.split("/").find((segment) => segment !== "") === AGENTS;
   return (
     <Page testId="oats-home-page">
-      <Sections oats={oats} where="page" visible />
+      <h1 data-testid="oats-home-title" className="m-0 text-lg font-semibold text-foreground">
+        {HOME}
+      </h1>
+      <Sections oats={oats} visible agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
     </Page>
   );
 }
@@ -337,6 +404,8 @@ export function HomePage() {
 export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
+  // In the tab, Home › Agents is a view of the tab itself: it has no address of its own.
+  const [agents, setAgents] = useState(false);
   const AgentTab = getAgentTab();
   if (AgentTab !== null) {
     if (oats.phase === "ready") {
@@ -356,7 +425,7 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   }
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
-      <Sections oats={oats} where="tab" visible={visible} />
+      <Sections oats={oats} visible={visible} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
     </div>
   );
 }

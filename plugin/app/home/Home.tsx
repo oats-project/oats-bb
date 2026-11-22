@@ -548,7 +548,7 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
-  // Read once the home is seen, and again when the person asks: the installed CLI changes with an install, not with what the agents do.
+  // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, unchecked, check } = useCli(visible, oats.phase === "ready");
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} unchecked={unchecked} onCheck={check} />;
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.

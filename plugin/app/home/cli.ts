@@ -1,5 +1,6 @@
 // Where the installed `oats` stands (the home's one verb, `homeCli`), read once when the home is
-// first seen and again when a person asks ("Check again", after an install). Read by a call of its
+// first seen (once more, by itself, when that read failed and the roster reads) and again when a
+// person asks ("Check again", after an install). Read by a call of its
 // own, not by a kept query: the home has to know when a check ENDS, also when its answer is the
 // same as before (a kept query hands back the same object then, and says nothing).
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -53,19 +54,27 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
       ),
     [rpc],
   );
+  // The step is kept beside the state too, read where the effect decides: an effect run twice
+  // before the state is drawn again (a strict-mode mount, a render between) must not ask twice.
+  const step = useRef(own);
+  const move = (next: typeof own) => {
+    step.current = next;
+    setOwn(next);
+  };
   useEffect(() => {
     if (!enabled) return;
-    if (own === "none") {
-      setOwn("first");
+    if (step.current === "none") {
+      move("first");
       void read().then((answered) => {
-        if (alive.current && !answered) setOwn("first-failed");
+        if (alive.current && !answered) move("first-failed");
       });
-    } else if (own === "first-failed" && rosterRead) {
-      setOwn("second");
+    } else if (step.current === "first-failed" && rosterRead) {
+      move("second");
       void read().then((answered) => {
-        if (alive.current && !answered) setOwn("second-failed");
+        if (alive.current && !answered) move("second-failed");
       });
     }
+    // `own` is a dependency so that the effect runs again once the first read is seen to have failed.
   }, [enabled, own, rosterRead, read]);
   const check = useCallback(() => {
     if (checking) return;

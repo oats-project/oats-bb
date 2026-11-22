@@ -123,11 +123,12 @@ with, the version of the kernel's JSON answers it reads), and only the home says
 | of a later minor than the plugin was tested with | one line, "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2."; no act is turned off |
 | it runs (the roster reads) and its version could not be read, also at the home's one more try | one muted line, "The installed oats could not be checked.", with **Check again**; New agent stays on (the kernel refuses a spawn it cannot make) |
 
-Each of the three has **Check again**: it asks the server to read `oats version` anew (the server
+Each of these notices (the two cards and the two lines) has **Check again**: it asks the server to read `oats version` anew (the server
 keeps one answer for every feature), so after an install the notice goes, and New agent comes back,
 with no reload. A check whose answer is the same leaves the notice as it is and can be pressed
 again; one that fails says so on the notice ("The installed oats could not be checked again: …")
-and keeps what was read before. The version is read by a call of the home's own (`app/home/cli.ts`),
+and keeps what was read before (on the line "The installed oats could not be checked." a check
+that fails leaves that one line, which stays true). The version is read by a call of the home's own (`app/home/cli.ts`),
 not by a kept query, so that the home knows when a check ends.
 
 It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the

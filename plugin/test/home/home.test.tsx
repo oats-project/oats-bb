@@ -1034,3 +1034,30 @@ test("New agent is on every home, in the heading's row: with agents too, on the 
   expect(nowhere.queryByTestId("oats-home-new-agent")).toBeNull();
   expect(nowhere.getByTestId("oats-home-head").textContent).toBe("Home");
 });
+
+test("the home's one more try of the version waits for the roster: none while the roster is not read, one once it is", async () => {
+  let rosterFails = true;
+  const slot = await homePage({
+    rpc: {
+      ...handlers({ snapshot: () => (rosterFails ? { ok: false as const, at: "t", code: "OATS_TIMEOUT", message: "oats did not answer" } : fixtureSnapshot()) }),
+      homeCli: () => {
+        throw new Error("OATS_TIMEOUT: oats did not answer");
+      },
+    } as Handlers,
+  });
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+  // OATS cannot be read at all: the roster's notice says it; the version was asked once, and is not asked again
+  await slot.findByRole("alert");
+  await waitFor(() => expect(asked()).toBe(1));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(asked()).toBe(1);
+  expect(slot.queryByTestId("oats-home-cli-unchecked")).toBeNull();
+  // the roster reads: now the one more try is made, and, failing too, the line is drawn
+  rosterFails = false;
+  await act(async () => {
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-19T12:55:00.000Z" });
+  });
+  await slot.findByTestId("oats-home-needs");
+  expect((await slot.findByTestId("oats-home-cli-unchecked")).textContent).toBe("The installed oats could not be checked.Check again");
+  expect(asked()).toBe(2);
+});

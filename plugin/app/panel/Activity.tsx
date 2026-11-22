@@ -11,7 +11,7 @@ import {
   sourcesLine, summaryLine, windowLine,
 } from "./events-words";
 import { usePanelEvents } from "./read";
-import { CommandState, offersRetry } from "./state";
+import { CommandState, mendable, offersRetry } from "./state";
 import { whenText } from "./words";
 
 function Events({ events, now }: { events: PanelEvents; now: number }) {
@@ -123,13 +123,14 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
       <div className="flex flex-wrap items-center gap-2">
         {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
             Over what is shown the button is off while a read runs, and the words beside it say why. */}
-        {(read.fetching && !held) || (asked && offersRetry(read, "activity")) ? null : (
+        {(read.fetching && !held) || (asked && offersRetry(read, "activity")) || (asked && read.status === "error" && !mendable(read, "activity")) ? null : (
           <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
             {held || asked ? REFRESH : LOAD}
           </Button>
         )}
-        {/* A read again over what is shown says so, in the words of the first read; after a failed one the line above says it. */}
-        {held && (read.fetching ? read.status === "ready" : !asked || read.status === "ready") ? (
+        {/* A read again over what is shown says so, in the words of the first read, beside the button it turned off; after a
+            failure whose notice has Retry, that button says it. */}
+        {held && (read.fetching ? read.status === "ready" || !offersRetry(read, "activity") : !asked || read.status === "ready") ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
             {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
           </span>

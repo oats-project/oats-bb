@@ -680,7 +680,7 @@ test("an unreachable agent: what OATS says of its session is in the header, once
 // ---- from the second round of review
 
 test("an agent with several children lists each on a row of its own as high as its target: no two links overlap", async () => {
-  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? agent : agent));
+  const agents = panelAgents();
   const lead = agents.find((agent) => agent.instance === "redesign-ui-lead")!;
   const second = { ...agents.find((agent) => agent.instance === CHILD)!, instance: "panel-second-helper", threadId: "thr_second", waiting: null };
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });

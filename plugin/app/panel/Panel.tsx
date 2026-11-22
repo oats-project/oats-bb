@@ -121,11 +121,12 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
 }
 
 /**
- * How wide the part of `root` that is in the window is, in px; null while it is whole in it. bb
- * 0.50.1 lays its side panel out wider than the window leaves room for when its sidebar, a thread
- * and the panel are all open (the panel's column runs past the window's right edge, by up to
- * about 140 px at 1280 px), and what is drawn there cannot be reached. So the panel draws within
- * the part that is in the window: nothing of it is cut.
+ * How wide the part of the panel that is in the window is, in px; null while it is whole in it.
+ * In the live checks up to oats-bb 84720c5, bb 0.50.1 laid its side panel out wider than the
+ * window left room for when its sidebar, a thread and the panel were all open (the panel's column
+ * ran past the window's right edge, by up to 138 px at 1280 px), and what was drawn there could
+ * not be reached; it has not since, and why was not found (README, "The instance panel"). Wherever
+ * the panel is not whole in the window, it draws within the part that is: nothing of it is cut.
  */
 function useVisibleWidth(element: HTMLElement | null): number | null {
   const [width, setWidth] = useState<number | null>(null);

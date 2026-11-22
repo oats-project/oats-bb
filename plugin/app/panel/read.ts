@@ -45,6 +45,8 @@ function usePanelRead<Method extends PanelMethod>(
   const held = query.data !== undefined;
   useEffect(() => setOn(!held), [held]);
   const refetch = useRef(query.refetch);
+  /** Reads again and notes when that read ended (`retry`, below), for the effects above it. */
+  const reread = useRef<() => void>(() => undefined);
   useEffect(() => {
     refetch.current = query.refetch;
   });
@@ -63,17 +65,28 @@ function usePanelRead<Method extends PanelMethod>(
     // The first value known is what the first read was for, not a change.
     const unknown = readFor.current === "";
     readFor.current = again;
-    if (enabled && !unknown) void refetch.current();
+    if (enabled && !unknown) reread.current();
   }, [again, enabled, key]);
   useRealtime(REALTIME_CHANGED, () => {
     if (live && enabled) void refetch.current();
   });
   const data = query.data as PanelAnswer<Method> | undefined;
-  // When this answer came: noted the first time it is seen, and kept for the part that is shown again.
-  if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
-  const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
-  const retry = () => void refetch.current();
   const fetching = query.isFetching;
+  // When the answer held was last read: noted the first time it is seen, and again each time a
+  // read asked for here ends with an answer (bb keeps the same object for an answer equal to the
+  // last one, so the object alone does not say that it was read again). Kept for the part that is
+  // shown again.
+  if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
+  const [ended, setEnded] = useState<number | null>(null);
+  const answered = query.error === null && data !== undefined;
+  useEffect(() => {
+    if (ended === null) return;
+    if (answered) receivedAt.set(key, { data, at: ended });
+    setEnded(null);
+  }, [ended, answered, data, key]);
+  const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
+  const retry = () => void refetch.current().then(() => setEnded(Date.now()));
+  reread.current = retry;
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };
   if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching, readAt };
   return { status: "ready", data, error: null, retry, fetching, readAt };

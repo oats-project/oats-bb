@@ -60,7 +60,8 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
       tone="error"
       code={code}
       details={read.error}
-      {...(kept ? { age: staleAge(at ?? read.readAt, now) } : {})}
+      // The panel's clock ticks every half minute: a failure drawn between two ticks is aged by the clock as it is now.
+      {...(kept ? { age: staleAge(at ?? read.readAt, Math.max(now, Date.now())) } : {})}
       actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
       {words.sentence === null ? null : <Sentence>{words.sentence}</Sentence>}

@@ -13,7 +13,7 @@ import {
   itemLine, itemOpens, itemProblems, itemTone, observedLine, policyLine, providerSays, signIn, summaryLine, warningLine,
 } from "./readiness-words";
 import { PathText } from "./parts";
-import { CommandState, offersRetry } from "./state";
+import { CommandState, mendable, offersRetry } from "./state";
 import { Warnings } from "./Warnings";
 
 /** A word with the mark of its tone; plainly when it has none. */
@@ -135,8 +135,9 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
       )}
       <div className="flex flex-wrap items-center gap-2">
         {/* One act at a time: while the first read runs the line above says so, and after a failure that reading again can
-            change, the notice's Retry is the act. Over what is shown the button is off while a read runs, and the words beside it say why. */}
-        {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") ? null : (
+            change, the notice's Retry is the act; where OATS has none of it for this kind of agent there is nothing to press.
+            Over what is shown the button is off while a read runs, and the words beside it say why. */}
+        {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") || (read.status === "error" && !mendable(read, "readiness")) ? null : (
           <Button
             data-testid="oats-panel-readiness-refresh"
             disabled={read.fetching}

@@ -4,12 +4,17 @@
 // the display filter one by one: the line itself is not filtered again. No bb and no React import.
 import type { PanelReadiness, PanelReadinessItem } from "../../kernel/panel-readiness";
 import { shown } from "../ui/text";
+import { whenText } from "./words";
 
 export const TITLE = { instance: "Instance readiness", soul: "Soul readiness" } as const;
 export const REFRESH = "Refresh readiness";
 export const REFRESHING = "Refreshing…";
 export const UPDATED = "Readiness updated";
-export const LOADING = "Loading readiness…";
+export const LOADING = "Reading readiness…";
+/** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
+export const CHECKS_PLAIN = "What OATS checked for this to run. Reading it starts nothing and allows nothing.";
+/** What to do about a provider that is set up and not signed in: the plugin has no act for it. */
+export const SIGN_IN_HOW = "Sign in to it on this computer, then press Refresh readiness.";
 export const NOT_PERMISSION = "Independent kernel observations, not launch permission. Unknown is not granted; an empty required set is not Ready.";
 export const CHECKS_AND_POLICY = "Checks and policy";
 export const NO_ITEMS = "No items reported for this check.";
@@ -23,16 +28,26 @@ export function summaryLine(summary: PanelReadiness["summary"]): string {
   return `${summary.fail} failing · ${summary.unknown} unknown · ${summary.required} required checks`;
 }
 /** "Observed: <instant>. Target: instance. This is not an atomic snapshot or a permission lease." */
-export const observedLine = (at: string | null, of: "instance" | "soul"): string => `${at === null ? "Observed." : `Observed: ${shown(at)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
-/** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>". */
-export const contextLine = (of: "instance" | "soul", name: string, agentsRoot: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · ${shown(agentsRoot)}`;
+export const observedLine = (at: string | null, of: "instance" | "soul", now: number): string => `${at === null ? "Observed." : `Observed: ${whenText(at, now)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
+/** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>"; this is its first part, and the path follows it as a path. */
+export const contextLabel = (of: "instance" | "soul", name: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · `;
 
-const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
+/** Whether an item waits for a sign-in to its provider. */
+export const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
 /** A check's state as it is drawn: one failing only because providers need a sign-in is its own state, not broken. */
 export function checkState(check: PanelReadiness["checks"][number]): string {
   const failing = check.items.filter((item) => item.status === "fail");
   return check.status === "fail" && failing.length > 0 && failing.every(signIn) ? "sign in needed" : shown(check.status);
 }
+/** How a check's state reads at a glance: one that fails is marked as bad, one that waits for a sign-in or is not known as a warning, the rest plainly. */
+export function checkTone(check: PanelReadiness["checks"][number]): "bad" | "warn" | null {
+  const said = checkState(check);
+  return said === "sign in needed" || check.status === "unknown" ? "warn" : check.status === "fail" ? "bad" : null;
+}
+/** The same for one item. */
+export const itemTone = (item: PanelReadinessItem): "bad" | "warn" | null => (signIn(item) ? "warn" : item.status === "fail" ? "bad" : null);
+/** Whether an item has anything to open: its facts, a provider's own answer, a problem. */
+export const itemOpens = (item: PanelReadinessItem): boolean => itemFacts(item).length > 0 || item.provider !== null || itemProblems(item).length > 0;
 /** "Installed", "Configured", "Member", "Providers". */
 export const checkLabel = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
 
@@ -51,8 +66,10 @@ export function declaredIn(at: string): string {
   return pkg ? `${where}, in the ${pkg[1]} package` : parts[1] ? `${where}, in ${parts[1]}` : `${where}, on this computer`;
 }
 
+/** A commit id: 40 hex characters. Inside a value it is drawn by its first seven, and the whole value is the fact's title: nothing is broken inside an id. */
+const EVERY_COMMIT = /\b[0-9a-f]{40}\b/g;
 /** An item's facts as label and text, in the Desktop's order; a fact the kernel does not report is left out. */
-export function itemFacts(item: PanelReadinessItem): { label: string; value: string }[] {
+export function itemFacts(item: PanelReadinessItem): { label: string; value: string; whole: string | null }[] {
   const facts: [string, string | null][] = [
     ["Producer", item.producer],
     ["Reason", item.reason],
@@ -62,10 +79,17 @@ export function itemFacts(item: PanelReadinessItem): { label: string; value: str
     ...item.evidence.map((fact): [string, string] => [fact.name, fact.value]),
     ["Remedy (display only)", item.remedy],
   ];
-  const out = facts.filter((fact): fact is [string, string] => fact[1] !== null).map(([label, value]) => ({ label: shown(label), value: shown(value) }));
+  const out = facts
+    .filter((fact): fact is [string, string] => fact[1] !== null)
+    .map(([label, value]) => {
+      const whole = shown(value);
+      // An id beside its own short form ("<id> @ <its first seven>") is said once.
+      const short = whole.replace(EVERY_COMMIT, (id) => id.slice(0, 7)).replace(/\b([0-9a-f]{7}) @ \1\b/, "$1");
+      return { label: shown(label), value: short, whole: short === whole ? null : whole };
+    });
   // The kernel's reason is the first problem's message: said once, with its code.
   for (const problem of [...(item.provider?.problems ?? []), ...item.problems]) {
-    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code) });
+    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code), whole: null });
   }
   return out;
 }

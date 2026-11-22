@@ -124,4 +124,10 @@ export default async (run) => {
   const eventsCall = recorded(["instance", "events"]);
   check(eventsCall.argv.join(" ") === `instance events ${CHILD} --home ${home} --limit 100 --json`, "the plugin asked `oats instance events <instance> --home <its home> --limit 100 --json`", eventsCall.argv.join(" "));
   fixtures.keep("panel/events.json", eventsCall.stdout);
+  // The roster of the same moment: what the panel's header says of the agent while its activity says this.
+  rpc("refresh");
+  const withClaim = recorded(["status"]);
+  const claimed = JSON.parse(withClaim.stdout).agents.flatMap((group) => group.instances).find((each) => each.instance === CHILD)?.waitingOnYou;
+  check(claimed?.since === kernelEvents.waitingOnYou?.since && claimed?.producer === kernelEvents.waitingOnYou?.producer, "at one moment the roster's claim for the agent is the claim its activity names", JSON.stringify([claimed, kernelEvents.waitingOnYou]));
+  fixtures.keep("panel/status-board.json", withClaim.stdout);
 };

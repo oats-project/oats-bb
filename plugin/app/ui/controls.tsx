@@ -144,6 +144,18 @@ export function Switch({ label, name, title, checked, onChange, disabled = false
   );
 }
 
+/** The left and right edges of what would cut `element`: its nearest ancestor that scrolls or clips, else the window. */
+function clipOf(element: HTMLElement): { left: number; right: number } {
+  for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(parent);
+    if ([overflowX, overflowY].some((overflow) => overflow !== "visible" && overflow !== "")) {
+      const box = parent.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    }
+  }
+  return { left: 0, right: document.documentElement.clientWidth };
+}
+
 export type MenuItem = { id: string; label: string; onSelect: () => void; destructive?: boolean; disabled?: boolean; reason?: string };
 
 /**
@@ -174,8 +186,11 @@ export function Menu({ label, items, children = "⋯", align = "right" }: { labe
     }
     const box = list.current?.getBoundingClientRect();
     if (box === undefined || box.width === 0) return;
-    if (edge === "right" && box.left < 0) setEdge("left");
-    else if (edge === "left" && box.right > document.documentElement.clientWidth) setEdge("right");
+    // The room is the place that would cut the list: the nearest ancestor that scrolls or clips
+    // (a page scrolls by itself), else the window.
+    const room = clipOf(list.current!);
+    if (edge === "right" && box.left < room.left) setEdge("left");
+    else if (edge === "left" && box.right > room.right) setEdge("right");
     else list.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [open, edge, align]);
   useEffect(() => {

@@ -137,7 +137,8 @@ export default [
       const home = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-home-page")} ${testId("oats-unreadable")}`)}); const cards = document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length; return e && cards > 0 ? JSON.stringify({ title: e.querySelector("h3")?.innerText ?? "", text: e.innerText.replace(/\\s+/g, " "), cards }) : ""; })()`, 30);
       const shown = home ? JSON.parse(home) : null;
       check(shown !== null && /^OATS is not installed on /.test(shown.title) && /Showing what was read /.test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
-      await page.shot(`a14-${viewport.name}-home`, { targets: true });
+      // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
+      await page.shot(`a14-${viewport.name}-home`);
     },
   },
 ];

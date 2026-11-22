@@ -19,7 +19,7 @@ import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
+import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
 import type { SpawnProblem } from "../../model/spawn";
 import { newKey } from "../keys";
 import { useOats } from "../oats";
@@ -321,6 +321,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const resolved = preview?.facts.resolved ?? null;
   const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
   const suggestions = useModelSuggestions(effectiveHarness);
+  // The kernel resolved a harness and no model for it, and none is chosen: bb will start it on bb's own default.
+  const unsetModel = model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
   const notReady = harnessState(effectiveHarness);
 
@@ -538,7 +540,17 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 {notReady.sentence}
               </p>
             )}
-            <Field label={W.MODEL_LABEL} hint={suggestions.note}>
+            <Field
+              label={W.MODEL_LABEL}
+              hint={
+                unsetModel === null && suggestions.note === null ? null : (
+                  <>
+                    {unsetModel === null ? null : <span className="block">{W.modelUnset(harnessLabel(unsetModel))}</span>}
+                    {suggestions.note === null ? null : <span className="block">{suggestions.note}</span>}
+                  </>
+                )
+              }
+            >
               <Choice
                 testId="oats-spawn-model"
                 field="model"
@@ -546,7 +558,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 placeholder={MODEL_DEFAULT}
                 filterLabel={W.FILTER_MODELS}
                 options={[
-                  { id: "", label: W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
+                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
                   ...suggestions.models.map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
                   ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),

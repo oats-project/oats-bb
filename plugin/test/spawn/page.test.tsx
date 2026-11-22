@@ -195,6 +195,21 @@ test("the model: Default says what the kernel resolved and passes nothing; a sug
   expect(submit(slot).disabled).toBe(false);
 });
 
+test("a harness the kernel resolved no model for: the preview and the model field say bb starts it on its own default, and to choose one; Spawn is not held", async () => {
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts(input.model === undefined ? unset : { ...recorded, model: input.model }, { name: input.name ?? null }), revision: REVISION }) });
+  const harnessRow = () => Array.from(column(slot).querySelectorAll('[data-testid="oats-fact"]')).find((fact) => fact.querySelector("dt")!.textContent === "Harness")!.querySelector("dd")!.textContent;
+  expect(harnessRow()).toMatch(/^pi · bb’s default for pi/);
+  expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Default · bb’s default for pi▾");
+  expect(slot.getByTestId("oats-spawn-form").textContent).toContain("No model is set for pi here, so bb starts it on its own default. Choose one to decide it.");
+  expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+  // A model chosen is the model said, and the line goes.
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "anthropic/claude-sonnet-5");
+  await waitFor(() => expect(harnessRow()).toMatch(/^pi · anthropic\/claude-sonnet-5/));
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toContain("No model is set for pi here");
+});
+
 test("with no model bb reports, the field is Default and Custom…, and says any id can be typed", async () => {
   const slot = await ready();
   await waitFor(() => expect(slot.getByTestId("oats-spawn-form").textContent).toContain("No model suggestions reported. Any model ID can be typed."));

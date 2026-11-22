@@ -161,6 +161,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
  * launch-prompt note (`prompts`) is not the form's yet, and is left out.
  */
 export type FormFacts = Omit<PreviewFacts, "prompts">;
+/** The model of a spawn on bb that names none for its harness: bb's own default for it. */
+export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
 export function formFacts(preview: unknown, options: { name?: string | null } = {}): FormFacts {
   const { prompts: _later, ...facts } = previewFacts(preview, options);
   const data: Json = record(preview) ? preview : {};
@@ -169,6 +171,14 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
     const at = rows.findIndex((fact) => fact.label === label);
     rows.splice(at === -1 ? rows.length : at + 1, 0, row);
   };
+  // No model for the harness (the soul's launch names another harness's, and none was chosen): the bb
+  // session provider passes none, and bb starts the harness on bb's own default. Said as that, never
+  // as an empty value.
+  const harness = text(data.harness);
+  if (harness !== null && text(data.model) === null && text(data.backend) === "bb") {
+    const at = rows.findIndex((fact) => fact.label === "Harness");
+    if (at !== -1) rows[at] = { label: "Harness", parts: [{ text: `${harnessLabel(harness)} · ${bbDefaultModel(harness)}` }, ...rows[at]!.parts.slice(1)] };
+  }
   const soul = text(data.agent);
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};

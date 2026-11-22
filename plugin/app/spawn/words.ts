@@ -31,6 +31,8 @@ export const TASK_PLACEHOLDER = "What should this instance do? Empty starts it w
 
 export const HARNESS_LABEL = "Harness";
 export const MODEL_LABEL = "Model";
+/** Under the model, when the kernel resolved none for the harness: bb decides, unless a person does. */
+export const modelUnset = (harness: string): string => `No model is set for ${harness} here, so bb starts it on its own default. Choose one to decide it.`;
 export const MODEL_CUSTOM = "Custom…";
 export const MODEL_CUSTOM_LABEL = "Model ID";
 export const MODEL_CUSTOM_PLACEHOLDER = "Type a model ID";

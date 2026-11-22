@@ -171,6 +171,15 @@ describe("the form's own rows of the preview", () => {
     expect(formFacts({ ...preview, backend: "tmux", decision: { effective: { yolo: false } } }).facts.filter((fact) => ["Session", "Access"].includes(fact.label)).map((fact) => fact.parts[0]!.text)).toEqual(["tmux", "the harness asks before it acts"]);
   });
 
+  it("a harness with no model resolved, on bb: the row says bb's default for it, never an empty value nor another harness's model", () => {
+    const unset = { ...preview, harness: "pi", model: null, modelSource: null };
+    expect(formFacts(unset).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · bb’s default for pi" });
+    expect(formFacts(unset).resolved).toEqual({ harness: "pi", model: null });
+    // Where the kernel resolved one, it is the one said; and off bb nothing is said of bb.
+    expect(formFacts(preview).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · github-copilot/claude-fable-5.1" });
+    expect(formFacts({ ...unset, backend: "tmux" }).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · default model" });
+  });
+
   it("says the relationship the kernel bound, with its anchor", () => {
     const related = { ...preview, relation: "child", decision: { effective: { relation: { anchor: { instance: "flaky-ci-developer" } }, yolo: true } } };
     expect(formFacts(related).facts.find((fact) => fact.label === "Relationship")).toEqual({ label: "Relationship", parts: [{ text: "child of flaky-ci-developer" }] });

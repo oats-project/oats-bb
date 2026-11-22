@@ -264,8 +264,10 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   // request's body).
   assert.notEqual((await sh("grep -l 'TASK-t1 say hi' mock-req-*.json | head -1")).trim(), "");
 
+  // Idle after its turn, its Claude still loaded in the home: it runs. (bb says `idle` of a
+  // stopped thread too: `running` is read from the home's own harness process.)
   const inspect = await provider("inspect", { home, endpoint });
-  assert.deepEqual(inspect.result, { present: true, state: "unknown", running: null, open: { label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+  assert.deepEqual(inspect.result, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
 // Changed with contract r24, A15(1). This test said "input to a stopped thread answers sent
@@ -332,13 +334,21 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   // stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
   // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
   // stopped and NOT archived, and the input starts Claude again on the same conversation
+  // (before it: the thread is idle after a turn, its Claude loaded in the home, and reads running)
+  assert.equal(await threadStatus(id), "idle");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "an idle thread whose harness is loaded in the home runs");
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [true]);
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
   await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
   assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: hostStopped.result.present, state: hostStopped.result.state, running: hostStopped.result.running }, { present: true, state: "unknown", running: null });
+  // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
+  // so. This is what tells the kernel a home stopped with the host from one that came back.
+  assert.deepEqual({ present: hostStopped.result.present, state: hostStopped.result.state, running: hostStopped.result.running }, { present: true, state: "unknown", running: false });
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [false]);
   await tell("T2-HOST-RESUMED marker");
   await once("T2-HOST-RESUMED");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "and it runs again");
   assert.equal(await carried("T2-HOST-RESUMED", "T2-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
 

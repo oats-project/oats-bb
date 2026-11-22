@@ -323,6 +323,29 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   (`E_SESSION_START_FAILED`) when nothing but those unsets came before it (some of the
   three names may then be gone already: the env reaches no process before the spawn),
   otherwise in doubt, as every failure after a launch's first effect is (above).
+- **inspect, `running` for a thread at rest** (both harnesses; contract r25, A16). bb says
+  `idle` of a thread whose agent is loaded and waits for its next message, and of one
+  `bb thread stop` released: the word does not say whether the agent runs. For a thread
+  that is `idle` or `pending` with nothing in line, the provider reads it from this host's
+  processes, at every call: `running: true` where the home's own harness is at work,
+  `false` where it is not. The home's own harness is one process that is named `pi` or
+  `claude` (as below, by the thread's `providerId`), carries `BB_THREAD_ID=<the thread's
+  id>`, AND has the home as its working directory (exactly the home, where bb starts a
+  thread's harness; read from `/proc/<pid>/cwd`, and only of such a process). A process
+  that merely carries the id (a command the agent left running) is never counted, nor a
+  harness at work in another directory: a false `true` is the dangerous answer, since the
+  kernel reads a home stopped with the host whose harness runs as one that came back,
+  and sends it no resume. So a thread the provider stopped and left live (`reason:
+  "host"`) reads `running: false`, and the same thread after bb started its harness again
+  reads `true`. A turn bb holds in line still reads `running: true` without a look, and a
+  thread in `error` whose harness lives still reads `running: null` (below). One look
+  serves an `inspect` or an `inspectMany`, made only when a thread needs it.
+  - **The limit on macOS is the provider's: no `/proc`, so `running` is `null`** for
+    every thread at rest (never a guess, and no error: such a thread is still read as
+    there). The kernel then cannot see a harness that was started again from bb in a home
+    it holds stopped, and a home stopped with the host that already runs gets one more
+    turn, its resume notice. What closes the door there is the stop's archive (A15(1)):
+    bb refuses every message to the thread of a home OATS stopped.
 - **inspect, for a thread in `error`** (both harnesses). bb says `error` of a thread
   whose last turn failed and of one whose agent is gone. The provider decides at every
   call from this host's processes: the thread's harness, which is a process whose
@@ -336,7 +359,8 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   it (its own rule): end that process, or `oats session start`. A live harness makes the thread present, `state: unknown`, `running: null`; none makes it a
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
-  `inspect` or `inspectMany` and only when a thread is in `error`; where it cannot be
+  `inspect` or `inspectMany` and only when a thread needs it (one in `error`, or one at
+  rest, above); for a thread in `error`, where it cannot be
   made (macOS: oats-bb#22), that thread's answer is `E_SESSION_UNAVAILABLE`, whose message
   says how to get the thread back (a message to it in bb itself: the kernel starts and
   sends to no home whose session it cannot read). A process's name and command line are

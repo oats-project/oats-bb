@@ -141,8 +141,10 @@ test("P1 launch: a pi thread in a project rooted at the home, with the launch's 
   const first = (await turns())[since];
   assert.match(first.lastText, /TASK-p1 say hi\./);
   assert.equal((await sh(`ls -a ${home}`)).split("\n").includes(".claude"), false, "a pi launch writes nothing of Claude's");
+  // Idle after its turn, its pi still loaded in the home: it runs. (bb says `idle` of a
+  // stopped thread too: `running` is read from the home's own harness process.)
   const inspected = (await provider("inspect", { home, endpoint })).result;
-  assert.deepEqual(inspected, { present: true, state: "unknown", running: null, open: { label: "Open in bb", url: `http://127.0.0.1:38886/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+  assert.deepEqual(inspected, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `http://127.0.0.1:38886/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
 test("P1 bb itself runs pi in full mode only, and the provider refuses the same launch before bb is asked", async () => {
@@ -340,17 +342,25 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   // Stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
   // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
   // stopped and NOT archived, and the input starts pi again on the same conversation.
+  // (Before it: the thread is idle after a turn, its pi loaded in the home, and reads running.)
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "an idle thread whose harness is loaded in the home runs");
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [true]);
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
   await nothingIn(home, "after the stop with the host");
   assert.equal((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = (await provider("inspect", { home, endpoint })).result;
-  assert.deepEqual([hostStopped.present, hostStopped.state, hostStopped.running], [true, "unknown", null]);
+  // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
+  // so. This is what tells the kernel a home stopped with the host from one that came back.
+  assert.deepEqual([hostStopped.present, hostStopped.state, hostStopped.running], [true, "unknown", false]);
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [false]);
   assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-P6-HOST-RESUMED" })).result, { submitted: true, verified: true });
   await waitFor("the resumed thread's turn", async () => (await landed("MARK-P6-HOST-RESUMED")) === 1, { timeoutMs: 90_000 });
   await idle(endpoint.threadId);
   assert.equal(await landed("MARK-P6-HOST-RESUMED"), 1);
   assert.equal(await carried("MARK-P6-HOST-RESUMED", "MARK-P6-IDLE"), true, "the resumed turn carries the conversation from before the stop");
   assert.ok((await pisIn(home)) >= 1, "the thread's pi runs again");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "and it reads so");
 });
 
 test("P6 a dialog a pi extension opens is a pending interaction: input refuses E_SESSION_PROMPT_OPEN and sends nothing", async () => {

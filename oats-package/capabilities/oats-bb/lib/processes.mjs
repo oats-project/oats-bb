@@ -19,10 +19,19 @@
 // user that owns it: Linux's /proc. bb's server and this provider run as one user (the
 // provider's data directory default rests on the same), so the thread's processes are
 // readable; a process of another user is not, and is not counted.
-import { readFileSync, readdirSync } from "node:fs";
+//
+// Two questions are asked of the same look. Whether a thread in `error` still has its
+// harness (above): any harness-named process that carries the thread's id. And whether a
+// thread at rest RUNS in a home (contract r25, A16; the release lane's condition): the
+// same process, whose working directory is also that home. There a false "it runs" is the
+// dangerous answer (the kernel would take a home stopped with the host for one that came
+// back, and send it no resume), so only the home's own harness counts: never a process
+// that merely carries the id, and never a harness that works somewhere else.
+import { readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fail } from "./errors.mjs";
 import { BB_PROVIDER } from "./mode.mjs";
+import { samePath } from "./threads.mjs";
 
 const VARIABLE = "BB_THREAD_ID=";
 /** The harness's process name, by bb's provider id (a thread row's `providerId`). */
@@ -52,7 +61,10 @@ function namesOf(proc, pid, read) {
 }
 
 /** For each bb thread that has a live harness-named process on this host, the names those
- *  processes go by: Map<thread id, Set<name>>.
+ *  processes go by: Map<thread id, Set<name>>. With `cwds` (a Map), it is also given, per
+ *  thread, each such process's names and working directory (`{names, cwd}`; `cwd` null
+ *  where it cannot be read: a process that ended meanwhile, or another user's), read by
+ *  `link` (the tests' seam, as `read`).
  *
  *  A process's name and command line are read first, and its environment only where one of
  *  its names is a harness's: the environment of every other program of this user (which
@@ -60,7 +72,7 @@ function namesOf(proc, pid, read) {
  *  (the tests watch which files it is asked for). Throws E_SESSION_UNAVAILABLE where processes cannot be
  *  looked at (no /proc: not Linux): the caller then cannot tell, and says so, never
  *  guesses. */
-export function threadProcesses({ proc = "/proc", read = readFileSync } = {}) {
+export function threadProcesses({ proc = "/proc", read = readFileSync, link = readlinkSync, cwds = null } = {}) {
   let entries;
   try { entries = readdirSync(proc); }
   catch (error) { throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc}: ${error.code ?? error.message}): the provider reads it from Linux's /proc. ${REMEDY}`); }
@@ -76,30 +88,50 @@ export function threadProcesses({ proc = "/proc", read = readFileSync } = {}) {
     let environ;
     // A process that ended meanwhile, a zombie (an empty environment) or another user's.
     try { environ = read(join(proc, pid, "environ"), "latin1"); } catch { continue; }
+    let cwd; // read once, and only for a harness that carries a thread's id
     for (const entry of environ.split("\0")) {
       if (!entry.startsWith(VARIABLE) || entry.length === VARIABLE.length) continue;
       const id = entry.slice(VARIABLE.length);
       const known = threads.get(id) ?? new Set();
       for (const name of names) known.add(name);
       threads.set(id, known);
+      if (cwds === null) continue;
+      if (cwd === undefined) { try { cwd = link(join(proc, pid, "cwd")); } catch { cwd = null; } }
+      cwds.set(id, [...(cwds.get(id) ?? []), { names: new Set(names), cwd }]);
     }
   }
   return threads;
 }
 
-/** A reader that looks once, and only when asked: `has(thread)` → whether the harness of
- *  that thread (a row of bb's: its `id` and `providerId`) lives on this host. A thread of
- *  a provider this module does not know the harness of is asked for either name. One look
- *  serves every home of an inspectMany. */
+/** A reader that looks once, and only when asked. One look serves every home of an
+ *  inspectMany, and a look that could not be made is not tried again.
+ *  - `has(thread)` → whether the harness of that thread (a row of bb's: its `id` and
+ *    `providerId`) lives on this host. A thread of a provider this module does not know
+ *    the harness of is asked for either name.
+ *  - `runsIn(thread, home)` → whether that harness works in the home: one process that is
+ *    the thread's harness by its name, carries the thread's id, AND has the home as its
+ *    working directory (exactly the home, as bb starts a harness in the thread's
+ *    environment). A harness whose working directory cannot be read is not counted.
+ *  Both throw E_SESSION_UNAVAILABLE where the processes cannot be looked at. */
 export function processLook(options) {
-  let threads = null;
+  let threads = null, failure = null;
+  const cwds = new Map();
+  const look = () => {
+    if (failure !== null) throw failure;
+    try { threads ??= threadProcesses({ ...options, cwds }); }
+    catch (error) { failure = error; throw error; }
+  };
+  const wanted = (thread) => (Object.hasOwn(HARNESS_PROCESS, thread.providerId) ? [HARNESS_PROCESS[thread.providerId]] : Object.values(HARNESS_PROCESS));
   return {
     has(thread) {
-      threads ??= threadProcesses(options);
+      look();
       const names = threads.get(thread.id);
-      if (names === undefined) return false;
-      const wanted = Object.hasOwn(HARNESS_PROCESS, thread.providerId) ? [HARNESS_PROCESS[thread.providerId]] : Object.values(HARNESS_PROCESS);
-      return wanted.some((name) => names.has(name));
+      return names !== undefined && wanted(thread).some((name) => names.has(name));
+    },
+    runsIn(thread, home) {
+      look();
+      const names = wanted(thread);
+      return (cwds.get(thread.id) ?? []).some((process) => names.some((name) => process.names.has(name)) && process.cwd !== null && samePath(process.cwd, home));
     },
   };
 }

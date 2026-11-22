@@ -1,7 +1,7 @@
 // What a bb thread means for OATS: contract item 4's table, and one thread per home.
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { fail, isObject, someOf } from "./errors.mjs";
+import { ProviderError, fail, isObject, someOf } from "./errors.mjs";
 import { loopbackOrigin } from "./settings.mjs";
 
 // bb's thread statuses (bb packages/domain thread-status). bb has no "stopped": a stopped
@@ -11,12 +11,31 @@ const SETTLED = new Set(["pending", "idle"]);
 
 // What a home with no session reads as: a thread that is gone, and a lost one.
 const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
-// A thread at rest. With work bb holds in line (a turn its concurrency limit has not
-// started yet) it is busy: the turn starts by itself when a slot frees.
-const atRest = (thread) => ({ present: true, state: "unknown", running: hasQueuedWork(thread) ? true : null });
+// A thread at rest whose harness cannot be said to run or not: one in error (below).
+const AT_REST = Object.freeze({ present: true, state: "unknown", running: null });
+// A turn bb holds in line (its concurrency limit has not started it yet) starts by itself
+// when a slot frees: such a thread is busy, whatever is loaded now.
+const HELD = Object.freeze({ present: true, state: "unknown", running: true });
 
-/** The inspect answer for one existing bb thread: only what bb shows, nothing inferred.
- *  A status word this provider does not know is an error, never a guess.
+/** `running` of a thread at rest (idle or pending, nothing in line): whether its harness
+ *  works in the home now, asked of the processes (lib/processes.mjs, `runsIn`). bb's word
+ *  is the same for a thread whose agent is loaded, waiting for its next message, and for
+ *  one `bb thread stop` released: only the process tells them apart, and the kernel needs
+ *  it to tell a home stopped with the host from one that came back (contract r25, A16).
+ *  true: the home's own harness runs. false: none does. null: it cannot be told on this
+ *  host (no /proc), or no home was given: never a guess. */
+function harnessRuns(thread, processes, home) {
+  if (typeof home !== "string") return null;
+  try { return processes.runsIn(thread, home); }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return null;
+  }
+}
+
+/** The inspect answer for one existing bb thread: only what bb shows and what this host's
+ *  processes show, nothing inferred. A status word this provider does not know is an
+ *  error, never a guess. `home`: the home the thread is inspected for.
  *
  *  `error` (contract r23, A13(1) and A14) is bb's word for a thread whose last turn failed, and
  *  bb says the same of one whose agent is gone. Seen at bb-app 0.50.1, for pi and for
@@ -28,18 +47,18 @@ const atRest = (thread) => ({ present: true, state: "unknown", running: hasQueue
  *  `processes.has(thread)` says whether the thread's harness lives on this host: the
  *  process named pi or claude that carries the thread's id, never a command the agent left
  *  running (lib/processes.mjs).
- *  - it lives: the thread is there and at rest, and an input recovers it;
+ *  - it lives: the thread is there and at rest (`running: null`, as before: the decision
+ *    that reads `running` from the processes is of a thread bb shows at rest, not of one
+ *    in error), and an input recovers it;
  *  - none: a lost session, as the kernel reads one, which it may resume with an input;
  *  - it cannot be told (the look throws): an error, never either of the two. */
-export function inspectAnswer(thread, processes) {
+export function inspectAnswer(thread, processes, home) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
-  if (SETTLED.has(status)) return atRest(thread);
-  if (status === "error") {
-    // A turn bb holds in line starts by itself, whatever is loaded now.
-    if (hasQueuedWork(thread)) return atRest(thread);
-    return processes.has(thread) ? atRest(thread) : { ...MISSING };
-  }
+  // A turn bb holds in line starts by itself, whatever is loaded now.
+  if (SETTLED.has(status) || status === "error") { if (hasQueuedWork(thread)) return { ...HELD }; }
+  if (SETTLED.has(status)) return { present: true, state: "unknown", running: harnessRuns(thread, processes, home) };
+  if (status === "error") return processes.has(thread) ? { ...AT_REST } : { ...MISSING };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
@@ -106,7 +125,7 @@ export function inspectHome({ home, endpoint }, threads, processes) {
     throw fail("E_SESSION_UNAVAILABLE", `more than one live bb thread runs in ${home}. One home is one thread: archive the ${ids.length > 1 ? `${ids.length} others` : "other"} in bb. The recorded thread is ${endpoint.threadId}${recorded ? "" : " (missing or archived)"}; the other${ids.length > 1 ? "s" : ""}: ${named}`);
   }
   if (!recorded) return { ...MISSING };
-  return { ...inspectAnswer(recorded, processes), open: openLink(endpoint) };
+  return { ...inspectAnswer(recorded, processes, home), open: openLink(endpoint) };
 }
 
 /** What runs in a home now: its bb projects, and its live threads. Two reads of bb. */

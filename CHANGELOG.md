@@ -45,6 +45,15 @@
     (`test/contract/kernel/pi-run.mjs` pins it under a real kernel). It archives the
     home's own recorded thread and no other thread of its bb project. Nothing is archived
     by a status read.
+  - **inspect says whether a thread at rest runs.** For a thread bb shows `idle` or
+    `pending` with nothing in line, `running` was `null`. It is now read from this host's
+    processes: `true` where the home's own harness is at work (a process named `pi` or
+    `claude` that carries the thread's id and has the home as its working directory),
+    `false` where it is not, as after `bb thread stop`. A process that only carries the
+    thread's id never counts. OATS needs it to tell a home stopped with the host from one
+    whose harness came back. On a host without `/proc` (macOS) it stays `null`: there a
+    harness started again from bb in a stopped home goes unseen, and the stop's archive
+    is what keeps it from starting. A thread in `error` reads as before.
   - The retire hook finds no live thread in a home OATS stopped, so it names none in
     `archived` (for a Claude home with nothing else to remove, its answer is
     `{retired: false, reason: "nothing-to-delete"}`).

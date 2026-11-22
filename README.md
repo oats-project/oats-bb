@@ -150,7 +150,9 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | bb thread | present | state | running |
 |---|---|---|---|
 | starting, active, stopping | true | unknown | true |
-| pending, idle | true | unknown | null |
+| pending, idle, and the home's own harness process is at work in the home | true | unknown | true |
+| pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too) | true | unknown | false |
+| pending, idle, on a host whose processes cannot be read (macOS: no `/proc`) | true | unknown | null |
 | pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
 | error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | null |
 | error, and its harness process is gone (whatever else the agent left running) | false | stopped | false |
@@ -176,6 +178,17 @@ many, and the remedy. Remove old archived threads of that project in bb: for eac
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself, and the provider's
 stop archives the thread, so the provider reads it missing from then on.
+
+So whether a thread at rest runs is read from this host's processes, not from bb's word:
+`running` is true where the home's own harness is at work, which is one process named
+`pi` or `claude` that carries the thread's id and has the home as its working directory,
+and false where there is none. A process that merely carries the thread's id, or a
+harness at work in another directory, never counts. This is how OATS tells a home
+stopped with the host (its thread left live, its harness gone) from one whose harness
+came back. On a host without `/proc` (macOS) the provider cannot look, and answers
+`running: null`: there OATS cannot see a harness started again from bb in a home it holds
+stopped, a home stopped with the host that already runs gets one more turn (its resume
+notice), and what keeps a stopped agent stopped is the stop's archive.
 
 bb says `error` of a thread whose last turn failed (the model endpoint refused it, for
 one) and of one whose agent is gone, and they are not the same for OATS. After a failed

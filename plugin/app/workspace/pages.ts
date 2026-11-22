@@ -155,16 +155,20 @@ export function usePagesShown(): { has(id: string): boolean } {
 }
 
 // ---- "New agent" ----
-// The form is the spawn feature's own page. It names how to open it here, in its `register`; until
-// it does, "New agent" opens the Souls page, where the form is today, when that page is shown.
-let newAgent: ((navigate: BbNavigate) => void) | null = null;
-export function setNewAgent(open: ((navigate: BbNavigate) => void) | null): void {
+// The form is the spawn feature's own page. It names how to open it here, in its `register`
+// (`setNewAgent(openNewAgent)` of app/spawn); until it does, "New agent" opens the Souls page, where
+// the form is today, when that page is shown.
+/** Where "New agent" starts: with a soul chosen (its key, as `oats souls` names it), or with none. */
+export type NewAgentTarget = { soul?: string };
+type OpenNewAgent = (navigate: BbNavigate, target?: NewAgentTarget) => void;
+let newAgent: OpenNewAgent | null = null;
+export function setNewAgent(open: OpenNewAgent | null): void {
   newAgent = open;
 }
 /** Opens the New agent form; false when there is nowhere to open it (no feature named one, and the Souls page is not shown). */
-export function openNewAgent(navigate: BbNavigate, soulsShown: boolean): boolean {
-  if (newAgent !== null) newAgent(navigate);
-  else if (soulsShown) navigate.toPluginPanel("souls");
+export function openNewAgent(navigate: BbNavigate, soulsShown: boolean, target?: NewAgentTarget): boolean {
+  if (newAgent !== null) newAgent(navigate, target);
+  else if (soulsShown) navigate.toPluginPanel("souls", target?.soul === undefined ? undefined : { subPath: target.soul });
   else return false;
   return true;
 }

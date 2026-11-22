@@ -834,7 +834,26 @@ try {
   // files' order). A part's default export is `async (run) => {…}`: `run` holds this script's own
   // helpers, so its acts go through the plugin's RPC and are recorded like the ones above.
   const PARTS = join(HERE, "parts");
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, VIEWPORTS, DEPLOY, OUT };
+  /**
+   * For a part that takes images of its own screens on the run's real agents: `draw` is called once
+   * per view (bb's light and dark themes, at each width), with a page of that view whose theme is
+   * checked, and `shot(name)`, which saves `<scene>-<width>x<height>-<name>[-dark].png` beside the
+   * run's other images. The part navigates, WAITS on what it reads (`page.until`), checks it with
+   * `check`, then shoots: the image-set rule is one state per scene in both themes.
+   */
+  const views = async (scene, draw) => {
+    for (const view of VIEWS) {
+      const { viewport, theme, suffix } = view;
+      const at = `${scene} ${theme} ${viewport.name}`;
+      const page = await viewPage(browser, view, at);
+      try {
+        await draw({ page, at, viewport, theme, shot: (name) => page.shot(`${scene}-${viewport.name}-${name}${suffix}`) });
+      } finally {
+        await page.close();
+      }
+    }
+  };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

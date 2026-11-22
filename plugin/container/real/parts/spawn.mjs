@@ -142,12 +142,19 @@ export default async (run) => {
       check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} harness pi is picked`, await page.evaluate(textOf(testId("oats-spawn-form"))));
       const marked = await page.until(`/not installed in bb/.test(document.querySelector(${q("oats-spawn-harness")}).innerText) && /bb has not installed pi on this machine/.test(document.querySelector(${q("oats-spawn-form")}).innerText)`, 30);
       check(Boolean(marked), `${at} the choice marks pi as not installed in bb, and the field says what to do, from bb's own state of its providers`, await page.evaluate(textOf(testId("oats-spawn-form"))));
-      await page.until(`document.querySelector(${q("oats-spawn-submit")}).disabled === false && /Harness pi · /.test(document.querySelector(${q("oats-spawn-preview")}).innerText.replace(/\\s+/g, " "))`, 60);
-      await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).click()`);
-      const refusedText = await page.until(`(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return r && r.getAttribute("data-tone") === "failed" ? r.innerText.replace(/\\s+/g, " ") : ""; })()`, 180);
-      check(/^The agent was not spawned bb isn’t ready to launch this agent, so the spawn was rolled back\. Nothing was created\. Details says what bb needs\. .*E_BACKEND_NOT_READY$/.test(refusedText ?? ""), `${at} the spawn on pi is refused: a person's words, Details, then the kernel's code; the form and its values stay`, refusedText ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
+      // OATS 0.70.0 decides the preview and refuses at the spawn; from 0.70.1 the preview asks the provider's own check and refuses there.
+      const how = await page.until(`document.querySelector(${q("oats-spawn-submit")}).disabled === false && /Harness pi · /.test(document.querySelector(${q("oats-spawn-preview")}).innerText.replace(/\\s+/g, " ")) ? "decided" : document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")} + '[data-tone="error"]') ? "refused" : ""`, 60);
+      if (how === "refused") {
+        const said = await page.evaluate(`JSON.stringify({ words: document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")} + '[data-tone="error"]').innerText.replace(/\\s+/g, " "), off: document.querySelector(${q("oats-spawn-submit")}).disabled, reason: ${textOf(testId("oats-disabled-reason"))} })`);
+        check(/^\{"words":"This can’t be spawned as it is bb isn’t ready to launch this agent as chosen\. Details says what bb needs; or pick another harness above\. .*E_BACKEND_NOT_READY.*","off":true,"reason":"OATS refused these values: “What will be created” says why\."\}$/.test(said), `${at} the PREVIEW on pi is refused (this kernel asks the provider at the preview): a person's words, the kernel's code, Details and Retry where the facts would be, and Spawn off for that reason`, said);
+      } else {
+        check(how === "decided", `${at} the preview on pi answers (this kernel asks the provider only at the spawn)`, await page.evaluate(textOf(testId("oats-new-agent-page"))));
+        await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).click()`);
+        const refusedText = await page.until(`(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return r && r.getAttribute("data-tone") === "failed" ? r.innerText.replace(/\\s+/g, " ") : ""; })()`, 180);
+        check(/^The agent was not spawned bb isn’t ready to launch this agent, so the spawn was rolled back\. Nothing was created\. Details says what bb needs\. .*E_BACKEND_NOT_READY$/.test(refusedText ?? ""), `${at} the spawn on pi is refused: a person's words, Details, then the kernel's code; the form and its values stay`, refusedText ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
+      }
       check(rowOf(NAME) === undefined, `${at} and nothing was created`);
-      await page.evaluate(`document.querySelector(${q("oats-result")}).scrollIntoView({ block: "center" })`);
+      await page.evaluate(`(document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}) ?? document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")} + '[data-tone="error"]')).scrollIntoView({ block: "center" })`);
       await shot("refused");
     });
     // Pass 2: the spawn, once, in the first view; every other view shows the same created agent's thread.

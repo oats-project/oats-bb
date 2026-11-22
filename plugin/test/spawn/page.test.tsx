@@ -514,6 +514,39 @@ test("a preview the kernel refuses: a person's words first, the code after, the 
   expect(submit(slot).disabled).toBe(false);
 });
 
+test("a preview the provider refuses (from OATS 0.70.1 it refuses as the spawn does) is drawn as a refusal, with Spawn off for that reason: not as a preview still to come, nor as a failed read", async () => {
+  // What the real kernel printed for a spawn on pi where bb has no pi provider (0.70.0 refuses at the spawn; later kernels at the preview, with the same code).
+  const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+  const slot = await ready({
+    spawnPlan: (input) => {
+      if (input.harness === "pi") throw new Error(`${refused.code}: ${refused.message}`);
+      return answer(input);
+    },
+  });
+  choose(slot, "oats-spawn-harness", "pi");
+  const notice = await waitFor(() => {
+    const found = column(slot).querySelector('[data-testid="oats-notice"][data-tone="error"]');
+    expect(found).not.toBeNull();
+    return found!;
+  });
+  expect([notice.getAttribute("data-tone"), notice.querySelector("h3")!.textContent, notice.querySelector("div p")!.textContent, notice.querySelector(":scope > p")!.textContent]).toEqual([
+    "error",
+    "This can’t be spawned as it is",
+    "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above.",
+    "E_BACKEND_NOT_READY",
+  ]);
+  expect(notice.querySelector('[data-testid="oats-notice-details"]')!.textContent).toContain("bb reports its pi provider as not_installed");
+  // Not "no preview yet": nothing is being read, the facts of the earlier values are gone, and Spawn says why it is off.
+  expect(column(slot).textContent).not.toMatch(/Reading defaults…|Updating…|numbered by the kernel/);
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, "OATS refused these values: “What will be created” says why."]);
+  fireEvent.click(submit(slot));
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-task"), { key: "Enter", ctrlKey: true });
+  expect(calls(slot, "spawn")).toEqual([]);
+  // Another harness, and the form is back.
+  choose(slot, "oats-spawn-harness", "claude");
+  await waitFor(() => expect(submit(slot).disabled).toBe(false));
+});
+
 test("a soul that cannot be spawned says why under the soul, and Spawn is off; a soul the deployment does not list says so", async () => {
   const slot = await form("broken-soul");
   await waitFor(() => expect(slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]')?.textContent).toBe("E_SOUL_INVALID: soul.yaml names a capability that is not installed: oats.missing"));

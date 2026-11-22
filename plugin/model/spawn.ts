@@ -221,6 +221,9 @@ const COMMON_FACTS: Record<string, Said> = {
   E_PLAN_CHANGED: said("The workspace changed while this was loading.", "review-again"),
 };
 const PREVIEW_FACTS: Record<string, Said> = {
+  // From OATS 0.70.1 a preview asks the session provider's own check, so it can refuse as the spawn does: bb cannot run this agent as chosen
+  // (a harness whose bb provider is not installed). Nothing was started; the provider's own words are the detail.
+  E_BACKEND_NOT_READY: said("bb isn’t ready to launch this agent as chosen.", "change-options"),
   OATS_TIMEOUT: said("OATS took too long to work out this soul’s defaults. Try again."),
 };
 const PREVIEW_FAILED = said("OATS couldn’t work out this soul’s defaults.", "details");
@@ -274,11 +277,13 @@ const BY_CODE: Record<string, string> = {
   E_LAUNCH_CONFIG_AMBIGUOUS: "Pick a harness above, or make one of them the default with oats launch-config on that machine.",
   E_HARNESS_UNAVAILABLE: "Install it, or pick another harness above.",
   E_BACKEND_HARNESS: "Pick one of the harnesses above.",
+  E_BACKEND_NOT_READY: "Details says what bb needs; or pick another harness above.",
   E_LAUNCH_PREFERENCE_UNMATCHED: "To spawn now, pick a harness above. To fix it for every spawn, correct the preference (Details).",
 };
 /** The tails that send a person to the Harness field: said only where the form has one (several harnesses to choose from). */
-const HARNESS_TAILS: ReadonlySet<string> = new Set(["E_LAUNCH_ENV_MISSING", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_HARNESS_UNAVAILABLE", "E_BACKEND_HARNESS", "E_LAUNCH_PREFERENCE_UNMATCHED"]);
+const HARNESS_TAILS: ReadonlySet<string> = new Set(["E_BACKEND_NOT_READY", "E_LAUNCH_ENV_MISSING", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_HARNESS_UNAVAILABLE", "E_BACKEND_HARNESS", "E_LAUNCH_PREFERENCE_UNMATCHED"]);
 const NO_HARNESS_FIELD: Record<string, string> = {
+  E_BACKEND_NOT_READY: "Details says what bb needs.",
   E_HARNESS_UNAVAILABLE: "Install it on that machine.",
   E_LAUNCH_CONFIG_AMBIGUOUS: "Make one of them the default with oats launch-config on that machine.",
   E_LAUNCH_PREFERENCE_UNMATCHED: "Correct the preference (Details).",

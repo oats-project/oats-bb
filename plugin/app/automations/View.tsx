@@ -9,6 +9,7 @@ import { Button, Lines, Loading, Notice, Stale, Tabs, Toned } from "../ui";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
+import type { RowActs } from "./List";
 import { readAge } from "../ui/words";
 import { schedulerLine, schedulerOn, TITLES } from "./words";
 import type { OriginFilter } from "./words";
@@ -42,9 +43,13 @@ export type ViewProps = {
   /** Why that state could not be read (again), where it could not. */
   statusFailure?: DetailProps["statusFailure"];
   /** What the page adds for a row: its acts, and the cards they bring. */
-  rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "sideStart" | "sideEnd" | "identityAction" | "summaryAction">;
+  rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
   /** The act of the notice of a scheduler that is off (Enable scheduler). */
   schedulerAction?: ReactNode;
+  /** A row's switch and menu in the list, where the page has acts. */
+  rowActs?: RowActs;
+  /** Why the shown kind's acts are held (its list could not be read again), where the page has acts. */
+  held?: string | null;
   /** A re-read is in flight. */
   refreshing?: boolean;
   /** Above the list: what an act just did (a result). */
@@ -55,7 +60,7 @@ const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -143,6 +148,8 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                   <p>
                     <Lines text={read.error.message} />
                   </p>
+                  {/* The rows are still shown, and the page has acts: they are held, and that is said here. */}
+                  {list !== undefined && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
                   {refreshing ? (
                     <p role="status" data-testid="oats-automations-rereading">
                       Refreshing…
@@ -171,7 +178,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                 {...rowParts?.(row)}
               />
             ) : (
-              <List list={list} now={now} origin={origin} onOrigin={setOrigin} query={query} onQuery={setQuery} onOpen={onOpen} schedulerAction={schedulerAction} />
+              <List list={list} now={now} origin={origin} onOrigin={setOrigin} query={query} onQuery={setQuery} onOpen={onOpen} schedulerAction={schedulerAction} acts={rowActs} />
             )}
           </>
         )}

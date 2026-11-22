@@ -193,8 +193,36 @@ alone), since a run that fails writes no event the server watches. A trigger's s
 current list names. An OATS that does not list the feature `automations` (before 0.29) is not
 asked: the page says which OATS it needs.
 
-Not there yet: acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
-and creating or editing a schedule; they come in their own changes. Two of the Desktop's ways into
+**Acting on a row** goes through the kernel's own verbs, for a row the current list names:
+
+- **The switch** (and Turn off here / Turn on here in the row's ⋯ menu) turns a row on or off on
+  this computer: a local item's own switch, a workspace item's entry in this host's opt-outs.
+- **Run now** (a schedule that runs here) says what the run did in words: Agent launched, Launch
+  failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
+  a run whose state is unknown.
+- **Test** runs nothing and says whether the row would run here, who `gh` acts as, and what would
+  fire now, with what is held and why. Its answer is on the row's page, so Test from the list's
+  menu opens that page. For a trigger on a capability's source it first says what will run and
+  with which parameters; only **Run test** runs that source's command, once, and only while the
+  trigger is what the confirmation showed (a change of its source or parameters, Back or another
+  row's page withdraws it).
+- **Edit summary** (a local item) and **Delete…** (a local schedule, after a confirmation); a
+  workspace item is changed and removed in its repository.
+- **Enable scheduler**, where the scheduler is off: a confirmation says what it installs on this
+  computer (the timer of `oats schedule host install`, for the account bb's machine runs as)
+  before it does.
+
+One act runs at a time. While it runs the page says so in words where its answer will be
+("Running daily-review…"); the answer, a test's result and a confirmation take the focus when they
+arrive, which brings them into view at any width. Where a row's page is one column (a phone, a
+narrow panel) they come first, right under the buttons; from bb's wide layout up they lead the
+second column. The lists are read again after every act. While
+a list is one that could not be read again its rows stay, with their acts held (what each row is now
+is not known) and the notice saying so; Open and Open file stay. An act
+is refused before any process starts for an id the list does not name; the kernel's own refusal is
+shown in a person's words with its code after.
+
+Not there yet: creating and editing a schedule (its own change). Two of the Desktop's ways into
 the page wait for a product decision and are not built: its ⌘3 / Ctrl+3 shortcut and its palette
 entry (bb takes both from a plugin command registered with a default shortcut).
 

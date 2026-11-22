@@ -1,5 +1,50 @@
 {
-  "schedule list": { "file": "schedule-list.json" },
-  "trigger list": { "file": "trigger-list.json" },
-  "trigger status": { "file": "trigger-status.json" }
+  "schedule list": {
+    "file": "schedule-list.json"
+  },
+  "trigger list": {
+    "file": "trigger-list.json"
+  },
+  "trigger status": {
+    "file": "trigger-status.json"
+  },
+  "schedule enable": {
+    "file": "schedule-enable.json"
+  },
+  "schedule disable": {
+    "file": "schedule-disable.json"
+  },
+  "trigger enable": {
+    "file": "trigger-enable.json"
+  },
+  "trigger disable": {
+    "file": "trigger-disable.json"
+  },
+  "schedule run": {
+    "file": "schedule-run.json"
+  },
+  "schedule test": {
+    "file": "schedule-test.json"
+  },
+  "trigger test": {
+    "file": "trigger-test.json"
+  },
+  "trigger test --run-source": {
+    "file": "trigger-test-source.json"
+  },
+  "schedule update": {
+    "file": "schedule-describe.json"
+  },
+  "trigger update": {
+    "file": "trigger-describe.json"
+  },
+  "schedule remove": {
+    "file": "schedule-remove.json"
+  },
+  "schedule reconcile": {
+    "file": "schedule-reconcile.json"
+  },
+  "schedule host install": {
+    "file": "host-install.json"
+  }
 }

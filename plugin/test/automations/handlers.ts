@@ -8,7 +8,19 @@ export const AT = "2026-11-21T20:40:00.000Z";
 /** What OATS 0.70.0 says of itself, as far as Automations reads it. */
 export const OATS = { version: "0.70.0", features: ["automations", "automation-descriptions", "trigger-sources"], automationsApi: 1 };
 
+const unexpected = (method: string) => (): never => {
+  throw new Error(`unexpected rpc ${method}`);
+};
+
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
   automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
   triggerStatus: ({ id }) => statusOf(id),
+  // A test names the acts it is about; one it did not expect fails it.
+  automationEnable: unexpected("automationEnable"),
+  scheduleRun: unexpected("scheduleRun"),
+  automationTest: unexpected("automationTest"),
+  automationDescribe: unexpected("automationDescribe"),
+  scheduleRemove: unexpected("scheduleRemove"),
+  scheduleReconcile: unexpected("scheduleReconcile"),
+  schedulerEnable: unexpected("schedulerEnable"),
 });

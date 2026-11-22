@@ -127,10 +127,131 @@ describe("automations", () => {
 });
 
 describe("the host verbs", () => {
-  it("are all reads: bb may retry each, so each runs under the read limit", () => {
+  it("bb may retry the reads, and never an act", () => {
     const retryable = Object.entries(host).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
     expect(retryable.sort()).toEqual(["scheduleList", "triggerList", "triggerStatus"]);
-    expect(Object.keys(host).sort()).toEqual(retryable);
+    expect(Object.keys(host).filter((name) => !retryable.includes(name)).sort()).toEqual(["automationDescribe", "automationEnable", "automationTest", "scheduleReconcile", "scheduleRemove", "scheduleRun", "schedulerEnable"]);
+  });
+});
+
+describe("the acts", () => {
+  const acts = async (running: Backend) => (await running.fake.calls()).filter((call) => !["status", "version", "schedule list", "trigger list"].includes(call.verb)).map((call) => call.argv);
+
+  it("each is the kernel's own command for the row the list names, by its qualified id", async () => {
+    backend = await startBackend();
+    await backend.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true });
+    await backend.rpc("automationEnable", { kind: "trigger", id: "old-prs", enabled: false });
+    await backend.rpc("scheduleRun", { id: "local/daily-review" });
+    await backend.rpc("automationTest", { kind: "schedule", id: "local/daily-review" });
+    await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review" });
+    await backend.rpc("automationDescribe", { kind: "schedule", id: "local/status-check", description: "--force" });
+    await backend.rpc("scheduleRemove", { id: "local/weekly-cleanup" });
+    await backend.rpc("scheduleReconcile", { id: "local/status-check" });
+    await backend.rpc("schedulerEnable");
+    expect(await acts(backend)).toEqual([
+      ["schedule", "enable", "local/weekly-cleanup", "--json"],
+      ["trigger", "disable", "local/old-prs", "--json"],
+      ["schedule", "run", "local/daily-review", "--json"],
+      ["schedule", "test", "local/daily-review", "--json"],
+      ["trigger", "test", "oats-real/proposal-review", "--json"],
+      ["schedule", "update", "local/status-check", "--description=--force", "--json"],
+      ["schedule", "remove", "local/weekly-cleanup", "--json"],
+      ["schedule", "reconcile", "local/status-check", "--json"],
+      ["schedule", "host", "install", "--json"],
+    ]);
+  });
+
+  it("answers what the kernel answered: the row as it is now, the run with its outcome, the test, the check, the scheduler", async () => {
+    backend = await startBackend();
+    expect(await backend.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true })).toMatchObject({ row: { id: "local/weekly-cleanup", enabledHere: true } });
+    expect(await backend.rpc("scheduleRun", { id: "local/daily-review" })).toMatchObject({ run: { outcome: "launched" } });
+    expect(await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review" })).toMatchObject({ ok: true, account: "ana", wouldFire: [{ label: "#41" }, { label: "#42" }, { label: "#43", held: true }] });
+    expect(await backend.rpc("scheduleReconcile", { id: "local/status-check" })).toMatchObject({ reconciled: "unknown" });
+    expect(await backend.rpc("schedulerEnable")).toMatchObject({ scheduler: { installed: true, active: true }, warnings: [] });
+  });
+
+  it("after an act the lists are read again for the next client", async () => {
+    backend = await startBackend();
+    await backend.rpc("automations");
+    await backend.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true });
+    await backend.rpc("automations");
+    expect(await argvs(backend, "schedule list")).toHaveLength(2);
+  }, 20_000);
+
+  it("an act that ends while the lists are being read makes the next lists a read after it, never one beside it", async () => {
+    backend = await startBackend();
+    const running = backend;
+    await running.rpc("automations");
+    await running.fake.behave({
+      "schedule enable": { file: "automations/schedule-enable.json", sleepMs: 2_000 },
+      "schedule list": { file: "automations/schedule-list.json", sleepMs: 5_000 },
+      "trigger list": { file: "automations/trigger-list.json", sleepMs: 5_000 },
+    });
+    const act = running.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true });
+    await running.rpc("refresh");
+    const during = running.rpc<Lists>("automations"); // a read of the lists that starts before the act ends
+    await act;
+    const after = running.rpc<Lists>("automations");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const calls = (await running.fake.calls()).filter((call) => call.verb.endsWith(" list"));
+    expect((await Promise.all(calls.map((call) => alive(call.pid)))).filter(Boolean)).toHaveLength(2);
+    expect((await after).at).not.toBe((await during).at);
+    expect(await argvs(running, "schedule list")).toHaveLength(3);
+  }, 40_000);
+
+  it("only a confirmed test of a capability source's trigger carries --run-source", async () => {
+    backend = await startBackend();
+    await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: true });
+    await expect(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review", runSource: true })).rejects.toThrow("has no capability source for a test to run");
+    await expect(backend.rpc("automationTest", { kind: "schedule", id: "local/daily-review", runSource: true })).rejects.toThrow();
+    await expect(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: false })).rejects.toThrow();
+    await expect(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: "yes" })).rejects.toThrow();
+    expect(await acts(backend)).toEqual([["trigger", "test", "oats-real/harvest-review", "--run-source", "--json"]]);
+  });
+
+  it("an id the list does not name, a flag, a path or one more key starts no process", async () => {
+    backend = await startBackend();
+    for (const [method, input] of [
+      ["automationEnable", { kind: "schedule", id: "local/nope", enabled: true }],
+      ["automationEnable", { kind: "trigger", id: "local/daily-review", enabled: true }],
+      ["scheduleRun", { id: "--force" }],
+      ["scheduleRun", { id: "oats-real/proposal-review" }],
+      ["scheduleRun", { id: "local/daily-review", force: true }],
+      ["automationTest", { kind: "schedule", id: "../../x" }],
+      ["automationDescribe", { kind: "schedule", id: "local/status-check", description: "x", file: "/etc/passwd" }],
+      ["scheduleRemove", { id: "local/daily-review", force: true }],
+      ["scheduleReconcile", { id: "local/status-check", clear: true }],
+      ["schedulerEnable", { maxConcurrent: 99 }],
+    ] as const) await expect(backend.rpc(method, input), `${method} ${JSON.stringify(input)}`).rejects.toThrow();
+    expect(await acts(backend)).toEqual([]);
+  });
+
+  it("a summary out of the kernel's rule, and a workspace item's summary or removal, start no process", async () => {
+    backend = await startBackend();
+    await expect(backend.rpc("automationDescribe", { kind: "schedule", id: "local/status-check", description: "two\nlines" })).rejects.toThrow("A summary is one line of up to 200 characters, without control characters.");
+    await expect(backend.rpc("automationDescribe", { kind: "schedule", id: "oats-real/nightly-digest", description: "Mine now" })).rejects.toThrow("its summary is changed in its repository");
+    await expect(backend.rpc("scheduleRemove", { id: "oats-real/nightly-digest" })).rejects.toThrow("it is removed in its repository");
+    expect(await acts(backend)).toEqual([]);
+  });
+
+  it("an act on a list that cannot be read is refused with why the list cannot be read, never as a row the list does not name, and starts no process", async () => {
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" } });
+    backend = await startBackend({ verbs: { "schedule list": { stdout: refusal } } });
+    await expect(backend.rpc("automationEnable", { kind: "schedule", id: "local/daily-review", enabled: false })).rejects.toThrow("E_SCHEDULE_INVALID: /abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}");
+    await expect(backend.rpc("scheduleRun", { id: "local/daily-review" })).rejects.toThrow(/^E_SCHEDULE_INVALID: /);
+    expect(await argvs(backend, "schedule disable")).toEqual([]);
+    expect(await argvs(backend, "schedule run")).toEqual([]);
+    // The other list answers: its rows can be acted on.
+    await backend.rpc("automationEnable", { kind: "trigger", id: "local/pr-triage", enabled: false });
+    expect(await argvs(backend, "trigger disable")).toHaveLength(1);
+  });
+
+  it("the kernel's refusal of an act is shown with its code and message", async () => {
+    const refusals = { "schedule run": "schedule-run-disabled.json", "schedule host install": "host-install-refused.json", "trigger test": "trigger-test-source-unconfirmed.json" };
+    backend = await startBackend({ verbs: Object.fromEntries(Object.entries(refusals).map(([verb, file]) => [verb, { file: `automations/${file}` }])) });
+    await expect(backend.rpc("scheduleRun", { id: "local/weekly-cleanup" })).rejects.toThrow("E_SCHEDULE_DISABLED: schedule weekly-cleanup is disabled; enable it or pass --force");
+    await expect(backend.rpc("schedulerEnable")).rejects.toThrow("E_SCHEDULE_HOST: systemctl --user daemon-reload failed: Failed to connect to bus: No medium found");
+    await expect(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review" })).rejects.toThrow(/^E_TRIGGER_SOURCE_RUN: /);
   });
 });
 

@@ -64,7 +64,7 @@ const REFUSED: Record<"readiness" | "activity" | "soul", string> = { readiness: 
 
 const TABLES = { readiness: READINESS, activity: ACTIVITY, soul: SOUL } as const;
 /** The server's refusal of an instance its roster no longer holds: it has no code of the kernel's. */
-const NOT_IN_ROSTER = /is not an agent of this OATS deployment's current snapshot$/;
+const NOT_IN_ROSTER = /is not an agent of this OATS deployment's (?:current|last) snapshot$/;
 const GONE: Record<keyof typeof TABLES, string | null> = { readiness: READINESS.E_SESSION_UNKNOWN ?? null, activity: ACTIVITY.E_SESSION_UNKNOWN ?? null, soul: SOUL.E_SESSION_UNKNOWN ?? null };
 
 /** What to do next, by the kernel's code; a code that is not here has no next step of its own. */

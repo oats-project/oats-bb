@@ -11,7 +11,7 @@ import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, Node } from "../../model/types";
 import { claimOf } from "../../model/view";
 import { agentStatus } from "../roster/status";
-import { Unreadable, failureWords } from "../roster/unreadable";
+import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
@@ -185,11 +185,14 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
         </div>
         {drift === null ? null : (
           <Disclosure summary="older build" testId="oats-panel-drift">
-            {drift.map((line, index) => (
-              <span key={index} className="text-muted-foreground">
-                {shown(line)}
-              </span>
-            ))}
+            {/* The header does not scroll with the page: what moved (a line per module) scrolls within its own height. */}
+            <span className="flex max-h-32 flex-col gap-1 overflow-y-auto">
+              {drift.map((line, index) => (
+                <span key={index} className="text-muted-foreground">
+                  {shown(line)}
+                </span>
+              ))}
+            </span>
           </Disclosure>
         )}
       </header>
@@ -209,6 +212,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
  * was read earlier, with its age. Nothing when the read is there and current.
  */
 function ReadState({ read, now, failure }: { read: InstanceRead; now: number; failure: RosterFailure | null }) {
+  const settings = useSettingsHref();
   const refusal = failure !== null ? failure.line : read.status === "error" ? read.error : null;
   // Retry asks for the roster again where that is what failed, and for the instance in either case:
   // the server answers it from the roster it holds then, and says when a newer one lands.
@@ -231,7 +235,17 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
       code={code}
       details={refusal}
       {...(read.data === undefined ? {} : { age: staleAge(read.data.at, now) })}
-      actions={words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
+      actions={
+        <>
+          {words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : null}
+          {/* The sidebar's notice for this cause offers the settings: the same here. */}
+          {words !== null && words.settings ? (
+            <a data-testid="oats-panel-open-settings" className={`${TARGET} ${LINK} inline-flex items-center`} href={settings}>
+              Open settings
+            </a>
+          ) : null}
+        </>
+      }
     >
       {words === null || words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
     </Notice>
@@ -279,7 +293,8 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
   const saysError = facts.runtimeError !== null && !unreachable;
   const hasSession = facts.harness !== null || where !== null || started !== null || saysError;
   /** Another instance, by its name: a link to its thread where it has one in bb. */
-  const instanceLink = (name: string, testId: string) => {
+  /** `stacked`: one of a list of links, each on a row as high as its target (a link alone takes its target's height back from its line). */
+  const instanceLink = (name: string, testId: string, stacked = false) => {
     const thread = oats.nodeByInstance.get(name)?.thread;
     const bbThread = thread === undefined ? undefined : oats.threadById.get(thread.id);
     // An agent by its name as words, as every place names one; the kernel's own name is the title.
@@ -292,12 +307,13 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
       );
     }
     return (
-      // A target of the size a press needs, on the label's line: its height is taken back from the line's.
+      // A target of the size a press needs. Alone beside its label, its height is taken back from the line's, so the two
+      // stand on one line; in a list each row is as high as the target, so no two targets overlap.
       <a
         data-testid={testId}
         href={bbThread.href}
         title={shown(name)}
-        className={`${TARGET} ${LINK} -my-3 inline-flex items-center md:-my-1.5`}
+        className={`${TARGET} ${LINK} inline-flex items-center ${stacked ? "" : "-my-3 md:-my-1.5"}`}
         onClick={(event) => {
           if (!plainClick(event)) return;
           event.preventDefault();
@@ -420,7 +436,7 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
               <Fact label={oats.children.length === 1 ? "Child" : "Children"}>
                 <span data-testid="oats-panel-children" className="flex min-w-0 flex-col items-start">
                   {oats.children.map((child) => (
-                    <span key={child}>{instanceLink(child, "oats-panel-child")}</span>
+                    <span key={child}>{instanceLink(child, "oats-panel-child", true)}</span>
                   ))}
                 </span>
               </Fact>

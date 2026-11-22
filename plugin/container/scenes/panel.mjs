@@ -224,7 +224,8 @@ const panelWhole = `(() => { const strip = document.querySelector('[data-testid=
  * right edge NOR past the window's (the panel draws within the part of bb's side panel that is in
  * the window: app/panel/Panel.tsx `useVisibleWidth`), the page does not scroll sideways, no word,
  * id or path segment is broken across two lines (a line may end at a space, after a slash or after
- * a hyphen, nowhere else), and every control of it is high enough to press.
+ * a hyphen, nowhere else), no two of its controls overlap (a press lands on the control under it),
+ * and every control of it is high enough to press.
  * `past` is how far bb's side panel itself reaches past the window: at 1280 with bb's sidebar, a
  * thread and the side panel open, bb 0.50.1 widens the thread's column once its composer has
  * loaded and pushes the side panel off the window (by how much varies with what
@@ -234,7 +235,7 @@ async function fits(page, viewport) {
   const need = viewport.mobile ? 44 : 32;
   return JSON.parse(
     await page.evaluate(
-      `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const broken = []; const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (!node.parentElement || node.parentElement.getClientRects().length === 0) continue; const atom = /[^\\s\\/\\-]+/g; for (let found = atom.exec(node.data); found; found = atom.exec(node.data)) { if (found[0].length < 2) continue; const range = document.createRange(); range.setStart(node, found.index); range.setEnd(node, found.index + found[0].length); const tops = new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))); if (tops.size > 1) broken.push(found[0]); } } const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; return JSON.stringify({ low, wide, broken, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
+      `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const broken = []; const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (!node.parentElement || node.parentElement.getClientRects().length === 0) continue; const atom = /[^\\s\\/\\-]+/g; for (let found = atom.exec(node.data); found; found = atom.exec(node.data)) { if (found[0].length < 2) continue; const range = document.createRange(); range.setStart(node, found.index); range.setEnd(node, found.index + found[0].length); const tops = new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))); if (tops.size > 1) broken.push(found[0]); } } const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; const targets = [...panel.querySelectorAll("a, button, summary")].filter((e) => e.getClientRects().length > 0).map((e) => [e, e.getBoundingClientRect()]); const overlap = []; for (let i = 0; i < targets.length; i += 1) for (let j = i + 1; j < targets.length; j += 1) { const [a, x] = targets[i], [b, y] = targets[j]; if (a.contains(b) || b.contains(a)) continue; if (Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1) overlap.push((a.innerText || a.getAttribute("aria-label") || a.tagName).trim() + " / " + (b.innerText || b.getAttribute("aria-label") || b.tagName).trim()); } return JSON.stringify({ low, wide, broken, overlap, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
     ),
   );
 }
@@ -242,8 +243,8 @@ async function fits(page, viewport) {
 async function fitted(page, viewport, check, at, what) {
   const fit = await fits(page, viewport);
   check(
-    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0,
-    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, no word, id or path segment is broken across two lines, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
+    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0 && fit.overlap.length === 0,
+    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, no word, id or path segment is broken across two lines, no two controls overlap, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
     JSON.stringify(fit),
   );
 }
@@ -308,7 +309,7 @@ const first = [
       check(holds(paths, folders), `${at} Paths: the folder and the home, each with its Copy`, paths);
       const copies = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel-paths")} button')].map((e) => e.getAttribute("aria-label")).join(", ")`);
       check(copies === "Copy folder path, Copy home path", `${at} the Copy buttons are named for what they copy`, copies);
-      await page.evaluate(scroll("oats-panel-work"));
+      await bring(page, check, at, "oats-panel-work");
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "its folds open");
       await page.shot(`panel-${viewport.name}-instance-open`);
@@ -398,12 +399,20 @@ const noticeOf = (part) =>
 const offersRetry = (read) => /(^| )Retry( |$)/.test(read ?? "");
 
 /**
- * Brings a part of the panel to the top of what scrolls, with room above it. Where the page cannot
- * scroll that far (a part near its end), it stops at the start of the part that would be cut: an
- * image never opens on a sliced heading, card or sentence.
+ * Brings a part of the panel into view for an image. The page scrolls to the start of one of its
+ * parts, with room above it, so an image never opens on a sliced heading, card or sentence: to the
+ * named part's own start where the page can scroll that far, else (a part near the page's end) to
+ * the latest part's start from which the named part's heading and first lines are still in view.
+ * → whether they are in view.
  */
 const scroll = (id) =>
-  `(() => { const part = document.querySelector(${JSON.stringify(inPanel(id))}); const pane = part?.closest('[role="tabpanel"]'); if (!part || !pane) return; part.scrollIntoView({ block: "start" }); pane.scrollTop = Math.max(0, pane.scrollTop - 12); const top = pane.getBoundingClientRect().top; const cut = [...pane.children].find((child) => { const box = child.getBoundingClientRect(); return box.top < top - 0.5 && box.bottom > top + 0.5; }); if (cut) pane.scrollTop = Math.max(0, pane.scrollTop - (top - cut.getBoundingClientRect().top) - 12); })()`;
+  `(() => { const part = document.querySelector(${JSON.stringify(inPanel(id))}); const pane = part?.closest('[role="tabpanel"]'); if (!part || !pane) return false; const box = () => pane.getBoundingClientRect(); const at = (e) => e.getBoundingClientRect().top - box().top + pane.scrollTop; const most = pane.scrollHeight - pane.clientHeight; const need = at(part) + Math.min(part.getBoundingClientRect().height, 96); const starts = [...pane.children].map((child) => Math.max(0, at(child) - 12)).filter((start) => start <= most + 0.5 && start <= at(part) && need <= start + pane.clientHeight).sort((a, b) => b - a); pane.scrollTop = starts.length > 0 ? starts[0] : Math.min(most, Math.max(0, at(part) - 12)); const top = part.getBoundingClientRect().top; return top >= box().top - 0.5 && top + Math.min(part.getBoundingClientRect().height, 96) <= box().bottom + 0.5; })()`;
+/** Brings a part into view (`scroll`) and checks that it is: the part an image is named for is in the image. */
+async function bring(page, check, at, id) {
+  const inView = await page.evaluate(scroll(id));
+  check(inView === true, `${at} ${id} is in view for its image: its heading and first lines, with nothing sliced above it`, inView);
+}
+
 
 const second = [
   {
@@ -426,7 +435,7 @@ const second = [
       const allowed = ["Lifecycle authority, not an OS sandbox.", "Child spawns: allowed · enforced · default: no spawn option: children allowed"];
       const policy = await reads(page, inPanel("oats-panel-policy"), allowed);
       check(holds(policy, allowed), `${at} View policy: what is allowed, and by whom`, policy);
-      await page.evaluate(scroll("oats-panel-readiness-instance"));
+      await bring(page, check, at, "oats-panel-readiness-instance");
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "readiness");
       await page.shot(`panel-${viewport.name}-readiness`);
@@ -449,7 +458,7 @@ const second = [
       const titlesOf = `(() => { ${unfolded(inPanel("oats-panel-activity-list"))}; return [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-activity-list")} ${testId("oats-panel-event")} strong`)})].map((e) => e.innerText.trim()).join(", "); })()`;
       const titles = (await page.until(`(() => { const titles = ${titlesOf}; return titles === ${JSON.stringify(eight)} ? titles : ""; })()`, 15)) ?? `(not there after 15 s; read: ${JSON.stringify(await page.evaluate(titlesOf))})`;
       check(titles === eight, `${at} the rows, newest first, by the Desktop's titles`, titles);
-      await page.evaluate(scroll("oats-panel-activity"));
+      await bring(page, check, at, "oats-panel-activity");
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "activity");
       await page.shot(`panel-${viewport.name}-activity`);
@@ -489,7 +498,7 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-instance")));
         const loading = await page.until(`${textOf(inPanel("oats-panel-readiness-instance") + " " + testId("oats-loading"))}`, 15);
         check(loading === "Reading readiness…", `${at} while readiness is read: Reading readiness…`, loading);
-        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await bring(page, check, at, "oats-panel-readiness-instance");
         await page.shot(`panel-${viewport.name}-readiness-loading`);
         // One state per image: the activity is asked for once readiness is there, so this image shows the activity alone in flight.
         await page.until(`${textOf(inPanel("oats-panel-readiness-instance") + " " + testId("oats-panel-readiness-summary"))} !== ""`, 30);
@@ -497,7 +506,7 @@ const second = [
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const reading = await page.until(`${textOf(inPanel("oats-panel-activity") + " " + testId("oats-loading"))}`, 15);
         check(reading === "Reading the recorded activity…", `${at} while the activity is read: Reading the recorded activity…`, reading);
-        await page.evaluate(scroll("oats-panel-activity"));
+        await bring(page, check, at, "oats-panel-activity");
         await page.shot(`panel-${viewport.name}-activity-loading`);
         // Both reads of the Soul tab take their time, so this image shows both in flight in either theme.
         slow("inspect --home");
@@ -528,6 +537,11 @@ const second = [
           `${at} the soul as spawned, refused: what happened and what to do, the kernel's code, Details, and no Retry that cannot help`,
           soulRefused,
         );
+        {
+          // One answer in the three parts: the notice offers no Retry, and the part keeps its own way to read again.
+          const own = await page.evaluate(textOf(inPanel("oats-panel-soul-again")));
+          check(own === "Read the soul again", `${at} and the part's own way to read again, for whoever mended it: Read the soul again`, own);
+        }
         // the soul's readiness, failed, under the soul's refused read: reading again may go better, so Retry
         const soulReadinessFailed = await page.until(noticeOf("oats-panel-readiness-soul"), 30);
         check(
@@ -541,10 +555,15 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-instance")));
         const readinessRefused = await page.until(noticeOf("oats-panel-readiness-instance"), 30);
         check(
-          (readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("This agent's folder is no longer the one OATS recorded for it. `oats status`, on the machine that holds it, shows where the agent is now.") && readinessRefused.includes("E_HOME_MISMATCH") && !offersRetry(readinessRefused),
+          (readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("This agent's folder is no longer the one OATS recorded for it. oats status, on the machine that holds it, shows where the agent is now.") && readinessRefused.includes("E_HOME_MISMATCH") && !offersRetry(readinessRefused),
           `${at} readiness, refused: what happened and what to do, then the kernel's code; no Retry that cannot help`,
           readinessRefused,
         );
+        {
+          const own = await page.evaluate(textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
+          const code = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-notice")} code`)})].map((e) => e.innerText).join(" | ")`);
+          check(own === "Refresh readiness" && code === "oats status", `${at} and the part's own Refresh readiness stays; the kernel's command in the sentence is drawn as code`, `the button: ${JSON.stringify(own)}; code: ${JSON.stringify(code)}`);
+        }
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const activityRefused = await page.until(noticeOf("oats-panel-activity"), 30);
         check(
@@ -552,7 +571,7 @@ const second = [
           `${at} the activity, refused: what happened and what to do, then the kernel's code; no Retry that cannot help`,
           activityRefused,
         );
-        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await bring(page, check, at, "oats-panel-readiness-instance");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "refused reads");
         await page.shot(`panel-${viewport.name}-reads-refused`);
@@ -597,7 +616,7 @@ const second = [
         const failed = ["Providers fail", "oats.bb session backend bb · fail · required · 2 warnings", "Producer session provider check", "Reason the bb version could not be read (cannot run bb: spawn bb ENOENT: install bb-app or set settings.oats.bb.cli)", "Problem code E_BACKEND_VERSION", "The provider says: needs configuration.", "Warning: bubblewrap (bwrap) is not on this host's PATH"];
         const failing = await reads(page, `${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-check-providers")}`, failed);
         check(holds(failing, failed), `${at} the failing check, open: the item's line, its producer, the kernel's reason, the problem's code, the provider's own answer and its warnings`, failing);
-        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await bring(page, check, at, "oats-panel-readiness-instance");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "readiness that is not ready");
         await page.shot(`panel-${viewport.name}-readiness-not-ready`);
@@ -620,7 +639,7 @@ const second = [
         check(incompleteLine === "Incomplete evidence: 1 unreadable rows · 0 foreign rows · window or source truncated.", `${at} an incomplete window says what is missing`, incompleteLine);
         const differed = await reads(page, inPanel("oats-panel-event-differed"), ["Where the screen first differed"]);
         check(differed === "Where the screen first differed from the confirmation OATS answers: OATS expected: Do you trust the files in this folder? The terminal showed: (no visible text) Nearest entry claude-folder-trust-2, first difference at 12", `${at} a blocked launch's row: what OATS expected and what the terminal showed, each under whose text it is`, differed);
-        await page.evaluate(scroll("oats-panel-activity"));
+        await bring(page, check, at, "oats-panel-activity");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "an incomplete activity window");
         await page.shot(`panel-${viewport.name}-activity-incomplete`);
@@ -640,7 +659,7 @@ const second = [
         check(Boolean(none), `${at} an empty window: No recorded lifecycle events in this observed window.`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
         const emptyList = await reads(page, inPanel("oats-panel-activity-list"), ["0 displayed / 0 observed rows"]);
         check(!emptyList.includes("No recorded lifecycle events") && !emptyList.includes("Null waiting"), `${at} and it is said once: the fold holds the window and no row, and no footnote about what is not shown`, emptyList);
-        await page.evaluate(scroll("oats-panel-activity"));
+        await bring(page, check, at, "oats-panel-activity");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "an empty activity window");
         await page.shot(`panel-${viewport.name}-activity-empty`);
@@ -671,7 +690,7 @@ const second = [
           const boxes = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-stale"))}).length`);
           check(boxes === 0, `${at} and no second drawing for what is stale`, boxes);
         }
-        await page.evaluate(scroll("oats-panel-readiness-instance"));
+        await bring(page, check, at, "oats-panel-readiness-instance");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "reads that failed after one answered");
         await page.shot(`panel-${viewport.name}-reads-stale`);
@@ -686,7 +705,7 @@ const second = [
         // The warning's own Details stays closed here: the line as it reads before a press.
         const warnings = (await page.until(flat(inPanel("oats-panel-readiness-warnings-soul")), 15)) ?? "(not on the page after 15 s)";
         check(/^warnings 1 Warning oats\.bb one declared hook never runs here: bb has no session-end event \S? ?Details$/i.test(warnings), `${at} readiness' capability warnings: the capability, the kernel's message, Details`, warnings);
-        await page.evaluate(scroll("oats-panel-readiness-soul"));
+        await bring(page, check, at, "oats-panel-readiness-soul");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "the soul's readiness, its fold open");
         await page.shot(`panel-${viewport.name}-soul-readiness-open`);
@@ -732,7 +751,7 @@ const second = [
           const read = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
           check(/^capabilities 2 /i.test(read), `${at} the count beside Capabilities is of the two the instance has: the one turned off is listed, not counted`, read);
         }
-        await page.evaluate(scroll("oats-panel-core"));
+        await bring(page, check, at, "oats-panel-core");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with a core capability, one turned off and a warning");
         await page.shot(`panel-${viewport.name}-soul-composed`);
@@ -750,7 +769,7 @@ const second = [
         await page.until(`/only the core ones/.test(${textOf(inPanel("oats-panel-capabilities"))})`, 30);
         const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
         check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only);
-        await page.evaluate(scroll("oats-panel-core"));
+        await bring(page, check, at, "oats-panel-core");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");
         await page.shot(`panel-${viewport.name}-soul-core-only`);
@@ -813,7 +832,7 @@ const more = [
       check(copyId === "Copy messaging ID", `${at} its Copy is named Copy messaging ID`, copyId);
       const lineage = await page.evaluate(factsOf("oats-panel-lineage"));
       check(lineage === "Owning human: Ana | Sibling: Redesign ui lead", `${at} Lineage: the owning human and the sibling, by its name as words`, lineage);
-      await page.evaluate(scroll("oats-panel-session"));
+      await bring(page, check, at, "oats-panel-session");
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "instance-running");
       await page.shot(`panel-${viewport.name}-instance-running`);
@@ -976,16 +995,18 @@ const more = [
         // A page opened while OATS cannot be read: the plugin's server keeps the last roster it read,
         // so the page shows the agent as last read, with how old that is and why, and Retry.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const opened = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) && t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
+        const opened = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) && t.includes("E_LOCAL_MISSING") && t.includes("Showing what was read") ? t : ""; })()`, 40);
         const named = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(
-          // Where the page had read the agent's facts before (the phone's width: it is the page the panel was on), the notice says
-          // how old they are; a page that opens fresh has read none, and says none.
-          /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory (Showing what was read (less than a minute|\d+ (min|h|d)) ago\. )?E_LOCAL_MISSING .*Retry$/.test(opened ?? "") && named === "Panel worktree helper",
-          `${at} a page opened while OATS cannot be read: the agent as the roster last named it, and why nothing more, with Retry`,
+          // The server answers the agent's facts from the last roster it read, so the settled notice says how old they are.
+          /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory Showing what was read (less than a minute|\d+ (min|h|d)) ago\. E_LOCAL_MISSING .*Retry$/.test(opened ?? "") && named === "Panel worktree helper",
+          `${at} a page opened while OATS cannot be read: the agent as last read, how old that is and why, with Retry`,
           `the notice: ${JSON.stringify(opened)}; the name: ${JSON.stringify(named)}`,
         );
-        // No image here: at 390 px it is the picture `stale` already is (the same page, the same notice).
+        // No image here: it is the picture `stale` is (the same page, the same notice). The page with no roster ever
+        // read (the sidebar's notice whole, `Unreadable`) has no scene: the plugin's server keeps the last roster it
+        // read for as long as it runs, and the live checks' server has read one. A unit test holds that page
+        // (test/panel/panel.test.tsx, "while OATS cannot be read the page shows the notice every place shows").
 
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });

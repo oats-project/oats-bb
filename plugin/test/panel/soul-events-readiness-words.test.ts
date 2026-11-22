@@ -150,6 +150,8 @@ describe("a refused read, in the Desktop's own sentence", () => {
     expect(refusalWords("readiness", "E_SOUL_UNKNOWN", "")).toMatchObject({ next: "It may have been removed from the workspace: `oats souls` lists the ones there are.", retry: false });
     expect(refusalWords("soul", "E_UNSUPPORTED_MODE", "")).toMatchObject({ next: "There is nothing to do: OATS has none for it.", retry: false });
     expect(refusalWords("readiness", "E_USAGE", "")).toEqual({ sentence: "The OATS installed here is too old for this. Update OATS.", next: null, retry: false });
+    // the server's words while OATS itself cannot be read: the roster is the last one
+    expect(refusalWords("soul", null, '"gone-helper" is not an agent of this OATS deployment\'s last snapshot').retry).toBe(false);
     expect(refusalWords("activity", null, '"gone-helper" is not an agent of this OATS deployment\'s current snapshot')).toEqual({
       sentence: "OATS no longer lists this agent.", next: "It may have been retired: the sidebar lists the agents OATS has.", retry: false,
     });
@@ -177,7 +179,7 @@ describe("readiness' words", () => {
     ]);
     expect(itemFacts(home.checks[0]!.items[1]!)).toEqual([{ label: "Producer", value: "instance modules", whole: null }, { label: "Origin", value: "package oats.framework 1.26.0 @ 41d8623", whole: null }]);
     // a commit id inside a value is drawn by its first seven, never broken inside; the whole value is the fact's title
-    expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb a3cca85 @ a3cca85", whole: "package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85" });
+    expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb a3cca85", whole: "package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85" });
     expect(itemFacts(home.checks[1]!.items[0]!).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code", "Configuration file"]);
     const provider = home.checks[3]!.items[0]!.provider!;
     expect(providerSays(provider.status)).toBe("The provider says: ready.");

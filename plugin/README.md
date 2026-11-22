@@ -123,7 +123,9 @@ Desktop's is an instruction nobody can follow from here, "OATS knows more than o
 name here, …"; and "OATS refused to read …" for a refusal with no sentence), then the code, with the
 kernel's message under Details. It then says what to do next, and offers Retry only where reading
 again can change the answer (a slow or failed `oats`, not an agent OATS no longer lists): there the
-notice's Retry is the one act, and the section's own Refresh is not drawn beside it. A read again
+notice's Retry is the one act, and the section's own Refresh is not drawn beside it. For a refusal
+that reading again cannot change as things are, the notice offers none, and the part keeps its own
+way to read again for whoever mended it (Refresh readiness, Refresh activity, Read the soul again). A read again
 that fails keeps what was read under the same titled notice ("Readiness could not be read again"),
 which says once how old what is shown is, always relative ("Showing what was read 12 min ago.").
 When OATS itself cannot be read, the panel says it in the words the sidebar and the thread's row
@@ -139,7 +141,7 @@ After a restart and a new question the roster can be the older of the two: the h
 the earlier question until the roster's next read (the plugin's server follows the kernel's event
 log; the real run measures under a second, the standard allows 3 s). So when an activity just read
 names another standing claim than the roster's, the panel asks for the roster again at once, once
-per answer (`app/panel/Activity.tsx`); the event path in `server/core.ts` will close the rest.
+per answer (`app/panel/Activity.tsx`).
 
 The panel draws within the part of bb's side panel that is in the window
 (`app/panel/Panel.tsx` `useVisibleWidth`). In the live checks up to oats-bb 84720c5, bb 0.50.1 laid

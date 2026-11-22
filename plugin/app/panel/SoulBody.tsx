@@ -3,11 +3,11 @@
 // it is there, the capability warnings, and the commit it was spawned from. As the OATS Desktop's
 // Soul tab and the instance snapshot of its soul inspector.
 import type { PanelSoul, PanelSource } from "../../kernel/panel-soul";
-import { Card, Fact, Facts, Section } from "../ui";
+import { Button, Card, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import type { PanelRead } from "./read";
 import { AS_SPAWNED, NO_CAPABILITIES, NO_OTHER_CAPABILITIES, coreNote, emptySlot, layerLabel, MODULES_AS_SPAWNED, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "./soul-words";
-import { CommandState } from "./state";
+import { CommandState, offersRetry } from "./state";
 import { Warnings } from "./Warnings";
 
 function Source({ source }: { source: PanelSource }) {
@@ -102,6 +102,14 @@ export function SoulBody({ read, now }: { read: PanelRead<"panelSoul">; now: num
   return (
     <div data-testid="oats-panel-soul-body" className="flex min-w-0 flex-col gap-4">
       <CommandState read={read} of="soul" reading="Reading the soul…" failed="The soul as spawned could not be read" now={now} />
+      {/* After a refusal that reading again cannot change as things are, the notice has no Retry: the way to read again, once it is mended, is here. */}
+      {read.status === "error" && !offersRetry(read, "soul") ? (
+        <div>
+          <Button data-testid="oats-panel-soul-again" disabled={read.fetching} onClick={read.retry}>
+            Read the soul again
+          </Button>
+        </div>
+      ) : null}
       {/* An inspection that names no soul: the header above says what the roster knows; nothing here. */}
       {read.data === undefined || read.data.soul === null ? null : <Spawned soul={read.data.soul} />}
     </div>

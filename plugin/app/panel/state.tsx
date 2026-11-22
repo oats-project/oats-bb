@@ -5,7 +5,8 @@
 // drawing whether or not something read earlier is still shown: with it, the notice says how old
 // that is, once.
 import { codes } from "../../kernel/result";
-import { Button, Loading, Notice } from "../ui";
+import { Fragment } from "react";
+import { Button, Code, Loading, Notice } from "../ui";
 import type { Read } from "../store";
 import { refusalWords } from "./refusal-words";
 import { staleAge } from "./words";
@@ -19,9 +20,23 @@ export function codeOf(error: string): string | null {
   return lead !== undefined && (lead.startsWith("E_") || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
 }
 
+/** A sentence of the plugin's with the kernel's words in it (a command between backticks): each drawn as code. */
+function Sentence({ children }: { children: string }) {
+  return (
+    <p className="m-0">
+      {children.split("`").map((part, index) => (index % 2 === 1 ? <Code key={index}>{part}</Code> : <Fragment key={index}>{part}</Fragment>))}
+    </p>
+  );
+}
+
 type CommandRead = Read<unknown> & { retry(): void; fetching: boolean; readAt: number | null };
 
-/** Whether the notice of a failed read offers Retry: the part's own button to read again is then not drawn beside it. */
+/**
+ * Whether the notice of a failed read offers Retry: the part's own button to read again is then
+ * not drawn beside it. For a refusal that reading again cannot change as things are, the notice
+ * offers none and the part keeps its own button (Refresh readiness, Refresh activity, Read the
+ * soul again): for the person who mended what was wrong.
+ */
 export const offersRetry = (read: CommandRead, of: "readiness" | "activity" | "soul"): boolean => read.status === "error" && refusalWords(of, codeOf(read.error), read.error).retry;
 
 /**
@@ -44,8 +59,8 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
       {...(kept ? { age: staleAge(at ?? read.readAt, now) } : {})}
       actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
-      {words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
-      {words.next === null ? null : <p className="m-0">{words.next}</p>}
+      {words.sentence === null ? null : <Sentence>{words.sentence}</Sentence>}
+      {words.next === null ? null : <Sentence>{words.next}</Sentence>}
     </Notice>
   );
 }

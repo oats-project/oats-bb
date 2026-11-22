@@ -10,7 +10,8 @@ import type { PanelSoul } from "../../kernel/panel-soul";
 import { handlers, resetApp } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { whenText } from "../../app/panel/words";
-import { instanceAnswer, panelSnapshot, panelThreads, recordedEvents, recordedNotReady, recordedReadiness, recordedSoul } from "./handlers";
+import { waitingClock } from "../../app/ui/words";
+import { instanceAnswer, panelAgents, panelSnapshot, panelThreads, recordedEvents, recordedNotReady, recordedReadiness, recordedSoul } from "./handlers";
 
 afterEach(() => {
   resetApp();
@@ -133,6 +134,8 @@ test("an inspection that names no soul draws nothing under the header; a refusal
   expect(text(refused)).toContain("OATS keeps no record of what this kind of agent was spawned from.There is nothing to do: OATS has none for it.");
   expect(text(refused)).toContain("E_UNSUPPORTED_MODE");
   expect(within(refused).queryByRole("button", { name: "Retry" })).toBeNull();
+  // The way to read again, for whoever mended it, is the part's own button, as in readiness and the activity.
+  expect(text(final.getByTestId("oats-panel-soul-again"))).toBe("Read the soul again");
 });
 
 test("the soul is read again when the instance was started again, and not when nothing of it changed", async () => {
@@ -338,7 +341,9 @@ test("readiness that cannot be read is a notice with the kernel's code and Retry
   });
   const notice = await within(await slot.findByTestId("oats-panel-readiness-instance")).findByRole("alert");
   expect(text(within(notice).getByRole("heading"))).toBe("Readiness could not be read");
-  expect(text(notice)).toContain("This agent's folder is no longer the one OATS recorded for it.`oats status`, on the machine that holds it, shows where the agent is now.");
+  // the kernel's command in the sentence is drawn as code, not between backticks
+  expect(text(notice)).toContain("This agent's folder is no longer the one OATS recorded for it.oats status, on the machine that holds it, shows where the agent is now.");
+  expect(within(notice).getByText("oats status").tagName).toBe("CODE");
   expect(text(notice)).toContain("E_HOME_MISMATCH");
   // Reading again cannot change it: no Retry in the notice; Refresh readiness is the section's own.
   expect(within(notice).queryByRole("button", { name: "Retry" })).toBeNull();
@@ -558,23 +563,30 @@ test("one act at a time: no Refresh while the first read runs, and none beside a
   expect(within(section).queryByTestId("oats-panel-readiness-refresh")).toBeNull();
 });
 
-test("the roster and the activity are read at two moments: an activity that names a newer claim than the roster's asks for the roster again, once", async () => {
+test("the roster and the activity are read at two moments: an activity that names a newer claim than the roster's asks for the roster again, once, and the header then says the newer claim", async () => {
   // The roster was read at 18:16 (the agent waits since 18:14 for its first question). Since then the agent was
   // started again and asked something new: the activity, read now, names a claim since 18:23.
   let refreshed = 0;
+  const older = panelAgents();
+  const newer = older.map((agent) => (agent.instance === CHILD ? { ...agent, waiting: { reason: "attention", message: "Which base branch?", since: "2026-11-21T18:23:39.829Z" } } : agent));
   const slot = panel({
+    snapshot: () => panelSnapshot(refreshed === 0 ? older : newer),
     refresh: () => {
       refreshed += 1;
       return { at: "2026-11-21T18:29:31.000Z" };
     },
   });
   await slot.findByTestId("oats-panel-waiting");
+  expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
   expect(recordedEvents().waitingOnYou?.since).toBe("2026-11-21T18:23:39.829Z");
   expect(refreshed).toBe(0);
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
   await slot.findByTestId("oats-panel-activity-summary");
   // the header would otherwise keep the older question until the roster's next read
   await waitFor(() => expect(refreshed).toBe(1));
+  // what the person then sees: the header and Needs input say the claim the activity names
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("Which base branch?"));
+  expect(text(slot.getByTestId("oats-panel-state"))).toContain(`since ${waitingClock("2026-11-21T18:23:39.829Z", NOW)}`);
   // the same answer drawn again asks nothing more
   act(() => showPanelTab("soul"));
   act(() => showPanelTab("instance"));
@@ -608,6 +620,7 @@ test("readiness says what was observed with its path whole between segments, and
   expect(context.querySelectorAll("wbr")).toHaveLength(3);
   expect(context.className).not.toContain("break-all");
   const origin = within(slot.getByTestId("oats-panel-check-installed")).getAllByTestId("oats-fact").find((fact) => text(fact.querySelector("dt")!) === "Origin")!;
-  expect(text(origin.querySelector("dd")!)).toBe("package oats.bb a3cca85 @ a3cca85");
+  // the id beside its own short form is said once
+  expect(text(origin.querySelector("dd")!)).toBe("package oats.bb a3cca85");
   expect(origin.querySelector("dd")!.getAttribute("title")).toBe("package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85");
 });

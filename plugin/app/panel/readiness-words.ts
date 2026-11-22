@@ -66,9 +66,9 @@ export function declaredIn(at: string): string {
   return pkg ? `${where}, in the ${pkg[1]} package` : parts[1] ? `${where}, in ${parts[1]}` : `${where}, on this computer`;
 }
 
-/** An item's facts as label and text, in the Desktop's order; a fact the kernel does not report is left out. */
 /** A commit id: 40 hex characters. Inside a value it is drawn by its first seven, and the whole value is the fact's title: nothing is broken inside an id. */
-const COMMIT = /\b[0-9a-f]{40}\b/;
+const EVERY_COMMIT = /\b[0-9a-f]{40}\b/g;
+/** An item's facts as label and text, in the Desktop's order; a fact the kernel does not report is left out. */
 export function itemFacts(item: PanelReadinessItem): { label: string; value: string; whole: string | null }[] {
   const facts: [string, string | null][] = [
     ["Producer", item.producer],
@@ -81,7 +81,12 @@ export function itemFacts(item: PanelReadinessItem): { label: string; value: str
   ];
   const out = facts
     .filter((fact): fact is [string, string] => fact[1] !== null)
-    .map(([label, value]) => ({ label: shown(label), value: shown(value).replace(new RegExp(COMMIT.source, "g"), (id) => id.slice(0, 7)), whole: COMMIT.test(shown(value)) ? shown(value) : null }));
+    .map(([label, value]) => {
+      const whole = shown(value);
+      // An id beside its own short form ("<id> @ <its first seven>") is said once.
+      const short = whole.replace(EVERY_COMMIT, (id) => id.slice(0, 7)).replace(/\b([0-9a-f]{7}) @ \1\b/, "$1");
+      return { label: shown(label), value: short, whole: short === whole ? null : whole };
+    });
   // The kernel's reason is the first problem's message: said once, with its code.
   for (const problem of [...(item.provider?.problems ?? []), ...item.problems]) {
     if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code), whole: null });

@@ -676,3 +676,54 @@ test("an unreachable agent: what OATS says of its session is in the header, once
   expect(stateOf(slot)).toBe("Unreachable· OATS says: bb did not answer");
   expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
 });
+
+// ---- from the second round of review
+
+test("an agent with several children lists each on a row of its own as high as its target: no two links overlap", async () => {
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? agent : agent));
+  const lead = agents.find((agent) => agent.instance === "redesign-ui-lead")!;
+  const second = { ...agents.find((agent) => agent.instance === CHILD)!, instance: "panel-second-helper", threadId: "thr_second", waiting: null };
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: lead.threadId! }, {
+    rpc: handlers({ snapshot: () => panelSnapshot([...agents, second]), panelInstance: ({ instance }) => instanceAnswer(instance === "panel-second-helper" ? CHILD : instance) }),
+    sidebarThreads: panelThreads([...agents, second]),
+  });
+  const lineage = await slot.findByTestId("oats-panel-lineage");
+  const children = within(lineage).getAllByTestId("oats-panel-child");
+  expect(children.map((child) => text(child))).toEqual(["Panel worktree helper", "Panel second helper"]);
+  expect(text(within(lineage).getAllByTestId("oats-fact").at(-1)!.querySelector("dt")!)).toBe("Children");
+  // A link of a list takes no height back from its row; a link alone beside its label does.
+  for (const child of children) expect(child.className).not.toMatch(/-my-/);
+});
+
+test("OATS cannot be found any more, over what was read: the panel's notice offers the settings, as the sidebar's does", async () => {
+  let fail = false;
+  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+    rpc: handlers({
+      snapshot: () => {
+        const read = panelSnapshot();
+        return fail ? { ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "OATS_NOT_FOUND", message: "spawn oats ENOENT", machine: "falcon", last: { at: read.at, deployment: read.deployment, agents: read.agents } } : read;
+      },
+      panelInstance: ({ instance }) => {
+        if (fail) throw new Error("OATS_NOT_FOUND: spawn oats ENOENT");
+        return instanceAnswer(instance);
+      },
+    }),
+  });
+  await slot.findByTestId("oats-panel-work");
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  const notice = await within(slot.getByTestId("oats-panel")).findByRole("alert");
+  await waitFor(() => expect(text(within(notice).getByRole("heading"))).toMatch(/^OATS is not installed on /));
+  expect(text(notice)).toContain("Install OATS there, or set the path to oats in the plugin's settings.");
+  expect(text(within(notice).getByTestId("oats-panel-open-settings"))).toBe("Open settings");
+  expect(within(notice).getByRole("button", { name: "Retry" })).not.toBeNull();
+});
+
+test("the older-build fold scrolls within its own height: the header does not grow with the number of modules that moved", async () => {
+  const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, drift: { soul: "moved", modules: Array.from({ length: 12 }, (_, index) => ({ name: `mod.${index}`, status: "moved", was: null, now: null, reason: null })) } }) });
+  const fold = await slot.findByTestId("oats-panel-drift");
+  const lines = fold.querySelector(".overflow-y-auto")!;
+  expect(lines.className).toContain("max-h-32");
+  expect(lines.children.length).toBeGreaterThan(12);
+});

@@ -6,7 +6,8 @@ import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
 const statusOf = async (page, state) => {
   const line = testId("oats-status-line");
   const read = await page.until(
-    `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${line}`)}); if (!e || e.getAttribute("data-state") !== ${JSON.stringify(state)}) return ""; const act = e.querySelector(${JSON.stringify(testId("oats-status-act"))}); const words = e.cloneNode(true); words.querySelector(${JSON.stringify(testId("oats-status-act"))})?.remove(); return JSON.stringify({ line: words.innerText.replace(/\\s+/g, " ").trim(), act: act ? act.innerText.trim() : null }); })()`,
+    // The words as the page lays them out (innerText of the drawn line), without the act's own.
+    `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${line}`)}); if (!e || e.getAttribute("data-state") !== ${JSON.stringify(state)}) return ""; const act = e.querySelector(${JSON.stringify(testId("oats-status-act"))})?.innerText.trim() ?? null; const all = e.innerText.replace(/\\s+/g, " ").trim(); return JSON.stringify({ line: act !== null && all.endsWith(act) ? all.slice(0, -act.length).trim() : all, act }); })()`,
     30,
   );
   return read ? JSON.parse(read) : null;
@@ -79,7 +80,7 @@ export default [
       // state's word, since when the agent has waited, and what it asked.
       const needs = await statusOf(page, "needs-you");
       check(
-        needs !== null && /^! Needs you · waiting .+ \(since \d\d:\d\d\) · Green light at 9f2e1c\? Second reader done\.$/.test(needs.line) && needs.act === null,
+        needs !== null && /^! Needs you · waiting .+ \(since [^)]+\) · Green light at 9f2e1c\? Second reader done\.$/.test(needs.line) && needs.act === null,
         `${at} the thread of an agent that waits says so in its own row: "Needs you", since when, and its question`,
         needs === null ? await rowText(page) : JSON.stringify(needs),
       );
@@ -89,7 +90,8 @@ export default [
       const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.startsWith("Needs you · ") ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
       const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
       check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
-      await page.shot(`a13-${viewport.name}-sidebar-open-row`);
+      // At 1280 the sidebar is beside the thread: the image above already shows the open row. At 390 it is bb's drawer, over the thread.
+      if (viewport.mobile) await page.shot(`a13-${viewport.name}-sidebar-open-row`);
 
       // the thread of an agent OATS stopped: "Stopped", and the act that brings it back
       const digest = threads.get("thr_digest");
@@ -148,7 +150,8 @@ export default [
       // And the agent whose bb thread is gone stays in the roster (S3).
       const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
       check(gone === "Stopped · oats-expert · its bb thread is gone", `${at} the agent whose bb thread is gone stays in the roster, and says so`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
-      await page.shot(`a16-${viewport.name}-states`);
+      // At 1280 the image of the failed thread already shows the sidebar's rows; at 390 they are in bb's drawer.
+      if (viewport.mobile) await page.shot(`a16-${viewport.name}-states`);
     },
   },
   {

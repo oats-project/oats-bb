@@ -2,10 +2,11 @@
 // answer for this deployment. Lists only: nothing here acts, and the Machines page runs no check.
 import type { ReactNode } from "react";
 import { count } from "../format";
-import { failureLine, useOats } from "../oats";
+import { useOats } from "../oats";
+import { RosterNotice } from "../roster/unreadable";
 import { useRead } from "../store";
 import type { Read, Result } from "../store";
-import { Chip, ErrorLine, Heading, Note, Page } from "../ui";
+import { Chip, ErrorLine, Heading, Loading, Note, Page } from "../ui";
 import { shown } from "../ui/text";
 
 /** A page that is one read: its loading line, its error with Retry, then its rows. */
@@ -62,6 +63,8 @@ export function TeamsPage() {
       {({ teams }) => (
         <>
           <Heading n={teams.length}>Teams</Heading>
+          {/* Each team's count of agents is the roster's: while OATS cannot be read, the notice says so (the counts are then the last read, or absent). */}
+          <RosterNotice oats={oats} />
           {teams.length === 0 ? <Note>This deployment defines no teams.</Note> : null}
           <ul className="flex flex-col">
             {teams.map((team) => (
@@ -114,6 +117,8 @@ export function MachinesPage() {
         <>
           <section data-testid="oats-this-machine" className="flex flex-col gap-1">
             <Heading>This machine</Heading>
+            {/* The machine and its agents are the roster's: while OATS cannot be read, the notice says so, above what was last read. */}
+            <RosterNotice oats={oats} />
             {oats.phase === "ready" ? (
               <>
                 <p className="break-words font-semibold">{shown(oats.deployment.machine)}</p>
@@ -126,10 +131,8 @@ export function MachinesPage() {
                 <p className="break-all text-xs text-muted-foreground">{shown(oats.deployment.root)}</p>
               </>
             ) : oats.phase === "loading" ? (
-              <Note>Reading OATS…</Note>
-            ) : (
-              <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
-            )}
+              <Loading>Reading your agents…</Loading>
+            ) : null}
           </section>
           <Servers machines={machines.filter((machine) => !machine.isThisMachine)} />
         </>

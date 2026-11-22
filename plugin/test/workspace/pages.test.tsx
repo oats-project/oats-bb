@@ -3,6 +3,7 @@
 import { afterEach, expect, test } from "vitest";
 import { fireEvent } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { fixtureAgents } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
@@ -95,4 +96,35 @@ test("Machines with no other server says so in one line", async () => {
   const slot = await page("machines"); // the default answer holds this machine only
   expect((await slot.findByText("OATS has no other server recorded.")).tagName).toBe("P");
   expect(slot.queryAllByTestId("oats-machine-row")).toEqual([]);
+});
+
+// What a page draws of the roster (Machines: this machine and its agents; Teams: each team's
+// count) is as old as the roster: while OATS cannot be read the page says so with the notice every
+// place shows, above what it keeps; with no roster ever read, the notice in the roster's place.
+const LAST = () => ({ at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+const unread = (last: ReturnType<typeof LAST> | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last });
+
+test("Machines while OATS cannot be read after it was: the notice with the age, above the machine and its agents as last read", async () => {
+  const slot = await page("machines", { snapshot: unread(LAST()) });
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(slot.getByTestId("oats-this-machine").textContent).toContain("7 agents in bb · 1 agent elsewhere");
+  expect(notice.compareDocumentPosition(slot.getByText("7 agents in bb · 1 agent elsewhere")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("Machines with no roster ever read: the notice in a person's words, the code after them, Retry; no raw line", async () => {
+  const slot = await page("machines", { snapshot: unread(null) });
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(notice.textContent!.indexOf("OATS_NOT_FOUND")).toBeGreaterThan(notice.textContent!.indexOf("Install OATS there"));
+  expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
+  expect(slot.getByTestId("oats-this-machine").textContent).not.toContain("agents in bb");
+});
+
+test("Teams while OATS cannot be read after it was: the notice with the age, and the counts as last read", async () => {
+  const slot = await page("teams", { snapshot: unread(LAST()) });
+  const notice = await slot.findByRole("alert");
+  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect((await slot.findAllByTestId("oats-team-row")).some((row) => /\d+ agents?/.test(row.textContent ?? ""))).toBe(true);
 });

@@ -27,14 +27,24 @@ export const agent = z.object({
 const raw = z.record(z.string(), z.unknown());
 const rawRow = z.object({ row: raw, agent: raw });
 
+const deployment = z.object({ root: z.string(), workspace: z.string(), machine: z.string() });
+
+/**
+ * The roster as last read, or why it cannot be read now. A failure carries `last`: the last roster
+ * the server read since it started (its `at` is when), so that every place keeps showing it, with
+ * its age, while OATS cannot be read; null when none was ever read.
+ */
 export const snapshot = z.union([
+  z.object({ ok: z.literal(true), at: z.string(), deployment, agents: z.array(agent) }),
   z.object({
-    ok: z.literal(true),
+    ok: z.literal(false),
     at: z.string(),
-    deployment: z.object({ root: z.string(), workspace: z.string(), machine: z.string() }),
-    agents: z.array(agent),
+    code: z.string(),
+    message: z.string(),
+    /** The machine `oats` was looked for on, by the name bb gives it; absent or null when no machine was chosen. */
+    machine: z.string().nullish(),
+    last: z.object({ at: z.string(), deployment, agents: z.array(agent) }).nullish(),
   }),
-  z.object({ ok: z.literal(false), at: z.string(), code: z.string(), message: z.string() }),
 ]);
 
 /** app -> server. `refresh` asks the server to reread now (Retry). */

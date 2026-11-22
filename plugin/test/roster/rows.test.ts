@@ -40,7 +40,7 @@ describe("the raw rows of the snapshot", () => {
     // of the instance's row, and of its agent group's (the soul's), which carries no instances.
     const one = await core.rowOf("redesign-ui-lead");
     const lead = rows.find(({ row }) => row.instance === "redesign-ui-lead")!;
-    expect(one).toEqual({ at: snapshot.at, root: printed.root, ...lead });
+    expect(one).toEqual({ at: snapshot.at, stale: false, root: printed.root, ...lead });
     expect(Object.keys(one.row)).toContain("open");
     expect(one.agent.name).toBe("oats-product-expert");
     expect(Object.keys(one.agent)).not.toContain("instances");
@@ -78,4 +78,44 @@ describe("the raw rows of the snapshot", () => {
     expect(signals()).toBe(2);
     expect(await backend.verbs()).toEqual(["status", "status", "status"]);
   }, 20_000);
+
+  it("while OATS cannot be read the snapshot carries the last roster, and the rows are the last ones, marked stale", async () => {
+    await start();
+    const read = await core.clientSnapshot();
+    expect(read.ok).toBe(true);
+    await backend.fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_NO_WORKSPACE", message: "no workspace here" } }) } });
+    await core.clientRefresh();
+    const failed = await core.clientSnapshot();
+    if (failed.ok || !read.ok) throw new Error("expected a roster, then a failure");
+    expect([failed.code, failed.message]).toEqual(["E_NO_WORKSPACE", "no workspace here"]);
+    expect(failed.last).toEqual({ at: read.at, deployment: read.deployment, agents: read.agents });
+    expect(failed.at > read.at).toBe(true);
+    const rows = await core.rowsOf();
+    expect([rows.at, rows.stale, rows.rows.size]).toEqual([read.at, true, read.agents.length]);
+    const one = await core.rowOf("redesign-ui-lead");
+    expect([one.at, one.stale, one.row.instance]).toEqual([read.at, true, "redesign-ui-lead"]);
+    expect(await refusalOf(core.rowOf("nobody-here"))).toEqual({ code: "invalid", message: '"nobody-here" is not an agent of this OATS deployment\'s last snapshot' });
+    // An act still finds its agent, the one of the last roster: the act goes to the kernel, which
+    // plans or refuses it on what it knows now.
+    expect((await core.agentOf("redesign-ui-lead")).instance).toBe("redesign-ui-lead");
+    expect((await refusalOf(core.agentOf("nobody-here"))).code).toBe("invalid");
+    // The failure is published once; the same failure again is not.
+    const published = backend.server.harness.realtimeSignals.length;
+    await core.clientRefresh();
+    expect(backend.server.harness.realtimeSignals.length).toBe(published);
+    // Read again: the roster is current, and nothing is stale.
+    await backend.fake.behave({});
+    await core.clientRefresh();
+    const back = await core.clientSnapshot();
+    expect(back.ok).toBe(true);
+    expect((await core.rowsOf()).stale).toBe(false);
+  }, 20_000);
+
+  it("with no roster ever read, a failure carries no last roster", async () => {
+    await start({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_NO_WORKSPACE", message: "no workspace here" } }) } });
+    const failed = await core.clientSnapshot();
+    expect(failed.ok === false && failed.last).toBeNull();
+    // No agent is known: an act is refused with why OATS cannot be read.
+    expect(await refusalOf(core.agentOf("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
+  });
 });

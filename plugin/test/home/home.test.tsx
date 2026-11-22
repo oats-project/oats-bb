@@ -255,11 +255,15 @@ test("a failed send says why and keeps the text", async () => {
   expect(text.value).toBe("hello");
 });
 
-test("with a failed snapshot the page shows the error's first line and Retry", async () => {
+test("with no roster ever read the page says what is missing in a person's words, the code after them, the kernel's message under Details, and Retry", async () => {
   const slot = await homePage({
     rpc: handlers({ snapshot: () => ({ ok: false, at: "t", code: "OATS_NOT_FOUND", message: "oats: not found on the host's PATH\nmore" }) }),
   });
-  expect((await slot.findByRole("alert")).textContent).toBe("oats: not found on the host's PATHRetry");
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on this machine");
+  expect(notice.textContent).toContain("OATS_NOT_FOUND");
+  expect(notice.querySelector("details")!.textContent).toContain("oats: not found on the host's PATH");
+  expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
   expect(slot.queryByTestId("oats-home-needs")).toBeNull();
 });
 
@@ -338,23 +342,27 @@ test("a claim's age follows the clock while the view stays open and nothing chan
   try {
     const slot = await homePage();
     const card = (await slot.findAllByTestId("oats-needs-card"))[0]!;
-    expect(card.textContent).toContain("just now");
+    expect(card.textContent).toContain("waiting under a minute (since "); // the Desktop's words for how long, and since when
     const before = slot.inspection.rpcCalls.length;
     await act(async () => {
       vi.advanceTimersByTime(18 * 60_000);
     });
-    expect(slot.getAllByTestId("oats-needs-card")[0]!.textContent).toContain("18 min ago");
+    expect(slot.getAllByTestId("oats-needs-card")[0]!.textContent).toContain("waiting 18 min (since ");
     expect(slot.inspection.rpcCalls.length).toBe(before); // the clock alone: no reread
   } finally {
     vi.useRealTimers();
   }
 });
 
-test("a kernel refusal of the snapshot keeps the kernel's code before its message", async () => {
+test("a kernel refusal of the snapshot: what happened in words, who says it, the kernel's code after the words", async () => {
   const slot = await homePage({
     rpc: handlers({ snapshot: () => ({ ok: false, at: "t", code: "E_WORKSPACE_INVALID", message: "oats-workspace.yaml: unknown key `foo`\nsee docs" }) }),
   });
-  expect((await slot.findByRole("alert")).textContent).toBe("E_WORKSPACE_INVALID: oats-workspace.yaml: unknown key `foo`Retry");
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS could not read this deployment");
+  expect(notice.textContent).toContain("OATS says: oats-workspace.yaml: unknown key `foo`");
+  const words = notice.textContent!;
+  expect(words.indexOf("E_WORKSPACE_INVALID")).toBeGreaterThan(words.indexOf("OATS says"));
 });
 
 test("while a message is being sent the box cannot be edited, so nothing typed meanwhile is lost", async () => {
@@ -464,4 +472,16 @@ test("while the roster cannot be read the tab keeps the view of the agent it sho
   } finally {
     setAgentTab(null);
   }
+});
+
+test("while OATS cannot be read after it was, the home keeps what it showed, under the same notice as the sidebar's, with its age", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const slot = await homePage({
+    rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
+  });
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
+  expect(notice.textContent).toContain("Showing what was read 2 min ago.");
+  expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
+  expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
 });

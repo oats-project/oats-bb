@@ -26,6 +26,7 @@ describe("stop", () => {
       ok: true,
       value: {
         revision: "9c1f2e3d4b5a69788796a5b4",
+        instance: "redesign-ui-lead", // the kernel's own target at depth 0
         lines: [
           "Stop redesign-ui-lead (oats-product-expert): running, in the middle of a task, 2 changed and 1 untracked files in its work tree",
           "Stop its child desktop-mockups-developer (oats-desktop-developer): running, in the middle of a task, 2 changed and 1 untracked files in its work tree",
@@ -147,6 +148,7 @@ describe("retire", () => {
       ok: true,
       value: {
         revision: "ef5028f1e6cb517560247307",
+        instance: "weekly-digest-helper", // the instance the kernel's plan names
         lines: [
           "Removed: the home of weekly-digest-helper (/abs/deployment/agents/oats-expert/instances/weekly-digest-helper). Its session is not running.",
           "Kept: its work tree on branch agents/weekly-digest-helper, moved out of the home (0 changed and 1 untracked file in its work tree).",

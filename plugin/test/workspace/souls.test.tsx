@@ -293,3 +293,43 @@ test("an agent with no bb thread opens its own page, where a feature gives agent
   fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
   expect(opened).toEqual(["kernel-fix-developer"]);
 });
+
+// A soul's agents are the roster's: while OATS cannot be read the page says so with the notice
+// every place shows, above the agents as last read; with no roster ever read, the notice alone.
+test("a soul's page while OATS cannot be read: the notice with the age above its agents as last read; with no roster, the notice and no raw line", async () => {
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
+  const stale = await souls("oats-developer", { snapshot: failed(last) });
+  const notice = await stale.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(stale.getByTestId("oats-soul-detail").textContent).toContain("flaky-ci-developer");
+  stale.unmount();
+  resetApp();
+  const never = await souls("oats-developer", { snapshot: failed(null) });
+  const alone = await never.findByRole("alert");
+  expect(alone.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("flaky-ci-developer");
+  expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
+});
+
+test("the Souls list while OATS cannot be read: the page's one notice, with the age above the counts as last read; with no roster, the notice and no count", async () => {
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
+  const stale = await souls("", { snapshot: failed(last) });
+  const notice = await stale.findByRole("alert");
+  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
+  await waitFor(() => expect(stale.getByTestId("oats-souls-page").textContent).toMatch(/oats-developer\s*2 agents/));
+  stale.unmount();
+  resetApp();
+  const never = await souls("", { snapshot: failed(null) });
+  expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(never.getByTestId("oats-souls-page").textContent).not.toMatch(/\d+ agents?/);
+  // And with a soul picked there is still one notice for the page, not two.
+  never.unmount();
+  resetApp();
+  const picked = await souls("oats-developer", { snapshot: failed(last) });
+  await picked.findByRole("alert");
+  expect(picked.getAllByTestId("oats-unreadable")).toHaveLength(1);
+});

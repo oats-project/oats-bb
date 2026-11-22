@@ -7,19 +7,24 @@ import type { PanelEvents } from "../../kernel/panel-events";
 import { Button, Disclosure, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import {
-  ACTIVITY, LAST_OBSERVATION, LOAD, LOADED, NO_EVENTS, PROVENANCE, READING, RECENT, REFRESH, claimLine, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
+  ACTIVITY, HISTORY_PLAIN, LAST_OBSERVATION, LOAD, LOADED, NO_EVENTS, PROVENANCE, PROVENANCE_PLAIN, READING, RECENT, REFRESH, claimLine, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
   sourcesLine, summaryLine, windowLine,
 } from "./events-words";
 import { usePanelEvents } from "./read";
 import { CommandState } from "./state";
+import { whenText } from "./words";
 
-function Events({ events }: { events: PanelEvents }) {
+function Events({ events, now }: { events: PanelEvents; now: number }) {
   return (
     <>
       <p data-testid="oats-panel-activity-summary" className="m-0 break-words text-foreground">
-        {summaryLine(events)}
+        {summaryLine(events, now)}
       </p>
       <Disclosure summary={RECENT} testId="oats-panel-activity-list">
+        {/* In a person's words first; then the kernel's own sentence for it, as the Desktop says it. */}
+        <p data-testid="oats-panel-activity-plain" className="m-0 text-foreground">
+          {HISTORY_PLAIN}
+        </p>
         <p className="m-0 text-xs text-muted-foreground">{windowLine(events)}</p>
         {incomplete(events) ? (
           <p data-testid="oats-panel-activity-incomplete" className="m-0 text-xs font-semibold text-foreground">
@@ -30,7 +35,9 @@ function Events({ events }: { events: PanelEvents }) {
         {events.waitingClaims.length === 0 ? null : (
           <ul data-testid="oats-panel-activity-claims" className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs text-foreground">
             {events.waitingClaims.map((claim) => (
-              <li key={claim.producer}>{claimLine(claim)}</li>
+              <li key={claim.producer} title={shown(claim.since)}>
+                {claimLine(claim, now)}
+              </li>
             ))}
           </ul>
         )}
@@ -46,8 +53,9 @@ function Events({ events }: { events: PanelEvents }) {
             return (
               <li key={index} data-testid="oats-panel-event" className="flex min-w-0 flex-col gap-1 border-t border-border pt-2 first:border-t-0 first:pt-0">
                 <strong className="text-foreground">{eventTitle(event.kind)}</strong>
-                <time dateTime={event.at} className="text-xs tabular-nums text-muted-foreground">
-                  {shown(event.at)}
+                {/* The plugin's one form for an instant; the kernel's own text of it is the title. */}
+                <time dateTime={event.at} title={shown(event.at)} className="text-xs tabular-nums text-muted-foreground">
+                  {whenText(event.at, now)}
                 </time>
                 <span className="text-xs text-muted-foreground">{producerLine(event)}</span>
                 <Facts>
@@ -86,6 +94,7 @@ function Events({ events }: { events: PanelEvents }) {
             );
           })}
         </ol>
+        <p className="m-0 text-xs text-foreground">{PROVENANCE_PLAIN}</p>
         <p className="m-0 text-xs text-muted-foreground">{PROVENANCE}</p>
       </Disclosure>
     </>
@@ -108,13 +117,17 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
     <Section title={ACTIVITY} testId="oats-panel-activity">
       {/* Nothing is read until a person asks: the kernel reads two logs for it. */}
       {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} /> : null}
-      {read.data === undefined ? null : <Events events={read.data} />}
+      {read.data === undefined ? null : <Events events={read.data} now={now} />}
       <div className="flex flex-wrap items-center gap-2">
-        <Button data-testid="oats-panel-activity-load" disabled={asked && read.fetching} onClick={ask}>
-          {held || asked ? REFRESH : LOAD}
-        </Button>
-        {/* A read again over what is shown says so, in the words of the first read. */}
-        {held && (read.fetching ? asked : !asked || read.status === "ready") ? (
+        {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
+            Over what is shown the button is off while a read runs, and the words beside it say why. */}
+        {(read.fetching && !held) || (asked && read.status === "error") ? null : (
+          <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
+            {held || asked ? REFRESH : LOAD}
+          </Button>
+        )}
+        {/* A read again over what is shown says so, in the words of the first read; after a failed one the line above says it. */}
+        {held && (read.fetching ? read.status === "ready" : !asked || read.status === "ready") ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
             {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
           </span>

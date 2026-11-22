@@ -6,11 +6,15 @@
 // no React import.
 import type { PanelEvent, PanelEvents } from "../../kernel/panel-events";
 import { shown } from "../ui/text";
+import { whenText } from "./words";
 
 export const ACTIVITY = "Reported lifecycle activity";
 export const LOAD = "Load activity";
 export const REFRESH = "Refresh activity";
-export const READING = "Reading reported lifecycle activity…";
+export const READING = "Reading the recorded activity…";
+/** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
+export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first. It is history: what the agent does now is at the top of this panel.";
+export const PROVENANCE_PLAIN = "Reading this starts nothing and allows nothing.";
 export const LOADED = "Reported observation loaded. Runtime state is shown separately.";
 export const LAST_OBSERVATION = "Last observation retained; refresh required.";
 export const RECENT = "Recent lifecycle events";
@@ -66,15 +70,18 @@ export const incompleteLine = (events: Pick<PanelEvents, "truncated" | "integrit
 /** "home: ok (834 bytes reported) · workspace: ok (834 bytes reported)". */
 export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => events.integrity.sources.map((source) => `${shown(source.path)}: ${shown(source.status)} (${source.bytes} bytes reported)`).join(" · ");
 /** "oats.board: reported waiting · 2026-11-21T18:23:39.829Z · attention". */
-export const claimLine = (claim: PanelEvents["waitingClaims"][number]): string => `${shown(claim.producer)}: ${claim.waiting ? "reported waiting" : "claim cleared"} · ${shown(claim.since)}${claim.reason === null ? "" : ` · ${shown(claim.reason)}`}`;
+export const claimLine = (claim: PanelEvents["waitingClaims"][number], now: number): string =>
+  `${shown(claim.producer)}: ${claim.waiting ? "reported waiting" : "claim cleared"} · ${whenText(claim.since, now)}${claim.reason === null ? "" : ` · ${shown(claim.reason)}`}`;
 
-/** The one line over the list: the last event, and what a producer reports of waiting. */
-export function summaryLine(events: PanelEvents): string {
+/**
+ * The one line over the list: the last recorded event. The Desktop's line also says what a
+ * producer reported of waiting when the log was read ("Reported waiting: …", "Waiting on you:
+ * unknown"); here what an agent waits for has one place, the panel's header and Needs input, read
+ * from the roster as it is now, so the summary never says another thing under it (plugin/WORDS.md).
+ */
+export function summaryLine(events: PanelEvents, now: number): string {
   const last = events.events[events.events.length - 1];
-  const waiting = events.waitingOnYou;
-  const lastPart = last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${shown(last.at)} · ${INCARNATION[last.incarnation]}`;
-  const waitingPart = waiting === null ? "Waiting on you: unknown" : `Reported waiting: ${shown(waiting.producer)} since ${shown(waiting.since)}${waiting.message === null ? "" : ` — ${shown(waiting.message)}`}`;
-  return `${lastPart} · ${waitingPart}`;
+  return last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${whenText(last.at, now)} · ${INCARNATION[last.incarnation]}`;
 }
 
 // ---- what a blocked launch's screen differed in

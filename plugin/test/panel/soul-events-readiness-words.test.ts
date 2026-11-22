@@ -3,8 +3,12 @@
 import { describe, expect, it } from "vitest";
 import { claimLine, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine, sourcesLine, summaryLine as activitySummary, windowLine } from "../../app/panel/events-words";
 import { refusalSentence } from "../../app/panel/refusal-words";
+import { whenText } from "../../app/panel/words";
+
+/** The clock the lines with an instant are said at. */
+const NOW = Date.parse("2026-11-21T18:29:30.000Z");
 import { checkLabel, checkState, declaredIn, itemFacts, itemLine, itemProblems, observedLine, policyLine, providerSays, summaryLine, warningLine } from "../../app/panel/readiness-words";
-import { coreNote, emptySlot, layerLabel, modulesAsSpawned, soulMeta, sourceKind, sourceText, spawnedFrom, whyTag } from "../../app/panel/soul-words";
+import { coreNote, emptySlot, layerLabel, MODULES_AS_SPAWNED, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "../../app/panel/soul-words";
 import type { PanelCapability } from "../../kernel/panel-soul";
 import type { PanelReadinessItem } from "../../kernel/panel-readiness";
 import { recordedEvents, recordedReadiness } from "./handlers";
@@ -35,9 +39,10 @@ describe("the Soul tab's words", () => {
   it("where it was spawned from, its modules and its line of repository and teams", () => {
     expect(spawnedFrom({ name: "oats-expert", commit: "0ab9f62d3d27913d0fda74c372860b1a90cce147" })).toBe("Spawned from oats-expert @ 0ab9f62");
     expect(spawnedFrom({ name: "oats-expert", commit: null })).toBe("Spawned from oats-expert");
-    expect(modulesAsSpawned(2)).toBe("Modules as spawned · 2");
-    expect(soulMeta({ repo: "oats-real", teams: ["eng", "ops"] })).toBe("oats-real · eng, ops");
-    expect(soulMeta({ repo: null, teams: [] })).toBeNull();
+    expect(MODULES_AS_SPAWNED).toBe("Modules as spawned");
+    // a commit id as a version is drawn short, and is whole for the line's title
+    const pinned = { kind: "package" as const, name: "oats.bb", version: "a3cca8511461e92c25d86f693365ec250b7c4684" };
+    expect([sourceText(pinned), sourceWhole(pinned)]).toEqual(["oats.bb a3cca85", "oats.bb a3cca8511461e92c25d86f693365ec250b7c4684"]);
   });
 });
 
@@ -70,10 +75,11 @@ describe("the recorded activity's words", () => {
     expect(windowLine(events)).toBe("8 displayed / 8 observed rows. This is address history, not current runtime state.");
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
-    expect(claimLine(events.waitingClaims[0]!)).toBe("oats.board: reported waiting · 2026-11-21T18:23:39.829Z · attention");
-    expect(claimLine({ producer: "oats.core", waiting: false, since: "2026-11-21T18:30:00.000Z", reason: null })).toBe("oats.core: claim cleared · 2026-11-21T18:30:00.000Z");
-    expect(activitySummary(events)).toBe("Waiting claim · 2026-11-21T18:23:39.829Z · Current recorded incarnation · Reported waiting: oats.board since 2026-11-21T18:23:39.829Z — Which base branch?");
-    expect(activitySummary({ ...events, events: [], waitingOnYou: null })).toBe("No recorded lifecycle events in this observed window. · Waiting on you: unknown");
+    expect(claimLine(events.waitingClaims[0]!, NOW)).toBe(`oats.board: reported waiting · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · attention`);
+    expect(claimLine({ producer: "oats.core", waiting: false, since: "2026-11-21T18:30:00.000Z", reason: null }, NOW)).toBe(`oats.core: claim cleared · ${whenText("2026-11-21T18:30:00.000Z", NOW)}`);
+    // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
+    expect(activitySummary(events, NOW)).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · Current recorded incarnation`);
+    expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No recorded lifecycle events in this observed window.");
   });
   it("says when the evidence is not whole", () => {
     expect(incomplete(events)).toBe(false);
@@ -88,12 +94,10 @@ describe("each part of the kernel's goes through the display filter, then the li
   const events = recordedEvents();
   it("a name that ends in a word a secret starts with withholds nothing but what is unsafe", () => {
     expect(setupLine({ capability: "acme.secret", ok: true })).toBe("acme.secret: done");
-    expect(claimLine({ producer: "acme.token", waiting: true, since: "2026-11-21T18:30:00.000Z", reason: "attention" })).toBe("acme.token: reported waiting · 2026-11-21T18:30:00.000Z · attention");
+    expect(claimLine({ producer: "acme.token", waiting: true, since: "2026-11-21T18:30:00.000Z", reason: "attention" }, NOW)).toBe(`acme.token: reported waiting · ${whenText("2026-11-21T18:30:00.000Z", NOW)} · attention`);
     expect(warningLine({ code: "x", message: "vault.api-key never runs here" })).toBe("Warning: vault.api-key never runs here (x)");
     // A message that is itself unsafe is withheld, and the rest of the line stays.
-    expect(activitySummary({ ...events, waitingOnYou: { producer: "oats.board", since: "2026-11-21T18:23:39.829Z", message: "set password: hunter2 please" } })).toBe(
-      "Waiting claim · 2026-11-21T18:23:39.829Z · Current recorded incarnation · Reported waiting: oats.board since 2026-11-21T18:23:39.829Z — [withheld]",
-    );
+    expect(claimLine({ producer: "oats.board", waiting: true, since: "2026-11-21T18:30:00.000Z", reason: "set password: hunter2 please" }, NOW)).toBe(`oats.board: reported waiting · ${whenText("2026-11-21T18:30:00.000Z", NOW)} · [withheld]`);
     expect(producerLine({ producer: "evil\u202Ekernel", incarnation: "current" })).toBe("Producer: evil\uFFFDkernel · Current recorded incarnation");
   });
   it("what a blocked launch's screen differed in: whose text each is, and where", () => {
@@ -107,12 +111,14 @@ describe("each part of the kernel's goes through the display filter, then the li
 
 describe("a refused read, in the Desktop's own sentence", () => {
   it("by the kernel's code, per read", () => {
-    expect(refusalSentence("readiness", "E_HOME_MISMATCH", "")).toBe("The instance home no longer matches its admitted identity.");
-    expect(refusalSentence("readiness", "E_UNSUPPORTED_MODE", "")).toBe("Captured incarnation: readiness comes from its resolution, not current configuration.");
-    expect(refusalSentence("readiness", "E_AMBIGUOUS_INSTANCE", "")).toBe("The selected instance is ambiguous.");
-    expect(refusalSentence("activity", "E_AMBIGUOUS_INSTANCE", "")).toBe("Choose one exact instance home.");
-    expect(refusalSentence("activity", "E_HOME_MISMATCH", "")).toBe("The instance home no longer matches the selected address.");
-    expect(refusalSentence("activity", "E_UNSUPPORTED_MODE", "")).toBe("Activity is unavailable for this execution mode; no classic fallback.");
+    // In a person's words where the Desktop's sentence is an instruction nobody can follow from here, or the kernel's terms.
+    expect(refusalSentence("readiness", "E_HOME_MISMATCH", "")).toBe("This agent's folder is no longer the one OATS recorded for it.");
+    expect(refusalSentence("readiness", "E_UNSUPPORTED_MODE", "")).toBe("OATS has no readiness check for this kind of agent.");
+    expect(refusalSentence("readiness", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name here, so it cannot say which one this is.");
+    expect(refusalSentence("readiness", "E_SOUL_UNKNOWN", "")).toBe("OATS does not list this soul in this deployment.");
+    expect(refusalSentence("activity", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name here, so it cannot say which one this is.");
+    expect(refusalSentence("activity", "E_HOME_MISMATCH", "")).toBe("This agent's folder is no longer the one OATS recorded for it.");
+    expect(refusalSentence("activity", "E_UNSUPPORTED_MODE", "")).toBe("OATS keeps no activity for this kind of agent.");
   });
   it("by the plugin's own code, for what the Desktop calls a slow, failed or unreadable CLI answer", () => {
     expect(refusalSentence("readiness", "OATS_TIMEOUT", "")).toBe("The readiness read timed out.");
@@ -125,11 +131,17 @@ describe("a refused read, in the Desktop's own sentence", () => {
   });
   it("an instance the roster no longer holds; a code with no sentence has none", () => {
     const gone = '"gone-helper" is not an agent of this OATS deployment\'s current snapshot';
-    expect(refusalSentence("readiness", null, gone)).toBe("The selected instance is no longer reported.");
-    expect(refusalSentence("activity", null, gone)).toBe("The selected instance is no longer in the current roster.");
-    expect(refusalSentence("soul", null, gone)).toBeNull();
-    expect(refusalSentence("soul", "E_UNSUPPORTED_MODE", "")).toBeNull();
+    expect(refusalSentence("readiness", null, gone)).toBe("OATS no longer lists this agent.");
+    expect(refusalSentence("activity", null, gone)).toBe("OATS no longer lists this agent.");
+    expect(refusalSentence("soul", null, gone)).toBe("OATS no longer lists this agent.");
+    expect(refusalSentence("soul", "E_UNSUPPORTED_MODE", "")).toBe("OATS keeps no record of what this kind of agent was spawned from.");
+    // a refusal of the kernel's with no sentence of its own still says, in words, that OATS refused
+    expect(refusalSentence("soul", "E_SOMETHING_NEW", "")).toBe("OATS refused to read what this agent was spawned from.");
+    expect(refusalSentence("activity", "E_SOMETHING_NEW", "")).toBe("OATS refused to read the activity.");
+    expect(refusalSentence("readiness", "E_SOMETHING_NEW", "")).toBe("OATS refused to read readiness.");
+    // a failure with no code of the kernel's has none
     expect(refusalSentence("readiness", "constructor", "")).toBeNull();
+    expect(refusalSentence("readiness", "OATS_ABORTED", "")).toBeNull();
   });
 });
 
@@ -140,8 +152,8 @@ describe("readiness' words", () => {
     expect(summaryLine(home.summary)).toBe("Ready — every required check passes or is not applicable.");
     expect(summaryLine({ ready: false, required: 0, fail: 0, unknown: 0 })).toBe("Readiness not established — no required checks reported.");
     expect(summaryLine({ ready: false, required: 5, fail: 2, unknown: 1 })).toBe("2 failing · 1 unknown · 5 required checks");
-    expect(observedLine("2026-11-21T18:25:22.386Z", "instance")).toBe("Observed: 2026-11-21T18:25:22.386Z. Target: instance. This is not an atomic snapshot or a permission lease.");
-    expect(observedLine(null, "soul")).toBe("Observed. Target: soul. This is not an atomic snapshot or a permission lease.");
+    expect(observedLine("2026-11-21T18:25:22.386Z", "instance", NOW)).toBe(`Observed: ${whenText("2026-11-21T18:25:22.386Z", NOW)}. Target: instance. This is not an atomic snapshot or a permission lease.`);
+    expect(observedLine(null, "soul", NOW)).toBe("Observed. Target: soul. This is not an atomic snapshot or a permission lease.");
   });
   it("the recorded checks: their labels and states, and each item on one line", () => {
     expect(home.checks.map((check) => `${checkLabel(check.key)} ${checkState(check)}`)).toEqual(["Installed pass", "Configured not-applicable", "Member pass", "Providers pass"]);

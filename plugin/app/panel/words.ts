@@ -4,6 +4,8 @@
 // says. The words every feature shares (a state, a waiting claim) are in app/ui/words.ts. No bb and
 // no React import.
 import type { PanelInstance } from "../../kernel/panel-instance";
+import { shown } from "../ui/text";
+import { waitingClock } from "../ui/words";
 
 /** How long ago, compactly ("<1m", "42m", "3h", "2d"); null when it is no timestamp. */
 export function shortAge(iso: string | null, now: number): string | null {
@@ -102,16 +104,15 @@ export function harnessName(harness: string): string {
 }
 
 /**
- * Where the session runs, in one line: `bb · thread thr_…` for a row on a session provider (the
- * provider alone when the row names no thread), `tmux · <session>` for a tmux row, "" for neither.
+ * Where the session runs: the place in a word (`bb`, a provider's name, `tmux`), and the session's
+ * own id with what it is ("thread" on a session provider, "session" on tmux); null for neither.
+ * The Desktop says it in one line, `bb · thread thr_…`; here the id stands on a line of its own,
+ * so that it is never broken inside (plugin/WORDS.md).
  */
-export function sessionLine(facts: Pick<PanelInstance, "backend" | "threadId" | "tmuxSession">): string {
-  if (facts.backend !== null && facts.backend !== "tmux") return facts.threadId === null ? facts.backend : `${facts.backend} · thread ${facts.threadId}`;
-  return facts.tmuxSession === null ? "" : `tmux · ${facts.tmuxSession}`;
+export function sessionWhere(facts: Pick<PanelInstance, "backend" | "threadId" | "tmuxSession">): { where: string; id: string | null; idName: string } | null {
+  if (facts.backend !== null && facts.backend !== "tmux") return { where: facts.threadId === null ? facts.backend : `${facts.backend} thread`, id: facts.threadId, idName: "the thread's id in bb" };
+  return facts.tmuxSession === null ? null : { where: "tmux session", id: facts.tmuxSession, idName: "the tmux session's name" };
 }
-
-/** The row's runtime error, with who said it: every fact here is the kernel's. */
-export const runtimeErrorLine = (error: string): string => `OATS says: ${error}`;
 
 const wordsOf = (text: string): string[] => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 /**
@@ -130,4 +131,14 @@ export function markText(value: string): string {
   const upper = [...chars.join("").toLocaleUpperCase("en")];
   // Upper case can grow ("ß" is "SS"): a mark is two glyphs at most, so then each character keeps its first.
   return (upper.length <= 2 ? upper : chars.map((char) => [...char.toLocaleUpperCase("en")][0])).join("") || "?";
+}
+
+/**
+ * An instant the kernel reports, in the plugin's one form for an instant (app/ui/words.ts
+ * `waitingClock`: "18:23" today, "Nov 21, 18:23" another day, local time); what is no instant, as
+ * sent, through the display filter. The kernel's own text of it (ISO, UTC, milliseconds) belongs
+ * in a title, for whoever needs the exact value.
+ */
+export function whenText(iso: string, now: number): string {
+  return waitingClock(iso, now) || shown(iso);
 }

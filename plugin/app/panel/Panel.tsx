@@ -2,21 +2,23 @@
 // panel (packages/desktop/renderer/context-panel.mjs). It reads one instance by its name and never
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, Node } from "../../model/types";
-import { claimOf, state as stateOf } from "../../model/view";
+import type { Agent, AgentState, Node } from "../../model/types";
+import { claimOf } from "../../model/view";
+import { agentStatus } from "../roster/status";
+import { failureWords } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
+import { instanceDisplayName, readAge, waitingLabel } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
@@ -26,16 +28,16 @@ import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById"> & { nodeByInstance: ReadonlyMap<string, Node> };
+type Roster = Pick<Oats, "soulOf" | "threadById"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
 /** The roster could not be read again: what it said, and the way to ask again. */
-type RosterFailure = { code: string; line: string; retry(): void };
+type RosterFailure = { code: string; message: string; machine: string | null; line: string; retry(): void };
 
 /** The panel's tabs. */
 export type TabId = "instance" | "soul";
@@ -93,22 +95,65 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   } else if (known !== undefined && last.current?.key !== key) {
     last.current = { key, agent: known, node: undefined };
   }
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const visible = useVisibleWidth(root);
   const held = last.current;
   // Another thread or name than the one held: nothing of that agent is known yet.
   if (held === null || held.key !== key) return null;
-  const roster: Roster = { soulOf: oats.soulOf, threadById: oats.threadById, nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES };
+  const roster: Roster = {
+    soulOf: oats.soulOf,
+    threadById: oats.threadById,
+    nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
+    children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
+  };
   // OATS cannot be read: never (no roster), or not again (the roster is the last one read).
   const unread = oats.phase === "failed" ? oats : oats.phase === "ready" ? oats.stale : null;
-  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, line: failureLine(unread), retry: oats.retry };
+  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, message: unread.message, machine: oats.phase === "failed" ? oats.machine : oats.phase === "ready" ? oats.deployment.machine : null, line: failureLine(unread), retry: oats.retry };
   return (
-    <div data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
-      <div className="shrink-0 px-3">
-        <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+    <div ref={setRoot} data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
+      {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
+      <div data-testid="oats-panel-visible" className="flex min-h-0 min-w-0 flex-1 flex-col" style={visible === null ? undefined : { width: visible }}>
+        <div className="shrink-0 px-3">
+          <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+        </div>
+        {/* One instance at a time: another agent starts from its own read. */}
+        <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} tab={tab} failure={failure} />
       </div>
-      {/* One instance at a time: another agent starts from its own read. */}
-      <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} tab={tab} failure={failure} />
     </div>
   );
+}
+
+/**
+ * How wide the part of `root` that is in the window is, in px; null while it is whole in it. bb
+ * 0.50.1 lays its side panel out wider than the window leaves room for when its sidebar, a thread
+ * and the panel are all open (the panel's column runs past the window's right edge, by up to
+ * about 140 px at 1280 px), and what is drawn there cannot be reached. So the panel draws within
+ * the part that is in the window: nothing of it is cut.
+ */
+function useVisibleWidth(element: HTMLElement | null): number | null {
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    // The panel's root comes on the page once an agent is known: measured from then on.
+    if (element === null) return;
+    const measure = () => {
+      const box = element.getBoundingClientRect();
+      const past = Math.round(box.right - document.documentElement.clientWidth);
+      setWidth(past > 0 && box.width - past > 0 ? Math.floor(box.width - past) : null);
+    };
+    measure();
+    // The panel moves without changing size when bb's thread column grows: seen by how much of it is in the window.
+    const seen = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(measure, { threshold: Array.from({ length: 101 }, (_, step) => step / 100) });
+    seen?.observe(element);
+    const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    sized?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      seen?.disconnect();
+      sized?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [element]);
+  return width;
 }
 
 function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent; node: Node | undefined; tab: TabId; failure: RosterFailure | null }) {
@@ -130,6 +175,8 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
 function ReadState({ read, now, failure }: { read: InstanceRead; now: number; failure: RosterFailure | null }) {
   const refusal = failure !== null ? failure.line : read.status === "error" ? read.error : null;
   const code = failure !== null ? (isKernelCode(failure.code) ? failure.code : null) : refusal === null ? null : codeOf(refusal);
+  // Why OATS cannot be read, in the words every place of the plugin says it (the sidebar's notice, the thread's row).
+  const words = failure === null ? null : failureWords(failure, failure.machine);
   // Retry asks for the roster again where that is what failed, and for the instance in either case:
   // the server answers it from the roster it holds then, and says when a newer one lands.
   const again = () => {
@@ -140,21 +187,24 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
   if (refusal === null) return read.status === "loading" ? <Loading>Reading this instance…</Loading> : null;
   // A failed reread keeps what was read, and says how old it is.
   if (read.data !== undefined) {
-    return <Stale age={readAge(read.data.at, now)} refreshing={read.fetching} held={`${failure === null ? "It" : "OATS"} could not be read again${code === null ? "" : ` (${code})`}.`} action={retry} />;
+    const why = words === null ? "This instance could not be read again." : `${words.title}.${words.sentence === null ? "" : ` ${words.sentence}`}`;
+    return <Stale age={readAge(read.data.at, now)} refreshing={read.fetching} held={`${why}${code === null ? "" : ` (${code})`}`} action={retry} />;
   }
-  return <Notice title={failure === null ? "This instance could not be read" : "OATS could not be read"} tone="error" code={code} details={refusal} actions={retry} />;
+  return (
+    <Notice title={words === null ? "This instance could not be read" : words.title} tone="error" code={code} details={refusal} actions={retry}>
+      {words === null || words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
+    </Notice>
+  );
 }
 
 function InstancePage({ oats, agent, node, read, now, state: readState }: { oats: Roster; agent: Agent; node: Node | undefined; read: InstanceRead; now: number; state: ReactNode }) {
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
-  // The one rule for a state (model/view.ts `state`, over the one gate for a claim), read as the
-  // sidebar's and the thread's rows read it; an agent with no bb thread has none to give it.
-  const state = stateOf(agent, node?.thread ?? null);
-  // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
-  // An agent that needs you for a question bb shows, with no claim, has no instant to count from.
-  const since = state === "needs-you" ? (claim === null ? null : waitingSince(claim.since, now)) : state === "working" ? shortAge(facts?.startedAt ?? null, now) : null;
+  // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
+  // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
+  // bb thread has none to give it.
+  const status = agentStatus(agent, node?.thread ?? null, now);
   const drift = facts === undefined ? null : driftLines(facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (
@@ -166,9 +216,9 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
             {instanceDisplayName(shown(agent.instance))}
           </h2>
         </div>
-        <div data-testid="oats-panel-state" title={state === "working" && facts?.startedAt ? shown(`started ${facts.startedAt}`) : undefined}>
-          {/* The Desktop's word for an agent that runs; every other state says its own word, as the tree does. */}
-          <StatusLine state={state} word={state === "working" ? "Running" : undefined} since={since} />
+        <div data-testid="oats-panel-state">
+          {/* The shared status line. What a waiting agent asks is said once, in Needs input below: here, since when. */}
+          <StatusLine state={status.state} word={status.word} since={status.since} detail={status.state === "needs-you" ? null : status.detail} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
@@ -189,8 +239,9 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
 
       {claim === null ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">
+          {/* The reason in words; how long it has waited is the header's to say, once. */}
           <p data-testid="oats-panel-waiting-head" className="m-0 font-semibold text-foreground">
-            {[waitingLabel(claim), waitingSince(claim.since, now)].filter((part) => part !== null).join(" · ")}
+            {waitingLabel(claim)}
           </p>
           {claim.message === null || shown(claim.message) === "" ? null : (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
@@ -201,20 +252,24 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status.state} now={now} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : contextLine("instance", agent.instance, answerRoot)} now={now} />
       <Activity instance={agent.instance} now={now} />
     </>
   );
 }
 
-function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstance; now: number }) {
+/** `state` is the state the header says: what OATS says of an unreachable session is said there, once, and an agent that does not run was last started, not started. */
+function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: PanelInstance; state: AgentState; now: number }) {
+  const unreachable = state === "unreachable";
+  const runs = state !== "stopped" && state !== "error";
   const navigate = useBbNavigate();
   const sentence = workSentence(facts);
-  const where = sessionLine(facts);
+  const where = sessionWhere(facts);
   const from = modelFromText(facts);
   const started = facts.startedAt ?? facts.createdAt;
-  const hasSession = facts.harness !== null || where !== "" || started !== null || facts.runtimeError !== null;
+  const saysError = facts.runtimeError !== null && !unreachable;
+  const hasSession = facts.harness !== null || where !== null || started !== null || saysError;
   /** Another instance, by its name: a link to its thread where it has one in bb. */
   const instanceLink = (name: string, testId: string) => {
     const thread = oats.nodeByInstance.get(name)?.thread;
@@ -288,15 +343,22 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
                   <span data-testid="oats-panel-model">{from === null ? shown(facts.model) : `${shown(facts.model)} · ${from}`}</span>
                 </Fact>
               )}
-              {where === "" ? null : (
+              {where === null ? null : (
                 <Fact label="Runs in">
-                  <span data-testid="oats-panel-session-line" className="break-all font-mono text-xs">
-                    {shown(where)}
+                  {/* Where, in a word; the session's own id is a code, whole and on a line of its own, never broken inside. */}
+                  <span data-testid="oats-panel-session-line" className="flex min-w-0 flex-col gap-0.5">
+                    <span>{shown(where.where)}</span>
+                    {where.id === null ? null : (
+                      <span className="whitespace-nowrap font-mono text-xs text-muted-foreground" title={shown(where.idName)}>
+                        {shown(where.id)}
+                      </span>
+                    )}
                   </span>
                 </Fact>
               )}
               {started === null ? null : (
-                <Fact label={facts.startedAt === null ? "Created" : "Started"}>
+                // An agent that does not run was started then, and is not running since then.
+                <Fact label={facts.startedAt === null ? "Created" : runs ? "Started" : "Last started"}>
                   <span
                     data-testid="oats-panel-started"
                     title={shown(facts.startedAt === null ? started : [facts.startedAt, facts.createdAt === null ? null : `created ${facts.createdAt}`].filter(Boolean).join(" · "))}
@@ -305,12 +367,12 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
                   </span>
                 </Fact>
               )}
+              {!saysError ? null : (
+                <Fact label="OATS says">
+                  <span data-testid="oats-panel-runtime-error">{shown(facts.runtimeError)}</span>
+                </Fact>
+              )}
             </Facts>
-            {facts.runtimeError === null ? null : (
-              <p data-testid="oats-panel-runtime-error" className="m-0 break-words text-muted-foreground">
-                {shown(runtimeErrorLine(facts.runtimeError))}
-              </p>
-            )}
           </Card>
         </Section>
       )}
@@ -325,7 +387,7 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
         </Section>
       )}
 
-      {facts.human === null && facts.parent === null && facts.sibling === null ? null : (
+      {facts.human === null && facts.parent === null && facts.sibling === null && oats.children.length === 0 ? null : (
         <Section title="Lineage" testId="oats-panel-lineage">
           <Facts>
             {facts.human === null ? null : (
@@ -335,6 +397,16 @@ function InstanceFacts({ oats, facts, now }: { oats: Roster; facts: PanelInstanc
             )}
             {facts.parent === null ? null : <Fact label="Parent">{instanceLink(facts.parent, "oats-panel-parent")}</Fact>}
             {facts.sibling === null ? null : <Fact label="Sibling">{instanceLink(facts.sibling, "oats-panel-sibling")}</Fact>}
+            {/* The agents it started, as the thread's row counts them ("1 child"): each by its name, a link where it has a thread. */}
+            {oats.children.length === 0 ? null : (
+              <Fact label={oats.children.length === 1 ? "Child" : "Children"}>
+                <span data-testid="oats-panel-children" className="flex min-w-0 flex-col items-start">
+                  {oats.children.map((child) => (
+                    <span key={child}>{instanceLink(child, "oats-panel-child")}</span>
+                  ))}
+                </span>
+              </Fact>
+            )}
           </Facts>
         </Section>
       )}

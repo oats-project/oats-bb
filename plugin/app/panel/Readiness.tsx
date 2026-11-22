@@ -5,17 +5,22 @@
 // (packages/desktop/renderer/readiness-view.mjs, compact).
 import { useEffect, useRef, useState } from "react";
 import type { PanelReadiness } from "../../kernel/panel-readiness";
-import { Button, Disclosure, Fact, Facts, Section } from "../ui";
+import { Button, Disclosure, Fact, Facts, Section, Toned } from "../ui";
 import { shown } from "../ui/text";
 import { usePanelReadiness } from "./read";
 import {
-  CHECKS_AND_POLICY, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, itemFacts, itemLine, itemProblems, observedLine,
-  policyLine, providerSays, summaryLine, warningLine,
+  CHECKS_AND_POLICY, CHECKS_PLAIN, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, SIGN_IN_HOW, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, checkTone, itemFacts,
+  itemLine, itemOpens, itemProblems, itemTone, needsSignIn, observedLine, policyLine, providerSays, summaryLine, warningLine,
 } from "./readiness-words";
 import { CommandState } from "./state";
 import { Warnings } from "./Warnings";
 
-function Checks({ readiness, of, context }: { readiness: PanelReadiness; of: "instance" | "soul"; context: string | null }) {
+/** A word with the mark of its tone; plainly when it has none. */
+function Said({ tone, children }: { tone: "bad" | "warn" | null; children: string }) {
+  return tone === null ? <>{children}</> : <Toned tone={tone}>{children}</Toned>;
+}
+
+function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of: "instance" | "soul"; context: string | null; now: number }) {
   return (
     <>
       {context === null ? null : (
@@ -23,16 +28,30 @@ function Checks({ readiness, of, context }: { readiness: PanelReadiness; of: "in
           {context}
         </p>
       )}
+      {/* In a person's words first; then the kernel's own sentences, as the Desktop says them. */}
+      <p data-testid="oats-panel-readiness-plain" className="m-0 text-foreground">
+        {CHECKS_PLAIN}
+      </p>
       <p className="m-0 text-xs text-muted-foreground">{NOT_PERMISSION}</p>
-      <p className="m-0 break-words text-xs text-muted-foreground">{observedLine(readiness.at, of)}</p>
+      <p title={readiness.at === null ? undefined : shown(readiness.at)} className="m-0 break-words text-xs text-muted-foreground">
+        {observedLine(readiness.at, of, now)}
+      </p>
       {readiness.checks.map((check) => (
         <div key={check.key} data-testid={`oats-panel-check-${check.key}`} className="flex min-w-0 flex-col gap-1 border-t border-border pt-2">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
             <strong className="text-foreground">{checkLabel(check.key)}</strong>
-            <span className="text-xs text-muted-foreground">{checkState(check)}</span>
+            <span data-testid="oats-panel-check-state" className={`text-xs ${checkTone(check) === null ? "text-muted-foreground" : "font-semibold text-foreground"}`}>
+              <Said tone={checkTone(check)}>{checkState(check)}</Said>
+            </span>
           </div>
           {check.items.length === 0 ? <p className="m-0 text-xs text-muted-foreground">{NO_ITEMS}</p> : null}
-          {check.items.map((item, index) => (
+          {check.items.map((item, index) =>
+            // An item with nothing more to say is a line, not a fold that opens on nothing.
+            !itemOpens(item) ? (
+              <p key={index} data-testid="oats-panel-check-item" className="m-0 break-words text-xs text-muted-foreground">
+                {itemLine(item)}
+              </p>
+            ) : (
             <Disclosure key={index} summary={itemLine(item)} testId="oats-panel-check-item">
               <Facts>
                 {itemFacts(item).map((fact, at) => (
@@ -41,7 +60,12 @@ function Checks({ readiness, of, context }: { readiness: PanelReadiness; of: "in
                   </Fact>
                 ))}
               </Facts>
-              {item.provider === null ? null : <p className="m-0 text-foreground">{providerSays(item.provider.status)}</p>}
+              {item.provider === null ? null : (
+                <p className="m-0 text-foreground">
+                  <Said tone={itemTone(item)}>{providerSays(item.provider.status)}</Said>
+                </p>
+              )}
+              {needsSignIn(item) ? <p className="m-0 text-foreground">{SIGN_IN_HOW}</p> : null}
               {(item.provider?.warnings ?? []).map((warning, at) => (
                 <p key={at} className="m-0 break-words text-xs text-muted-foreground">
                   {warningLine(warning)}
@@ -53,7 +77,8 @@ function Checks({ readiness, of, context }: { readiness: PanelReadiness; of: "in
                 </p>
               ))}
             </Disclosure>
-          ))}
+            ),
+          )}
         </div>
       ))}
       <Warnings warnings={readiness.warnings} testId={`oats-panel-readiness-warnings-${of}`} />
@@ -95,24 +120,28 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
       {read.data === undefined ? null : (
         <>
           <p data-testid="oats-panel-readiness-summary" className="m-0 font-semibold text-foreground">
-            {summaryLine(read.data.summary)}
+            <Said tone={read.data.summary.ready ? null : read.data.summary.fail > 0 ? "bad" : "warn"}>{summaryLine(read.data.summary)}</Said>
           </p>
           <Disclosure summary={CHECKS_AND_POLICY} testId="oats-panel-readiness-checks">
-            <Checks readiness={read.data} of={of} context={context} />
+            <Checks readiness={read.data} of={of} context={context} now={now} />
           </Disclosure>
         </>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          data-testid="oats-panel-readiness-refresh"
-          disabled={read.fetching}
-          onClick={() => {
-            setRefreshed("reading");
-            read.retry();
-          }}
-        >
-          {REFRESH}
-        </Button>
+        {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
+            Over what is shown the button is off while a read runs, and the words beside it say why. */}
+        {(read.fetching && read.data === undefined) || read.status === "error" ? null : (
+          <Button
+            data-testid="oats-panel-readiness-refresh"
+            disabled={read.fetching}
+            onClick={() => {
+              setRefreshed("reading");
+              read.retry();
+            }}
+          >
+            {REFRESH}
+          </Button>
+        )}
         {refreshed === "no" || read.data === undefined ? null : (
           <span role="status" data-testid="oats-panel-readiness-status" className="text-xs text-muted-foreground">
             {refreshed === "reading" ? REFRESHING : UPDATED}

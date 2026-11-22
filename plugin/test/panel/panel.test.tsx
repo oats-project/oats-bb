@@ -63,16 +63,19 @@ test("two tabs, Instance first; the header names the instance as words, its soul
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
-test("a running agent says since when it runs; a stopped one says Stopped and shows no claim", async () => {
+test("a running agent says Working, as the tree and the thread do, and since when it runs is a fact of its session; a stopped one says Stopped and shows no claim", async () => {
   const running = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: true, waiting: null }) });
   await running.findByTestId("oats-panel-work");
   // started 18:13:36Z, read at 18:29:30Z
-  expect(stateOf(running)).toBe("Running· 15m");
-  expect(running.getByTestId("oats-panel-state").getAttribute("title")).toBe("started 2026-11-21T18:13:36.478Z");
+  expect(stateOf(running)).toBe("Working");
+  // started 18:13:36Z, read at 18:29:30Z: a labelled fact of the session
+  expect(text(running.getByTestId("oats-panel-started").closest('[data-testid="oats-fact"]')!)).toBe("Started16 min ago");
   running.unmount();
   const stopped = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: false, runtimeState: "stopped" }) });
   await stopped.findByTestId("oats-panel-work");
   expect(stateOf(stopped)).toBe("Stopped");
+  // It does not run since then: "Last started", not "Started".
+  expect(text(stopped.getByTestId("oats-panel-started").closest('[data-testid="oats-fact"]')!)).toBe("Last started16 min ago");
   // A stopped agent's claim belongs to an ended session: it is not shown.
   expect(stopped.queryByTestId("oats-panel-waiting")).toBeNull();
 });
@@ -90,20 +93,21 @@ test("a failed or unreachable agent that still carries a claim says Needs you an
   }
 });
 
-test("Needs input: the reason in words, how long and since when, and the agent's message; the header says the same wait", async () => {
+test("Needs input: the reason in words and the agent's message; how long and since when is said once, by the header", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");
   // The clock as the words module says it here: with the date where local midnight falls inside the wait.
   const clock = waitingClock("2026-11-21T18:14:12.916Z", NOW);
   expect(text(within(waiting).getByRole("heading"))).toBe("Needs input");
-  expect(text(slot.getByTestId("oats-panel-waiting-head"))).toBe(`Asked for your attention · waiting 15 min (since ${clock})`);
+  expect(text(slot.getByTestId("oats-panel-waiting-head"))).toBe("Asked for your attention");
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
   expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${clock})`);
 });
 
 test("a claim with no message says the reason alone; its message is drawn as text through the display filter", async () => {
   const bare = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: { reason: "permission", message: null, since: "2026-11-21T18:28:00.000Z" } }) });
-  expect(text(await bare.findByTestId("oats-panel-waiting-head"))).toContain("Waiting for a tool approval · waiting 1 min");
+  expect(text(await bare.findByTestId("oats-panel-waiting-head"))).toBe("Waiting for a tool approval");
+  expect(stateOf(bare)).toMatch(/^Needs you· waiting 1 min \(since .+\)$/);
   expect(bare.queryByTestId("oats-panel-waiting-message")).toBeNull();
   bare.unmount();
   const unsafe = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: { reason: "question", message: "use token=abc123 <b>now</b>", since: null } }) });
@@ -157,7 +161,7 @@ test("Session: the harness, the model and where it came from, where the session 
   const session = await slot.findByTestId("oats-panel-session");
   expect(text(within(session).getByRole("heading"))).toBe("Session");
   expect(within(session).getAllByTestId("oats-fact").map((fact) => `${text(fact.querySelector("dt")!)}: ${text(fact.querySelector("dd")!)}`)).toEqual([
-    "Harness: Claude", "Model: claude-opus-5-5 · the soul's choice", "Runs in: bb · thread thr_gx4sgexjgw", "Started: 16 min ago",
+    "Harness: Claude", "Model: claude-opus-5-5 · the soul's choice", "Runs in: bb threadthr_gx4sgexjgw", "Started: 16 min ago",
   ]);
   expect(slot.getByTestId("oats-panel-started").getAttribute("title")).toBe("2026-11-21T18:13:36.478Z · created 2026-11-21T18:13:36.478Z");
   expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
@@ -167,9 +171,10 @@ test("a home never started says when it was created; the row's runtime error is 
   const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, startedAt: null, model: null, runtimeError: "bb did not answer at http://127.0.0.1:38886" }) });
   const session = await slot.findByTestId("oats-panel-session");
   expect(within(session).getAllByTestId("oats-fact").map((fact) => `${text(fact.querySelector("dt")!)}: ${text(fact.querySelector("dd")!)}`)).toEqual([
-    "Harness: Claude", "Runs in: bb · thread thr_gx4sgexjgw", "Created: 16 min ago",
+    "Harness: Claude", "Runs in: bb threadthr_gx4sgexjgw", "Created: 16 min ago", "OATS says: bb did not answer at http://127.0.0.1:38886",
   ]);
-  expect(text(slot.getByTestId("oats-panel-runtime-error"))).toBe("OATS says: bb did not answer at http://127.0.0.1:38886");
+  // The id is a code on a line of its own, never broken inside.
+  expect(slot.getByTestId("oats-panel-session-line").querySelector(".whitespace-nowrap")?.textContent).toBe("thr_gx4sgexjgw");
 });
 
 test("Messaging & Teams: the messaging id with its copy, only where the row has one", async () => {
@@ -275,8 +280,8 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
     rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, backend: "tmux", threadId: null, tmuxSession: "oats-agents" })) }),
     sidebarThreads: panelThreads(agents),
   });
-  expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux · oats-agents");
-  expect(stateOf(slot)).toBe("Running· 15m");
+  expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
+  expect(stateOf(slot)).toBe("Working");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
 });
 
@@ -331,7 +336,7 @@ test("a later read that fails keeps what was read, says how old it is and why, a
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
   const stale = await slot.findByTestId("oats-stale");
   expect(text(stale)).toContain("Showing what was read 3 min ago.");
-  expect(text(stale)).toContain("It could not be read again (OATS_TIMEOUT).");
+  expect(text(stale)).toContain("This instance could not be read again. (OATS_TIMEOUT)");
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
   fail = false;
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
@@ -350,7 +355,7 @@ test("the panel reads again when OATS changes", async () => {
 test("an agent whose session fell back to a shell says Failed, and one the kernel cannot reach Unreachable, as the tree does", async () => {
   const shell = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: false, runtimeState: "shell" }) });
   await shell.findByTestId("oats-panel-work");
-  expect(stateOf(shell)).toBe("Failed");
+  expect(stateOf(shell)).toBe("Failed· Its session ended");
   shell.unmount();
   const unreachable = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable" }) });
   await unreachable.findByTestId("oats-panel-work");
@@ -363,7 +368,7 @@ test("an agent whose session fell back to a shell says Failed, and one the kerne
   };
   const tmuxShell = byName({ running: false, runtimeState: "shell" });
   await tmuxShell.findByTestId("oats-panel-work");
-  expect(stateOf(tmuxShell)).toBe("Failed");
+  expect(stateOf(tmuxShell)).toBe("Failed· Its session ended");
   tmuxShell.unmount();
   const tmuxGone = byName({ running: false, runtimeState: null });
   await tmuxGone.findByTestId("oats-panel-work");
@@ -453,7 +458,8 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
   const stale = await slot.findByTestId("oats-stale");
-  await waitFor(() => expect(text(stale)).toContain("OATS could not be read again (E_LOCAL_MISSING)."));
+  // The words every place of the plugin says for this cause (app/roster/unreadable.tsx), then the code.
+  await waitFor(() => expect(text(stale)).toContain("OATS could not read this deployment. OATS says: no oats-local.yaml here (E_LOCAL_MISSING)"));
   expect(text(stale)).toContain("howing what was read 3 min ago.");
   // Everything it read is still there: the name, the state, the claim, the facts.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
@@ -497,7 +503,11 @@ test("the page of an agent with no thread in bb goes back to Home; a name OATS d
   expect(gone.queryByTestId("oats-panel")).toBeNull();
   gone.unmount();
   const none = await agentPage("");
-  await waitFor(() => expect(text(none.getByTestId("oats-agent-page"))).toContain("No agent is named here."));
+  await waitFor(() => expect(text(none.getByTestId("oats-agent-page"))).toContain("No agent to showThis page shows one agent, and its address names none. Open an agent from the sidebar or the home."));
+  // The page of a name OATS does not list has a title too.
+  none.unmount();
+  const again = await agentPage("gone-helper");
+  await waitFor(() => expect(text(again.getByTestId("oats-agent-page"))).toContain("This agent is not in OATS"));
 });
 
 test("while OATS cannot be read the page shows the notice every place shows: what happened in words, the kernel's line and code, Retry", async () => {
@@ -535,7 +545,7 @@ test("the page keeps the agent and its way back while the roster cannot be read 
   await slot.findByTestId("oats-panel-work");
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
-  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS could not be read again.");
+  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS did not answer on this machine. It took more than 20 s.");
   expect(text(slot.getByTestId("oats-agent-back"))).toBe("Back to the thread");
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
 });
@@ -559,7 +569,7 @@ test("with the last roster the server kept: the page shows the agent as last rea
   await slot.findByTestId("oats-panel-work");
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
-  await waitFor(() => expect(text(slot.getByTestId("oats-stale"))).toContain("OATS could not be read again (E_LOCAL_MISSING)."));
+  await waitFor(() => expect(text(slot.getByTestId("oats-stale"))).toContain("OATS could not read this deployment. OATS says: no oats-local.yaml here (E_LOCAL_MISSING)"));
   expect(text(slot.getByTestId("oats-agent-back"))).toBe("Back to the thread");
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
 });
@@ -582,7 +592,7 @@ test("the fixed tab keeps the agent's panel when the roster cannot be read again
   await slot.findByTestId("oats-panel-work");
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
-  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS could not be read again (E_LOCAL_MISSING).");
+  expect(text(await slot.findByTestId("oats-stale"))).toContain("OATS could not read this deployment. OATS says: no oats-local.yaml here (E_LOCAL_MISSING)");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.queryByTestId("oats-home-tab")).toBeNull();
 });
@@ -600,7 +610,8 @@ test("a panel that opens while the roster cannot be read shows the agent its cal
     sidebarThreads: panelThreads(),
   });
   const notice = await slot.findByRole("alert");
-  expect(text(within(notice).getByRole("heading"))).toBe("OATS could not be read");
+  expect(text(within(notice).getByRole("heading"))).toBe("OATS could not read this deployment");
+  expect(text(notice)).toContain("OATS says: no oats-local.yaml here");
   expect(text(notice)).toContain("E_LOCAL_MISSING");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(stateOf(slot)).toMatch(/^Needs you/);
@@ -615,4 +626,38 @@ test("at the phone's width the thread's OATS chip opens the agent's page", async
   });
   fireEvent.click(await slot.findByTestId("oats-open-panel"));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: CHILD } }]);
+});
+
+// ---- from the second UX read
+
+test("Lineage names the agents it started, as the thread's row counts them, each a link where it has a thread", async () => {
+  const slot = panel({ threadId: panelAgents().find((agent) => agent.instance === "redesign-ui-lead")!.threadId! });
+  const lineage = await slot.findByTestId("oats-panel-lineage");
+  expect(within(lineage).getAllByTestId("oats-fact").map((fact) => text(fact))).toContain(`Child${CHILD}`);
+  expect(within(lineage).getByTestId("oats-panel-child").tagName).toBe("A");
+});
+
+test("the panel draws within the part of bb's side panel that is in the window, and whole when all of it is", async () => {
+  const slot = panel();
+  const root = await slot.findByTestId("oats-panel");
+  const inner = slot.getByTestId("oats-panel-visible");
+  // all of it in the window: no width of its own
+  expect(inner.style.width).toBe("");
+  // bb lays the panel 480 px wide with its last 120 px past a 1280 px window
+  Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: 1280 });
+  root.getBoundingClientRect = () => ({ left: 920, right: 1400, width: 480, top: 0, bottom: 800, height: 800, x: 920, y: 0, toJSON: () => ({}) });
+  act(() => void window.dispatchEvent(new Event("resize")));
+  expect(inner.style.width).toBe("360px");
+  // and back in the window
+  root.getBoundingClientRect = () => ({ left: 800, right: 1280, width: 480, top: 0, bottom: 800, height: 800, x: 800, y: 0, toJSON: () => ({}) });
+  act(() => void window.dispatchEvent(new Event("resize")));
+  expect(inner.style.width).toBe("");
+  Reflect.deleteProperty(document.documentElement, "clientWidth");
+});
+
+test("an unreachable agent: what OATS says of its session is in the header, once, and not again in the Session card", async () => {
+  const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }), facts: (facts) => ({ ...facts, runtimeError: "bb did not answer" }) });
+  await slot.findByTestId("oats-panel-session");
+  expect(stateOf(slot)).toBe("Unreachable· OATS says: bb did not answer");
+  expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
 });

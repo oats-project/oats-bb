@@ -4,12 +4,17 @@
 // the display filter one by one: the line itself is not filtered again. No bb and no React import.
 import type { PanelReadiness, PanelReadinessItem } from "../../kernel/panel-readiness";
 import { shown } from "../ui/text";
+import { whenText } from "./words";
 
 export const TITLE = { instance: "Instance readiness", soul: "Soul readiness" } as const;
 export const REFRESH = "Refresh readiness";
 export const REFRESHING = "Refreshing…";
 export const UPDATED = "Readiness updated";
-export const LOADING = "Loading readiness…";
+export const LOADING = "Reading readiness…";
+/** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
+export const CHECKS_PLAIN = "What OATS checked for this to run. Reading it starts nothing and allows nothing.";
+/** What to do about a provider that is set up and not signed in: the plugin has no act for it. */
+export const SIGN_IN_HOW = "Sign in to it on this computer, then press Refresh readiness.";
 export const NOT_PERMISSION = "Independent kernel observations, not launch permission. Unknown is not granted; an empty required set is not Ready.";
 export const CHECKS_AND_POLICY = "Checks and policy";
 export const NO_ITEMS = "No items reported for this check.";
@@ -23,7 +28,7 @@ export function summaryLine(summary: PanelReadiness["summary"]): string {
   return `${summary.fail} failing · ${summary.unknown} unknown · ${summary.required} required checks`;
 }
 /** "Observed: <instant>. Target: instance. This is not an atomic snapshot or a permission lease." */
-export const observedLine = (at: string | null, of: "instance" | "soul"): string => `${at === null ? "Observed." : `Observed: ${shown(at)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
+export const observedLine = (at: string | null, of: "instance" | "soul", now: number): string => `${at === null ? "Observed." : `Observed: ${whenText(at, now)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
 /** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>". */
 export const contextLine = (of: "instance" | "soul", name: string, agentsRoot: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · ${shown(agentsRoot)}`;
 
@@ -33,6 +38,17 @@ export function checkState(check: PanelReadiness["checks"][number]): string {
   const failing = check.items.filter((item) => item.status === "fail");
   return check.status === "fail" && failing.length > 0 && failing.every(signIn) ? "sign in needed" : shown(check.status);
 }
+/** How a check's state reads at a glance: one that fails is marked as bad, one that waits for a sign-in or is not known as a warning, the rest plainly. */
+export function checkTone(check: PanelReadiness["checks"][number]): "bad" | "warn" | null {
+  const said = checkState(check);
+  return said === "sign in needed" || check.status === "unknown" ? "warn" : check.status === "fail" ? "bad" : null;
+}
+/** The same for one item. */
+export const itemTone = (item: PanelReadinessItem): "bad" | "warn" | null => (signIn(item) ? "warn" : item.status === "fail" ? "bad" : null);
+/** Whether an item has anything to open: its facts, a provider's own answer, a problem. */
+export const itemOpens = (item: PanelReadinessItem): boolean => itemFacts(item).length > 0 || item.provider !== null || itemProblems(item).length > 0;
+/** Whether an item waits for a sign-in to its provider. */
+export const needsSignIn = (item: PanelReadinessItem): boolean => signIn(item);
 /** "Installed", "Configured", "Member", "Providers". */
 export const checkLabel = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
 

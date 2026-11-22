@@ -99,7 +99,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state as a mark and its word with since when ("Running · 42m" since its last start, "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words, how long and since when, and its message. **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs (`bb · thread <id>`), since when, and the kernel's runtime error when it has one. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent and the sibling, each a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS says: …"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent and the sibling, each a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy) and **Open soul page**. |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
@@ -117,10 +117,21 @@ recorded it, not its current state. When the tab is left and come back to, what 
 again as the last observation ("Last observation retained; refresh required."), and nothing is read
 until Refresh activity.
 
-A read that is refused says the OATS Desktop's own sentence for that refusal where it has one
-(`app/panel/refusal-words.ts`: "The readiness read timed out.", "Choose one exact instance home."),
-then the code, with the kernel's message under Details and Retry; a read again that fails keeps what
-was read, under a line with the same sentence and code.
+A read that is refused says why in a person's words (`app/panel/refusal-words.ts`: the Desktop's
+sentence where it says what happened, "The readiness read timed out."; the plugin's own where the
+Desktop's is an instruction nobody can follow from here, "OATS knows more than one agent by this
+name here, …"; and "OATS refused to read …" for a refusal with no sentence), then the code, with the
+kernel's message under Details and Retry; a read again that fails keeps what was read, under a line
+with the same sentence and code. After a failure Retry is the one act: the section's own Refresh
+is not drawn beside it. When OATS itself cannot be read, the panel says it in the words the sidebar
+and the thread's row say it (`app/roster/unreadable.tsx` `failureWords`).
+
+The panel draws within the part of bb's side panel that is in the window: bb 0.50.1 lays its side
+panel out up to about 140 px past a 1280 px window when its sidebar, a thread and the panel are all
+open, and what would be drawn there could not be reached (`app/panel/Panel.tsx` `useVisibleWidth`).
+An instant is said in one form ("18:23" today, "Nov 21, 18:23" another day; the kernel's own text of
+it is the title), an id or a commit is never broken inside, and each sentence of the kernel's in
+the activity and in readiness has a plain first line over it (`plugin/WORDS.md` holds each pair).
 
 On the Instance tab's facts and its header, a fact the kernel does not report is not drawn, and the
 panel never guesses. Three places do say that the kernel reported nothing, as the Desktop does: a

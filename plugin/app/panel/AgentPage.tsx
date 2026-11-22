@@ -67,7 +67,10 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
             // The notice every place shows when OATS cannot be read: what is missing in a person's words, on which machine, the code, Retry.
             <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
           ) : (
-            <Empty>{instance === null ? "No agent is named here." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}</Empty>
+            // The page says what it is, why it is empty, and the one way on.
+            <Empty title={instance === null ? "No agent to show" : "This agent is not in OATS"}>
+              {instance === null ? "This page shows one agent, and its address names none. Open an agent from the sidebar or the home." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}
+            </Empty>
           )}
         </div>
       )}

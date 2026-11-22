@@ -1,0 +1,112 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "instance": "wake-at-spawn-developer",
+  "agent": "oats-developer",
+  "home": "/abs/deployment/agents/oats-developer/instances/wake-at-spawn-developer",
+  "work": "directory",
+  "branch": null,
+  "base": null,
+  "launched": true,
+  "warnings": [],
+  "launchPrompts": {
+   "status": "not-engaged",
+   "startId": "a9f463f1-309b-490a-84b5-d131fc178690",
+   "at": "2026-11-22T05:49:20.124Z"
+  },
+  "wakeSchedule": {
+   "id": "wake-wake-at-spawn-developer",
+   "cron": "*/15 * * * *",
+   "tz": "Europe/Madrid",
+   "kind": "wake",
+   "home": "/abs/deployment/agents/oats-developer/instances/wake-at-spawn-developer",
+   "message": "Check your pending work and report anything that needs attention.",
+   "createdAt": "2026-11-22T05:49:20.139Z",
+   "updatedAt": "2026-11-22T05:49:20.139Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-22T06:00:00.000Z",
+   "lastRun": null,
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "wake-wake-at-spawn-developer",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": null,
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/wake-wake-at-spawn-developer",
+   "soul": null,
+   "task": null,
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-22T06:00:00.000Z",
+   "enabled": true
+  },
+  "tmux": null,
+  "backend": "bb",
+  "session": {
+   "provider": "oats.bb",
+   "endpoint": {
+    "server": "http://127.0.0.1:38886",
+    "projectId": "proj_ptfs975y8e",
+    "threadId": "thr_3arktci9ab"
+   }
+  },
+  "repo": "/abs/deployment",
+  "harness": "claude",
+  "model": "claude-opus-5-5",
+  "parent": null,
+  "sibling": null,
+  "relation": null,
+  "spawnOrigin": "operator",
+  "attach": null,
+  "yolo": true,
+  "background": false,
+  "launchConfig": null,
+  "launch": {
+   "version": 2,
+   "harness": "claude",
+   "launchConfig": null,
+   "launchConfigSource": null,
+   "executable": null,
+   "executableDeclared": null,
+   "executableResolvedFrom": "session provider bb",
+   "args": [],
+   "env": {},
+   "model": "claude-opus-5-5",
+   "yolo": true,
+   "hooks": {
+    "launch": {},
+    "env": {},
+    "contributions": []
+   },
+   "prompt": {
+    "kind": "task-file",
+    "file": "TASK.md"
+   }
+  }
+ }
+}

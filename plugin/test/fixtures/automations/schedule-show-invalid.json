@@ -1,0 +1,80 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "legacy-herdr",
+   "kind": "spawn",
+   "cron": "0 6 * * *",
+   "tz": "UTC",
+   "agent": "oats-developer",
+   "backend": "herdr",
+   "task": "A job from before Herdr was removed.",
+   "createdAt": "2026-06-01T00:00:00.000Z",
+   "updatedAt": "2026-06-01T00:00:00.000Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-22T06:00:00.000Z",
+   "lastRun": {
+    "outcome": "invalid",
+    "error": "definition cannot be evaluated: Herdr is no longer supported by OATS (removed in 0.31.0); tmux is the only session backend. /abs/deployment/oats-schedules.json sets jobs.legacy-herdr.backend: herdr. Remove it (or use tmux).",
+    "errorCode": "E_HERDR_REMOVED",
+    "runId": null,
+    "session": {
+     "instance": null,
+     "home": null,
+     "incarnation": null,
+     "server": null,
+     "delivery": "none"
+    }
+   },
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "legacy-herdr",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "description": null,
+   "owner": null,
+   "runsOn": null,
+   "runsHere": false,
+   "reason": null,
+   "enabledHere": true,
+   "invalid": {
+    "code": "E_HERDR_REMOVED",
+    "message": "Herdr is no longer supported by OATS (removed in 0.31.0); tmux is the only session backend. /abs/deployment/oats-schedules.json sets jobs.legacy-herdr.backend: herdr. Remove it (or use tmux).",
+    "field": "backend"
+   },
+   "qualifiedId": "local/legacy-herdr",
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": null,
+   "enabled": true
+  }
+ }
+}

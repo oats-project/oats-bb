@@ -491,6 +491,195 @@
     "--json"
    ],
    "exit": 0
+  },
+  "schedule-add-operation.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "form-operation",
+    "--spec-json={\"kind\":\"operation\",\"cron\":\"0 * * * *\",\"tz\":\"UTC\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"operation\":\"knowledge:checkpoint\"}",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-add-spawn.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "form-spawn",
+    "--spec-json={\"kind\":\"spawn\",\"cron\":\"0 9 * * 1-5\",\"tz\":\"Europe/Madrid\",\"enabled\":false,\"agent\":\"oats-developer\",\"task\":\"Look at the build queue.\\nReport what is red.\",\"purpose\":\"queue\",\"harness\":\"claude\",\"model\":\"claude-sonnet\",\"backend\":\"bb\",\"yolo\":true,\"description\":\"Look at the build queue on weekdays\",\"wake\":{\"cron\":\"*/30 * * * *\",\"tz\":\"Europe/Madrid\",\"message\":\"Anything red?\"}}",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-add-spec-invalid.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "form-bad",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"every day\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-add-spec-no-home.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "form-nowhere",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"*/15 * * * *\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/no-such-home\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-add-wake.json": {
+   "argv": [
+    "schedule",
+    "add",
+    "form-wake",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"*/15 * * * *\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-show-command.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "status-check",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-show-invalid.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "legacy-herdr",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-show-operation.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "form-operation",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-show-spawn.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "form-spawn",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-show-wake.json": {
+   "argv": [
+    "schedule",
+    "show",
+    "form-wake",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "schedule-update-invalid.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "form-wake",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"*/15 * * * *\",\"tz\":\"Mars/Olympus\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-update-unknown.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "form-gone",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"*/15 * * * *\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-update-workspace.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "oats-real/nightly-digest",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"*/15 * * * *\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\\nSay what, then stop.\",\"description\":\"Ask the note keeper for news\"}",
+    "--json"
+   ],
+   "exit": 1
+  },
+  "schedule-update.json": {
+   "argv": [
+    "schedule",
+    "update",
+    "form-wake",
+    "--spec-json={\"kind\":\"wake\",\"cron\":\"0 * * * *\",\"tz\":\"Europe/Madrid\",\"enabled\":true,\"home\":\"/abs/deployment/agents/note-keeper/instances/team-notes-keeper\",\"message\":\"Anything to write down?\",\"description\":\"Ask the note keeper every hour\"}",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "spawn-wake-not-saved.json": {
+   "argv": [
+    "spawn",
+    "oats-developer",
+    "--backend",
+    "bb",
+    "--yolo",
+    "--name",
+    "wake-bad-cron-developer",
+    "--task-file",
+    "/abs/real/task-wake.md",
+    "--wake-json={\"cron\":\"every day\",\"tz\":\"Europe/Madrid\",\"message\":\"Anything?\",\"enabled\":true}",
+    "--json"
+   ],
+   "exit": 0
+  },
+  "spawn-wake.json": {
+   "argv": [
+    "spawn",
+    "oats-developer",
+    "--backend",
+    "bb",
+    "--yolo",
+    "--name",
+    "wake-at-spawn-developer",
+    "--task-file",
+    "/abs/real/task-wake.md",
+    "--wake-json={\"cron\":\"*/15 * * * *\",\"tz\":\"Europe/Madrid\",\"message\":\"Check your pending work and report anything that needs attention.\",\"enabled\":true}",
+    "--json"
+   ],
+   "exit": 0
   }
+ },
+ "later": {
+  "at": "2026-11-22T05:49:23.591Z",
+  "oats": "0.70.0",
+  "files": [
+   "schedule-add-operation.json",
+   "schedule-add-spawn.json",
+   "schedule-add-spec-invalid.json",
+   "schedule-add-spec-no-home.json",
+   "schedule-add-wake.json",
+   "schedule-show-command.json",
+   "schedule-show-invalid.json",
+   "schedule-show-operation.json",
+   "schedule-show-spawn.json",
+   "schedule-show-wake.json",
+   "schedule-update-invalid.json",
+   "schedule-update-unknown.json",
+   "schedule-update-workspace.json",
+   "schedule-update.json",
+   "spawn-wake-not-saved.json",
+   "spawn-wake.json"
+  ]
  }
 }

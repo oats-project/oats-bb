@@ -1,0 +1,56 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "form-wake",
+   "cron": "*/15 * * * *",
+   "tz": "Europe/Madrid",
+   "kind": "wake",
+   "description": "Ask the note keeper for news",
+   "home": "/abs/deployment/agents/note-keeper/instances/team-notes-keeper",
+   "message": "Anything to write down?\nSay what, then stop.",
+   "createdAt": "2026-11-22T05:49:16.387Z",
+   "updatedAt": "2026-11-22T05:49:16.387Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": "2026-11-22T06:00:00.000Z",
+   "lastRun": null,
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "form-wake",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/form-wake",
+   "soul": null,
+   "task": null,
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-22T06:00:00.000Z",
+   "enabled": true
+  }
+ }
+}

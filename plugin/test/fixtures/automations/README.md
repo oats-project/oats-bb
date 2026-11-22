@@ -101,6 +101,18 @@ The rows of `trigger-list.json`:
 - An **unreadable** row, and a workspace row with a web address (`origin.url`: the kernel gives one
   for `github.com` members only, and the member here is a local repository).
 
+## A later run of the same script
+
+The answers the schedule form and the wake-up at spawn rest on were recorded in a later run of
+`record/record.sh` (`recorded.json` names them under `later`, with that run's time): a schedule
+created with `--spec-json` for each kind the form makes (`schedule-add-wake.json`, `-spawn`,
+`-operation`), the kernel's refusals of one (`schedule-add-spec-invalid.json`,
+`-spec-no-home.json`), what the kernel holds of a schedule (`schedule-show-*.json`: the three kinds,
+a command, and the job nobody validated), a definition replaced and the refusals of that
+(`schedule-update*.json`), and a spawn that asks for a recurring wake-up, saved and not saved
+(`spawn-wake.json`, `spawn-wake-not-saved.json`). The script makes them last, after every list
+above was printed, so a whole new recording gives the same lists; only these files were copied in.
+
 ## What is not recorded
 
 Three answers the live scenes use are written in `container/scenes/automations.mjs`, not recorded,

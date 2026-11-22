@@ -1,0 +1,11 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SCHEDULE_INVALID",
+  "message": "home: an existing instance home inside the scope",
+  "details": {
+   "field": "home"
+  }
+ }
+}

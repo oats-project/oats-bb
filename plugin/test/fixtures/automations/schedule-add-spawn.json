@@ -1,0 +1,66 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "schedule": {
+   "id": "form-spawn",
+   "cron": "0 9 * * 1-5",
+   "tz": "Europe/Madrid",
+   "kind": "spawn",
+   "description": "Look at the build queue on weekdays",
+   "agent": "oats-developer",
+   "backend": "bb",
+   "purpose": "queue",
+   "task": "Look at the build queue.\nReport what is red.",
+   "harness": "claude",
+   "model": "claude-sonnet",
+   "yolo": true,
+   "wake": {
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "message": "Anything red?"
+   },
+   "createdAt": "2026-11-22T05:49:16.491Z",
+   "updatedAt": "2026-11-22T05:49:16.491Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true
+   },
+   "nextRun": null,
+   "lastRun": null,
+   "history": {
+    "status": "ok",
+    "stored": 0,
+    "truncated": false
+   },
+   "recentRuns": [],
+   "running": false,
+   "name": "form-spawn",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "owner": null,
+   "runsOn": null,
+   "runsHere": false,
+   "reason": null,
+   "enabledHere": false,
+   "qualifiedId": "local/form-spawn",
+   "soul": {
+    "name": "oats-developer",
+    "origin": null
+   },
+   "teams": [],
+   "launchConfig": null,
+   "concurrency": null,
+   "nextDue": null,
+   "enabled": false
+  }
+ }
+}

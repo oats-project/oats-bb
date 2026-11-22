@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SCHEDULE_UNKNOWN",
+  "message": "no schedule \"form-gone\" in /abs/deployment"
+ }
+}

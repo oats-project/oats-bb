@@ -109,17 +109,30 @@ test("an inspection that names no soul draws nothing under the header; a refusal
   let fail = true;
   const slot = await soulTab({
     panelSoul: () => {
-      if (fail) throw new Error("E_UNSUPPORTED_MODE: this home has no modules");
+      if (fail) throw new Error("OATS_FAILED: `oats` exited 1: boom");
       return { soul: recordedSoul() };
     },
   });
   const notice = await within(slot.getByTestId("oats-panel-soul-body")).findByRole("alert");
   expect(text(within(notice).getByRole("heading"))).toBe("The soul as spawned could not be read");
-  expect(text(notice)).toContain("E_UNSUPPORTED_MODE");
-  expect(text(within(notice).getByTestId("oats-notice-details"))).toContain("this home has no modules");
+  expect(text(notice)).toContain("OATS could not finish reading it.");
+  expect(text(notice)).toContain("OATS_FAILED");
+  expect(text(within(notice).getByTestId("oats-notice-details"))).toContain("exited 1: boom");
   fail = false;
   fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
   expect(text(await slot.findByTestId("oats-panel-spawned-from"))).toContain("Spawned from oats-expert");
+  slot.unmount();
+  resetApp();
+  // A refusal that reading again cannot change says what happened and what to do, and offers no Retry.
+  const final = await soulTab({
+    panelSoul: () => {
+      throw new Error("E_UNSUPPORTED_MODE: this home has no modules");
+    },
+  });
+  const refused = await within(final.getByTestId("oats-panel-soul-body")).findByRole("alert");
+  expect(text(refused)).toContain("OATS keeps no record of what this kind of agent was spawned from.There is nothing to do: OATS has none for it.");
+  expect(text(refused)).toContain("E_UNSUPPORTED_MODE");
+  expect(within(refused).queryByRole("button", { name: "Retry" })).toBeNull();
 });
 
 test("the soul is read again when the instance was started again, and not when nothing of it changed", async () => {
@@ -153,9 +166,11 @@ test("the activity is read only when a person asks: Load activity, then the rows
   const list = slot.getByTestId("oats-panel-activity-list");
   expect(text(list.querySelector("summary")!)).toContain("Recent lifecycle events");
   // a person's words first, then the kernel's own sentence
-  expect(text(within(list).getByTestId("oats-panel-activity-plain"))).toBe("What OATS recorded about this agent, newest first. It is history: what the agent does now is at the top of this panel.");
+  expect(text(within(list).getByTestId("oats-panel-activity-plain"))).toBe("What OATS recorded about this agent, newest first. It is history, not what the agent does now.");
   expect(text(list)).toContain("8 displayed / 8 observed rows. This is address history, not current runtime state.");
-  expect(text(within(list).getByTestId("oats-panel-activity-claims"))).toBe(`oats.board: reported waiting · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · attention`);
+  // Nothing in the list reads as what the agent waits for now: the claims are its "Waiting claim" rows, each at its own time.
+  expect(within(list).queryByTestId("oats-panel-activity-claims")).toBeNull();
+  expect(text(list)).not.toContain("reported waiting");
   const rows = within(list).getAllByTestId("oats-panel-event");
   expect(rows.map((row) => text(row.querySelector("strong")!))).toEqual(["Waiting claim", "Launched", "Stopped", "Launched", "Restarted", "Waiting claim", "Launched", "Spawned"]);
   // the plugin's one form for an instant; the kernel's own text of it is the title
@@ -164,7 +179,7 @@ test("the activity is read only when a person asks: Load activity, then the rows
   expect(facts(rows[7]!)).toEqual(["Soul: oats-expert", "Work mode: worktree", "Branch: agents/panel-worktree-helper", "Model: claude-opus-5-5", "Parent: redesign-ui-lead", "Relation: child", "Harness: claude", "Launch reported: true"]);
   expect(facts(rows[2]!)).toEqual(["Signal: not reported", "State reported: stopped", "Waited (ms): 2149", "Targets still running: 0"]);
   expect(text(list)).toContain("Reading this starts nothing and allows nothing.");
-  expect(text(list)).toContain("no action is authorized by these events.");
+  expect(text(list)).not.toContain("Null waiting");
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
   await waitFor(() => expect(calls(slot, "panelEvents")).toHaveLength(2));
 });
@@ -190,8 +205,14 @@ test("incomplete evidence is said; an added worktree's setup is listed; a refusa
   expect(facts(row)).toEqual(["Purpose: docs", "Setup: oats.dev: failed (continuing)/abs/log"]);
   fail = true;
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
-  const stale = await within(slot.getByTestId("oats-panel-activity")).findByTestId("oats-stale");
-  expect(text(stale)).toContain("OATS knows more than one agent by this name here, so it cannot say which one this is. (E_AMBIGUOUS_INSTANCE)");
+  // What was read stays under the titled notice: what happened, what to do, the code; no Retry that cannot help, so Refresh stays.
+  const stale = await within(slot.getByTestId("oats-panel-activity")).findByRole("alert");
+  expect(text(within(stale).getByRole("heading"))).toBe("The recorded activity could not be read again");
+  expect(text(stale)).toContain("OATS knows more than one agent by this name here, so it cannot say which one this is.Retire or rename one of them with OATS, on the machine that holds them.");
+  expect(text(stale)).toContain("Showing what was read less than a minute ago.");
+  expect(text(stale)).toContain("E_AMBIGUOUS_INSTANCE");
+  expect(within(stale).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(text(slot.getByTestId("oats-panel-activity-load"))).toBe("Refresh activity");
   expect(slot.getByTestId("oats-panel-event")).not.toBeNull();
 });
 
@@ -226,9 +247,9 @@ test("a blocked launch's row shows what its screen differed in, the terminal's t
   slot.unmount();
   const empty = panel({ panelEvents: () => ({ ...events, count: 0, returned: 0, events: [], waitingOnYou: null, waitingClaims: [] }) });
   fireEvent.click(await empty.findByTestId("oats-panel-activity-load"));
-  expect(text(await empty.findByTestId("oats-panel-activity-none"))).toBe("No recorded lifecycle events in this observed window.");
-  // never "Waiting on you: unknown" under a header that says what the agent waits for
-  expect(text(empty.getByTestId("oats-panel-activity-summary"))).toBe("No recorded lifecycle events in this observed window.");
+  // never "Waiting on you: unknown" under a header that says what the agent waits for; and said once, not again inside the fold
+  expect(text(await empty.findByTestId("oats-panel-activity-summary"))).toBe("No recorded lifecycle events in this observed window.");
+  expect(text(empty.getByTestId("oats-panel-activity-list"))).not.toContain("No recorded lifecycle events");
 });
 
 test("a first activity read that fails is a notice with the code and Retry", async () => {
@@ -317,10 +338,12 @@ test("readiness that cannot be read is a notice with the kernel's code and Retry
   });
   const notice = await within(await slot.findByTestId("oats-panel-readiness-instance")).findByRole("alert");
   expect(text(within(notice).getByRole("heading"))).toBe("Readiness could not be read");
-  expect(text(notice)).toContain("This agent's folder is no longer the one OATS recorded for it.");
+  expect(text(notice)).toContain("This agent's folder is no longer the one OATS recorded for it.`oats status`, on the machine that holds it, shows where the agent is now.");
   expect(text(notice)).toContain("E_HOME_MISMATCH");
+  // Reading again cannot change it: no Retry in the notice; Refresh readiness is the section's own.
+  expect(within(notice).queryByRole("button", { name: "Retry" })).toBeNull();
   fail = false;
-  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
+  fireEvent.click(slot.getByTestId("oats-panel-readiness-refresh"));
   expect(text(await slot.findByTestId("oats-panel-readiness-summary"))).toContain("Ready");
 });
 
@@ -348,9 +371,12 @@ test("readiness read again that fails keeps what was read, with its age, the Des
   await slot.findByTestId("oats-panel-readiness-summary");
   fail = true;
   fireEvent.click(slot.getByTestId("oats-panel-readiness-refresh"));
-  const stale = await within(slot.getByTestId("oats-panel-readiness-instance")).findByTestId("oats-stale");
-  expect(text(stale)).toContain("howing what was read 3 min ago.");
-  expect(text(stale)).toContain("The readiness read timed out. (OATS_TIMEOUT)");
+  const stale = await within(slot.getByTestId("oats-panel-readiness-instance")).findByRole("alert");
+  expect(text(within(stale).getByRole("heading"))).toBe("Readiness could not be read again");
+  // the age of what is still shown, relative, from the instant the kernel's answer names
+  expect(text(stale)).toContain("Showing what was read 3 min ago.");
+  expect(text(stale)).toContain("The readiness read timed out.");
+  expect(text(stale)).toContain("OATS_TIMEOUT");
   expect(slot.getByTestId("oats-panel-readiness-summary")).not.toBeNull();
   expect(slot.queryByTestId("oats-panel-readiness-status")).toBeNull();
 });
@@ -435,7 +461,7 @@ test("a Refresh activity still running when its tab is come back to says that it
   let mode: "ok" | "pending" | "fail" = "ok";
   const slot = panel({
     panelEvents: () => {
-      if (mode === "fail") throw new Error("E_NOT_IN_SCOPE: outside this deployment");
+      if (mode === "fail") throw new Error("OATS_FAILED: `oats` exited 1: boom");
       if (mode === "ok") return recordedEvents();
       return new Promise((done) => {
         answer = () => done(recordedEvents());
@@ -458,14 +484,15 @@ test("a Refresh activity still running when its tab is come back to says that it
   // a refresh that fails, then one more while the first failure is still shown: said once, by the line that holds the failure
   mode = "fail";
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
-  const stale = await within(slot.getByTestId("oats-panel-activity")).findByTestId("oats-stale");
-  // After a failure the line's Retry is the one act: no second button under it for the same read.
+  const stale = await within(slot.getByTestId("oats-panel-activity")).findByRole("alert");
+  // After a failure that reading again can change, the notice's Retry is the one act: no second button under it for the same read.
   expect(slot.queryByTestId("oats-panel-activity-load")).toBeNull();
   mode = "pending";
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
-  await waitFor(() => expect(text(stale)).toContain("Refreshing…"));
+  // the read again is said once, by the button that started it
+  await waitFor(() => expect(text(within(slot.getByTestId("oats-panel-activity")).getByRole("alert"))).toContain("Reading…"));
   expect(slot.queryByTestId("oats-panel-activity-status")).toBeNull();
-  expect(within(slot.getByTestId("oats-panel-activity")).getAllByRole("status")).toHaveLength(1);
+  expect(within(slot.getByTestId("oats-panel-activity")).queryAllByRole("status")).toHaveLength(0);
   act(() => answer?.());
 });
 
@@ -513,7 +540,7 @@ test("one act at a time: no Refresh while the first read runs, and none beside a
   let fail = false;
   const slot = panel({
     panelReadiness: () => {
-      if (fail) throw new Error("E_HOME_MISMATCH: the home is not this deployment's");
+      if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
       return new Promise((done) => (release = () => done(recordedReadiness("instance"))));
     },
   });
@@ -526,7 +553,61 @@ test("one act at a time: no Refresh while the first read runs, and none beside a
   const refresh = await within(section).findByTestId("oats-panel-readiness-refresh");
   fail = true;
   fireEvent.click(refresh);
-  const stale = await within(section).findByTestId("oats-stale");
+  const stale = await within(section).findByRole("alert");
   expect(within(stale).getByRole("button", { name: "Retry" })).not.toBeNull();
   expect(within(section).queryByTestId("oats-panel-readiness-refresh")).toBeNull();
+});
+
+test("the roster and the activity are read at two moments: an activity that names a newer claim than the roster's asks for the roster again, once", async () => {
+  // The roster was read at 18:16 (the agent waits since 18:14 for its first question). Since then the agent was
+  // started again and asked something new: the activity, read now, names a claim since 18:23.
+  let refreshed = 0;
+  const slot = panel({
+    refresh: () => {
+      refreshed += 1;
+      return { at: "2026-11-21T18:29:31.000Z" };
+    },
+  });
+  await slot.findByTestId("oats-panel-waiting");
+  expect(recordedEvents().waitingOnYou?.since).toBe("2026-11-21T18:23:39.829Z");
+  expect(refreshed).toBe(0);
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  await slot.findByTestId("oats-panel-activity-summary");
+  // the header would otherwise keep the older question until the roster's next read
+  await waitFor(() => expect(refreshed).toBe(1));
+  // the same answer drawn again asks nothing more
+  act(() => showPanelTab("soul"));
+  act(() => showPanelTab("instance"));
+  await slot.findByTestId("oats-panel-activity-summary");
+  expect(refreshed).toBe(1);
+});
+
+test("an activity whose standing claim is the roster's asks for nothing", async () => {
+  let refreshed = 0;
+  const events = recordedEvents();
+  const slot = panel({
+    refresh: () => {
+      refreshed += 1;
+      return { at: "2026-11-21T18:29:31.000Z" };
+    },
+    // the claim the recorded roster holds for the agent: since 18:14:12.916Z
+    panelEvents: () => ({ ...events, waitingOnYou: { producer: "oats.board", since: "2026-11-21T18:14:12.916Z", message: "How should I merge the pull request?" } }),
+  });
+  fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
+  await slot.findByTestId("oats-panel-activity-summary");
+  await act(async () => { await new Promise((done) => setTimeout(done, 50)); });
+  expect(refreshed).toBe(0);
+});
+
+test("readiness says what was observed with its path whole between segments, and a commit id short with the whole value as its title", async () => {
+  const slot = panel();
+  await slot.findByTestId("oats-panel-readiness-summary");
+  const context = slot.getByTestId("oats-panel-readiness-context");
+  expect(text(context)).toBe(`Instance: ${CHILD} · /abs/deployment/agents`);
+  // a line may end after a slash, never inside a name
+  expect(context.querySelectorAll("wbr")).toHaveLength(3);
+  expect(context.className).not.toContain("break-all");
+  const origin = within(slot.getByTestId("oats-panel-check-installed")).getAllByTestId("oats-fact").find((fact) => text(fact.querySelector("dt")!) === "Origin")!;
+  expect(text(origin.querySelector("dd")!)).toBe("package oats.bb a3cca85 @ a3cca85");
+  expect(origin.querySelector("dd")!.getAttribute("title")).toBe("package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85");
 });

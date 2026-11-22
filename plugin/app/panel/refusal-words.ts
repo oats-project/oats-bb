@@ -3,7 +3,8 @@
 // (awebai/oats at 95c7b43b: packages/client/readiness-contract.mjs `ERRORS`,
 // packages/client/instance-events-contract.mjs `errors`, packages/desktop/renderer/instance-soul.mjs).
 // The code is drawn after the sentence and the kernel's message stays under Details; a code with
-// no sentence here has the notice's title alone. No bb and no React import.
+// no sentence here has the notice's title alone. A refusal also says what to do next, and the
+// notice offers Retry only where reading again can change the answer. No bb and no React import.
 import { codes } from "../../kernel/result";
 
 type Sentences = Readonly<Record<string, string>>;
@@ -66,12 +67,34 @@ const TABLES = { readiness: READINESS, activity: ACTIVITY, soul: SOUL } as const
 const NOT_IN_ROSTER = /is not an agent of this OATS deployment's current snapshot$/;
 const GONE: Record<keyof typeof TABLES, string | null> = { readiness: READINESS.E_SESSION_UNKNOWN ?? null, activity: ACTIVITY.E_SESSION_UNKNOWN ?? null, soul: SOUL.E_SESSION_UNKNOWN ?? null };
 
+/** What to do next, by the kernel's code; a code that is not here has no next step of its own. */
+const NEXT: Sentences = {
+  E_SESSION_UNKNOWN: "It may have been retired: the sidebar lists the agents OATS has.",
+  E_NOT_IN_SCOPE: "It may have been retired or moved: the sidebar lists the agents OATS has here.",
+  E_AMBIGUOUS_INSTANCE: "Retire or rename one of them with OATS, on the machine that holds them.",
+  E_SOUL_UNKNOWN: "It may have been removed from the workspace: `oats souls` lists the ones there are.",
+  E_HOME_MISMATCH: "`oats status`, on the machine that holds it, shows where the agent is now.",
+  E_UNSUPPORTED_MODE: "There is nothing to do: OATS has none for it.",
+};
+/** The refusals that reading again cannot change: the notice offers no Retry for them. */
+const FINAL: ReadonlySet<string> = new Set([...Object.keys(NEXT), "E_USAGE"]);
+
+export type RefusalWords = {
+  /** what happened, in a person's words; null for a failure with no code at all */
+  sentence: string | null;
+  /** what to do next, where there is something to say */
+  next: string | null;
+  /** whether reading again can help: the notice offers Retry only then */
+  retry: boolean;
+};
+
 /**
- * What a person reads for a refusal of one of the panel's reads: the sentence for its code; for a
- * kernel's code with none, that OATS refused; null for a failure with no code at all.
+ * What a person reads for a refusal of one of the panel's reads: the sentence for its code (for a
+ * kernel's code with none, that OATS refused), what to do next, and whether Retry can help.
  */
-export function refusalSentence(read: keyof typeof TABLES, code: string | null, error: string): string | null {
-  if (code !== null && Object.hasOwn(TABLES[read], code)) return TABLES[read][code] ?? null;
-  if (NOT_IN_ROSTER.test(error)) return GONE[read];
-  return code !== null && code.startsWith("E_") ? REFUSED[read] : null;
+export function refusalWords(read: keyof typeof TABLES, code: string | null, error: string): RefusalWords {
+  const gone = code === null && NOT_IN_ROSTER.test(error);
+  const known = gone ? "E_SESSION_UNKNOWN" : code;
+  const sentence = gone ? GONE[read] : code !== null && Object.hasOwn(TABLES[read], code) ? (TABLES[read][code] ?? null) : code !== null && code.startsWith("E_") ? REFUSED[read] : null;
+  return { sentence, next: known !== null && Object.hasOwn(NEXT, known) ? (NEXT[known] ?? null) : null, retry: known === null || !FINAL.has(known) };
 }

@@ -2,16 +2,16 @@
 // (Load activity), read again on Refresh activity, never in the background. Address history as
 // the kernel recorded it, never the current runtime state. As the OATS Desktop's "Reported
 // lifecycle activity" (packages/desktop/renderer/instance-events-view.mjs).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PanelEvents } from "../../kernel/panel-events";
 import { Button, Disclosure, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import {
-  ACTIVITY, HISTORY_PLAIN, LAST_OBSERVATION, LOAD, LOADED, NO_EVENTS, PROVENANCE, PROVENANCE_PLAIN, READING, RECENT, REFRESH, claimLine, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
+  ACTIVITY, HISTORY_PLAIN, LAST_OBSERVATION, LOAD, LOADED, PROVENANCE_PLAIN, READING, RECENT, REFRESH, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
   sourcesLine, summaryLine, windowLine,
 } from "./events-words";
 import { usePanelEvents } from "./read";
-import { CommandState } from "./state";
+import { CommandState, offersRetry } from "./state";
 import { whenText } from "./words";
 
 function Events({ events, now }: { events: PanelEvents; now: number }) {
@@ -32,20 +32,8 @@ function Events({ events, now }: { events: PanelEvents; now: number }) {
           </p>
         ) : null}
         <p className="m-0 break-words text-xs text-muted-foreground">{sourcesLine(events)}</p>
-        {events.waitingClaims.length === 0 ? null : (
-          <ul data-testid="oats-panel-activity-claims" className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs text-foreground">
-            {events.waitingClaims.map((claim) => (
-              <li key={claim.producer} title={shown(claim.since)}>
-                {claimLine(claim, now)}
-              </li>
-            ))}
-          </ul>
-        )}
-        {events.events.length === 0 ? (
-          <p data-testid="oats-panel-activity-none" className="m-0 text-muted-foreground">
-            {NO_EVENTS}
-          </p>
-        ) : null}
+        {/* The claims the log holds are its "Waiting claim" rows, each at its own time: history. What the agent waits for
+            now is the header's and Needs input's to say. An empty window is said once, by the line over this fold. */}
         {/* Newest first. */}
         <ol className="m-0 flex list-none flex-col gap-3 p-0">
           {[...events.events].reverse().map((event, index) => {
@@ -94,14 +82,20 @@ function Events({ events, now }: { events: PanelEvents; now: number }) {
             );
           })}
         </ol>
-        <p className="m-0 text-xs text-foreground">{PROVENANCE_PLAIN}</p>
-        <p className="m-0 text-xs text-muted-foreground">{PROVENANCE}</p>
+        <p className="m-0 text-xs text-muted-foreground">{PROVENANCE_PLAIN}</p>
       </Disclosure>
     </>
   );
 }
 
-export function Activity({ instance, now }: { instance: string; now: number }) {
+/**
+ * `claimSince` is the instant of the waiting claim the roster holds for the agent (the one the
+ * header shows), null with none; `onNewerClaim` asks for the roster again. The roster and the
+ * activity are read at two moments: when the activity just read names another standing claim than
+ * the roster's (the agent was started again and asked something new since the roster was read),
+ * the roster is behind, and is asked for again at once, once per answer.
+ */
+export function Activity({ instance, claimSince, onNewerClaim, now }: { instance: string; claimSince: string | null; onNewerClaim: () => void; now: number }) {
   // Whether a person asked for a read since this section came on the page. The section leaves the
   // page when its tab turns and what was read stays with bb: coming back reads nothing, and shows
   // it as what it is, the last observation, with Refresh activity.
@@ -109,6 +103,14 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
   // The read is on only while it holds no answer (read.ts), so asking with one held starts nothing by itself.
   const read = usePanelEvents(instance, asked);
   const held = read.data !== undefined;
+  const checked = useRef<unknown>(null);
+  const recorded = read.data === undefined ? undefined : (read.data.waitingOnYou?.since ?? null);
+  useEffect(() => {
+    // Only for an answer read on this page (not one kept from before), and once for it.
+    if (!asked || read.data === undefined || read.fetching || checked.current === read.data) return;
+    checked.current = read.data;
+    if (recorded !== claimSince) onNewerClaim();
+  }, [asked, read.data, read.fetching, recorded, claimSince, onNewerClaim]);
   const ask = () => {
     if (asked || held) read.retry();
     setAsked(true);
@@ -121,7 +123,7 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
       <div className="flex flex-wrap items-center gap-2">
         {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
             Over what is shown the button is off while a read runs, and the words beside it say why. */}
-        {(read.fetching && !held) || (asked && read.status === "error") ? null : (
+        {(read.fetching && !held) || (asked && offersRetry(read, "activity")) ? null : (
           <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
             {held || asked ? REFRESH : LOAD}
           </Button>

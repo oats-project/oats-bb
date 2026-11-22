@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, shortAge, workFolder, whenText, workSentence } from "../../app/panel/words";
+import { ageText, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, staleAge, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -9,7 +9,10 @@ const HOUR = 60 * MIN;
 
 describe("ages", () => {
   it("ages: compact for the header, in words for the session", () => {
-    expect([shortAge(ago(20_000), NOW), shortAge(ago(59 * MIN), NOW), shortAge(ago(3 * HOUR), NOW), shortAge(ago(49 * HOUR), NOW), shortAge("soon", NOW), shortAge(null, NOW)]).toEqual(["<1m", "59m", "3h", "2d", null, null]);
+    // The age of what is still shown under a failed read: always relative, never "just now".
+    expect([staleAge(ago(20_000), NOW), staleAge(ago(12 * MIN), NOW), staleAge(ago(15 * HOUR), NOW), staleAge(ago(49 * HOUR), NOW), staleAge(NOW - 5 * MIN, NOW), staleAge("soon", NOW), staleAge(null, NOW)]).toEqual([
+      "less than a minute ago", "12 min ago", "15 h ago", "2 d ago", "5 min ago", null, null,
+    ]);
     expect([ageText(ago(20_000), NOW), ageText(ago(5 * MIN), NOW), ageText(ago(3 * HOUR), NOW), ageText(ago(49 * HOUR), NOW), ageText(ago(40 * 24 * HOUR), NOW), ageText("soon", NOW)]).toEqual([
       "just now", "5 min ago", "3 h ago", "2 d ago", "2026-10-12", "soon",
     ]);

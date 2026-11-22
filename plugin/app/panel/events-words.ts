@@ -13,13 +13,12 @@ export const LOAD = "Load activity";
 export const REFRESH = "Refresh activity";
 export const READING = "Reading the recorded activity…";
 /** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
-export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first. It is history: what the agent does now is at the top of this panel.";
+export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first. It is history, not what the agent does now.";
 export const PROVENANCE_PLAIN = "Reading this starts nothing and allows nothing.";
 export const LOADED = "Reported observation loaded. Runtime state is shown separately.";
 export const LAST_OBSERVATION = "Last observation retained; refresh required.";
 export const RECENT = "Recent lifecycle events";
 export const NO_EVENTS = "No recorded lifecycle events in this observed window.";
-export const PROVENANCE = "Null waiting means unknown, not “not waiting”. Paths and past plans are provenance only; no action is authorized by these events.";
 
 const TITLES: Record<string, string> = {
   spawned: "Spawned", launched: "Launched", restarted: "Restarted", stopped: "Stopped", "stop-refused": "Stop refused", "retire-planned": "Retirement planned", retired: "Retired",
@@ -69,10 +68,6 @@ export const incompleteLine = (events: Pick<PanelEvents, "truncated" | "integrit
   `Incomplete evidence: ${events.integrity.unreadableRows} unreadable rows · ${events.integrity.foreignRows} foreign rows${events.truncated ? " · window or source truncated" : ""}${events.integrity.sources.some((source) => source.status === "refused") ? " · source refused" : ""}.`;
 /** "home: ok (834 bytes reported) · workspace: ok (834 bytes reported)". */
 export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => events.integrity.sources.map((source) => `${shown(source.path)}: ${shown(source.status)} (${source.bytes} bytes reported)`).join(" · ");
-/** "oats.board: reported waiting · 2026-11-21T18:23:39.829Z · attention". */
-export const claimLine = (claim: PanelEvents["waitingClaims"][number], now: number): string =>
-  `${shown(claim.producer)}: ${claim.waiting ? "reported waiting" : "claim cleared"} · ${whenText(claim.since, now)}${claim.reason === null ? "" : ` · ${shown(claim.reason)}`}`;
-
 /**
  * The one line over the list: the last recorded event. The Desktop's line also says what a
  * producer reported of waiting when the log was read ("Reported waiting: …", "Waiting on you:

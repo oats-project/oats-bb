@@ -25,10 +25,12 @@
 // check, and unit tests hold their words (test/panel/panel.test.tsx).
 //
 // Both stages have the fake `oats` print the roster recorded from the real kernel for the panel
-// (test/fixtures/panel/status-soul-moved.json: a child on its own worktree, idle in bb, whose board
-// asked a question and whose soul's repository moved on; and its parent, stopped), with its thread
-// ids replaced by threads the live checks made in bb. The second stage changes that recording, in
-// the open and only here: the fields a state is made of, and copies of the child's row under other
+// (test/fixtures/panel/status-board.json: a child on its own worktree, idle in bb, whose board asks
+// a question and whose soul's repository moved on; and its parent, stopped), with its thread ids
+// replaced by threads the live checks made in bb. It is the roster of the moment the recorded
+// activity is of (test/fixtures/panel/events.json): one agent, one story, in every place the panel
+// says it. The second stage changes that recording, in the open and only here: the fields a state
+// is made of, and copies of the child's row under other
 // names for the states that need an agent of their own. Those rows are not fixtures: no test reads
 // them.
 // The first stage's last two scenes change the recorded answers of `oats readiness`, `oats instance
@@ -43,7 +45,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { testId, textOf, visible } from "../browser.mjs";
 
-const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "panel", "status-soul-moved.json");
+const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "panel", "status-board.json");
 const FIXTURES = dirname(FIXTURE);
 /** A recorded answer of the panel's fixtures, changed for a scene: what the fake `oats` prints for a verb. */
 function derived(file, change) {
@@ -51,8 +53,17 @@ function derived(file, change) {
   change(document.result);
   return { stdout: JSON.stringify(document) };
 }
+/** The recorded inspection with the messaging slot filled (and, for an agent of another soul, that soul's name): what agrees with a messaging id on the Instance tab. */
+const withMessaging = (soul = null) =>
+  derived("inspect-home.json", (result) => {
+    result.layers.messaging = { id: "oats.aweb", from: "workspace" };
+    result.capabilities.push({ ...result.capabilities[1], id: "oats.aweb", layer: "messaging", from: { kind: "package", package: "oats.aweb", version: "1.4.0" } });
+    if (soul !== null) result.souls[0].name = soul;
+  });
+/** A read that fails with no answer of the kernel's: the process ends badly. Reading again can go better. */
+const FAILS = { stdout: "", stderr: "oats: internal error", exit: 1 };
 const FAKE_CONFIG = join(homedir(), ".local/bin/fake-oats.json");
-const CHILD = { instance: "panel-worktree-helper", recorded: "thr_gx4sgexjgw", thread: "thr_mockups" };
+const CHILD = { instance: "panel-worktree-helper", recorded: "thr_t9xz6jqajf", thread: "thr_mockups" };
 const PARENT = { instance: "redesign-ui-lead", recorded: "thr_uz64t6aahn", thread: "thr_redesign" };
 // The second stage's agents of their own: copies of the child's row.
 const IDLE = { instance: "panel-idle-helper", thread: "thr_ci" };
@@ -137,7 +148,8 @@ export const stages = {
   "panel-states": {
     label: "P2",
     enter: async ({ fake, threads, untilSnapshot }) => {
-      fake({ status: { stdout: JSON.stringify(states(threads)) } });
+      // The second stage's agents have a messaging id: the soul they were spawned from fills the messaging slot.
+      fake({ status: { stdout: JSON.stringify(states(threads)) }, "inspect --home": withMessaging() });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === SHELL.instance) && snapshot.agents.some((agent) => agent.instance === CHILD.instance && agent.running === true));
     },
   },
@@ -210,8 +222,9 @@ const panelWhole = `(() => { const strip = document.querySelector('[data-testid=
 /**
  * What is measured of the panel before a screenshot: nothing it draws reaches past the panel's own
  * right edge NOR past the window's (the panel draws within the part of bb's side panel that is in
- * the window: app/panel/Panel.tsx `useVisibleWidth`), the page does not scroll sideways, and every
- * control of it is high enough to press.
+ * the window: app/panel/Panel.tsx `useVisibleWidth`), the page does not scroll sideways, no word,
+ * id or path segment is broken across two lines (a line may end at a space, after a slash or after
+ * a hyphen, nowhere else), and every control of it is high enough to press.
  * `past` is how far bb's side panel itself reaches past the window: at 1280 with bb's sidebar, a
  * thread and the side panel open, bb 0.50.1 widens the thread's column once its composer has
  * loaded and pushes the side panel off the window (by how much varies with what
@@ -221,7 +234,7 @@ async function fits(page, viewport) {
   const need = viewport.mobile ? 44 : 32;
   return JSON.parse(
     await page.evaluate(
-      `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; return JSON.stringify({ low, wide, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
+      `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const broken = []; const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (!node.parentElement || node.parentElement.getClientRects().length === 0) continue; const atom = /[^\\s\\/\\-]+/g; for (let found = atom.exec(node.data); found; found = atom.exec(node.data)) { if (found[0].length < 2) continue; const range = document.createRange(); range.setStart(node, found.index); range.setEnd(node, found.index + found[0].length); const tops = new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))); if (tops.size > 1) broken.push(found[0]); } } const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; return JSON.stringify({ low, wide, broken, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
     ),
   );
 }
@@ -229,8 +242,8 @@ async function fits(page, viewport) {
 async function fitted(page, viewport, check, at, what) {
   const fit = await fits(page, viewport);
   check(
-    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0,
-    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
+    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0,
+    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, no word, id or path segment is broken across two lines, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
     JSON.stringify(fit),
   );
 }
@@ -272,7 +285,7 @@ const first = [
       check(head === "Asked for your attention", `${at} Needs input: the reason in words (how long it waits is said once, by the header)`, head);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-waiting-message")));
-        check(read === "How should I merge the pull request?", `${at} Needs input: the agent's message`, read);
+        check(read === "Which base branch?", `${at} Needs input: the agent's message`, read);
       }
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "Works in its own worktree of oats-real, on branch agents/panel-worktree-helper.", `${at} Work: the mode in one sentence`, work);
@@ -280,7 +293,7 @@ const first = [
       check(["Harness Claude", "Model claude-opus-5-5 · the soul's choice", `Runs in bb thread ${threads.get(CHILD.thread).id}`, "Started "].every((part) => session.includes(part)), `${at} Session: the harness, the model and where it came from, the thread, since when, each a labelled fact`, session);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-lineage")));
-        check(read.includes("Parent redesign-ui-lead"), `${at} Lineage: the parent`, read);
+        check(read.includes("Parent Redesign ui lead"), `${at} Lineage: the parent, by its name as words`, read);
       }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the Instance tab");
@@ -295,10 +308,28 @@ const first = [
       check(holds(paths, folders), `${at} Paths: the folder and the home, each with its Copy`, paths);
       const copies = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel-paths")} button')].map((e) => e.getAttribute("aria-label")).join(", ")`);
       check(copies === "Copy folder path, Copy home path", `${at} the Copy buttons are named for what they copy`, copies);
-      await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-paths"))}).scrollIntoView({ block: "center" })`);
+      await page.evaluate(scroll("oats-panel-work"));
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "its folds open");
       await page.shot(`panel-${viewport.name}-instance-open`);
+
+      // bb's side panel pushed past the window: the panel draws within what is in the window. bb 0.50.1 did this by
+      // itself in the live checks up to oats-bb 84720c5 (by up to 138 px at 1280 px) and has not since; what made it
+      // stop was not found, so the scene makes it: bb's panel column is moved 120 px to the right by hand.
+      if (!viewport.mobile) {
+        const push = (px) => `(() => { let column = document.querySelector(${JSON.stringify(testId("oats-panel"))}); while (column && !String(column.className).includes("transition-[flex")) column = column.parentElement; if (!column) return false; column.style.transform = ${JSON.stringify("")} + (${px} === 0 ? "" : "translateX(" + ${px} + "px)"); return true; })()`;
+        const widths = `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const inner = document.querySelector(${JSON.stringify(inPanel("oats-panel-visible"))}); const box = panel.getBoundingClientRect(); return JSON.stringify({ past: Math.round(box.right - document.documentElement.clientWidth), panel: Math.round(box.width), drawn: Math.round(inner.getBoundingClientRect().width), right: Math.round(inner.getBoundingClientRect().right) }); })()`;
+        const pushed = await page.evaluate(push(120));
+        check(pushed === true, `${at} bb's side panel column is found, to push it`, pushed);
+        const narrowed = await page.until(`(() => { const now = JSON.parse(${widths}); return now.past > 0 && now.right <= document.documentElement.clientWidth ? JSON.stringify(now) : ""; })()`, 15);
+        const now = JSON.parse(narrowed ?? (await page.evaluate(widths)));
+        check(now.past === 120 && now.drawn === now.panel - 120, `${at} pushed 120 px past the window, the panel draws 120 px narrower: all of it is in the window`, JSON.stringify(now));
+        await fitted(page, viewport, check, at, "bb's side panel pushed past the window");
+        await page.shot(`panel-${viewport.name}-pushed`);
+        await page.evaluate(push(0));
+        const back = await page.until(`(() => { const now = JSON.parse(${widths}); return now.past <= 0 && now.drawn === now.panel ? JSON.stringify(now) : ""; })()`, 15);
+        check(Boolean(back), `${at} back in the window, the panel is as wide as bb gives it`, back ?? (await page.evaluate(widths)));
+      }
 
       // the Soul tab, from the soul's name in the header
       await page.evaluate(click(inPanel("oats-panel-soul-link")));
@@ -360,8 +391,19 @@ async function reads(page, selector, wants, seconds = 15) {
 }
 /** Whether `text` holds every one of `wants`. */
 const holds = (text, wants) => wants.every((want) => text.includes(want));
-/** Brings a part of the panel to the top of what scrolls, with room above it: its heading whole, not against the tabs. */
-const scroll = (id) => `(() => { const part = document.querySelector(${JSON.stringify(inPanel(id))}); if (!part) return; part.scrollIntoView({ block: "start" }); for (let pane = part.parentElement; pane; pane = pane.parentElement) { if (pane.scrollTop > 0) { pane.scrollTop = Math.max(0, pane.scrollTop - 12); break; } } })()`;
+/** The titled notice of a part of the panel, as a person reads it: "title | role | all its text"; "" with none. */
+const noticeOf = (part) =>
+  `(() => { const e = document.querySelector(${JSON.stringify(`${inPanel(part)} ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
+/** Whether a notice (as `noticeOf` reads it) offers Retry. */
+const offersRetry = (read) => /(^| )Retry( |$)/.test(read ?? "");
+
+/**
+ * Brings a part of the panel to the top of what scrolls, with room above it. Where the page cannot
+ * scroll that far (a part near its end), it stops at the start of the part that would be cut: an
+ * image never opens on a sliced heading, card or sentence.
+ */
+const scroll = (id) =>
+  `(() => { const part = document.querySelector(${JSON.stringify(inPanel(id))}); const pane = part?.closest('[role="tabpanel"]'); if (!part || !pane) return; part.scrollIntoView({ block: "start" }); pane.scrollTop = Math.max(0, pane.scrollTop - 12); const top = pane.getBoundingClientRect().top; const cut = [...pane.children].find((child) => { const box = child.getBoundingClientRect(); return box.top < top - 0.5 && box.bottom > top + 0.5; }); if (cut) pane.scrollTop = Math.max(0, pane.scrollTop - (top - cut.getBoundingClientRect().top) - 12); })()`;
 
 const second = [
   {
@@ -399,7 +441,7 @@ const second = [
         const read = await page.evaluate(textOf(inPanel("oats-panel-activity-load")));
         check(read === "Refresh activity", `${at} and the button becomes Refresh activity`, read);
       }
-      const rows = ["8 displayed / 8 observed rows. This is address history, not current runtime state.", "Spawned", "Work mode worktree", "no action is authorized by these events."];
+      const rows = ["What OATS recorded about this agent, newest first. It is history, not what the agent does now.", "8 displayed / 8 observed rows. This is address history, not current runtime state.", "Spawned", "Work mode worktree", "Reading this starts nothing and allows nothing."];
       const list = await reads(page, inPanel("oats-panel-activity-list"), rows);
       check(holds(list, rows), `${at} Recent lifecycle events: the window, the rows with their facts, the note`, list.slice(0, 400));
       // The titles as a person reads them, with their fold open: waited for, like the fold's text.
@@ -469,41 +511,57 @@ const second = [
         check(soul === "Reading the soul…", `${at} while the soul is read: Reading the soul…`, soul);
         await page.shot(`panel-${viewport.name}-soul-loading`);
 
-        // refused: the kernel's code after the words, its message under Details, Retry
+        // refused: what happened and what to do in a person's words, the kernel's code after them, its message under
+        // Details; Retry only where reading again can change the answer
         setVerb("readiness --home", refusal("E_HOME_MISMATCH", "the home is not this deployment's"));
         setVerb("instance events", refusal("E_AMBIGUOUS_INSTANCE", "two homes hold an instance of this name"));
         setVerb("inspect --home", refusal("E_UNSUPPORTED_MODE", "this home has no modules"));
-        setVerb("readiness --soul", refusal("E_SOUL_UNKNOWN", "no soul of this name"));
+        setVerb("readiness --soul", FAILS);
         {
           const opened = await open(page, viewport, threads, CHILD);
           check(opened.ok, `${at} the panel is open again`, opened.read);
         }
         await page.evaluate(click(inPanel("oats-tab-soul")));
-        const notice = (section) => `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-panel")} `)} + ${JSON.stringify(section)} + ${JSON.stringify(` ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
-        const soulRefused = await page.until(notice(testId("oats-panel-soul-body")), 30);
-        check((soulRefused ?? "").startsWith("The soul as spawned could not be read | alert | ") && soulRefused.includes("E_UNSUPPORTED_MODE") && soulRefused.includes("Details") && soulRefused.includes("Retry"), `${at} the soul as spawned, refused: a notice in words, the kernel's code, Details and Retry`, soulRefused);
-        // the soul's readiness, refused, under the soul's refused read
-        const soulReadinessRefused = await page.until(notice(testId("oats-panel-readiness-soul")), 30);
-        check((soulReadinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && soulReadinessRefused.includes("OATS does not list this soul in this deployment.") && soulReadinessRefused.includes("E_SOUL_UNKNOWN"), `${at} the soul's readiness, refused: the Desktop's sentence for the code, then the code`, soulReadinessRefused);
+        const soulRefused = await page.until(noticeOf("oats-panel-soul-body"), 30);
+        check(
+          (soulRefused ?? "").startsWith("The soul as spawned could not be read | alert | ") && soulRefused.includes("OATS keeps no record of what this kind of agent was spawned from. There is nothing to do: OATS has none for it.") && soulRefused.includes("E_UNSUPPORTED_MODE") && soulRefused.includes("Details") && !offersRetry(soulRefused),
+          `${at} the soul as spawned, refused: what happened and what to do, the kernel's code, Details, and no Retry that cannot help`,
+          soulRefused,
+        );
+        // the soul's readiness, failed, under the soul's refused read: reading again may go better, so Retry
+        const soulReadinessFailed = await page.until(noticeOf("oats-panel-readiness-soul"), 30);
+        check(
+          (soulReadinessFailed ?? "").startsWith("Readiness could not be read | alert | ") && soulReadinessFailed.includes("The installed CLI could not complete the readiness read.") && soulReadinessFailed.includes("OATS_FAILED") && offersRetry(soulReadinessFailed),
+          `${at} the soul's readiness, failed: a person's sentence, the code, and Retry`,
+          soulReadinessFailed,
+        );
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "the Soul tab's refused reads");
         await page.shot(`panel-${viewport.name}-soul-refused`);
         await page.evaluate(click(inPanel("oats-tab-instance")));
-        const readinessRefused = await page.until(notice(testId("oats-panel-readiness-instance")), 30);
-        check((readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("This agent's folder is no longer the one OATS recorded for it.") && readinessRefused.includes("E_HOME_MISMATCH"), `${at} readiness, refused: the Desktop's sentence for the code, then the kernel's code`, readinessRefused);
+        const readinessRefused = await page.until(noticeOf("oats-panel-readiness-instance"), 30);
+        check(
+          (readinessRefused ?? "").startsWith("Readiness could not be read | alert | ") && readinessRefused.includes("This agent's folder is no longer the one OATS recorded for it. `oats status`, on the machine that holds it, shows where the agent is now.") && readinessRefused.includes("E_HOME_MISMATCH") && !offersRetry(readinessRefused),
+          `${at} readiness, refused: what happened and what to do, then the kernel's code; no Retry that cannot help`,
+          readinessRefused,
+        );
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const activityRefused = await page.until(notice(testId("oats-panel-activity")), 30);
-        check((activityRefused ?? "").startsWith("The recorded activity could not be read | alert | ") && activityRefused.includes("OATS knows more than one agent by this name here, so it cannot say which one this is.") && activityRefused.includes("E_AMBIGUOUS_INSTANCE"), `${at} the activity, refused: the Desktop's sentence for the code, then the kernel's code`, activityRefused);
+        const activityRefused = await page.until(noticeOf("oats-panel-activity"), 30);
+        check(
+          (activityRefused ?? "").startsWith("The recorded activity could not be read | alert | ") && activityRefused.includes("OATS knows more than one agent by this name here, so it cannot say which one this is. Retire or rename one of them with OATS, on the machine that holds them.") && activityRefused.includes("E_AMBIGUOUS_INSTANCE") && !offersRetry(activityRefused),
+          `${at} the activity, refused: what happened and what to do, then the kernel's code; no Retry that cannot help`,
+          activityRefused,
+        );
         await page.evaluate(scroll("oats-panel-readiness-instance"));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "refused reads");
         await page.shot(`panel-${viewport.name}-reads-refused`);
 
-        // Retry, once the kernel answers
+        // Refresh readiness, the section's own act, once the kernel answers
         setVerb("readiness --home", null);
-        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
+        await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
         const again = await page.until(`${textOf(inPanel("oats-panel-readiness-instance") + " " + testId("oats-panel-readiness-summary"))}`, 30);
-        check(again === "Ready — every required check passes or is not applicable.", `${at} Retry reads readiness again`, again);
+        check(again === "Ready — every required check passes or is not applicable.", `${at} Refresh readiness reads it again`, again);
       } finally {
         for (const verb of ["readiness --home", "readiness --soul", "instance events", "inspect --home"]) setVerb(verb, null);
         await page.evaluate(click(inPanel("oats-tab-instance")));
@@ -518,7 +576,6 @@ const second = [
       const VERBS = ["readiness --home", "readiness --soul", "instance events", "inspect --home"];
       const summaryOf = (of) => textOf(`${inPanel(`oats-panel-readiness-${of}`)} ${testId("oats-panel-readiness-summary")}`);
       const flat = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); return e ? e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
-      const staleOf = (section) => flat(`${inPanel(section)} ${testId("oats-stale")}`);
       try {
         // not ready: the kernel's own answer when it cannot run bb (a recording)
         setVerb("readiness --home", { file: "panel/readiness-home-not-ready.json" });
@@ -581,26 +638,39 @@ const second = [
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const none = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))} === "No recorded lifecycle events in this observed window."`, 30);
         check(Boolean(none), `${at} an empty window: No recorded lifecycle events in this observed window.`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
-        const noRow = await reads(page, inPanel("oats-panel-activity-none"), ["No recorded lifecycle events"]);
-        check(noRow === "No recorded lifecycle events in this observed window.", `${at} and its fold says the same, with no row`, noRow);
+        const emptyList = await reads(page, inPanel("oats-panel-activity-list"), ["0 displayed / 0 observed rows"]);
+        check(!emptyList.includes("No recorded lifecycle events") && !emptyList.includes("Null waiting"), `${at} and it is said once: the fold holds the window and no row, and no footnote about what is not shown`, emptyList);
         await page.evaluate(scroll("oats-panel-activity"));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "an empty activity window");
         await page.shot(`panel-${viewport.name}-activity-empty`);
 
-        // a read again that fails keeps what was read: readiness (with its age) and the activity
-        setVerb("readiness --home", refusal("E_HOME_MISMATCH", "the home is not this deployment's"));
-        setVerb("instance events", refusal("E_NOT_IN_SCOPE", "the instance is outside this deployment"));
+        // a read again that fails keeps what was read, under the one drawing of a failed read: the titled notice, with
+        // how old what is shown is, said once and never as a clock time
+        setVerb("readiness --home", FAILS);
+        setVerb("instance events", FAILS);
         await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
-        const staleReadiness = await page.until(staleOf("oats-panel-readiness-instance"), 30);
-        check(/^Showing what was read .+\. This agent's folder is no longer the one OATS recorded for it\. \(E_HOME_MISMATCH\) ?Retry$/.test(staleReadiness ?? ""), `${at} readiness read again and refused: what was read stays, with its age, the Desktop's sentence, the code and Retry`, staleReadiness);
+        const staleReadiness = await page.until(noticeOf("oats-panel-readiness-instance"), 30);
+        check(
+          /^Readiness could not be read again \| alert \| Readiness could not be read again The installed CLI could not complete the readiness read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleReadiness ?? ""),
+          `${at} readiness read again and failed: the titled notice, a person's sentence, a relative age said once, the code and Retry`,
+          staleReadiness,
+        );
         {
           const read = await page.evaluate(summaryOf("instance"));
           check(read === "1 failing · 0 unknown · 4 required checks", `${at} and the summary read before is still shown`, read);
         }
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const staleActivity = await page.until(staleOf("oats-panel-activity"), 30);
-        check((staleActivity ?? "").includes("This agent is not one of this deployment's. (E_NOT_IN_SCOPE)") && staleActivity.endsWith("Retry"), `${at} the activity read again and refused: what was read stays, with the Desktop's sentence, the code and Retry`, staleActivity);
+        const staleActivity = await page.until(noticeOf("oats-panel-activity"), 30);
+        check(
+          /^The recorded activity could not be read again \| alert \| The recorded activity could not be read again The installed CLI could not complete the activity read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleActivity ?? ""),
+          `${at} the activity read again and failed: the same drawing, with its own age`,
+          staleActivity,
+        );
+        {
+          const boxes = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-stale"))}).length`);
+          check(boxes === 0, `${at} and no second drawing for what is stale`, boxes);
+        }
         await page.evaluate(scroll("oats-panel-readiness-instance"));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "reads that failed after one answered");
@@ -685,18 +755,22 @@ const second = [
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");
         await page.shot(`panel-${viewport.name}-soul-core-only`);
 
-        // read again (the instance was started again) and refused: what was read stays
-        setVerb("inspect --home", refusal("E_UNSUPPORTED_MODE", "this home has no modules"));
+        // read again (the instance was started again) and failed: what was read stays, under the titled notice
+        setVerb("inspect --home", FAILS);
         const restarted = recorded(threads);
         restarted.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance).startedAt = new Date().toISOString();
         record(restarted);
-        const stale = await page.until(flat(`${inPanel("oats-panel-soul-body")} ${testId("oats-stale")}`), 30);
-        check((stale ?? "").includes("OATS keeps no record of what this kind of agent was spawned from. (E_UNSUPPORTED_MODE)") && stale.endsWith("Retry"), `${at} the soul read again and refused: what was read stays, with the code and Retry`, stale);
+        const stale = await page.until(noticeOf("oats-panel-soul-body"), 30);
+        check(
+          /^The soul as spawned could not be read again \| alert \| The soul as spawned could not be read again OATS could not finish reading it\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(stale ?? ""),
+          `${at} the soul read again and failed: what was read stays under the titled notice, with its age, the code and Retry`,
+          stale,
+        );
         {
           const read = await page.evaluate(textOf(inPanel("oats-panel-capabilities")));
           check(/only the core ones/.test(read), `${at} and the soul read before is still shown`, read);
         }
-        await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-soul-body")} ${testId("oats-stale")}`)}).scrollIntoView({ block: "center" })`);
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-page-soul"))}).scrollTop = 0`);
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "the soul, read again and refused");
         await page.shot(`panel-${viewport.name}-soul-stale`);
@@ -738,8 +812,8 @@ const more = [
       const copyId = await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-messaging")} button`)})?.getAttribute("aria-label")`);
       check(copyId === "Copy messaging ID", `${at} its Copy is named Copy messaging ID`, copyId);
       const lineage = await page.evaluate(factsOf("oats-panel-lineage"));
-      check(lineage === "Owning human: Ana | Sibling: redesign-ui-lead", `${at} Lineage: the owning human and the sibling`, lineage);
-      await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-lineage"))}).scrollIntoView({ block: "end" })`);
+      check(lineage === "Owning human: Ana | Sibling: Redesign ui lead", `${at} Lineage: the owning human and the sibling, by its name as words`, lineage);
+      await page.evaluate(scroll("oats-panel-session"));
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "instance-running");
       await page.shot(`panel-${viewport.name}-instance-running`);
@@ -762,6 +836,7 @@ const more = [
       }
       const unreachable = await page.until(`(() => { const t = ${said}; return t.startsWith("Unreachable") ? t : ""; })()`, 30);
       check(unreachable === "Unreachable· OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)", `${at} an agent the kernel cannot reach says Unreachable and what OATS says of it, in its header`, unreachable);
+      await page.until(visible(inPanel("oats-panel-session")), 30);
       const again = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-runtime-error"))}).length`);
       check(again === 0, `${at} and the Session card does not say it a second time`, again);
       await settled(page, viewport);
@@ -778,6 +853,8 @@ const more = [
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "instance-failed");
       await page.shot(`panel-${viewport.name}-instance-failed`);
+      // This agent is of another soul: the kernel's inspection of it names that soul.
+      setVerb("inspect --home", withMessaging("oats-legacy"));
       await page.evaluate(click(inPanel("oats-tab-soul")));
       const why = await page.until(`${textOf(inPanel("oats-panel-open-soul-why"))}`, 15);
       check(why === "OATS lists no soul of this name here, so there is no soul page to open.", `${at} a soul OATS does not name: Open soul page is off, and the reason is beside it`, why);
@@ -786,11 +863,12 @@ const more = [
       {
         // One state per image: the soul as spawned is there before the image is taken.
         const read = await page.until(`${textOf(inPanel("oats-panel-spawned-from"))}`, 30);
-        check((read ?? "").startsWith("Spawned from "), `${at} and the soul as spawned is read`, read);
+        check((read ?? "").startsWith("Spawned from oats-legacy @ "), `${at} and the soul as spawned is read: the soul the header names`, read);
       }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "soul-unnamed");
       await page.shot(`panel-${viewport.name}-soul-unnamed`);
+      setVerb("inspect --home", withMessaging());
       await page.evaluate(click(inPanel("oats-tab-instance")));
     },
   },
@@ -879,8 +957,12 @@ const more = [
         await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
         setStatus(REFUSED);
         refresh();
-        const stale = await page.until(`(() => { const t = ${textOf(inPanel("oats-stale"))}; return t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
-        check(/howing what was read (just now|\d+s ago|\d+ min ago)\. OATS could not read this deployment\. OATS says: no oats-local\.yaml at or above this directory \(E_LOCAL_MISSING\) ?Retry$/.test(stale ?? ""), `${at} when OATS cannot be read again the panel says how old what it shows is, and why, with Retry`, stale);
+        const stale = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
+        check(
+          /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory Showing what was read (less than a minute|\d+ (min|h|d)) ago\. E_LOCAL_MISSING .*Retry$/.test(stale ?? ""),
+          `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same words), how old what it shows is, the code and Retry`,
+          stale,
+        );
         const kept = [await page.evaluate(textOf(inPanel("oats-panel-name"))), await page.evaluate(visible(inPanel("oats-panel-work-sentence")))];
         check(kept[0] === "Panel worktree helper" && kept[1] === true, `${at} and keeps the agent and its facts on screen`, `the name read: ${JSON.stringify(kept[0])}; the work sentence in view: ${kept[1]}`);
         if (viewport.mobile) {
@@ -894,14 +976,20 @@ const more = [
         // A page opened while OATS cannot be read: the plugin's server keeps the last roster it read,
         // so the page shows the agent as last read, with how old that is and why, and Retry.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const opened = await page.until(`(() => { const t = ${textOf(`${testId("oats-agent-page")} ${inPanel("oats-stale")}`)}; return t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
+        const opened = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) && t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
         const named = await page.evaluate(textOf(inPanel("oats-panel-name")));
-        check(/howing what was read (just now|\d+s ago|\d+ min ago|at \d\d:\d\d)\. OATS could not read this deployment\. OATS says: no oats-local\.yaml at or above this directory \(E_LOCAL_MISSING\) ?Retry$/.test(opened ?? "") && named === "Panel worktree helper", `${at} a page opened while OATS cannot be read: the agent as last read, how old that is and why, with Retry`, `the stale line: ${JSON.stringify(opened)}; the name: ${JSON.stringify(named)}`);
-        await page.shot(`panel-${viewport.name}-page-unreadable`);
+        check(
+          // Where the page had read the agent's facts before (the phone's width: it is the page the panel was on), the notice says
+          // how old they are; a page that opens fresh has read none, and says none.
+          /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory (Showing what was read (less than a minute|\d+ (min|h|d)) ago\. )?E_LOCAL_MISSING .*Retry$/.test(opened ?? "") && named === "Panel worktree helper",
+          `${at} a page opened while OATS cannot be read: the agent as the roster last named it, and why nothing more, with Retry`,
+          `the notice: ${JSON.stringify(opened)}; the name: ${JSON.stringify(named)}`,
+        );
+        // No image here: at 390 px it is the picture `stale` already is (the same page, the same notice).
 
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
-        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-stale")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
+        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-panel-page-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
         check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, await page.evaluate(textOf(model)));
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });

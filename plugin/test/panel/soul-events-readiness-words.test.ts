@@ -1,9 +1,12 @@
 // The words of the Soul tab's body, of the recorded activity and of readiness: the OATS Desktop's,
 // for the answers recorded from the real kernel.
 import { describe, expect, it } from "vitest";
-import { claimLine, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine, sourcesLine, summaryLine as activitySummary, windowLine } from "../../app/panel/events-words";
-import { refusalSentence } from "../../app/panel/refusal-words";
+import { differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine, sourcesLine, summaryLine as activitySummary, windowLine } from "../../app/panel/events-words";
+import { refusalWords } from "../../app/panel/refusal-words";
 import { whenText } from "../../app/panel/words";
+
+/** A refusal's sentence alone. */
+const refusalSentence = (read: "readiness" | "activity" | "soul", code: string | null, error: string) => refusalWords(read, code, error).sentence;
 
 /** The clock the lines with an instant are said at. */
 const NOW = Date.parse("2026-11-21T18:29:30.000Z");
@@ -75,8 +78,6 @@ describe("the recorded activity's words", () => {
     expect(windowLine(events)).toBe("8 displayed / 8 observed rows. This is address history, not current runtime state.");
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
-    expect(claimLine(events.waitingClaims[0]!, NOW)).toBe(`oats.board: reported waiting · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · attention`);
-    expect(claimLine({ producer: "oats.core", waiting: false, since: "2026-11-21T18:30:00.000Z", reason: null }, NOW)).toBe(`oats.core: claim cleared · ${whenText("2026-11-21T18:30:00.000Z", NOW)}`);
     // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
     expect(activitySummary(events, NOW)).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)} · Current recorded incarnation`);
     expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No recorded lifecycle events in this observed window.");
@@ -94,10 +95,8 @@ describe("each part of the kernel's goes through the display filter, then the li
   const events = recordedEvents();
   it("a name that ends in a word a secret starts with withholds nothing but what is unsafe", () => {
     expect(setupLine({ capability: "acme.secret", ok: true })).toBe("acme.secret: done");
-    expect(claimLine({ producer: "acme.token", waiting: true, since: "2026-11-21T18:30:00.000Z", reason: "attention" }, NOW)).toBe(`acme.token: reported waiting · ${whenText("2026-11-21T18:30:00.000Z", NOW)} · attention`);
     expect(warningLine({ code: "x", message: "vault.api-key never runs here" })).toBe("Warning: vault.api-key never runs here (x)");
     // A message that is itself unsafe is withheld, and the rest of the line stays.
-    expect(claimLine({ producer: "oats.board", waiting: true, since: "2026-11-21T18:30:00.000Z", reason: "set password: hunter2 please" }, NOW)).toBe(`oats.board: reported waiting · ${whenText("2026-11-21T18:30:00.000Z", NOW)} · [withheld]`);
     expect(producerLine({ producer: "evil\u202Ekernel", incarnation: "current" })).toBe("Producer: evil\uFFFDkernel · Current recorded incarnation");
   });
   it("what a blocked launch's screen differed in: whose text each is, and where", () => {
@@ -143,6 +142,22 @@ describe("a refused read, in the Desktop's own sentence", () => {
     expect(refusalSentence("readiness", "constructor", "")).toBeNull();
     expect(refusalSentence("readiness", "OATS_ABORTED", "")).toBeNull();
   });
+  it("says what to do next, and offers Retry only where reading again can change the answer", () => {
+    expect(refusalWords("readiness", "E_HOME_MISMATCH", "")).toEqual({
+      sentence: "This agent's folder is no longer the one OATS recorded for it.", next: "`oats status`, on the machine that holds it, shows where the agent is now.", retry: false,
+    });
+    expect(refusalWords("activity", "E_AMBIGUOUS_INSTANCE", "")).toMatchObject({ next: "Retire or rename one of them with OATS, on the machine that holds them.", retry: false });
+    expect(refusalWords("readiness", "E_SOUL_UNKNOWN", "")).toMatchObject({ next: "It may have been removed from the workspace: `oats souls` lists the ones there are.", retry: false });
+    expect(refusalWords("soul", "E_UNSUPPORTED_MODE", "")).toMatchObject({ next: "There is nothing to do: OATS has none for it.", retry: false });
+    expect(refusalWords("readiness", "E_USAGE", "")).toEqual({ sentence: "The OATS installed here is too old for this. Update OATS.", next: null, retry: false });
+    expect(refusalWords("activity", null, '"gone-helper" is not an agent of this OATS deployment\'s current snapshot')).toEqual({
+      sentence: "OATS no longer lists this agent.", next: "It may have been retired: the sidebar lists the agents OATS has.", retry: false,
+    });
+    // A slow, failed or unreadable answer, and a refusal nobody has words for yet, may go better next time.
+    expect(refusalWords("readiness", "OATS_TIMEOUT", "")).toEqual({ sentence: "The readiness read timed out.", next: null, retry: true });
+    expect(refusalWords("soul", "E_SOMETHING_NEW", "")).toMatchObject({ next: null, retry: true });
+    expect(refusalWords("activity", null, "boom")).toEqual({ sentence: null, next: null, retry: true });
+  });
 });
 
 describe("readiness' words", () => {
@@ -160,7 +175,9 @@ describe("readiness' words", () => {
     expect(home.checks.flatMap((check) => check.items.map(itemLine))).toEqual([
       "oats.bb · pass · required", "oats.core · pass · required", "launch · unknown · optional", "member local//abs/real/src/oats-real · pass · required", "oats.bb session backend bb · pass · required · 2 warnings",
     ]);
-    expect(itemFacts(home.checks[0]!.items[1]!)).toEqual([{ label: "Producer", value: "instance modules" }, { label: "Origin", value: "package oats.framework 1.26.0 @ 41d8623" }]);
+    expect(itemFacts(home.checks[0]!.items[1]!)).toEqual([{ label: "Producer", value: "instance modules", whole: null }, { label: "Origin", value: "package oats.framework 1.26.0 @ 41d8623", whole: null }]);
+    // a commit id inside a value is drawn by its first seven, never broken inside; the whole value is the fact's title
+    expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb a3cca85 @ a3cca85", whole: "package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85" });
     expect(itemFacts(home.checks[1]!.items[0]!).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code", "Configuration file"]);
     const provider = home.checks[3]!.items[0]!.provider!;
     expect(providerSays(provider.status)).toBe("The provider says: ready.");
@@ -181,7 +198,7 @@ describe("readiness' words", () => {
       provider: { status: "needs-configuration", problems: [{ code: "needs-configuration", message: "setting state-dir is required" }, { code: "other", message: "another thing" }], warnings: [] },
       problems: [{ code: null, message: "no code" }],
     });
-    expect(itemFacts(failing)).toEqual([
+    expect(itemFacts(failing).map(({ label, value }) => ({ label, value }))).toEqual([
       { label: "Reason", value: "setting state-dir is required" }, { label: "Declared in", value: "oats-local.yaml › settings › oats.okf › state-dir, on this computer" },
       { label: "Remedy (display only)", value: "set state-dir" }, { label: "Problem code", value: "needs-configuration" },
     ]);

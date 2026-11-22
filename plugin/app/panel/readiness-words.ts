@@ -29,10 +29,11 @@ export function summaryLine(summary: PanelReadiness["summary"]): string {
 }
 /** "Observed: <instant>. Target: instance. This is not an atomic snapshot or a permission lease." */
 export const observedLine = (at: string | null, of: "instance" | "soul", now: number): string => `${at === null ? "Observed." : `Observed: ${whenText(at, now)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
-/** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>". */
-export const contextLine = (of: "instance" | "soul", name: string, agentsRoot: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · ${shown(agentsRoot)}`;
+/** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>"; this is its first part, and the path follows it as a path. */
+export const contextLabel = (of: "instance" | "soul", name: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · `;
 
-const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
+/** Whether an item waits for a sign-in to its provider. */
+export const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
 /** A check's state as it is drawn: one failing only because providers need a sign-in is its own state, not broken. */
 export function checkState(check: PanelReadiness["checks"][number]): string {
   const failing = check.items.filter((item) => item.status === "fail");
@@ -47,8 +48,6 @@ export function checkTone(check: PanelReadiness["checks"][number]): "bad" | "war
 export const itemTone = (item: PanelReadinessItem): "bad" | "warn" | null => (signIn(item) ? "warn" : item.status === "fail" ? "bad" : null);
 /** Whether an item has anything to open: its facts, a provider's own answer, a problem. */
 export const itemOpens = (item: PanelReadinessItem): boolean => itemFacts(item).length > 0 || item.provider !== null || itemProblems(item).length > 0;
-/** Whether an item waits for a sign-in to its provider. */
-export const needsSignIn = (item: PanelReadinessItem): boolean => signIn(item);
 /** "Installed", "Configured", "Member", "Providers". */
 export const checkLabel = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
 
@@ -68,7 +67,9 @@ export function declaredIn(at: string): string {
 }
 
 /** An item's facts as label and text, in the Desktop's order; a fact the kernel does not report is left out. */
-export function itemFacts(item: PanelReadinessItem): { label: string; value: string }[] {
+/** A commit id: 40 hex characters. Inside a value it is drawn by its first seven, and the whole value is the fact's title: nothing is broken inside an id. */
+const COMMIT = /\b[0-9a-f]{40}\b/;
+export function itemFacts(item: PanelReadinessItem): { label: string; value: string; whole: string | null }[] {
   const facts: [string, string | null][] = [
     ["Producer", item.producer],
     ["Reason", item.reason],
@@ -78,10 +79,12 @@ export function itemFacts(item: PanelReadinessItem): { label: string; value: str
     ...item.evidence.map((fact): [string, string] => [fact.name, fact.value]),
     ["Remedy (display only)", item.remedy],
   ];
-  const out = facts.filter((fact): fact is [string, string] => fact[1] !== null).map(([label, value]) => ({ label: shown(label), value: shown(value) }));
+  const out = facts
+    .filter((fact): fact is [string, string] => fact[1] !== null)
+    .map(([label, value]) => ({ label: shown(label), value: shown(value).replace(new RegExp(COMMIT.source, "g"), (id) => id.slice(0, 7)), whole: COMMIT.test(shown(value)) ? shown(value) : null }));
   // The kernel's reason is the first problem's message: said once, with its code.
   for (const problem of [...(item.provider?.problems ?? []), ...item.problems]) {
-    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code) });
+    if (problem.message === item.reason && problem.code !== null) out.push({ label: "Problem code", value: shown(problem.code), whole: null });
   }
   return out;
 }

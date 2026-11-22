@@ -22,6 +22,8 @@ export type PanelRead<Method extends PanelMethod> = Read<PanelAnswer<Method>> & 
   retry(): void;
   /** A read is in flight, the first one or a later one. */
   fetching: boolean;
+  /** When the answer held was received, by this window's clock; null with none. */
+  readAt: number | null;
 };
 
 /**
@@ -67,16 +69,24 @@ function usePanelRead<Method extends PanelMethod>(
     if (live && enabled) void refetch.current();
   });
   const data = query.data as PanelAnswer<Method> | undefined;
+  // When this answer came: noted the first time it is seen, and kept for the part that is shown again.
+  if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
+  const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
   const retry = () => void refetch.current();
   const fetching = query.isFetching;
-  if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching };
-  if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching };
-  return { status: "ready", data, error: null, retry, fetching };
+  if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };
+  if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching, readAt };
+  return { status: "ready", data, error: null, retry, fetching, readAt };
 }
 
 /** What each read's held answer was read for (`again`), by method and input, in this app window. */
 const lastReadFor = new Map<string, string>();
-onWindowReset(() => lastReadFor.clear());
+/** Each read's held answer and when it was received, by method and input, in this app window. */
+const receivedAt = new Map<string, { data: unknown; at: number }>();
+onWindowReset(() => {
+  lastReadFor.clear();
+  receivedAt.clear();
+});
 
 /** One instance's facts, from the roster the server holds: kept fresh, at no command's cost. */
 export const usePanelInstance = (instance: string): PanelRead<"panelInstance"> => usePanelRead("panelInstance", { instance }, { live: true });

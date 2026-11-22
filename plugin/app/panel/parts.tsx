@@ -15,24 +15,34 @@ const NOT_TEXT = new RegExp(NOT_NOTE_TEXT.source, "gu");
  * character that is no text, and a path that looks like a secret, which is withheld whole; what is
  * copied is the path as the kernel gave it.
  */
+/**
+ * A path as text: a line may end after a slash, so a long path breaks between its segments and
+ * never inside a name. Withheld whole when the path as given looks like a secret (its segments
+ * alone would not show it); a character that is no text is drawn as U+FFFD.
+ */
+export function PathText({ path }: { path: string }) {
+  if (UNSAFE.test(path)) return <>{DETAIL_WITHHELD}</>;
+  return (
+    <>
+      {path.split("/").map((segment, index) => (
+        <Fragment key={index}>
+          {index === 0 ? null : (
+            <>
+              /<wbr />
+            </>
+          )}
+          {segment.replace(NOT_TEXT, "\uFFFD")}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 export function PathLine({ path, copyName, tag, testId }: { path: string; copyName: string; tag?: ReactNode; testId: string }) {
   return (
     <span className="flex min-w-0 flex-col items-start gap-1.5">
       <span data-testid={testId} className="min-w-0 break-words font-mono text-xs text-foreground">
-        {/* Withheld whole when the path as given looks like a secret: its segments alone would not show it. */}
-        {UNSAFE.test(path)
-          ? DETAIL_WITHHELD
-          : // A line may end after a slash, so a long path breaks between its segments, not inside a name.
-            path.split("/").map((segment, index) => (
-              <Fragment key={index}>
-                {index === 0 ? null : (
-                  <>
-                    /<wbr />
-                  </>
-                )}
-                {segment.replace(NOT_TEXT, "\uFFFD")}
-              </Fragment>
-            ))}
+        <PathText path={path} />
       </span>
       {tag}
       <CopyButton text={path} name={copyName} />

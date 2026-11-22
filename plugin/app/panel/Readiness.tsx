@@ -9,10 +9,11 @@ import { Button, Disclosure, Fact, Facts, Section, Toned } from "../ui";
 import { shown } from "../ui/text";
 import { usePanelReadiness } from "./read";
 import {
-  CHECKS_AND_POLICY, CHECKS_PLAIN, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, SIGN_IN_HOW, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, checkTone, itemFacts,
-  itemLine, itemOpens, itemProblems, itemTone, needsSignIn, observedLine, policyLine, providerSays, summaryLine, warningLine,
+  CHECKS_AND_POLICY, CHECKS_PLAIN, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, SIGN_IN_HOW, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, checkTone, contextLabel, itemFacts,
+  itemLine, itemOpens, itemProblems, itemTone, observedLine, policyLine, providerSays, signIn, summaryLine, warningLine,
 } from "./readiness-words";
-import { CommandState } from "./state";
+import { PathText } from "./parts";
+import { CommandState, offersRetry } from "./state";
 import { Warnings } from "./Warnings";
 
 /** A word with the mark of its tone; plainly when it has none. */
@@ -20,12 +21,17 @@ function Said({ tone, children }: { tone: "bad" | "warn" | null; children: strin
   return tone === null ? <>{children}</> : <Toned tone={tone}>{children}</Toned>;
 }
 
-function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of: "instance" | "soul"; context: string | null; now: number }) {
+/** What was observed: the instance's or the soul's name, and the agents root. */
+type Context = { name: string; root: string };
+
+function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of: "instance" | "soul"; context: Context | null; now: number }) {
   return (
     <>
       {context === null ? null : (
-        <p data-testid="oats-panel-readiness-context" className="m-0 break-all text-xs text-muted-foreground">
-          {context}
+        // The path breaks between its segments, never inside a name.
+        <p data-testid="oats-panel-readiness-context" className="m-0 break-words text-xs text-muted-foreground">
+          {contextLabel(of, context.name)}
+          <PathText path={context.root} />
         </p>
       )}
       {/* In a person's words first; then the kernel's own sentences, as the Desktop says them. */}
@@ -55,7 +61,7 @@ function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of
             <Disclosure key={index} summary={itemLine(item)} testId="oats-panel-check-item">
               <Facts>
                 {itemFacts(item).map((fact, at) => (
-                  <Fact key={at} label={fact.label}>
+                  <Fact key={at} label={fact.label} {...(fact.whole === null ? {} : { title: fact.whole })}>
                     {fact.value}
                   </Fact>
                 ))}
@@ -65,7 +71,7 @@ function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of
                   <Said tone={itemTone(item)}>{providerSays(item.provider.status)}</Said>
                 </p>
               )}
-              {needsSignIn(item) ? <p className="m-0 text-foreground">{SIGN_IN_HOW}</p> : null}
+              {signIn(item) ? <p className="m-0 text-foreground">{SIGN_IN_HOW}</p> : null}
               {(item.provider?.warnings ?? []).map((warning, at) => (
                 <p key={at} className="m-0 break-words text-xs text-muted-foreground">
                   {warningLine(warning)}
@@ -104,8 +110,8 @@ function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of
   );
 }
 
-/** `context` is the line that names what was observed (readiness-words.ts `contextLine`), once it is known. */
-export function Readiness({ instance, of, context, now }: { instance: string; of: "instance" | "soul"; context: string | null; now: number }) {
+/** `context` names what was observed, once it is known. */
+export function Readiness({ instance, of, context, now }: { instance: string; of: "instance" | "soul"; context: Context | null; now: number }) {
   const read = usePanelReadiness(instance, of);
   // A person's Refresh says what it does: "Refreshing…" while it reads, then that it is updated.
   const [refreshed, setRefreshed] = useState<"no" | "reading" | "updated">("no");
@@ -128,9 +134,9 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
         </>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
-            Over what is shown the button is off while a read runs, and the words beside it say why. */}
-        {(read.fetching && read.data === undefined) || read.status === "error" ? null : (
+        {/* One act at a time: while the first read runs the line above says so, and after a failure that reading again can
+            change, the notice's Retry is the act. Over what is shown the button is off while a read runs, and the words beside it say why. */}
+        {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") ? null : (
           <Button
             data-testid="oats-panel-readiness-refresh"
             disabled={read.fetching}

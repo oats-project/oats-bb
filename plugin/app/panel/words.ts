@@ -7,16 +7,6 @@ import type { PanelInstance } from "../../kernel/panel-instance";
 import { shown } from "../ui/text";
 import { waitingClock } from "../ui/words";
 
-/** How long ago, compactly ("<1m", "42m", "3h", "2d"); null when it is no timestamp. */
-export function shortAge(iso: string | null, now: number): string | null {
-  const at = iso === null ? Number.NaN : Date.parse(iso);
-  if (!Number.isFinite(at)) return null;
-  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
-  if (minutes < 1) return "<1m";
-  if (minutes < 60) return `${minutes}m`;
-  return minutes < 1440 ? `${Math.floor(minutes / 60)}h` : `${Math.floor(minutes / 1440)}d`;
-}
-
 /** A reported timestamp as a relative age ("3 h ago"); anything that is no timestamp, as sent. */
 export function ageText(iso: string, now: number): string {
   const at = Date.parse(iso);
@@ -110,7 +100,7 @@ export function harnessName(harness: string): string {
  * so that it is never broken inside (plugin/WORDS.md).
  */
 export function sessionWhere(facts: Pick<PanelInstance, "backend" | "threadId" | "tmuxSession">): { where: string; id: string | null; idName: string } | null {
-  if (facts.backend !== null && facts.backend !== "tmux") return { where: facts.threadId === null ? facts.backend : `${facts.backend} thread`, id: facts.threadId, idName: "the thread's id in bb" };
+  if (facts.backend !== null && facts.backend !== "tmux") return { where: facts.threadId === null ? facts.backend : `${facts.backend} thread`, id: facts.threadId, idName: `the thread's id in ${facts.backend}` };
   return facts.tmuxSession === null ? null : { where: "tmux session", id: facts.tmuxSession, idName: "the tmux session's name" };
 }
 
@@ -141,4 +131,18 @@ export function markText(value: string): string {
  */
 export function whenText(iso: string, now: number): string {
   return waitingClock(iso, now) || shown(iso);
+}
+
+/**
+ * How old what is still shown is, for the notice over a read that failed after one answered: always
+ * relative and never "just now" (a read that just failed is not news of now): "less than a minute
+ * ago", "12 min ago", "3 h ago", "2 d ago"; null for an instant that cannot be read.
+ */
+export function staleAge(at: string | number | null, now: number): string | null {
+  const then = at === null ? Number.NaN : typeof at === "number" ? at : Date.parse(at);
+  if (!Number.isFinite(then)) return null;
+  const minutes = Math.floor(Math.max(0, now - then) / 60_000);
+  if (minutes < 1) return "less than a minute ago";
+  if (minutes < 60) return `${minutes} min ago`;
+  return minutes < 1440 ? `${Math.floor(minutes / 60)} h ago` : `${Math.floor(minutes / 1440)} d ago`;
 }

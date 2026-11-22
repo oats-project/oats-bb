@@ -11,28 +11,27 @@ import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, Node } from "../../model/types";
 import { claimOf } from "../../model/view";
 import { agentStatus } from "../roster/status";
-import { failureWords } from "../roster/unreadable";
+import { Unreadable, failureWords } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
-import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, Stale, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { instanceDisplayName, readAge, waitingLabel } from "../ui/words";
+import { instanceDisplayName, waitingLabel } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
-import { contextLine } from "./readiness-words";
 import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, staleAge, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -103,6 +102,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   const roster: Roster = {
     soulOf: oats.soulOf,
     threadById: oats.threadById,
+    retry: oats.retry,
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
@@ -113,9 +113,6 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     <div ref={setRoot} data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
       <div data-testid="oats-panel-visible" className="flex min-h-0 min-w-0 flex-1 flex-col" style={visible === null ? undefined : { width: visible }}>
-        <div className="shrink-0 px-3">
-          <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
-        </div>
         {/* One instance at a time: another agent starts from its own read. */}
         <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} tab={tab} failure={failure} />
       </div>
@@ -160,56 +157,16 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   const read = usePanelInstance(agent.instance);
   const now = useNow();
   const state = <ReadState read={read} now={now} failure={failure} />;
-  return (
-    <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-      {tab === "instance" ? <InstancePage oats={oats} agent={agent} node={node} read={read} now={now} state={state} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
-    </div>
-  );
-}
-
-/**
- * What the panel says when what it shows is not a current read: the read in flight, a first read
- * that failed, or (the roster's failure first: it is why the instance cannot be read either) what
- * was read earlier, with its age. Nothing when the read is there and current.
- */
-function ReadState({ read, now, failure }: { read: InstanceRead; now: number; failure: RosterFailure | null }) {
-  const refusal = failure !== null ? failure.line : read.status === "error" ? read.error : null;
-  const code = failure !== null ? (isKernelCode(failure.code) ? failure.code : null) : refusal === null ? null : codeOf(refusal);
-  // Why OATS cannot be read, in the words every place of the plugin says it (the sidebar's notice, the thread's row).
-  const words = failure === null ? null : failureWords(failure, failure.machine);
-  // Retry asks for the roster again where that is what failed, and for the instance in either case:
-  // the server answers it from the roster it holds then, and says when a newer one lands.
-  const again = () => {
-    failure?.retry();
-    read.retry();
-  };
-  const retry = <Button onClick={again}>Retry</Button>;
-  if (refusal === null) return read.status === "loading" ? <Loading>Reading this instance…</Loading> : null;
-  // A failed reread keeps what was read, and says how old it is.
-  if (read.data !== undefined) {
-    const why = words === null ? "This instance could not be read again." : `${words.title}.${words.sentence === null ? "" : ` ${words.sentence}`}`;
-    return <Stale age={readAge(read.data.at, now)} refreshing={read.fetching} held={`${why}${code === null ? "" : ` (${code})`}`} action={retry} />;
-  }
-  return (
-    <Notice title={words === null ? "This instance could not be read" : words.title} tone="error" code={code} details={refusal} actions={retry}>
-      {words === null || words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
-    </Notice>
-  );
-}
-
-function InstancePage({ oats, agent, node, read, now, state: readState }: { oats: Roster; agent: Agent; node: Node | undefined; read: InstanceRead; now: number; state: ReactNode }) {
-  const facts = read.data?.facts;
-  const answerRoot = read.data?.agentsRoot ?? null;
-  const claim = claimOf(agent);
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
   // bb thread has none to give it.
   const status = agentStatus(agent, node?.thread ?? null, now);
-  const drift = facts === undefined ? null : driftLines(facts.drift);
+  const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (
     <>
-      <header data-testid="oats-panel-header" className="flex min-w-0 flex-col gap-1">
+      {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
+      <header data-testid="oats-panel-header" className="flex min-w-0 shrink-0 flex-col gap-1 px-3 pt-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <SoulMark soul={oats.soulOf(agent)} />
           <h2 data-testid="oats-panel-name" title={shown(agent.instance)} className="m-0 min-w-0 break-words text-base font-semibold">
@@ -217,12 +174,12 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
           </h2>
         </div>
         <div data-testid="oats-panel-state">
-          {/* The shared status line. What a waiting agent asks is said once, in Needs input below: here, since when. */}
-          <StatusLine state={status.state} word={status.word} since={status.since} detail={status.state === "needs-you" ? null : status.detail} />
+          {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here. */}
+          <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
-          <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-all text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
+          <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
             {soul}
           </button>
         </div>
@@ -236,7 +193,57 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
           </Disclosure>
         )}
       </header>
+      <div className="shrink-0 px-3">
+        <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+      </div>
+      <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+      </div>
+    </>
+  );
+}
 
+/**
+ * What the panel says when what it shows is not a current read: the read in flight, a first read
+ * that failed, or (the roster's failure first: it is why the instance cannot be read either) what
+ * was read earlier, with its age. Nothing when the read is there and current.
+ */
+function ReadState({ read, now, failure }: { read: InstanceRead; now: number; failure: RosterFailure | null }) {
+  const refusal = failure !== null ? failure.line : read.status === "error" ? read.error : null;
+  // Retry asks for the roster again where that is what failed, and for the instance in either case:
+  // the server answers it from the roster it holds then, and says when a newer one lands.
+  const again = () => {
+    failure?.retry();
+    read.retry();
+  };
+  if (refusal === null) return read.status === "loading" ? <Loading>Reading this instance…</Loading> : null;
+  // Nothing was ever read: the notice every place of the plugin shows when OATS cannot be read, whole.
+  if (failure !== null && read.data === undefined) return <Unreadable failure={failure} machine={failure.machine} onRetry={again} />;
+  // Why, in the words every place says it (the sidebar's notice, the thread's row) where it is OATS that cannot be read.
+  const words = failure === null ? null : failureWords(failure, failure.machine);
+  const code = failure !== null ? (isKernelCode(failure.code) ? failure.code : null) : codeOf(refusal);
+  const kept = read.data !== undefined;
+  return (
+    // One drawing for a read that failed, with or without something read earlier under it: with it, how old that is, once.
+    <Notice
+      title={words !== null ? words.title : kept ? "This instance could not be read again" : "This instance could not be read"}
+      tone="error"
+      code={code}
+      details={refusal}
+      {...(read.data === undefined ? {} : { age: staleAge(read.data.at, now) })}
+      actions={words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
+    >
+      {words === null || words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
+    </Notice>
+  );
+}
+
+function InstancePage({ oats, agent, read, now, state: readState, status }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState }) {
+  const facts = read.data?.facts;
+  const answerRoot = read.data?.agentsRoot ?? null;
+  const claim = claimOf(agent);
+  return (
+    <>
       {claim === null ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">
           {/* The reason in words; how long it has waited is the header's to say, once. */}
@@ -252,9 +259,10 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status.state} now={now} />}
-      <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : contextLine("instance", agent.instance, answerRoot)} now={now} />
-      <Activity instance={agent.instance} now={now} />
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} now={now} />}
+      <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} />
+      {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
+      <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} />
     </>
   );
 }
@@ -274,19 +282,29 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
   const instanceLink = (name: string, testId: string) => {
     const thread = oats.nodeByInstance.get(name)?.thread;
     const bbThread = thread === undefined ? undefined : oats.threadById.get(thread.id);
-    if (bbThread === undefined) return <span data-testid={testId}>{shown(name)}</span>;
+    // An agent by its name as words, as every place names one; the kernel's own name is the title.
+    const words = instanceDisplayName(shown(name));
+    if (bbThread === undefined) {
+      return (
+        <span data-testid={testId} title={shown(name)}>
+          {words}
+        </span>
+      );
+    }
     return (
+      // A target of the size a press needs, on the label's line: its height is taken back from the line's.
       <a
         data-testid={testId}
         href={bbThread.href}
-        className={`${TARGET} ${LINK} inline-flex items-center`}
+        title={shown(name)}
+        className={`${TARGET} ${LINK} -my-3 inline-flex items-center md:-my-1.5`}
         onClick={(event) => {
           if (!plainClick(event)) return;
           event.preventDefault();
           navigate.toThread(bbThread.id);
         }}
       >
-        {shown(name)}
+        {words}
       </a>
     );
   };
@@ -438,7 +456,7 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
       </header>
       {readState}
       <SoulBody read={soul} now={now} />
-      {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : contextLine("soul", key, answer.agentsRoot)} now={now} />}
+      {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : { name: key, root: answer.agentsRoot }} now={now} />}
       {answer === undefined || answer.agentsRoot === null ? null : (
         <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>

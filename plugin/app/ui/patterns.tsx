@@ -154,6 +154,21 @@ export function Disclosure({ summary, children, open, onToggle, testId = "oats-d
   );
 }
 
+/**
+ * What the kernel itself says behind a status line's words (of a session it cannot reach: often a
+ * raw URL or an errno): one press away, under Details, never the line's words. The one drawing, for
+ * the thread's row and the instance panel's header. Nothing for no text.
+ */
+export function KernelSays({ text }: { text: string | null }) {
+  const said = text === null ? "" : shown(text);
+  if (said === "") return null;
+  return (
+    <Disclosure summary="Details" testId="oats-status-kernel">
+      <p className="text-xs text-muted-foreground">{`OATS says: ${said}`}</p>
+    </Disclosure>
+  );
+}
+
 /** A kernel's own word inside a sentence (a code, a flag, a file's name): drawn as that, through the display filter. */
 export function Code({ children }: { children: string }) {
   return <code className="break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">{shown(children)}</code>;

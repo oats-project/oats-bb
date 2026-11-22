@@ -333,3 +333,19 @@ test("the Souls list while OATS cannot be read: the page's one notice, with the 
   await picked.findByRole("alert");
   expect(picked.getAllByTestId("oats-unreadable")).toHaveLength(1);
 });
+
+// The acts are held on the last roster read (R4), in this place too: Start and Retire of an agent
+// whose thread is missing stay in their place, off, with the reason.
+test("a soul's page on the last roster read: Start and Retire of an agent whose thread is missing are off, with the reason, and press nothing", async () => {
+  const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
+  const last = { at: new Date(Date.now() - 3 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const slot = await souls("oats-developer", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", machine: "falcon", last }) }, fixtureAgents(), threads);
+  await slot.findByTestId("oats-soul-agent-detached");
+  for (const id of ["oats-detached-start", "oats-detached-retire"]) {
+    const button = slot.getByTestId(id) as HTMLButtonElement;
+    expect([id, button.disabled, button.title]).toEqual([id, true, "Comes back when OATS is read again"]);
+    fireEvent.click(button);
+  }
+  expect(rpcOf(slot, "start")).toEqual([]);
+  expect(rpcOf(slot, "retirePlan")).toEqual([]);
+});

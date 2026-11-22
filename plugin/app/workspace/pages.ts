@@ -63,8 +63,11 @@ const setOpen = (path: string | null) => {
 export function shownPage<Props extends object>(path: string, Page: ComponentType<Props>): ComponentType<Props> {
   return function ShownPage(props: Props) {
     // A page that is not shown in this release has no route: its path answers one line, with a way back.
-    const shownNow = usePageShown(path);
-    return shownNow ? createElement(Open<Props>, { path, Page, props }) : createElement(NotShown, { path });
+    const pages = usePagesShown();
+    // Which pages are shown is not known until bb has read the settings: nothing is drawn till
+    // then, so a page that IS shown never says for a moment that it is not.
+    if (!pages.known) return null;
+    return pages.has(path) ? createElement(Open<Props>, { path, Page, props }) : createElement(NotShown, { path });
   };
 }
 
@@ -132,8 +135,8 @@ export function showEveryPageWhenUnset(on: boolean): void {
 
 /**
  * The pages a `pages` value names: its ids, with commas or spaces between them, in any case (the
- * six of PAGE_IDS, and the id of a page a feature adds). The default while the settings are not
- * read, or for a value that is no text.
+ * six of PAGE_IDS, and the id of a page a feature adds). The default for a value that is no text
+ * (the setting is not set, or bb could not give the settings).
  */
 export function pagesShown(value: unknown): { has(id: string): boolean } {
   if (typeof value !== "string" && everyPageWhenUnset) return { has: () => true };
@@ -141,18 +144,25 @@ export function pagesShown(value: unknown): { has(id: string): boolean } {
   return { has: (id) => ids.has(id.toLowerCase()) };
 }
 
-/** Whether the page `id` is shown, given the setting's value: the one rule (`usePageShown` reads the setting for it). */
-export const pageShown = (id: string, value: unknown): boolean => pagesShown(value).has(id);
+const NONE = { has: () => false, known: false } as const;
 
-/** Whether the page `id` is shown in this release: for a link to it, a mark of it, and its own route. */
-export function usePageShown(id: string): boolean {
-  return pageShown(id, useSettings().values?.pages);
+/**
+ * The pages shown in this release, from the plugin's settings: `has(id)` for a link to a page, a
+ * mark of it, and its own route. `known` is false while bb is still reading the settings: no page
+ * is shown till then (a link that appears, never one that is taken away), and a page's own route
+ * draws nothing. Settings bb cannot give at all are the default's.
+ */
+export function usePagesShown(): { has(id: string): boolean; known: boolean } {
+  return pagesOf(useSettings());
+}
+/** The rule of `usePagesShown`, given what bb says of the settings. */
+export function pagesOf(settings: { values: Record<string, unknown> | undefined; isLoading: boolean }): { has(id: string): boolean; known: boolean } {
+  if (settings.values === undefined && settings.isLoading) return NONE;
+  return { ...pagesShown(settings.values?.pages), known: true };
 }
 
-/** The ids of the pages shown, for a place that lists several (the sidebar's links). */
-export function usePagesShown(): { has(id: string): boolean } {
-  return pagesShown(useSettings().values?.pages);
-}
+/** Whether the page `id` is shown in this release: `usePagesShown().has(id)`, for a place that asks for one. */
+export const usePageShown = (id: string): boolean => usePagesShown().has(id);
 
 // ---- "New agent" ----
 // The form is the spawn feature's own page. It names how to open it here, in its `register`

@@ -863,6 +863,8 @@ const more = [
       }
       const unreachable = await page.until(`(() => { const t = ${said}; return t.startsWith("Unreachable") ? t : ""; })()`, 30);
       check(unreachable === "Unreachable· OATS cannot reach its session", `${at} an agent the kernel cannot reach says Unreachable in a person's words, in its header`, unreachable);
+      const kernel = await page.until(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-state")} ${testId("oats-status-kernel")} p`)})?.textContent ?? ""`, 15);
+      check(kernel === "OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)", `${at} and what OATS says of it is one press away, under Details in its header`, kernel);
       await page.until(visible(inPanel("oats-panel-session")), 30);
       const again = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-runtime-error"))}).length`);
       check(again === 0, `${at} and the Session card does not say it a second time`, again);

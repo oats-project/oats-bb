@@ -670,10 +670,13 @@ test("the panel draws within the part of bb's side panel that is in the window, 
   Reflect.deleteProperty(document.documentElement, "clientWidth");
 });
 
-test("an unreachable agent: what OATS says of its session is in the header, once, and not again in the Session card", async () => {
+test("an unreachable agent: its header says so in a person's words, what OATS says is one press away under Details there, and not again in the Session card", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }), facts: (facts) => ({ ...facts, runtimeError: "bb did not answer" }) });
   await slot.findByTestId("oats-panel-session");
   expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
+  const kernel = slot.getByTestId("oats-status-kernel") as HTMLDetailsElement;
+  expect(kernel.open).toBe(false);
+  expect(kernel.querySelector("p")!.textContent).toBe("OATS says: bb did not answer");
   expect(slot.queryByTestId("oats-panel-runtime-error")).toBeNull();
 });
 

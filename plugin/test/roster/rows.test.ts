@@ -96,8 +96,11 @@ describe("the raw rows of the snapshot", () => {
     expect([one.at, one.stale, one.row.instance]).toEqual([read.at, true, "redesign-ui-lead"]);
     expect(await refusalOf(core.rowOf("nobody-here"))).toEqual({ code: "invalid", message: '"nobody-here" is not an agent of this OATS deployment\'s last snapshot' });
     // The acts are held while OATS cannot be read (the lead's ruling R4, the Desktop's D-085): the
-    // server finds no agent for one, also in the roster it still shows, and says why.
-    expect(await refusalOf(core.agentOf("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
+    // server finds no agent for an ACT, also in the roster it still shows, and says why.
+    expect(await refusalOf(core.agentForAct("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
+    // A READ of an agent still shown (its soul, its events, its readiness) finds it in that roster.
+    expect((await core.agentOf("redesign-ui-lead")).home).toBe(read.agents.find((agent) => agent.instance === "redesign-ui-lead")!.home);
+    expect(await refusalOf(core.agentOf("nobody-here"))).toEqual({ code: "invalid", message: '"nobody-here" is not an agent of this OATS deployment\'s current snapshot' });
     // The failure is published once; the same failure again is not.
     const published = backend.server.harness.realtimeSignals.length;
     await core.clientRefresh();
@@ -114,7 +117,8 @@ describe("the raw rows of the snapshot", () => {
     await start({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_NO_WORKSPACE", message: "no workspace here" } }) } });
     const failed = await core.clientSnapshot();
     expect(failed.ok === false && failed.last).toBeNull();
-    // No agent is known: an act is refused with why OATS cannot be read.
+    // No agent is known: an act, and a read of an agent, are refused with why OATS cannot be read.
+    expect(await refusalOf(core.agentForAct("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
     expect(await refusalOf(core.agentOf("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
   });
 });

@@ -241,6 +241,25 @@ describe("snapshot", () => {
     expect((await rpc("snapshot")).code).toBe(codes.noDeployment);
   }, 30_000);
 
+  it("a change of a setting the app alone reads (`pages`) is no other deployment: the roster, and the last one kept while OATS cannot be read, stay", async () => {
+    const read = await rpc("snapshot");
+    expect(read.ok).toBe(true);
+    const before = (await verbs()).length;
+    await server.harness.setSettings({ pages: "home, souls" });
+    // The roster is still the one read: no client waits for another, and nothing is read for the change.
+    expect((await rpc("snapshot")).at).toBe(read.at);
+    expect((await verbs()).length).toBe(before);
+    // OATS cannot be read: the last roster is kept, also across another change of `pages`.
+    await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
+    await rpc("refresh").catch(() => undefined);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    const failed = await rpc("snapshot");
+    expect(failed.last?.at).toBe(read.at);
+    await server.harness.setSettings({ pages: "home" });
+    const after = await rpc("snapshot");
+    expect([after.ok, after.last?.at]).toEqual([false, read.at]);
+  }, 20_000);
+
   it("asks to choose a machine when the server has several and none is set", async () => {
     await server.harness.dispose();
     hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" }), makeHostResponse({ id: "host_kite", name: "kite" })];

@@ -694,18 +694,61 @@ test("a page's tile carries the mark its feature gives it: Automations while a r
 const withCli = (cli: { version: string | null; desktopApi: number | null; state: "older" | "tested" | "newer" | "newer-api" | "unknown" }, agents: Agent[] = fixtureAgents()) =>
   homePage({ rpc: { ...handlers({}, agents), homeCli: () => cli } as Handlers });
 
-test("a tested oats says nothing; so does a version read that failed (OATS that cannot be run is the roster's notice)", async () => {
+test("a tested oats says nothing", async () => {
   const tested = await homePage();
   await tested.findByTestId("oats-home-needs");
   await waitFor(() => expect(tested.inspection.rpcCalls.some((call) => call.method === "homeCli")).toBe(true));
   expect(tested.queryByTestId("oats-home-cli")).toBeNull();
   expect(tested.queryByTestId("oats-home-cli-line")).toBeNull();
-  tested.unmount();
-  const failed = await homePage({ rpc: { ...handlers(), homeCli: () => { throw new Error("OATS_TIMEOUT: oats did not answer"); } } as Handlers });
-  await failed.findByTestId("oats-home-needs");
-  await waitFor(() => expect(failed.inspection.rpcCalls.some((call) => call.method === "homeCli")).toBe(true));
-  expect(failed.queryByTestId("oats-home-cli")).toBeNull();
-  expect(failed.queryByRole("alert")).toBeNull();
+  expect(tested.queryByTestId("oats-home-cli-unchecked")).toBeNull();
+});
+
+test("a first version read that fails: the home tries once more by itself once the roster is read; still failing, one line says so, with Check again; New agent stays on", async () => {
+  let failing = true;
+  const slot = await homePage({
+    rpc: {
+      ...handlers(),
+      homeCli: () => {
+        if (failing) throw new Error("OATS_TIMEOUT: oats did not answer");
+        return { version: "0.70.0", desktopApi: 1, state: "tested" as const };
+      },
+    } as Handlers,
+  });
+  await slot.findByTestId("oats-home-needs");
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+  // it failed, and was tried once more, by itself, and no more than that
+  const line = await slot.findByTestId("oats-home-cli-unchecked");
+  expect(asked()).toBe(2);
+  expect(line.textContent).toBe("The installed oats could not be checked.Check again");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(asked()).toBe(2);
+  // not drawn as a failure of the roster's, and the act that makes an agent is not turned off for it
+  expect(slot.queryByRole("alert")).toBeNull();
+  expect(slot.queryByTestId("oats-home-cli")).toBeNull();
+  expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(false);
+  // Check again: the version reads, and the line goes
+  failing = false;
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(slot.queryByTestId("oats-home-cli-unchecked")).toBeNull());
+  expect(asked()).toBe(3);
+});
+
+test("a first version read that fails and answers at the home's own second try says nothing", async () => {
+  let calls = 0;
+  const slot = await homePage({
+    rpc: {
+      ...handlers(),
+      homeCli: () => {
+        calls += 1;
+        if (calls === 1) throw new Error("OATS_TIMEOUT: oats did not answer");
+        return { version: "0.69.4", desktopApi: 1, state: "older" as const };
+      },
+    } as Handlers,
+  });
+  // the second try answered: what it read is shown as any answer is
+  expect((await slot.findByTestId("oats-home-cli")).querySelector("h3")!.textContent).toBe("Compatible oats CLI required");
+  expect(calls).toBe(2);
+  expect(slot.queryByTestId("oats-home-cli-unchecked")).toBeNull();
 });
 
 test("an oats older than the plugin works with: the card says what was detected, what is required and the command to copy", async () => {

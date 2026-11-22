@@ -12,14 +12,21 @@ export type Cli = Result<"homeCli">;
 /**
  * `cli`: the last answer, undefined before the first one and while none was ever read (a read that
  * failed keeps what an earlier one answered). `checking`: a check a person asked for is under way.
- * `failure`: why the last read failed, null when it answered.
+ * `failure`: why the last read failed, null when it answered. `unchecked`: no version was ever
+ * read, and the home's own second try failed too: the home then says so, with Check again.
  * `check()`: asks the server to read OATS again (it drops the version it keeps), then reads.
+ *
+ * `rosterRead`: whether the roster is read. A first read of the version that fails is tried once
+ * more by the home itself, once the roster is read (a roster that reads proves `oats` runs, so a
+ * version read that failed alone is worth one more try); never more than once, and never on a timer.
  */
-export function useCli(enabled: boolean): { cli: Cli | undefined; checking: boolean; failure: string | null; check(): void } {
+export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | undefined; checking: boolean; failure: string | null; unchecked: boolean; check(): void } {
   const rpc = useRpc<typeof rpcContract>();
   const [cli, setCli] = useState<Cli | undefined>(undefined);
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** How the home's own reads stand: none asked, the first under way, the first failed, the second under way, the second failed (answered: `cli` holds it). */
+  const [own, setOwn] = useState<"none" | "first" | "first-failed" | "second" | "second-failed">("none");
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -27,27 +34,39 @@ export function useCli(enabled: boolean): { cli: Cli | undefined; checking: bool
       alive.current = false;
     };
   }, []);
+  /** One read of the version. → whether it answered. */
   const read = useCallback(
-    () =>
+    (): Promise<boolean> =>
       attempt(() => rpc.call("homeCli", null)).then(
         (answer) => {
-          if (!alive.current) return;
-          setCli(answer);
-          setFailure(null);
+          if (alive.current) {
+            setCli(answer);
+            setFailure(null);
+          }
+          return true;
         },
         (cause: unknown) => {
           // The home keeps what it knew of the CLI, and says that the check failed where it shows a notice.
           if (alive.current) setFailure(errorMessage(cause));
+          return false;
         },
       ),
     [rpc],
   );
-  const asked = useRef(false);
   useEffect(() => {
-    if (!enabled || asked.current) return;
-    asked.current = true;
-    void read();
-  }, [enabled, read]);
+    if (!enabled) return;
+    if (own === "none") {
+      setOwn("first");
+      void read().then((answered) => {
+        if (alive.current && !answered) setOwn("first-failed");
+      });
+    } else if (own === "first-failed" && rosterRead) {
+      setOwn("second");
+      void read().then((answered) => {
+        if (alive.current && !answered) setOwn("second-failed");
+      });
+    }
+  }, [enabled, own, rosterRead, read]);
   const check = useCallback(() => {
     if (checking) return;
     setChecking(true);
@@ -58,5 +77,5 @@ export function useCli(enabled: boolean): { cli: Cli | undefined; checking: bool
         if (alive.current) setChecking(false);
       });
   }, [checking, read, rpc]);
-  return { cli, checking, failure, check };
+  return { cli, checking, failure, unchecked: cli === undefined && own === "second-failed", check };
 }

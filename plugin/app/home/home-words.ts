@@ -97,6 +97,8 @@ export const CHECK_AGAIN = "Check again";
 export const CHECKING = "Checking…";
 /** A check that could not be made; what the read said follows it. */
 export const CHECK_FAILED = "The installed oats could not be checked again:";
+/** No version could be read, though the roster reads. */
+export const CLI_UNCHECKED = "The installed oats could not be checked.";
 export const DETECTED = "Detected";
 export const REQUIRED = "Required";
 export const detected = (version: string | null): string => version ?? "unknown: oats answered no version the plugin can read";

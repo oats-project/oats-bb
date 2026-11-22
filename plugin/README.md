@@ -121,6 +121,7 @@ with, the version of the kernel's JSON answers it reads), and only the home says
 | older than the floor, or its version cannot be read | a card, **Compatible oats CLI required**: what was detected, what is required, and the command to copy (`npm install -g @awebai/oats@<tested minor>`); the home's New agent is off behind it, with why |
 | its JSON answers are of a later version than the plugin reads (`desktopApi`) | a card, **This plugin is older than the installed oats CLI**, with no npm command: the plugin is what to update |
 | of a later minor than the plugin was tested with | one line, "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2."; no act is turned off |
+| it runs (the roster reads) and its version could not be read, also at the home's one more try | one muted line, "The installed oats could not be checked.", with **Check again**; New agent stays on (the kernel refuses a spawn it cannot make) |
 
 Each of the three has **Check again**: it asks the server to read `oats version` anew (the server
 keeps one answer for every feature), so after an install the notice goes, and New agent comes back,

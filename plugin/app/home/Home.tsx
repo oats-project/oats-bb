@@ -31,7 +31,7 @@ import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
+  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
   NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, THREAD_GONE, WORKING, WORKING_SHOWN,
   answeredWith, attachCommand, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
@@ -463,9 +463,23 @@ function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: 
  * read (what was detected, what is required, the command to copy), a card with no command while it
  * speaks a later version of its answers than the plugin reads, one line while it is of a later
  * minor than the plugin was tested with. Nothing for a tested one, and nothing while the read is
- * out or failed: OATS that cannot be run at all is the roster's notice.
+ * out. A version that could not be read at all (the read failed, and the home's one more try with
+ * it): one muted line that says so, with Check again. OATS that cannot be run at all is the
+ * roster's notice.
  */
-function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; checking: boolean; failure: string | null; onCheck: () => void }) {
+function CliNotice({ cli, checking, failure, unchecked, onCheck }: { cli: Cli | undefined; checking: boolean; failure: string | null; unchecked: boolean; onCheck: () => void }) {
+  // No version was ever read, twice over, while the roster reads: said in one line, with the way to
+  // ask again. New agent stays on: the kernel refuses a spawn it cannot make.
+  if (cli === undefined && unchecked) {
+    return (
+      <div data-testid="oats-home-cli-unchecked" className="flex flex-wrap items-center gap-2 text-muted-foreground">
+        <span>{CLI_UNCHECKED}</span>
+        <Button data-testid="oats-home-cli-retry" disabled={checking} onClick={onCheck}>
+          {checking ? CHECKING : CHECK_AGAIN}
+        </Button>
+      </div>
+    );
+  }
   if (cli === undefined || cli.state === "tested") return null;
   // A check that failed leaves the notice as it was, and says so: a press is never silent.
   const failed =
@@ -535,8 +549,8 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // Read once the home is seen, and again when the person asks: the installed CLI changes with an install, not with what the agents do.
-  const { cli, checking, failure: checkFailure, check } = useCli(visible);
-  const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
+  const { cli, checking, failure: checkFailure, unchecked, check } = useCli(visible, oats.phase === "ready");
+  const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} unchecked={unchecked} onCheck={check} />;
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and

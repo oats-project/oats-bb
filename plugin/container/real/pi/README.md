@@ -18,16 +18,22 @@ are the images, `answers/` (what the kernel printed for the form's preview and s
 `kernel.json` and `bridge.json` (what npm says of the two tarballs), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
 
-The first recorded run is of 2026-11-22: OATS 0.70.3 from npm (`@awebai/oats@0.70.3`, gitHead
-`38217e1ddb0356d5b9a2c16d1b0d1e304bca365f`), `@awebai/oats-pi@0.70.3`, pi 1.5.2
+The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
+`e5e7a2a48db42140718948553e8272fb4e8e3ed4`), `@awebai/oats-pi@0.70.5`, pi 1.5.2
 (`@earendil-works/pi-coding-agent`), bb-app at the root `bb-version` (0.50.1), the bb session
-provider of this checkout, no aweb. It was also the first run of the plugin against a kernel newer
-than 0.70.0.
+provider of this checkout, no aweb. Its first runs, the same day, were on 0.70.3: the first runs of
+the plugin against a kernel newer than 0.70.0.
+
+To move it to another release: in `../run.sh`, the pi run's default (`[ "$REAL_PI" != 1 ] ||
+KERNEL_NPM=${KERNEL_NPM-<version>}`) and the kernel tarball's integrity in the `case` below it; in
+`setup.sh` here, the bridge tarball's integrity for that version; and the versions named in this
+file and in `../README.md`. Or, for one run, with no edit: `KERNEL_NPM=<version> KERNEL_INTEGRITY=…
+OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `KERNEL_NPM`, `KERNEL_INTEGRITY` | `0.70.3`, that tarball's integrity | as the main run's; the kernel of this run |
-| `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.3`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
+| `KERNEL_NPM`, `KERNEL_INTEGRITY` | `0.70.5`, that tarball's integrity | as the main run's; the kernel of this run |
+| `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.5`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
 | `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against |
 | the others | as the main run | `REQUIRE_REAL_FLOOR`, `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` |
 
@@ -55,6 +61,12 @@ read.
 - **P0** The plugin reads the deployment on this kernel; bb reports its pi provider ready; bb's pi
   configuration lists the bridge at the kernel's version and nothing else; the plugin's harness
   list holds pi.
+- **P0b a preview the kernel refuses.** With the bridge taken out of bb's pi configuration for the
+  time of one call, the plugin's preview with the harness pi is refused by the provider's own
+  check of the planned launch (`E_BACKEND_NOT_READY`; a kernel from 0.70.1 refuses at the preview
+  what it would refuse at the spawn), and the plugin shows the kernel's code and message
+  unchanged. The kernel's answer is kept as `answers/spawn-preview-pi-refused.json`. The
+  configuration is put back, and the next preview answers.
 - **P1 the preview.** From the sidebar's New agent: a soul, the harness **pi** from the provider's
   list, the model `mock/echo` from the models bb lists for its pi provider, an instruction and a
   name. The form's column reads "Harness pi · mock/echo" from the kernel's preview; the `oats`

@@ -5,6 +5,8 @@
 // to the recording wrapper (../oats-record.mjs).
 //
 // It proves, THROUGH THE NEW AGENT FORM in a browser, that a person can launch a pi agent on bb:
+//   P0b a preview with the harness pi that the kernel refuses (the bridge missing) is shown as
+//       the kernel words it;
 //   P1  a preview with the harness pi answers, and the form shows it;
 //   P2  a spawn with the harness pi creates the agent, its bb thread opens, and it answers a turn;
 //   P3  the pi agent's own needs-input (`oats instance attention`, run by pi's own shell in its
@@ -228,6 +230,32 @@ try {
   check(JSON.stringify(packages) === JSON.stringify([`npm:@awebai/oats-pi@${kernel}`]), "bb's pi configuration lists the OATS bridge at the kernel's own version, and nothing else", JSON.stringify(packages));
   const list = act("the provider's harnesses", "spawnHarnesses", null);
   check(list?.harnesses.includes("pi"), "the bb session provider declares pi", JSON.stringify(list?.harnesses));
+
+  step("P0b a preview with the harness pi, refused: the bridge is not in bb's pi configuration");
+  // What a person meets on a machine where pi is not set up for bb. The provider reads bb's pi
+  // configuration at every check, so the bridge is taken out of its list for one call and put back.
+  const piSettings = join(process.env.HOME, ".pi", "agent", "settings.json");
+  const asInstalled = readFileSync(piSettings, "utf8");
+  let refusedPreview;
+  try {
+    writeFileSync(piSettings, `${JSON.stringify({ ...JSON.parse(asInstalled), packages: [] }, null, 2)}\n`);
+    refusedPreview = rpc("spawnPlan", { soul: SOUL, name: "pi-refused-developer", task: "", harness: "pi", model: MODEL });
+  } finally {
+    writeFileSync(piSettings, asInstalled);
+  }
+  const refusedCall = recorded(["spawn", SOUL], ["--preview", "pi-refused-developer"]);
+  let refusal;
+  try {
+    refusal = JSON.parse(refusedCall?.stdout ?? "").error;
+  } catch {
+    refusal = undefined; // no JSON printed: the check below says what was
+  }
+  check(refusedPreview.ok === false && refusal?.code === "E_BACKEND_NOT_READY" && /@awebai\/oats-pi/.test(refusal.message), "the kernel refuses the preview itself, with the provider's word that the bridge is missing (E_BACKEND_NOT_READY)", refusedCall?.stdout || JSON.stringify(refusedPreview));
+  check(refusedPreview.ok === false && refusal !== undefined && refusedPreview.message.endsWith(`${refusal.code}: ${refusal.message}`), "and the plugin shows the kernel's refusal unchanged", JSON.stringify(refusedPreview));
+  show("kernel", refusal === undefined ? "no refusal" : `${refusal.code}: ${refusal.message}`);
+  show("plugin", refusedPreview.ok ? refusedPreview.value : refusedPreview.message);
+  if (refusal !== undefined) evidence.keep("spawn-preview-pi-refused.json", refusedCall.stdout);
+  check(rowOf("pi-refused-developer") === undefined, "and nothing was created");
 
   step("P1 + P2 the New agent form: the harness pi, its preview, the spawn, the thread");
   let spawnedAt = null;

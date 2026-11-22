@@ -21,8 +21,8 @@ PI_AGENT_DIR=$HOME/.pi/agent
 KERNEL_VERSION=$(oats version --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
 # The bridge is released with its kernel and tested only at that version: never another.
 OATS_PI_VERSION=$KERNEL_VERSION
-if [ "$OATS_PI_VERSION" = 0.70.3 ]; then
-  OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY-sha512-Th+Vv//U65HSdeY1hfp1x0a2pqlP81Y1zl16NE32JV73RSX18E8yXQVrs04H/G2f1jWB+2XEWS6MKH7WzBfT8g==}
+if [ "$OATS_PI_VERSION" = 0.70.5 ]; then
+  OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY-sha512-ZimaoOJ962iWNkbKLtA49SeEmvEBviSOs58q1sM7XNpm943SqEbJaCvfwK0kSqIUUJLFhLaW6M7zvFc9a3ourw==}
 fi
 OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY:-}
 

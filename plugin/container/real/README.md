@@ -30,7 +30,7 @@ This is the run the release lane asks for before an oats-bb release.
 | `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
 | `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` | as `container/ci.sh` | keep the container, name it, the image, extra `docker run` arguments (`--dns 1.1.1.1`) |
-| `REAL_PI` | `0` | `1`: the pi run instead (below, "pi agents"; `container/ci.sh pi`). It changes the default of `KERNEL_NPM` to `0.70.3`, with that tarball's integrity |
+| `REAL_PI` | `0` | `1`: the pi run instead (below, "pi agents"; `container/ci.sh pi`). It changes the default of `KERNEL_NPM` to `0.70.5`, with that tarball's integrity |
 
 A kernel that is on no release yet, the way the run was made before OATS 0.70.0:
 
@@ -168,8 +168,9 @@ can launch a pi agent on bb. In plain words, on the machine that runs bb:
 3. **The aweb extension for pi, `@awebai/pi`, is NOT in that configuration.** A person who also
    runs pi agents in tmux usually has it in `~/.pi/agent`: OATS then refuses every pi launch on bb
    (`E_BACKEND_PI_LISTENER`). Give bb's server a pi configuration of its own (point 2).
-4. **A kernel that pairs with a released bridge, 0.70.3 or later for everything shown here.** The
-   question a pi extension's dialog asks reaches the home's card only from bridge 0.70.2.
+4. **A kernel that pairs with a released bridge, 0.70.2 or later for everything shown here** (the
+   pi run is on 0.70.5). The question a pi extension's dialog asks reaches the home's card only
+   from bridge 0.70.2.
 5. **A model pi can use.** pi's logins and model list are those of that same configuration. The
    form's model field lists them (bb's own list for its pi provider): pick one, or give the soul a
    `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model

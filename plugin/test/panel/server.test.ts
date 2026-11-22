@@ -60,3 +60,66 @@ describe("panelInstance", () => {
     await expect(backend.rpc("panelInstance", { instance: "panel-worktree-helper" })).rejects.toThrow("E_LOCAL_MISSING: no oats-local.yaml here");
   });
 });
+
+const HOME = "agents/oats-expert/instances/panel-worktree-helper";
+/** The argv of the fake's calls of one verb, with the deployment's own directory written `<deployment>`. */
+async function argvOf(started: Backend, verb: string): Promise<string[][]> {
+  return (await started.fake.calls()).filter((call) => call.verb === verb).map((call) => call.argv.map((word) => word.replace(started.fake.deployment, "<deployment>")));
+}
+
+describe("panelSoul, panelEvents, panelReadiness", () => {
+  it("each runs its one command on the home the kernel named, and answers what the kernel printed, read", async () => {
+    backend = await startBackend({ verbs: recorded });
+    const soul = await backend.rpc<{ soul: { name: string; capabilities: { name: string }[]; core: { slot: string }[] } }>("panelSoul", { instance: "panel-worktree-helper" });
+    expect(soul.soul).toMatchObject({ name: "oats-expert", repo: "oats-real", modules: 2 });
+    expect(soul.soul.capabilities.map((capability) => capability.name)).toEqual(["oats.bb", "oats.core"]);
+    const events = await backend.rpc<{ count: number; events: { kind: string }[] }>("panelEvents", { instance: "panel-worktree-helper" });
+    expect([events.count, events.events.map((event) => event.kind).join(" ")]).toEqual([8, "spawned launched waiting restarted launched stopped launched waiting"]);
+    const readiness = await backend.rpc<{ summary: unknown; checks: { key: string }[] }>("panelReadiness", { instance: "panel-worktree-helper", of: "instance" });
+    expect(readiness.summary).toEqual({ ready: true, required: 4, fail: 0, unknown: 0 });
+    // The home is the one of the kernel's own row (the recording's deployment), never a caller's.
+    const home = "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper";
+    expect(await argvOf(backend, "inspect --home")).toEqual([["inspect", "--home", home, "--json"]]);
+    expect(await argvOf(backend, "instance events")).toEqual([["instance", "events", "panel-worktree-helper", "--home", home, "--limit", "100", "--json"]]);
+    expect(await argvOf(backend, "readiness --home")).toEqual([["readiness", "--home", home, "--policy", "--json"]]);
+    expect(HOME).toBe(home.slice("/abs/deployment/".length));
+  });
+
+  it("a soul's readiness is asked by the key the roster names, once `oats souls` lists it", async () => {
+    backend = await startBackend({ verbs: recorded });
+    const readiness = await backend.rpc<{ summary: unknown }>("panelReadiness", { instance: "panel-worktree-helper", of: "soul" });
+    expect(readiness.summary).toEqual({ ready: true, required: 3, fail: 0, unknown: 0 });
+    expect(await argvOf(backend, "readiness --soul")).toEqual([["readiness", "--soul", "oats-expert", "--policy", "--json"]]);
+    // The key was checked against the kernel's own list before the command ran.
+    expect((await backend.verbs()).indexOf("souls")).toBeLessThan((await backend.verbs()).indexOf("readiness --soul"));
+  });
+
+  it("a soul the kernel's list does not hold starts no readiness command", async () => {
+    backend = await startBackend({ verbs: { ...recorded, souls: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { souls: [{ name: "another-soul" }] } }) } } });
+    await expect(backend.rpc("panelReadiness", { instance: "panel-worktree-helper", of: "soul" })).rejects.toThrow('"oats-expert" is not a soul `oats souls` lists for this deployment');
+    expect(await backend.verbs()).not.toContain("readiness --soul");
+  });
+
+  it("the kernel's refusal is answered with its code and message", async () => {
+    const refusal = (code: string, message: string) => ({ stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code, message } }), exit: 1 });
+    backend = await startBackend({
+      verbs: { ...recorded, "inspect --home": refusal("E_UNSUPPORTED_MODE", "this home has no modules"), "instance events": refusal("E_AMBIGUOUS_INSTANCE", "two homes"), "readiness --home": refusal("E_HOME_MISMATCH", "not this deployment's") },
+    });
+    await expect(backend.rpc("panelSoul", { instance: "panel-worktree-helper" })).rejects.toThrow("E_UNSUPPORTED_MODE: this home has no modules");
+    await expect(backend.rpc("panelEvents", { instance: "panel-worktree-helper" })).rejects.toThrow("E_AMBIGUOUS_INSTANCE: two homes");
+    await expect(backend.rpc("panelReadiness", { instance: "panel-worktree-helper", of: "instance" })).rejects.toThrow("E_HOME_MISMATCH: not this deployment's");
+  });
+
+  it("each refuses an instance the snapshot does not hold, and anything but the instance and what is asked of it, before a command starts", async () => {
+    backend = await startBackend({ verbs: recorded });
+    for (const method of ["panelSoul", "panelEvents"]) {
+      await expect(backend.rpc(method, { instance: "gone-helper" })).rejects.toThrow("is not an agent of this OATS deployment's current snapshot");
+      await expect(backend.rpc(method, { instance: "panel-worktree-helper", home: "/tmp" })).rejects.toThrow();
+    }
+    await expect(backend.rpc("panelReadiness", { instance: "gone-helper", of: "instance" })).rejects.toThrow("is not an agent of this OATS deployment's current snapshot");
+    await expect(backend.rpc("panelReadiness", { instance: "panel-worktree-helper", of: "--soul" })).rejects.toThrow();
+    await expect(backend.rpc("panelReadiness", { instance: "panel-worktree-helper", of: "soul", soul: "x" })).rejects.toThrow();
+    expect(await backend.verbs()).toEqual(["status"]);
+  });
+});
+

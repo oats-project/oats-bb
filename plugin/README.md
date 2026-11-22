@@ -95,18 +95,52 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 | Tab | Shows |
 |---|---|
 | **Instance** | the soul's mark and the instance's name as words, its state as a mark and its word with since when ("Running · 42m" since its last start, "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words, how long and since when, and its message. **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs (`bb · thread <id>`), since when, and the kernel's runtime error when it has one. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent and the sibling, each a link when it has a thread in bb. |
-| **Soul** | the soul's mark, key and description, **Details** (the agents root, with its Copy) and **Open soul page**. |
+| **Soul** | the soul's mark, key and description; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy) and **Open soul page**. |
 
-A fact the kernel does not report is not drawn: the panel never says "Not reported" and never
-guesses. The words are the Desktop's (`app/panel/words.ts` and `app/ui/words.ts` name where each
-comes from), and it is drawn with the patterns of `app/ui.tsx`.
+The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
+that says whether it is ready, then, behind "Checks and policy", the four checks (Installed,
+Configured, Member, Providers) with their items, what a provider itself answers, and the policy
+(child spawns, worktrees); **Refresh readiness** reads it again. These are the kernel's
+observations, never launch permission. **Reported lifecycle activity** (`oats instance events`):
+nothing is read until **Load activity** is pressed; then the last event and what is reported of
+waiting, and behind "Recent lifecycle events" each recorded row, newest first, with its time, its
+producer and its recorded facts (Spawned, Launched, Restarted, Stopped, Waiting claim, …); a
+launch that was blocked at a prompt also shows where its screen first differed from the
+confirmation OATS answers (what OATS expected and what the terminal showed, each under whose text it
+is). **Refresh activity** reads it again. It is the history of the instance's address as the kernel
+recorded it, not its current state. When the tab is left and come back to, what was read is shown
+again as the last observation ("Last observation retained; refresh required."), and nothing is read
+until Refresh activity.
+
+A read that is refused says the OATS Desktop's own sentence for that refusal where it has one
+(`app/panel/refusal-words.ts`: "The readiness read timed out.", "Choose one exact instance home."),
+then the code, with the kernel's message under Details and Retry; a read again that fails keeps what
+was read, under a line with the same sentence and code.
+
+On the Instance tab's facts and its header, a fact the kernel does not report is not drawn, and the
+panel never guesses. Three places do say that the kernel reported nothing, as the Desktop does: a
+core slot of an older kernel's inspection ("Not reported"), a recorded event's fact that is null
+("Signal: not reported") and a row whose incarnation the kernel does not name. The words are the
+Desktop's (`app/panel/words.ts`, `soul-words.ts`, `events-words.ts`, `readiness-words.ts`,
+`refusal-words.ts` and `app/ui/words.ts` name where each comes from), and it is drawn with the
+patterns of `app/ui.tsx`.
 
 How it reads: `panelInstance` (`contract/panel.ts`) answers one instance's facts from what the one
 status read kept, as the kernel printed it (`core.rowOf`: the instance's row, its agent group's row
 and the roster's root), parsed by `kernel/panel-instance.ts`. It starts no process. The panel reads
 again at every `oats/changed`; when a read fails it keeps what it read and says how old that is,
 with Retry; a first read that fails is a notice in words, the kernel's code after them and its
-message under Details. Another feature opens the panel on one of its tabs with
+message under Details. The other three reads each run one command on the home the kernel named: `panelSoul`
+(`oats inspect --home`), read when the Soul tab first shows and again when the instance was started
+again or what it was built from moved; `panelReadiness` (`oats readiness --home|--soul --policy`),
+read when its tab first shows and on Refresh; `panelEvents` (`oats instance events`), read only when
+asked. A tab turned back to shows what was read and runs nothing (bb's query client would read a
+mounted query again once its answer is 2 s old, so each of these queries is on only until it holds
+an answer: `app/panel/read.ts`). None is on a timer. One case is bb's: a first read that is still
+in flight or that failed is read again by bb when the window takes focus or the network returns
+while bb's own connection is down. A soul's readiness is asked by the key the roster
+names, checked against `oats souls` before its process starts.
+Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
 ## Automations

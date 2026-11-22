@@ -1,1 +1,14 @@
-{}
+{
+ "inspect --home": {
+  "file": "inspect-home.json"
+ },
+ "instance events": {
+  "file": "events.json"
+ },
+ "readiness --home": {
+  "file": "readiness-home.json"
+ },
+ "readiness --soul": {
+  "file": "readiness-soul.json"
+ }
+}

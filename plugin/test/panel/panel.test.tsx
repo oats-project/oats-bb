@@ -11,6 +11,7 @@ import type { Agent } from "../../model/types";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
 import { instanceAnswer, panelAgents, panelSnapshot, panelThreads } from "./handlers";
+import { waitingClock } from "../../app/ui/words";
 
 afterEach(() => {
   resetApp();
@@ -79,8 +80,8 @@ test("a running agent says since when it runs; a stopped one says Stopped and sh
 test("Needs input: the reason in words, how long and since when, and the agent's message; the header says the same wait", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");
-  const since = new Date("2026-11-21T18:14:12.916Z");
-  const clock = `${String(since.getHours()).padStart(2, "0")}:${String(since.getMinutes()).padStart(2, "0")}`;
+  // The clock as the words module says it here: with the date where local midnight falls inside the wait.
+  const clock = waitingClock("2026-11-21T18:14:12.916Z", NOW);
   expect(text(within(waiting).getByRole("heading"))).toBe("Needs input");
   expect(text(slot.getByTestId("oats-panel-waiting-head"))).toBe(`Asked for your attention · waiting 15 min (since ${clock})`);
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
@@ -361,7 +362,7 @@ test("an agent with no thread that waits on a person says Needs you, as its Need
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-waiting");
-  expect(stateOf(slot)).toMatch(/^Needs you· waiting 15 min \(since \d\d:\d\d\)$/);
+  expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)})`);
 });
 
 test("an agent on tmux shows a claim only while the kernel says it runs: one it cannot reach says Unreachable and shows none", async () => {

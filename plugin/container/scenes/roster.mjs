@@ -17,7 +17,16 @@ export default [
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
       check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.includes("pl-6") === true`), `${at} a child is indented under its parent`);
       check((await page.evaluate(textOf(testId("oats-workspace-line")))).includes("8 agents"), `${at} the workspace line`, await page.evaluate(textOf(testId("oats-workspace-line"))));
-      check((await page.evaluate(textOf(testId("oats-needs-line")))) === "3 need you", `${at} "3 need you"`, await page.evaluate(textOf(testId("oats-needs-line"))));
+      check((await page.evaluate(textOf(testId("oats-needs-line")))) === "! 3 need you", `${at} "3 need you", with the mark of an agent that waits`, await page.evaluate(textOf(testId("oats-needs-line"))));
+      // What the image's name says: every agent a row, each with its state in a word and its soul; the
+      // one that runs in tmux among them; the roster first, then who waits, New agent, the pages.
+      const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
+      const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable) · \S/;
+      check(
+        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · oats-developer · runs in tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"]),
+        `${at} eight agents, eight rows: each its mark, its state in a word and its soul, the one in tmux among them; then who waits, New agent and the pages`,
+        JSON.stringify(drawn),
+      );
       const others = await page.evaluate(texts(testId("oats-other-row")));
       check(others.some((text) => text.includes("Plain bb thread")), `${at} the thread that is no agent is under Other threads`, JSON.stringify(others));
       await page.shot(`a13-${viewport.name}-sidebar`);
@@ -48,14 +57,14 @@ export default [
       check(whole, `${at} nothing of the row is cut or out of sight`);
       await page.shot(`a13-${viewport.name}-thread`, { targets: true });
 
-      // the thread of an agent that needs you: its row is the open one, with its dot and its "?"
+      // the thread of an agent that needs you: its row is the open one, with the "!" and "Needs you"
       const release = threads.get("thr_release");
       await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
-      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-state="needs-you"]') && row.querySelector('[aria-hidden="true"][title="needs you"]')?.innerText.trim() === "?" ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
+      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.startsWith("Needs you · ") ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
       const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
-      check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its dot and its "?", on the open row's background`, `${marked} against ${resting}`);
+      check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
       await page.shot(`a13-${viewport.name}-thread-needs`);
 
       // a thread that is no agent has no row

@@ -5,7 +5,7 @@
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
 import { firstLine, THREADS_FAILED } from "../oats";
-import { Button, LINK, Notice } from "../ui";
+import { Button, LINK, Notice, TARGET } from "../ui";
 import { shown } from "../ui/text";
 import { readAge } from "../ui/words";
 
@@ -65,7 +65,7 @@ export function Unreadable({ failure, machine, at, now, onRetry }: { failure: Fa
           <>
             {words.retry ? <Button onClick={onRetry}>Retry</Button> : null}
             {words.settings ? (
-              <a className={LINK} href={settings}>
+              <a className={`${TARGET} ${LINK} inline-flex items-center`} href={settings}>
                 Open settings
               </a>
             ) : null}

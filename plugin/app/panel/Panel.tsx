@@ -125,7 +125,9 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   // Another thread or name than the one held: nothing of that agent is known yet.
   if (held === null || held.key !== key) return null;
   const roster: Roster = { soulOf: oats.soulOf, threadById: oats.threadById, nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES };
-  const failure: RosterFailure | null = oats.phase === "failed" ? { code: oats.code, line: failureLine(oats), retry: oats.retry } : null;
+  // OATS cannot be read: never (no roster), or not again (the roster is the last one read).
+  const unread = oats.phase === "failed" ? oats : oats.phase === "ready" ? oats.stale : null;
+  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, line: failureLine(unread), retry: oats.retry };
   return (
     <div data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       <div className="shrink-0 px-3">

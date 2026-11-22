@@ -716,15 +716,16 @@ const more = [
       await fitted(page, viewport, check, at, "stale");
         await page.shot(`panel-${viewport.name}-stale`);
 
-        // Never read: a page opened while OATS cannot be read.
+        // A page opened while OATS cannot be read: the plugin's server keeps the last roster it read,
+        // so the page shows the agent as last read, with how old that is and why, and Retry.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-agent-page")} ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 40);
-        check((notice ?? "").startsWith("OATS could not be read | alert | ") && notice.includes("E_LOCAL_MISSING") && notice.includes("Details") && notice.includes("Retry"), `${at} a page opened while OATS cannot be read: a notice in words, the code after them, Details and Retry`, notice);
+        const opened = await page.until(`(() => { const t = ${textOf(`${testId("oats-agent-page")} ${inPanel("oats-stale")}`)}; return t.includes("could not be read again") ? t : ""; })()`, 40);
+        check(/howing what was read (just now|\d+s ago|\d+ min ago|at \d\d:\d\d)\. OATS could not be read again \(E_LOCAL_MISSING\)\. Retry$/.test(opened ?? "") && (await page.evaluate(textOf(inPanel("oats-panel-name")))) === "Panel worktree helper", `${at} a page opened while OATS cannot be read: the agent as last read, how old that is and why, with Retry`, opened);
         await page.shot(`panel-${viewport.name}-page-unreadable`);
 
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
-        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
+        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-stale")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
         check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`);
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });

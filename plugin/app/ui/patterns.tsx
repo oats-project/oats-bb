@@ -87,8 +87,9 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
-  const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
+export function StatusLine({ state, word, since, detail, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; action?: ReactNode }) {
+  // `asOf`: the line is drawn from a roster kept as last read; it says so, last ("as of 2 min ago").
+  const said = [since, detail, asOf].map((part) => shown(part)).filter((part) => part !== "");
   // No line of it starts with a separator. Each part after the word carries its "·" in its own
   // left padding, and the row is pulled left by as much inside a frame that clips: a part that
   // wraps to the start of a line has its separator in the clipped strip, and the line starts

@@ -17,11 +17,12 @@ import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
+import { Button, LINK, plainClick } from "../ui";
 import { shown } from "../ui/text";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus, rowState, stoppedSince } from "./status";
+import { AgentStatusLine } from "./AgentStatusLine";
+import { agentStatus } from "./status";
 import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
@@ -88,8 +89,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return null; // not an OATS agent: take no space
 
   const { agent } = node;
-  const read = agentStatus(agent, node.thread, now);
-  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
+  const status = agentStatus(agent, node.thread, now);
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;
@@ -140,23 +140,25 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
-      {gone ? (
-        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={panelButton} />
-      ) : (
-        <StatusLine
-          state={status.state}
-          since={status.since}
-          detail={status.detail}
-          action={
+      {/* The one status line of an agent (the panel's header draws the same). The age of a roster kept as
+          last read is said by the one-line notice under it, so the line itself says no "as of". */}
+      <AgentStatusLine
+        agent={agent}
+        thread={node.thread}
+        now={now}
+        events={events.data?.events}
+        gone={gone}
+        action={
+          gone ? (
+            panelButton
+          ) : (
             <>
               {act}
               {panelButton}
             </>
-          }
-        />
-      )}
-      {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
-      {gone ? null : <KernelSays text={status.kernel} />}
+          )
+        }
+      />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">

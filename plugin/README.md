@@ -196,16 +196,22 @@ asked: the page says which OATS it needs.
   failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
   a run whose state is unknown.
 - **Test** runs nothing and says whether the row would run here, who `gh` acts as, and what would
-  fire now, with what is held and why. For a trigger on a capability's source it first says what
-  will run and with which parameters; only **Run test** runs that source's command, once.
+  fire now, with what is held and why. Its answer is on the row's page, so Test from the list's
+  menu opens that page. For a trigger on a capability's source it first says what will run and
+  with which parameters; only **Run test** runs that source's command, once, and only while the
+  trigger is what the confirmation showed (a change of its source or parameters, Back or another
+  row's page withdraws it).
 - **Edit summary** (a local item) and **Delete…** (a local schedule, after a confirmation); a
   workspace item is changed and removed in its repository.
 - **Enable scheduler**, where the scheduler is off: a confirmation says what it installs on this
   computer (the timer of `oats schedule host install`, for the account bb's machine runs as)
   before it does.
 
-An act is refused before any process starts for an id the list does not name; the kernel's own
-refusal is shown in a person's words with its code after.
+One act runs at a time. While it runs the page says so in words where its answer will be
+("Running daily-review…"); the answer, a test's result and a confirmation take the focus when they
+arrive, which brings them into view at any width. The lists are read again after every act. An act
+is refused before any process starts for an id the list does not name; the kernel's own refusal is
+shown in a person's words with its code after.
 
 Not there yet: the selection of the sidebar's Automations row while its page is open (it comes
 with the sidebar's own rework, for every page of the block), and creating and editing a schedule

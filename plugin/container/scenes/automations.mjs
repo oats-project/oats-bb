@@ -19,6 +19,17 @@ async function shotOf(page, selector, name) {
   await page.evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center" })`);
   await page.shot(name, { targets: true });
 }
+/**
+ * The text of `selector`, waited for: a read after a press or a navigation waits on the thing it
+ * reads, never on another element and never at once. → its text, or "" when it never came.
+ */
+const read = async (page, selector, seconds = 15) => (await page.until(`(() => ${textOf(selector)})()`, seconds)) ?? "";
+/** Waits until `expression` is `wanted` (compared as JSON). → what it was at the end, for the check to print. */
+async function settle(page, expression, wanted, seconds = 15) {
+  const same = `JSON.stringify(${expression}) === ${JSON.stringify(JSON.stringify(wanted))}`;
+  await page.until(`(() => ${same})()`, seconds);
+  return page.evaluate(expression);
+}
 /** Whether the whole box of `selector` is on screen: an image of it then shows it, and a person can reach it. */
 const inView = (selector) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return "absent"; const r = e.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight ? "in" : "out " + [r.left, r.top, r.right, r.bottom].map(Math.round).join(","); })()`;
@@ -59,19 +70,19 @@ const scenes = [
     name: "the two lists",
     run: async ({ page, at, viewport, check }) => {
       await open(page, "", ROW);
-      const tabs = await page.evaluate(texts('[role="tab"]'));
+      const tabs = await settle(page, texts('[role="tab"]'), ["Schedules 11", "Triggers 7"]);
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules 11", "Triggers 7"]), `${at} Automations shows its two tabs with their counts`, JSON.stringify(tabs));
-      const groups = await page.evaluate(texts(`${testId("oats-automations-group")} h3`));
+      const groups = await settle(page, texts(`${testId("oats-automations-group")} h3`), ["Runs on this computer 7", "Needs attention here 3", "Runs elsewhere 1"]);
       check(JSON.stringify(groups) === JSON.stringify(["Runs on this computer 7", "Needs attention here 3", "Runs elsewhere 1"]), `${at} the schedules are grouped by where they run`, JSON.stringify(groups));
-      const scheduler = await page.evaluate(textOf(testId("oats-automations-scheduler")));
+      const scheduler = await read(page, testId("oats-automations-scheduler"));
       check(/^Scheduler on · checked .+ · up to 5 at once$/.test(scheduler), `${at} the header says the scheduler is on`, scheduler);
       // From bb's wide layout up a row is five cells under their headings; below it a row is a stack.
-      const heads = await page.evaluate(visible('[role="columnheader"]'));
+      const heads = await settle(page, visible('[role="columnheader"]'), !viewport.mobile);
       check(heads === !viewport.mobile, `${at} ${viewport.mobile ? "a row is a stack: the headings are not drawn" : "the rows sit under the five headings"}`);
       await page.shot(`automations-${viewport.name}-schedules`, { targets: true });
 
       await open(page, "/triggers", ROW);
-      const n = await page.evaluate(count(ROW));
+      const n = await settle(page, count(ROW), 7);
       check(n === 7, `${at} the Triggers tab lists its 7 triggers`, String(n));
       await page.shot(`automations-${viewport.name}-triggers`, { targets: true });
 
@@ -104,7 +115,7 @@ const scenes = [
       // a spawn schedule on bb: the list gives way to the row's page, with Back
       const spawn = await open(page, "/schedules/local/daily-review", testId("oats-automation-spawns"));
       check(/Backend bb/.test(spawn) && /YOLO — skips permission prompts/.test(spawn), `${at} a schedule's page says what it spawns, on bb, in full mode`, spawn);
-      check((await page.evaluate(visible(ROW))) === false && (await page.evaluate(visible(testId("oats-automation-back")))) === true, `${at} the list gives way to the row's page, with Back`);
+      check((await settle(page, visible(ROW), false)) === false && (await settle(page, visible(testId("oats-automation-back")), true)) === true, `${at} the list gives way to the row's page, with Back`);
       await shotOf(page, testId("oats-automation-spawns"), `automations-${viewport.name}-schedule`);
       // focus: the row's page opens with focus on Back, and Back returns it to the row it was opened from
       await open(page, "", ROW);
@@ -137,7 +148,7 @@ const scenes = [
       // a pull-request trigger with its state
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const lead = await page.until(`(() => { const t = ${textOf(testId("oats-automation-history-note"))}; return /live now/.test(t) ? t : ""; })()`, 30);
-      check(lead === "on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await page.evaluate(textOf(detail))));
+      check(lead === "on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await read(page, detail)));
       await shotOf(page, testId("oats-automation-history-note"), `automations-${viewport.name}-trigger`);
 
       // a capability source's trigger: its parameters and the source's own words, quoted
@@ -193,7 +204,7 @@ const scenes = [
 
       // the switch says what it is and what a press does; a press asks the kernel and the row is read again
       const toggleOf = `${rowOf("local/weekly-cleanup")} [role="switch"]`;
-      const toggle = [await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.getAttribute("aria-checked") ?? ""`), await page.evaluate(textOf(toggleOf)), await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.title ?? ""`)].join(" | ");
+      const toggle = [await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.getAttribute("aria-checked") ?? ""`), await read(page, toggleOf), await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.title ?? ""`)].join(" | ");
       check(toggle === "false | This computer Off | Off here: click to turn it on", `${at} a row that is off here has its switch off, and says a press turns it on`, toggle);
       await page.evaluate(reach(rowOf("local/weekly-cleanup")));
       await page.evaluate(click(toggleOf));
@@ -384,7 +395,7 @@ const scenes = [
     run: async ({ page, at, viewport, check }) => {
       const off = await open(page, "", testId("oats-automations-scheduler-off"));
       check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled. Enable scheduler", `${at} a scheduler that is off says nothing here runs`, off);
-      const header = await page.evaluate(textOf(testId("oats-automations-scheduler")));
+      const header = await read(page, testId("oats-automations-scheduler"));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
       await page.shot(`automations-${viewport.name}-scheduler-off`, { targets: true });
       // Enable scheduler: says what it installs on this computer before it does; here the kernel refuses (no service manager)
@@ -405,7 +416,7 @@ const scenes = [
     run: async ({ page, at, viewport, check }) => {
       const empty = await open(page, "", testId("oats-automations-empty"));
       check(/^No schedules yet/.test(empty), `${at} with no schedule yet the page says so and how to add one`, empty);
-      const foot = await page.evaluate(textOf(testId("oats-automations-foot")));
+      const foot = await read(page, testId("oats-automations-foot"));
       check(/^Workspace items appear after the next sync/.test(foot), `${at} before the first sync the page says when workspace items appear`, foot);
       await page.shot(`automations-${viewport.name}-empty`, { targets: true });
     },
@@ -416,7 +427,7 @@ const scenes = [
     run: async ({ page, at, viewport, check }) => {
       const failed = await open(page, "", testId("oats-automations-failed"));
       check(failed === "Schedules could not be read /abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}} E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
-      const tabs = await page.evaluate(texts('[role="tab"]'));
+      const tabs = await settle(page, texts('[role="tab"]'), ["Schedules 11", "Triggers 7"]);
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules", "Triggers 7"]), `${at} the other list is still read`, JSON.stringify(tabs));
       await page.shot(`automations-${viewport.name}-failed`, { targets: true });
     },
@@ -428,11 +439,11 @@ const scenes = [
       await page.goto("/plugins/oats/automations/triggers/oats-real/harvest-review");
       const poll = await page.until(`(() => ${textOf(testId("oats-automation-last-poll"))})()`, 30);
       check(/^Last poll .+ failed: the source refused$/.test(poll ?? ""), `${at} a failed poll says when, and its cause in words`, poll);
-      const error = await page.evaluate(textOf(testId("oats-automation-poll-error")));
+      const error = await read(page, testId("oats-automation-poll-error"));
       check(error === "acme.graph:harvest-branches refused the poll E_TRIGGER_POLL", `${at} the kernel's error follows, its code after`, error);
-      const says = await page.evaluate(textOf(testId("oats-automation-source-says")));
+      const says = await read(page, testId("oats-automation-source-says"));
       check(says === "acme.graph · harvest-branches says: graph-offline <img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run.", `${at} the source's own refusal is quoted under whose it is`, says);
-      const from = await page.evaluate(textOf(testId("oats-automation-lists-from")));
+      const from = await read(page, testId("oats-automation-lists-from"));
       check(from === "From the last successful poll, before the failure above", `${at} the lists under it say they are the last good poll's`, from);
       // Open capability: in this stage `oats capabilities` answers the recording's workspace, which lists the source's capability once
       const openCapability = await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automation-open-capability"))})?.getAttribute("aria-label") ?? "")()`, 20);
@@ -447,7 +458,7 @@ const scenes = [
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const failed = await page.until(`(() => ${textOf(testId("oats-automation-status-failed"))})()`, 30);
       check(failed === "This trigger's state could not be read no trigger \"oats-real/proposal-review\" in /abs/deployment What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_TRIGGER_UNKNOWN Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
-      const last = await page.evaluate(textOf(testId("oats-automation-run")));
+      const last = await read(page, testId("oats-automation-run"));
       check(/#41 · opened · oats-developer-review-pr-41$/.test(last), `${at} the row's own last fire still shows under it`, last);
       await shotOf(page, testId("oats-automation-status-failed"), `automations-${viewport.name}-trigger-state-failed`);
     },
@@ -472,9 +483,15 @@ const scenes = [
       await page.until(visible(testId("oats-automations-refresh")), 40);
       await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automations-refresh"))})?.disabled === false ? "ready" : "")()`, 40);
       await page.evaluate(click(testId("oats-automations-refresh")));
-      await sleep(2500);
-      await page.goto("/plugins/oats/automations");
-      const reading = await page.until(`(() => ${textOf(`${testId("oats-automations-page")} ${testId("oats-loading")}`)})()`, 20);
+      // The page cannot see when the server's new read starts (after its own re-read of OATS, a
+      // second or two). A load that comes before it is answered at once with the lists the server
+      // holds: the scene then loads again, by when that read is under way.
+      let reading;
+      for (let attempt = 0; attempt < 3 && !reading; attempt += 1) {
+        await sleep(2500);
+        await page.goto("/plugins/oats/automations");
+        reading = await page.until(`(() => ${textOf(`${testId("oats-automations-page")} ${testId("oats-loading")}`)})()`, 6);
+      }
       check(reading === "Reading schedules…", `${at} while the lists are read the page says "Reading schedules…"`, String(reading));
       await page.shot(`automations-${viewport.name}-loading`, { targets: true });
       await page.until(visible(ROW), 60);

@@ -161,6 +161,16 @@ test("the harness: the soul's default passes nothing and says what the kernel re
   expect(calls(one, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]);
 });
 
+test("while the provider's harnesses are read the field is in its place, off and saying so: nothing jumps when the list arrives", async () => {
+  let arrive: (value: { harnesses: string[]; hostId: string | null }) => void = () => undefined;
+  const slot = await form("oats-developer", previews({ spawnHarnesses: () => new Promise((resolve) => (arrive = resolve)) }));
+  const harness = (await slot.findByTestId("oats-spawn-harness")) as HTMLButtonElement;
+  expect([harness.disabled, harness.textContent]).toEqual([true, "Reading the harnesses…▾"]);
+  await act(async () => arrive({ harnesses: ["claude", "pi"], hostId: "host_falcon" }));
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-harness") as HTMLButtonElement).disabled).toBe(false));
+  expect(slot.getByTestId("oats-spawn-harness").textContent).toMatch(/^The soul's default/);
+});
+
 test("the model: Default says what the kernel resolved and passes nothing; a suggestion of bb's or a typed id is passed", async () => {
   const bbModel = (model: string, displayName = model) => ({ id: model, model, displayName, description: "", isDefault: false, defaultReasoningEffort: "medium" });
   const slot = await ready(previews(), { models: () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5")] }) });

@@ -11,6 +11,7 @@ export const titleFor = (soul: string, workspace: string | null): string => (wor
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
 export const READING_SOULS = "Reading the souls…";
+export const READING_HARNESSES = "Reading the harnesses…";
 export const FILTER_SOULS = "Filter souls";
 export const FILTER_HARNESSES = "Filter harnesses";
 export const FILTER_INSTANCES = "Filter instances";

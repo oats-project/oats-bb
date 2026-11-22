@@ -424,13 +424,15 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <Field label={W.TASK_LABEL} optional>
                 <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
               </Field>
-              {harnesses.choice ? (
+              {/* In its place while the provider's list is read, so that nothing jumps when it arrives; gone only where there is nothing to choose. */}
+              {harnesses.choice || harnesses.status === "loading" ? (
                 <Field label={W.HARNESS_LABEL}>
                   <Choice
                     testId="oats-spawn-harness"
                     field="harness"
-                    value={harness}
-                    placeholder={SOUL_DEFAULT}
+                    value={harnesses.choice ? harness : "\u0000"}
+                    disabled={!harnesses.choice}
+                    placeholder={W.READING_HARNESSES}
                     filterLabel={W.FILTER_HARNESSES}
                     options={[{ id: "", label: resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null), detail: W.HARNESS_DEFAULT_DETAIL }, ...harnesses.options]}
                     onChange={setHarness}

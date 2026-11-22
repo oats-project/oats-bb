@@ -16,8 +16,8 @@ const q = (id) => JSON.stringify(testId(id));
 export const choose = (id, value) =>
   `(async () => { const field = document.querySelector(${q(id)}); if (!field || field.disabled) return false; if (field.getAttribute("aria-expanded") !== "true") field.click(); let option; for (let i = 0; i < 40 && !option; i += 1) { await new Promise((done) => setTimeout(done, 50)); option = [...document.querySelectorAll(${q(`${id}-option`)})].find((e) => e.getAttribute("data-value") === ${JSON.stringify(value)}); } if (!option) return false; option.click(); await new Promise((done) => setTimeout(done, 50)); return document.querySelector(${q(id)}).getAttribute("data-value") === ${JSON.stringify(value)}; })()`;
 const click = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; e.click(); return true; })()`;
-/** The souls are read: the soul field lists them. */
-const SOULS_READ = `document.querySelector(${q("oats-spawn-soul")})?.disabled === false`;
+/** The souls and the provider's harnesses are read: both fields can be opened. */
+const SOULS_READ = `document.querySelector(${q("oats-spawn-soul")})?.disabled === false && document.querySelector(${q("oats-spawn-harness")})?.disabled === false`;
 /** The form's first control. */
 const FIRST = `document.querySelector(${q("oats-spawn-form")}).querySelector("button, select, textarea, input").getAttribute("data-testid")`;
 /** What will be created is read for the values on screen: the facts are drawn, none being read again, and Spawn can be pressed. → the column's text. */

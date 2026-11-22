@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.0
+
+The OATS plugin for bb shows OATS's Automations, and the agent's panel gains its Soul tab,
+recorded activity and readiness. The team image's pi bridge moves to `@awebai/oats-pi`
+0.70.3. Package `oats.bb` 0.3.0. Nothing changes in the session provider.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.3.0`, then `oats sync`. The floor
+  stays OATS 0.70.0 and bb-app 0.50.1, and 0.2.0's upgrade notes for pi agents still apply.
+- For pi agents, OATS 0.70.3 with `oats update` brings the bridge's fix for a question that
+  could stand unseen after a second pi died during a clear (oats-project/oats#2076). The
+  team image pins `@awebai/oats-pi` 0.70.3, and the pi contract test runs with OATS 0.70.3.
+
+### The OATS plugin for bb
+
+- **Automations, read-only.** A page lists OATS's schedules and triggers, grouped by where
+  they run: here, needing attention, or elsewhere. It shows each one's definition, last run
+  and next due time, and a trigger's recorded state (`oats trigger status`).
+  - A schedule's prompt and wake message are drawn whole, as the person wrote them. Every
+    other text from OATS goes through the display filter.
+  - The sidebar row carries a mark while a schedule's last run failed.
+  - It needs an OATS that lists the feature `automations` with `automationsApi` 1. No act
+    is offered yet.
+- **The agent's panel, part 2, read-only.**
+  - The Soul tab shows the soul the instance was spawned from (`oats inspect --home`).
+  - Activity shows the instance's recorded lifecycle events (`oats instance events`, the
+    last 100).
+  - Readiness shows the instance's or its soul's readiness (`oats readiness --policy`).
+  - The browser names only the instance. The home and the soul come from the kernel's own
+    roster.
+
 ## 0.2.0
 
 pi agents run on bb, beside Claude Code agents, and the OATS plugin for bb gains the

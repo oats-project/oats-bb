@@ -16,3 +16,9 @@ instance's name as words).
 | Automations: the notice that the host scheduler is off | "The scheduler is not running on this computer, so nothing here runs until it is enabled." (one sentence in a banner) | title **The scheduler is not running on this computer**, then "Nothing here runs until it is enabled." | The standard's notice has a title: the sentence's first clause is the title, the rest follows. No word is changed. |
 | Automations: the notice that this computer has no host name | "This computer has no host name, so it runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it." | title **This computer has no host name**, then "It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it." | The same: a title, then the rest of the Desktop's sentence. |
 | Automations: a list that could not be read | the kernel's message alone, in the error colour | title **Schedules could not be read** (or **Triggers …**), the kernel's message under it, its code after, Retry | The standard: a person's words first, the kernel's code after. The Desktop has no sentence of its own here. |
+
+## The instance panel
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| An inspection the installed OATS answered and the reader cannot read (the Soul tab, `app/panel/refusal-words.ts`) | "The installed OATS CLI returned an inspection this Desktop cannot read. Update OATS and retry." | "The installed OATS CLI returned an inspection this plugin cannot read. Update OATS and retry." | It is the plugin that reads it, not the Desktop. |

@@ -52,6 +52,7 @@ A time is said only where the kernel recorded one; the plugin invents none.
 | Idle | none | the kernel records none | |
 | Failed | none; the reason in its place: "Its session ended" | the kernel records none (a session that died wrote nothing) | |
 | Unreachable | none; the reason in its place: "OATS cannot reach its session", with the kernel's own message under Details | the kernel records none | |
+
 ## The home
 
 | Thing | The Desktop says | The plugin says | Why |

@@ -247,7 +247,7 @@ test("each card has its own reply, named for its agent, and sends through bb's o
   ]);
   // No reply stands apart from a card: every box is inside the card of the agent it writes to.
   for (const box of slot.getAllByTestId("oats-reply")) expect(box.closest('[data-testid="oats-needs-card"]')).not.toBeNull();
-  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => !["snapshot", "souls", "capabilities", "teams", "machines", "automations"].includes(method))).toEqual([]); // reads only (the roster, the tiles' counts, the Automations tile's mark): never an OATS act
+  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => !["snapshot", "souls", "capabilities", "teams", "machines", "automations", "homeCli"].includes(method))).toEqual([]); // reads only (the roster, the tiles' counts, the Automations tile's mark): never an OATS act
 });
 
 test("a failed send says why, on the card, and keeps the text", async () => {
@@ -675,4 +675,94 @@ test("a page's tile carries the mark its feature gives it: Automations while a r
   } finally {
     remove();
   }
+});
+
+// ---- the installed oats against what the plugin is built for; the pages this release shows
+
+const withCli = (cli: { version: string | null; desktopApi: number | null; state: "older" | "tested" | "newer" | "newer-api" | "unknown" }, agents: Agent[] = fixtureAgents()) =>
+  homePage({ rpc: { ...handlers({}, agents), homeCli: () => cli } as Handlers });
+
+test("a tested oats says nothing; so does a version read that failed (OATS that cannot be run is the roster's notice)", async () => {
+  const tested = await homePage();
+  await tested.findByTestId("oats-home-needs");
+  await waitFor(() => expect(tested.inspection.rpcCalls.some((call) => call.method === "homeCli")).toBe(true));
+  expect(tested.queryByTestId("oats-home-cli")).toBeNull();
+  expect(tested.queryByTestId("oats-home-cli-line")).toBeNull();
+  tested.unmount();
+  const failed = await homePage({ rpc: { ...handlers(), homeCli: () => { throw new Error("OATS_TIMEOUT: oats did not answer"); } } as Handlers });
+  await failed.findByTestId("oats-home-needs");
+  await waitFor(() => expect(failed.inspection.rpcCalls.some((call) => call.method === "homeCli")).toBe(true));
+  expect(failed.queryByTestId("oats-home-cli")).toBeNull();
+  expect(failed.queryByRole("alert")).toBeNull();
+});
+
+test("an oats older than the plugin works with: the card says what was detected, what is required and the command to copy", async () => {
+  const slot = await withCli({ version: "0.69.4", desktopApi: 1, state: "older" });
+  const card = await slot.findByTestId("oats-home-cli");
+  expect(card.querySelector("h3")!.textContent).toBe("Compatible oats CLI required");
+  expect(card.textContent).toContain("Everything the plugin shows and does runs through the installed oats CLI.");
+  expect(within(card).getAllByTestId("oats-fact").map((fact) => fact.textContent)).toEqual(["Detected0.69.4", "Required0.70.0 or newer, with desktop API 1"]);
+  expect(card.querySelector("code")!.textContent).toBe("npm install -g @awebai/oats@0.70");
+  expect(within(card).getByRole("button", { name: "Copy install command" })).toBeTruthy();
+  // the card comes before what needs the person, and the roster is still drawn
+  expect(card.compareDocumentPosition(slot.getByTestId("oats-home-needs")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("an oats whose version cannot be read gets the same card, and says so", async () => {
+  const slot = await withCli({ version: null, desktopApi: null, state: "unknown" });
+  const card = await slot.findByTestId("oats-home-cli");
+  expect(card.querySelector("h3")!.textContent).toBe("Compatible oats CLI required");
+  expect(within(card).getAllByTestId("oats-fact")[0]!.textContent).toBe("Detectedunknown: oats answered no version the plugin can read");
+});
+
+test("an oats that speaks a newer desktop API: the card names the plugin as the older one and offers no npm command", async () => {
+  const slot = await withCli({ version: "0.74.0", desktopApi: 2, state: "newer-api" });
+  const card = await slot.findByTestId("oats-home-cli");
+  expect(card.querySelector("h3")!.textContent).toBe("This plugin is older than the installed oats CLI");
+  expect(card.textContent).toContain("The installed oats CLI is 0.74.0, which speaks a newer desktop API (2) than this plugin's (1). Update the OATS plugin to use it.");
+  expect(card.querySelector("code")).toBeNull();
+  expect(card.textContent).not.toContain("npm");
+  expect(within(card).queryByRole("button")).toBeNull();
+});
+
+test("an oats of a later minor than the plugin was tested with: one line, no card, and nothing is turned off", async () => {
+  const slot = await withCli({ version: "0.71.2", desktopApi: 1, state: "newer" }, []);
+  expect((await slot.findByTestId("oats-home-cli-line")).textContent).toBe("This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2.");
+  expect(slot.queryByTestId("oats-home-cli")).toBeNull();
+  expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("behind the card New agent is off, and says why", async () => {
+  const slot = await withCli({ version: "0.69.4", desktopApi: 1, state: "older" }, []);
+  await slot.findByTestId("oats-home-cli");
+  const button = slot.getByTestId("oats-home-new-agent") as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(slot.getByTestId("oats-disabled-reason").textContent).toBe("Off until a compatible oats CLI is installed.");
+  fireEvent.click(button);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+});
+
+test("the release's default shows the home alone: the Agents tile only, no count read for a page that is not shown, and no New agent with nowhere to open", async () => {
+  const slot = await homePage({ settings: { pages: "home" } });
+  await slot.findByTestId("oats-home-needs");
+  expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-agents"]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => ["capabilities", "teams", "machines"].includes(method))).toEqual([]);
+  slot.unmount();
+  const some = await homePage({ settings: { pages: "home, teams" } });
+  await some.findByTestId("oats-home-needs");
+  expect(Array.from(some.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-agents", "oats-tile-teams"]);
+  some.unmount();
+  const empty = await homePage({ rpc: handlers({}, []), sidebarThreads: calm(), settings: { pages: "home" } });
+  await empty.findByTestId("oats-empty");
+  expect(empty.queryByTestId("oats-home-new-agent")).toBeNull();
+});
+
+test("the home's count of who needs you is the sidebar's: an agent on tmux that asks is in the badge, the heading and the summary", async () => {
+  const agents = [...fixtureAgents(), TMUX_ASKS];
+  const latest = await badge({ rpc: handlers({}, agents) });
+  await waitFor(() => expect(latest()).toEqual({ count: 4, tone: "warning", label: "4 agents need you" }));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you4");
+  expect(slot.getByTestId("oats-home-summary").textContent).toContain(" · 4 need you");
 });

@@ -14,28 +14,29 @@ import type { BbNavigate, ExperimentalBadge, ExperimentalThreadTabProps, PluginN
 import { needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import type { Oats } from "../oats";
+import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { useNow } from "../roster/now";
 import { Unreadable } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Card, DisabledReason, Empty, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { Button, Card, Code, CopyButton, DisabledReason, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
-import { pageLinks } from "../workspace/pages";
+import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board } from "./board";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, READING, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
-  replyLabel, replyPlaceholder, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, tileCount, tmuxNote,
+  BACK_TO_HOME, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD, NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
+  detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxNote,
 } from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 
-/** The home's navigation badge: how many agents need the person, the thread-less ones (on tmux, their thread gone) among them, as the home lists them. */
+/** The home's navigation badge: how many agents need the person, the ones with no bb thread among them: the sidebar's own count (`view.needing`). */
 export function useHomeBadge(): ExperimentalBadge | null {
   const oats = useOats();
-  const n = oats.phase === "ready" ? board(oats.view, 0).needsYou.length : 0;
+  const n = oats.phase === "ready" ? oats.view.needing.length : 0;
   return n === 0 ? null : { count: n, tone: "warning", label: needsYouLabel(n) };
 }
 
@@ -291,10 +292,12 @@ function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: numbe
 /** The workspace's tiles: Agents (Home › Agents) and the plugin's pages, each with its count. */
 function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onAgents: () => void }) {
   const navigate = useBbNavigate();
-  const souls = useRead("souls", { enabled: visible });
-  const capabilities = useRead("capabilities", { enabled: visible });
-  const teams = useRead("teams", { enabled: visible });
-  const machines = useRead("machines", { enabled: visible });
+  // A tile leads to a page: only the pages this release shows have one, and only their counts are read.
+  const pages = usePagesShown();
+  const souls = useRead("souls", { enabled: visible && pages.has("souls") });
+  const capabilities = useRead("capabilities", { enabled: visible && pages.has("capabilities") });
+  const teams = useRead("teams", { enabled: visible && pages.has("teams") });
+  const machines = useRead("machines", { enabled: visible && pages.has("machines") });
   const counted = (read: { status: string }, n: number | undefined): number | "loading" | "failed" => (read.status === "error" ? "failed" : n === undefined ? "loading" : n);
   const counts: Record<string, number | "loading" | "failed" | null> = {
     souls: counted(souls, souls.data?.souls.length),
@@ -311,7 +314,7 @@ function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onA
           <span className="text-xs text-muted-foreground">{tileCount(made.all.length)}</span>
         </button>
       </li>
-      {pageLinks().map((page) => (
+      {pageLinks().filter((page) => pages.has(page.path)).map((page) => (
         <PageTile key={page.path} page={page} n={counts[page.path] ?? null} look={`${TARGET} ${tile}`} visible={visible} onOpen={() => navigate.toPluginPanel(page.path)} />
       ))}
     </ul>
@@ -351,9 +354,64 @@ function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: 
   );
 }
 
+type Cli = { version: string | null; desktopApi: number | null; state: "older" | "tested" | "newer" | "newer-api" | "unknown" };
+
+/**
+ * Where the installed `oats` stands against what the plugin is built for (D-004, D-007, D-008), on
+ * the home only: a card while it is older than the plugin works with or its version cannot be
+ * read (what was detected, what is required, the command to copy), a card with no command while it
+ * speaks a later version of its answers than the plugin reads, one line while it is of a later
+ * minor than the plugin was tested with. Nothing for a tested one, and nothing while the read is
+ * out or failed: OATS that cannot be run at all is the roster's notice.
+ */
+function CliNotice({ cli }: { cli: Cli | undefined }) {
+  if (cli === undefined || cli.state === "tested") return null;
+  if (cli.state === "newer") {
+    return (
+      <p data-testid="oats-home-cli-line" className="m-0 text-muted-foreground">
+        {testedWhy(OATS_TESTED_MINOR, shown(cli.version ?? ""))}
+      </p>
+    );
+  }
+  const facts = (
+    <Facts>
+      <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>
+      <Fact label={REQUIRED}>{required(OATS_FLOOR, DESKTOP_API)}</Fact>
+    </Facts>
+  );
+  if (cli.state === "newer-api") {
+    return (
+      <div data-testid="oats-home-cli" data-state={cli.state}>
+        <Notice title={CLI_NEWER_API} tone="warning">
+          <p className="m-0">{newerApiWhy(cli.version === null ? null : shown(cli.version), cli.desktopApi, DESKTOP_API)}</p>
+          {facts}
+        </Notice>
+      </div>
+    );
+  }
+  const command = installCommand(OATS_TESTED_MINOR);
+  return (
+    <div data-testid="oats-home-cli" data-state={cli.state}>
+      <Notice title={CLI_REQUIRED} tone="warning" actions={<CopyButton text={command} name="Copy install command" />}>
+        <p className="m-0">{CLI_REQUIRED_WHY}</p>
+        {facts}
+        <p className="m-0">
+          <Code>{command}</Code>
+        </p>
+      </Notice>
+    </div>
+  );
+}
+
 function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onAgents: () => void; onBack: () => void }) {
   const now = useNow();
   const navigate = useBbNavigate();
+  const pages = usePagesShown();
+  // Read once: the installed CLI changes with an install, not with what the agents do.
+  const cli = useRead("homeCli", { enabled: visible, live: false }).data;
+  const notice = <CliNotice cli={cli} />;
+  // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
+  const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
   if (oats.phase === "loading") return <Loading>{READING}</Loading>;
@@ -370,10 +428,25 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
     );
   }
   if (made.all.length === 0) {
+    const somewhere = hasNewAgent(pages.has("souls"));
     return (
       <>
         {stale}
-        <Empty title={FIRST_RUN[0]} action={<Button variant="primary" data-testid="oats-home-new-agent" onClick={() => navigate.toPluginPanel("souls")}>New agent</Button>}>
+        {notice}
+        <Empty
+          title={FIRST_RUN[0]}
+          action={
+            // Offered where New agent has somewhere to open (the sidebar's rule); off, with why, behind the CLI card.
+            somewhere ? (
+              <>
+                <Button variant="primary" data-testid="oats-home-new-agent" disabled={incompatible} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
+                  New agent
+                </Button>
+                {incompatible ? <DisabledReason>{NEW_AGENT_HELD}</DisabledReason> : null}
+              </>
+            ) : null
+          }
+        >
           {FIRST_RUN[1]}
         </Empty>
         <Tiles made={made} visible={visible} onAgents={onAgents} />
@@ -383,6 +456,7 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
   return (
     <>
       {stale}
+      {notice}
       <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
         {made.needsYou.length === 0 ? (
           <p data-testid="oats-home-nothing" className="m-0 text-muted-foreground">

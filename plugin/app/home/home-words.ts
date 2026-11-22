@@ -61,3 +61,23 @@ export const NOT_ANSWERED = "The answer was not sent";
 export const HELD = "Held until OATS is read again: what is shown may have changed.";
 /** An agent with no bb thread: nothing can be sent to it from bb. */
 export const tmuxNote = (where: string): string => `${where}: answer it in its terminal.`;
+
+// ---- the installed `oats` against what the plugin is built for (kernel/compat.ts)
+// As the OATS Desktop's CLI card and its one line (packages/desktop/renderer/views/cli-status.mjs,
+// packages/client/above-tested-notice.mjs), said of the plugin.
+export const CLI_REQUIRED = "Compatible oats CLI required";
+export const CLI_REQUIRED_WHY = "Everything the plugin shows and does runs through the installed oats CLI.";
+export const CLI_NEWER_API = "This plugin is older than the installed oats CLI";
+/** The installed CLI speaks a later version of its answers than the plugin reads: what to do is to update the plugin, never to install an older CLI. */
+export const newerApiWhy = (version: string | null, api: number | null, reads: number): string =>
+  `The installed oats CLI${version === null ? "" : ` is ${version}, which`} speaks a newer desktop API${api === null ? "" : ` (${api})`} than this plugin's (${reads}). Update the OATS plugin to use it.`;
+/** The one line for a CLI of a later minor than the plugin was tested with: nothing is turned off. */
+export const testedWhy = (testedThrough: string, version: string): string => `This plugin was tested with oats CLIs up to ${testedThrough}; the installed CLI is ${version}.`;
+export const DETECTED = "Detected";
+export const REQUIRED = "Required";
+export const detected = (version: string | null): string => version ?? "unknown: oats answered no version the plugin can read";
+export const required = (floor: string, api: number): string => `${floor} or newer, with desktop API ${api}`;
+/** The command that installs the newest release of the minor the plugin was tested with. */
+export const installCommand = (testedMinor: string): string => `npm install -g @awebai/oats@${testedMinor}`;
+/** Why New agent is off behind the card. */
+export const NEW_AGENT_HELD = "Off until a compatible oats CLI is installed.";

@@ -55,6 +55,18 @@ describe("the home's board", () => {
   });
 });
 
+describe("the order of what needs the person", () => {
+  it("a claim an agent OATS stopped still carries orders nothing: it needs the person through bb's own question, with no instant", () => {
+    const asks = [
+      agent("stopped-asks", { running: false, runtimeState: "stopped", waiting: { reason: "permission", message: "dead", since: "2026-11-21T18:29:00.000Z" } }),
+      agent("claims", { waiting: { reason: "attention", message: null, since: "2026-11-21T18:00:00.000Z" } }),
+    ];
+    const made = board(view(asks, [thread("thr_stopped-asks", { hasPendingInteraction: true }), thread("thr_claims")]), NOW);
+    // by the dead claim's instant the stopped one would be first; with none it follows the one that has one
+    expect(made.needsYou.map((entry) => entry.agent.instance)).toEqual(["claims", "stopped-asks"]);
+  });
+});
+
 describe("the home's words", () => {
   it("the summary: every agent once, the plugin's state words, a state with no agent left out but for working and needs you", () => {
     expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0 })).toBe("8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed");

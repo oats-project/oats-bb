@@ -118,8 +118,17 @@ async function untilRoster(matches, seconds = 40) {
   }
   return undefined;
 }
-/** Every page, spelled another way than the harness's ALL_PAGES: setting it is a change of the plugin's settings and no change of what is shown. */
-const ALL_PAGES_AGAIN = "home,automations,souls,capabilities,teams,machines";
+/**
+ * Names the `oats` the plugin runs, in the plugin's setting `oatsBin` (null: unset, the `oats` of the
+ * PATH, as the run has it). The fake is that one program however it is spelled, so nothing changes
+ * in what is read; but a change of a setting that says WHERE OATS is read (`deployment`, `oatsBin`,
+ * `host`; not `pages`) makes the plugin's server forget the roster it holds, which may be another
+ * deployment's: the next read is a first read.
+ */
+const OATS_BIN = [join(homedir(), ".local/bin/oats"), join(homedir(), ".local/bin/./oats")];
+function oatsBin(value) {
+  execFileSync("bb", ["plugin", "config", "oats", ...(value === null ? ["unset", "oatsBin"] : ["set", "oatsBin", value])], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
 /** No tile still counts: an image shows one state (a scene about "Counting…" would not wait for this). */
 const counted = `![...document.querySelectorAll(${JSON.stringify(`${PAGE} ${testId("oats-home-tiles")} button`)})].some((tile) => tile.innerText.includes("Counting"))`;
 
@@ -301,6 +310,10 @@ export default [
         check(line === "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2. Check again" && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null`)) === true, `${at} one line with Check again, and no card`, line);
         await sound(page, viewport, check, at, "the tested-up-to line");
         await page.shot(`home-${viewport.name}-cli-newer`);
+        // A check whose answer is the same as before ends too: the button is "Check again" once more, not "Checking…" for good.
+        await page.evaluate(click(within("oats-home-cli-retry")));
+        const ended = await page.until(`(() => { const button = document.querySelector(${JSON.stringify(within("oats-home-cli-retry"))}); return button && !button.disabled && button.innerText.trim() === "Check again" && document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) !== null ? "ended" : ""; })()`, 20);
+        check(ended === "ended", `${at} a check that reads the same oats ends: the line stays, and Check again can be pressed again`, await page.evaluate(textOf(within("oats-home-cli-line"))));
         // After the install the person asks again, on the page: the notice goes without a reload.
         setVerb("version", null);
         await page.evaluate(click(within("oats-home-cli-retry")));
@@ -331,35 +344,35 @@ export default [
   {
     stage: "fixtures",
     name: "a first read: \"Reading your agents…\" while OATS is read, and what the home says when that read fails",
-    run: async ({ page, at, viewport, check: plain, pages, ALL_PAGES }) => {
+    run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
       const status = verbNow("status");
       try {
-        // A slow first read: the server holds no roster (its settings changed), and `oats status` takes its time.
-        // A change of the plugin's settings makes its server forget the roster it holds (it may be another deployment's): the next read is a first read.
+        // A slow first read: the server holds no roster (the setting that names `oats` changed), and `oats status` takes its time.
         setVerb("status", { ...status, sleepMs: 12_000 });
-        pages(ALL_PAGES_AGAIN);
+        oatsBin(OATS_BIN[0]);
         await page.goto(HOME);
         const reading = await page.until(`(() => { const text = ${textOf(PAGE)}; return text.includes("Reading your agents") ? text : ""; })()`, 10);
         check(reading === "Home Reading your agents…", `${at} while the roster is read for the first time the home says so, and nothing else`, reading ?? (await page.evaluate(textOf(PAGE))));
         await settled(page, viewport);
-        await page.shot(`home-${viewport.name}-loading`);
+        // The image is of the state its name says, or there is none.
+        if (reading === "Home Reading your agents…") await page.shot(`home-${viewport.name}-loading`);
         // and it then draws what was read
         const drawn = await page.until(`document.querySelector(${JSON.stringify(within("oats-needs-card"))}) !== null`, 40);
         check(Boolean(drawn), `${at} and then draws the roster it read`, await page.evaluate(textOf(PAGE)));
 
         // A first read that fails: no roster was ever read under these settings.
         setVerb("status", FAILS);
-        pages(ALL_PAGES);
+        oatsBin(OATS_BIN[1]);
         check((await untilRoster((roster) => roster.ok === false && (roster.last === undefined || roster.last === null))) !== undefined, `${at} the server has no roster and its read fails`, untilRoster.last);
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
         check(Boolean(failed) && /Retry/.test(failed) && !/Showing what was read/.test(failed) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null`)) === true, `${at} a first read that failed: one titled notice with Retry, no age of anything kept, and no roster drawn`, failed ?? (await page.evaluate(textOf(PAGE))));
         await sound(page, viewport, check, at, "the home that could not be read");
-        await page.shot(`home-${viewport.name}-unreadable`);
+        if (Boolean(failed) && !/Showing what was read/.test(failed)) await page.shot(`home-${viewport.name}-unreadable`);
       } finally {
         setVerb("status", status ?? null);
-        pages(ALL_PAGES);
+        oatsBin(null);
         check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} and the roster is read again afterwards`, untilRoster.last);
       }
     },

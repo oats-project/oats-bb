@@ -95,6 +95,8 @@ export const testedWhy = (testedThrough: string, version: string): string => `Th
 /** Asks the server to read `oats version` again (after an install), as the Desktop's Retry on its card. */
 export const CHECK_AGAIN = "Check again";
 export const CHECKING = "Checking…";
+/** A check that could not be made; what the read said follows it. */
+export const CHECK_FAILED = "The installed oats could not be checked again:";
 export const DETECTED = "Detected";
 export const REQUIRED = "Required";
 export const detected = (version: string | null): string => version ?? "unknown: oats answered no version the plugin can read";

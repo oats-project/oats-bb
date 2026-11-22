@@ -917,3 +917,38 @@ test("an agent that asks again by a claim of its own, after a choice was pressed
   expect(now().dataset.offer).toBe("in-thread");
   expect(within(now()).getByTestId("oats-reply-text")).toBeTruthy();
 });
+
+test("a check whose answer is the same as before ends: Check again can be pressed again", async () => {
+  const slot = await homePage({ rpc: { ...handlers(), homeCli: () => ({ version: "0.69.4", desktopApi: 1, state: "older" as const }) } as Handlers });
+  await slot.findByTestId("oats-home-cli");
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+  const before = asked();
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(asked()).toBe(before + 1));
+  await waitFor(() => expect(slot.getByTestId("oats-home-cli-retry").textContent).toBe("Check again"));
+  expect((slot.getByTestId("oats-home-cli-retry") as HTMLButtonElement).disabled).toBe(false);
+  // and a second press asks again
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(asked()).toBe(before + 2));
+  await waitFor(() => expect(slot.getByTestId("oats-home-cli-retry").textContent).toBe("Check again"));
+});
+
+test("a check that fails ends too, and the card keeps what was read before", async () => {
+  let failing = false;
+  const slot = await homePage({
+    rpc: {
+      ...handlers(),
+      homeCli: () => {
+        if (failing) throw new Error("OATS_TIMEOUT: oats did not answer");
+        return { version: "0.69.4", desktopApi: 1, state: "older" as const };
+      },
+    } as Handlers,
+  });
+  await slot.findByTestId("oats-home-cli");
+  failing = true;
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length).toBe(2));
+  await waitFor(() => expect(slot.getByTestId("oats-home-cli-retry").textContent).toBe("Check again"));
+  expect(slot.getByTestId("oats-home-cli").textContent).toContain("Detected0.69.4");
+  expect(slot.getByTestId("oats-home-cli-check-failed").textContent).toBe("The installed oats could not be checked again: OATS_TIMEOUT: oats did not answer");
+});

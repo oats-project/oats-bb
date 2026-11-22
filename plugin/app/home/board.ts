@@ -4,7 +4,7 @@
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
 import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
-import { flatten } from "../../model/view";
+import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";
 
 /** One agent on the home: the kernel's row, its bb thread where it has one, and where it is. */
@@ -23,8 +23,10 @@ export type Board = {
   counts: Record<AgentState, number>;
 };
 
+/** When the claim the card shows was made: through the one gate (`claimOf`), so a claim an agent OATS stopped still carries orders nothing. */
 const instant = (entry: Entry): number => {
-  const at = entry.agent.waiting?.since == null ? Number.NaN : Date.parse(entry.agent.waiting.since);
+  const since = claimOf(entry.agent)?.since ?? null;
+  const at = since === null ? Number.NaN : Date.parse(since);
   return Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY;
 };
 

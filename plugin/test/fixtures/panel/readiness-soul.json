@@ -1,0 +1,198 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "readinessApi": 2,
+  "subject": {
+   "kind": "soul",
+   "soul": "oats-expert",
+   "repoKey": "local//abs/real/src/oats-real",
+   "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a"
+  },
+  "selector": {
+   "kind": "soul",
+   "soul": "oats-expert",
+   "agentsRoot": null,
+   "dir": null
+  },
+  "at": "2026-11-21T18:25:22.386Z",
+  "checks": {
+   "installed": {
+    "status": "pass",
+    "items": [
+     {
+      "subject": "oats.bb",
+      "status": "pass",
+      "required": true,
+      "reason": null,
+      "producer": "workspace resolution",
+      "evidence": {
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
+        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
+        "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+        "repoKey": "local//abs/real/oats-bb.git"
+       }
+      },
+      "remedy": null,
+      "capability": {
+       "id": "oats.bb"
+      }
+     },
+     {
+      "subject": "oats.core",
+      "status": "pass",
+      "required": true,
+      "reason": null,
+      "producer": "workspace resolution",
+      "evidence": {
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       }
+      },
+      "remedy": null,
+      "capability": {
+       "id": "oats.core"
+      }
+     }
+    ]
+   },
+   "configured": {
+    "status": "not-applicable",
+    "items": [
+     {
+      "subject": "launch",
+      "status": "unknown",
+      "required": false,
+      "reason": "claude folder trust is not established in /abs/home/.claude.json (the pane's environment is not established: this process has no tmux on its PATH to read the OATS tmux server with; read instead: this process's CLAUDE_CONFIG_DIR (not set), this process's HOME): oats harness trust --dir /abs/deployment",
+      "producer": "harness folder trust",
+      "evidence": null,
+      "remedy": null,
+      "code": "harness-trust",
+      "harness": "claude",
+      "file": "/abs/home/.claude.json",
+      "deployment": "/abs/deployment"
+     }
+    ]
+   },
+   "member": {
+    "status": "pass",
+    "items": [
+     {
+      "subject": "member local//abs/real/src/oats-real",
+      "status": "pass",
+      "required": true,
+      "reason": null,
+      "producer": "workspace discovery",
+      "evidence": {
+       "repoKey": "local//abs/real/src/oats-real",
+       "workspace": "local//abs/real/src/oats-real",
+       "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a"
+      },
+      "remedy": null
+     }
+    ]
+   },
+   "providers": {
+    "status": "not-applicable",
+    "items": [
+     {
+      "subject": "oats.bb session backend bb",
+      "status": "pass",
+      "required": false,
+      "reason": null,
+      "producer": "session provider check",
+      "evidence": null,
+      "remedy": null,
+      "result": {
+       "status": "ready",
+       "problems": [],
+       "warnings": [
+        {
+         "code": "session-provider-sandbox-unsupported",
+         "message": "bubblewrap (bwrap) is not on this host's PATH, so Claude's sandbox cannot start: in bb's sandboxed modes (auto, accept-edits) every command waits for a person in bb. In a team container, spawn bb agents with --yolo (bb full mode): the container is the boundary, as it is for tmux agents there"
+        },
+        {
+         "code": "session-provider-full-mode-only",
+         "message": "the bb backend launches in bb's full mode only (sandboxed modes are not offered): a spawn or start that does not choose it (--yolo, or a launch configuration's --permission-mode bypassPermissions) would run in bb's accept-edits or auto mode, which are sandboxed, and is refused before anything starts (E_BACKEND_SANDBOXED_MODE). bb lets a command leave its sandbox, so those modes are no boundary; full mode claims none"
+        }
+       ]
+      },
+      "capability": {
+       "id": "oats.bb"
+      }
+     }
+    ]
+   }
+  },
+  "summary": {
+   "ready": true,
+   "required": 3,
+   "pass": 3,
+   "fail": 0,
+   "unknown": 0,
+   "byCapability": [
+    {
+     "capability": {
+      "id": "oats.bb"
+     },
+     "checks": {
+      "installed": "pass",
+      "configured": "not-applicable",
+      "member": "not-applicable",
+      "providers": "not-applicable"
+     },
+     "ownReady": true,
+     "ready": true
+    },
+    {
+     "capability": {
+      "id": "oats.core"
+     },
+     "checks": {
+      "installed": "pass",
+      "configured": "not-applicable",
+      "member": "not-applicable",
+      "providers": "not-applicable"
+     },
+     "ownReady": true,
+     "ready": true
+    }
+   ],
+   "subjectBlockers": []
+  },
+  "notes": [
+   "ready means every REQUIRED check passes; it is never inferred from an empty set",
+   "member is the soul's member repository confirmed in the workspace (oats-membership.yaml), never login or team registration",
+   "providers relays each provider's own binding check verbatim; the spawn's fail-closed hooks are unchanged",
+   "policy: a lifecycle-authority claim enforced by the spawn route, not an OS sandbox"
+  ],
+  "warnings": [],
+  "policy": {
+   "childSpawns": {
+    "allowed": true,
+    "enforced": false,
+    "origin": {
+     "kind": "default",
+     "detail": "no declaration: children allowed"
+    }
+   },
+   "worktrees": {
+    "allowed": true,
+    "mode": "worktree",
+    "enforced": false,
+    "origin": {
+     "kind": "soul",
+     "detail": "work: worktree"
+    }
+   }
+  }
+ }
+}

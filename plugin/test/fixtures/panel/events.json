@@ -1,0 +1,192 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "eventsApi": 2,
+  "instance": "panel-worktree-helper",
+  "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+  "incarnation": "2026-11-21T18:13:36.478Z",
+  "count": 8,
+  "returned": 8,
+  "truncated": false,
+  "integrity": {
+   "unreadableRows": 0,
+   "foreignRows": 0,
+   "sources": [
+    {
+     "path": "home",
+     "status": "ok",
+     "bytes": 3029
+    },
+    {
+     "path": "workspace",
+     "status": "ok",
+     "bytes": 3029
+    }
+   ]
+  },
+  "events": [
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:13:37.962Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "spawned",
+    "data": {
+     "agent": "oats-expert",
+     "work": "worktree",
+     "branch": "agents/panel-worktree-helper",
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "parentInstance": "redesign-ui-lead",
+     "relation": "child",
+     "spawnedBy": null,
+     "launched": true,
+     "hooks": [
+      {
+       "capability": "oats.core",
+       "ok": true,
+       "meta": false
+      }
+     ]
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:13:37.962Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "launched",
+    "data": {
+     "harness": "claude",
+     "backend": "bb",
+     "launchConfig": null
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:14:12.916Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "oats.board",
+    "kind": "waiting",
+    "data": {
+     "waitingOnYou": true,
+     "reason": "attention",
+     "message": "How should I merge the pull request?",
+     "session": "launched@2026-11-21T18:13:37.962Z#2af046ecc35bcfef"
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:23:06.661Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "restarted",
+    "data": {
+     "phase": "restart-stop",
+     "signal": null,
+     "waitedMs": 2064,
+     "stillRunning": []
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:23:06.662Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "launched",
+    "data": {
+     "harness": "claude",
+     "backend": "bb",
+     "launchConfig": null,
+     "phase": "restart",
+     "startId": "9c458179-0cf2-449b-ad72-7a216b6088bd"
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:23:24.196Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "stopped",
+    "data": {
+     "signal": null,
+     "waitedMs": 2149,
+     "stillRunning": [],
+     "state": "stopped"
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:23:27.220Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "kernel",
+    "kind": "launched",
+    "data": {
+     "harness": "claude",
+     "backend": "bb",
+     "launchConfig": null,
+     "phase": "start",
+     "startId": "ebd1fa11-10db-4a21-9b01-1fc823c3b91b"
+    }
+   },
+   {
+    "eventsApi": 2,
+    "at": "2026-11-21T18:23:39.829Z",
+    "instance": "panel-worktree-helper",
+    "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+    "incarnation": "2026-11-21T18:13:36.478Z",
+    "producer": "oats.board",
+    "kind": "waiting",
+    "data": {
+     "waitingOnYou": true,
+     "reason": "attention",
+     "message": "Which base branch?",
+     "session": "launched@2026-11-21T18:23:27.220Z#9d8b2208afb585a2"
+    }
+   }
+  ],
+  "lastEvent": {
+   "kind": "waiting",
+   "at": "2026-11-21T18:23:39.829Z",
+   "producer": "oats.board",
+   "incarnation": "2026-11-21T18:13:36.478Z"
+  },
+  "waitingOnYou": {
+   "since": "2026-11-21T18:23:39.829Z",
+   "producer": "oats.board",
+   "reason": "attention",
+   "message": "Which base branch?"
+  },
+  "waitingClaims": [
+   {
+    "producer": "oats.board",
+    "waiting": true,
+    "since": "2026-11-21T18:23:39.829Z",
+    "reason": "attention",
+    "message": "Which base branch?"
+   }
+  ],
+  "notes": [
+   "events are producer-attributed facts written by the kernel action that made them true; nothing is inferred from transcripts or task files",
+   "this is the ADDRESS's history: rows tagged with an earlier incarnation belong to a previous instance at this address",
+   "waitingOnYou is null unless a producer reported it for the current incarnation — null means unknown, not 'not waiting'; an explicit false clears that producer's claim; an unknown current incarnation (null) admits no claim at all",
+   "a claim older than the incarnation's latest kernel launched, restarted or stopped row belongs to an ended session and is not counted",
+   "integrity counts torn and foreign rows and names each source's status; truncated is true when the window cut rows or a source was read as a tail"
+  ]
+ }
+}

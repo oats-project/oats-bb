@@ -11,17 +11,16 @@ const SETTLED = new Set(["pending", "idle"]);
 
 // What a home with no session reads as: a thread that is gone, and a lost one.
 const MISSING = Object.freeze({ present: false, state: "stopped", running: false });
-// A thread at rest whose harness cannot be said to run or not: one in error (below).
-const AT_REST = Object.freeze({ present: true, state: "unknown", running: null });
 // A turn bb holds in line (its concurrency limit has not started it yet) starts by itself
 // when a slot frees: such a thread is busy, whatever is loaded now.
 const HELD = Object.freeze({ present: true, state: "unknown", running: true });
 
-/** `running` of a thread at rest (idle or pending, nothing in line): whether its harness
- *  works in the home now, asked of the processes (lib/processes.mjs, `runsIn`). bb's word
- *  is the same for a thread whose agent is loaded, waiting for its next message, and for
- *  one `bb thread stop` released: only the process tells them apart, and the kernel needs
- *  it to tell a home stopped with the host from one that came back (contract r25, A16).
+/** `running` of a thread at rest (idle or pending with nothing in line, or in error with
+ *  its harness alive): whether its harness works in the home now, asked of the processes
+ *  (lib/processes.mjs, `runsIn`). bb's word is the same for a thread whose agent is loaded,
+ *  waiting for its next message, and for one `bb thread stop` released: only the process
+ *  tells them apart, and the kernel needs it to tell a home stopped with the host from one
+ *  that came back (contract r25, A16).
  *  true: the home's own harness runs. false: none does. null: it cannot be told on this
  *  host (no /proc), or no home was given: never a guess. */
 function harnessRuns(thread, processes, home) {
@@ -47,9 +46,10 @@ function harnessRuns(thread, processes, home) {
  *  `processes.has(thread)` says whether the thread's harness lives on this host: the
  *  process named pi or claude that carries the thread's id, never a command the agent left
  *  running (lib/processes.mjs).
- *  - it lives: the thread is there and at rest (`running: null`, as before: the decision
- *    that reads `running` from the processes is of a thread bb shows at rest, not of one
- *    in error), and an input recovers it;
+ *  - it lives: the thread is there and at rest, and an input recovers it. `running` is
+ *    then read as for any thread at rest: true where that harness works in the home
+ *    (a stopped home a person started again in bb, whose turn then failed, still runs),
+ *    false where it works somewhere else;
  *  - none: a lost session, as the kernel reads one, which it may resume with an input;
  *  - it cannot be told (the look throws): an error, never either of the two. */
 export function inspectAnswer(thread, processes, home) {
@@ -58,7 +58,7 @@ export function inspectAnswer(thread, processes, home) {
   // A turn bb holds in line starts by itself, whatever is loaded now.
   if (SETTLED.has(status) || status === "error") { if (hasQueuedWork(thread)) return { ...HELD }; }
   if (SETTLED.has(status)) return { present: true, state: "unknown", running: harnessRuns(thread, processes, home) };
-  if (status === "error") return processes.has(thread) ? { ...AT_REST } : { ...MISSING };
+  if (status === "error") return processes.has(thread) ? { present: true, state: "unknown", running: harnessRuns(thread, processes, home) } : { ...MISSING };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 

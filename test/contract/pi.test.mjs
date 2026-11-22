@@ -239,7 +239,8 @@ test("P4 a failed turn: with its pi alive the thread is there and at rest, and a
   assert.ok((await pisIn(home)) >= 1);
   assert.ok((await carriers(endpoint.threadId)).includes("pi"), "the thread's pi carries BB_THREAD_ID");
   const inspected = (await provider("inspect", { home, endpoint })).result;
-  assert.deepEqual([inspected.present, inspected.state, inspected.running], [true, "unknown", null]);
+  // (`running` is read from the processes, as for an idle thread: its pi works in the home.)
+  assert.deepEqual([inspected.present, inspected.state, inspected.running], [true, "unknown", true]);
   assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.present), [true]);
   await sh("rm pi-mock-error");
   const recovering = await provider("input", { home, endpoint, text: "this turn works MARK-P4-OK" });

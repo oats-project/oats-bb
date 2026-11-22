@@ -337,9 +337,18 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   kernel reads a home stopped with the host whose harness runs as one that came back,
   and sends it no resume. So a thread the provider stopped and left live (`reason:
   "host"`) reads `running: false`, and the same thread after bb started its harness again
-  reads `true`. A turn bb holds in line still reads `running: true` without a look, and a
-  thread in `error` whose harness lives still reads `running: null` (below). One look
-  serves an `inspect` or an `inspectMany`, made only when a thread needs it.
+  reads `true`. A turn bb holds in line still reads `running: true` without a look. A
+  thread in `error` whose harness lives (below) is at rest too, and its `running` is read
+  the same way: `true` where that harness works in the home (a stopped home a person
+  started again in bb, whose turn then failed, still runs), `false` where it works
+  somewhere else. One look serves an `inspect` or an `inspectMany`, made only when a
+  thread needs it.
+  - A limit: the harness is known by its name. A `pi` or a `claude` the agent itself
+    started in its home and left running detached (`setsid claude …`, `nohup pi …`)
+    inherits the thread's id, is named as the harness and works in the home: it reads as
+    the thread's harness, and `running: true`, after the thread's own is gone. (A stop
+    takes the processes of the thread's tools with it; only one the agent detached
+    outlives it.)
   - **The limit on macOS is the provider's: no `/proc`, so `running` is `null`** for
     every thread at rest (never a guess, and no error: such a thread is still read as
     there). The kernel then cannot see a harness that was started again from bb in a home
@@ -356,7 +365,7 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   it, is not the harness, and alone does not count (a `pi` or `claude` the agent itself
   started and left running does: the harness is known by its name). A lost session
   with a process still working in the home is the kernel's to refuse to resume, naming
-  it (its own rule): end that process, or `oats session start`. A live harness makes the thread present, `state: unknown`, `running: null`; none makes it a
+  it (its own rule): end that process, or `oats session start`. A live harness makes the thread present, `state: unknown`, with `running` read as for a thread at rest (above); none makes it a
   lost session (`present: false`), as before. A turn bb holds in line reads `running:
   true` without a look. The look reads Linux's `/proc/<pid>/environ`, once per
   `inspect` or `inspectMany` and only when a thread needs it (one in `error`, or one at

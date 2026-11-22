@@ -28,7 +28,8 @@ export async function inspect(input, settings, { deadline, env = process.env } =
 export async function inspectMany(input, settings, { deadline, env = process.env } = {}) {
   if (!isObject(input) || !Array.isArray(input.homes)) throw fail("E_SESSION_UNAVAILABLE", "the inspectMany input has no homes list");
   const lists = new Map();
-  // One look at this host's processes for all the homes, and only if a thread is in error.
+  // One look at this host's processes for all the homes, and only if a thread needs it
+  // (one in error, or one at rest: lib/threads.mjs).
   const processes = processLook();
   const listOf = (server) => {
     if (!lists.has(server)) lists.set(server, bbClient({ cli: settings.cli, server, deadline, env }).threads().then((threads) => ({ threads }), (error) => ({ error })));

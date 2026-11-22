@@ -141,7 +141,7 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | Call | What the provider does |
 |---|---|
 | launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600); for a pi launch, the three variables into the env of the home's bb project instead ([pi](#pi)). Runs `bb thread spawn --provider claude-code` (or `--provider pi`) `--environment <home> --prompt-file <home>/TASK.md --title <the instance's name as words>` ("The thread's title", below). Answers `{server, projectId, threadId}`. |
-| inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error`, also looks at this host's processes for one of the thread's. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
+| inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error` or at rest (idle, pending), also looks at this host's processes for the thread's harness: whether it lives, and whether it works in the home. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
 | stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. Then archives the thread (`bb thread archive`): bb starts a stopped thread's agent again at the next message to it and refuses every message to an archived one, so an agent OATS stopped stays stopped ("Stops", below). An archive bb refuses fails no stop: `stopped`, and a warning on the command's standard error that names the thread. |
 | retire (hook) | For each of the home's live threads: withdraws what bb holds in line for it, stops it, and archives it once the stop is confirmed (a thread it could not stop is left, and named in a warning). Then stops the home's threads that were archived before, and removes the env of the home's bb project (what a pi launch wrote there). It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
@@ -154,7 +154,7 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too) | true | unknown | false |
 | pending, idle, on a host whose processes cannot be read (macOS: no `/proc`) | true | unknown | null |
 | pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
-| error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | null |
+| error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | true where it works in the home, false where it works elsewhere |
 | error, and its harness process is gone (whatever else the agent left running) | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |
 
@@ -185,7 +185,9 @@ So whether a thread at rest runs is read from this host's processes, not from bb
 and false where there is none. A process that merely carries the thread's id, or a
 harness at work in another directory, never counts. This is how OATS tells a home
 stopped with the host (its thread left live, its harness gone) from one whose harness
-came back. On a host without `/proc` (macOS) the provider cannot look, and answers
+came back. The harness is known by its name: a `pi` or a `claude` the agent itself
+started in its home and left running detached reads as the thread's harness. On a host
+without `/proc` (macOS) the provider cannot look, and answers
 `running: null`: there OATS cannot see a harness started again from bb in a home it holds
 stopped, a home stopped with the host that already runs gets one more turn (its resume
 notice), and what keeps a stopped agent stopped is the stop's archive.

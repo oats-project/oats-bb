@@ -53,7 +53,9 @@
     thread's id never counts. OATS needs it to tell a home stopped with the host from one
     whose harness came back. On a host without `/proc` (macOS) it stays `null`: there a
     harness started again from bb in a stopped home goes unseen, and the stop's archive
-    is what keeps it from starting. A thread in `error` reads as before.
+    is what keeps it from starting. A thread in `error` whose harness is still loaded
+    reads the same way (`true` where it works in the home; it was `null`); one whose
+    harness is gone is a lost session, as before.
   - The retire hook finds no live thread in a home OATS stopped, so it names none in
     `archived` (for a Claude home with nothing else to remove, its answer is
     `{retired: false, reason: "nothing-to-delete"}`).

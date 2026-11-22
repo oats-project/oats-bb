@@ -379,7 +379,8 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   assert.ok((await claudesIn(home)) >= 1, "bb released the Claude of a thread whose turn failed: the error rule may no longer be needed for Claude");
   assert.ok((await carriers(id)).includes("claude"), "the thread's Claude carries BB_THREAD_ID, under the name the provider looks for");
   const errored = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: null });
+  // (`running` is read from the processes, as for an idle thread: its Claude works in the home.)
+  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: true });
   await sh("rm mock-error");
   await tell("T2-ERROR marker");
   await once("T2-ERROR");

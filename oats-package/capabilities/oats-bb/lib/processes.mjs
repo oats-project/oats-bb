@@ -60,19 +60,19 @@ function namesOf(proc, pid, read) {
   return names;
 }
 
-/** For each bb thread that has a live harness-named process on this host, the names those
- *  processes go by: Map<thread id, Set<name>>. With `cwds` (a Map), it is also given, per
- *  thread, each such process's names and working directory (`{names, cwd}`; `cwd` null
- *  where it cannot be read: a process that ended meanwhile, or another user's), read by
- *  `link` (the tests' seam, as `read`).
+/** For each bb thread that has a live harness-named process on this host, those
+ *  processes: Map<thread id, [{names, cwd}]>. `names`: the harness names the process goes
+ *  by. `cwd`: its working directory, or null where it cannot be read (a process that ended
+ *  meanwhile, or another user's).
  *
  *  A process's name and command line are read first, and its environment only where one of
  *  its names is a harness's: the environment of every other program of this user (which
- *  may hold a secret) is never opened, and never held in memory. `read` is the file read
- *  (the tests watch which files it is asked for). Throws E_SESSION_UNAVAILABLE where processes cannot be
- *  looked at (no /proc: not Linux): the caller then cannot tell, and says so, never
- *  guesses. */
-export function threadProcesses({ proc = "/proc", read = readFileSync, link = readlinkSync, cwds = null } = {}) {
+ *  may hold a secret) is never opened, and never held in memory. Its working directory is
+ *  read only where that environment names a thread. `read` and `link` are the file read
+ *  and the link read (the tests watch which files they are asked for). Throws
+ *  E_SESSION_UNAVAILABLE where processes cannot be looked at (no /proc: not Linux): the
+ *  caller then cannot tell, and says so, never guesses. */
+export function threadProcesses({ proc = "/proc", read = readFileSync, link = readlinkSync } = {}) {
   let entries;
   try { entries = readdirSync(proc); }
   catch (error) { throw fail("E_SESSION_UNAVAILABLE", `whether a bb thread's agent process is still loaded cannot be read on this host (${proc}: ${error.code ?? error.message}): the provider reads it from Linux's /proc. ${REMEDY}`); }
@@ -83,21 +83,21 @@ export function threadProcesses({ proc = "/proc", read = readFileSync, link = re
   const threads = new Map();
   for (const pid of pids) {
     // Not a harness by any of its names: its environment is none of the provider's business.
-    const names = [...namesOf(proc, pid, read)].filter((name) => harnesses.has(name));
-    if (names.length === 0) continue;
+    const names = new Set([...namesOf(proc, pid, read)].filter((name) => harnesses.has(name)));
+    if (names.size === 0) continue;
     let environ;
     // A process that ended meanwhile, a zombie (an empty environment) or another user's.
     try { environ = read(join(proc, pid, "environ"), "latin1"); } catch { continue; }
-    let cwd; // read once, and only for a harness that carries a thread's id
+    let process = null; // made once, for a harness that carries a thread's id
     for (const entry of environ.split("\0")) {
       if (!entry.startsWith(VARIABLE) || entry.length === VARIABLE.length) continue;
+      if (process === null) {
+        let cwd = null;
+        try { cwd = link(join(proc, pid, "cwd")); } catch { /* ended meanwhile, or not ours to read */ }
+        process = { names, cwd };
+      }
       const id = entry.slice(VARIABLE.length);
-      const known = threads.get(id) ?? new Set();
-      for (const name of names) known.add(name);
-      threads.set(id, known);
-      if (cwds === null) continue;
-      if (cwd === undefined) { try { cwd = link(join(proc, pid, "cwd")); } catch { cwd = null; } }
-      cwds.set(id, [...(cwds.get(id) ?? []), { names: new Set(names), cwd }]);
+      threads.set(id, [...(threads.get(id) ?? []), process]);
     }
   }
   return threads;
@@ -115,23 +115,16 @@ export function threadProcesses({ proc = "/proc", read = readFileSync, link = re
  *  Both throw E_SESSION_UNAVAILABLE where the processes cannot be looked at. */
 export function processLook(options) {
   let threads = null, failure = null;
-  const cwds = new Map();
-  const look = () => {
+  /** The thread's own harness processes, by its provider's harness name. */
+  const harnessesOf = (thread) => {
     if (failure !== null) throw failure;
-    try { threads ??= threadProcesses({ ...options, cwds }); }
+    try { threads ??= threadProcesses(options); }
     catch (error) { failure = error; throw error; }
+    const wanted = Object.hasOwn(HARNESS_PROCESS, thread.providerId) ? [HARNESS_PROCESS[thread.providerId]] : Object.values(HARNESS_PROCESS);
+    return (threads.get(thread.id) ?? []).filter((process) => wanted.some((name) => process.names.has(name)));
   };
-  const wanted = (thread) => (Object.hasOwn(HARNESS_PROCESS, thread.providerId) ? [HARNESS_PROCESS[thread.providerId]] : Object.values(HARNESS_PROCESS));
   return {
-    has(thread) {
-      look();
-      const names = threads.get(thread.id);
-      return names !== undefined && wanted(thread).some((name) => names.has(name));
-    },
-    runsIn(thread, home) {
-      look();
-      const names = wanted(thread);
-      return (cwds.get(thread.id) ?? []).some((process) => names.some((name) => process.names.has(name)) && process.cwd !== null && samePath(process.cwd, home));
-    },
+    has: (thread) => harnessesOf(thread).length > 0,
+    runsIn: (thread, home) => harnessesOf(thread).some((process) => process.cwd !== null && samePath(process.cwd, home)),
   };
 }

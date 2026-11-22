@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { inspectAnswer } from "../../oats-package/capabilities/oats-bb/lib/threads.mjs";
+import { inspectAnswer, inspectHome } from "../../oats-package/capabilities/oats-bb/lib/threads.mjs";
 import { processLook, threadProcesses } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
 import { NOT_FOUND, UNREACHABLE, call, fakeBbIn, scratch, threadRow } from "../fixtures/harness.mjs";
 
@@ -73,21 +73,29 @@ const liveId = (name) => `thr_${name}_${process.pid}`;
 
 test("a thread whose last turn failed, with its harness still loaded, is there and at rest: for pi and for Claude alike", { skip: NO_PROC }, async (t) => {
   for (const providerId of ["pi", "claude-code"]) {
+    const { dir, home } = scratch(t);
     const id = liveId(`failed_${providerId.replace("-", "_")}`);
     const open = { label: "Open in bb", url: `${SERVER}/projects/proj_a/threads/${id}` };
-    const input = { endpoint: { ...endpoint, threadId: id } };
+    const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", "error", { providerId })] } });
+    const read = async () => (await call("inspect", { home, endpoint: { ...endpoint, threadId: id } }, { settings, bb })).result;
     // No process of the thread: lost.
-    const lost = await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input);
-    assert.deepEqual(lost.answer.result, { present: false, state: "stopped", running: false, open }, providerId);
-    // Its harness is still loaded: an input recovers it, and the kernel must not resume beside it.
-    const child = await threadProcess(t, id, HARNESS_NAME[providerId]);
-    const there = await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input);
-    assert.deepEqual(there.answer.result, { present: true, state: "unknown", running: null, open }, providerId);
-    assert.deepEqual(there.bb.calls().map((c) => c.argv), [["thread", "list", "--include-hidden", "--json"]], "bb is asked nothing more");
+    assert.deepEqual(await read(), { present: false, state: "stopped", running: false, open }, providerId);
+    // Its harness is still loaded, at work somewhere else than the home: the thread is
+    // there (an input recovers it, and the kernel must not resume beside it), and it does
+    // not run in this home.
+    const away = await threadProcess(t, id, HARNESS_NAME[providerId], dir);
+    assert.deepEqual(await read(), { present: true, state: "unknown", running: false, open }, providerId);
+    await new Promise((done) => { away.once("exit", done); away.kill("SIGKILL"); });
+    // Its harness is still loaded in the home, as bb leaves it after a failed turn: there,
+    // and it runs (`running` is read as for any thread at rest: a stopped home a person
+    // started again in bb, whose turn then failed, still runs).
+    const child = await threadProcess(t, id, HARNESS_NAME[providerId], home);
+    assert.deepEqual(await read(), { present: true, state: "unknown", running: true, open }, providerId);
+    assert.deepEqual(bb.calls().at(-1).argv, ["thread", "list", "--include-hidden", "--json"]);
+    assert.equal(bb.calls().length, 3, "bb is asked nothing more than its thread list, once a call");
     // Decided at every call: once the process is gone, so is the session.
     await new Promise((done) => { child.once("exit", done); child.kill("SIGKILL"); });
-    const gone = await inspectWith(t, [threadRow(id, "proj_a", "error", { providerId })], input);
-    assert.deepEqual(gone.answer.result, { present: false, state: "stopped", running: false, open }, providerId);
+    assert.deepEqual(await read(), { present: false, state: "stopped", running: false, open }, providerId);
   }
 });
 
@@ -163,6 +171,37 @@ test("inspectMany looks at the host's processes once for all its homes, and each
   const { results } = (await call("inspectMany", { homes: [at(homes.a, "proj_a", here), at(homes.b, "proj_b", elsewhere), at(homes.c, "proj_c", none)] }, { settings, bb })).result;
   assert.deepEqual(results.map((result) => [result.present, result.running]), [[true, true], [true, false], [true, false]]);
   assert.equal(bb.calls().length, 1, "one thread list for the three homes");
+});
+
+// One scan for all the homes of a call, made only when a thread needs it: every home's
+// answer is read from the same look (lib/inspect.mjs makes one per inspect or inspectMany).
+test("one look at the processes serves every home it is handed to, and none is made while no thread needs it", (t) => {
+  const { dir } = scratch(t);
+  const proc = join(dir, "proc");
+  const homes = ["a", "b", "c"].map((name) => join(dir, name));
+  for (const [index, home] of homes.entries()) {
+    mkdirSync(join(proc, String(101 + index)), { recursive: true });
+    mkdirSync(home);
+    writeFileSync(join(proc, String(101 + index), "environ"), `BB_THREAD_ID=thr_${index}\0`);
+    writeFileSync(join(proc, String(101 + index), "comm"), "pi\n");
+    writeFileSync(join(proc, String(101 + index), "cmdline"), "pi\0");
+    // The third thread's pi works in the first home, not in its own.
+    symlinkSync(index === 2 ? homes[0] : home, join(proc, String(101 + index), "cwd"));
+  }
+  const opened = [];
+  const look = processLook({ proc, read: (path, encoding) => { opened.push(path.slice(proc.length + 1)); return readFileSync(path, encoding); } });
+  const subject = (index) => ({ home: homes[index], endpoint: { server: SERVER, projectId: `proj_${index}`, threadId: `thr_${index}` } });
+  const rows = (status) => homes.map((home, index) => threadRow(`thr_${index}`, `proj_${index}`, status, { providerId: "pi" }));
+  // Threads in a turn ask nothing of the processes.
+  assert.deepEqual(homes.map((home, index) => inspectHome(subject(index), rows("active"), look).running), [true, true, true]);
+  assert.deepEqual(opened, [], "no look for threads that are in a turn");
+  // Three idle threads, one look: each process's files are read once, whatever the number of homes.
+  assert.deepEqual(homes.map((home, index) => inspectHome(subject(index), rows("idle"), look).running), [true, true, false]);
+  assert.deepEqual(opened.filter((path) => path.endsWith("/comm")).sort(), ["101/comm", "102/comm", "103/comm"]);
+  assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ"]);
+  // And again for threads in error: still the same look.
+  assert.deepEqual(homes.map((home, index) => { const answer = inspectHome(subject(index), rows("error"), look); return [answer.present, answer.running]; }), [[true, true], [true, true], [true, false]]);
+  assert.equal(opened.length, 9, "nothing was read a second time");
 });
 
 test("a command the agent left running carries the thread's id and is not its harness: alone, it leaves a thread in error lost", { skip: NO_PROC }, async (t) => {
@@ -245,7 +284,8 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   const read = (path, encoding) => { opened.push(path.slice(proc.length + 1)); return readFileSync(path, encoding); };
   const threads = threadProcesses({ proc, read });
   assert.deepEqual([...threads.keys()].sort(), ["thr_claude", "thr_pi", "thr_script"], "only threads with a harness-named process");
-  assert.deepEqual([...threads.get("thr_pi")].sort(), ["pi"], "the stray sleep of the same thread adds nothing");
+  assert.deepEqual(threads.get("thr_pi").map((process) => ({ names: [...process.names], cwd: process.cwd })), [{ names: ["pi"], cwd: home }], "one process: the stray sleep of the same thread adds nothing");
+  assert.deepEqual(threads.get("thr_script").map((process) => process.cwd), [null], "a working directory that cannot be read is null, and the process is still the thread's harness");
   assert.deepEqual(opened.filter((path) => path.endsWith("/environ")).sort(), ["101/environ", "102/environ", "103/environ", "106/environ", "107/environ", "108/environ", "109/environ"],
     "the environment of the sleep (104), the server (105), the tail (111) and the process with no readable name (110) is never opened");
   for (const pid of ["104", "105", "110", "111"]) assert.ok(!opened.includes(`${pid}/environ`), pid);

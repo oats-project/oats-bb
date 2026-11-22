@@ -70,7 +70,7 @@ export function PatternBook() {
         <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "question", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
-        <StatusLine state="unreachable" detail="OATS says: bb did not answer" action={<Button>Retry</Button>} />
+        <StatusLine state="unreachable" detail="OATS cannot reach its session" action={<Button>Retry</Button>} />
       </section>
 
       <section data-testid="oats-patterns-facts" className="flex flex-col gap-2">

@@ -161,7 +161,8 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     elsewhere,
     needsYou: pick((node) => node.state === "needs-you"),
     // Every agent that waits on a person, whether bb has a thread for it or not: the ONE number a
-    // place says of who waits (the sidebar's foot, the home, its badge). In the kernel's order.
+    // place says of who waits. The sidebar's foot reads it; the home and its badge still count
+    // `needsYou` (the agents with a thread) until their owner moves them to this. In the kernel's order.
     needing: agents.filter((agent) => {
       const node = drawn.get(agent.instance);
       return (node !== undefined && node.agent === agent ? node.state : state(agent, null)) === "needs-you";

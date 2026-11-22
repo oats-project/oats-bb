@@ -97,14 +97,12 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
   // page when its tab turns and what was read stays with bb: coming back reads nothing, and shows
   // it as what it is, the last observation, with Refresh activity.
   const [asked, setAsked] = useState(false);
-  const [first, setFirst] = useState(false);
-  const read = usePanelEvents(instance, first);
+  // The read is on only while it holds no answer (read.ts), so asking with one held starts nothing by itself.
+  const read = usePanelEvents(instance, asked);
   const held = read.data !== undefined;
   const ask = () => {
+    if (asked || held) read.retry();
     setAsked(true);
-    // A first read starts by turning the read on; a later one reads again.
-    if (held || first) read.retry();
-    else setFirst(true);
   };
   return (
     <Section title={ACTIVITY} testId="oats-panel-activity">
@@ -115,9 +113,10 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
         <Button data-testid="oats-panel-activity-load" disabled={asked && read.fetching} onClick={ask}>
           {held || asked ? REFRESH : LOAD}
         </Button>
-        {held && !read.fetching && (!asked || read.status === "ready") ? (
+        {/* A read again over what is shown says so, in the words of the first read. */}
+        {held && (read.fetching ? asked : !asked || read.status === "ready") ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
-            {asked ? LOADED : LAST_OBSERVATION}
+            {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
           </span>
         ) : null}
       </div>

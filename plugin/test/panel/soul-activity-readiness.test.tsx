@@ -393,3 +393,25 @@ test("a readiness note of the kernel's goes through the display filter", async (
   expect(checks).not.toContain("\u202E");
   expect(checks).not.toContain("abc123");
 });
+
+test("Refresh activity over what is shown says that it reads, until the kernel answers", async () => {
+  let answer: (() => void) | null = null;
+  let reads = 0;
+  const slot = panel({
+    panelEvents: () => {
+      reads += 1;
+      if (reads === 1) return recordedEvents();
+      return new Promise((done) => {
+        answer = () => done(recordedEvents());
+      });
+    },
+  });
+  fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Reported observation loaded. Runtime state is shown separately."));
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Reading reported lifecycle activity…"));
+  expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(true);
+  expect(slot.getByTestId("oats-panel-activity-summary")).not.toBeNull();
+  act(() => answer?.());
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Reported observation loaded. Runtime state is shown separately."));
+});

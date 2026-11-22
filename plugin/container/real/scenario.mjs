@@ -276,7 +276,8 @@ function snapshotRow(instance) {
  * time and not the `oats` command's own start-up, which on a slow runner is half a second (a run
  * read 3044 ms from before the command, with nothing of the plugin slow). The snapshot is polled
  * first and the event read after, so reading the event costs the measure nothing; the poll starts
- * when the command has returned, so the delay is never less than the truth. With no such event in
+ * when the command has returned, and the event taken is the first of its kind since the command, so
+ * the delay is never less than the truth. With no such event in
  * the kernel's answer the delay runs from `since` instead, and the check's line says so. The line
  * says both delays, from the kernel's record and from before the command, and a NOTE reports
  * either one over 3 s even where the check passes.
@@ -298,10 +299,10 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     }
     await sleep(100);
   }
-  const recorded = recordedAt(instance, home, kind, since);
+  const { at: recorded, why } = recordedAt(instance, home, kind, since);
   // Both delays are said: from the kernel's record (the one the 3 s is on), and from before the
   // command (what the check counted until now: it holds the command's own run too).
-  const fromRecord = seenAt === null || recorded === null ? null : Math.max(0, seenAt - recorded);
+  const fromRecord = seenAt === null || recorded === null ? null : seenAt - recorded;
   const fromCommand = seenAt === null ? null : seenAt - since;
   const seen = fromRecord ?? fromCommand; // with no event of the kernel's to count from: from before the command
   const before = Date.now();
@@ -311,25 +312,36 @@ async function fresh(what, { instance, home, kind, since }, matches) {
   const ms = (delay) => (delay === null ? "never" : `${delay} ms`);
   const counted =
     recorded === null
-      ? `${ms(fromCommand)} after the moment before the command, which the limit is on here: the kernel's events hold no "${kind}" event since then`
+      ? `${ms(fromCommand)} after the moment before the command, which the limit is on here: ${why}`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
-  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${counted} (${limit} ms at most, on the first; the kernel's own oats status took ${statusMs} ms)`);
+  // The snapshot cannot have a change before the kernel recorded it: a delay under 0 means the event
+  // taken is not this change's, and the check fails on it, with both times in its line.
+  check(seen !== null && seen >= 0 && seen <= limit, `freshness: the plugin's snapshot has ${what} ${counted} (${limit} ms at most, on the first; the kernel's own oats status took ${statusMs} ms)${seen !== null && seen < 0 ? `; the snapshot had it at ${new Date(seenAt).toISOString()}, before that event: not this change's event` : ""}`);
   // A delay over 3 s is said even where the check passes: from before the command (a slow command, or
   // a slow runner), or under the wider limit of a kernel whose status takes over a second.
   const over = [["after the kernel recorded it", fromRecord], ["after the moment before the command", fromCommand]].filter(([, delay]) => delay !== null && delay > 3000);
   if (over.length > 0) note(`freshness: ${what} was over 3 s: ${over.map(([from, delay]) => `${delay} ms ${from}`).join(", ")} (the kernel's own oats status took ${statusMs} ms)`);
 }
-/** When the kernel recorded a change: the time of the newest `kind` event of the instance at or after `since` (epoch ms), or null when its events hold none. */
+/**
+ * When the kernel recorded a change: `at`, the time (epoch ms) of the FIRST `kind` event of the
+ * instance at or after `since`. The command that makes the change is the first thing after `since`,
+ * so its event is the earliest: a later event of the same kind (another claim, by any producer)
+ * would make the delay smaller than the truth, and an unrelated one before it only longer. `at` is
+ * null when there is none to count from, and `why` then says what was read.
+ */
 function recordedAt(instance, home, kind, since) {
   const answer = oats("instance", "events", instance, "--home", home, "--limit", "20", "--json");
-  let events = [];
+  const said = (text) => String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (answer.exit !== 0) return { at: null, why: `oats instance events exited ${answer.exit}: ${said(answer.stderr || answer.stdout)}` };
+  let events;
   try {
-    events = JSON.parse(answer.stdout).result?.events ?? [];
-  } catch {
-    events = []; // no answer to read: the caller counts from before the command, and says so
+    events = JSON.parse(answer.stdout).result?.events;
+  } catch (error) {
+    return { at: null, why: `oats instance events printed no JSON (${said(error.message)}): ${said(answer.stdout)}` };
   }
+  if (!Array.isArray(events)) return { at: null, why: `oats instance events answered no list of events: ${said(answer.stdout)}` };
   const times = events.filter((event) => event.kind === kind).map((event) => Date.parse(event.at)).filter((at) => Number.isFinite(at) && at >= since);
-  return times.length === 0 ? null : Math.max(...times);
+  return times.length === 0 ? { at: null, why: `the kernel's last ${events.length} events of ${instance} hold no "${kind}" event since then` } : { at: Math.min(...times), why: null };
 }
 /** The plugin's snapshot agrees with the kernel's row: the thread, and the kernel's words for whether it runs. */
 function agrees(instance, row) {

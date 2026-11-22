@@ -3,6 +3,11 @@
 import { hostname } from "node:os";
 import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
 
+// The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
+// host name, by which bb names its machine). A container started another way has no name set: the
+// host's own is then what bb shows, and the check says so if it is an id.
+const MACHINE = process.env.MACHINE_NAME || hostname();
+
 /** The thread's own row, read once it says `state`: → `{ line, act }` (the status line's words, and its button's), or null. The read waits on the row. */
 const statusOf = async (page, state) => {
   const line = testId("oats-status-line");
@@ -30,8 +35,9 @@ export default [
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
       check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.includes("pl-6") === true`), `${at} a child is indented under its parent`);
-      // The machine is shown by the name bb gives it, which is the host's own (G1): never an id of bb's.
-      check((await page.evaluate(textOf(testId("oats-workspace-line")))) === `oats · ${hostname()} · 8 agents`, `${at} the workspace line: the workspace, the machine by its name (${hostname()}), and as many agents as rows`, await page.evaluate(textOf(testId("oats-workspace-line"))));
+      // The machine is shown by the name bb gives it, which is the host's own (G1): a name, never an id.
+      check(!/^[0-9a-f]{12}$/.test(MACHINE), `${at} the machine the checks run on has a name (${MACHINE}), not a container's id: start the container through ci.sh, or with --hostname and MACHINE_NAME`);
+      check((await page.evaluate(textOf(testId("oats-workspace-line")))) === `oats · ${MACHINE} · 8 agents`, `${at} the workspace line: the workspace, the machine by its name (${MACHINE}), and as many agents as rows`, await page.evaluate(textOf(testId("oats-workspace-line"))));
       check((await page.evaluate(textOf(testId("oats-needs-line")))) === "! 3 need you", `${at} "3 need you", with the mark of an agent that waits`, await page.evaluate(textOf(testId("oats-needs-line"))));
       // What the image's name says: every agent a row, each with its state in a word and its soul; the
       // one that runs in tmux among them; the roster first, then who waits, New agent, the pages.
@@ -177,7 +183,7 @@ export default [
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
       // A titled notice in a person's words, with the age of what is still shown and Retry.
-      const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return t === ${JSON.stringify(`OATS is not installed on ${hostname()}`)} ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
+      const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return t === ${JSON.stringify(`OATS is not installed on ${MACHINE}`)} ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
       const said = notice ? JSON.parse(notice) : null;
       check(said !== null && said.code === "OATS_NOT_FOUND" && /Showing what was read /.test(said.text) && said.retry && said.settings, `${at} the notice says what is missing in a person's words, how old what is shown is, with Retry and Open settings: ${said?.title ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
       const observed = await page.evaluate(textOf(testId("oats-last-observation")));

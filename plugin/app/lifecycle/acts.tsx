@@ -8,7 +8,7 @@ import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
 import { useOats } from "../oats";
-import { markGone, saysGone } from "../roster/gone";
+import { markGone, planSaysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, ErrorLine, Modal, Note, Notice } from "../ui";
 import { refusalCode, shown } from "../ui/text";
@@ -62,10 +62,9 @@ export async function run(verb: RunVerb, instance: string, rpc: Rpc, navigate: B
   } catch (cause) {
     // The thread menu contains and hides a thrown error: say it here instead, without replacing
     // a dialog the person opened meanwhile.
-    const message = errorMessage(cause);
-    // The kernel has no such agent any more (the roster on screen was read before it went).
-    if (saysGone(refusalCode(message), message)) markGone(instance);
-    const failed: Request = { kind: "failed", verb, instance, message };
+    // The kernel's refusal, as it is. (An agent that is gone is not told from its words: the
+    // server reads the roster again after every act, and that read drops its row.)
+    const failed: Request = { kind: "failed", verb, instance, message: errorMessage(cause) };
     if (current === mine || current === null) set(failed);
     else deferred = failed;
   }
@@ -106,7 +105,8 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         const error = errorMessage(cause);
         // The kernel no longer has an agent of this name (the roster on screen was read before it
         // went): its row says so until the next roster is read.
-        const gone = saysGone(refusalCode(error), error);
+        // A plan refused for a name the kernel does not know: the agent is gone, and its row says so.
+        const gone = planSaysGone(refusalCode(error));
         if (gone) markGone(request.instance);
         if (wanted) setState({ phase: "unreadable", error, gone });
       },
@@ -131,11 +131,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         if (current === request) set(null);
       },
       (cause: unknown) => {
-        const error = errorMessage(cause);
-        // The agent went between the plan and the act: nothing is left to confirm.
-        const gone = saysGone(refusalCode(error), error);
-        if (gone) markGone(request.instance);
-        if (live.current) setState((now) => (now.phase !== "ready" ? now : gone ? { phase: "unreadable", error, gone } : { ...now, applying: false, error }));
+        if (live.current) setState((now) => (now.phase === "ready" ? { ...now, applying: false, error: errorMessage(cause) } : now));
       },
     );
   };
@@ -215,7 +211,6 @@ export function ActsOverlay() {
     );
   }
   const again = () => void run(request.verb, request.instance, rpc, navigate);
-  const gone = saysGone(refusalCode(request.message), request.message);
   return (
     <Modal
       // No agent is named in the title: the name asked for is the row's, which may be older than what the kernel knows.
@@ -226,17 +221,15 @@ export function ActsOverlay() {
           <Button data-testid="oats-act-close" onClick={() => set(null)}>
             Close
           </Button>
-          {gone ? null : (
-            <Button data-testid="oats-act-again" variant="primary" onClick={again}>
-              Try again
-            </Button>
-          )}
+          <Button data-testid="oats-act-again" variant="primary" onClick={again}>
+            Try again
+          </Button>
         </>
       }
     >
       <div data-testid="oats-act-failed" className="flex flex-col gap-2">
-        {gone ? null : <p>{`OATS was asked to ${request.verb} ${shown(request.instance)}.`}</p>}
-        <Refused error={request.message} gone={gone} instance={request.instance} onRetry={again} footerRetries />
+        <p>{`OATS was asked to ${request.verb} ${shown(request.instance)}.`}</p>
+        <Refused error={request.message} gone={false} instance={request.instance} onRetry={again} footerRetries />
       </div>
     </Modal>
   );
@@ -244,7 +237,7 @@ export function ActsOverlay() {
 
 /**
  * Why an act did not happen, in the place that asked for it: the agent is not in OATS any more
- * (a notice, nothing to retry); OATS itself cannot be read (the same notice every place shows,
+ * (`gone`: a plan the kernel refused for a name it does not know; a notice, nothing to retry); OATS itself cannot be read (the same notice every place shows,
  * and Retry asks again); or the kernel's refusal, its code and message as the filter draws them.
  */
 function Refused({ error, gone, instance, onRetry, footerRetries = false }: { error: string; gone: boolean; instance: string; onRetry: () => void; /** the dialog's footer has "Try again": the kernel's refusal draws no Retry of its own */ footerRetries?: boolean }) {

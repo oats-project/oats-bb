@@ -77,6 +77,19 @@ test("a running agent says since when it runs; a stopped one says Stopped and sh
   expect(stopped.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
+// One gate for a claim (model/view.ts `claimOf`), the same for the sidebar, the thread's row and
+// this panel: a session that ended in a shell, or that the kernel cannot reach, keeps "a claim
+// wins" (the spec's author's rule), so the panel says Needs you where the tree does.
+test("a failed or unreachable agent that still carries a claim says Needs you and shows it, as its row in the tree does", async () => {
+  for (const change of [{ running: false, runtimeState: "shell" }, { running: null, runtimeState: "unreachable" }] as const) {
+    const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, ...change }) });
+    await slot.findByTestId("oats-panel-work");
+    expect(stateOf(slot), JSON.stringify(change)).toMatch(/^Needs you· waiting 15 min/);
+    expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
+    slot.unmount();
+  }
+});
+
 test("Needs input: the reason in words, how long and since when, and the agent's message; the header says the same wait", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");

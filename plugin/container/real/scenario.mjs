@@ -666,8 +666,9 @@ try {
   step("A15 edge: every act on the agent that is gone: what the kernel answers (kept, for the plugin's \"not in OATS any more\")");
   // The roster on a screen can be older than this: an act asked from it reaches the kernel, which
   // refuses it for an agent it no longer has. The six refusals are recorded as the kernel prints
-  // them, with the argv the plugin's host entry uses, so that the plugin's test of how it tells
-  // "gone" from any other refusal reads the kernel's own words. Each command is refused before it
+  // them, with the argv the plugin's host entry uses. The plugin says "not in OATS any more" for a
+  // stop plan or a retire plan refused with E_SESSION_UNKNOWN, by that code alone, and shows every
+  // other refusal as the kernel's: its tests read these recordings for both. Each command is refused before it
   // changes anything: the home is not there, the name is no instance's.
   const goneActs = {
     start: ["session", "start", "--home", home, "--json"],
@@ -690,7 +691,15 @@ try {
     if (refused) {
       show(verb, `${error.code}: ${error.message}`);
       fixtures.keepIn("lifecycle/gone.json", verb, run.stdout);
+      // What the plugin's rule rests on: a plan for a name the kernel does not know is refused with this code.
+      if (verb === "stopPlan" || verb === "retirePlan") check(error.code === "E_SESSION_UNKNOWN", `the ${verb === "stopPlan" ? "stop" : "retire"} plan of an agent that is gone is refused with E_SESSION_UNKNOWN`, error.code);
     }
+  }
+  // Asked once, to know it, and built on nowhere: a start addressed by the instance's NAME (the
+  // plugin starts by home, which is what the kernel's contract gives it).
+  for (const verb of ["start", "restart"]) {
+    const byName = oats("session", verb, A.instance, "--json");
+    note(`oats session ${verb} <name> on the retired agent (not used by the plugin) answers exit ${byName.exit}: ${String(byName.stdout || byName.stderr).replace(/\s+/g, " ").trim().slice(0, 400)}`);
   }
   check(!existsSync(home) && rowOf(A.instance) === undefined, "and nothing was made by asking: no home, no row");
 

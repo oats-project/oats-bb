@@ -20,7 +20,7 @@ import { shown } from "../ui/text";
 import { asOf } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus, drawnState } from "./status";
+import { agentStatus, rowState } from "./status";
 import { failureWords } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
@@ -107,7 +107,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {gone ? (
-        <StatusLine {...drawnState(status, true)} detail={["OATS has no agent of this name now", stale].filter((part) => part !== null).join(" · ")} />
+        <StatusLine {...rowState(status, true)} detail={["OATS has no agent of this name now", stale].filter((part) => part !== null).join(" · ")} />
       ) : (
         <StatusLine state={status.state} since={status.since} detail={[status.detail, stale].filter((part) => part !== null).join(" · ") || null} action={act} />
       )}

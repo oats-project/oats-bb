@@ -12,22 +12,18 @@ export const GONE_MARK = "stopped" as const;
 export const UNKNOWN_INSTANCE = "E_SESSION_UNKNOWN";
 
 /**
- * Whether a refusal says the kernel has no such agent. The kernel says it in two ways, as recorded
- * from it (test/fixtures/lifecycle/gone.json; awebai/oats lib/instance-address.mjs and
- * lib/core.mjs at 95c7b43b3):
- * - a stop or a retire, plan or apply, resolves the name first: E_SESSION_UNKNOWN,
- *   `no instance "<name>" under <roots>`. The code alone is not enough: for a session it also
- *   means one whose state cannot be established.
- * - a start or a restart is given the home. For a home that was retired the kernel answers
- *   `directory instance home was removed or exchanged: <home>; …` (E_WORK_INSPECTION_FAILED, as
- *   recorded); for a directory that never was one, `<home> is not an OATS instance home (no
- *   instance.json); nothing was started` (E_RUNTIME_ENDPOINT_UNKNOWN, lib/core.mjs). The message is
- *   what says it, whatever the code.
+ * Whether the refusal of a stop PLAN or a retire PLAN says the kernel has no such agent: by its
+ * code alone, E_SESSION_UNKNOWN, which the kernel documents for it (docs/desktop-cli-api.md) and
+ * which a plan can only get from resolving the name (`no instance "<name>" under <roots>`,
+ * recorded in test/fixtures/lifecycle/gone.json). Never by its words.
+ *
+ * Nothing else marks an agent gone. A start, a restart and an apply can be refused with the same
+ * code for a session whose state cannot be established, and a start on a retired home answers a
+ * code shared with other failures (E_WORK_INSPECTION_FAILED): those are shown as the kernel's
+ * refusal, and the roster, read again right after every act, drops the row of an agent that is
+ * no longer there.
  */
-export function saysGone(code: string | null, message: string): boolean {
-  if (/\binstance home was removed or exchanged\b|\bis not an OATS instance home\b/.test(message)) return true;
-  return code === UNKNOWN_INSTANCE && /\bno instance (named )?"/.test(message);
-}
+export const planSaysGone = (code: string | null): boolean => code === UNKNOWN_INSTANCE;
 
 const NONE: ReadonlySet<string> = new Set();
 let gone: ReadonlySet<string> = NONE;

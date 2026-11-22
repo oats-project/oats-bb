@@ -5,13 +5,14 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
-import { failureLine, useOats } from "../oats";
+import { useOats } from "../oats";
+import { RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
 import { useRead } from "../store";
 import type { Contract, Result } from "../store";
-import { Button, Chip, Dot, ErrorLine, Heading, Lines, Note, Page, plainClick } from "../ui";
+import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, Page, plainClick } from "../ui";
 import { shown } from "../ui/text";
 
 type Soul = Result<"souls">["souls"][number];
@@ -122,13 +123,9 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
       </section>
       <section className="flex flex-col gap-2">
         <Heading>Agents</Heading>
-        {oats.phase === "ready" ? (
-          <SoulAgents soul={soul} oats={oats} />
-        ) : oats.phase === "loading" ? (
-          <Note>Reading OATS…</Note>
-        ) : (
-          <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>
-        )}
+        {/* The agents are the roster's: while OATS cannot be read, the notice says so, above the ones last read. */}
+        <RosterNotice oats={oats} />
+        {oats.phase === "ready" ? <SoulAgents soul={soul} oats={oats} /> : oats.phase === "loading" ? <Loading>Reading your agents…</Loading> : null}
       </section>
       <section className="flex flex-col gap-2">
         <Heading>New agent</Heading>

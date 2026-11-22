@@ -22,7 +22,7 @@ import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
-import { agentStatus, drawnState } from "./status";
+import { agentStatus, rowState } from "./status";
 import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
@@ -126,7 +126,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
-      const drawn = drawnState(status, gone.has(node.agent.instance));
+      const drawn = rowState(status, gone.has(node.agent.instance));
       return [
         threadRow(
           thread,
@@ -149,7 +149,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    */
   const threadlessRow = (agent: Agent, where: string) => {
     const status = agentStatus(agent, null, now);
-    const drawn = drawnState(status, gone.has(agent.instance));
+    const drawn = rowState(status, gone.has(agent.instance));
     const name = instanceDisplayName(shown(agent.instance));
     return (
       <li key={agent.instance}>

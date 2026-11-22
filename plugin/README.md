@@ -254,7 +254,9 @@ What the features share, beyond the entries:
   state, its word and how long the agent has waited. It is the one function for every place that
   says a state in words: the sidebar's rows, the line under a thread's header and the home's card
   read it (the instance panel has the Desktop's own words for its header). `claimOf(agent)`
-  (`model/view.ts`) is the one gate for whether a row shows its claim, the Desktop's.
+  (`model/view.ts`) is the one gate for whether an agent's claim is shown, the Desktop's with one
+  difference the comment there states: the sidebar, the thread's row and the instance panel all
+  read it, so they say Needs you, and show the claim, together.
 - **One tab on a thread.** bb gives the plugin one fixed tab on a thread, the home's. A feature
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home

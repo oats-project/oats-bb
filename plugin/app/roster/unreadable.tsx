@@ -1,10 +1,13 @@
 // When OATS cannot be read: the one Notice every place shows, in a person's words, with the acts
 // that help (the UX standard, section 3; the design of the unreadable state). The same component
-// for the sidebar, the identity row, the home and the pages; with a roster still shown (stale) it
-// says how old that roster is.
+// for every place that draws the roster or a count from it: the sidebar, the home, a soul's page,
+// Teams and Machines (`RosterNotice`), and a confirmation asked meanwhile; the thread's row says its
+// title in one line. With a roster still shown (stale) it says how old that roster is.
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
 import { firstLine, THREADS_FAILED } from "../oats";
+import type { Oats } from "../oats";
+import { useNow } from "./now";
 import { Button, LINK, Notice, TARGET } from "../ui";
 import { shown } from "../ui/text";
 import { readAge } from "../ui/words";
@@ -81,4 +84,16 @@ export function Unreadable({ failure, machine, at, now, onRetry }: { failure: Fa
       </Notice>
     </div>
   );
+}
+
+/**
+ * For a place that draws something of the roster: nothing while the roster is the one just read;
+ * the Notice when OATS cannot be read, with the age of what the place still shows when it is the
+ * last roster read. The place draws it above what it keeps.
+ */
+export function RosterNotice({ oats }: { oats: Oats }) {
+  const now = useNow();
+  if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
+  if (oats.phase === "ready" && oats.stale !== null) return <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
+  return null;
 }

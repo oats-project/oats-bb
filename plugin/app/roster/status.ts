@@ -46,6 +46,6 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
  * since refused as one it does not know, the mark of an agent that does not run and "Not in OATS
  * any more". The one function for the sidebar's rows and the thread's own row.
  */
-export function drawnState(status: AgentStatus, gone: boolean): { state: AgentStatus["state"]; word: string } {
+export function rowState(status: AgentStatus, gone: boolean): { state: AgentStatus["state"]; word: string } {
   return gone ? { state: GONE_MARK, word: GONE_WORD } : { state: status.state, word: status.word };
 }

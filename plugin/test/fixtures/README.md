@@ -43,8 +43,9 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
     longer has (`flaky-ci-2-developer`, after its retire), one refusal per key: `start`, `restart`
     (given the retired home: `E_WORK_INSPECTION_FAILED`, "directory instance home was removed or
     exchanged"), `stopPlan`, `stopApply`, `retirePlan`, `retireApply` (given the name:
-    `E_SESSION_UNKNOWN`, `no instance "<name>" under <roots>`). The plugin tells "not in OATS any
-    more" from these words (`app/roster/gone.ts`). Not recorded, a rule for the type only: a
+    `E_SESSION_UNKNOWN`, `no instance "<name>" under <roots>`). The plugin says "not in OATS any
+    more" for a stop plan or a retire plan refused with `E_SESSION_UNKNOWN`, by the code alone
+    (`app/roster/gone.ts`), and shows every other refusal as the kernel's. Not recorded, a rule for the type only: a
     stopped row that still carries a claim (the kernel prints none on a stopped row; `claimOf`,
     `model/view.ts`), and a start given a directory that never was a home ("is not an OATS
     instance home": no roster names such a home).

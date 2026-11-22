@@ -179,6 +179,62 @@ names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
+## The New agent form
+
+**New agent** (at the roster's foot in the sidebar, on the home, and on a soul's page where the
+Souls page is shown) opens the form: a page of its own, `/plugins/oats/new-agent`, or
+`/new-agent/<soul>` with that soul chosen. It is the OATS Desktop's Spawn dialog, in its order and
+its words, and it is not one of the pages the setting `pages` can leave out: whatever a release
+shows, an agent can be started.
+
+| Field | What it is |
+|---|---|
+| **Soul** | the souls OATS lists; the chosen one's description is under the field. A soul that cannot be spawned says why there. |
+| **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
+| **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. With one harness declared there is no field. |
+| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…** with a typed model id. |
+| **Relationship** | Independent, Child of, Sibling of or Parent of, then which instance: one of the roster's. |
+| **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent. A name that cannot be used says its fault under the field. |
+
+Beside the fields (under them on a phone) stands **What will be created**: the kernel's own
+preview (`oats spawn … --preview --json`) of exactly the values on screen, in a person's words: the
+name and the home, where it works, the harness and the model and where they came from, the team,
+the relationship, the core capabilities and the capabilities. It is read again 0.4 s after the
+last change; meanwhile the last facts stay, marked "Updating…" ("Reading defaults…" before the
+first), and an answer for values that are no longer on screen is never drawn. A warning is drawn
+only where the kernel gives one, as a warning. The app never gets the kernel's preview whole: the
+host entry answers these facts and the decision's revision (`contract/spawn.ts` `spawnFacts`,
+`model/spawn.ts` `previewFacts`).
+
+**Spawn** applies the decision that preview showed (its revision goes with the call), so "Spawn
+refuses if this changes before you confirm" is true: a decision that moved is refused by the
+kernel, nothing is created, and the column is read again. The button is off only with its reason
+beside it ("Choose a soul first.", "The name can’t be used: its field says why.", …). Pressed
+before the preview of the values on screen answered, the press is kept and goes on when it does
+("Checking…"); if the values change meanwhile, "Changed: press Spawn again". While it spawns the
+button says "Spawning…" and the fields are held; then the new agent's thread opens. A refusal leads
+with a person's words (the Desktop's, `model/spawn.ts` `spawnProblem`), the kernel's code after,
+and the kernel's own message under Details; where the outcome is not known the button becomes
+"Check result", which asks again under the same key, so that nothing is spawned twice. A spawn
+goes on when its page is left: the form, opened again meanwhile, says "A spawn of <soul> is in
+progress." and starts no second one.
+
+While OATS cannot be read the form is held like the acts: the roster's own notice, the fields and
+Spawn off with the acts' reason, and nothing asked of the kernel.
+
+Keys, as the Desktop's dialog has them, handled by the form itself: Mod+Enter spawns; Mod+1 the
+instruction, Mod+2 the harness, Mod+3 the model, Mod+4 the relationship, Mod+6 the name (Mod is ⌘
+on a Mac, Ctrl elsewhere). In a browser tab the browser may keep Ctrl or ⌘ with a digit for its
+own tabs; Tab walks the same order.
+
+Every spawn is `--backend bb --yolo`: the form says so in one line, "Runs in bb's full mode: no
+sandbox.", with no control ([How it is built](#how-it-is-built)).
+
+Not in the form yet (a later change): teams to join, Run in background, the developer settings
+(work area, launch configuration, messaging identity), the Setup and Launch prompts of the
+preview, a failed spawn kept with Reopen and the draft kept, a name from the task, and a wake-up
+at spawn.
+
 ## Automations
 
 **Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's
@@ -382,7 +438,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   `oats` that finished by itself left running is the kernel's and is left alone.
 - **Inputs are untrusted.** bb's API has no login, so any client of the server can call the
   plugin's RPC. No RPC takes a path, a flag or a command. A soul must be one `oats souls` lists; a
-  name must match `^[a-z0-9][a-z0-9-]{0,62}$` and is one argv element; a task travels as a 0600
+  name must match `^[a-z0-9][a-z0-9-]{0,62}$` and is one argv element; a harness must be one the bb
+  session provider declares; a model is one line that cannot be read as an option; a relation is
+  one of three words and an instance of the current snapshot; a task travels as a 0600
   file in the host worker's temporary directory, removed when the call ends; an instance must be in
   the current snapshot, and its home is the one the kernel named. The plugin adds no power a caller
   of bb's own API lacks.
@@ -395,8 +453,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
-  (`--expect-decision`), so Spawn reads the kernel's preview and applies exactly that decision with
-  the key; asked again with the same key, it replays the same spawn. A spawn or a retire that runs
+  (`--expect-decision`), so Spawn applies exactly the decision a preview answered, with the key:
+  the one the form showed (its revision comes with the call), else the one the server reads right
+  before the apply; asked again with the same key, it replays the same spawn. A spawn or a retire that runs
   capability hooks can take minutes: if the client stops waiting, the act still finishes and the
   tree shows it.
 - **Freshness.** The server keeps one snapshot (`oats status --json`). It rereads on the host

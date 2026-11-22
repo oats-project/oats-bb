@@ -1,6 +1,6 @@
 ---
 name: oats-in-bb
-description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one from a soul's page, reading the sidebar tree and the "needs you" list, reading OATS schedules and triggers on the Automations page, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
+description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one with New agent, reading the sidebar tree and the "needs you" list, reading OATS schedules and triggers on the Automations page, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
 ---
 
 # OATS agents in bb
@@ -19,10 +19,13 @@ agents, their homes, identities and mail are OATS's and aweb's.
   otherwise.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.
-- **Spawn** from a soul's page (Souls, pick a soul, name, task, Preview, Spawn in bb). The name is
-  lower-case letters, digits and dashes. The new agent opens in its own thread. It runs in bb's
-  full mode, with no sandbox between it and the account bb runs as: the plugin asks for that on
-  every spawn (`--yolo`), and the form says so in one line.
+- **Spawn** with **New agent** (the sidebar's foot, the home, a soul's page): the form's own page.
+  Choose the soul; the rest is optional: an opening instruction (empty: the agent starts and
+  waits), the harness and the model (the defaults are the kernel's), a relationship to another
+  agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will
+  be created" is the kernel's preview of what is on screen; Spawn applies exactly that, and opens
+  the new agent's thread. It runs in bb's full mode, with no sandbox between it and the account bb
+  runs as: the plugin asks for that on every spawn (`--yolo`), and the form says so in one line.
 - **Answer an agent in bb**: in its thread, or on the OATS home's "Needs you" cards. A card
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types

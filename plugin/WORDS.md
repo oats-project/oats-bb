@@ -86,3 +86,30 @@ A time is said only where the kernel recorded one; the plugin invents none.
 | Another agent in Lineage | its instance name ("redesign-ui-lead") | its name as words ("Redesign ui lead"); the instance name is the title | One name for an agent everywhere the plugin draws it (R1). |
 | After a refusal of the soul's read that reading again cannot change | nothing to press | a button under the notice, "Read the soul again" | Readiness and the activity keep their Refresh for whoever mended what was wrong; the Soul tab had no such button. |
 | A refusal that is no fault: OATS has none of it for this kind of agent (`E_UNSUPPORTED_MODE`) | the sentence in the error colour, as every refusal | a notice that is no failure, titled with the sentence ("OATS keeps no record of what this kind of agent was spawned from"), with nothing to press in any of the three parts | A state that is not a fault is not drawn as one. |
+
+## The New agent form
+
+The Desktop's Spawn dialog (`packages/desktop/renderer/spawn-dialog.mjs`, `spawn-words.mjs`,
+`packages/client/spawn-messages.mjs` and `spawn-preview-facts.mjs`, at awebai/oats 3d834aa3c). Its
+labels, hints, statuses and refusals are used as they are; these differ.
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| The form's title before a soul is chosen | (the dialog always opens on a soul, or on its soul picker) | **New agent** | The form is a page whose first field is the soul: until one is chosen there is no "Spawn <soul> in <workspace>" to say. |
+| The first field | **Change soul**, a button in the dialog's head | **Soul**, a field, the first | The second pilot path: the form does not depend on the Souls page, so the choice is a field of the form. |
+| A name that cannot be used | the rule: "Use letters, digits and dashes in the name (start with a letter or digit).", "Instance names are at most 64 characters. Shorten the name." | the fault: "A space can’t be in a name. Use letters, digits and dashes.", "“/” can’t be in a name. …", "A name starts with a letter or a digit, not a dash.", "This name has 70 characters. A name has 63 at most: shorten it." | The second UX read, B25: a refusal states the fault, not the rule. 63 is the plugin's own limit, checked before any process (`contract/shared.ts`). |
+| The name's placeholder | "e.g. pricing-page-lead" | the same | none. |
+| The harness's first entry | "Default · <harness>", detail "What this soul launches with unless you choose" | **The soul's default**, then "The soul's default: pi" | The harness interface (v4, point 2), agreed with the provider's side. |
+| A model that is typed | **Custom…**, detail "Type a model ID", in the model's popup | **Custom…** in the model's list, then a field **Model ID** with the placeholder "Type a model ID" | bb gives a plugin no popup with a text entry; the words are the Desktop's. |
+| After a spawn | "Created <instance>. Opening its terminal…" | "Created <name as words>. Opening its thread…" | In bb an agent's session is a thread; an agent is named by its name as words (R1). |
+| What follows an outcome that is not known | "Use Check result before spawning again." | "Check the agents in the sidebar before spawning again."; the button reads **Check result** | The form's Check result asks the kernel again under the same key; the sidebar is where a person sees the agent. |
+| What follows "update OATS", "sync the workspace" | "…then open this dialog again.", "Run Sync in the Workspace view." | "Update OATS, then open this form again.", "Run oats sync in the deployment, then try again." | The plugin has a form, and no Sync act. |
+| The provider's refusal of a harness it does not declare (`E_BACKEND_HARNESS`) | (no sentence: the Desktop does not spawn on bb) | "bb can’t run the harness this soul would use. Pick one of the harnesses above." | A refusal leads with a person's words; the kernel's are under Details. |
+| Why Spawn is off | the button is off; the status line or a field says why | beside the button, always: "Choose a soul first.", "The name can’t be used: its field says why.", "Pick the instance first, or choose Independent.", "Type the model ID, or choose Default.", "OATS refused these values: “What will be created” says why.", "A spawn of <soul> is in progress."; under a roster that could not be read again, the acts' own "Comes back when OATS is read again" | The standard: a disabled button says why, beside it. |
+| The column before a soul is chosen, and while a value cannot be used | (no such state) | "Choose a soul to see what will be created.", "Shown once the values above can be used." | A designed empty state, in the place the facts will be. |
+| A preview the kernel refuses | the sentence in the footer's status line, with Details | the notice **This can’t be spawned as it is** in the column: the sentence, the code, Details, Retry | The standard's Notice, in the place the facts would be. |
+| A warning of the kernel's in the preview | its lines, in the warning colour | the notice **OATS warns** with its lines | A warning has a mark and a title; drawn only where the kernel gives one. |
+| A refused spawn | the sentence in the footer's status line | the result **The agent was not spawned** (or **It is not known whether the agent was spawned**): the sentence, the code, Details | The standard's Result. |
+| The keys | a hint beside each label | one line under the form: "Keys: Ctrl+Enter spawns · Ctrl+1 Opening instruction · …" | The shared Field takes a label as words; one line says them all. |
+| "Preview ready" | in the status line once the preview is read | not said | The column itself shows it is read; a status is said only for what a person waits on. |
+

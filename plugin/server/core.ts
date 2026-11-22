@@ -257,6 +257,14 @@ export function createCore(bb: BbPluginApi) {
       // What was read before stays, with its age: no place falls back to nothing where there was a roster.
       next = { ...next, last: lastRoster === null ? null : { at: lastRoster.at, deployment: lastRoster.deployment, agents: lastRoster.agents } };
     }
+    // A read that began under settings that have changed since is not this deployment's answer:
+    // nothing keeps it (the change emptied `cached`, and the read it queued brings the new one), so
+    // no client is shown it and no act finds an agent, or a home, of the old deployment in it.
+    if (generation !== settingsGeneration) {
+      lastEnd = Date.now();
+      lastTook = 0;
+      return next;
+    }
     const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
@@ -296,9 +304,20 @@ export function createCore(bb: BbPluginApi) {
     if (!lifetime.signal.aborted) void reread();
   };
 
-  /** The cached snapshot; before the first one, the read in flight, or one started now. */
+  /**
+   * The cached snapshot; before the first one (and after a settings change, which empties it), the
+   * answer of the read in flight or of one started now. A read that ended under other settings than
+   * it began with keeps nothing: the next one is waited for.
+   */
   async function current(): Promise<Snapshot> {
-    return cached ?? (await (running ?? reread()));
+    for (;;) {
+      if (cached !== null) return cached;
+      const answer = await (running ?? reread());
+      if (cached !== null) return cached;
+      // Nothing was kept: the read ended under other settings than it began with, and the one the
+      // change queued is waited for; or the plugin is stopping, and the answer is all there is.
+      if (lifetime.signal.aborted) return answer;
+    }
   }
 
   /**
@@ -427,7 +446,10 @@ export function createCore(bb: BbPluginApi) {
     bb.events.on("thread.deleted", rereadSoon);
     settings.onChange(() => {
       settingsGeneration += 1;
-      // Another machine or deployment: what was read of the old one is not this one's last roster.
+      // Another machine or deployment: what was read of the old one is not this one's roster, nor
+      // its last one. Until the new one is read there is none: a client and an act wait for it.
+      cached = null;
+      comparable = "";
       lastRoster = null;
       rawRows = null;
       target = null;

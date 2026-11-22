@@ -29,13 +29,19 @@ export type ConfirmProps = {
   /** Why the primary button is off, in words, beside it; null when it can be pressed. */
   blocked?: string | null;
   phase:
-    | { kind: "reading" }
+    /** The kernel is being asked: `text` says for what, where the place has the Desktop's own line ("Checking instance…"). */
+    | { kind: "reading"; text?: string }
     | { kind: "ready" }
     /** The act is on its way: the dialog says so (`doing`, once, under the plan) and cannot be dismissed into a lost result. */
     | { kind: "running"; doing: string }
-    | { kind: "done"; title: string; lines?: readonly string[]; actions?: ReactNode }
-    /** A refusal or a failure: a person's words (`title`), then the kernel's code and message, and the next step. */
-    | { kind: "failed"; title: string; refusal: string; actions?: ReactNode };
+    /**
+     * The act's result. `tone: "unknown"` is a result that is NOT CONFIRMED (an answer that was
+     * lost): neither done nor failed, drawn as such, with the next step ("Check again") in
+     * `actions`. `code` is the kernel's or the plugin's code, after the words.
+     */
+    | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; code?: string | null; actions?: ReactNode }
+    /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
+    | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
   /** Cancel before the act, Close after it. Not called while the act runs. */
   onClose: () => void;
@@ -110,7 +116,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
             <p>{`OATS answered for ${shown(shownFor)}, not for ${shown(about)}. Nothing was done. Close this and ask again.`}</p>
           </Result>
         ) : phase.kind === "reading" ? (
-          <Loading>Reading the plan from OATS…</Loading>
+          <Loading>{phase.text ?? "Reading the plan from OATS…"}</Loading>
         ) : phase.kind === "done" ? null : (
           <>
             {sentences("What will happen", happens)}
@@ -120,14 +126,14 @@ export function Confirm({ title, about, shownFor, happens, kept = [], children, 
         )}
         {phase.kind === "running" ? <Loading>{phase.doing}</Loading> : null}
         {phase.kind === "done" ? (
-          <Result title={phase.title} actions={phase.actions}>
+          <Result title={phase.title} tone={phase.tone ?? "done"} code={phase.code} actions={phase.actions}>
             {(phase.lines ?? []).map((line, index) => (
               <p key={index}>{shown(line)}</p>
             ))}
           </Result>
         ) : null}
         {phase.kind === "failed" ? (
-          <Result title={phase.title} tone="failed" actions={phase.actions}>
+          <Result title={phase.title} tone="failed" code={phase.code} actions={phase.actions}>
             <p className="text-muted-foreground">
               <Lines text={phase.refusal} />
             </p>

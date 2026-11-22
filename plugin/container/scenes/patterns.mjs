@@ -261,6 +261,7 @@ export default [
       // The other states of a confirmation: the plan being read, blocked with its reason, a plan that names no agent, and one that is not destructive.
       for (const [opener, name, holds] of [
         ["oats-patterns-open-reading", "reading", (d) => d.phase === "reading" && d.body.includes("Reading the plan from OATS…") && d.off === true],
+        ["oats-patterns-open-checking", "checking", (d) => d.phase === "reading" && d.body.includes("Checking instance…") && !d.body.includes("Reading the plan") && d.off === true],
         ["oats-patterns-open-blocked", "blocked", (d) => d.phase === "ready" && d.reason === "Tick the box to discard its work." && d.off === true],
         ["oats-patterns-open-unnamed", "unnamed", (d) => d.phase === "ready" && d.reason === "OATS did not say which agent this plan is for." && d.off === true],
         ["oats-patterns-open-stop", "stop", (d) => d.title === "Stop Weekly digest helper?" && d.phase === "ready" && d.off === false && d.focus === "oats-confirm-act"],
@@ -274,6 +275,32 @@ export default [
         await page.press("Escape");
         await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       }
+      // A result that is not confirmed: neither done nor failed, with its code after the words and the next step.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-unknown")}').focus()`);
+      await page.press("Enter");
+      await page.until(visible(testId("oats-confirm")), 10);
+      const unknown = JSON.parse(await page.evaluate(`JSON.stringify({ tone: document.querySelector('${testId("oats-confirm")} ${testId("oats-result")}')?.getAttribute("data-tone"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`));
+      check(unknown.tone === "unknown" && unknown.body.includes("Result not confirmed") && unknown.body.indexOf("OATS_TIMEOUT") > unknown.body.indexOf("Check again before assuming") && unknown.body.includes("Check again") && unknown.focus === "oats-confirm-close", `${at} a result that is not confirmed is drawn as neither done nor failed: its words, the code after them, Check again, the focus on Close`, JSON.stringify(unknown));
+      await page.shot(`patterns-${viewport.name}-confirm-not-confirmed`, { targets: true });
+      await page.press("Escape");
+      await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
+      // A result through bb's own toaster (app/ui/notify.ts): `sonner` is bb's shim in the BUILT plugin, so the
+      // toast is one bb draws. A result leaves by itself; a failure stays until it is dismissed.
+      const toasts = `[...document.querySelectorAll("[data-sonner-toast]")].map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-failed")}').click()`);
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-done")}').click()`);
+      const drawn = await page.until(`(() => { const all = ${toasts}; return all.length === 2 ? JSON.stringify(all) : null; })()`, 10);
+      const both = drawn ? JSON.parse(drawn) : [];
+      check(
+        both.some((toast) => toast.text.startsWith("Weekly digest helper started.") && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes("Weekly digest helper wasn't started") && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
+        `${at} a result and a failure are told through bb's own toaster: the result with "Open <agent>", the failure with its sentence`,
+        JSON.stringify(both),
+      );
+      await page.shot(`patterns-${viewport.name}-toasts`);
+      const left = await page.until(`(() => { const all = ${toasts}; return all.length === 1 ? JSON.stringify(all) : null; })()`, 15);
+      check(Boolean(left) && JSON.parse(left)[0].text.includes("wasn't started"), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
+      await page.evaluate(`document.querySelector('[data-sonner-toast] button[aria-label="Dismiss notification"]')?.click()`);
+      await page.until(`document.querySelectorAll("[data-sonner-toast]").length === 0`, 10);
     },
   },
 ];

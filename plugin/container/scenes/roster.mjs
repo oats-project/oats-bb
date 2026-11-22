@@ -242,13 +242,15 @@ export default [
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
-      // The thread's own row: the soul by its name alone (its page is not shown: no link leads nowhere).
-      const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-fact-soul"))}); return e ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, " ").trim(), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
-      check(soul === JSON.stringify({ text: "instance of oats-desktop-developer", links: 0 }), `${at} the thread's row names the soul with no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // The sidebar: the roster and who waits; no list of pages, no link to one, no mark of one.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
       check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // The thread's own row: the soul by its name alone (its page is not shown: no link leads nowhere).
+      // Read AFTER the sidebar: the needs line is a button only once bb has given the settings, and
+      // until then no page is known shown under any value, so an earlier read would prove nothing.
+      const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-fact-soul"))}); return e ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, " ").trim(), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
+      check(soul === JSON.stringify({ text: "instance of oats-desktop-developer", links: 0 }), `${at} the thread's row names the soul with no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
       await page.shot(`pages-default-${viewport.name}-sidebar`, { targets: true });
       // A page that is not shown has no route: its path answers one line and the way back.
       for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) {

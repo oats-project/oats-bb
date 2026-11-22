@@ -494,7 +494,7 @@ test("until a feature names the form's page, \"New agent\" opens the Souls page 
   }
 });
 
-// One count of who waits, for the sidebar's foot, the home and its badge (model/view.ts `needing`):
+// One count of who waits (model/view.ts `needing`), read by the sidebar's foot (the home follows in its owner's change):
 // an agent with no bb thread that waits on a person is counted, as its own row says it does.
 test("the foot counts every agent that waits, the ones with no bb thread included", async () => {
   const claim = { reason: "question", message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
@@ -505,4 +505,26 @@ test("the foot counts every agent that waits, the ones with no bb thread include
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // three in the tree, and the one on tmux
   const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
   expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · runs in tmux");
+});
+
+// On a deployment that shows more than the default, a page opened by its path must not say "not
+// shown" for the moment bb takes to read the settings (round 1 of the second pass).
+test("while bb is still reading the settings no page is known to be shown or hidden; settings bb cannot give are the default's", async () => {
+  const { pagesOf, showEveryPageWhenUnset } = await import("../../app/workspace/pages");
+  showEveryPageWhenUnset(false); // as in the built app
+  try {
+    const loading = pagesOf({ values: undefined, isLoading: true });
+    expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
+    const unavailable = pagesOf({ values: undefined, isLoading: false });
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
+    const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
+    expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // A cleared field is the default, as for the plugin's other settings.
+    const cleared = pagesOf({ values: { pages: " " }, isLoading: false });
+    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, false]);
+    // The values of a read before stay while bb reads them again.
+    expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
+  } finally {
+    showEveryPageWhenUnset(true);
+  }
 });

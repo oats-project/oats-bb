@@ -61,6 +61,8 @@ export function useSettingsHref(): string {
  * plugin/WORDS.md holds both.
  */
 export const HELD = "Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.";
+/** The same where the notice has no Retry, because only the plugin's settings can mend it (which machine holds the agents). */
+export const HELD_SETTINGS = "Open settings: Stop, Start, Restart and Retire come back when OATS is read again.";
 export const HELD_REASON = "Comes back when OATS is read again";
 
 /**
@@ -77,11 +79,15 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
     return (
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
         <span className="font-semibold text-destructive-text">{words.title}</span>
-        <span className="min-w-0 text-muted-foreground">{at === undefined ? (words.sentence ?? "") : `${showingRead(readAge(at, now))} ${HELD}`}</span>
+        <span className="min-w-0 text-muted-foreground">{at === undefined ? (words.sentence ?? "") : `${showingRead(readAge(at, now))} ${words.retry ? HELD : HELD_SETTINGS}`}</span>
         {words.retry ? (
           <span className="ml-auto shrink-0">
             <Button onClick={onRetry}>Retry</Button>
           </span>
+        ) : words.settings ? (
+          <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
+            Open settings
+          </a>
         ) : null}
       </div>
     );
@@ -106,7 +112,7 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
         }
       >
         {words.sentence === null ? null : <p>{words.sentence}</p>}
-        {at === undefined ? null : <p data-testid="oats-held">{HELD}</p>}
+        {at === undefined ? null : <p data-testid="oats-held">{words.retry ? HELD : HELD_SETTINGS}</p>}
       </Notice>
     </div>
   );

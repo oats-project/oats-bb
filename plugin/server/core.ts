@@ -329,11 +329,26 @@ export function createCore(bb: BbPluginApi) {
   }
 
   /**
-   * The agent the kernel's snapshot names; an instance it does not name is refused. While OATS
-   * cannot be read no act is taken, also where the last roster is still shown: the acts are held
-   * until it is read again (the Desktop's rule), and the failure is the refusal.
+   * The agent the kernel's snapshot names, for a READ of it; an instance it does not name is
+   * refused. While OATS cannot be read after it was, the agent is the one of the last roster read:
+   * what a place still shows of it can still be read. With no roster ever read, the failure is the
+   * refusal. An act asks `agentForAct`.
    */
   async function agentOf(instance: string): Promise<Agent> {
+    const read = await current();
+    if (!read.ok && lastRoster === null) throw refusal({ code: read.code, message: read.message });
+    const now = read.ok ? read : lastRoster!;
+    const found = now.agents.find((agent) => agent.instance === instance);
+    if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
+    return found;
+  }
+
+  /**
+   * The agent an ACT is for: the one the kernel's snapshot names now. While OATS cannot be read no
+   * act is taken, also where the last roster is still shown: the acts are held until it is read
+   * again (the Desktop's rule), and the failure is the refusal.
+   */
+  async function agentForAct(instance: string): Promise<Agent> {
     const now = await current();
     if (!now.ok) throw refusal({ code: now.code, message: now.message });
     const found = now.agents.find((agent) => agent.instance === instance);
@@ -450,7 +465,10 @@ export function createCore(bb: BbPluginApi) {
     });
     bb.events.on("thread.created", rereadSoon);
     bb.events.on("thread.deleted", rereadSoon);
-    settings.onChange(() => {
+    settings.onChange((next, prev) => {
+      // Only what says WHERE OATS is read makes another roster: a setting the app alone reads
+      // (`pages`) leaves the roster, and the last one kept while OATS cannot be read, as they are.
+      if (next.deployment === prev.deployment && next.oatsBin === prev.oatsBin && next.host === prev.host) return;
       settingsGeneration += 1;
       // Another machine or deployment: what was read of the old one is not this one's roster, nor
       // its last one. Until the new one is read there is none: a client and an act wait for it.
@@ -494,6 +512,7 @@ export function createCore(bb: BbPluginApi) {
     reread,
     rereadSoon,
     agentOf,
+    agentForAct,
     rowOf,
     rowsOf,
     versionOf,

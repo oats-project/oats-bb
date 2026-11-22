@@ -68,11 +68,20 @@ test("a working agent says when its session started, as that; with no start in t
   expect(sessionStarted("not a time", now)).toBeNull();
 });
 
-test("a stopped agent's time is its last \"stopped\" event's; none when its events hold none", () => {
+test("a stopped agent's time is its last \"stopped\" event's; none when its events hold none, or none since its session started", () => {
   const now = new Date(2026, 10, 21, 14, 30).getTime();
   const at = (h: number, m: number) => new Date(2026, 10, 21, h, m).toISOString();
-  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }, { kind: "stopped", at: at(10, 0) }, { kind: "launched", at: at(11, 0) }, { kind: "stopped", at: at(13, 41) }], now)).toBe("since 13:41");
-  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }], now)).toBeNull();
-  expect(stoppedSince(undefined, now)).toBeNull();
-  expect(stoppedSince([{ kind: "stopped", at: "not a time" }], now)).toBeNull();
+  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }, { kind: "stopped", at: at(10, 0) }, { kind: "launched", at: at(11, 0) }, { kind: "stopped", at: at(13, 41) }], at(11, 0), now)).toBe("since 13:41");
+  expect(stoppedSince([{ kind: "launched", at: at(9, 0) }], null, now)).toBeNull();
+  expect(stoppedSince(undefined, null, now)).toBeNull();
+  expect(stoppedSince([{ kind: "stopped", at: "not a time" }], null, now)).toBeNull();
+  // The events held are from before this stop (the session started after their last "stopped"):
+  // an earlier stop's time is not this one's. A start the roster does not name, or cannot be read, hides nothing.
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], at(11, 0), now)).toBeNull();
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], null, now)).toBe("since 10:00");
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], "not a time", now)).toBe("since 10:00");
+  // A stop of an earlier instance of the same name (the events are the address's history) is not this one's.
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0), incarnation: "earlier" }], null, now)).toBeNull();
+  expect(stoppedSince([{ kind: "stopped", at: at(9, 0), incarnation: "current" }, { kind: "stopped", at: at(10, 0), incarnation: "earlier" }], null, now)).toBe("since 09:00");
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0), incarnation: "unknown" }], null, now)).toBe("since 10:00");
 });

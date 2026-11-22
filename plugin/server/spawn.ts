@@ -57,7 +57,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     }
     let anchor: HostChoices["relation"];
     if (relation !== undefined) {
-      const to = await core.agentOf(relation.to);
+      // A spawn is an act: its anchor is an agent of the roster as it is NOW (held while OATS cannot be read, like the acts).
+      const to = await core.agentForAct(relation.to);
       const root = agentsRootOf(to);
       anchor = { ...relation, ...(root === null ? {} : { root }) };
     }

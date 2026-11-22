@@ -165,7 +165,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           title={shown(agent.instance)}
           className={`${ROW} w-full pl-2 text-left`}
           onClick={() => {
-            if (!openAgentPage(navigate, agent.instance)) openSoul(navigate, oats.soulOf(agent));
+            // With no page for one agent (no feature names one): its soul's page, where that page is shown.
+            if (!openAgentPage(navigate, agent.instance) && pagesNow.has("souls")) openSoul(navigate, oats.soulOf(agent));
             onNavigate();
           }}
         >
@@ -220,7 +221,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   }
 
   const { view, deployment } = oats;
-  // Every agent that waits, the ones with no bb thread included: the number the home says too.
+  // Every agent that waits, the ones with no bb thread included (`view.needing`: the home follows in its owner's change).
   const needs = view.needing.length;
   // Every agent OATS has is a row: the count in the workspace line is the count of rows.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;

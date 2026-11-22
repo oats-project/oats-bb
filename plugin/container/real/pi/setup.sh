@@ -5,7 +5,8 @@
 #   pi, on the PATH bb's server and oats run with;
 #   the OATS bridge for pi (@awebai/oats-pi) AT THE KERNEL'S OWN VERSION, in the pi configuration
 #     bb's server runs with: here the user's own, ~/.pi/agent, which is also the provider's
-#     default for settings.oats.bb.piAgentDir. Its tarball's integrity is checked first;
+#     default for settings.oats.bb.piAgentDir. Its tarball's integrity is checked first, and
+#     what pi then installs is compared with that tarball;
 #   and NOT the aweb extension for pi (@awebai/pi) in that configuration;
 #   the provider `mock` of that configuration (models.json) and its endpoint (mock-openai.mjs);
 #   one extension of the run's own, whose tool opens a dialog of pi (ask-dialog.ts).
@@ -38,6 +39,15 @@ if ! grep -qs "\"npm:@awebai/oats-pi@$OATS_PI_VERSION\"" "$PI_AGENT_DIR/settings
   echo "bridge tarball: @awebai/oats-pi@$OATS_PI_VERSION, integrity $BRIDGE_INTEGRITY"
   [ -z "$OATS_PI_INTEGRITY" ] || [ "$BRIDGE_INTEGRITY" = "$OATS_PI_INTEGRITY" ] || { echo "pi setup: the tarball of @awebai/oats-pi@$OATS_PI_VERSION is not the one expected (OATS_PI_INTEGRITY $OATS_PI_INTEGRITY)" >&2; exit 1; }
   pi install "npm:@awebai/oats-pi@$OATS_PI_VERSION"
+  # pi fetches the package itself (the provider knows the bridge by its npm name only, so the
+  # checked file cannot be what is installed): what it installed is compared, file by file, with
+  # the tarball that was checked.
+  INSTALLED=$(find "$PI_AGENT_DIR" -type d -path '*/node_modules/@awebai/oats-pi' | head -1)
+  [ -n "$INSTALLED" ] || { echo "pi setup: pi installed no @awebai/oats-pi under $PI_AGENT_DIR" >&2; exit 1; }
+  rm -rf "$REAL/bridge" && mkdir -p "$REAL/bridge"
+  tar -xzf "$REAL/$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0].filename' "$OUT/bridge.json")" -C "$REAL/bridge"
+  diff -r "$REAL/bridge/package" "$INSTALLED" || { echo "pi setup: the @awebai/oats-pi pi installed ($INSTALLED) is not the tarball that was checked" >&2; exit 1; }
+  echo "bridge installed: $INSTALLED, the same files as the checked tarball"
 fi
 PACKAGES=$(node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).packages ?? [])' "$PI_AGENT_DIR/settings.json")
 case "$PACKAGES" in *@awebai/pi@* | *'@awebai/pi"'*) echo "pi setup: bb's pi configuration lists @awebai/pi ($PACKAGES): the provider refuses a pi launch there" >&2; exit 1 ;; esac

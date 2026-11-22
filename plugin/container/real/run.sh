@@ -30,7 +30,10 @@ REPOSITORY=$(dirname "$PLUGIN")
 # Unset: the release the fixtures were recorded at. Set and empty: a tree from KERNEL_REPO.
 REAL_PI=${REAL_PI:-0}
 [ "$REAL_PI" != 1 ] || [ "${UPDATE_FIXTURES:-0}" != 1 ] || { echo "real: the pi run records no fixture: UPDATE_FIXTURES is the main run's" >&2; exit 2; }
-if [ "$REAL_PI" = 1 ]; then KERNEL_NPM=${KERNEL_NPM-0.70.3}; else KERNEL_NPM=${KERNEL_NPM-0.70.0}; fi
+# The pi run's kernel, where none is named. (The next line stays as it is, alone on its line: it
+# is the main run's pin, and test/kernel-compat.test.ts reads it.)
+[ "$REAL_PI" != 1 ] || KERNEL_NPM=${KERNEL_NPM-0.70.3}
+KERNEL_NPM=${KERNEL_NPM-0.70.0}
 case "$KERNEL_NPM" in
   0.70.0) KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-DeVGFZi1ev2ClxF3p/UV0OBc4XwAWuLjEckJ56rz7UVCg8deavPAOHPjeIuyIvg5l4g52rzRBtoe3aVsxQrxrQ==} ;;
   0.70.3) KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-8OEBK0SGL+bubsiksC19LQuusiZ66aur5HhaMwSuKorEHcekt9lU/P7GNoaXT/YH/bfFHPURq7A9+3Yb1dhnLw==} ;;
@@ -86,7 +89,9 @@ trap cleanup EXIT
 
 BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -e "REAL_PI=$REAL_PI" -w /home/node/plugin "$NAME" "$@"; }
+# OATS_PI_INTEGRITY and PI_VERSION (the pi run's, pi/README.md) are passed by name: only when set
+# here, so that one left unset keeps pi/setup.sh's default.
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -e "REAL_PI=$REAL_PI" -e OATS_PI_INTEGRITY -e PI_VERSION -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 [ -n "$KERNEL_NPM" ] || git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel

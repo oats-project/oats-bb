@@ -159,8 +159,8 @@ can launch a pi agent on bb. In plain words, on the machine that runs bb:
    starts the command `pi` by name. Install it before bb's server starts, or restart bb after:
    bb then lists pi among its providers as ready.
 2. **The OATS bridge for pi, `@awebai/oats-pi`, is installed in the pi configuration bb's server
-   runs with**, at the same version as the OATS kernel (`pi install npm:@awebai/oats-pi@<the
-   version `oats version` prints>`). The two are released together and tested only as a pair.
+   runs with**, at the same version as the OATS kernel (`pi install npm:@awebai/oats-pi@<version>`, with
+   the version `oats version` prints). The two are released together and tested only as a pair.
    Without the bridge a pi agent loads none of its skills, so OATS refuses to launch it
    (`E_BACKEND_NOT_READY`). That configuration is `~/.pi/agent` of the user that runs bb, unless
    bb's server was started with `PI_CODING_AGENT_DIR`; then name that directory in

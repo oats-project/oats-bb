@@ -164,6 +164,9 @@ export default [
       const check = printing(plain);
       check(await open(page, within("oats-needs-card")), `${at} the home draws its cards`, await page.evaluate(textOf(PAGE)));
       check((await page.evaluate(textOf(within("oats-home-title")))) === "Home", `${at} the page is headed "Home"`, await page.evaluate(textOf(within("oats-home-title"))));
+      // New agent is on every home, in the heading's row: at a phone's width bb's sidebar is in a drawer, and the home is what a person sees.
+      const head = await page.evaluate(`(() => { const head = document.querySelector(${JSON.stringify(within("oats-home-head"))}); const button = head?.querySelector('[data-testid="oats-home-new-agent"]'); const title = head?.querySelector('[data-testid="oats-home-title"]'); return JSON.stringify({ text: (head?.innerText ?? "").replace(/\\s+/g, " ").trim(), off: button?.disabled ?? null, oneRow: Boolean(button && title) && Math.abs((button.getBoundingClientRect().top + button.getBoundingClientRect().bottom) / 2 - (title.getBoundingClientRect().top + title.getBoundingClientRect().bottom) / 2) < 12 }); })()`);
+      check(head === JSON.stringify({ text: "Home New agent", off: false, oneRow: true }), `${at} New agent is in the heading's row of a home with agents, and can be pressed`, head);
       const needs = await page.until(`${heading("oats-home-needs", "needs you 3")} ? ${headingOf("oats-home-needs")} : ""`, 15);
       check(Boolean(needs), `${at} three agents need the person`, await page.evaluate(headingOf("oats-home-needs")));
       // every card: the agent's name as words, its soul and machine, what it asks, and the answer its request takes
@@ -453,7 +456,9 @@ export default [
       const check = printing(plain);
       check(await open(page, within("oats-home-new-agent")), `${at} the home offers New agent`, await page.evaluate(textOf(PAGE)));
       const words = await page.evaluate(textOf(within("oats-empty")));
-      check(words === "OATS runs your agents: each one is a soul at work on a machine of yours. Start one, and Home shows what needs you and what you have. New agent", `${at} it says what OATS does in two lines`, words);
+      check(words === "OATS runs your agents: each one is a soul at work on a machine of yours. Start one, and Home shows what needs you and what you have.", `${at} it says what OATS does in two lines`, words);
+      const head = await page.evaluate(`(() => { const head = document.querySelector(${JSON.stringify(within("oats-home-head"))}); const button = head?.querySelector('[data-testid="oats-home-new-agent"]'); return JSON.stringify({ text: (head?.innerText ?? "").replace(/\\s+/g, " ").trim(), off: button?.disabled ?? null }); })()`);
+      check(head === JSON.stringify({ text: "Home New agent", off: false }), `${at} and New agent is the one act, in the heading's row`, head);
       check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-summary"))}) === null`)) === true, `${at} and draws no empty group and no count of nothing`, await page.evaluate(textOf(PAGE)));
       await sound(page, viewport, check, at, "the empty workspace");
       await page.shot(`home-${viewport.name}-empty`);
@@ -467,6 +472,8 @@ export default [
       check(await open(page, within("oats-needs-card")), `${at} the home keeps its cards`, await page.evaluate(textOf(PAGE)));
       const notices = JSON.parse(await page.evaluate(`JSON.stringify(${texts(`${PAGE} ${testId("oats-notice")}`)})`));
       check(notices.length === 1 && /Showing what was read /.test(notices[0]) && /Retry/.test(notices[0]), `${at} one notice says OATS cannot be read, how old what is shown is, and offers Retry`, JSON.stringify(notices));
+      const newAgent = await page.evaluate(`(() => { const head = document.querySelector(${JSON.stringify(within("oats-home-head"))}); return JSON.stringify({ off: head?.querySelector('[data-testid="oats-home-new-agent"]')?.disabled ?? null, why: head?.querySelector('[data-testid="oats-disabled-reason"]')?.innerText.trim() ?? null }); })()`);
+      check(newAgent === JSON.stringify({ off: true, why: "Held until OATS is read again: what is shown may have changed." }), `${at} New agent is held, and says why beside it`, newAgent);
       const held = await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ offer: card.dataset.offer, text: card.querySelector('[data-testid="oats-reply-text"]')?.disabled ?? null, send: card.querySelector('[data-testid="oats-reply-send"]')?.disabled ?? null, why: [...card.querySelectorAll('[data-testid="oats-disabled-reason"]')].filter((reason) => reason.checkVisibility()).map((reason) => reason.innerText.trim()), open: card.querySelector('[data-testid="oats-needs-open"]').disabled })))`);
       const cards = JSON.parse(held);
       check(cards.length === 3 && cards.every((each) => each.text === true && each.send === true && each.open === false) && cards.filter((each) => each.offer === "reply").length === 2 && cards.filter((each) => each.offer === "reply").every((each) => each.why.join() === "Held until OATS is read again: what is shown may have changed."), `${at} every card's reply is held, a reply in view says why beside it, and Open still opens`, held);

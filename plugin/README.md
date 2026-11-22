@@ -108,7 +108,8 @@ the OATS Desktop's Home: what needs you first, then what you have.
 | **Working** | the agents at work, five, then **Show all N working** / **Show fewer**; each row opens its agent |
 | **Finished, not looked at** | idle agents whose thread holds something you have not read; not drawn with none |
 | **Home › Agents** | `/plugins/oats/home/agents` (in the tab, a view of the tab): **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its soul and machine, its state in words and who started it ("started by Ana": the person OATS attributes it to, else its parent), and **Back to Home** (Esc does the same) |
-| an empty workspace | what OATS does in two lines, and **New agent** |
+| **New agent** | in the heading's row of every home (the page's "Home", Home › Agents, and the tab), where New agent has somewhere to open; off, with the reason beside it, behind the CLI card and while the roster shown is the last one read |
+| an empty workspace | what OATS does in two lines; **New agent**, in the heading's row, is drawn as the one thing to press |
 
 **The installed `oats`.** The home says where the installed `oats` stands against what the plugin
 is built for (`kernel/compat.ts`: the oldest OATS it works with, the newest minor it was tested
@@ -134,8 +135,8 @@ that cannot be run at all is the roster's notice, not this one.
 
 **The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
 shows (the plugin's setting `pages`; the default is `home` alone, and then the tiles are **Agents**
-only), and reads a page's count only then. New agent on the empty home is offered where it has
-somewhere to open.
+only), and reads a page's count only then. New agent is offered where it has somewhere to open
+(the New agent form's page, once that feature names it; else the Souls page when it is shown).
 
 **What a card offers.** An agent is answered by the answer its request takes, and the card offers
 that one, not a free-text box beside it as an equal:

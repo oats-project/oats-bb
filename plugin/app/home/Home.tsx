@@ -529,11 +529,10 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
-function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onAgents: () => void; onBack: () => void }) {
+function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; /** the page's own heading (the tab has bb's) */ title: boolean; onAgents: () => void; onBack: () => void }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
-  // Read once: the installed CLI changes with an install, not with what the agents do.
   // Read once the home is seen, and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, check } = useCli(visible);
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
@@ -541,48 +540,64 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
-  if (oats.phase === "loading") return <Loading>{READING}</Loading>;
-  if (oats.phase === "failed") return <RosterNotice oats={oats} />;
+  const heading = title ? (
+    <h1 data-testid="oats-home-title" className="m-0 text-lg font-semibold text-foreground">
+      {HOME}
+    </h1>
+  ) : null;
+  if (oats.phase === "loading" || oats.phase === "failed") {
+    return (
+      <>
+        {heading}
+        {oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />}
+      </>
+    );
+  }
   const made = board(oats.view, now);
   const held = oats.stale !== null;
+  // New agent is on every home, in the heading's row (the Desktop's Home has none: its act is the
+  // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
+  // open (the sidebar's rule); off, with why beside it, behind the CLI card and while the roster
+  // shown is the last one read. On the home of a workspace with no agent it is the one act.
+  const offWhy = incompatible ? NEW_AGENT_HELD : held ? HELD : null;
+  const head = (
+    <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+      {heading ?? <span />}
+      {hasNewAgent(pages.has("souls")) ? (
+        <span className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {offWhy === null ? null : <DisabledReason>{offWhy}</DisabledReason>}
+          <Button variant={made.all.length === 0 ? "primary" : "default"} data-testid="oats-home-new-agent" disabled={offWhy !== null} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
+            New agent
+          </Button>
+        </span>
+      ) : null}
+    </div>
+  );
   // The one Stale drawing, the roster's: nothing while the roster is the one just read.
   const stale = <RosterNotice oats={oats} />;
   if (agents) {
     return (
       <>
+        {head}
         {stale}
         <EveryAgent made={made} oats={oats} onBack={onBack} />
       </>
     );
   }
   if (made.all.length === 0) {
-    const somewhere = hasNewAgent(pages.has("souls"));
     return (
       <>
+        {head}
         {stale}
         {notice}
-        <Empty
-          title={FIRST_RUN[0]}
-          action={
-            // Offered where New agent has somewhere to open (the sidebar's rule); off, with why, behind the CLI card.
-            somewhere ? (
-              <>
-                <Button variant="primary" data-testid="oats-home-new-agent" disabled={incompatible} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
-                  New agent
-                </Button>
-                {incompatible ? <DisabledReason>{NEW_AGENT_HELD}</DisabledReason> : null}
-              </>
-            ) : null
-          }
-        >
-          {FIRST_RUN[1]}
-        </Empty>
+        <Empty title={FIRST_RUN[0]}>{FIRST_RUN[1]}</Empty>
         <Tiles made={made} visible={visible} onAgents={onAgents} />
       </>
     );
   }
   return (
     <>
+      {head}
       {stale}
       {notice}
       <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
@@ -630,10 +645,7 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
   const agents = subPath.split("/").find((segment) => segment !== "") === AGENTS;
   return (
     <Page testId="oats-home-page">
-      <h1 data-testid="oats-home-title" className="m-0 text-lg font-semibold text-foreground">
-        {HOME}
-      </h1>
-      <Sections oats={oats} visible agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
+      <Sections oats={oats} visible title agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
     </Page>
   );
 }
@@ -666,7 +678,7 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   }
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
-      <Sections oats={oats} visible={visible} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
+      <Sections oats={oats} visible={visible} title={false} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
     </div>
   );
 }

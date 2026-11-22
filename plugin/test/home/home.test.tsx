@@ -640,10 +640,12 @@ test("more than five at work show five, then all on a press", async () => {
   expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(7);
 });
 
-test("a workspace with no agent says what OATS does in two lines and offers New agent", async () => {
+test("a workspace with no agent says what OATS does in two lines, and New agent is the one act, in the heading's row", async () => {
   const slot = await homePage({ rpc: handlers({}, []), sidebarThreads: calm() });
   const empty = await slot.findByTestId("oats-empty");
-  expect(empty.textContent).toBe("OATS runs your agents: each one is a soul at work on a machine of yours.Start one, and Home shows what needs you and what you have.New agent");
+  expect(empty.textContent).toBe("OATS runs your agents: each one is a soul at work on a machine of yours.Start one, and Home shows what needs you and what you have.");
+  // the one act of that home is New agent, in the heading's row, drawn as the thing to press
+  expect(slot.getByTestId("oats-home-head").textContent).toBe("HomeNew agent");
   expect(slot.queryByTestId("oats-home-needs")).toBeNull();
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-home-new-agent"));
@@ -951,4 +953,41 @@ test("a check that fails ends too, and the card keeps what was read before", asy
   await waitFor(() => expect(slot.getByTestId("oats-home-cli-retry").textContent).toBe("Check again"));
   expect(slot.getByTestId("oats-home-cli").textContent).toContain("Detected0.69.4");
   expect(slot.getByTestId("oats-home-cli-check-failed").textContent).toBe("The installed oats could not be checked again: OATS_TIMEOUT: oats did not answer");
+});
+
+test("New agent is on every home, in the heading's row: with agents too, on the page and in the tab; held with its reason while the roster is the last one read", async () => {
+  const slot = await homePage();
+  await slot.findByTestId("oats-home-needs");
+  const head = slot.getByTestId("oats-home-head");
+  expect(head.textContent).toBe("HomeNew agent");
+  // above everything else of the home
+  expect(head.compareDocumentPosition(slot.getByTestId("oats-home-needs")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(slot.getByTestId("oats-home-new-agent"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+  slot.unmount();
+  // Home › Agents keeps it
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const list = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "agents" }, { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+  await list.findByTestId("oats-home-agents");
+  expect(list.getByTestId("oats-home-new-agent")).toBeTruthy();
+  list.unmount();
+  // the tab has bb's own heading: the row holds the button alone
+  const tab = await plainTab();
+  await tab.findByTestId("oats-home-needs");
+  expect(tab.getByTestId("oats-home-head").textContent).toBe("New agent");
+  expect(tab.queryByTestId("oats-home-title")).toBeNull();
+  tab.unmount();
+  // the roster as last read: off, and it says why
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });
+  await stale.findByTestId("oats-home-needs");
+  expect((stale.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(true);
+  expect(within(stale.getByTestId("oats-home-head")).getByTestId("oats-disabled-reason").textContent).toBe("Held until OATS is read again: what is shown may have changed.");
+  stale.unmount();
+  // where New agent has nowhere to open (the default pages, and no form's page named), it is not drawn
+  const nowhere = await homePage({ settings: { pages: "home" } });
+  await nowhere.findByTestId("oats-home-needs");
+  expect(nowhere.queryByTestId("oats-home-new-agent")).toBeNull();
+  expect(nowhere.getByTestId("oats-home-head").textContent).toBe("Home");
 });

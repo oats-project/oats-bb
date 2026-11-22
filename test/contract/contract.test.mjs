@@ -684,7 +684,7 @@ test("T9 a live thread whose project root is gone is reported by readiness as or
 test("launch runs the provider's readiness first: a bb whose Claude is not signed in refuses with E_BACKEND_NOT_READY, bb's word in it", async () => {
   // A second bb server with no credential for Claude at all (no mock key in its environment).
   await run("docker", ["exec", "-d", NAME, "sh", "-c",
-    "cd ~ && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates > bb-app-signed-out.out 2>&1"]);
+    "cd ~ && echo started > bb-app-signed-out.out && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates >> bb-app-signed-out.out 2>&1; echo \"bb-app exited with status $?\" >> bb-app-signed-out.out"]);
   const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
   try {
   // This wait has timed out twice in some ten runs with no cause found: when it does, say
@@ -714,7 +714,7 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
 // Last: it starts another bb server, bound to every address, beside the first.
 test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", async () => {
   await run("docker", ["exec", "-d", "-e", "ANTHROPIC_BASE_URL=http://127.0.0.1:9999", "-e", "ANTHROPIC_API_KEY=dummy-not-a-real-key", NAME, "sh", "-c",
-    "cd ~ && bb-app --data-dir ~/bbdata-exposed --server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887 --no-in-app-updates > bb-app-exposed.out 2>&1"]);
+    "cd ~ && echo started > bb-app-exposed.out && bb-app --data-dir ~/bbdata-exposed --server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887 --no-in-app-updates >> bb-app-exposed.out 2>&1; echo \"bb-app exited with status $?\" >> bb-app-exposed.out"]);
   const exposed = { ...SETTINGS, server: "http://127.0.0.1:48886", daemon: "http://127.0.0.1:48887" };
   // It has timed out on a CI runner with no cause seen: when it does, say what that bb printed, what it answered and
   // what its processes wait on, so the next one is read, not rerun.

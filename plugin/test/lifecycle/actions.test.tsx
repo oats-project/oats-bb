@@ -111,21 +111,26 @@ test("with no roster ever read, every thread's menu has one entry, off, that say
   }
 });
 
-test("while OATS cannot be read after it was, the acts stay for the agents of the last roster, each saying how old that is", async () => {
+// The lead's ruling R4 (2026-11-22) reversed "acts are offered as of <age>": on a roster that is
+// the last one read the OATS acts are HELD, as on the Desktop (D-085).
+test("while OATS cannot be read after it was, the acts stay in the menu, off, each with when it comes back; nothing runs", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const stale = () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last });
-  const { shown, item } = await menu("thr_redesign", { snapshot: stale });
+  const { shown, item, slot } = await menu("thr_redesign", { snapshot: stale });
   expect(shown()).toEqual(["stop", "restart", "retire"]);
-  for (const id of ["stop", "restart", "retire"]) expect(item(id)).toMatchObject({ detail: "as of 2 min ago" });
-  expect(item("stop")!.disabled).toBeUndefined();
+  for (const id of ["stop", "restart", "retire"]) expect(item(id)).toMatchObject({ disabled: true, detail: "Comes back when OATS is read again" });
+  await item("stop")!.run({ requestRename: () => {} });
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(slot.inspection.rpcCalls.map((call) => call.method)).not.toContain("stopPlan");
   resetApp();
   // A thread that was no agent's has none, and no "can't be read" entry either: the roster is known, as of then.
   expect((await menu("thr_plain", { snapshot: stale })).shown()).toEqual([]);
 });
 
-test("with the roster just read the acts carry no age", async () => {
+test("with the roster just read the acts are on, with nothing beside them", async () => {
   const { item } = await menu("thr_redesign");
   expect(item("stop")!.detail).toBeUndefined();
+  expect(item("stop")!.disabled).toBeUndefined();
 });
 
 test("while the first read is in flight the menu says so only once it has taken more than a second", async () => {

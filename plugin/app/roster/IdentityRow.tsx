@@ -17,11 +17,10 @@ import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { asOf } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { useNow } from "./now";
 import { agentStatus, rowState } from "./status";
-import { failureWords } from "./unreadable";
+import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -82,18 +81,21 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       if (!openAgentPage(navigate, agent.instance)) navigate.toPluginPanel("home");
     } else if (!panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
   };
+  // While the roster is the last one read the OATS acts are held (the Desktop's rule): the act
+  // stays in its place, off, with the reason; the notice under the line has Retry.
+  const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
   const act =
     status.state === "stopped" ? (
-      <Button data-testid="oats-status-act" onClick={() => void run("start", agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
         Start
       </Button>
     ) : status.state === "error" ? (
-      <Button data-testid="oats-status-act" onClick={() => void run("restart", agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("restart", agent.instance, rpc, navigate)}>
         Restart
       </Button>
-    ) : status.state === "unreachable" ? (
+    ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>
         Retry
       </Button>
@@ -101,16 +103,16 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // The kernel has since refused this agent as one it does not know: the row says that, with no act,
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
-  // What is shown is the last roster read while OATS cannot be read: the line says how old it is.
-  const stale = oats.stale === null ? null : asOf(oats.stale.at, now);
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {gone ? (
-        <StatusLine {...rowState(status, true)} detail={["OATS has no agent of this name now", stale].filter((part) => part !== null).join(" · ")} />
+        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" />
       ) : (
-        <StatusLine state={status.state} since={status.since} detail={[status.detail, stale].filter((part) => part !== null).join(" · ") || null} action={act} />
+        <StatusLine state={status.state} since={status.since} detail={status.detail} action={act} />
       )}
+      {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
+      {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <RowFact label="Soul" testId="oats-fact-soul">
           <a

@@ -5,7 +5,7 @@ import { cloneElement, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
 import type { AgentState } from "../../model/types";
 import { refusalLines, shown } from "./text";
-import { STATE } from "./words";
+import { showingRead, STATE } from "./words";
 
 /** A control's height: 32 px, and 44 px at bb's compact (phone) width, where a finger presses it. */
 export const TARGET = "min-h-11 md:min-h-8";
@@ -148,8 +148,6 @@ export function Code({ children }: { children: string }) {
   return <code className="break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">{shown(children)}</code>;
 }
 
-/** The Desktop's sentence for content read earlier: with its age, or without one when the age is not known. */
-const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
 
 const TONE = {
   info: { frame: "border-border", title: "text-foreground", role: "status" },

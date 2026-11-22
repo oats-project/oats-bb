@@ -26,7 +26,7 @@ import { agentStatus, rowState } from "./status";
 import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
-import { instanceDisplayName, readAge } from "../ui/words";
+import { instanceDisplayName } from "../ui/words";
 import { Unreadable } from "./unreadable";
 import { useNow } from "./now";
 
@@ -221,10 +221,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
       {oats.stale === null ? null : (
-        <>
-          <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
-          <p data-testid="oats-last-observation" className="px-2 pt-2 text-xs text-muted-foreground">{`Last observation — ${readAge(oats.stale.at, now) ?? "its time is not known"}`}</p>
-        </>
+        <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>

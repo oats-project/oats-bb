@@ -8,8 +8,7 @@ import {
 import type { PluginAppBuilder, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState } from "../../model/types";
 import { useOats } from "../oats";
-import { failureWords } from "../roster/unreadable";
-import { asOf } from "../ui/words";
+import { failureWords, HELD_REASON } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import type { Contract, Rpc } from "../store";
 import { ActsOverlay, askPlan, run } from "./acts";
@@ -62,11 +61,11 @@ function lifecycle(
       if (oats.phase !== "ready") return null;
       const node = oats.nodeByThread.get(input.thread.id);
       if (node === undefined || !when(node.state, node.agent)) return null;
-      // On the last roster read, while OATS cannot be read, the acts stay: each goes to the kernel
-      // first, which decides it from its own facts, and without them a person is left with bb's
-      // own Stop, Archive and Delete only. The entry says how old what it is offered from is.
-      const detail = oats.stale === null ? undefined : asOf(oats.stale.at);
-      return { label, icon, variant, ...(detail === undefined ? {} : { detail }), run: () => act(node.agent.instance, input) };
+      // On the last roster read, while OATS cannot be read, the acts are HELD (the Desktop's rule):
+      // the entry stays where it was, off, with the reason, so that a person sees that the act
+      // exists and when it comes back, and does not reach for bb's own Stop. The notice has Retry.
+      if (oats.stale !== null) return { label, icon, variant, disabled: true, detail: HELD_REASON, run: () => undefined };
+      return { label, icon, variant, run: () => act(node.agent.instance, input) };
     },
   };
 }

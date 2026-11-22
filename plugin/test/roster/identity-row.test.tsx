@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A9: the IdentityRow (experimental_threadHeaderRow).
 import { afterEach, expect, test, vi } from "vitest";
-import { fireEvent } from "@testing-library/react";
+import { fireEvent, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
@@ -181,10 +181,20 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
   expect(slot.getByTestId("oats-status-line").className).toContain("flex-wrap");
 });
 
-test("on the last roster read, while OATS cannot be read, the line says how old what it shows is", async () => {
+test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
-  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("Working· as of 2 min ago");
+  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("Working");
+  const stale = slot.getByTestId("oats-unreadable");
+  expect(stale.getAttribute("data-compact")).toBe("");
+  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.Retry");
+  fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
+  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
+  slot.unmount();
+  // A stopped agent's Start stays in its place, off, and says when it comes back.
+  const stopped = await render("thr_digest", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
+  const start = (await stopped.findByTestId("oats-status-act")) as HTMLButtonElement;
+  expect([start.textContent, start.disabled, start.title]).toEqual(["Start", true, "Comes back when OATS is read again"]);
 });
 
 test("with no roster ever read the row says that OATS cannot be read, with Retry: never nothing", async () => {

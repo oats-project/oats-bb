@@ -346,7 +346,7 @@ test("a feature's own page is a row under the four pages, with its mark while it
   expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
 });
 
-test("while OATS cannot be read after it was, the tree stays as last read, under the notice and its age: never bb's flat list", async () => {
+test("while OATS cannot be read after it was, the tree stays as last read under the one notice: its age said once, that the acts are held, Retry; never bb's flat list", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const { slot } = await sidebar({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) });
   const rows = await slot.findAllByTestId("oats-agent-row");
@@ -355,7 +355,10 @@ test("while OATS cannot be read after it was, the tree stays as last read, under
   const notice = slot.getByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
   expect(notice.textContent).toContain("Showing what was read 2 min ago.");
-  expect(slot.getByTestId("oats-last-observation").textContent).toBe("Last observation — 2 min ago");
+  // The age is said once, in one form; the acts are held, and the sentence names Retry first.
+  expect(slot.getByTestId("oats-sidebar").textContent!.match(/2 min ago/g)).toHaveLength(1);
+  expect(slot.queryByTestId("oats-last-observation")).toBeNull();
+  expect(slot.getByTestId("oats-held").textContent).toBe("Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.");
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });

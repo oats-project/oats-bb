@@ -428,7 +428,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, o
             </Button>
           ) : null}
           {row.kind === "schedule" && row.runsHere ? (
-            <Button data-testid="oats-automation-run" disabled={busy} onClick={() => void runNow(row)}>
+            <Button data-testid="oats-automation-run-now" disabled={busy} onClick={() => void runNow(row)}>
               Run now
             </Button>
           ) : null}

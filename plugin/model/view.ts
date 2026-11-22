@@ -160,6 +160,12 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     detached,
     elsewhere,
     needsYou: pick((node) => node.state === "needs-you"),
+    // Every agent that waits on a person, whether bb has a thread for it or not: the ONE number a
+    // place says of who waits (the sidebar's foot, the home, its badge). In the kernel's order.
+    needing: agents.filter((agent) => {
+      const node = drawn.get(agent.instance);
+      return (node !== undefined && node.agent === agent ? node.state : state(agent, null)) === "needs-you";
+    }),
     working: pick((node) => node.state === "working"),
     finished: pick((node) => node.state === "idle" && node.thread.isUnread),
   };

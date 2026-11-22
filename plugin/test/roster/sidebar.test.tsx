@@ -483,3 +483,16 @@ test("\"New agent\" opens the form's own page once the spawn feature names it, w
     setNewAgent(null);
   }
 });
+
+// One count of who waits, for the sidebar's foot, the home and its badge (model/view.ts `needing`):
+// an agent with no bb thread that waits on a person is counted, as its own row says it does.
+test("the foot counts every agent that waits, the ones with no bb thread included", async () => {
+  const claim = { reason: "question", message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
+  // The tmux agent runs and carries a claim; the stopped agent's thread is gone (it shows none).
+  const agents = fixtureAgents().map((agent) => (agent.backend === "tmux" ? { ...agent, running: true, runtimeState: null, waiting: claim } : agent));
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) }, null, { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_digest") });
+  await slot.findByTestId("oats-tree");
+  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // three in the tree, and the one on tmux
+  const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
+  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · runs in tmux");
+});

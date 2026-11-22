@@ -220,7 +220,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   }
 
   const { view, deployment } = oats;
-  const needs = view.needsYou.length;
+  // Every agent that waits, the ones with no bb thread included: the number the home says too.
+  const needs = view.needing.length;
   // Every agent OATS has is a row: the count in the workspace line is the count of rows.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (

@@ -61,7 +61,10 @@ export type View = {
   detached: Agent[];
   /** agents on tmux */
   elsewhere: Agent[];
+  /** The nodes of the tree that wait on a person (agents with a bb thread). */
   needsYou: Node[];
+  /** Every agent that waits on a person, the ones with no bb thread included (on tmux, or whose thread is gone): the one count of who waits. */
+  needing: Agent[];
   working: Node[];
   /** state idle and the thread unread */
   finished: Node[];

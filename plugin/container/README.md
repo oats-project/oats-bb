@@ -65,6 +65,11 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
   version, on the real run's mock model (`real/mock-anthropic.mjs`; no login, nothing spent). The
   fixture threads are made on it, and the run checks that each one's turn was answered and bb
   shows it idle before any image is taken: an image of a thread shows a healthy one.
+- **`page.clock(at)`** runs the page with its clock at an instant (`"2026-11-21T20:21:00.000Z"`),
+  from the next navigation on, going on at the real pace; `page.clock(null)` gives the real clock
+  back. For a scene on recorded answers, whose times are older than the run: call it with the
+  recording's own time and clear it in a `finally`. Only the page's clock moves: the plugin's
+  server and OATS keep the real one.
 - **`page.press(key)`** sends a real key ("Tab", "Shift+Tab", "Enter", "Escape", an arrow): it
   moves the focus and closes a dialog as a person's key does. `FOCUSED` names what holds the focus.
   So a scene can open a menu, walk a dialog's focus order, and take the image of a dialog before

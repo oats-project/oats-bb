@@ -88,9 +88,30 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
         await sleep(250);
       }
     };
+    let clockScript = null;
     return {
       evaluate,
       until,
+      /**
+       * The page's clock, for a scene on recorded answers: `clock("2026-11-21T20:21:00.000Z")` makes
+       * `Date.now()` and `new Date()` in the page start at that instant, from the NEXT navigation on,
+       * and go on at the real pace; `clock(null)` gives the real clock back, again from the next
+       * navigation. A scene clears it in a `finally`, so that the next scene has the real clock.
+       * Only the page's clock moves: the plugin's server and OATS keep the real one, so an instant
+       * the server stamps itself ("as of", "showing what was read") is not one to read under it.
+       */
+      clock: async (at) => {
+        if (clockScript !== null) {
+          await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier: clockScript });
+          clockScript = null;
+        }
+        if (at === null) return;
+        const then = Date.parse(at);
+        if (!Number.isFinite(then)) throw new Error(`browser: clock(${JSON.stringify(at)}) is not an instant`);
+        const shift = then - Date.now();
+        const source = `(() => { const Real = Date; const shift = ${shift}; class Shifted extends Real { constructor(...args) { if (args.length === 0) super(Real.now() + shift); else super(...args); } static now() { return Real.now() + shift; } } globalThis.Date = Shifted; })();`;
+        clockScript = (await cdp("Page.addScriptToEvaluateOnNewDocument", { source })).identifier;
+      },
       goto: async (path) => {
         await cdp("Page.navigate", { url: base + path });
         await until("document.readyState === 'complete'", 30);

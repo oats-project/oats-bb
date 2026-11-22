@@ -19,7 +19,7 @@
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -77,7 +77,7 @@ function threadsByFixtureId() {
   for (const wanted of fixtureThreads) {
     if (existing.some((thread) => thread.title === wanted.title)) continue;
     // A healthy thread: Claude Code on the mock model (live.sh) answers its one turn.
-    bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", wanted.title, "--prompt", "hello", "--json");
+    bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", wanted.title, "--prompt", held(wanted) ? `hello MOCK-HOLD:${HOLD}` : "hello", "--json");
   }
   existing = list();
   const byId = new Map();
@@ -127,8 +127,15 @@ function bbSays(id) {
  * with every thread's name and status, what bb says of the ones that are not idle, and the end of
  * bb's and the mock model's logs.
  */
-const START_SECONDS = 120;
+const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS ?? 120);
 const AGAIN_SECONDS = 180;
+// To PROVE the path a stuck thread takes (not part of a normal run): LIVE_UI_PROVE_STUCK=1 makes
+// the first fixture thread's turn one the mock model does not answer (its hold file, real/mock-
+// anthropic.mjs), so the thread does not come to rest; the hold is lifted when it is made again.
+const HOLD = "live-ui-stuck";
+const HOLD_FILE = join(homedir(), "mock", "hold", HOLD);
+let holding = process.env.LIVE_UI_PROVE_STUCK === "1";
+const held = (wanted) => holding && wanted.id === fixtureThreads[0].id;
 async function healthyThreads() {
   const titleOf = new Map(fixtureThreads.map((thread) => [thread.id, thread.title]));
   const read = (threads) => {
@@ -144,6 +151,7 @@ async function healthyThreads() {
     }
     return now;
   };
+  if (holding) writeFileSync(HOLD_FILE, "");
   let threads = threadsByFixtureId();
   let now = await rest(threads, START_SECONDS);
   const stuck = now.filter((thread) => thread.status !== "idle");
@@ -155,6 +163,10 @@ async function healthyThreads() {
       } catch (error) {
         console.log(`NOTE bb thread delete ${thread.id} failed: ${String(error.stderr || error.message).trim().slice(0, 300)}`);
       }
+    }
+    if (holding) {
+      holding = false; // the proof's hold is lifted: the thread made again is a healthy one
+      rmSync(HOLD_FILE, { force: true });
     }
     threads = threadsByFixtureId(); // makes the ones that are gone, by their titles
     now = await rest(threads, AGAIN_SECONDS);

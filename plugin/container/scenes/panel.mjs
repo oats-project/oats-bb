@@ -39,7 +39,7 @@
 // a filled core slot. Readiness that is not ready is a recording
 // (test/fixtures/panel/readiness-home-not-ready.json).
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,7 +112,10 @@ function setVerb(verb, behaviour) {
   const verbs = { ...config.verbs };
   if (behaviour === null) delete verbs[verb];
   else verbs[verb] = behaviour;
-  writeFileSync(FAKE_CONFIG, JSON.stringify({ ...config, verbs }));
+  // Written beside and moved into place: the fake reads this file at every `oats` it stands for, and
+  // must never read half of it (a read that began during a plain write failed with no answer).
+  writeFileSync(`${FAKE_CONFIG}.next`, JSON.stringify({ ...config, verbs }));
+  renameSync(`${FAKE_CONFIG}.next`, FAKE_CONFIG);
 }
 const setStatus = (behaviour) => setVerb("status", behaviour);
 /** A kernel refusal, as the kernel prints one. */
@@ -772,7 +775,8 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-soul")));
         await page.until(`/only the core ones/.test(${textOf(inPanel("oats-panel-capabilities"))})`, 30);
         const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
-        check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only);
+        // When it is not there, the check prints what the Soul tab says in its place, a notice's folded details included (seen once: the read was refused).
+        check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only !== "" ? only : `(no capabilities part; the Soul tab says: ${await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 900)`)})`);
         await bring(page, check, at, "oats-panel-core");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");

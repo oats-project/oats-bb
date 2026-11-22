@@ -66,8 +66,8 @@ function Arrive({ token, seen, testId, children }: { token: number; seen: { curr
   );
 }
 
-/** What a capability source's test would run: the source and the parameters its command receives. A confirmation is for these, as they were shown. */
-const signatureOf = (row: AutomationRow): string => JSON.stringify([row.id, row.on?.source ?? null, sourceParams(row.on).lines]);
+/** What a capability source's test would run, whole: the trigger's `on` (its source, every parameter, its events), as the Desktop ties a confirmation to the whole row. */
+const signatureOf = (row: AutomationRow): string => JSON.stringify([row.id, row.on]);
 const events = (n: number): string => `${n} ${n === 1 ? "event" : "events"}`;
 const tally = (parts: readonly (readonly [number, string])[]): string => parts.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`).join(", ");
 
@@ -254,7 +254,7 @@ export type Acts = {
   /** A row's menu, after Open. */
   menuOf(row: AutomationRow): MenuItem[];
   /** What a row's page adds: its acts, the test's confirmation and result. */
-  rowParts(row: AutomationRow, now: number, host: string | null): Pick<DetailProps, "actions" | "runStateAction" | "sideStart" | "sideEnd" | "identityAction" | "summaryAction">;
+  rowParts(row: AutomationRow, now: number, host: string | null): Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
   /** The act of the notice of a scheduler that is off. */
   schedulerAction: ReactNode;
   /** The dialog that is open, if one is. */
@@ -294,9 +294,30 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
   const arrived = () => setArrival((before) => before + 1);
 
   // A confirmation is for the row whose page it was asked on: Back, or another row's page, drops it.
+  // Asked from the list's menu, it is kept while that row's page opens (`opening`).
+  const opening = useRef<string | null>(null);
   useEffect(() => {
-    setConfirming((before) => (before !== null && before.id !== openId ? null : before));
+    if (opening.current !== null && opening.current === openId) opening.current = null;
+    setConfirming((before) => (before !== null && before.id !== openId && opening.current !== before.id ? null : before));
   }, [openId]);
+  // It arrives once its row's page is open: this effect runs after the page's own (which puts the
+  // focus on Back when it opens), so the confirmation is what holds the focus.
+  const confirmingId = confirming?.id ?? null;
+  useEffect(() => {
+    if (confirmingId !== null && confirmingId === openId) arrived();
+  }, [confirmingId, openId]);
+  // Where the focus goes when a press removes or turns off the control that held it (a switch
+  // while its act runs, Cancel, Dismiss): set at the press, taken once no act is on its way.
+  const back = useRef<(() => HTMLElement | null) | null>(null);
+  useEffect(() => {
+    if (back.current === null || doing !== null) return;
+    const to = back.current();
+    back.current = null;
+    to?.focus();
+  });
+  const switchOfRow = (row: AutomationRow) => () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]')).find((control) => control.getAttribute("aria-label") === `${row.id} enabled on this computer`) ?? null;
+  const first = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-back"], [data-testid="oats-automations"] [role="tab"][aria-selected="true"]');
 
   const refused = (what: string, error: unknown): Said => {
     const { code, message } = refusalParts(errorMessage(error));
@@ -341,7 +362,11 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
     say(
       row.enabledHere ? `Turning ${row.name} off here…` : `Turning ${row.name} on here…`,
       () => rpc.call("automationEnable", { kind: row.kind, id: row.id, enabled: !row.enabledHere }),
-      () => null,
+      () => {
+        // Nothing is said of a switch that was taken: the focus goes back to it.
+        back.current = switchOfRow(row);
+        return null;
+      },
       row.enabledHere ? `${row.name} was not turned off here` : `${row.name} was not turned on here`,
     );
   const runNow = (row: AutomationRow) =>
@@ -364,11 +389,13 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
    */
   const test = (row: AutomationRow, runSource = false) => {
     if (running.current) return;
-    if (openId !== row.id) onOpen(row);
+    if (openId !== row.id) {
+      opening.current = row.id;
+      onOpen(row);
+    }
     if (!runSource && capabilitySource(row.on) !== null) {
       setNothingRan(null);
       setConfirming({ id: row.id, signature: signatureOf(row) });
-      arrived();
       return;
     }
     // Run test stands for what the confirmation showed: a row read again with another source or other parameters is asked again.
@@ -419,11 +446,11 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
     setDialog({ ...dialog, phase: { kind: "running", doing: "Deleting…" } });
     try {
       await attempt(() => rpc.call("scheduleRemove", { id: row.id }));
-      setDialog({ kind: "delete", row, phase: { kind: "done", title: `${row.name} was deleted`, lines: ["It is removed from this computer and no longer runs here."] } });
+      setDialog({ kind: "delete", row, phase: { kind: "done", title: `${shown(row.name)} was deleted`, lines: ["It is removed from this computer and no longer runs here."] } });
       onRemoved(row);
       refresh();
     } catch (error) {
-      setDialog({ kind: "delete", row, phase: { kind: "failed", title: `${row.name} was not deleted`, refusal: errorMessage(error) } });
+      setDialog({ kind: "delete", row, phase: { kind: "failed", title: `${shown(row.name)} was not deleted`, refusal: errorMessage(error) } });
     }
   };
   const confirmScheduler = async () => {
@@ -507,8 +534,8 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
           </Button>
         </div>
       ) : null,
-      // A capability source: the confirmation, then its result, lead the side column (where the person is looking); another's result closes it.
-      sideStart: (
+      // What an act put on the page: a confirmation, that nothing ran, a test on its way, its answer.
+      answers: (
         <>
           {/* This press carried no confirmation and the row turned out to watch a capability's source: nothing ran, and that is no failure of the trigger. */}
           {nothingRan === row.id ? (
@@ -520,13 +547,17 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
           ) : null}
           {source !== null && confirm ? (
             <Arrive token={arrival} seen={seen} testId="oats-automation-test-confirm-arrived">
-              <SourceConfirm row={row} source={source} host={host} running={testing} disabled={busy} onRun={() => test(row, true)} onCancel={() => setConfirming(null)} />
+              <SourceConfirm row={row} source={source} host={host} running={testing} disabled={busy} onRun={() => test(row, true)}
+                onCancel={() => {
+                  back.current = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-test-button"]');
+                  setConfirming(null);
+                }}
+              />
             </Arrive>
           ) : null}
-          {source !== null ? card : null}
+          {source === null && testing ? <Loading>{shown(doing.words)}</Loading> : card}
         </>
       ),
-      sideEnd: source === null ? (testing ? <Loading>{doing.words}</Loading> : card) : null,
     };
   };
 
@@ -543,7 +574,13 @@ export function useActs({ rpc, refresh, summaries, openId, onOpen, onOpenFile, h
           tone={said.tone}
           code={said.code}
           actions={
-            <Button data-testid="oats-automations-result-dismiss" onClick={() => setSaid(null)}>
+            <Button
+              data-testid="oats-automations-result-dismiss"
+              onClick={() => {
+                back.current = first;
+                setSaid(null);
+              }}
+            >
               Dismiss
             </Button>
           }

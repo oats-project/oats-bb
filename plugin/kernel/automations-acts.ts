@@ -185,5 +185,3 @@ export const verbs = (oats: Runner) => ({
   scheduleReconcile: (id: string, signal?: AbortSignal): Promise<Result<ScheduleReconciled>> => oats.run(scheduleReconcileArgv(id), parseScheduleReconcile, oats.timeouts.act, signal),
   schedulerEnable: (signal?: AbortSignal): Promise<Result<{ scheduler: AutomationScheduler; warnings: string[] }>> => oats.run(hostInstallArgv(), parseHostInstall, oats.timeouts.act, signal),
 });
-
-export { descriptionValid };

@@ -43,7 +43,7 @@ export type ViewProps = {
   /** Why that state could not be read (again), where it could not. */
   statusFailure?: DetailProps["statusFailure"];
   /** What the page adds for a row: its acts, and the cards they bring. */
-  rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "sideStart" | "sideEnd" | "identityAction" | "summaryAction">;
+  rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
   /** The act of the notice of a scheduler that is off (Enable scheduler). */
   schedulerAction?: ReactNode;
   /** A row's switch and menu in the list, where the page has acts. */

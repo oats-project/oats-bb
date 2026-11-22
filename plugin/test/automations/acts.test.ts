@@ -1,9 +1,9 @@
 // kernel/automations-acts.ts against what the real kernel printed for each act (OATS 0.70.0).
+import { descriptionValid } from "../../model/automations";
 import { describe, expect, it } from "vitest";
 import { automationTest } from "../../contract/automations";
 import {
   describeArgv,
-  descriptionValid,
   enableArgv,
   hostInstallArgv,
   parseHostInstall,

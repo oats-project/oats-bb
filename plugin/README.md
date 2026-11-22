@@ -209,7 +209,9 @@ asked: the page says which OATS it needs.
 
 One act runs at a time. While it runs the page says so in words where its answer will be
 ("Running daily-review…"); the answer, a test's result and a confirmation take the focus when they
-arrive, which brings them into view at any width. The lists are read again after every act. An act
+arrive, which brings them into view at any width. Where a row's page is one column (a phone, a
+narrow panel) they come first, right under the buttons; from bb's wide layout up they lead the
+second column. The lists are read again after every act. An act
 is refused before any process starts for an id the list does not name; the kernel's own refusal is
 shown in a person's words with its code after.
 

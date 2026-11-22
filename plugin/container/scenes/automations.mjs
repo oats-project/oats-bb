@@ -201,6 +201,9 @@ const scenes = [
       const resultBox = await page.evaluate(inView(result));
       check(resultBox === "in", `${at} the result is on screen, wherever the row was`, resultBox);
       await page.shot(`automations-${viewport.name}-run-launched`, { targets: true });
+      await page.evaluate(click(testId("oats-automations-result-dismiss")));
+      const dismissed = await page.until(`(() => document.querySelector(${JSON.stringify(result)}) === null && document.activeElement?.getAttribute("role") === "tab" ? "tab" : "")()`, 15);
+      check(dismissed === "tab", `${at} Dismiss takes the result away and the focus goes to the page's tab, not nowhere`, await page.evaluate(FOCUSED));
 
       // the switch says what it is and what a press does; a press asks the kernel and the row is read again
       const toggleOf = `${rowOf("local/weekly-cleanup")} [role="switch"]`;
@@ -210,6 +213,8 @@ const scenes = [
       await page.evaluate(click(toggleOf));
       const pressed = await page.until(`(() => document.querySelector(${JSON.stringify(toggleOf)})?.disabled === false && document.querySelector(${JSON.stringify(result)}) === null && document.querySelector(${JSON.stringify(testId("oats-automations-doing"))}) === null ? "settled" : "")()`, 30);
       check(pressed === "settled", `${at} a press of the switch is taken by the kernel without a refusal, and the switch can be pressed again`, String(pressed));
+      const onSwitch = await page.until(`(() => document.activeElement?.getAttribute("aria-label") === "local/weekly-cleanup enabled on this computer" ? "switch" : "")()`, 15);
+      check(onSwitch === "switch", `${at} after the press the focus is back on the switch`, await page.evaluate(FOCUSED));
 
       // Edit summary: the dialog takes the focus on its field, Tab stays inside it, and Escape gives the focus back to what opened it
       await openMenu("local/daily-review");
@@ -289,13 +294,30 @@ const scenes = [
       const confirmBox = await page.evaluate(inView(`${testId("oats-automation-test-confirm")} h3, ${testId("oats-automation-test-confirm")} h2`));
       check(confirmBox === "in", `${at} the confirmation is on screen without the person scrolling to it`, confirmBox);
       await page.shot(`automations-${viewport.name}-test-confirm`, { targets: true });
-      // Back withdraws it: asked on this row's page, it is not there on return
-      await page.evaluate(click(testId("oats-automation-back")));
-      await open(page, "/triggers/oats-real/harvest-review", testId("oats-automation-test-button"));
-      const withdrawn = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-automation-test-confirm"))}) === null ? "gone" : "still there"`);
-      check(withdrawn === "gone", `${at} a confirmation left with Back is not there on return`, withdrawn);
+      // Cancel takes it away and gives the focus back to Test
+      await page.evaluate(click(testId("oats-automation-test-cancel")));
+      check((await gone(testId("oats-automation-test-confirm"))) === "gone" && (await focusOn("oats-automation-test-button")) === "there", `${at} Cancel takes the confirmation away and the focus is back on Test`, await page.evaluate(FOCUSED));
+      // Back withdraws it: asked on this row's page, it is not there when the row is opened again from the list
       await page.evaluate(click(testId("oats-automation-test-button")));
       await said(testId("oats-automation-test-confirm"));
+      await page.evaluate(click(testId("oats-automation-back")));
+      await page.until(`(() => document.querySelector(${JSON.stringify(rowOf("oats-real/harvest-review"))}) ? "list" : "")()`, 15);
+      await page.evaluate(reach(rowOf("oats-real/harvest-review")));
+      await page.evaluate(click(`${rowOf("oats-real/harvest-review")} ${testId("oats-automation-open")}`));
+      await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automation-test-button"))}) ? "page" : "")()`, 15);
+      // An absence: read once the row's page is drawn again, which is when a kept confirmation would be drawn too.
+      const withdrawn = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-automation-test-confirm"))}) === null ? "gone" : "still there"`);
+      check(withdrawn === "gone", `${at} a confirmation left with Back is not there when the row is opened again`, withdrawn);
+      // Test from the list's menu: the row's page opens and the confirmation, not Back, holds the focus, on screen
+      await page.evaluate(click(testId("oats-automation-back")));
+      await page.until(`(() => document.querySelector(${JSON.stringify(rowOf("oats-real/harvest-review"))}) ? "list" : "")()`, 15);
+      await openMenu("oats-real/harvest-review");
+      await page.evaluate(click(item("oats-real/harvest-review"), "Test"));
+      const fromMenu = await said(testId("oats-automation-test-confirm"));
+      check(/^Test this trigger This runs acme\.graph's source command/.test(fromMenu ?? ""), `${at} Test from the list's menu on a capability source's trigger opens its page with the confirmation`, fromMenu);
+      check((await focusOn("oats-automation-test-confirm-arrived")) === "there", `${at} and the confirmation holds the focus, not Back`, await page.evaluate(FOCUSED));
+      const fromMenuBox = await page.evaluate(inView(`${testId("oats-automation-test-confirm")} h3, ${testId("oats-automation-test-confirm")} h2`));
+      check(fromMenuBox === "in", `${at} and is on screen without the person scrolling to it`, fromMenuBox);
       await page.evaluate(click(testId("oats-automation-test-run")));
       const answered = await said(testId("oats-automation-test"));
       check(/^Test result The source answered: 2 events, 1 filtered, 2 skipped, 2 refused/.test(answered ?? ""), `${at} Run test says what the source answered`, answered);

@@ -392,6 +392,87 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     expect(calls(slot, "automationTest")).toEqual([]);
   });
 
+  /** bb opening another page of the panel: the same slot, drawn at another route. */
+  async function go(slot: Slot, subPath: string) {
+    const app = await loadApp();
+    const Panel = app.navPanels.find((candidate) => candidate.id === "automations")!.component;
+    slot.lifecycle.rerender(<Panel subPath={subPath} />);
+  }
+
+  it("Test from the list's menu on a capability source's trigger: its page opens and the confirmation holds the focus, not Back", async () => {
+    const slot = await page("triggers");
+    (await menu(slot, "oats-real/harvest-review")).press("Test");
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "triggers/oats-real/harvest-review" } }]);
+    await go(slot, "triggers/oats-real/harvest-review");
+    expect((await slot.findByTestId("oats-automation-test-confirm")).textContent).toMatch(/^Test this trigger/);
+    await waitFor(() => expect(focused()).toBe("oats-automation-test-confirm-arrived"));
+    expect(calls(slot, "automationTest")).toEqual([]);
+  });
+
+  it("a confirmation left with Back is not there when the row's page is opened again", async () => {
+    const slot = await page("triggers/oats-real/harvest-review");
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await slot.findByTestId("oats-automation-test-confirm");
+    await go(slot, "triggers");
+    await row(slot, "oats-real/harvest-review");
+    await go(slot, "triggers/oats-real/harvest-review");
+    await slot.findByTestId("oats-automation-test-button");
+    expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull();
+  });
+
+  it("a press that turns off or removes the control it was made on gives the focus back: the switch, Test after Cancel, the tab after Dismiss", async () => {
+    const slot = await page("", { automationEnable: ({ id }) => ({ row: rowOf(schedules(), id) }), scheduleRun: () => value(parseScheduleRun(answer("schedule-run.json"))) });
+    const toggle = within(await row(slot, "local/daily-review")).getByRole("switch");
+    toggle.focus();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(calls(slot, "automationEnable")).toHaveLength(1));
+    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("local/daily-review enabled on this computer"));
+    (await menu(slot, "local/daily-review")).press("Run now");
+    fireEvent.click(await slot.findByTestId("oats-automations-result-dismiss"));
+    await waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("tab"));
+    resetApp();
+    const onPage = await page("triggers/oats-real/harvest-review");
+    fireEvent.click(await onPage.findByTestId("oats-automation-test-button"));
+    fireEvent.click(await onPage.findByTestId("oats-automation-test-cancel"));
+    await waitFor(() => expect(focused()).toBe("oats-automation-test-button"));
+  });
+
+  it("a name is drawn through the display filter where an act says it runs and where a delete says what it did", async () => {
+    const list = schedules();
+    const hostile = list.rows.map((entry) => (entry.id === "local/weekly-cleanup" ? { ...entry, name: "weekly\u202ecleanup" } : entry));
+    const remove = held(() => ({ removed: "weekly-cleanup" }));
+    const slot = await page("schedules/local/weekly-cleanup", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }),
+      automationTest: held(() => value(parseTest(answer("schedule-test.json"), "schedule", null))).handler,
+      scheduleRemove: remove.handler,
+    });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toMatch(/Testing weekly.cleanup…/));
+    expect(slot.getByTestId("oats-automation-detail").textContent).not.toContain("\u202e");
+    resetApp();
+    const again = await page("schedules/local/weekly-cleanup", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }), scheduleRemove: () => ({ removed: "weekly-cleanup" }) });
+    fireEvent.click(await again.findByTestId("oats-automation-delete"));
+    const dialog = await again.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("was deleted"));
+    expect(dialog.textContent).not.toContain("\u202e");
+  });
+
+  it("a confirmation is for the trigger's whole definition: a re-read that changes its events withdraws it", async () => {
+    let events = ["opened", "updated"];
+    const lists = () => {
+      const list = triggers();
+      const rows = list.rows.map((entry) => (entry.id === "oats-real/harvest-review" && entry.on !== null ? { ...entry, on: { ...entry.on, events } } : entry));
+      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+    };
+    const slot = await page("triggers/oats-real/harvest-review", { automations: lists });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await slot.findByTestId("oats-automation-test-confirm");
+    events = ["opened"];
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    await waitFor(() => expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull());
+  });
+
   it("while a summary is saved the focus stays on the dialog", async () => {
     const save = held(() => ({ row: rowOf(schedules(), "local/daily-review") }));
     const slot = await page("", { automationDescribe: save.handler });

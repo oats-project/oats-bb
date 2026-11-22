@@ -512,15 +512,14 @@ export type DetailProps = {
   actions?: ReactNode;
   /** The run-state card's own act (Check run state). */
   runStateAction?: ReactNode;
-  /** Cards that lead or close the side column (a test's confirmation and its result). */
-  sideStart?: ReactNode;
-  sideEnd?: ReactNode;
+  /** What an act put on the page (a test's confirmation and its answer): it leads the second column, and comes first where the columns stack. */
+  answers?: ReactNode;
   /** Beside the name (the on/off switch), and under "No summary" (Edit summary). */
   identityAction?: ReactNode;
   summaryAction?: ReactNode;
 };
 
-export function Detail({ row, host, now, status, statusFailure = null, onBack, onOpenFile, hostId = null, canOpenCapability, onOpenCapability, actions, runStateAction, sideStart, sideEnd, identityAction, summaryAction }: DetailProps) {
+export function Detail({ row, host, now, status, statusFailure = null, onBack, onOpenFile, hostId = null, canOpenCapability, onOpenCapability, actions, runStateAction, answers, identityAction, summaryAction }: DetailProps) {
   const title = TITLES[row.kind];
   const page = useRef<HTMLDivElement>(null);
   // Opening the page puts focus on Back, where Escape and Enter both lead out again.
@@ -562,8 +561,12 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
         )}
         {actions}
       </div>
+      {/* Two columns from bb's wide layout up. Below it they stack, and what an act just put on the
+          page (a confirmation, a test's answer) comes first, right under the buttons that were
+          pressed, not under everything else: the second column is then no box of its own
+          (`contents`) and its two parts are ordered around the first. */}
       <div className="grid gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="order-2 flex min-w-0 flex-col gap-4 @4xl:order-none">
           <div data-testid="oats-automation-identity" className="flex min-w-0 items-start gap-3">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <h2 className="break-all font-mono text-lg font-semibold text-foreground">{shown(row.name)}</h2>
@@ -590,8 +593,11 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
           </div>
           <History row={row} status={status} failure={row.kind === "trigger" ? statusFailure : null} source={source} check={sourceCheck} now={now} />
         </div>
-        <div className="flex min-w-0 flex-col gap-3">
-          {sideStart}
+        <div className="contents @4xl:flex @4xl:min-w-0 @4xl:flex-col @4xl:gap-3">
+          <div data-testid="oats-automation-answers" className="order-1 flex min-w-0 flex-col gap-3 empty:hidden @4xl:order-none">
+            {answers}
+          </div>
+          <div className="order-3 flex min-w-0 flex-col gap-3 @4xl:order-none">
           {check !== null && check.at !== null ? (
             // The last source check failed at a poll: the kernel's message, code and field, and when.
             <Card title="Source check failed" testId="oats-automation-problem" tone="warn">
@@ -634,7 +640,7 @@ export function Detail({ row, host, now, status, statusFailure = null, onBack, o
               </>
             )}
           </Card>
-          {sideEnd}
+          </div>
         </div>
       </div>
     </div>

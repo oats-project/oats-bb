@@ -27,7 +27,7 @@ import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesSh
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
-import { HELD_REASON, Unreadable } from "./unreadable";
+import { HELD_REASON, LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
@@ -78,6 +78,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
+  const pageShowsNotice = usePageShowsNotice();
   // The pages this release shows (the plugin's setting `pages`): a page that is not shown has no
   // link here, and no mark.
   const pagesNow = usePagesShown();
@@ -228,7 +229,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
-      {oats.stale === null ? null : (
+      {/* Where a page beside it shows the full notice, one line here: how old the roster is, and Retry. */}
+      {oats.stale === null ? null : pageShowsNotice ? (
+        <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+      ) : (
         <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">

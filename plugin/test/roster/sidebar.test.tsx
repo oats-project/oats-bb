@@ -523,3 +523,30 @@ test("while bb is still reading the settings no page is known to be shown or hid
     showEveryPageWhenUnset(true);
   }
 });
+
+// One full notice on a screen (the home read's ruling): beside a page that shows the notice over
+// what it keeps, the sidebar says one line, how old the roster is and Retry; alone, it is the notice.
+test("on the last roster read, beside a page that shows the full notice the sidebar says one line: \"Last observation — <age>\" and Retry", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last }) };
+  const { slot } = await sidebar(failed);
+  await slot.findAllByTestId("oats-agent-row");
+  expect(slot.getByTestId("oats-held")).toBeTruthy(); // alone: the full notice
+  expect(slot.queryByTestId("oats-last-observation")).toBeNull();
+  // A page of the plugin is drawn beside it, with the notice above what it keeps.
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "teams")!;
+  const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(within(page.container).getByTestId("oats-held")).toBeTruthy());
+  const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
+  expect(line.textContent).toBe("Last observation — 2 min agoRetry");
+  expect(within(slot.container).queryByTestId("oats-held")).toBeNull();
+  expect(within(slot.container).queryByRole("alert")).toBeNull();
+  expect(within(slot.container).getAllByTestId("oats-agent-row")).toHaveLength(7); // the roster stays
+  fireEvent.click(within(line).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
+  // The page leaves: the sidebar is the one place again, and says it whole.
+  page.unmount();
+  await waitFor(() => expect(within(slot.container).getByTestId("oats-held")).toBeTruthy());
+  expect(within(slot.container).queryByTestId("oats-last-observation")).toBeNull();
+});

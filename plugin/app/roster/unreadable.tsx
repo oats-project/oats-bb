@@ -3,9 +3,11 @@
 // for every place that draws the roster or a count from it: the sidebar, the home, a soul's page,
 // Teams and Machines (`RosterNotice`), and a confirmation asked meanwhile; the thread's row says its
 // title in one line. With a roster still shown (stale) it says how old that roster is.
+import { useEffect, useSyncExternalStore } from "react";
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
 import { firstLine, THREADS_FAILED } from "../oats";
+import { onWindowReset } from "../store";
 import type { Oats } from "../oats";
 import { useNow } from "./now";
 import { Button, LINK, Notice, TARGET } from "../ui";
@@ -125,7 +127,61 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
  */
 export function RosterNotice({ oats }: { oats: Oats }) {
   const now = useNow();
+  // A page that draws the full notice over a roster kept as last read says so, so that the sidebar
+  // beside it says one line and not the same notice a second time.
+  const full = oats.phase === "ready" && oats.stale !== null;
+  useEffect(() => {
+    if (!full) return;
+    pagesWithNotice += 1;
+    tell();
+    return () => {
+      pagesWithNotice -= 1;
+      tell();
+    };
+  }, [full]);
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   if (oats.phase === "ready" && oats.stale !== null) return <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
   return null;
+}
+
+// ---- one full notice on a screen ----
+// The sidebar and a page are drawn side by side. While a page shows the full notice over what it
+// keeps, the sidebar says ONE line (how old the roster is, and Retry): `LastObservation`.
+let pagesWithNotice = 0;
+const noticeWatchers = new Set<() => void>();
+const tell = () => {
+  for (const watcher of noticeWatchers) watcher();
+};
+onWindowReset(() => {
+  pagesWithNotice = 0;
+});
+/** Whether a page drawn now shows the full notice over a roster kept as last read. */
+export function usePageShowsNotice(): boolean {
+  return useSyncExternalStore(
+    (watcher) => {
+      noticeWatchers.add(watcher);
+      return () => noticeWatchers.delete(watcher);
+    },
+    () => pagesWithNotice > 0,
+  );
+}
+
+/** The sidebar's one line beside a page's full notice: "Last observation — 2 min ago", and Retry (or the settings, where only they mend it). */
+export function LastObservation({ failure, machine, at, now, onRetry }: { failure: Failure; machine: string | null; at: string; now: number; onRetry: () => void }) {
+  const words = failureWords(failure, machine);
+  const settings = useSettingsHref();
+  return (
+    <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
+      <span className="min-w-0">{`Last observation — ${readAge(at, now) ?? "its time is not known"}`}</span>
+      {words.retry ? (
+        <span className="ml-auto shrink-0">
+          <Button onClick={onRetry}>Retry</Button>
+        </span>
+      ) : words.settings ? (
+        <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
+          Open settings
+        </a>
+      ) : null}
+    </div>
+  );
 }

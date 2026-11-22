@@ -15,6 +15,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
+import { claimOf } from "../../model/view";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, LINK, plainClick } from "../ui";
@@ -34,6 +35,22 @@ export function isCompactViewport(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia(COMPACT_VIEWPORT_QUERY).matches
     : false;
+}
+
+/**
+ * Moves the focus to the instance panel's "Needs input" (its reply where it has one, else the
+ * section itself), once it is drawn: the panel may be opening. Tried for about a second, then left.
+ */
+export function focusNeedsInput(tries = 10): void {
+  const section = document.querySelector<HTMLElement>('[data-testid="oats-panel-waiting"]');
+  if (section !== null) {
+    const target = section.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? section;
+    if (target === section && !section.hasAttribute("tabindex")) section.setAttribute("tabindex", "-1");
+    section.scrollIntoView?.({ block: "nearest" });
+    target.focus();
+    return;
+  }
+  if (tries > 0) window.setTimeout(() => focusNeedsInput(tries - 1), 100);
 }
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
@@ -114,6 +131,20 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
         {verb[1]}
+      </Button>
+    ) : status.state === "needs-you" && claimOf(agent) !== null ? (
+      // The agent asked through OATS: what it asks is on the line; "Answer" is the way to reply. It
+      // opens the instance panel at "Needs input", and with the panel already open it moves the focus
+      // there (never a dead press). A question bb itself shows is answered in the thread: no act.
+      <Button
+        data-testid="oats-status-act"
+        title="Answer in the instance panel"
+        onClick={() => {
+          openPanel();
+          focusNeedsInput();
+        }}
+      >
+        Answer
       </Button>
     ) : status.state === "working" || status.state === "idle" ? (
       // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops

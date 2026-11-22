@@ -94,7 +94,20 @@ test("an agent that needs you: since when and its question, on its own thread", 
   const slot = await render("thr_release", agents);
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?Instance panel$/);
+  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?AnswerInstance panel$/);
+  // "Answer" is the way to reply (what is asked is on the line): it opens the instance panel, and
+  // where the panel is drawn it moves the focus to "Needs input".
+  const needs = document.createElement("section");
+  needs.setAttribute("data-testid", "oats-panel-waiting");
+  needs.append(document.createElement("textarea"));
+  document.body.append(needs);
+  try {
+    fireEvent.click(slot.getByTestId("oats-status-act"));
+    expect(slot.inspection.experimental_panelCalls.map((call) => call.method)).toEqual(["openTab"]);
+    expect(document.activeElement).toBe(needs.querySelector("textarea"));
+  } finally {
+    needs.remove();
+  }
 });
 
 test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {

@@ -152,9 +152,14 @@ const click = (selector) => `document.querySelector(${JSON.stringify(selector)})
  * The live checks' `check`, for this file's scenes: a check that fails always prints what it read.
  * The harness prints a failing check's detail unless it is "" (container/live-ui.mjs), and the
  * text of an element that is not on the page is "": the very case a failure is most often about.
- * So a detail that is no text, or empty text, is printed as its JSON (`""`, `null`, `false`).
+ * So a detail that is no text, or empty text, is printed as its JSON (`""`, `null`, `false`), and
+ * one that is undefined (a wait that ran out answers that) as `undefined`. A check given no detail
+ * at all has none to print: its title says the one thing it read.
  */
-const printing = (check) => (ok, what, detail) => check(ok, what, detail === undefined || (typeof detail === "string" && detail !== "") ? detail : JSON.stringify(detail));
+const printing =
+  (check) =>
+  (ok, what, ...given) =>
+    given.length === 0 ? check(ok, what) : check(ok, what, typeof given[0] === "string" && given[0] !== "" ? given[0] : String(JSON.stringify(given[0])));
 
 /**
  * Shows the panel of `agent` the way a person gets to it: the OATS chip of its thread (the thread's
@@ -299,7 +304,8 @@ const first = [
       }
       const details = await reads(page, inPanel("oats-panel-details"), ["Details", "/agents"]);
       check(details.includes("Details") && /agents root/i.test(details) && details.includes("/agents"), `${at} Details: the agents root, with its Copy`, details);
-      check((await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled`)) === false, `${at} Open soul page is offered`);
+      const offered = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled ?? null`);
+      check(offered === false, `${at} Open soul page is offered`, `the button's disabled: ${offered} (null: no such button)`);
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the Soul tab");
       await page.shot(`panel-${viewport.name}-soul`);
@@ -553,7 +559,8 @@ const second = [
         await page.until(visible(inPanel("oats-panel-soul-body")), 15);
         await page.evaluate(click(inPanel("oats-tab-instance")));
         const kept = await page.until(`${textOf(inPanel("oats-panel-activity-status"))}`, 15);
-        check(kept === "Last observation retained; refresh required." && (await page.evaluate(textOf(inPanel("oats-panel-activity-load")))) === "Refresh activity", `${at} back on the tab, the activity read earlier is said to be the last observation, with Refresh activity`, kept);
+        const button = await page.evaluate(textOf(inPanel("oats-panel-activity-load")));
+        check(kept === "Last observation retained; refresh required." && button === "Refresh activity", `${at} back on the tab, the activity read earlier is said to be the last observation, with Refresh activity`, `the status line: ${JSON.stringify(kept)}; the button: ${JSON.stringify(button)}`);
 
         // an empty window
         setVerb("instance events", derived("events.json", (result) => Object.assign(result, { count: 0, returned: 0, events: [], waitingOnYou: null, waitingClaims: [] })));
@@ -758,7 +765,8 @@ const more = [
       await page.evaluate(click(inPanel("oats-tab-soul")));
       const why = await page.until(`${textOf(inPanel("oats-panel-open-soul-why"))}`, 15);
       check(why === "OATS lists no soul of this name here, so there is no soul page to open.", `${at} a soul OATS does not name: Open soul page is off, and the reason is beside it`, why);
-      check((await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled`)) === true, `${at} Open soul page is disabled there`);
+      const off = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled ?? null`);
+      check(off === true, `${at} Open soul page is disabled there`, `the button's disabled: ${off} (null: no such button)`);
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "soul-unnamed");
       await page.shot(`panel-${viewport.name}-soul-unnamed`);

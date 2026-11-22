@@ -24,13 +24,15 @@ import { eventLabel, eventWords, PULL_REQUEST } from "../model/automations.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
+// The module of the acts reads the rows of this one; its commands are composed below, used only once a verb is called.
+import { verbs as actVerbs } from "./automations-acts.js";
 
-type Json = Record<string, unknown>;
-const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
-const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
-const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+export type Json = Record<string, unknown>;
+export const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
+export const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+export const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const integer = (value: unknown): number | null => (Number.isInteger(value) ? (value as number) : null);
-const counted = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+export const counted = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
 // ---- the ids an act may name ----
 // The kernel's grammar for an id (contract/automations.ts: TRIGGER_ID, SCHEDULE_ID). Neither part
@@ -101,7 +103,7 @@ function soulOf(raw: unknown): AutomationSoul | null {
 /** A run's error, as the kernel recorded it: its words, or the message of an error object. */
 const errorText = (value: unknown): string | null => text(value) ?? (record(value) ? text(value.message) : null);
 
-function runOf(raw: unknown): AutomationRun | null {
+export function runOf(raw: unknown): AutomationRun | null {
   if (!record(raw)) return null;
   return {
     at: text(raw.at),
@@ -259,23 +261,23 @@ export function parseTriggerList(document: unknown): Result<AutomationList> {
 // ---- a trigger's recorded state ----
 
 /** What a trigger source itself said (`source: { code, message? }` of a failed poll): its own, untrusted words. */
-function sourceSays(raw: unknown): { code: string | null; message: string | null } | null {
+export function sourceSays(raw: unknown): { code: string | null; message: string | null } | null {
   if (!record(raw)) return null;
   const says = { code: displayLine(raw.code), message: displayLine(raw.message) };
   return says.code !== null || says.message !== null ? says : null;
 }
-const refusedEvents = (value: unknown) =>
+export const refusedEvents = (value: unknown) =>
   list(value)
     .filter(record)
     .map((entry) => ({ text: displayLine(entry.text), rule: displayLine(entry.rule) }))
     .filter((entry) => entry.text !== null || entry.rule !== null);
-const skippedItems = (value: unknown) =>
+export const skippedItems = (value: unknown) =>
   list(value)
     .filter(record)
     .map((entry) => ({ subject: displayLine(entry.subject), why: displayLine(entry.why) }))
     .filter((entry) => entry.subject !== null || entry.why !== null);
 /** A failed meaning check, as display lines. `at` is null unless it is a time. */
-function sourceCheck(raw: unknown): AutomationProblem | null {
+export function sourceCheck(raw: unknown): AutomationProblem | null {
   const problem = problemOf(raw);
   return problem === null ? null : { code: displayLine(problem.code), message: displayLine(problem.message), field: displayLine(problem.field), at: problem.at };
 }
@@ -356,8 +358,9 @@ export function parseTriggerStatus(document: unknown, id: string, source: string
   });
 }
 
-/** Automations' commands. */
+/** Automations' commands: the reads here, the acts in kernel/automations-acts.ts. */
 export const verbs = (oats: Runner) => ({
+  ...actVerbs(oats),
   scheduleList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(scheduleListArgv(), parseScheduleList, oats.timeouts.read, signal),
   triggerList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(triggerListArgv(), parseTriggerList, oats.timeouts.read, signal),
   triggerStatus: (id: string, source: string | null, signal?: AbortSignal): Promise<Result<TriggerStatus>> =>

@@ -1,7 +1,11 @@
-// Automations in the real run: the plugin's reads against the real kernel. A person adds a local
-// schedule and a local trigger on the command line (the plugin's own acts are sub-pieces of their
-// own); the plugin's lists hold them as the kernel's own `oats schedule list` and
+// Automations in the real run: the plugin's reads and acts against the real kernel. A person adds
+// a local schedule and a local trigger on the command line (creating one from the plugin is a
+// sub-piece of its own); the plugin's lists hold them as the kernel's own `oats schedule list` and
 // `oats trigger list` do, and a trigger's state is read for the id the list names.
+//
+// One act is not run here against the real kernel: a confirmed test of a capability source's
+// trigger (`oats trigger test --run-source`), since this run's workspace holds no capability with a
+// trigger source; its argv and its answer rest on the recording, which ran it for real.
 //
 // The feature's fixtures are not made here: they are a recording of their own, on a deployment
 // with workspace automations, a trigger source and runs (test/fixtures/automations/record/).
@@ -9,7 +13,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export default async (run) => {
-  const { step, check, act, oats, recorded, rpc, OUT } = run;
+  const { step, check, act, oats, recorded, refused, rpc, status, OUT } = run;
   step("Automations: the lists and a trigger's state, read through the plugin");
 
   const file = (name, definition) => {
@@ -57,7 +61,59 @@ export default async (run) => {
   const unknown = rpc("triggerStatus", { id: "local/not-a-trigger" });
   check(unknown.ok === false && /is not a trigger of this OATS deployment's current list/.test(unknown.message ?? ""), "an id the list does not name is refused before any process starts", JSON.stringify(unknown));
 
-  // Left as it was found.
-  added("the schedule is removed again", "schedule", "remove", "real-run-digest", "--json");
+  // ---- the acts, each through the plugin, each checked in what the kernel then answers ----
+  step("Automations: acting on a schedule and a trigger through the plugin");
+  const schedule = (id) => JSON.parse(oats("schedule", "show", id, "--json").stdout).result?.schedule;
+  const argv = (words) => JSON.stringify(recorded(words).argv);
+
+  const off = act("turn the schedule off on this computer", "automationEnable", { kind: "schedule", id: "local/real-run-digest", enabled: false });
+  check(off?.row?.enabledHere === false && schedule("real-run-digest")?.enabled === false && argv(["schedule", "disable"]) === JSON.stringify(["schedule", "disable", "local/real-run-digest", "--json"]), "the kernel holds the schedule as off, and the plugin ran `oats schedule disable local/real-run-digest --json`", JSON.stringify(off?.row && { enabledHere: off.row.enabledHere }));
+  const on = act("turn it on again", "automationEnable", { kind: "schedule", id: "local/real-run-digest", enabled: true });
+  check(on?.row?.enabledHere === true && schedule("real-run-digest")?.enabled === true, "the kernel holds the schedule as on again", JSON.stringify(on?.row && { enabledHere: on.row.enabledHere }));
+
+  const described = act("change its summary", "automationDescribe", { kind: "schedule", id: "local/real-run-digest", description: "-- the real run's schedule, renamed" });
+  check(described?.row?.description === "-- the real run's schedule, renamed" && schedule("real-run-digest")?.description === "-- the real run's schedule, renamed" && recorded(["schedule", "update"]).argv[3] === "--description=-- the real run's schedule, renamed",
+    "the kernel holds the new summary, which travelled as one `--description=` element though it starts with dashes", argv(["schedule", "update"]));
+
+  const tested = act("test the schedule", "automationTest", { kind: "schedule", id: "local/real-run-digest" });
+  check(tested?.ok === true && tested.soul?.resolves === true && argv(["schedule", "test"]) === JSON.stringify(["schedule", "test", "local/real-run-digest", "--json"]), "the kernel finds it ready here, its soul resolving; nothing was run", JSON.stringify(tested));
+  const triggerTested = act("test the pull-request trigger", "automationTest", { kind: "trigger", id: "local/real-run-prs" });
+  check(triggerTested !== undefined && Array.isArray(triggerTested.problems) && !recorded(["trigger", "test"]).argv.includes("--run-source"), "the kernel answers the trigger's test (this container has no gh: its problems say so), and no --run-source was sent", JSON.stringify(triggerTested && { ok: triggerTested.ok, problems: triggerTested.problems }));
+  const forced = rpc("automationTest", { kind: "trigger", id: "local/real-run-prs", runSource: true });
+  check(forced.ok === false && /has no capability source for a test to run/.test(forced.message ?? ""), "a pull-request trigger's test cannot be asked to run a source", JSON.stringify(forced));
+
+  const before = new Set(status().rows.keys());
+  const ran = act("run the schedule now", "scheduleRun", { id: "local/real-run-digest" });
+  const launched = [...status().rows.values()].find((row) => !before.has(row.instance));
+  check(ran?.run?.outcome === "launched" && launched !== undefined && launched.backend === "bb" && launched.instance === ran.run.instance && argv(["schedule", "run"]) === JSON.stringify(["schedule", "run", "local/real-run-digest", "--json"]),
+    "Run now launched a bb agent: the run's outcome is `launched`, and `oats status` holds the new instance on bb", JSON.stringify({ run: ran?.run && { outcome: ran.run.outcome, instance: ran.run.instance }, launched: launched && { instance: launched.instance, backend: launched.backend } }));
+
+  // Check run state: the kernel's reconcile answers for a schedule whatever its last run is.
+  const reconciled = act("check the schedule's run state", "scheduleReconcile", { id: "local/real-run-digest" });
+  check(reconciled !== undefined && "reconciled" in reconciled && argv(["schedule", "reconcile"]) === JSON.stringify(["schedule", "reconcile", "local/real-run-digest", "--json"]),
+    "the kernel answers the check of a run's state", JSON.stringify(reconciled));
+
+  // The trigger: off and on on this computer, and its summary.
+  const trigger = (id) => JSON.parse(oats("trigger", "show", id, "--json").stdout).result?.trigger;
+  const triggerOff = act("turn the trigger off on this computer", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: false });
+  check(triggerOff?.row?.enabledHere === false && trigger("real-run-prs")?.enabled === false && argv(["trigger", "disable"]) === JSON.stringify(["trigger", "disable", "local/real-run-prs", "--json"]),
+    "the kernel holds the trigger as off", JSON.stringify(triggerOff?.row && { enabledHere: triggerOff.row.enabledHere }));
+  const triggerOn = act("turn it on again", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: true });
+  check(triggerOn?.row?.enabledHere === true && trigger("real-run-prs")?.enabled === true, "the kernel holds the trigger as on again", JSON.stringify(triggerOn?.row && { enabledHere: triggerOn.row.enabledHere }));
+  const triggerDescribed = act("change the trigger's summary", "automationDescribe", { kind: "trigger", id: "local/real-run-prs", description: "The real run's trigger" });
+  check(triggerDescribed?.row?.description === "The real run's trigger" && trigger("real-run-prs")?.description === "The real run's trigger", "the kernel holds the trigger's new summary", JSON.stringify(triggerDescribed?.row?.description));
+
+  // A schedule that never ran is deleted through the plugin.
+  added("a person adds a second schedule", "schedule", "add", "real-run-spare", "--file",
+    file("automations-spare.json", { id: "real-run-spare", kind: "spawn", cron: "0 8 * * *", tz: "UTC", enabled: true, agent: "oats-developer", backend: "bb", yolo: true, task: "Nothing." }), "--json");
+  rpc("refresh");
+  const removed = act("delete the second schedule", "scheduleRemove", { id: "local/real-run-spare" });
+  check(removed?.removed !== undefined && schedule("real-run-spare") === undefined && argv(["schedule", "remove"]) === JSON.stringify(["schedule", "remove", "local/real-run-spare", "--json"]), "the kernel no longer holds it, and the plugin ran `oats schedule remove local/real-run-spare --json`", JSON.stringify(removed));
+
+  // This container has no service manager: the kernel refuses to install the timer, and the plugin shows that unchanged.
+  refused("Enable scheduler on a computer with no service manager", "E_SCHEDULE_HOST", "schedulerEnable", null, ["schedule", "host", "install"]);
+
+  // Left as it was found: the definitions go (the agent Run now launched is the kernel's to keep).
+  added("the schedule is removed again", "schedule", "remove", "real-run-digest", "--force", "--json");
   added("the trigger is removed again", "trigger", "remove", "real-run-prs", "--json");
 };

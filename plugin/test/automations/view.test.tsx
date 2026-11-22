@@ -420,14 +420,18 @@ describe("a row's page (D-279)", () => {
     expect(card(view, "oats-automation-identity")).toBe(`${wake.name}${wake.id}localNo summary`);
   });
 
-  it("a run that did not happen says why, in the kernel's words", () => {
+  it("a run that did not happen says so in a word; the kernel's own words are one press away, under Details", () => {
     const view = page();
     view.open("local/hourly-check");
     const run = view.getByTestId("oats-automation-run");
-    expect(run.textContent).toMatch(/^2 h agolaunch failedoats-developer-hourly-check-\d{12} was not launched: .*E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode/);
+    const details = within(run).getByTestId("oats-automation-run-error") as HTMLDetailsElement;
+    expect(run.textContent).toMatch(/^2 h agolaunch failed▸Details/);
+    expect([details.tagName, details.open, details.querySelector("summary")?.textContent]).toEqual(["DETAILS", false, "▸Details"]);
+    expect(details.querySelector("p")?.textContent).toMatch(/^oats-developer-hourly-check-\d{12} was not launched: .*E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode/);
     // The code is in the kernel's message already: it is not said twice.
-    expect(within(run).getByTestId("oats-automation-run-error").querySelector("code")).toBeNull();
+    expect(details.querySelector("code")).toBeNull();
   });
+
 
   it("an invalid definition: the kernel's code, field and message", () => {
     const view = page();

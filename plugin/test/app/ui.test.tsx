@@ -748,3 +748,24 @@ describe("where a menu's list hangs", () => {
     expect(open([0, 390], [300, 332], 200, "left").getAttribute("data-edge")).toBe("right");
   });
 });
+
+test("a fold's mark turns for its own fold alone: one inside an open fold is not turned by it", () => {
+  render(
+    <Disclosure summary="Checks and policy" open testId="outer">
+      <Disclosure summary="oats.bb" testId="inner">
+        <p>pass</p>
+      </Disclosure>
+    </Disclosure>,
+  );
+  // The rule is on the mark's own details (a direct summary of an open details), not on any open ancestor.
+  for (const id of ["outer", "inner"]) {
+    const mark = within(screen.getByTestId(id)).getAllByTestId("oats-disclosure-mark")[0]!;
+    expect(mark.className).toContain("[details[open]>summary>&]:rotate-90");
+    expect(mark.className).not.toContain("group-open");
+    expect(mark.parentElement!.tagName).toBe("SUMMARY");
+    expect(mark.parentElement!.parentElement).toBe(screen.getByTestId(id));
+  }
+  expect(screen.getByTestId("outer").className).not.toMatch(/\bgroup\b/);
+  expect((screen.getByTestId("inner") as HTMLDetailsElement).open).toBe(false);
+  expect(screen.getByTestId("inner").matches("details[open] > summary > *")).toBe(false);
+});

@@ -139,10 +139,12 @@ export const LINK = "underline underline-offset-2 hover:opacity-80";
  */
 export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
   return (
-    <details data-testid={testId} className="group min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+    <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
       <summary className={`${TARGET} inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground hover:text-foreground`}>
-        {/* The mark that says it opens, turned when it is open (the summary's own triangle is lost with its flex layout). */}
-        <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">
+        {/* The mark that says it opens, turned when THIS fold is open (the summary's own triangle is
+            lost with its flex layout). By its own details alone: a fold inside an open fold is closed
+            until it is opened, and a rule on any open ancestor would turn its mark too. */}
+        <span aria-hidden="true" data-testid="oats-disclosure-mark" className="inline-block transition-transform [details[open]>summary>&]:rotate-90">
           ▸
         </span>
         {summary}

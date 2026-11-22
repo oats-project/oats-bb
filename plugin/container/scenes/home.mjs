@@ -119,15 +119,19 @@ async function untilRoster(matches, seconds = 40) {
   return undefined;
 }
 /**
- * Names the `oats` the plugin runs, in the plugin's setting `oatsBin` (null: unset, the `oats` of the
- * PATH, as the run has it). The fake is that one program however it is spelled, so nothing changes
- * in what is read; but a change of a setting that says WHERE OATS is read (`deployment`, `oatsBin`,
+ * The `oats` the plugin runs is the plugin's setting `oatsBin`; unset, it is the `oats` of the PATH,
+ * as the run has it. The fake is that one program either way, so nothing changes in what is read;
+ * but a change of a setting that says WHERE OATS is read (`deployment`, `oatsBin`,
  * `host`; not `pages`) makes the plugin's server forget the roster it holds, which may be another
  * deployment's: the next read is a first read.
  */
-const OATS_BIN = [join(homedir(), ".local/bin/oats"), join(homedir(), ".local/bin/./oats")];
-function oatsBin(value) {
-  execFileSync("bb", ["plugin", "config", "oats", ...(value === null ? ["unset", "oatsBin"] : ["set", "oatsBin", value])], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const OATS_BIN = join(homedir(), ".local/bin/oats");
+let named = false;
+/** Names the fake by its path (`true`) or leaves `oatsBin` unset again (`false`); nothing is asked of bb when it is so already. */
+function oatsBin(byPath) {
+  if (byPath === named) return;
+  execFileSync("bb", ["plugin", "config", "oats", ...(byPath ? ["set", "oatsBin", OATS_BIN] : ["unset", "oatsBin"])], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  named = byPath;
 }
 /** No tile still counts: an image shows one state (a scene about "Counting…" would not wait for this). */
 const counted = `![...document.querySelectorAll(${JSON.stringify(`${PAGE} ${testId("oats-home-tiles")} button`)})].some((tile) => tile.innerText.includes("Counting"))`;
@@ -353,7 +357,7 @@ export default [
       try {
         // A slow first read: the server holds no roster (the setting that names `oats` changed), and `oats status` takes its time.
         setVerb("status", { ...status, sleepMs: 12_000 });
-        oatsBin(OATS_BIN[0]);
+        oatsBin(true);
         await page.goto(HOME);
         const reading = await page.until(`(() => { const text = ${textOf(PAGE)}; return text.includes("Reading your agents") ? text : ""; })()`, 10);
         check(reading === "Home Reading your agents…", `${at} while the roster is read for the first time the home says so, and nothing else`, reading ?? (await page.evaluate(textOf(PAGE))));
@@ -366,7 +370,7 @@ export default [
 
         // A first read that fails: no roster was ever read under these settings.
         setVerb("status", FAILS);
-        oatsBin(OATS_BIN[1]);
+        oatsBin(false);
         check((await untilRoster((roster) => roster.ok === false && (roster.last === undefined || roster.last === null))) !== undefined, `${at} the server has no roster and its read fails`, untilRoster.last);
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
@@ -375,7 +379,7 @@ export default [
         if (Boolean(failed) && !/Showing what was read/.test(failed)) await page.shot(`home-${viewport.name}-unreadable`);
       } finally {
         setVerb("status", status ?? null);
-        oatsBin(null);
+        oatsBin(false);
         check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} and the roster is read again afterwards`, untilRoster.last);
       }
     },

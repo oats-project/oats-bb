@@ -60,9 +60,9 @@ export function useSettingsHref(): string {
  * menu or beside a button. It names Retry first, so that a person is not left with bb's own Stop.
  * plugin/WORDS.md holds both.
  */
-export const HELD = "Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.";
+export const HELD = "Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.";
 /** The same where the notice has no Retry, because only the plugin's settings can mend it (which machine holds the agents). */
-export const HELD_SETTINGS = "Open settings: Stop, Start, Restart and Retire come back when OATS is read again.";
+export const HELD_SETTINGS = "Open settings: Stop, Start, Restart, Retire and New agent return when OATS is read again.";
 export const HELD_REASON = "Comes back when OATS is read again";
 
 /**

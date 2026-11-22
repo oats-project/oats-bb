@@ -195,7 +195,7 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingInstance panel");
   const stale = slot.getByTestId("oats-unreadable");
   expect(stale.getAttribute("data-compact")).toBe("");
-  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.Retry");
+  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.Retry");
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
   slot.unmount();
@@ -281,7 +281,7 @@ test("on the last roster read with no Retry to offer, the one-line notice names 
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "CHOOSE_HOST", message: "This bb server has 2 machines", last }) });
   const stale = await slot.findByTestId("oats-unreadable");
-  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart and Retire come back when OATS is read again.Open settings");
+  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart, Retire and New agent return when OATS is read again.Open settings");
   expect(within(stale).queryByRole("button", { name: "Retry" })).toBeNull();
   expect(within(stale).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/settings/plugins/test-plugin");
 });

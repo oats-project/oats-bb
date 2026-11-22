@@ -358,7 +358,12 @@ test("while OATS cannot be read after it was, the tree stays as last read under 
   // The age is said once, in one form; the acts are held, and the sentence names Retry first.
   expect(slot.getByTestId("oats-sidebar").textContent!.match(/2 min ago/g)).toHaveLength(1);
   expect(slot.queryByTestId("oats-last-observation")).toBeNull();
-  expect(slot.getByTestId("oats-held").textContent).toBe("Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.");
+  expect(slot.getByTestId("oats-held").textContent).toBe("Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.");
+  // "New agent" is held with the acts: in its place, off, with the reason, and it opens nothing.
+  const newAgent = slot.getByTestId("oats-new-agent") as HTMLButtonElement;
+  expect([newAgent.disabled, newAgent.title]).toEqual([true, "Comes back when OATS is read again"]);
+  fireEvent.click(newAgent);
+  expect(slot.inspection.navigateCalls).toEqual([]);
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });

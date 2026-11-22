@@ -27,7 +27,7 @@ import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesSh
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
-import { Unreadable } from "./unreadable";
+import { HELD_REASON, Unreadable } from "./unreadable";
 import { useNow } from "./now";
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
@@ -266,8 +266,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       )}
       {newAgentShown ? (
         <div className="px-2 py-1">
+          {/* On the last roster read "New agent" is held with the OATS acts: in its place, off, with the reason. */}
           <Button
             data-testid="oats-new-agent"
+            disabled={oats.stale !== null}
+            title={oats.stale !== null ? HELD_REASON : undefined}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}

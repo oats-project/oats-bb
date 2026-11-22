@@ -206,7 +206,7 @@ export default [
       // One drawing, the age said once and in one form, and the acts held: the sentence names Retry first.
       const AGE = "(less than a minute ago|\\d+ min ago|\\d+ h ago)";
       const once = JSON.parse(await page.evaluate(`JSON.stringify({ held: ${textOf(`${testId("oats-sidebar")} ${testId("oats-held")}`)}, ages: (document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).innerText.match(/${AGE}/g) ?? []).length, second: document.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null })`));
-      check(once.held === "Press Retry: Stop, Start, Restart and Retire come back when OATS is read again." && once.ages === 1 && once.second === false, `${at} the notice says that the acts are held, Retry first, and the age of what is shown once, in one form`, JSON.stringify(once));
+      check(once.held === "Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again." && once.ages === 1 && once.second === false, `${at} the notice says that the acts are held, Retry first, and the age of what is shown once, in one form`, JSON.stringify(once));
       // The roster stays: the agents as last read, joined to their threads, never bb's flat list.
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
       check(rows.length >= 6 && rows.includes(threads.get("thr_release").id), `${at} the tree is still drawn, as last read (${rows.length} agents)`, JSON.stringify(rows));
@@ -221,7 +221,7 @@ export default [
       const kept = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const said = row?.querySelector(${JSON.stringify(`${testId("oats-unreadable")}[data-compact]`)}); return said ? JSON.stringify({ line: row.querySelector(${JSON.stringify(testId("oats-status-line"))}).getAttribute("data-state"), said: said.innerText.replace(/\\s+/g, " ").trim() }) : ""; })()`, 15);
       const row = kept ? JSON.parse(kept) : null;
       check(
-        row !== null && row.line === "working" && new RegExp(`^OATS is not installed on ${MACHINE} Showing what was read ${AGE}\\. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again\\. Retry$`).test(row.said),
+        row !== null && row.line === "working" && new RegExp(`^OATS is not installed on ${MACHINE} Showing what was read ${AGE}\\. Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again\\. Retry$`).test(row.said),
         `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, the acts held, Retry`,
         kept ?? (await page.evaluate(textOf(testId("oats-identity-row")))),
       );

@@ -2,7 +2,7 @@
 // function for a state.
 import { describe, expect, it } from "vitest";
 import { board } from "../../app/home/board";
-import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
+import { attachCommand, startedBy, summaryLine, tileCount } from "../../app/home/home-words";
 import type { Agent, BbThread, Node } from "../../model/types";
 import { view } from "../../model/view";
 
@@ -66,5 +66,9 @@ describe("the home's words", () => {
     expect(startedBy({ human: "Ana", parent: "redesign-ui-lead" })).toBe("started by Ana");
     expect(startedBy({ human: null, parent: "redesign-ui-lead" })).toBe("started by Redesign ui lead");
     expect(startedBy({ human: null, parent: null })).toBeNull();
+  });
+  it("the command into a tmux agent's session names its home as one word of a shell", () => {
+    expect(attachCommand("/abs/deployment/agents/oats-developer/instances/kernel-fix-developer")).toBe("oats session attach --home /abs/deployment/agents/oats-developer/instances/kernel-fix-developer");
+    expect(attachCommand("/home/ana maria/it's/agents/x")).toBe(`oats session attach --home '/home/ana maria/it'\\''s/agents/x'`);
   });
 });

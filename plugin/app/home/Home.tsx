@@ -290,8 +290,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               <>
                 <p className="m-0">{tmuxWhere(shown(oats.deployment.machine))}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
-                  <Code>{attachCommand(entry.agent.instance)}</Code>
-                  <CopyButton text={attachCommand(entry.agent.instance)} name="Copy the command" />
+                  <Code>{attachCommand(entry.agent.home)}</Code>
+                  <CopyButton text={attachCommand(entry.agent.home)} name="Copy the command" />
                 </p>
               </>
             ) : (

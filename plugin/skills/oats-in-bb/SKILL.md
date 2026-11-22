@@ -45,7 +45,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   A card offers the answer the request takes: bb's choices as buttons (an approval, a question
   with options); a reply box that writes to that agent through bb's own send, for an agent that
   asks in its own words; "open its thread" where the answer is in the thread; for an agent on
-  tmux, the command that reaches its terminal (`oats session attach --instance <instance>`).
+  tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
   A message never grants an approval: beside choices it is behind "Write a message instead".
   The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
   with no bb thread among them, with its state and who started it. While OATS cannot be read the

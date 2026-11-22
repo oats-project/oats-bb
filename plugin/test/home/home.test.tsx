@@ -593,7 +593,7 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     // where it runs is on its line, as in every list; then where to answer it, with the kernel's own command to copy, and where Open leads
     expect(card.textContent).toContain(" · falcon · runs in tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe(
-      "It runs in tmux on falcon, where bb cannot write to it. Answer it in its terminal, in the OATS deployment there:oats session attach --instance night-watch-helperCopyOpen its page shows who it is and how it runs.",
+      `It runs in tmux on falcon, where bb cannot write to it. Answer it in its terminal there:oats session attach --home ${TMUX_ASKS.home}CopyOpen its page shows who it is and how it runs.`,
     );
     expect(within(card).getByRole("button", { name: "Copy the command" })).toBeTruthy();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open its page");

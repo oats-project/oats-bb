@@ -478,12 +478,16 @@ const isModel = (model: string): boolean => model.length <= 256 && !model.starts
 
 /** Why the agent cannot be started now, by the kernel's own row (the Desktop's start gate); null when it can. */
 function gate(verb: RunVerb, check: Check): { reason: string; running: boolean } | null {
+  // A state that could not be reached is not known, for either act: nothing is started or restarted on a guess.
+  if (check.runtimeState === "unreachable") return { reason: START.unknownState, running: false };
+  // Restart: the Desktop restarts only what it knows running or stopped. bb reports an idle agent
+  // as neither (`running: null`), and that is the ordinary agent a person restarts: allowed here
+  // (a named difference, WORDS.md).
   if (verb === "restart") return null;
-  // The Desktop's rule (start-gate.mjs): running is "already running"; anything that is not known
-  // stopped is not known, and is never started on a guess. A session that ended in a shell is stopped.
+  // Start: the Desktop's rule (start-gate.mjs). Running is "already running"; only an agent the
+  // kernel says is NOT running (`running === false`) is started. A word of the runtime's state is never read as that.
   if (check.running === true) return { reason: START.alreadyRunning, running: true };
-  const stopped = check.running === false || check.runtimeState === "stopped" || check.runtimeState === "shell";
-  return stopped && check.runtimeState !== "unreachable" ? null : { reason: START.unknownState, running: false };
+  return check.running === false ? null : { reason: START.unknownState, running: false };
 }
 
 function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {

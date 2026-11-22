@@ -16,6 +16,7 @@ import type { Oats } from "../oats";
 import { Button, DisabledReason } from "../ui";
 import { ActsOverlay, openAct } from "./acts";
 import { notify } from "../ui";
+import { agentName } from "../ui/words";
 import { cannotAct, NO_TARGET } from "./words";
 import type { Verb } from "./words";
 
@@ -138,12 +139,15 @@ function runCommand(verb: Verb, threadId: string | null): void {
   const node = nodeIn(threadId);
   // One line about the key that was pressed, not the failure of an act: it leaves by itself.
   const say = (title: string) => notify({ tone: "hint", title });
-  if (node === undefined || roster?.phase !== "ready") return say(NO_TARGET);
+  // Whose thread it is is known only from a roster that was read: until then the line says what the thread's menu says.
+  if (roster === null || roster.phase === "loading") return say("OATS agents: reading…");
+  if (roster.phase === "failed") return say(`OATS agents: can't be read. ${failureWords(roster, roster.machine).title}`);
+  if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
   const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you", known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
-  if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agent.instance} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
+  if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);
 }
 

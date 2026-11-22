@@ -995,9 +995,9 @@ test("an apply or a start whose CALL failed (nobody answered: bb restarted, the 
 });
 
 test("the Start gate is the Desktop's: running is already running; what is not known stopped is not known, and is never started on a guess", async () => {
-  const gated = async (change: Parameters<typeof startCheckOf>[1]) => {
-    const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, change) });
-    await pick("start");
+  const gated = async (change: Parameters<typeof startCheckOf>[1], verb: "start" | "restart" = "start") => {
+    const { slot, pick } = await menu(verb === "start" ? "thr_digest" : "thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, change) });
+    await pick(verb);
     await ready(slot);
     const reason = slot.queryByTestId("oats-confirm-blocked")?.textContent ?? null;
     resetApp();
@@ -1012,6 +1012,16 @@ test("the Start gate is the Desktop's: running is already running; what is not k
   expect(await gated({ running: false, runtimeState: "stopped" })).toBeNull();
   expect(await gated({ running: false, runtimeState: "shell" })).toBeNull();
   expect(await gated({ running: false, runtimeState: null })).toBeNull();
+  // Only the kernel's `running: false` is stopped: a word of the runtime's state is never read as that.
+  expect(await gated({ running: null, runtimeState: "stopped" })).toBe(UNKNOWN);
+  expect(await gated({ running: null, runtimeState: "shell" })).toBe(UNKNOWN);
+  // Restart: bb reports an idle agent as neither running nor stopped, and it is the ordinary one a person restarts
+  // (the named difference from the Desktop). A state that could not be reached is not restarted on a guess.
+  expect(await gated({ running: null, runtimeState: "idle" }, "restart")).toBeNull();
+  expect(await gated({ running: null, runtimeState: "unknown" }, "restart")).toBeNull();
+  expect(await gated({ running: true, runtimeState: "working" }, "restart")).toBeNull();
+  expect(await gated({ running: null, runtimeState: "unreachable" }, "restart")).toBe(UNKNOWN);
+  expect(await gated({ running: true, runtimeState: "unreachable" }, "restart")).toBe(UNKNOWN);
 });
 
 // ---- from the third review round
@@ -1093,4 +1103,57 @@ test("a state the kernel cannot tell says the kernel's own reason, under its nam
   await plain.pick("start");
   await ready(plain.slot);
   expect(plain.slot.getByTestId("oats-start-status").textContent).toContain("OATS says: bb did not answer");
+});
+
+// ---- from the fourth review round
+
+test("a command's key pressed before OATS was read says that, never that the thread is no agent's", async () => {
+  const { commands } = await import("../../app/lifecycle");
+  const stop = commands.find((each) => each.id === "agent-stop")!;
+  const failed = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last: null }) });
+  await stop.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
+  const said = notified().at(-1)!;
+  expect(said.tone).toBe("hint");
+  expect(said.title.startsWith("OATS agents: can't be read. ")).toBe(true);
+  expect(said.title).not.toContain("not an OATS agent");
+  expect(failed.slot.queryByRole("dialog")).toBeNull();
+  resetApp();
+  const reading = await menu("thr_redesign", { snapshot: () => new Promise(() => undefined) });
+  await stop.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "OATS agents: reading…" });
+  expect(reading.slot.queryByRole("dialog")).toBeNull();
+});
+
+test("a plan that changed in a fact with no sentence of its own says that it changed, never that nothing differs", async () => {
+  const kept = { ...retirePlanOf(), extraTrees: [{ path: "/abs/x", branch: "feature/x", disposition: "retain" as const, reason: null }] };
+  let refuse = false;
+  const { slot, pick } = await menu("thr_digest", {
+    retirePlan: () => (refuse ? { ...kept, revision: "a-later-revision", extraTrees: [{ ...kept.extraTrees[0]!, disposition: "refuse" as const }] } : kept),
+    retireApply: () => {
+      refuse = true;
+      throw new Error("E_PLAN_STALE: the plan changed");
+    },
+  });
+  await pick("retire");
+  await ready(slot);
+  const KEPT = "Keeps its extra worktree on branch feature/x, moved aside.";
+  expect(slot.getByRole("dialog").textContent).toContain(KEPT);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  expect(texts(await slot.findByTestId("oats-notice"), "p")).toEqual(["What this would do has changed: read it again below."]);
+  // And the plan below is the one that differs: it no longer keeps that tree.
+  expect(slot.getByRole("dialog").textContent).not.toContain(KEPT);
+});
+
+test("a start the lock blocks says OATS's own line under the sentence that points at it", async () => {
+  const { slot, pick } = await menu("thr_digest", {
+    startCheck: ({ instance }) => startCheckOf(instance),
+    start: () => {
+      throw new Error("E_SESSION_START_LOCK_STUCK: /abs/home/.oats/start.lock is held by pid 4242");
+    },
+  });
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: /abs/home/.oats/start.lock is held by pid 4242");
 });

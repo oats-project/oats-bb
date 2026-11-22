@@ -187,6 +187,41 @@ describe("a plan that changed under the confirmation", () => {
     expect(planChanges(before, before)).toEqual([]);
   });
 
+  // Whether anything differs is decided from what the dialog draws. A fact with no sentence of
+  // its own here is never "nothing differs": one line says the plan changed.
+  const CHANGED = ["What this would do has changed: read it again below."];
+  it.each([
+    ["a child that is now left out", (plan: StopPlan): StopPlan => ({ ...plan, skipped: ["another-helper"] })],
+    ["a child the kernel cannot attribute", (plan: StopPlan): StopPlan => ({ ...plan, ambiguous: ["another-helper"] })],
+    ["children no longer included", (plan: StopPlan): StopPlan => ({ ...plan, recursive: false })],
+  ])("a stop whose plan differs by %s says the plan changed", (_, change) => {
+    const before = stopPlan();
+    const after = change(before);
+    expect(JSON.stringify(stopPlanView(after))).not.toBe(JSON.stringify(stopPlanView(before)));
+    expect(planChanges(before, after)).toEqual(CHANGED);
+  });
+  it.each([
+    ["an extra worktree OATS would now refuse (kept before)", (plan: RetirePlan): RetirePlan => ({ ...plan, extraTrees: [{ path: "/abs/x", branch: "feature/x", disposition: "refuse", reason: null }] })],
+    ["a worktree that drifted from its branch", (plan: RetirePlan): RetirePlan => ({ ...plan, work: { ...plan.work, drift: true } })],
+    ["a worktree that is now detached", (plan: RetirePlan): RetirePlan => ({ ...plan, work: { ...plan.work, detached: true } })],
+    ["a worktree that is no longer its own", (plan: RetirePlan): RetirePlan => ({ ...plan, ownWorktree: false })],
+    ["a work mode that changed", (plan: RetirePlan): RetirePlan => ({ ...plan, ownWorktree: null, workMode: "attached" })],
+    ["a child the kernel cannot attribute", (plan: RetirePlan): RetirePlan => ({ ...plan, ambiguous: ["another-helper"] })],
+  ])("a retire whose plan differs by %s says the plan changed", (_, change) => {
+    const before: RetirePlan = { ...retirePlan(), extraTrees: [{ path: "/abs/x", branch: "feature/x", disposition: "retain", reason: null }] };
+    const after = change(before);
+    const drawn = (plan: RetirePlan) => JSON.stringify([retirePlanView(plan, false), retirePlanView(plan, true)]);
+    // The case is one the dialog draws differently; a fact it does not draw would be no case.
+    expect(drawn(after)).not.toBe(drawn(before));
+    expect(planChanges(before, after)).toEqual(CHANGED);
+  });
+  it("says nothing differs only when the dialog draws the two plans alike", () => {
+    const before = retirePlan();
+    expect(planChanges(before, { ...before, revision: "another-revision" })).toEqual([]);
+    const stop = stopPlan();
+    expect(planChanges(stop, { ...stop, revision: "another-revision" })).toEqual([]);
+  });
+
   it("for a retire: its session, its uncommitted work, its children", () => {
     const before = retirePlan();
     expect(planChanges(before, { ...before, session: "there", work: { ...before.work, changed: 2 }, children: [] })).toEqual([

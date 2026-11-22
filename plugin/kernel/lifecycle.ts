@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { shaped } from "./envelope.js";
 import { checkHome, checkInstance, checkKey, checkRevision } from "./input.js";
-import { ok, type Result } from "./result.js";
+import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { checkHarness, checkModel } from "./spawn.js";
 
@@ -346,6 +346,11 @@ export function parseRetireApply(document: unknown): Result<RetireReceipt> {
   const parsed = shaped(retireReceipt, document, "oats retire");
   if (!parsed.ok) return parsed;
   const receipt = parsed.value;
+  // Whether the home was removed is the kernel's to say. A receipt of a retire that ran (not
+  // deferred) and does not say it is an answer this cannot read: never "kept" from an absent field.
+  if (receipt.deferred !== true && typeof receipt.removedDir !== "boolean") {
+    return err(codes.badAnswer, "`oats retire` answered a receipt that does not say whether the home was removed (`removedDir`)");
+  }
   const kept = receipt.retention?.worktree;
   const compensation = receipt.spawnCompensation;
   return ok({

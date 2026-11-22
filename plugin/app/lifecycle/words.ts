@@ -219,10 +219,12 @@ export const PLAN_STALE = "Something changed since you opened this. Review it an
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
  * in it, whether each session runs, who is in the middle of a task; for a retire also its work and
- * its children. Empty when nothing a person is shown differs (the kernel's revision moved for a
- * fact the plan does not draw): the notice then says so.
+ * its children. Whether anything differs is decided from what the dialog DRAWS (the two views),
+ * never from this list of facts: where the views differ and no sentence here says how, one line
+ * says that what this would do has changed. Empty only when the two views are equal (the kernel's
+ * revision moved for a fact the plan does not draw): the notice then says so.
  */
-export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan): string[] {
+export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan, archives = false): string[] {
   const lines: string[] = [];
   const was = (value: keyof typeof SESSION) => SESSION[value].toLowerCase();
   if (before.action === "stop" && after.action === "stop") {
@@ -245,8 +247,13 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
     for (const child of after.children) if (!before.children.includes(child)) lines.push(`${agentName(child)} is now one of its children.`);
     for (const child of before.children) if (!after.children.includes(child)) lines.push(`${agentName(child)} is no longer one of its children.`);
   }
+  if (lines.length === 0 && drawn(before, archives) !== drawn(after, archives)) lines.push(PLAN_CHANGED);
   return lines;
 }
+/** Everything the dialog draws of a plan: its title's agent and its view (a retire's with its tick off and on). */
+const drawn = (plan: StopPlan | RetirePlan, archives: boolean): string =>
+  JSON.stringify([plan.action, plan.instance, plan.action === "stop" ? [stopPlanView(plan, archives)] : [retirePlanView(plan, false), retirePlanView(plan, true)]]);
+export const PLAN_CHANGED = "What this would do has changed: read it again below.";
 export const NOTHING_SHOWN_CHANGED = "Nothing shown here differs: OATS read the plan again, and it is the one below.";
 export const REVIEW_FIRST = "Read what changed, then press Review again.";
 export const REPLAYED = "This is the result already recorded for this confirmation; nothing ran again.";
@@ -468,7 +475,7 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   }
   if (code === "NO_THREAD_NAMED") return of("unknown", `${name} was started, but its thread isn't ready yet`, ["Open it from its row when it is."], []);
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may still be running: check its row in the sidebar before you start it again."]);
-  if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!]);
+  if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!, ...(code === "E_SESSION_START_LOCK_STUCK" ? oatsSays(refusal.message) : [])]); // the sentence says OATS's message names what blocks: it stands under it
   if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);
   if (code === "E_LIFECYCLE_BUSY") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`OATS refused this ${act} as busy. ${nothing}`]);
   if (code === "E_UNIDENTIFIED_INSTANCE_HOME") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [unidentified(verb)]);

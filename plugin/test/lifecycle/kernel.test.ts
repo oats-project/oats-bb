@@ -322,6 +322,13 @@ describe("retire", () => {
     expect(replayed.ok && applied.ok && replayed.value).toEqual(applied.ok && { ...applied.value, replayed: true });
   });
 
+  it("does not read a home as kept from a receipt that does not say: a retire that ran answers `removedDir`, or the answer cannot be read", async () => {
+    await fake.behave({ retire: { stdout: JSON.stringify({ retired: "weekly-digest-helper", retention: { worktree: "retained", movedTo: "/abs/aside" } }) } });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
+    expect(applied).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });
+    expect(!applied.ok && applied.error.message).toContain("removedDir");
+  });
+
   it("does not take a retire that exits nonzero for done, whatever it printed", async () => {
     await fake.behave({ retire: { file: "lifecycle/retire-apply.json", exit: 1, stderr: "TypeError: boom\n" } });
     const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });

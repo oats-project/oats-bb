@@ -462,8 +462,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <div data-testid="oats-spawn-relation" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
                 <span id="oats-spawn-relation-label">{W.RELATION_LABEL}</span>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  {/* The four words stay whole: where they do not fit in a row, the row scrolls. */}
-                  <div className="min-w-0 max-w-full overflow-x-auto [&_[role=radio]]:whitespace-nowrap">
+                  {/* The four words stay whole and on screen: closer together at a phone's width, and on a second row where one row cannot hold them. */}
+                  <div className="min-w-0 max-w-full [&_[role=radio]]:whitespace-nowrap max-md:[&_[role=radio]]:px-2 [&_[role=radiogroup]]:flex-wrap">
                     <Segmented label={W.RELATION_LABEL} options={W.RELATIONS} value={relation} onChange={setRelation} />
                   </div>
                   {relation === "unrelated" ? null : (

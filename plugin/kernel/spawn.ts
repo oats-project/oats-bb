@@ -199,18 +199,22 @@ export function parseSpawn(document: unknown): Result<{ instance: string; thread
  * resolves it, whose manifest declares the harnesses its session provider can launch.
  */
 export const harnessListArgv = (): string[] => ["capabilities", "show", "oats.bb", "--json"];
-const shownCapability = z.looseObject({ sessionProviders: z.looseObject({ bb: z.looseObject({ harnesses: z.unknown().optional() }).nullish() }).nullish() });
+/** A version as the kernel prints one for a capability: a release ("1.4.0") or, for one taken from a repository, a commit. One word, never an option. */
+const VERSION = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/;
+const shownCapability = z.looseObject({ version: z.unknown().optional(), sessionProviders: z.looseObject({ bb: z.looseObject({ harnesses: z.unknown().optional() }).nullish() }).nullish() });
 /**
  * `result.sessionProviders.bb.harnesses`, in the manifest's order, each once. A provider from
  * before the list carries none: the answer is then empty, and a form offers no choice and passes
  * no `--harness`.
  */
-export function parseHarnessList(document: unknown): Result<{ harnesses: string[] }> {
+export function parseHarnessList(document: unknown): Result<{ harnesses: string[]; version: string | null }> {
   const parsed = shaped(shownCapability, document, "oats capabilities show oats.bb");
   if (!parsed.ok) return parsed;
   const declared = parsed.value.sessionProviders?.bb?.harnesses;
   const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
-  return ok({ harnesses: [...new Set(harnesses)] });
+  // The provider's own version (`result.version`), for a place that must know what this provider does (the lifecycle dialogs).
+  const version = typeof parsed.value.version === "string" && VERSION.test(parsed.value.version) ? parsed.value.version : null;
+  return ok({ harnesses: [...new Set(harnesses)], version });
 }
 
 /**
@@ -231,7 +235,7 @@ export function checkModel(model: string): Result<string> {
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
-  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[] }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
+  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
 
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the

@@ -25,7 +25,7 @@ const READ = `(() => { const c = document.querySelector(${q("oats-spawn-preview"
 const reasonOf = textOf(testId("oats-disabled-reason"));
 const fieldError = `(document.querySelector(${q("oats-spawn-form")})?.querySelector('[role="alert"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 /** Nothing of the form is wider than its page: no sideways scroll at any width. */
-const FITS = `(() => { const p = document.querySelector(${q("oats-new-agent-page")}); return p ? p.scrollWidth <= p.clientWidth + 1 : false; })()`;
+const FITS = `(() => { const p = document.querySelector(${q("oats-new-agent-page")}); if (!p) return false; const edge = p.getBoundingClientRect().right; return p.scrollWidth <= p.clientWidth + 1 && [...p.querySelectorAll('[role="radio"], button, input, textarea, label')].every((e) => e.getBoundingClientRect().right <= edge + 1); })()`;
 const show = (id) => `document.querySelector(${q(id)})?.scrollIntoView({ block: "center" })`;
 
 async function open(page, soul = "") {
@@ -85,8 +85,9 @@ export default [
       await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
       const read = await page.until(`(() => { const t = ${READ}; return t.includes("Name ranker-v4-probe") ? t : ""; })()`, 30);
       check(
-        Boolean(read) && /^WHAT WILL BE CREATED Name ranker-v4-probe Home .+ Works in .+ Harness .+ Team .+ CORE CAPABILITIES Knowledge .+ Messaging .+ Tasks .+ CAPABILITIES \d+ .+ Resolved by the installed CLI\. Spawn refuses if this changes before you confirm\.$/.test(read ?? ""),
-        `${at} What will be created: the name and the home, where it works, the harness and the model, the team, the capabilities, in a person's words`,
+        Boolean(read) && /^WHAT WILL BE CREATED OATS warns the bb server at \S+ runs bb-app [\d.]+; the capability was tested up to [\d.]+ Name ranker-v4-probe Home .+ Works in .+ Harness .+ Team .+ CORE CAPABILITIES Knowledge .+ Messaging .+ Tasks .+ CAPABILITIES \d+ .+ Resolved by the installed CLI\. Spawn refuses if this changes before you confirm\.$/.test(read ?? ""),
+        // The recorded preview of this stage carries one warning of the provider's: it is drawn, as a warning, before the facts.
+        `${at} What will be created: the kernel's one warning as a warning, then the name and the home, where it works, the harness and the model, the team, the capabilities, in a person's words`,
         read ?? (await whole(page)),
       );
       const hint = await page.evaluate(`document.querySelector(${q("oats-spawn-form")}).innerText.includes("Instance name: ranker-v4-probe") && ${reasonOf} === "" && document.querySelector(${q("oats-spawn-submit")}).innerText.trim()`);
@@ -152,6 +153,8 @@ export default [
       await page.shot(`spawn-${viewport.name}-reading`, { targets: true });
       const read = await page.until(READ, 30);
       check(Boolean(read) && (read ?? "").includes("Name numbered by the kernel") && (await page.evaluate(textOf(testId("oats-spawn-status")))) === "", `${at} then what will be created, for a form with no name: the kernel numbers it`, read ?? (await whole(page)));
+      const warned = await page.evaluate(`document.querySelector(${q("oats-spawn-preview")}).querySelectorAll(${q("oats-notice")}).length`);
+      check(warned === 0, `${at} and no warning: this preview, as the kernel printed it, carries none`, String(warned));
       await page.shot(`spawn-${viewport.name}-read`);
     },
   },

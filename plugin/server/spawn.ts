@@ -12,7 +12,15 @@ import { soulsOf } from "./workspace.js";
  * order: one read for every client and every feature, reused like a page's answer. A spawn, a
  * start and a restart refuse a harness that is not in it before any process.
  */
-export const harnessesOf = (core: Core): Promise<string[]> => core.page("spawnHarnesses", async (signal) => (await core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal)).harnesses);
+export const harnessesOf = async (core: Core): Promise<string[]> => (await providerOf(core)).harnesses;
+/**
+ * The bb session provider's own version, as the kernel prints it for the capability the
+ * deployment resolves (a release, or a commit for one taken from a repository); null when the
+ * kernel prints none. From the same read as the harness list: no second process.
+ */
+export const providerVersionOf = async (core: Core): Promise<string | null> => (await providerOf(core)).version;
+/** The one read behind both (`oats capabilities show oats.bb --json`), kept like a page's answer. */
+const providerOf = (core: Core): Promise<Value<"spawnHarnesses">> => core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
 
 /**
  * The agents root an agent's home is in, for `--relative-root` (it tells same-named anchors

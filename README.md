@@ -4,7 +4,7 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-The latest release is 0.2.0 ([CHANGELOG.md](CHANGELOG.md)): pi agents run on bb beside Claude Code agents. The work arrives as reviewed pull
+The latest release is 0.3.0 ([CHANGELOG.md](CHANGELOG.md)): pi agents run on bb beside Claude Code agents, and the plugin shows the Desktop's agent panel and Automations. The work arrives as reviewed pull
 requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
@@ -64,8 +64,8 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 > those modes.
 >
 > **Released after a real run.** Each release is cut after the plugin's real run in CI,
-> against OATS 0.70.0 from npm with `--backend bb`. 0.2.0's pi support is also run against
-> the real bb and pi with OATS 0.70.2 (`test/contract/pi.test.mjs`). bb homes run in bb's full mode, and
+> against OATS 0.70.0 from npm with `--backend bb`. The pi support is also run against
+> the real bb and pi with OATS 0.70.3 (`test/contract/pi.test.mjs`). bb homes run in bb's full mode, and
 > claim no sandbox boundary.
 
 ## Install
@@ -87,7 +87,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/oats-project/oats-bb@v0.2.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.3.0
    defaults:
      capabilities:
        oats.bb: { from: package }
@@ -436,7 +436,7 @@ never a failed start.
 A soul whose harness is pi runs on bb as a thread of bb's own pi provider
 (`bb thread spawn --provider pi --model <the launch's model>`; a model is
 `<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.2
+follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.3
 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**

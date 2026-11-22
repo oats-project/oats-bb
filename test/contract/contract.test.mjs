@@ -137,13 +137,13 @@ after(async () => {
  *  By the start of its command line (`node …/bb-app --data-dir …/<dir>`), which this shell's own does not have.
  *  The container has two CPUs: a bb a test is done with is stopped, so the next test's bb starts at full speed. */
 async function stopExtraBb(dir) {
-  const each = (act) => `for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir "*"/${dir} "*) ${act} ;; esac; done`;
+  const each = (act) => `for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' 2>/dev/null < $p/cmdline)" in "node "*"/bb-app --data-dir "*"/${dir} "*) ${act} ;; esac; done`;
   await sh(each("kill ${p#/proc/}")); // a plain string: the shell expands ${p#/proc/}
   await waitFor(`the bb of ~/${dir} to stop`, async () => !(await sh(each("echo alive"))).includes("alive"), { timeoutMs: 60_000, everyMs: 500 });
 }
 /** Every bb process in the container, with how long it has run, its state and what it waits on in the kernel: when a
  *  second bb prints nothing, whether it started at all, and where it is stuck. */
-const BB_PROCESSES = "ps -eo pid,ppid,etime,stat,wchan:24,args | grep -E '[b]b-app|[s]erver/dist|[d]aemon' | cut -c1-200 || echo none";
+const BB_PROCESSES = "ps -eo pid,ppid,etime,stat,wchan:24,args | grep -E '[b]b-app|[s]erver/dist|[d]aemon' | cut -c1-200 | grep . || echo none";
 /** What a container read says, for a failure's message: never a second error that hides the first. */
 const said = (command) => sh(command).catch((error) => `(not read: ${error.message})`);
 

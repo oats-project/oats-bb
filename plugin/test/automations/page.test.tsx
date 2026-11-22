@@ -219,7 +219,7 @@ describe("a row's page", () => {
     // OATS changed: the lists are read again, and with them the state.
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
     const notice = await slot.findByTestId("oats-automation-status-failed");
-    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readShowing what was read just now.E_TRIGGER_FAILEDRetry");
+    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readShowing what was read less than a minute ago.E_TRIGGER_FAILEDRetry");
     expect(slot.getByTestId("oats-automation-history-note").textContent).toContain("2 of 2 live now");
   });
 

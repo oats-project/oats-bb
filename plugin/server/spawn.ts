@@ -4,14 +4,20 @@ import type { rpc } from "../contract/spawn.js";
 import { HOST_TIMEOUT, invalid, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
 
+/**
+ * The harnesses the bb session provider declares (`oats capabilities show oats.bb --json`), in its
+ * order: one read for every client and every feature, reused like a page's answer. A spawn, a
+ * start and a restart refuse a harness that is not in it before any process.
+ */
+export const harnessesOf = (core: Core): Promise<string[]> => core.page("spawnHarnesses", async (signal) => (await core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal)).harnesses);
+
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /** key -> the decision a spawn with that key applies, so that a retry replays it. */
   const spawns = new Map<string, { soul: string; name: string; revision: string }>();
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
-      const { harnesses } = await core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
-      return { harnesses, hostId: core.target()?.hostId ?? null };
+      return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
     },
     async spawnPreview({ soul, name, task }, context) {
       if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);

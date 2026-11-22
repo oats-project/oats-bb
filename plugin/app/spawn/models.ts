@@ -12,6 +12,8 @@
 import { useEffect, useState } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import { harnessLabel } from "../../model/spawn";
+
+export { harnessLabel };
 import { useRead } from "../store";
 
 /**
@@ -74,13 +76,15 @@ export function modelOptions(answer: unknown): ModelOption[] {
 }
 
 /**
- * bb's models for a harness, on the machine that holds the deployment. Asked again when the
- * harness changes; an answer for a harness that is no longer the chosen one is dropped. A harness
+ * bb's models for a harness (`null`: none chosen, nothing is asked), on the machine that holds the
+ * deployment. Asked again when the harness changes; an answer for a harness that is no longer the chosen one is dropped. A harness
  * with no bb provider, a machine not known yet, and a list bb could not give all read as no
  * suggestion: the field stays "Default" plus free text, and says so.
  */
-export function useModelSuggestions(harness: string | null, hostId: string | null): ModelSuggestions {
+export function useModelSuggestions(harness: string | null): ModelSuggestions {
   const sdk = useSdk();
+  // The machine that holds the deployment comes with the harness list, which every place that offers a model has read.
+  const hostId = useRead("spawnHarnesses", { live: false }).data?.hostId ?? null;
   const providerId = harness === null ? undefined : BB_PROVIDER[harness];
   const [answer, setAnswer] = useState<{ of: string; models: ModelOption[] } | null>(null);
   const of = providerId === undefined || hostId === null ? null : `${hostId}\n${providerId}`;

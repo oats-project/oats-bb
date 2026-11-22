@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
-import { ok, type Result } from "./result.js";
+import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
@@ -148,6 +148,21 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
   const declared = parsed.value.sessionProviders?.bb?.harnesses;
   const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
   return ok({ harnesses: [...new Set(harnesses)] });
+}
+
+/**
+ * A harness named for a spawn, a start or a restart (`--harness <id>`): one the bb session provider
+ * declares. Anything else starts no process.
+ */
+export function checkHarness(harness: string, declared: readonly string[]): Result<string> {
+  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness the bb session provider declares (${declared.join(", ") || "none"})`);
+}
+/**
+ * A model named for a spawn, a start or a restart (`--model <id>`): any id a person typed or picked,
+ * as one argv element that cannot be read as an option. The kernel refuses what it cannot launch.
+ */
+export function checkModel(model: string): Result<string> {
+  return model !== "" && model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model) ? ok(model) : err(codes.invalidInput, "a model is one line of up to 256 characters that does not start with a dash");
 }
 
 /** Spawn's commands. */

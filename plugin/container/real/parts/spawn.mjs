@@ -49,11 +49,12 @@ export default async (run) => {
   let piSpawned = false;
   if (Array.isArray(declared) && declared.includes("pi")) {
     step("Spawn: harness pi, as the provider declares it");
-    const pi = rpc("spawnPlan", { soul: SOUL, task: "", harness: "pi" });
+    const PI = { soul: SOUL, name: "form-pi-developer", task: "", harness: "pi" };
+    const pi = rpc("spawnPlan", PI);
     const piCall = recorded(["spawn", SOUL], ["--harness"]);
     check(piCall.argv[piCall.argv.indexOf("--harness") + 1] === "pi" && piCall.argv.includes("--preview"), "picking a listed harness passes --harness <id> on the preview", JSON.stringify(piCall.argv));
     // The kernel decides a spawn on pi and then asks the provider whether bb can launch it here.
-    const spawned = pi.ok ? rpc("spawn", { soul: SOUL, name: "form-pi-developer", task: "", harness: "pi", key: "spawn-form-pi-1", revision: pi.value.revision }) : pi;
+    const spawned = pi.ok ? rpc("spawn", { ...PI, key: "spawn-form-pi-1", revision: pi.value.revision }) : pi;
     if (spawned.ok) {
       const row = await until("the pi agent's row", () => rowOf("form-pi-developer"), 60);
       check(row?.backend === "bb" && row?.harness === "pi", "the kernel has the agent on bb, on pi", JSON.stringify(row && { backend: row.backend, harness: row.harness }));
@@ -67,6 +68,8 @@ export default async (run) => {
         kernel = undefined;
       }
       show("the kernel's refusal", spawned.message);
+      // Only the provider's own "not ready" is this case: any other refusal (a decision that moved, a busy kernel) fails the run.
+      check(kernel?.code === "E_BACKEND_NOT_READY" || kernel?.code === "E_HARNESS_UNAVAILABLE" || kernel?.code === "E_BACKEND_HARNESS", `the refusal is the kernel's or the provider's word that pi cannot be launched here (${kernel?.code})`, spawned.message);
       check(kernel !== undefined && spawned.message.endsWith(`${kernel.code}: ${kernel.message}`), `this container cannot launch pi (${pi.ok ? "refused at the spawn" : "refused at the preview"}), and the plugin shows the kernel's refusal unchanged (${kernel?.code})`, spawned.message);
       check(rowOf("form-pi-developer") === undefined || rowOf("form-pi-developer")?.running !== true, "and no pi agent runs");
       if (kernel !== undefined) fixtures.keep("spawn/spawn-pi-refused.json", refusedCall.stdout);

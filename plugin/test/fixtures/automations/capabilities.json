@@ -1,0 +1,239 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "capabilitiesApi": 1,
+  "workspace": {
+   "name": "bbreal",
+   "key": "local//abs/real/src/oats-real",
+   "commit": "04755d41aa407a4b28e7390efdee278b23284ac5"
+  },
+  "capabilities": [
+   {
+    "name": "acme.graph",
+    "origin": "member local//abs/real/src/oats-real @ 04755d41",
+    "kind": "member",
+    "repoKey": "local//abs/real/src/oats-real",
+    "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+    "private": false,
+    "path": "capabilities/acme-graph",
+    "layer": null,
+    "version": "1.0.0",
+    "description": "A knowledge graph with harvest branches (the Automations fixtures' trigger source).",
+    "skills": [],
+    "commands": [
+     "review-source"
+    ],
+    "hooks": [],
+    "file": {
+     "path": "capabilities/acme-graph/oats.json",
+     "url": null
+    },
+    "tree": "2789fd46f1a11cc05711e73beb2e97ab0bd049e5"
+   },
+   {
+    "name": "acme.notes",
+    "origin": "member local//abs/real/src/oats-real @ 04755d41",
+    "kind": "member",
+    "repoKey": "local//abs/real/src/oats-real",
+    "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+    "private": false,
+    "path": "capabilities/acme-notes",
+    "layer": "knowledge",
+    "version": "1.0.0",
+    "description": "Notes an agent keeps (the Automations fixtures' knowledge layer, with one operation).",
+    "skills": [],
+    "commands": [
+     "checkpoint"
+    ],
+    "hooks": [],
+    "file": {
+     "path": "capabilities/acme-notes/oats.json",
+     "url": null
+    },
+    "tree": "596d0923abd889f9dd020aee4daa6fe794020ab2"
+   },
+   {
+    "name": "oats.bb",
+    "origin": "package oats.bb va3cca8511461e92c25d86f693365ec250b7c4684",
+    "kind": "package",
+    "package": "oats.bb",
+    "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
+    "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
+    "private": false,
+    "layer": null,
+    "description": "Session provider bb: runs an instance as one bb thread (Claude Code) through bb's public CLI, at one pinned bb-app version, instead of a tmux session.",
+    "skills": [],
+    "commands": [
+     "doctor",
+     "session-check",
+     "session-input",
+     "session-inspect",
+     "session-inspect-many",
+     "session-launch",
+     "session-stop"
+    ],
+    "hooks": [
+     "launch",
+     "retire"
+    ],
+    "file": {
+     "path": "oats-package/capabilities/oats-bb/oats.json",
+     "url": null
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.coordination-setup",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "How an organisation's agents work together, for the setup expert: the coordination practices OATS recommends and why, and how to shape them to one organisation at onboarding and as it changes (the roster of souls, the landing rules, the ownership record across people, and when to revisit them). Resource-only; the roles' templates are OATS's coordination template repositories.",
+    "skills": [
+     "adapt-to-the-organisation",
+     "coordination-best-practices",
+     "design-the-roster",
+     "review-the-setup",
+     "set-landing-rules"
+    ],
+    "commands": [],
+    "hooks": [],
+    "file": {
+     "path": "oats-package/capabilities/oats-coordination-setup/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-coordination-setup/oats.json"
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.core",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "Day-to-day OATS operation from inside an instance: home and work, modules, status and drift, spawn preview and apply (harness, relations, teams to join), soul discovery, being spawned by a trigger, retiring instances you spawned, asking for a human's attention, and saving tokens when instances message each other (who a message is for, whether to send it, how long it is); for Claude Code instances, reports when the session waits on a permission prompt or a question, or a turn ended in an API error. No layer. Workspace setup and config is oats.setup.",
+    "skills": [
+     "oats-operate",
+     "oats-souls",
+     "oats-token-saving"
+    ],
+    "commands": [],
+    "hooks": [
+     "launch",
+     "spawn",
+     "upgrade"
+    ],
+    "file": {
+     "path": "oats-package/capabilities/oats-core/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-core/oats.json"
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.knowledge-theory",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "Optional knowledge-model authoring guidance (the oats.framework package soul knowledge-theory-expert uses it); not a knowledge core capability, no runtime policy injection.",
+    "skills": [
+     "knowledge-capability-authoring"
+    ],
+    "commands": [],
+    "hooks": [],
+    "file": {
+     "path": "oats-package/capabilities/oats-knowledge-theory/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-knowledge-theory/oats.json"
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.onboarding",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "Onboarding a new OATS workspace to its use case: the setup expert discovers how the team works, authors the workspace's own coordination, knowledge and tasks capabilities from OATS's defaults, attaches the person to the workspace's messaging account, takes them through the deployment-agent step for human attribution, offers the approved channel route and briefs the person. Procedure only; the setup and config procedures are oats.setup's.",
+    "skills": [
+     "oats-tailor-workspace"
+    ],
+    "commands": [],
+    "hooks": [],
+    "file": {
+     "path": "oats-package/capabilities/oats-onboarding/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-onboarding/oats.json"
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.setup",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "The setup and config of an OATS workspace: the model (people, workspace, members, packages, capabilities, souls, teams, automations, machines), onboarding a machine, Git and GitHub setup, workspace config, teams, package pins, automations and upgrading a host to the latest OATS; the operator knowledge node carries the rationale.",
+    "skills": [
+     "oats-agent-permissions",
+     "oats-automations",
+     "oats-git-setup",
+     "oats-host-delivery",
+     "oats-onboarding",
+     "oats-package-pins",
+     "oats-setup-expert",
+     "oats-setup-model",
+     "oats-teams",
+     "oats-upgrade",
+     "oats-workspace-config"
+    ],
+    "commands": [],
+    "hooks": [],
+    "file": {
+     "path": "oats-package/capabilities/oats-setup/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-setup/oats.json"
+    },
+    "tree": null
+   },
+   {
+    "name": "oats.support",
+    "origin": "package oats.framework v1.26.0",
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "private": false,
+    "layer": null,
+    "description": "A support desk that anyone may reach: it takes in support requests, turns each one into one ticket, hands tickets to the project's support maintainer (finding a live one, or spawning one when none is reachable) and keeps each requester informed. It treats everything a requester sends as untrusted data, works from a fixed set of actions, and never changes code, reviews, merges, releases or deploys. Generic: the project's tracker, support maintainer and routes stay with the soul.",
+    "skills": [
+     "support-handoff",
+     "support-intake",
+     "support-relay",
+     "support-safety",
+     "support-ticket"
+    ],
+    "commands": [],
+    "hooks": [],
+    "file": {
+     "path": "oats-package/capabilities/oats-support/oats.json",
+     "url": "https://github.com/awebai/oats/blob/41d862390e8053a84d6ea61426fe635f5b224105/oats-package/capabilities/oats-support/oats.json"
+    },
+    "tree": null
+   }
+  ],
+  "problems": []
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SCHEDULE_INVALID",
+  "message": "cron: five fields required (minute hour day month weekday)",
+  "details": {
+   "field": "cron"
+  }
+ }
+}

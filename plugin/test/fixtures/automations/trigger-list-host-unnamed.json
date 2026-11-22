@@ -1,0 +1,500 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "triggerApi": 1,
+  "scope": "/abs/deployment",
+  "host": {
+   "name": null,
+   "ghUser": {
+    "github.com": "ana"
+   }
+  },
+  "triggers": [
+   {
+    "kind": "trigger",
+    "id": "local/graph-watch",
+    "name": "graph-watch",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": "Watch every harvest branch",
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/graph-watch",
+    "soul": {
+     "name": "graph-reviewer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Look at branch {subject} ({event}).",
+    "on": {
+     "source": "acme.graph:harvest-branches",
+     "params": {
+      "prefix": "harvest/"
+     },
+     "events": [
+      "opened",
+      "updated"
+     ],
+     "poll": "1m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": {
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "graph-reviewer-graph-watch-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a",
+     "key": "local/graph-watch:harvest/a:h1"
+    },
+    "nextDue": "2026-11-21T20:21:27.324Z",
+    "enabled": true,
+    "spawn": {
+     "soul": "graph-reviewer",
+     "purpose": "{trigger}-{subject}",
+     "task": "Look at branch {subject} ({event}).",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment",
+    "createdAt": "2026-11-21T20:17:42.215Z",
+    "updatedAt": "2026-11-21T20:17:42.953Z"
+   },
+   {
+    "kind": "trigger",
+    "id": "local/old-prs",
+    "name": "old-prs",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": null,
+    "owner": null,
+    "runsOn": null,
+    "runsHere": false,
+    "reason": null,
+    "enabledHere": false,
+    "qualifiedId": "local/old-prs",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+    "on": {
+     "source": "github.pull_request",
+     "repo": "github.com/acme/legacy",
+     "events": [
+      "opened",
+      "reopened"
+     ],
+     "labels": [],
+     "poll": "2m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": null,
+    "nextDue": null,
+    "enabled": false,
+    "spawn": {
+     "soul": "oats-developer",
+     "purpose": "triage-{number}",
+     "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment",
+    "createdAt": "2026-11-21T20:17:42.338Z",
+    "updatedAt": "2026-11-21T20:17:42.813Z"
+   },
+   {
+    "kind": "trigger",
+    "id": "local/pr-triage",
+    "name": "pr-triage",
+    "origin": {
+     "kind": "local",
+     "path": "oats-schedules.json",
+     "url": null,
+     "localPath": "/abs/deployment/oats-schedules.json"
+    },
+    "description": "Triage every new pull request of the app",
+    "owner": null,
+    "runsOn": null,
+    "runsHere": true,
+    "reason": null,
+    "enabledHere": true,
+    "qualifiedId": "local/pr-triage",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+    "on": {
+     "source": "github.pull_request",
+     "repo": "github.com/acme/app",
+     "events": [
+      "opened",
+      "reopened"
+     ],
+     "labels": [],
+     "poll": "2m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": {
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-triage-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41",
+     "key": "local/pr-triage:github.com/acme/app#41:opened:2026-11-20T10:41:00Z"
+    },
+    "nextDue": "2026-11-21T20:22:27.324Z",
+    "enabled": true,
+    "spawn": {
+     "soul": "oats-developer",
+     "purpose": "triage-{number}",
+     "task": "Triage {repo}#{number} ({url}): label it and say who should review it.",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment",
+    "createdAt": "2026-11-21T20:17:41.945Z",
+    "updatedAt": "2026-11-21T20:17:41.945Z"
+   },
+   {
+    "kind": "trigger",
+    "id": "oats-real/docs-review",
+    "name": "docs-review",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-triggers/docs-review.yaml",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-triggers/docs-review.yaml"
+    },
+    "description": null,
+    "owner": "github.com/acme-bot",
+    "runsOn": "docs-server",
+    "runsHere": false,
+    "reason": "host-unnamed",
+    "reasonDetail": "this host has no host.name in oats-local.yaml",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/docs-review",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Review docs PR {repo}#{number}.",
+    "on": {
+     "source": "github.pull_request",
+     "repo": "github.com/acme/docs",
+     "events": [
+      "opened",
+      "synchronize"
+     ],
+     "labels": [],
+     "poll": "5m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": null,
+    "nextDue": null,
+    "enabled": true,
+    "spawn": {
+     "soul": "oats-developer",
+     "purpose": "{trigger}-{number}",
+     "task": "Review docs PR {repo}#{number}.",
+     "teams": []
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment"
+   },
+   {
+    "kind": "trigger",
+    "id": "oats-real/harvest-closed",
+    "name": "harvest-closed",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-triggers/harvest-closed.yaml",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-triggers/harvest-closed.yaml"
+    },
+    "description": null,
+    "owner": "github.com/ana",
+    "runsOn": "bb-box",
+    "runsHere": false,
+    "reason": "host-unnamed",
+    "reasonDetail": "this host has no host.name in oats-local.yaml",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/harvest-closed",
+    "soul": {
+     "name": "graph-reviewer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Archive branch {subject}.",
+    "on": {
+     "source": "acme.graph:harvest-branches",
+     "params": {},
+     "events": [
+      "closed"
+     ],
+     "poll": "1m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": null,
+    "nextDue": null,
+    "enabled": true,
+    "spawn": {
+     "soul": "graph-reviewer",
+     "purpose": "{trigger}-{subject}",
+     "task": "Archive branch {subject}.",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment",
+    "invalid": {
+     "code": "E_TRIGGER_INVALID",
+     "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)",
+     "field": "on.events",
+     "at": "2026-11-21T20:20:27.324Z"
+    }
+   },
+   {
+    "kind": "trigger",
+    "id": "oats-real/harvest-review",
+    "name": "harvest-review",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-triggers/harvest-review.yaml",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-triggers/harvest-review.yaml"
+    },
+    "description": "Review harvest branches of the knowledge graph",
+    "owner": "github.com/ana",
+    "runsOn": "bb-box",
+    "runsHere": false,
+    "reason": "host-unnamed",
+    "reasonDetail": "this host has no host.name in oats-local.yaml",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/harvest-review",
+    "soul": {
+     "name": "graph-reviewer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Review branch {subject} of graph {fields.graph} ({url}).",
+    "on": {
+     "source": "acme.graph:harvest-branches",
+     "params": {
+      "prefix": "harvest/",
+      "graph": "kb"
+     },
+     "events": [
+      "opened"
+     ],
+     "poll": "1m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 1,
+     "perKey": 1
+    },
+    "lastRun": {
+     "at": "2026-11-21T20:19:12.371Z",
+     "instance": "graph-reviewer-harvest-review-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a",
+     "key": "oats-real/harvest-review:harvest/a:h1"
+    },
+    "nextDue": null,
+    "enabled": true,
+    "spawn": {
+     "soul": "graph-reviewer",
+     "purpose": "{trigger}-{subject}",
+     "task": "Review branch {subject} of graph {fields.graph} ({url}).",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment"
+   },
+   {
+    "kind": "trigger",
+    "id": "oats-real/proposal-review",
+    "name": "proposal-review",
+    "origin": {
+     "kind": "workspace",
+     "repoKey": "local//abs/real/src/oats-real",
+     "path": "oats-triggers/proposal-review.yaml",
+     "commit": "04755d41aa407a4b28e7390efdee278b23284ac5",
+     "url": null,
+     "localPath": "/abs/deployment/oats-real/oats-triggers/proposal-review.yaml"
+    },
+    "description": "Review every knowledge proposal pull request",
+    "owner": "github.com/ana",
+    "runsOn": "bb-box",
+    "runsHere": false,
+    "reason": "host-unnamed",
+    "reasonDetail": "this host has no host.name in oats-local.yaml",
+    "enabledHere": true,
+    "qualifiedId": "oats-real/proposal-review",
+    "soul": {
+     "name": "oats-developer",
+     "origin": {
+      "kind": "member",
+      "repoKey": "local//abs/real/src/oats-real",
+      "member": "oats-real"
+     }
+    },
+    "task": "Review knowledge-base PR {repo}#{number} ({url}). Load knowledge-review first.",
+    "on": {
+     "source": "github.pull_request",
+     "repo": "github.com/acme/knowledge",
+     "events": [
+      "opened",
+      "reopened",
+      "ready_for_review"
+     ],
+     "labels": [
+      "okf-proposal"
+     ],
+     "base": "main",
+     "poll": "2m"
+    },
+    "teams": [],
+    "launchConfig": null,
+    "harness": null,
+    "model": null,
+    "concurrency": {
+     "max": 2,
+     "perKey": 1
+    },
+    "lastRun": {
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-review-pr-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41",
+     "key": "oats-real/proposal-review:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z"
+    },
+    "nextDue": null,
+    "enabled": true,
+    "spawn": {
+     "soul": "oats-developer",
+     "purpose": "review-pr-{number}",
+     "task": "Review knowledge-base PR {repo}#{number} ({url}). Load knowledge-review first.",
+     "teams": [],
+     "yolo": true,
+     "backend": "bb"
+    },
+    "triggerApi": 1,
+    "scope": "/abs/deployment"
+   }
+  ],
+  "snapshot": {
+   "takenAt": "2026-11-21T20:17:24.885Z",
+   "problems": 0
+  },
+  "scheduler": {
+   "installed": true,
+   "active": false,
+   "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
+   "problems": [],
+   "lastTick": "2026-11-21T20:20:27.324Z",
+   "maxConcurrent": 5,
+   "triggersMaxConcurrent": null,
+   "tickIntervalSec": 60,
+   "workspace": "/abs/deployment",
+   "registered": true,
+   "workspaces": [
+    "/abs/deployment"
+   ],
+   "live": 1
+  }
+ }
+}

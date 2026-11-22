@@ -1,0 +1,22 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "scheduler": {
+   "installed": true,
+   "active": true,
+   "unit": "/abs/home/.config/systemd/user/oats-schedule-tick.timer",
+   "problems": [],
+   "lastTick": "2026-11-21T20:19:12.371Z",
+   "maxConcurrent": 5,
+   "triggersMaxConcurrent": null,
+   "tickIntervalSec": 60,
+   "workspace": "/abs/deployment",
+   "registered": true,
+   "workspaces": [
+    "/abs/deployment"
+   ],
+   "live": 1
+  }
+ }
+}

@@ -15,7 +15,7 @@ import { errorMessage, onWindowReset, type Read } from "../store";
 
 type Contract = typeof rpcContract;
 /** The panel's reads of one instance. */
-export type PanelMethod = "panelInstance" | "panelSoul" | "panelEvents" | "panelReadiness";
+export type PanelMethod = "panelInstance" | "panelSoul" | "panelEvents" | "panelReadiness" | "panelBoard";
 export type PanelAnswer<Method extends PanelMethod> = PluginRpcResult<Contract[Method]>;
 export type PanelRead<Method extends PanelMethod> = Read<PanelAnswer<Method>> & {
   /** Reads again now. */
@@ -86,6 +86,13 @@ export const usePanelSoul = (instance: string, again: string): PanelRead<"panelS
 export const usePanelEvents = (instance: string, asked: boolean): PanelRead<"panelEvents"> => usePanelRead("panelEvents", { instance }, { enabled: asked });
 /** `oats readiness` of the instance's home or of its soul: read when first shown, and again when a person asks. */
 export const usePanelReadiness = (instance: string, of: "instance" | "soul"): PanelRead<"panelReadiness"> => usePanelRead("panelReadiness", { instance, of });
+
+/**
+ * The board with each fact's history and each question's context (`oats inspect --home --board`):
+ * read once there is something it would add (`wanted`), and again when `again` changes (a fact's
+ * instant, a question with a context being asked).
+ */
+export const usePanelBoard = (instance: string, wanted: boolean, again: string): PanelRead<"panelBoard"> => usePanelRead("panelBoard", { instance }, { enabled: wanted, again });
 
 /**
  * The clock, read again every half minute while the panel is open: an agent that runs or waits

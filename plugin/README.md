@@ -143,6 +143,51 @@ names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
+### The agent's board
+
+Under the header, the Instance tab shows the agent's board (`oats instance board`, the kernel's
+`instance-board` feature), as the Desktop shows it around an agent's terminal.
+
+**Questions**: the questions the agent asks, one at a time: which one and since when ("question 2 of
+3 · asked 4 min ago"), the question, its options as numbered buttons, and its **Context** (the
+agent's own text, under "<agent> says:"). ‹ and › turn the questions; with the focus in the zone so
+do ← and →, a number chooses that option, and `c` opens the context. A waiting claim that is the
+board's own is shown here, as its questions, and not a second time as Needs input.
+
+**Answering.** The Desktop types `<id>: <option>` on the terminal's input line and the person
+presses Enter there. A bb thread has no terminal, so an option opens a dialog that shows the exact
+line, and **Send answer** sends it as the agent's next input, which starts a turn
+(`oats session input --home <home> --text-file <file>`; the only use of that command in the plugin,
+by section 3b of the status interface). Nothing is sent on a press alone. The server makes the line
+itself from the board of the kernel's own row and sends nothing unless that question is open now
+(same id, asked at the same instant) and its line for that option is the one the person confirmed;
+the line travels as a 0600 file, removed when the call ends. The question stays until the agent
+clears it, with a note that its answer went. While the agent's thread shows a prompt of its harness
+(a waiting claim whose reason is `question` or `permission`) the options are off and the zone says
+to answer there first. A refusal says why in words, then the kernel's code and message:
+`E_SESSION_PROMPT_OPEN` (a prompt is open in bb), `E_SESSION_INPUT_QUEUED` (the agent is in the
+middle of a turn), `E_SESSION_NOT_RUNNING`. When the kernel answers `verified: false` the dialog
+says that no change was seen yet and not to send it again.
+
+**Facts**: what the agent keeps in view, one row each: label, value and unit, "updated 4 min ago",
+and a sparkline once its history holds two numbers. Three show, then **N more**. A fact's link
+names its host; a press shows the whole address under "<agent> says:", and only **Open in
+browser** opens it; an address that may hold a secret is never shown. **×** (or `u` on a fact)
+hides a fact on this computer (the browser's storage, by the agent's home) until its value changes;
+**N hidden · show** brings all back. What cannot be shown is said: "N entries of this agent's
+board could not be shown.", "This agent's board could not be read.", "History could not be read.",
+"This OATS sends no history.".
+
+How it reads: the board as it is now comes with `panelInstance`, from the row of the one status
+read (`kernel/panel-board.ts` `rowBoard`): no command. Each fact's history and each question's
+context come from `panelBoard` (`oats inspect --home <home> --board`), read when the board has a
+fact or a question with a context and again only when a fact's instant or such a question changes.
+The bounds of a board and what may be shown of it are the kernel's contract, read as the Desktop
+reads it: an entry out of the contract drops by itself and is counted.
+
+Not here: the Desktop's dots under a question (‹ and › and the count say the same), and its F6
+focus regions (bb has its own focus order; the zone and the facts are reached with Tab).
+
 ## Automations
 
 **Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's

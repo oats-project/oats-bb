@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SESSION_NOT_RUNNING",
+  "message": "panel-worktree-helper was stopped by OATS; nothing was sent. Start it first: oats session start --home /abs/deployment/agents/oats-expert/instances/panel-worktree-helper"
+ }
+}

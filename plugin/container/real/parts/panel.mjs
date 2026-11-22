@@ -1,13 +1,15 @@
-// The instance panel's part of the real run (parts/README.md). The panel adds no act yet: it
-// reads. So this part makes the state its fixtures describe, checks that what the plugin answers
-// (the row's facts, the soul as spawned, readiness, the recorded events) is what the kernel
-// itself says, and keeps what the kernel printed for the plugin's own calls.
+// The instance panel's part of the real run (parts/README.md). The panel reads, and has one act:
+// the answer to a question of the agent's board. So this part makes the state its fixtures
+// describe, checks that what the plugin answers (the row's facts, the soul as spawned, readiness,
+// the recorded events, the board) is what the kernel itself says, sends one answer through the
+// plugin, and keeps what the kernel printed for the plugin's own calls.
 //   - a child on its own worktree under the lead part B left (`oats spawn --parent`, on the command
 //     line: the plugin's spawn names no parent), with two facts and two questions on its board, set
 //     as its own session sets them (`oats instance board`, in its home);
 //   - then one commit to its soul in the workspace's member repository: the row's soul has moved;
 //   - then a restart, a stop and a start of the child through the plugin, and one more question on
-//     its board: its recorded history.
+//     its board: its recorded history;
+//   - then one more question, with a context, and the answer to the first one through the plugin.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -124,4 +126,40 @@ export default async (run) => {
   const eventsCall = recorded(["instance", "events"]);
   check(eventsCall.argv.join(" ") === `instance events ${CHILD} --home ${home} --limit 100 --json`, "the plugin asked `oats instance events <instance> --home <its home> --limit 100 --json`", eventsCall.argv.join(" "));
   fixtures.keep("panel/events.json", eventsCall.stdout);
+
+  step("C panel 5: the child's board: the plugin's facts and questions are the kernel's, and an answer goes as one session input");
+  const withContext = asInstance("instance", "board", "ask", "How should I merge the pull request?", "--option", "Squash: one clean commit", "--option", "Merge: keep the three commits", "--context-file", context, "--json");
+  check(withContext.status === 0, "oats instance board ask, with a context", withContext.stdout + withContext.stderr);
+  await until(`${CHILD}'s row to hold two open questions`, () => (rowOf(CHILD)?.board?.questions?.length === 2 ? true : undefined));
+  rpc("refresh");
+  const inspected5 = JSON.parse(oats("inspect", "--home", home, "--board", "--json").stdout).result;
+  const kernelBoard = inspected5.board ?? inspected5.instance?.board;
+  const withBoard = act("the panel's facts, with the row's board", "panelInstance", { instance: CHILD });
+  const ids = (questions) => (questions ?? []).map((question) => `${question.id}@${question.since}`).join(" ");
+  check(withBoard?.board.state === "ok" && ids(withBoard.board.questions) === ids(kernelBoard.questions) && withBoard.board.facts.map((fact) => `${fact.key}=${fact.value}`).join(" ") === kernelBoard.facts.map((fact) => `${fact.key}=${fact.value}`).join(" "), `the row's board is the kernel's: questions ${ids(kernelBoard.questions)}, ${kernelBoard.facts.length} facts`, JSON.stringify(withBoard?.board));
+  check(withBoard?.boardClaim === true, "the row's waiting claim is the board's own");
+  fixtures.keep("panel/status-board.json", recorded(["status"]).stdout);
+  const detail = act("the board's detail", "panelBoard", { instance: CHILD });
+  check(detail?.state === "ok" && detail.facts.map((fact) => fact.history?.length).join(" ") === kernelBoard.facts.map((fact) => fact.history.length).join(" "), "each fact's history is the kernel's", JSON.stringify(detail?.facts));
+  check(JSON.stringify(detail?.questions.map((question) => question.context)) === JSON.stringify(kernelBoard.questions.map((question) => question.context ?? null)), "each question's context is the kernel's, as the agent wrote it", JSON.stringify(detail?.questions));
+  const boardCall = recorded(["inspect", "--home"], ["--board"]);
+  check(boardCall.argv.join(" ") === `inspect --home ${home} --board --json`, "the plugin asked `oats inspect --home <the home the kernel named> --board --json`", boardCall.argv.join(" "));
+  fixtures.keep("panel/inspect-board.json", boardCall.stdout);
+
+  // An answer: the line is `<id>: <option>`, as the person confirmed it; anything else sends nothing.
+  const asked5 = withBoard?.board.questions[0];
+  const line = `${asked5?.id}: ${asked5?.options[0]}`;
+  const inputsBefore = run.records().filter((record) => record.argv[0] === "session" && record.argv[1] === "input").length;
+  const wrong = rpc("panelBoardAnswer", { instance: CHILD, id: asked5?.id, since: asked5?.since, option: 0, text: `${asked5?.id}: something else` });
+  check(wrong.ok === false && /nothing was sent/.test(wrong.message ?? ""), "a line that is not the option's is refused: nothing was sent", JSON.stringify(wrong));
+  const stale = rpc("panelBoardAnswer", { instance: CHILD, id: asked5?.id, since: "2020-01-01T00:00:00.000Z", option: 0, text: line });
+  check(stale.ok === false && /no longer open/.test(stale.message ?? ""), "an earlier asking of the same id is refused: nothing was sent", JSON.stringify(stale));
+  check(run.records().filter((record) => record.argv[0] === "session" && record.argv[1] === "input").length === inputsBefore, "and neither started `oats session input`");
+  const sent = act("answer the board's first question", "panelBoardAnswer", { instance: CHILD, id: asked5?.id, since: asked5?.since, option: 0, text: line });
+  check(sent?.submitted === true && sent.text === line, `the kernel says the input was submitted: ${line}`, JSON.stringify(sent));
+  const inputCall = recorded(["session", "input"]);
+  const file = inputCall.argv[inputCall.argv.indexOf("--text-file") + 1];
+  check(inputCall.argv.join(" ") === `session input --home ${home} --text-file ${file} --json`, "the plugin asked `oats session input --home <the home the kernel named> --text-file <its file> --json`", inputCall.argv.join(" "));
+  check(!existsSync(file), "the file that held the line is gone once the call ended", file);
+  fixtures.keep("panel/input-sent.json", inputCall.stdout);
 };

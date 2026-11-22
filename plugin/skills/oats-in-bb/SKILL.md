@@ -42,7 +42,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
   a tab in a thread's side panel): Needs you, Working, Finished and not looked at. On the page, a
   reply box sends a message to the agent you pick, through bb's own send.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
-  state in words, what it waits on you for and since when, where it works (the folder and the home
+  state in words, what it waits on you for and since when, the questions its board asks you (press
+  an option, read the exact line in the dialog, then Send answer: it goes to the agent as its next
+  input) and the facts it keeps in view, where it works (the folder and the home
   to copy), its harness, model and thread, its messaging id, its parent, whether it is ready
   (Instance readiness, with the checks behind a fold) and, once you press Load activity, its
   recorded lifecycle events. Soul: its soul as the instance was spawned from it (core

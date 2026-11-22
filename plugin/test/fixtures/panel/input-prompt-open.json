@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SESSION_PROMPT_OPEN",
+  "message": "bb thread thr_t9xz6jqajf waits on a person (1 pending user_question): nothing was sent. Answer it in bb. Open: pint_mnnkqxkpwh"
+ }
+}

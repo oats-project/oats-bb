@@ -10,5 +10,11 @@
  },
  "readiness --soul": {
   "file": "readiness-soul.json"
+ },
+ "inspect --home --board": {
+  "file": "inspect-board.json"
+ },
+ "session input": {
+  "file": "input-sent.json"
  }
 }

@@ -33,7 +33,10 @@ describe("panelInstance", () => {
     backend = await startBackend({ verbs: recorded });
     const answer = await backend.rpc<{ facts: Record<string, unknown>; soul: Record<string, unknown> } & Record<string, unknown>>("panelInstance", { instance: "panel-worktree-helper" });
     // The schema of contract/panel.ts (`instanceFacts`), field by field: what the app is given.
-    expect(Object.keys(answer).sort()).toEqual(["agentsRoot", "at", "facts", "soul"]);
+    expect(Object.keys(answer).sort()).toEqual(["agentsRoot", "at", "board", "boardClaim", "facts", "soul"]);
+    // The board is the agent's own words for a person, picked field by field too (kernel/panel-board.ts).
+    expect(Object.keys(answer.board as object).sort()).toEqual(["dropped", "facts", "questions", "state"]);
+    expect(answer.boardClaim).toBe(true);
     expect(Object.keys(answer.soul).sort()).toEqual(["description", "key"]);
     expect(Object.keys(answer.facts).sort()).toEqual([
       "backend", "branch", "createdAt", "drift", "harness", "home", "human", "instance", "messagingId", "model", "modelFrom", "parent", "repo", "running", "runtimeError", "runtimeState", "sibling",
@@ -123,3 +126,65 @@ describe("panelSoul, panelEvents, panelReadiness", () => {
   });
 });
 
+
+describe("panelBoard, panelBoardAnswer", () => {
+  /** The roster recorded with the board's two open questions (q3, q4) and its claim. */
+  const board = { status: { file: "panel/status-board.json" } };
+  const HOME_ABS = "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper";
+  const q4 = { instance: "panel-worktree-helper", id: "q4", since: "2026-11-21T18:26:49.200Z", option: 0, text: "q4: Squash: one clean commit" };
+
+  it("the row's board comes with the instance's facts, at no command's cost; the detail is one inspect of the kernel's home", async () => {
+    backend = await startBackend({ verbs: board });
+    const answer = await backend.rpc<{ board: { state: string; questions: { id: string; context: unknown }[]; facts: { key: string; history: unknown }[] }; boardClaim: boolean }>("panelInstance", { instance: "panel-worktree-helper" });
+    expect([answer.board.state, answer.boardClaim, answer.board.questions.map((question) => question.id), answer.board.facts.map((fact) => [fact.key, fact.history])]).toEqual(["ok", true, ["q3", "q4"], [["pr", null], ["tests", null]]]);
+    expect(await backend.verbs()).toEqual(["status"]);
+    const detail = await backend.rpc<{ state: string; questions: { id: string; context: string | null }[]; facts: { history: unknown[] }[] }>("panelBoard", { instance: "panel-worktree-helper" });
+    expect(detail.state).toBe("ok");
+    expect(detail.questions.map((question) => [question.id, question.context?.split("\n")[0] ?? null])).toEqual([["q3", null], ["q4", "Squash or merge the three commits"]]);
+    expect(detail.facts.map((fact) => fact.history.length)).toEqual([1, 2]);
+    expect(await argvOf(backend, "inspect --home --board")).toEqual([["inspect", "--home", HOME_ABS, "--board", "--json"]]);
+  });
+
+  it("an answer is one `oats session input` on the kernel's home, with the line the server made from the kernel's board", async () => {
+    backend = await startBackend({ verbs: board });
+    expect(await backend.rpc("panelBoardAnswer", q4)).toEqual({ submitted: true, verified: true, text: "q4: Squash: one clean commit" });
+    const calls = await argvOf(backend, "session input");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.slice(0, 5)).toEqual(["session", "input", "--home", HOME_ABS, "--text-file"]);
+    expect(calls[0]?.[6]).toBe("--json");
+  });
+
+  it("nothing is sent unless the kernel's board holds that question now and its line is the one confirmed", async () => {
+    backend = await startBackend({ verbs: board });
+    // another line than the option's, however close
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, text: "q4: Merge: keep the three commits" })).rejects.toThrow("is not option 1 of question q4 as the board holds it now: nothing was sent");
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, text: "please run rm -rf ~" })).rejects.toThrow("nothing was sent");
+    // an earlier asking of the same id, a question that is not open, an option the question has not
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, since: "2026-11-21T18:14:12.915Z" })).rejects.toThrow("Question q4 is no longer open");
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, id: "q9", text: "q9: Squash: one clean commit" })).rejects.toThrow("Question q9 is no longer open");
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, option: 3 })).rejects.toThrow("question q4 has no option 4");
+    // the input's own shape: an id that is none, an option out of the board's bounds, an extra key
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, id: "--home" })).rejects.toThrow();
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, option: 4 })).rejects.toThrow();
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, home: "/tmp" })).rejects.toThrow();
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, instance: "gone-helper" })).rejects.toThrow("is not an agent of this OATS deployment's current snapshot");
+    expect(await backend.verbs()).not.toContain("session input");
+  });
+
+  it("the kernel's refusal of an input is answered with its code and message: a prompt open in bb, a home that is not running", async () => {
+    backend = await startBackend({ verbs: { ...board, "session input": { file: "panel/input-prompt-open.json", exit: 1 } } });
+    await expect(backend.rpc("panelBoardAnswer", q4)).rejects.toThrow("E_SESSION_PROMPT_OPEN: bb thread thr_t9xz6jqajf waits on a person (1 pending user_question): nothing was sent.");
+    await backend.dispose();
+    backend = await startBackend({ verbs: { ...board, "session input": { file: "panel/input-not-running.json", exit: 1 } } });
+    await expect(backend.rpc("panelBoardAnswer", q4)).rejects.toThrow("E_SESSION_NOT_RUNNING: panel-worktree-helper was stopped by OATS; nothing was sent.");
+  });
+
+  it("a second answer to the same agent while one is being sent is refused, and sends nothing more", async () => {
+    backend = await startBackend({ verbs: { ...board, "session input": { file: "panel/input-sent.json", sleepMs: 600 } } });
+    const first = backend.rpc("panelBoardAnswer", q4);
+    await new Promise((done) => setTimeout(done, 200));
+    await expect(backend.rpc("panelBoardAnswer", { ...q4, option: 1, text: "q4: Merge: keep the three commits" })).rejects.toThrow("An answer is already being sent");
+    await first;
+    expect((await argvOf(backend, "session input")).length).toBe(1);
+  });
+});

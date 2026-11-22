@@ -11,20 +11,21 @@ import { parsePanelReadiness, type PanelReadiness } from "../../kernel/panel-rea
 import { parsePanelSoul, type PanelSoul } from "../../kernel/panel-soul";
 import { parseStatus } from "../../kernel/roster";
 import type { Agent } from "../../model/types";
+import { parseBoardAnswer, parsePanelBoard, rowBoard, type PanelBoard } from "../../kernel/panel-board";
 import { fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 
 type Roster = { root: string; agents: { description?: string; instances: Record<string, unknown>[] }[] };
 const roster = (name: string): Roster => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures", name.includes("/") ? "" : "panel", name), "utf8")) as Roster;
 
 /** The facts of one instance of a recorded roster, and its soul's description from the roster's agent row. */
-export function recordedFacts(instance: string, file = "status.json"): { facts: PanelInstance; description: string | null; root: string } {
+export function recordedFacts(instance: string, file = "status.json"): { facts: PanelInstance; board: PanelBoard; boardClaim: boolean; description: string | null; root: string } {
   const document = roster(file);
   for (const agent of document.agents) {
     const row = agent.instances.find((candidate) => candidate.instance === instance);
     if (row === undefined) continue;
     const facts = parsePanelInstance(row);
     if (!facts.ok) throw new Error(`${file}: ${facts.error.message}`);
-    return { facts: facts.value, description: agent.description ?? null, root: document.root };
+    return { facts: facts.value, board: rowBoard(row), boardClaim: (row.waitingOnYou as { producer?: string } | null | undefined)?.producer === "oats.board", description: agent.description ?? null, root: document.root };
   }
   throw new Error(`${file} has no instance ${instance}`);
 }
@@ -33,8 +34,8 @@ export const PANEL_AT = "2026-11-21T18:30:00.000Z";
 
 /** The answer of `panelInstance` for one instance of the recorded roster, changed by `change`. */
 export function instanceAnswer(instance: string, change: (facts: PanelInstance) => PanelInstance = (facts) => facts, file?: string) {
-  const { facts, description, root } = recordedFacts(instance, file);
-  return { at: PANEL_AT, facts: change(facts), agentsRoot: root, soul: { key: facts.soul, description } };
+  const { facts, board, boardClaim, description, root } = recordedFacts(instance, file);
+  return { at: PANEL_AT, facts: change(facts), board, boardClaim, agentsRoot: root, soul: { key: facts.soul, description } };
 }
 
 /** The pinned sample roster the other features' slot tests draw (test/fixtures/roster/status.json). */
@@ -51,6 +52,8 @@ function parsed<Value>(file: string, parse: (document: unknown) => { ok: true; v
 export const recordedSoul = (): PanelSoul | null => parsed("inspect-home.json", parsePanelSoul);
 export const recordedEvents = (): PanelEvents => parsed("events.json", parsePanelEvents);
 export const recordedReadiness = (of: "instance" | "soul"): PanelReadiness => parsed(of === "instance" ? "readiness-home.json" : "readiness-soul.json", parsePanelReadiness);
+/** The board with its history and contexts (`oats inspect --board`), recorded with `status-board.json`'s roster. */
+export const recordedBoard = (file = "inspect-board.json"): PanelBoard => parsed(file, parsePanelBoard);
 /** The home's readiness as the kernel answered it when it could not run bb: not ready. */
 export const recordedNotReady = (): PanelReadiness => parsed("readiness-home-not-ready.json", parsePanelReadiness);
 
@@ -63,6 +66,9 @@ export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
   panelSoul: () => ({ soul: recordedSoul() }),
   panelEvents: () => recordedEvents(),
   panelReadiness: ({ of }) => recordedReadiness(of),
+  panelBoard: () => recordedBoard(),
+  // The kernel's recorded answer to an answer that went through; the line is the one the app confirmed.
+  panelBoardAnswer: ({ text }) => ({ ...parsed("input-sent.json", parseBoardAnswer), text }),
 });
 // ---- For the panel's slot tests: the recorded roster as the app's snapshot, and bb threads for its rows.
 

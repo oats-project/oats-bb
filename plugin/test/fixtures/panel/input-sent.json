@@ -1,0 +1,10 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
+  "backend": "bb",
+  "submitted": true,
+  "verified": true
+ }
+}

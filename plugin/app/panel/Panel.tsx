@@ -19,6 +19,8 @@ import { shown } from "../ui/text";
 import { instanceDisplayName, readAge, waitingLabel, waitingSince } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { Activity } from "./Activity";
+import { Board } from "./Board";
+import { dialogOpen } from "./board-words";
 import { PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
 import { contextLine } from "./readiness-words";
@@ -211,7 +213,8 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
         )}
       </header>
 
-      {claim === null ? null : (
+      {/* The board's own claim is its questions, shown as questions below: not said twice. */}
+      {claim === null || (read.data?.boardClaim === true && read.data.board.questions.length > 0) ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">
           <p data-testid="oats-panel-waiting-head" className="m-0 font-semibold text-foreground">
             {[waitingLabel(claim), waitingSince(claim.since, now)].filter((part) => part !== null).join(" · ")}
@@ -225,6 +228,9 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
       )}
 
       {readState}
+      {read.data === undefined ? null : (
+        <Board instance={agent.instance} board={read.data.board} home={read.data.facts.home} name={instanceDisplayName(shown(agent.instance))} dialog={dialogOpen(claim)} now={now} />
+      )}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : contextLine("instance", agent.instance, answerRoot)} now={now} />
       <Activity instance={agent.instance} now={now} />

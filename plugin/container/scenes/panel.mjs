@@ -7,7 +7,9 @@
 //                 fails after one answered; readiness that is not ready, a provider that needs a
 //                 sign-in and capability warnings; an incomplete and an empty activity window and
 //                 a blocked launch's row; a soul with a filled core slot, a capability turned off,
-//                 warnings, and only its core capabilities
+//                 warnings, and only its core capabilities; the agent's board: its questions
+//                 with their context, an answer confirmed, sent and refused, a harness prompt
+//                 open, its facts with their history, a link, folded and hidden facts
 //   panel-states  the states the first stage has none of: running (with a messaging id, an owning
 //                 human and a sibling), idle, failed, unreachable with the kernel's runtime error,
 //                 an agent with no thread in bb, a soul OATS does not name; the agent's page for a
@@ -50,6 +52,19 @@ function derived(file, change) {
   const document = JSON.parse(readFileSync(join(FIXTURES, file), "utf8"));
   change(document.result);
   return { stdout: JSON.stringify(document) };
+}
+/**
+ * The board's detail for the roster the stages draw. The recorded inspection
+ * (test/fixtures/panel/inspect-board.json) is of a later moment than the recorded roster, when the
+ * same two questions had been asked again under other ids: here its questions take the roster's
+ * ids and instants, each with the context recorded for the question of the same words.
+ */
+function boardDetail() {
+  const asked = JSON.parse(readFileSync(FIXTURE, "utf8")).agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance).board.questions;
+  return derived("inspect-board.json", (result) => {
+    const board = result.board ?? result.instance.board;
+    board.questions = asked.map((question) => ({ ...question, context: board.questions.find((each) => each.question === question.question)?.context ?? null }));
+  });
 }
 const FAKE_CONFIG = join(homedir(), ".local/bin/fake-oats.json");
 const CHILD = { instance: "panel-worktree-helper", recorded: "thr_gx4sgexjgw", thread: "thr_mockups" };
@@ -130,14 +145,14 @@ export const stages = {
   panel: {
     label: "P1",
     enter: async ({ fake, threads, untilSnapshot }) => {
-      fake({ status: { stdout: JSON.stringify(recorded(threads)) } });
+      fake({ status: { stdout: JSON.stringify(recorded(threads)) }, "inspect --home --board": boardDetail() });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === CHILD.instance && agent.threadId === threads.get(CHILD.thread).id && agent.waiting !== null));
     },
   },
   "panel-states": {
     label: "P2",
     enter: async ({ fake, threads, untilSnapshot }) => {
-      fake({ status: { stdout: JSON.stringify(states(threads)) } });
+      fake({ status: { stdout: JSON.stringify(states(threads)) }, "inspect --home --board": boardDetail() });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === SHELL.instance) && snapshot.agents.some((agent) => agent.instance === CHILD.instance && agent.running === true));
     },
   },
@@ -220,9 +235,8 @@ const first = [
       // The state is a mark AND its word; beside its word the mark is hidden from a screen reader, which reads the word.
       const state = await page.evaluate(stateOf);
       check(/^\["needs-you","Needs you","· waiting \d+ (min|h|d) \(since .+\)",true\]$/.test(state), `${at} the header says the state in words beside its mark, and since when: Needs you · waiting …`, state);
-      const head = await page.evaluate(textOf(inPanel("oats-panel-waiting-head")));
-      check(/^Asked for your attention · waiting \d+ (min|h|d) \(since .+\)$/.test(head), `${at} Needs input: the reason in words, how long and since when`, head);
-      check((await page.evaluate(textOf(inPanel("oats-panel-waiting-message")))) === "How should I merge the pull request?", `${at} Needs input: the agent's message`);
+      // What it waits for is a question of its board: shown as the question (the board's own scene), not as a second message.
+      check((await page.evaluate(textOf(inPanel("oats-panel-question-text")))) === "How should I merge the pull request?", `${at} what it needs: the question its board asks`);
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "Works in its own worktree of oats-real, on branch agents/panel-worktree-helper.", `${at} Work: the mode in one sentence`, work);
       const session = await page.evaluate(textOf(inPanel("oats-panel-session")));
@@ -710,8 +724,11 @@ const more = [
         refresh();
         const stale = await page.until(`(() => { const t = ${textOf(inPanel("oats-stale"))}; return t.includes("could not be read again") ? t : ""; })()`, 40);
         check(/howing what was read (just now|\d+s ago|\d+ min ago)\. OATS could not be read again \(E_LOCAL_MISSING\)\. Retry$/.test(stale ?? ""), `${at} when OATS cannot be read again the panel says how old what it shows is, and why, with Retry`, stale);
+        // The facts are under the board now: brought into view before they are looked for.
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-work-sentence"))})?.scrollIntoView({ block: "center" })`);
         check((await page.evaluate(textOf(inPanel("oats-panel-name")))) === "Panel worktree helper" && (await page.evaluate(visible(inPanel("oats-panel-work-sentence")))), `${at} and keeps the agent and its facts on screen`);
         if (viewport.mobile) check((await page.evaluate(textOf(testId("oats-agent-back")))) === "Back to the thread", `${at} and the way back`);
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-header"))})?.scrollIntoView({ block: "start" })`);
         await settled(page, viewport);
       await fitted(page, viewport, check, at, "stale");
         await page.shot(`panel-${viewport.name}-stale`);
@@ -733,4 +750,123 @@ const more = [
   },
 ];
 
-export default [...first, ...second, ...more];
+const board = [
+  {
+    stage: "panel",
+    name: "the agent's board: its questions one at a time with their context, an answer confirmed and sent, a refused answer, a harness prompt open; its facts with their history, a link, hidden and folded facts",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const flat = (selector, open = false) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return ""; if (${open}) e.querySelectorAll("details").forEach((d) => { d.open = true; }); return e.innerText.replace(/\\s+/g, " ").trim(); })()`;
+      const confirm = testId("oats-confirm");
+      const phase = (kind) => `document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-phase") === ${JSON.stringify(kind)}`;
+      const optionsOf = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-question-option"))})].map((e) => [e.innerText.replace(/\\s+/g, " ").trim(), e.disabled]))`;
+      const childRow = (roster) => roster.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance);
+      try {
+        check(await open(page, viewport, threads, CHILD), `${at} the panel is open`);
+        await page.evaluate(click(inPanel("oats-tab-instance")));
+
+        // the questions: one at a time, which one and since when, its options numbered, its context
+        await page.until(visible(inPanel("oats-panel-question")), 30);
+        const zone = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-question"))}).getAttribute("aria-label")`);
+        check(zone === "Question 1 of 2 from Panel worktree helper", `${at} Questions: the zone is named for which question it shows and whose it is`, zone);
+        const tag = await page.evaluate(textOf(inPanel("oats-panel-question-tag")));
+        check(/^question 1 of 2 · asked (just now|\d+ (min|h|d) ago)$/.test(tag), `${at} which question, and since when: question 1 of 2 · asked …`, tag);
+        check((await page.evaluate(textOf(inPanel("oats-panel-question-text")))) === "How should I merge the pull request?", `${at} the agent's question`);
+        const options = await page.evaluate(optionsOf);
+        check(options === JSON.stringify([["1 Squash: one clean commit", false], ["2 Merge: keep the three commits", false]]), `${at} its options, numbered, each a button`, options);
+        check(!(await page.evaluate(visible(inPanel("oats-panel-waiting")))), `${at} the board's own claim is not said a second time as Needs input`);
+        await page.evaluate(click(`${inPanel("oats-panel-question-context")} summary`));
+        const context = await page.until(`(() => { const text = ${flat(inPanel("oats-panel-question-context"))}; return text.includes("I rebased the branch") ? text : ""; })()`, 30);
+        check((context ?? "").includes("Context Panel worktree helper says: Squash or merge the three commits I rebased the branch on main and all checks pass."), `${at} Context: the agent's context as text, under the words that say whose it is`, context);
+
+        // the facts: label, value, unit, when it changed, a sparkline from the history, a link that shows its address first
+        const facts = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-fact"))})]; return rows.length === 2 && rows[1].querySelector(${JSON.stringify(testId("oats-panel-fact-spark"))}) ? JSON.stringify(rows.map((row) => row.querySelector('[role="group"]').getAttribute("aria-label"))) : ""; })()`, 30);
+        check(/^\["Pull request: #42, updated .+","Tests: 3 failing, updated .+"\]$/.test(facts ?? ""), `${at} Facts: each a label, its value and unit and when it changed; a number that changed draws its history`, facts);
+        await page.evaluate(click(inPanel("oats-panel-fact-link")));
+        const address = await page.evaluate(flat(inPanel("oats-panel-fact-address")));
+        check(address === "Panel worktree helper says: https://github.com/oats-project/oats-bb/pull/42 Open in browser", `${at} a fact's link shows the whole address, said to be the agent's, with Open in browser`, address);
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-questions"))}).scrollIntoView({ block: "start" })`);
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the board");
+        await page.shot(`panel-${viewport.name}-board`);
+
+        // the other question, by Next
+        await page.evaluate(click(inPanel("oats-panel-question-next")));
+        check((await page.evaluate(textOf(inPanel("oats-panel-question-text")))) === "Which base branch?", `${at} Next question shows the other question`);
+        check(!(await page.evaluate(visible(inPanel("oats-panel-question-context")))), `${at} a question with no context has no Context fold`);
+        await page.evaluate(click(inPanel("oats-panel-question-previous")));
+
+        // an answer: the exact line in a dialog, nothing sent before Send answer
+        await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-question-option"))})[0].click()`);
+        await page.until(phase("ready"), 15);
+        const dialog = await page.evaluate(flat(`${testId("oats-modal")} [role="dialog"]`));
+        check(
+          dialog.startsWith("Answer Panel worktree helper?") && dialog.includes("OATS sends this line to Panel worktree helper as its next input") && dialog.includes("q1: Squash: one clean commit") && dialog.endsWith("Cancel Send answer"),
+          `${at} an option opens a dialog: whom it answers, what will happen, the exact line, Cancel and Send answer`,
+          dialog,
+        );
+        await page.shot(`panel-${viewport.name}-board-answer`);
+        await page.evaluate(click(testId("oats-confirm-act")));
+        check(Boolean(await page.until(phase("done"), 30)), `${at} Send answer sends it`);
+        const done = await page.evaluate(flat(confirm));
+        check(done.includes("Answer sent") && done.includes("q1: Squash: one clean commit"), `${at} the dialog says it was sent, and the line that went`, done);
+        await page.shot(`panel-${viewport.name}-board-answer-sent`);
+        await page.evaluate(click(testId("oats-confirm-close")));
+        const note = await page.until(textOf(inPanel("oats-panel-question-sent")), 15);
+        check(note === "Sent to the agent as its next input. The question stays until the agent clears it.", `${at} the question stays, with a note that its answer went`, note);
+
+        // an answer the kernel refuses: a prompt of bb's is open (the kernel's recorded refusal)
+        setVerb("session input", { file: "panel/input-prompt-open.json", exit: 1 });
+        await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-question-option"))})[1].click()`);
+        await page.until(phase("ready"), 15);
+        await page.evaluate(click(testId("oats-confirm-act")));
+        check(Boolean(await page.until(phase("failed"), 30)), `${at} an answer the kernel refuses ends as a failure in the dialog`);
+        const refused = await page.evaluate(flat(confirm));
+        check(refused.includes("The answer was not sent") && refused.includes("The agent's thread is showing a prompt: answer it there first.") && refused.includes("E_SESSION_PROMPT_OPEN") && refused.includes("nothing was sent"), `${at} why, in words, then the kernel's code and message`, refused);
+        await page.shot(`panel-${viewport.name}-board-answer-refused`);
+        await page.evaluate(click(testId("oats-confirm-close")));
+        setVerb("session input", null);
+
+        // a prompt of the harness is open on the thread: the answers are off, and the zone says why
+        const asking = recorded(threads);
+        childRow(asking).waitingOnYou = { since: new Date().toISOString(), producer: "oats.core", reason: "question", message: "Claude asked a question" };
+        record(asking);
+        const off = await page.until(textOf(inPanel("oats-panel-question-note")), 30);
+        check(off === "The agent's thread is showing a prompt: answer it there first.", `${at} while the thread shows a prompt of its harness, the zone says to answer it there first`, off);
+        const disabled = await page.evaluate(optionsOf);
+        check(JSON.parse(disabled).every((option) => option[1] === true), `${at} and the answers are off`, disabled);
+        const needs = await page.until(textOf(inPanel("oats-panel-waiting-message")), 30);
+        check(needs === "Claude asked a question", `${at} that claim is not the board's: Needs input says it`, needs);
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-questions"))}).scrollIntoView({ block: "start" })`);
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the board while a prompt is open");
+        await page.shot(`panel-${viewport.name}-board-prompt-open`);
+
+        // five facts, and one entry out of the board's contract: three show, the rest fold; one hidden on this computer
+        const many = recorded(threads);
+        const row = childRow(many);
+        row.board.facts = [...row.board.facts, ...["Coverage", "Open issues", "Build"].map((label, index) => ({ key: `f${index}`, label, value: ["81", "4", "green"][index], unit: index === 0 ? "%" : null, link: null, at: row.board.facts[0].at })), { key: "Not A Key", label: "x", value: "y", unit: null, link: null, at: row.board.facts[0].at }];
+        record(many);
+        const more = await page.until(`${textOf(inPanel("oats-panel-facts-more"))} === "2 more" && ${textOf(inPanel("oats-panel-facts-note"))}`, 30);
+        check(more === "1 entry of this agent's board could not be shown.", `${at} three facts show and the rest fold (2 more); an entry out of the board's contract is counted, not hidden`, more ?? (await page.evaluate(flat(inPanel("oats-panel-facts")))));
+        await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-fact-hide"))})[0].click()`);
+        const hidden = await page.until(textOf(inPanel("oats-panel-facts-hidden")), 15);
+        check(hidden === "1 hidden · show", `${at} a fact hidden on this computer: 1 hidden · show`, hidden);
+        const name = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-fact-hide"))})[0].getAttribute("aria-label")`);
+        check(name === "Hide Tests on this computer", `${at} each fact's × is named for the fact it hides`, name);
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-facts"))}).scrollIntoView({ block: "start" })`);
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "the facts, folded, with one hidden");
+        await page.shot(`panel-${viewport.name}-board-facts`);
+        await page.evaluate(click(inPanel("oats-panel-facts-hidden")));
+        check(!(await page.evaluate(visible(inPanel("oats-panel-facts-hidden")))), `${at} N hidden · show brings every fact back`);
+      } finally {
+        setVerb("session input", null);
+        record(recorded(threads));
+        await page.evaluate(`localStorage.removeItem("oats.bb.board.hidden")`);
+        await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-confirm-close"))})?.click()`);
+      }
+    },
+  },
+];
+
+export default [...first, ...second, ...board, ...more];

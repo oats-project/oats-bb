@@ -24,12 +24,16 @@ const CHILD_THREAD = "thr_gx4sgexjgw";
 /** A quarter of an hour after the recorded agent's board asked its question (18:14:12Z). */
 const NOW = Date.parse("2026-11-21T18:29:30.000Z");
 
-type Change = { agent?: (agent: Agent) => Agent; facts?: (facts: PanelInstance) => PanelInstance };
+/** `claim: "other"`: the row's waiting claim is not the board's own (which the panel shows as the board's questions, not as Needs input). */
+type Change = { agent?: (agent: Agent) => Agent; facts?: (facts: PanelInstance) => PanelInstance; claim?: "other" };
 function panel(props: { threadId?: string; instance?: string } = { threadId: CHILD_THREAD }, change: Change = {}, options: RenderSlotOptions<Contract> = {}) {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const agents = panelAgents().map((agent) => (agent.instance === CHILD && change.agent ? change.agent(agent) : agent));
   return renderSlot<{ threadId?: string; instance?: string }, Contract>({ component: InstancePanel }, props, {
-    rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, instance === CHILD ? change.facts : undefined) }),
+    rpc: handlers({
+      snapshot: () => panelSnapshot(agents),
+      panelInstance: ({ instance }) => ({ ...instanceAnswer(instance, instance === CHILD ? change.facts : undefined), ...(change.claim === "other" ? { boardClaim: false } : {}) }),
+    }),
     sidebarThreads: panelThreads(agents),
     ...options,
   });
@@ -78,7 +82,7 @@ test("a running agent says since when it runs; a stopped one says Stopped and sh
 });
 
 test("Needs input: the reason in words, how long and since when, and the agent's message; the header says the same wait", async () => {
-  const slot = panel();
+  const slot = panel({ threadId: CHILD_THREAD }, { claim: "other" });
   const waiting = await slot.findByTestId("oats-panel-waiting");
   // The clock as the words module says it here: with the date where local midnight falls inside the wait.
   const clock = waitingClock("2026-11-21T18:14:12.916Z", NOW);
@@ -89,11 +93,11 @@ test("Needs input: the reason in words, how long and since when, and the agent's
 });
 
 test("a claim with no message says the reason alone; its message is drawn as text through the display filter", async () => {
-  const bare = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: { reason: "permission", message: null, since: "2026-11-21T18:28:00.000Z" } }) });
+  const bare = panel({ threadId: CHILD_THREAD }, { claim: "other", agent: (agent) => ({ ...agent, waiting: { reason: "permission", message: null, since: "2026-11-21T18:28:00.000Z" } }) });
   expect(text(await bare.findByTestId("oats-panel-waiting-head"))).toContain("Waiting for a tool approval · waiting 1 min");
   expect(bare.queryByTestId("oats-panel-waiting-message")).toBeNull();
   bare.unmount();
-  const unsafe = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: { reason: "question", message: "use token=abc123 <b>now</b>", since: null } }) });
+  const unsafe = panel({ threadId: CHILD_THREAD }, { claim: "other", agent: (agent) => ({ ...agent, waiting: { reason: "question", message: "use token=abc123 <b>now</b>", since: null } }) });
   expect(text(await unsafe.findByTestId("oats-panel-waiting-message"))).toBe("[withheld]");
   // No instant from the kernel: the reason alone, no invented time.
   expect(text(unsafe.getByTestId("oats-panel-waiting-head"))).toBe("Asked you a question");
@@ -444,7 +448,7 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   expect(text(stale)).toContain("howing what was read 3 min ago.");
   // Everything it read is still there: the name, the state, the claim, the facts.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
-  expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();
+  expect(slot.getByTestId("oats-panel-questions")).not.toBeNull();
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toContain("Works in its own worktree");
   fail = false;
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));

@@ -21,7 +21,7 @@ import { shown, shownBlock } from "../ui/text";
 import {
   BOARD_MALFORMED, CONTEXT, DETAIL_NOTES, DIALOG_NOTE, FACTS, FACTS_SHOWN, FOLD, HIDE_TITLE, MAYBE_SENT, MAYBE_SENT_NEXT, NEXT, NOT_SENT, NO_CONTEXT, OPEN_IN_BROWSER, PREVIOUS, QUESTIONS, READING_CONTEXT, SEND, SENDING, SENT, SENT_NOTE,
   UNVERIFIED, addressName, answerHappens, answerLine, answerRefusal, answerTitle, askedText, boardDropped, detailSignature, factName, factsView, hiddenFacts, hideName, linkName, moreFacts,
-  occurrence, questionTag, refusedUnsent, says, sparkNote, sparkValues, terminalNote, turnQuestion, updatedText, wantsDetail, zoneHint, zoneName, type DetailState,
+  dotName, occurrence, questionTag, refusedUnsent, says, sparkNote, sparkValues, terminalNote, turnQuestion, updatedText, wantsDetail, zoneHint, zoneName, type DetailState,
 } from "./board-words";
 import { hiddenOf, hideFact, showAllFacts } from "./hidden-facts";
 import { usePanelBoard } from "./read";
@@ -245,6 +245,32 @@ function Questions({
           </span>
           {questions.length < 2 ? null : (
             <span className="ml-auto flex items-center gap-1">
+              {/* One dot per question, the shown one filled: how many wait, at a glance. Where there is room each is a button that shows its question. */}
+              <span data-testid="oats-panel-question-dots" className="hidden items-center md:flex">
+                {questions.map((each, dot) => (
+                  <button
+                    key={occurrence(each)}
+                    type="button"
+                    data-testid="oats-panel-question-dot"
+                    aria-label={dotName(dot)}
+                    aria-current={dot === at ? "true" : undefined}
+                    className={`${TARGET} inline-flex w-5 items-center justify-center`}
+                    onClick={() => {
+                      setIndex(dot);
+                      setShownId(each.id);
+                      zone.current?.focus();
+                    }}
+                  >
+                    <span aria-hidden="true" className={`inline-block size-2 rounded-full border border-foreground ${dot === at ? "bg-foreground" : ""}`} />
+                  </button>
+                ))}
+              </span>
+              {/* At a phone's width the dots only show: ‹ and › are the controls there, and nine targets do not fit. */}
+              <span aria-hidden="true" data-testid="oats-panel-question-dots-shown" className="flex items-center gap-1.5 md:hidden">
+                {questions.map((each, dot) => (
+                  <span key={occurrence(each)} className={`inline-block size-2 rounded-full border border-foreground ${dot === at ? "bg-foreground" : ""}`} />
+                ))}
+              </span>
               <Button data-testid="oats-panel-question-previous" aria-label={PREVIOUS} title={`${PREVIOUS} (←)`} onClick={() => turn(-1)}>
                 <span aria-hidden="true">‹</span>
               </Button>

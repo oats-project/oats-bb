@@ -94,6 +94,8 @@ export const zoneName = (index: number, total: number, name: string): string => 
 export const askedText = (since: string, now: number): string => `asked ${waitedText(since, now)} ago`.replace("under a minute ago", "just now");
 /** The index after turning by `step` among `total` questions, wrapping at the ends. */
 export const turnQuestion = (index: number, step: number, total: number): number => (total > 0 ? (((index + step) % total) + total) % total : 0);
+/** A dot's name: "Question 2". */
+export const dotName = (index: number): string => `Question ${index + 1}`;
 export const PREVIOUS = "Previous question";
 export const NEXT = "Next question";
 

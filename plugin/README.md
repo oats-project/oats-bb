@@ -150,7 +150,7 @@ Under the header, the Instance tab shows the agent's board (`oats instance board
 
 **Questions**: the questions the agent asks, one at a time: which one and since when ("question 2 of
 3 · asked 4 min ago"), the question, its options as numbered buttons, and its **Context** (the
-agent's own text, under "<agent> says:"). ‹ and › turn the questions; with the focus in the zone so
+agent's own text, under "<agent> says:"). ‹ and › and the dots turn the questions; with the focus in the zone so
 do ← and →, a number chooses that option, and `c` opens the context. A waiting claim that is the
 board's own is shown here, as its questions, and not a second time as Needs input.
 
@@ -194,8 +194,10 @@ fact or a question with a context and again only when a fact's instant or such a
 The bounds of a board and what may be shown of it are the kernel's contract, read as the Desktop
 reads it: an entry out of the contract drops by itself and is counted.
 
-Not here: the Desktop's dots under a question (‹ and › and the count say the same), and its F6
-focus regions (bb has its own focus order; the zone and the facts are reached with Tab).
+One dot per question shows how many wait, the shown one filled: buttons named "Question N" where
+there is room, and at a phone's width an indicator only (‹ and › are the controls there: nine
+targets of the size a finger needs do not fit). Not here: the Desktop's F6 focus regions (bb has
+its own focus order; the zone and the facts are reached with Tab).
 
 ## Automations
 

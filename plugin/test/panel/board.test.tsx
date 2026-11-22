@@ -67,6 +67,16 @@ test("Previous and Next turn the questions, wrapping, and so do the arrow keys; 
   fireEvent.click(slot.getByTestId("oats-panel-question-next"));
   expect(text(slot.getByTestId("oats-panel-question-text"))).toBe("How should I merge the pull request?");
   expect(text(slot.getByTestId("oats-panel-question-tag"))).toBe("question 2 of 2 · asked 2 min ago");
+  // one dot per question, named, the shown one marked; a dot shows its question
+  const dots = () => slot.getAllByTestId("oats-panel-question-dot").map((dot) => [dot.getAttribute("aria-label"), dot.getAttribute("aria-current")]);
+  expect(dots()).toEqual([["Question 1", null], ["Question 2", "true"]]);
+  fireEvent.click(slot.getAllByTestId("oats-panel-question-dot")[0]!);
+  expect(text(slot.getByTestId("oats-panel-question-text"))).toBe("Which base branch?");
+  expect(dots()).toEqual([["Question 1", "true"], ["Question 2", null]]);
+  fireEvent.click(slot.getAllByTestId("oats-panel-question-dot")[1]!);
+  // the same dots as an indicator for a phone's width, hidden from a screen reader
+  expect(slot.getByTestId("oats-panel-question-dots-shown").getAttribute("aria-hidden")).toBe("true");
+  expect(slot.getByTestId("oats-panel-question-dots-shown").children).toHaveLength(2);
   fireEvent.keyDown(slot.getByTestId("oats-panel-question"), { key: "ArrowRight" });
   expect(text(slot.getByTestId("oats-panel-question-text"))).toBe("Which base branch?");
   fireEvent.keyDown(slot.getByTestId("oats-panel-question"), { key: "ArrowLeft" });

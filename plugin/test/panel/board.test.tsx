@@ -130,6 +130,26 @@ test("the context fold says what it cannot show: still reading, none sent, not r
   expect(text(earlier.fold)).not.toContain("I rebased the branch");
 });
 
+test("a detail held from an earlier board, which does not name the question asked now, is read once more and never in a loop", async () => {
+  const withContext = (board: PanelBoard): PanelBoard => ({ ...board, questions: board.questions.filter((question) => question.hasContext) });
+  const earlier = { ...recordedBoard(), questions: [] };
+  let reads = 0;
+  const slot = panel({ panelBoard: () => (++reads === 1 ? earlier : recordedBoard()) }, { board: withContext });
+  const fold = await slot.findByTestId("oats-panel-question-context");
+  await waitFor(() => expect(text(fold)).toContain("I rebased the branch"));
+  expect(reads).toBe(2);
+  slot.unmount();
+  resetApp();
+  // a kernel whose detail never names it: one more read, then the fold says there is none
+  reads = 0;
+  const never = panel({ panelBoard: () => (++reads, earlier) }, { board: withContext });
+  const none = await never.findByTestId("oats-panel-question-context");
+  await waitFor(() => expect(reads).toBe(2));
+  await waitFor(() => expect(text(none)).toContain("The agent sent no context for this question."));
+  await act(async () => { await new Promise((done) => setTimeout(done, 50)); });
+  expect(reads).toBe(2);
+});
+
 // ---- answering
 
 test("an option opens a dialog with the exact line; nothing is sent until Send answer, and then that line, for that question and option", async () => {

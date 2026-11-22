@@ -331,7 +331,21 @@ function Questions({
  * agent's thread (the answers are off); `name` is the agent's name as words.
  */
 export function Board({ instance, board, home, name, dialog, now }: { instance: string; board: PanelBoard; home: string; name: string; dialog: boolean; now: number }) {
-  const detail = usePanelBoard(instance, wantsDetail(board), detailSignature(board));
+  const signature = detailSignature(board);
+  const detail = usePanelBoard(instance, wantsDetail(board), signature);
+  // A detail held from before that does not name a question the row asks with a context is behind
+  // the row (it was read for an earlier board): read once more for this board, never in a loop.
+  const held = detail.data;
+  const behind = held !== undefined && held.state === "ok" && board.questions.some((question) => question.hasContext && !held.questions.some((each) => occurrence(each) === occurrence(question)));
+  const rereadFor = useRef<string | null>(null);
+  // `retry` reads the query as it is when called: it is not what this effect waits on.
+  const retry = useRef(detail.retry);
+  retry.current = detail.retry;
+  useEffect(() => {
+    if (!behind || detail.fetching || rereadFor.current === signature) return;
+    rereadFor.current = signature;
+    retry.current();
+  }, [behind, detail.fetching, signature]);
   const detailState: DetailState = !wantsDetail(board) ? "ok" : detail.status === "error" ? "failed" : detail.data === undefined || detail.fetching ? "reading" : detail.data.state;
   if (board.state === "unsupported" || board.state === "none") return null;
   return (

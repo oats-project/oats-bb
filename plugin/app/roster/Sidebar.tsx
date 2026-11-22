@@ -1,5 +1,6 @@
-// The sidebar's thread list (experimental_threadList): the "oats" block, then the agents tree,
-// then every other bb thread. With no snapshot, bb's threads are still all listed and usable.
+// The sidebar's thread list (experimental_threadList): the workspace line, the roster (every agent
+// OATS has, as a tree), at its foot who waits and New agent, the plugin's pages under "Workspace",
+// then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
 import type { MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -21,6 +22,7 @@ import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
+import { GONE_MARK, GONE_WORD } from "./gone";
 import { agentStatus } from "./status";
 import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
@@ -52,9 +54,6 @@ const INDENT = ["pl-2", "pl-6", "pl-10"] as const;
 // A row is a control: as high as one (TARGET).
 const ROW = `flex ${TARGET} min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent`;
 const HEADING = "px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
-
-/** What a row says in its state's place once the kernel has refused its agent as one it does not know. */
-const GONE = "Not in OATS any more";
 
 const NO_ONE: ReadonlySet<string> = new Set();
 
@@ -128,14 +127,15 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
-      const word = gone.has(node.agent.instance) ? GONE : status.word;
+      const isGone = gone.has(node.agent.instance);
+      const word = isGone ? GONE_WORD : status.word;
       return [
         threadRow(
           thread,
           INDENT[node.depth],
           "oats-agent-row",
           <>
-            <StateMark state={status.state} hidden />
+            <StateMark state={isGone ? GONE_MARK : status.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
             {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, word, shown(oats.soulOf(node.agent)))}
           </>,
@@ -165,8 +165,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             onNavigate();
           }}
         >
-          <StateMark state={status.state} hidden />
-          {lines(name, status.state === "needs-you", gone.has(agent.instance) ? GONE : status.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+          <StateMark state={gone.has(agent.instance) ? GONE_MARK : status.state} hidden />
+          {lines(name, status.state === "needs-you", gone.has(agent.instance) ? GONE_WORD : status.word, `${shown(oats.soulOf(agent))} · ${where}`)}
         </button>
       </li>
     );
@@ -207,7 +207,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             <Loading>Reading your agents…</Loading>
           </div>
         ) : (
-          <Unreadable failure={oats} machine={null} onRetry={oats.retry} />
+          <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
         )}
         <h2 className={HEADING}>Threads</h2>
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>

@@ -694,3 +694,47 @@ describe("a confirmation", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 });
+
+// jsdom lays nothing out: the boxes are given, as a browser would measure them.
+describe("where a menu's list hangs", () => {
+  const box = (left: number, right: number) => ({ left, right, top: 0, bottom: 0, width: right - left, height: 0, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+  /** A room `room` wide that clips, a button at `at`, a list `width` wide: → the opened list. */
+  function open(room: [number, number], at: [number, number], width: number, align?: "left" | "right") {
+    cleanup(); // one menu at a time
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute("data-room") !== null) return box(...room);
+      if (this.getAttribute("aria-haspopup") === "menu") return box(...at);
+      if (this.getAttribute("role") === "menu") return box(0, width);
+      return box(0, 0);
+    });
+    render(
+      <div data-room="" style={{ overflow: "auto" }}>
+        <Menu label="More" {...(align === undefined ? {} : { align })} items={[{ id: "one", label: "A long label that does not fit beside the button", onSelect: () => undefined }]} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    const list = screen.getByRole("menu");
+    rect.mockRestore();
+    return list;
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  test("from the button's right edge where it fits there", () => {
+    const list = open([0, 390], [300, 332], 200);
+    expect([list.getAttribute("data-edge"), list.style.maxWidth]).toEqual(["right", "332px"]);
+  });
+  test("from the left edge where the right one would pass the room's edge", () => {
+    const list = open([0, 390], [10, 42], 200);
+    expect([list.getAttribute("data-edge"), list.style.maxWidth]).toEqual(["left", "380px"]);
+  });
+  test("a list that fits on neither side hangs where there is more room, no wider than that room, and is decided once", () => {
+    // Hung right it would pass the left edge, hung left the right one: it must not flip for ever.
+    const list = open([0, 390], [150, 182], 300);
+    expect([list.getAttribute("data-edge"), list.style.maxWidth]).toEqual(["left", "240px"]);
+    expect(open([0, 390], [250, 282], 300).getAttribute("data-edge")).toBe("right");
+  });
+  test("align left asks for the left edge first", () => {
+    expect(open([0, 390], [10, 42], 200, "left").getAttribute("data-edge")).toBe("left");
+    expect(open([0, 390], [300, 332], 200, "left").getAttribute("data-edge")).toBe("right");
+  });
+});

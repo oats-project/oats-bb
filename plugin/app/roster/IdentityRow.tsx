@@ -2,6 +2,7 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { GONE_MARK, GONE_WORD } from "./gone";
 import {
   experimental_useAppPanel as useAppPanel,
   experimental_usePluginId as usePluginId,
@@ -37,7 +38,7 @@ export function isCompactViewport(): boolean {
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
 
 /** One fact of the row: its label, muted, then its value. */
-function Fact({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+function RowFact({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
   return (
     <span data-testid={testId} className="inline-flex min-w-0 items-baseline gap-1">
       <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -58,7 +59,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
     return (
       <div data-testid="oats-identity-row" data-unreadable="" role="status" className={`${FRAME} flex-row flex-wrap items-center gap-2`}>
-        <span className="min-w-0 break-words text-muted-foreground">{failureWords(oats, null).title}</span>
+        <span className="min-w-0 break-words text-muted-foreground">{failureWords(oats, oats.machine).title}</span>
         <Button onClick={oats.retry}>Retry</Button>
       </div>
     );
@@ -98,14 +99,21 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         Retry
       </Button>
     ) : undefined;
+  // The kernel has since refused this agent as one it does not know: the row says that, with no act,
+  // as its row in the sidebar does, until the next roster is read.
+  const gone = oats.gone.has(agent.instance);
   // What is shown is the last roster read while OATS cannot be read: the line says how old it is.
   const asOf = oats.stale === null ? null : `as of ${readAge(oats.stale.at, now) ?? "the last read"}`;
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
-      <StatusLine state={status.state} since={status.since} detail={[status.detail, asOf].filter((part) => part !== null).join(" · ") || null} action={act} />
+      {gone ? (
+        <StatusLine state={GONE_MARK} word={GONE_WORD} detail={["OATS has no agent of this name now", asOf].filter((part) => part !== null).join(" · ")} />
+      ) : (
+        <StatusLine state={status.state} since={status.since} detail={[status.detail, asOf].filter((part) => part !== null).join(" · ") || null} action={act} />
+      )}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <Fact label="Soul" testId="oats-fact-soul">
+        <RowFact label="Soul" testId="oats-fact-soul">
           <a
             href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
             className={LINK}
@@ -117,9 +125,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           >
             {shown(soul)}
           </a>
-        </Fact>
+        </RowFact>
         {agent.parent !== null ? (
-          <Fact label="Under" testId="oats-fact-parent">
+          <RowFact label="Under" testId="oats-fact-parent">
             {parentThread === undefined ? (
               shown(agent.parent)
             ) : (
@@ -135,11 +143,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
                 {shown(agent.parent)}
               </a>
             )}
-          </Fact>
+          </RowFact>
         ) : agent.human !== null ? (
-          <Fact label="Started by" testId="oats-fact-parent">
+          <RowFact label="Started by" testId="oats-fact-parent">
             {shown(agent.human)}
-          </Fact>
+          </RowFact>
         ) : null}
         {children > 0 ? (
           <span data-testid="oats-fact-children" className="text-muted-foreground">
@@ -147,9 +155,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           </span>
         ) : null}
         {identity === null ? null : (
-          <Fact label={agent.team === null ? "Identity" : `Identity in ${shown(agent.team)}`} testId="oats-fact-identity">
+          <RowFact label={agent.team === null ? "Identity" : `Identity in ${shown(agent.team)}`} testId="oats-fact-identity">
             {shown(identity)}
-          </Fact>
+          </RowFact>
         )}
         <button
           type="button"

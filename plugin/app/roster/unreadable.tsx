@@ -41,6 +41,11 @@ export function failureWords(failure: Failure, machine: string | null): { title:
   }
 }
 
+/** The plugin's own codes for "OATS cannot be read at all": no `oats`, no deployment, no machine, no answer. */
+const UNREADABLE: ReadonlySet<string> = new Set([codes.notFound, codes.noDeployment, codes.chooseHost, codes.hostNotFound, codes.noHost, codes.hostUnreachable, codes.timeout]);
+/** Whether a refusal's code says OATS itself cannot be read (so the place shows this notice, not the refusal's raw line). */
+export const isUnreadable = (code: string | null): boolean => code !== null && UNREADABLE.has(code);
+
 /** The settings of this plugin, in bb's own settings (a route of bb's, not of the plugin's SDK: README). */
 export function useSettingsHref(): string {
   return `/settings/plugins/${encodeURIComponent(usePluginId())}`;

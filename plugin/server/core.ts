@@ -36,7 +36,7 @@ export const HOST_TIMEOUT = { read: 45_000, preview: 100_000, act: 125_000, long
 
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type Target = { hostId: string; deployment: string; machine: string };
-type Failure = { ok: false; code: string; message: string };
+type Failure = { ok: false; code: string; message: string; machine?: string | null };
 type Answer<Value> = { ok: true; value: Value } | { ok: false; error: KernelError };
 
 const hostRow = z.looseObject({ id: z.string(), name: z.string().nullish() });
@@ -127,7 +127,7 @@ export function createCore(bb: BbPluginApi) {
 
   // ---- where `oats` runs ----
 
-  const fail = (code: string, message: string): Failure => ({ ok: false, code, message });
+  const fail = (code: string, message: string, machine: string | null = null): Failure => ({ ok: false, code, message, machine });
 
   async function findTarget(signal: AbortSignal): Promise<Target | Failure> {
     const values = await settings.get();
@@ -163,6 +163,7 @@ export function createCore(bb: BbPluginApi) {
         values.deployment === ""
           ? `No OATS deployment found on ${found.machine}: no bb project there is in a directory that holds oats-local.yaml. Set the deployment directory in the OATS plugin's settings.`
           : `No OATS deployment found on ${found.machine}: ${values.deployment} holds no oats-local.yaml. Correct the deployment directory in the OATS plugin's settings.`,
+        chosen.name ?? found.machine,
       );
     }
     // The machine is shown by the name bb gives it (the one a person sees in bb), never by the
@@ -200,6 +201,8 @@ export function createCore(bb: BbPluginApi) {
   // ---- the one cached snapshot ----
 
   async function read(): Promise<Snapshot> {
+    // A read that began under other settings must not bring their roster back once they changed.
+    const generation = settingsGeneration;
     lastStart = Date.now();
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
@@ -227,7 +230,7 @@ export function createCore(bb: BbPluginApi) {
             answer.error.code === codes.notFound
               ? `oats was not found on ${where.target.machine}: install OATS there, or set the path to oats in the OATS plugin's settings. (${answer.error.message})`
               : answer.error.message;
-          next = { ok: false, at, code: answer.error.code, message };
+          next = { ok: false, at, code: answer.error.code, message, machine: where.target.machine };
           // The deployment may have moved or gone: look for it again at the next read.
           target = null;
         }
@@ -239,8 +242,13 @@ export function createCore(bb: BbPluginApi) {
     // A change is a change of anything the kernel printed: a feature may draw a field of a raw row
     // that the snapshot's agents do not hold.
     if (next.ok) {
-      lastRoster = next;
-      rawRows = rows === null ? null : { at, root, rows };
+      // Kept as "the last roster" only for the settings it was read under: after a change of machine
+      // or deployment it is the old one's, and must not be shown as this one's last observation,
+      // nor lend its homes to an act (the read that the change queued brings the new one).
+      if (generation === settingsGeneration) {
+        lastRoster = next;
+        rawRows = rows === null ? null : { at, root, rows };
+      }
     } else {
       // What was read before stays, with its age: no place falls back to nothing where there was a roster.
       next = { ...next, last: lastRoster === null ? null : { at: lastRoster.at, deployment: lastRoster.deployment, agents: lastRoster.agents } };

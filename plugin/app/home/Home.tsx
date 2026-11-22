@@ -285,7 +285,7 @@ function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab";
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
   if (oats.phase === "loading") return <Loading>Reading your agents…</Loading>;
-  if (oats.phase === "failed") return <Unreadable failure={oats} machine={null} onRetry={oats.retry} />;
+  if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   const { view } = oats;
   return (
     <>

@@ -169,6 +169,7 @@ export type MenuItem = { id: string; label: string; onSelect: () => void; destru
 export function Menu({ label, items, children = "⋯", align = "right" }: { label: string; items: readonly MenuItem[]; children?: ReactNode; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   const [edge, setEdge] = useState(align);
+  const [widest, setWidest] = useState<number | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -178,21 +179,30 @@ export function Menu({ label, items, children = "⋯", align = "right" }: { labe
     setOpen(false);
     if (refocus) button.current?.focus();
   };
-  // Before the list is painted: the edge it hangs from, then all of it in view.
+  // Before the list is painted, once per opening: the edge it hangs from and the widest it may be.
+  // Decided in one pass from the button and the room, never flipped back: a list that fits on
+  // neither side hangs from the side with more room and wraps inside it.
   useLayoutEffect(() => {
     if (!open) {
       setEdge(align);
+      setWidest(null);
       return;
     }
-    const box = list.current?.getBoundingClientRect();
-    if (box === undefined || box.width === 0) return;
-    // The room is the place that would cut the list: the nearest ancestor that scrolls or clips
-    // (a page scrolls by itself), else the window.
+    const at = button.current?.getBoundingClientRect();
+    const width = list.current?.getBoundingClientRect().width ?? 0;
+    if (at === undefined || width === 0) return;
     const room = clipOf(list.current!);
-    if (edge === "right" && box.left < room.left) setEdge("left");
-    else if (edge === "left" && box.right > room.right) setEdge("right");
-    else list.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [open, edge, align]);
+    // Hung from the button's right edge the list reaches left of it, and the other way round.
+    const space = { right: at.right - room.left, left: room.right - at.left };
+    const other = align === "right" ? "left" : "right";
+    const side = width <= space[align] ? align : width <= space[other] ? other : space[align] >= space[other] ? align : other;
+    setEdge(side);
+    setWidest(Math.max(0, Math.floor(space[side])));
+  }, [open, align]);
+  // Then all of it in view, where it hangs.
+  useLayoutEffect(() => {
+    if (open) list.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [open, edge, widest]);
   useEffect(() => {
     if (!open) return;
     // The focus moves without scrolling: the layout effect has put the whole list in view, and the
@@ -231,7 +241,9 @@ export function Menu({ label, items, children = "⋯", align = "right" }: { labe
           role="menu"
           aria-label={label}
           data-edge={edge}
-          className={`absolute ${edge === "right" ? "right-0" : "left-0"} top-full z-40 mt-1 flex min-w-44 flex-col rounded-md border border-border bg-background p-1 text-sm text-foreground shadow-lg`}
+          // As wide as its longest item, never under 11rem, and never wider than the room: there an item wraps.
+          style={widest === null ? { minWidth: "11rem" } : { minWidth: `${Math.min(176, widest)}px`, maxWidth: `${widest}px` }}
+          className={`absolute ${edge === "right" ? "right-0" : "left-0"} top-full z-40 mt-1 flex w-max flex-col rounded-md border border-border bg-background p-1 text-sm text-foreground shadow-lg`}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();

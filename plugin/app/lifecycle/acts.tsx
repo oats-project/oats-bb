@@ -7,7 +7,9 @@ import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
-import { markGone, UNKNOWN_INSTANCE } from "../roster/gone";
+import { useOats } from "../oats";
+import { markGone, saysGone, UNKNOWN_INSTANCE } from "../roster/gone";
+import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, ErrorLine, Modal, Note, Notice } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 
@@ -60,7 +62,10 @@ export async function run(verb: RunVerb, instance: string, rpc: Rpc, navigate: B
   } catch (cause) {
     // The thread menu contains and hides a thrown error: say it here instead, without replacing
     // a dialog the person opened meanwhile.
-    const failed: Request = { kind: "failed", verb, instance, message: errorMessage(cause) };
+    const message = errorMessage(cause);
+    // The kernel has no such agent any more (the roster on screen was read before it went).
+    if (saysGone(refusalCode(message), message, { plan: false })) markGone(instance);
+    const failed: Request = { kind: "failed", verb, instance, message };
     if (current === mine || current === null) set(failed);
     else deferred = failed;
   }
@@ -74,7 +79,7 @@ const PLAN = {
 type PlanState =
   | { phase: "reading" }
   | { phase: "ready"; revision: string; lines: string[]; instance: string | null; key: string; error: string | null; applying: boolean }
-  | { phase: "unreadable"; error: string };
+  | { phase: "unreadable"; error: string; gone: boolean };
 
 function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }) {
   const rpc = useRpc<Contract>();
@@ -101,8 +106,8 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         const error = errorMessage(cause);
         // The kernel no longer has an agent of this name (the roster on screen was read before it
         // went): its row says so until the next roster is read.
-        if (refusalCode(error) === UNKNOWN_INSTANCE) markGone(request.instance);
-        if (wanted) setState({ phase: "unreadable", error });
+        if (saysGone(refusalCode(error), error, { plan: true })) markGone(request.instance);
+        if (wanted) setState({ phase: "unreadable", error, gone: saysGone(refusalCode(error), error, { plan: true }) });
       },
     );
     return () => {
@@ -125,7 +130,11 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         if (current === request) set(null);
       },
       (cause: unknown) => {
-        if (live.current) setState((now) => (now.phase === "ready" ? { ...now, applying: false, error: errorMessage(cause) } : now));
+        const error = errorMessage(cause);
+        // The agent went between the plan and the act: nothing is left to confirm.
+        const gone = saysGone(refusalCode(error), error, { plan: false });
+        if (gone) markGone(request.instance);
+        if (live.current) setState((now) => (now.phase !== "ready" ? now : gone ? { phase: "unreadable", error, gone } : { ...now, applying: false, error }));
       },
     );
   };
@@ -159,15 +168,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
     >
       <div data-testid="oats-plan" className="flex flex-col gap-2">
         {state.phase === "reading" ? <Note>Reading the plan from OATS…</Note> : null}
-        {state.phase === "unreadable" ? (
-          refusalCode(state.error) === UNKNOWN_INSTANCE ? (
-            <Notice title={`${shown(request.instance)} is not in OATS any more`} tone="error" code={UNKNOWN_INSTANCE} details={state.error}>
-              <p>OATS has no agent of this name now: it was retired, or removed, after the roster on screen was read. Nothing was changed.</p>
-            </Notice>
-          ) : (
-            <ErrorLine onRetry={() => setAttempt((n) => n + 1)}>{state.error}</ErrorLine>
-          )
-        ) : null}
+        {state.phase === "unreadable" ? <Refused error={state.error} gone={state.gone} instance={request.instance} onRetry={() => setAttempt((n) => n + 1)} /> : null}
         {state.phase === "ready" ? (
           <>
             {state.lines.length === 0 ? (
@@ -212,26 +213,51 @@ export function ActsOverlay() {
       </div>
     );
   }
+  const again = () => void run(request.verb, request.instance, rpc, navigate);
+  const gone = saysGone(refusalCode(request.message), request.message, { plan: false });
   return (
     <Modal
-      title={`${RUN[request.verb].failed} ${shown(request.instance)} failed`}
+      // No agent is named in the title: the name asked for is the row's, which may be older than what the kernel knows.
+      title={`${RUN[request.verb].failed} did not happen`}
       onCancel={() => set(null)}
       footer={
         <>
           <Button data-testid="oats-act-close" onClick={() => set(null)}>
             Close
           </Button>
-          <Button
-            data-testid="oats-act-again"
-            variant="primary"
-            onClick={() => void run(request.verb, request.instance, rpc, navigate)}
-          >
-            Try again
-          </Button>
+          {gone ? null : (
+            <Button data-testid="oats-act-again" variant="primary" onClick={again}>
+              Try again
+            </Button>
+          )}
         </>
       }
     >
-      <ErrorLine>{request.message}</ErrorLine>
+      <div data-testid="oats-act-failed" className="flex flex-col gap-2">
+        {gone ? null : <p>{`OATS was asked to ${request.verb} ${shown(request.instance)}.`}</p>}
+        <Refused error={request.message} gone={gone} instance={request.instance} onRetry={again} footerRetries />
+      </div>
     </Modal>
   );
+}
+
+/**
+ * Why an act did not happen, in the place that asked for it: the agent is not in OATS any more
+ * (a notice, nothing to retry); OATS itself cannot be read (the same notice every place shows,
+ * and Retry asks again); or the kernel's refusal, its code and message as the filter draws them.
+ */
+function Refused({ error, gone, instance, onRetry, footerRetries = false }: { error: string; gone: boolean; instance: string; onRetry: () => void; /** the dialog's footer has "Try again": the kernel's refusal draws no Retry of its own */ footerRetries?: boolean }) {
+  const code = refusalCode(error);
+  const oats = useOats();
+  // The machine by its name where the roster, or its failure, names it.
+  const machine = oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null;
+  if (gone) {
+    return (
+      <Notice title={`${shown(instance)} is not in OATS any more`} tone="error" code={UNKNOWN_INSTANCE} details={error}>
+        <p>OATS has no agent of this name now: it was retired, or removed, after the roster on screen was read. Nothing was changed.</p>
+      </Notice>
+    );
+  }
+  if (code !== null && isUnreadable(code)) return <Unreadable failure={{ code, message: error.slice(code.length + 2) }} machine={machine} onRetry={onRetry} />;
+  return footerRetries ? <ErrorLine>{error}</ErrorLine> : <ErrorLine onRetry={onRetry}>{error}</ErrorLine>;
 }

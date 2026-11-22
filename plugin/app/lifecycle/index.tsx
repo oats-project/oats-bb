@@ -111,7 +111,7 @@ export function register(app: PluginAppBuilder): void {
     item: ({ data }: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {
       const { oats, slow } = data;
       if (oats.phase === "failed") {
-        return { label: "OATS agents: can't be read", detail: failureWords(oats, null).title, icon: ICON.oats, disabled: true, run: () => undefined };
+        return { label: "OATS agents: can't be read", detail: failureWords(oats, oats.machine).title, icon: ICON.oats, disabled: true, run: () => undefined };
       }
       if (oats.phase === "loading" && slow) return { label: "OATS agents: reading…", icon: ICON.oats, disabled: true, run: () => undefined };
       return null;

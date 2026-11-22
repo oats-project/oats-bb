@@ -33,7 +33,8 @@ export type Oats = {
 } & (
   | { phase: "loading" }
   /** No snapshot: `code` is the server's, or RPC_FAILED when the call itself failed. */
-  | { phase: "failed"; code: string; message: string }
+  /** `machine`: the machine `oats` was looked for on, by the name bb gives it; null when none was chosen (or the call itself failed). */
+  | { phase: "failed"; code: string; message: string; machine: string | null }
   | {
       phase: "ready";
       /**
@@ -83,14 +84,15 @@ export function useOats(): Oats {
   // Why OATS cannot be read now, if it cannot: the call to the plugin's server failed, or the server says so.
   const failure =
     read.status === "error" ? { code: RPC_FAILED, message: read.error } : snapshot !== undefined && !snapshot.ok ? { code: snapshot.code, message: snapshot.message } : null;
+  const machine = snapshot !== undefined && !snapshot.ok ? (snapshot.machine ?? null) : null;
   if (roster === undefined) {
-    if (failure !== null) return { ...base, phase: "failed", ...failure };
+    if (failure !== null) return { ...base, phase: "failed", ...failure, machine };
     return { ...base, phase: "loading" };
   }
   // Until bb has listed its threads nothing can be joined: an empty list would make every agent
   // look like one whose thread is missing.
   if (sidebar.status === "error") {
-    return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them." };
+    return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them.", machine: null };
   }
   if (sidebar.status !== "ready" || joined === null) return { ...base, phase: "loading" };
   return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, gone, ...joined };

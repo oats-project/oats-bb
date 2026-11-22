@@ -41,6 +41,8 @@ export const snapshot = z.union([
     at: z.string(),
     code: z.string(),
     message: z.string(),
+    /** The machine `oats` was looked for on, by the name bb gives it; absent or null when no machine was chosen. */
+    machine: z.string().nullish(),
     last: z.object({ at: z.string(), deployment, agents: z.array(agent) }).nullish(),
   }),
 ]);

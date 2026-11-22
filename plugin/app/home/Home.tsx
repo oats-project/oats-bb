@@ -277,7 +277,7 @@ function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: numbe
   return (
     <li>
       <button type="button" data-testid={`oats-tile-${page.path}`} className={look} onClick={onOpen}>
-        <span className="font-semibold text-foreground">
+        <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
           {page.title}
           {page.useMark === undefined || !visible ? null : <PageMark useMark={page.useMark} />}
         </span>

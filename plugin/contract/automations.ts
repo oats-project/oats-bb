@@ -260,6 +260,61 @@ export type AutomationTest = z.infer<typeof automationTest>;
 export type ScheduleRunReceipt = z.infer<typeof scheduleRunReceipt>;
 export type ScheduleReconciled = z.infer<typeof scheduleReconciled>;
 
+// ---- a schedule's definition, as the form makes one ----
+/** A new schedule's name, as the Desktop's form holds it: lower-case letters, digits and "-". */
+export const SCHEDULE_NAME = /^[a-z0-9][a-z0-9-]{0,99}$/;
+/** A text of a definition: as typed, of any length a definition may have, with no NUL (the kernel's argv cannot hold one). */
+const definitionText = z.string().max(1_048_576).refine((value) => !value.includes("\0"), "a NUL character");
+const filled = definitionText.refine((value) => value.trim() !== "", "empty");
+/** A soul's key, a harness, a session backend: a name, never an option or a path of the caller's making. */
+const named = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/);
+/** A provider operation's address, `<layer>:<operation>`. */
+export const operationAddress = z.string().regex(/^[a-z][a-z0-9-]{0,63}:[A-Za-z][A-Za-z0-9._-]{0,127}$/);
+const when = { cron: filled, tz: filled, enabled: z.boolean(), description: z.string().optional() };
+/** The recurring message of a launched agent: `wake` inside a spawn schedule. */
+export const nestedWake = z.object({ cron: filled, tz: filled, message: filled }).strict();
+/** A recurring wake-up asked at spawn (`oats spawn --wake-json`). */
+export const wake = z.object({ cron: filled, tz: filled, message: filled, enabled: z.literal(true) }).strict();
+/**
+ * A schedule's definition, one of the three kinds the form makes. Strict: a key the form does not
+ * make is refused, so a definition it could not keep whole is never replaced through it.
+ */
+export const scheduleSpec = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("wake"), ...when, home: filled, message: filled }).strict(),
+  z
+    .object({
+      kind: z.literal("spawn"),
+      ...when,
+      agent: named,
+      repo: definitionText.optional(),
+      agentsRoot: definitionText.optional(),
+      task: filled,
+      purpose: definitionText.optional(),
+      harness: named.optional(),
+      model: definitionText.optional(),
+      backend: named.optional(),
+      yolo: z.boolean().optional(),
+      wake: nestedWake.optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("operation"), ...when, home: filled, operation: operationAddress }).strict(),
+]);
+/** A stored definition the form can keep whole, read back for Edit: its id and what a save would send. */
+export const scheduleDraft = z.object({ id: z.string(), spec: scheduleSpec });
+/** What the form chooses among: the souls a schedule may launch, the homes one may wake or act in. */
+export const scheduleTargets = z.object({
+  souls: z.array(z.object({ key: z.string(), description: z.string(), spawnable: z.boolean() })),
+  homes: z.array(z.object({ instance: z.string(), soul: z.string(), home: z.string(), backend: z.string() })),
+});
+/** A provider operation a schedule can run in a home: its address and how the form names it. */
+export const homeOperation = z.object({ address: z.string(), label: z.string() });
+
+export type ScheduleSpec = z.infer<typeof scheduleSpec>;
+export type ScheduleDraft = z.infer<typeof scheduleDraft>;
+export type ScheduleTargets = z.infer<typeof scheduleTargets>;
+export type HomeOperation = z.infer<typeof homeOperation>;
+export type Wake = z.infer<typeof wake>;
+
 // ---- the verbs ----
 
 /** The plugin's own code for an OATS that has no automations lists (feature `automations`, automationsApi 1: OATS 0.29). */
@@ -316,6 +371,20 @@ export const rpc = defineRpcContract({
   scheduleReconcile: { input: z.object({ id: automationId }).strict(), output: scheduleReconciled },
   /** Install the host timer for this deployment (a systemd user timer, or a launchd agent, of the account bb's machine runs as). */
   schedulerEnable: { input: z.null(), output: z.object({ scheduler: automationScheduler, warnings: z.array(z.string()) }) },
+
+  // ---- creating and editing a local schedule ----
+  /** What the form chooses among. */
+  scheduleTargets: { input: z.null(), output: scheduleTargets },
+  /** The session backends a soul can launch on, beside tmux: the providers its capabilities supply. */
+  scheduleSoulBackends: { input: z.object({ soul: named }).strict(), output: z.object({ backends: z.array(z.string()) }) },
+  /** The provider operations a schedule can run in a home of the current roster. */
+  scheduleHomeOperations: { input: z.object({ home: filled }).strict(), output: z.object({ operations: z.array(homeOperation) }) },
+  /** A local schedule's stored definition, read back for Edit; `draft: null` for one the form cannot keep whole. */
+  scheduleDraft: { input: z.object({ id: automationId }).strict(), output: z.object({ draft: scheduleDraft.nullable() }) },
+  /** Create a local schedule. */
+  scheduleAdd: { input: z.object({ id: z.string().regex(SCHEDULE_NAME), spec: scheduleSpec }).strict(), output: z.object({ row: automationRow }) },
+  /** Replace a local schedule's definition. */
+  scheduleUpdate: { input: z.object({ id: automationId, spec: scheduleSpec }).strict(), output: z.object({ row: automationRow }) },
 });
 
 const hostAutomation = z.object({ ...hostBase, id: automationId }).strict();
@@ -341,4 +410,11 @@ export const host = defineRpcContract({
   scheduleRemove: { input: hostAutomation, output: answer(z.object({ removed: z.string() })) },
   scheduleReconcile: { input: hostAutomation, output: answer(scheduleReconciled) },
   schedulerEnable: { input: hostRead, output: answer(z.object({ scheduler: automationScheduler, warnings: z.array(z.string()) })) },
+  // The form's reads: `oats inspect --soul`, `oats inspect --home`, `oats schedule show`.
+  scheduleSoulBackends: { experimental_retryable: true, input: z.object({ ...hostBase, soul: named }).strict(), output: answer(z.object({ backends: z.array(z.string()) })) },
+  scheduleHomeOperations: { experimental_retryable: true, input: z.object({ ...hostBase, home: filled }).strict(), output: answer(z.object({ operations: z.array(homeOperation) })) },
+  scheduleDraft: { experimental_retryable: true, input: hostAutomation, output: answer(z.object({ draft: scheduleDraft.nullable() })) },
+  // The form's saves: never retried by bb. The definition is one argv element, `--spec-json=<json>`.
+  scheduleAdd: { input: z.object({ ...hostBase, id: z.string().regex(SCHEDULE_NAME), spec: scheduleSpec }).strict(), output: answer(z.object({ row: automationRow })) },
+  scheduleUpdate: { input: z.object({ ...hostBase, id: automationId, spec: scheduleSpec }).strict(), output: answer(z.object({ row: automationRow })) },
 });

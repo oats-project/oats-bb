@@ -289,6 +289,9 @@ const wakeAt = (wake) => `--wake-json=${JSON.stringify(wake)}`;
 keepAny("spawn-wake.json", "spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "wake-at-spawn-developer", "--task-file", join(REAL, "task-wake.md"), wakeAt({ cron: "*/15 * * * *", tz: "Europe/Madrid", message: "Check your pending work and report anything that needs attention.", enabled: true }), "--json");
 keepAny("spawn-wake-not-saved.json", "spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "wake-bad-cron-developer", "--task-file", join(REAL, "task-wake.md"), wakeAt({ cron: "every day", tz: "Europe/Madrid", message: "Anything?", enabled: true }), "--json");
 
+// What a soul can launch on: the session providers its capabilities supply (the form's Session backend).
+keepAny("inspect-soul.json", "inspect", "--soul", "oats-developer", "--json");
+
 const version = must("version", "--json");
 for (const line of fixtures.write()) log(line);
 writeFileSync(join(OUT, "recorded.json"), `${JSON.stringify({ oats: version.version, at: new Date().toISOString(), calls: recorded }, null, 1)}\n`);

@@ -1,6 +1,7 @@
 // Automations' host verbs: the reads (`oats schedule list`, `oats trigger list`,
 // `oats trigger status <id>`) and the acts on a row (on and off, run now, test, a summary, delete,
-// check a run) and on this host (install the scheduler's timer).
+// check a run), on this host (install the scheduler's timer), and creating and editing a local
+// schedule (what a soul can launch on, a home's operations, the stored definition, add, update).
 import type { host } from "../contract/automations.js";
 import type { Handlers, HostCore } from "./core.js";
 
@@ -16,4 +17,10 @@ export const handlers = (core: HostCore): Handlers<typeof host> => ({
   scheduleRemove: ({ id, ...base }, context) => core.run(base, context, (oats) => oats.scheduleRemove(id, context.signal)),
   scheduleReconcile: ({ id, ...base }, context) => core.run(base, context, (oats) => oats.scheduleReconcile(id, context.signal)),
   schedulerEnable: (base, context) => core.run(base, context, (oats) => oats.schedulerEnable(context.signal)),
+
+  scheduleSoulBackends: ({ soul, ...base }, context) => core.run(base, context, (oats) => oats.scheduleSoulBackends(soul, context.signal)),
+  scheduleHomeOperations: ({ home, ...base }, context) => core.run(base, context, (oats) => oats.scheduleHomeOperations(home, context.signal)),
+  scheduleDraft: ({ id, ...base }, context) => core.run(base, context, (oats) => oats.scheduleDraft(id, context.signal)),
+  scheduleAdd: ({ id, spec, ...base }, context) => core.run(base, context, (oats) => oats.scheduleAdd(id, spec, context.signal)),
+  scheduleUpdate: ({ id, spec, ...base }, context) => core.run(base, context, (oats) => oats.scheduleUpdate(id, spec, context.signal)),
 });

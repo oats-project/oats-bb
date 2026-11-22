@@ -5,10 +5,11 @@
 // reaches the host.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc } from "../contract/automations.js";
+import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type ScheduleSpec, type automationListAnswer, type rpc } from "../contract/automations.js";
 import { PULL_REQUEST } from "../model/automations.js";
 import { codes, isKernelCode } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core } from "./core.js";
+import { soulsOf } from "./workspace.js";
 
 /** The longest one read of the lists serves: the page, the sidebar's mark and a second window ask at once. */
 export const LISTS_TTL_MS = 30_000;
@@ -90,6 +91,23 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`);
     return row;
   };
+  // What a definition may name: a soul `oats souls` lists, a home of the current roster. A name or
+  // a path nobody listed reaches no process.
+  const soulOf = async (soul: string): Promise<void> => {
+    if (!(await soulsOf(core)).some((entry) => entry.name === soul)) throw invalid(`"${soul}" is not a soul of this OATS deployment`);
+  };
+  const homeOf = async (home: string): Promise<void> => {
+    const snapshot = await core.clientSnapshot();
+    if (!snapshot.ok) throw refusal({ code: snapshot.code, message: snapshot.message });
+    if (!snapshot.agents.some((agent) => agent.home === home)) throw invalid("the home is not one of this OATS deployment's agents");
+  };
+  const targetOf = (spec: ScheduleSpec): Promise<void> => (spec.kind === "spawn" ? soulOf(spec.agent) : homeOf(spec.home));
+  /** A LOCAL schedule of the current list: the only kind the form creates or replaces. */
+  const localSchedule = async (id: string): Promise<AutomationRow> => {
+    const row = await rowOf("schedule", id);
+    if (row.origin.kind !== "local") throw invalid(`${row.id} is a workspace schedule, defined in Git: it is changed there`);
+    return row;
+  };
   /** After an act: the lists are read again for the next client, and so is the roster (a run launches an agent). */
   const changed = () => {
     // Not dropped: a read still running is waited for, so the next lists are read after it and never beside it.
@@ -137,6 +155,36 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       return act(() => core.call("scheduleReconcile", { id: row.id }, HOST_TIMEOUT.act, core.signal));
     },
     schedulerEnable: () => act(() => core.call("schedulerEnable", {}, HOST_TIMEOUT.act, core.signal)),
+
+    // ---- creating and editing a local schedule ----
+    async scheduleTargets() {
+      const [souls, snapshot] = await Promise.all([soulsOf(core), core.clientSnapshot()]);
+      return {
+        souls: souls.map((soul) => ({ key: soul.name, description: soul.description, spawnable: soul.spawnable })),
+        homes: snapshot.ok ? snapshot.agents.map((agent) => ({ instance: agent.instance, soul: agent.soul, home: agent.home, backend: agent.backend })) : [],
+      };
+    },
+    async scheduleSoulBackends({ soul }, context) {
+      await soulOf(soul);
+      return core.call("scheduleSoulBackends", { soul }, HOST_TIMEOUT.read, context.experimental_signal);
+    },
+    async scheduleHomeOperations({ home }, context) {
+      await homeOf(home);
+      return core.call("scheduleHomeOperations", { home }, HOST_TIMEOUT.read, context.experimental_signal);
+    },
+    async scheduleDraft({ id }, context) {
+      const row = await localSchedule(id);
+      return core.call("scheduleDraft", { id: row.id }, HOST_TIMEOUT.read, context.experimental_signal);
+    },
+    async scheduleAdd({ id, spec }) {
+      await targetOf(spec);
+      return act(() => core.call("scheduleAdd", { id, spec }, HOST_TIMEOUT.act, core.signal));
+    },
+    async scheduleUpdate({ id, spec }) {
+      const row = await localSchedule(id);
+      await targetOf(spec);
+      return act(() => core.call("scheduleUpdate", { id: row.id, spec }, HOST_TIMEOUT.act, core.signal));
+    },
 
     async triggerStatus({ id }, context) {
       const row = await rowOf("trigger", id);

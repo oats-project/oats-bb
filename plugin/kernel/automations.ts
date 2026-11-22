@@ -26,6 +26,7 @@ import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 // The module of the acts reads the rows of this one; its commands are composed below, used only once a verb is called.
 import { verbs as actVerbs } from "./automations-acts.js";
+import { verbs as formVerbs } from "./automations-form.js";
 
 export type Json = Record<string, unknown>;
 export const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -358,9 +359,10 @@ export function parseTriggerStatus(document: unknown, id: string, source: string
   });
 }
 
-/** Automations' commands: the reads here, the acts in kernel/automations-acts.ts. */
+/** Automations' commands: the reads here, the acts in kernel/automations-acts.ts, creating and editing in kernel/automations-form.ts. */
 export const verbs = (oats: Runner) => ({
   ...actVerbs(oats),
+  ...formVerbs(oats),
   scheduleList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(scheduleListArgv(), parseScheduleList, oats.timeouts.read, signal),
   triggerList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(triggerListArgv(), parseTriggerList, oats.timeouts.read, signal),
   triggerStatus: (id: string, source: string | null, signal?: AbortSignal): Promise<Result<TriggerStatus>> =>

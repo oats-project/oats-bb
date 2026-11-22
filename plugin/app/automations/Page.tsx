@@ -11,13 +11,16 @@ import { codes } from "../../kernel/result";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Page } from "../ui";
+import { useActs } from "./acts";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
-import { capabilitySource, TITLES } from "./words";
+import { capabilitySource, GROUPS, refusalParts, TITLES } from "./words";
 import type { FileTarget } from "./words";
 
 export const PATH = "automations";
+/** Why a list's acts are held while it is one that could not be read again (the UX standard, Stale). */
+export const HELD = "Held until the list can be read again: what each row is now is not known.";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
 
 /** The route under the page: which tab, and which row's page is open. */
@@ -93,13 +96,29 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const [refreshing, setRefreshing] = useState(false);
   const mounted = useRef(true);
   useEffect(() => () => void (mounted.current = false), []);
-  const refresh = () => {
-    if (refreshing) return;
+  // One read at a time, and one more behind it: an act that ends while the lists are being read
+  // again (after the act before it) is still read back, whichever render its press belongs to.
+  const reading = useRef(false);
+  const again = useRef(false);
+  const reread = useRef(read.refresh);
+  reread.current = read.refresh;
+  const refresh = useCallback(() => {
+    if (reading.current) {
+      again.current = true;
+      return;
+    }
+    reading.current = true;
     setRefreshing(true);
-    void read.refresh().finally(() => {
+    const run = (): Promise<void> => {
+      again.current = false;
+      const next = () => (again.current ? run() : undefined);
+      return reread.current().then(next, next);
+    };
+    void run().finally(() => {
+      reading.current = false;
       if (mounted.current) setRefreshing(false);
     });
-  };
+  }, []);
   const answer = read.data?.[kind];
   const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null);
 
@@ -124,9 +143,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
       },
       (error: unknown) => {
         if (asked.current !== ticket) return;
-        const said = errorMessage(error);
-        const lead = /^([A-Z][A-Z0-9_]*): /.exec(said);
-        const failure = lead === null ? { code: null, message: said } : { code: lead[1]!, message: said.slice(lead[0].length) };
+        const failure = refusalParts(errorMessage(error));
         setStatus((before) => (before !== null && before.id === openId ? { ...before, error: failure } : { id: openId, value: null, readAt: null, error: failure }));
       },
     );
@@ -155,9 +172,45 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const onOpenCapability = useCallback(() => navigate.toPluginPanel("capabilities"), [navigate]);
   const onOpen = useCallback((id: string | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(kind, id) }), [kind, navigate]);
 
+  const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
+  const list = reads[kind].list;
+  const acts = useActs({
+    rpc,
+    refresh,
+    summaries: descriptions,
+    kind,
+    open: openId === null ? null : { kind, id: openId },
+    held: { schedule: reads.schedule.error === null ? null : HELD, trigger: reads.trigger.error === null ? null : HELD },
+    onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
+    onOpenFile,
+    hostId,
+    // The row after the deleted one, else the one before it: the control a person would reach next.
+    // Among the rows the list shows (its filter and search applied) when the list is on screen;
+    // from a row's own page, in the order the list will show them (its groups, each in the kernel's order).
+    neighbourOf: (row) => {
+      const drawn = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]')).map((entry) => entry.dataset.id ?? "");
+      const shown = drawn.length > 0 ? drawn : GROUPS.flatMap((group) => (reads[row.kind].list?.rows ?? []).filter((entry) => entry.group === group.id)).map((entry) => entry.id);
+      const at = shown.indexOf(row.id);
+      const besideId = at === -1 ? null : (shown[at + 1] ?? shown[at - 1] ?? null);
+      return () => {
+        const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
+        return (rows.find((entry) => entry.dataset.id === besideId) ?? rows[0])?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
+      };
+    },
+    onRemoved: (row) => {
+      if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });
+    },
+  });
+
   return (
     <Page testId="oats-automations-page">
+      {acts.dialog}
       <View
+        rowActs={acts}
+        held={reads[kind].error === null ? null : HELD}
+        rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
+        schedulerAction={acts.schedulerAction}
+        result={acts.result}
         kind={kind}
         onKind={(next) => navigate.toPluginPanel(PATH, { subPath: subPathOf(next) })}
         reads={reads}

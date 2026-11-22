@@ -4,7 +4,7 @@
 // derives a placement: the kernel's `runsHere`, `reason` and `enabledHere` are read as given.
 import type { AutomationHost, AutomationKind, AutomationList, AutomationOn, AutomationRow, AutomationRun, AutomationScheduler, AutomationSoul } from "../../contract/automations";
 import { eventLabel, PULL_REQUEST } from "../../model/automations";
-import { displayLine, MAX_DISPLAY_LINE } from "../ui/text";
+import { displayLine, MAX_DISPLAY_LINE, refusalCode } from "../ui/text";
 
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };
 export const NOUNS: Record<AutomationKind, string> = { schedule: "schedule", trigger: "trigger" };
@@ -409,4 +409,45 @@ export function fileTarget(row: AutomationRow, hostId: string | null): { target:
     target: null,
     title: localPath !== null ? "The machine that holds this deployment did not answer, so its file cannot be opened from here" : "This computer has no clone of this member, and the kernel reports no web address for the file",
   };
+}
+
+// ---- the acts ----
+/**
+ * What a run now did, in the Desktop's words (views/schedules.mjs scheduleOutcome): the outcome.
+ * The Desktop joins the kernel's error and reason to it in one line; here they are lines of their
+ * own (`runWhy`), filtered apart from it.
+ */
+const RUN_OUTCOMES: Record<string, string> = {
+  launched: "Agent launched",
+  active: "Agent active",
+  running: "Agent active",
+  ended: "Run ended",
+  stopped: "Agent stopped — needs attention",
+  unknown: "Launch state unknown — needs attention",
+  "launch-failed": "Launch failed",
+  skipped: "Skipped",
+  delivered: "Wake message delivered",
+};
+export const scheduleOutcome = (run: AutomationRun | null): string => (run === null ? "Not run yet" : ((run.outcome !== null ? RUN_OUTCOMES[run.outcome] : undefined) ?? run.outcome ?? "Attempt recorded"));
+/** The kernel's own words on a run that did not go as asked: its error, then its reason. Drawn apart from the outcome, so one that is withheld leaves the outcome said. */
+export const runWhy = (run: AutomationRun | null): string[] => (run === null ? [] : [run.error, run.reason].filter((line): line is string => line !== null && line !== ""));
+/** Whether a run now went through, did not, or left a state nobody knows. */
+export const runTone = (run: AutomationRun | null): "done" | "failed" | "unknown" =>
+  run === null || run.outcome === null ? "unknown" : run.outcome === "launch-failed" || run.outcome === "invalid" ? "failed" : run.outcome === "unknown" || run.outcome === "stopped" ? "unknown" : "done";
+
+/** What a row's switch says it does (its title), as the Desktop's. */
+export function switchTitle(row: AutomationRow): string {
+  if (row.reason === "untrusted") return `${row.enabledHere ? "On" : "Off"} here, but not trusted on this computer: it runs only once oats-local.yaml trusts it`;
+  return row.enabledHere ? "On here: click to turn it off on this computer" : "Off here: click to turn it on";
+}
+
+/** A one-click test of a trigger that turned out to watch a capability's source: nothing ran. */
+export const NOTHING_RAN = "Nothing ran. Testing this trigger runs a capability's source command and needs your confirmation.";
+export const TEST_TIMED_OUT = "The test did not answer in time. Nothing was recorded.";
+export const NAME_CUT = "The purpose was cut and a hash added so the name fits 64 characters.";
+
+/** A refusal as the server words it, `<code>: <message>`, apart: the message for a person, the code after it. One rule for what a code is (ui/text). */
+export function refusalParts(text: string): { code: string | null; message: string } {
+  const code = refusalCode(text);
+  return code === null ? { code: null, message: text } : { code, message: text.slice(code.length + 2) };
 }

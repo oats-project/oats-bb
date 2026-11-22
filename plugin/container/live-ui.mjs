@@ -154,6 +154,8 @@ async function healthyThreads() {
   if (holding) writeFileSync(HOLD_FILE, "");
   let threads = threadsByFixtureId();
   let now = await rest(threads, START_SECONDS);
+  // Read once more, now: a thread whose turn ended in the last moments is not one to make again.
+  if (now.some((thread) => thread.status !== "idle")) now = read(threads);
   const stuck = now.filter((thread) => thread.status !== "idle");
   if (stuck.length > 0) {
     for (const thread of stuck) {

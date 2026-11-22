@@ -74,23 +74,37 @@ function usePanelRead<Method extends PanelMethod>(
   const fetching = query.isFetching;
   // When the answer held was last read: noted the first time it is seen, and again each time a
   // read asked for here ends with an answer (bb keeps the same object for an answer equal to the
-  // last one, so the object alone does not say that it was read again). Kept for the part that is
-  // shown again.
-  if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
-  // The instant is kept by the read's key, not in this part: a read that ends while its part is
-  // off the page (a tab turned away from) is noted when the part is back.
-  const [, drawAgain] = useState(0);
+  // last one, so the object alone does not say that it was read again). The instant is kept by the
+  // read's key, not in this part, for the part that is shown again: a read that ends while its
+  // part is off the page (a tab turned away from) is noted when the part is back. Noting it reads
+  // the clock and writes what the window keeps, so it is done after the drawing, never during it.
+  const [ended, setEnded] = useState(0);
   const answered = query.error === null && data !== undefined;
-  const ended = endedAt.get(key);
-  if (ended !== undefined && !fetching) {
-    if (answered) receivedAt.set(key, { data, at: ended });
-    endedAt.delete(key);
-  }
-  const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
+  const [readAt, setReadAt] = useState<number | null>(() => (data === undefined ? null : (receivedAt.get(key)?.at ?? null)));
+  useEffect(() => {
+    if (data === undefined) {
+      setReadAt(null);
+      return;
+    }
+    let noted = receivedAt.get(key);
+    if (noted?.data !== data) {
+      noted = { data, at: Date.now() };
+      receivedAt.set(key, noted);
+    }
+    const at = endedAt.get(key);
+    if (at !== undefined && !fetching) {
+      if (answered) {
+        noted = { data, at };
+        receivedAt.set(key, noted);
+      }
+      endedAt.delete(key);
+    }
+    setReadAt(noted.at);
+  }, [data, key, fetching, answered, ended]);
   const retry = () =>
     void refetch.current().then(() => {
       endedAt.set(key, Date.now());
-      drawAgain((n) => n + 1);
+      setEnded((n) => n + 1);
     });
   reread.current = retry;
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };

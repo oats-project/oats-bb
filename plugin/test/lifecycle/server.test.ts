@@ -155,6 +155,28 @@ describe("start and restart", () => {
 });
 
 describe("retire", () => {
+  it("the answer of a retire that was sent can be asked again with its key after the retire removed the agent from the roster; any other key is a new act, and is refused", async () => {
+    backend = await startBackend();
+    const { rpc, fake } = backend;
+    const plan = await rpc<{ revision: string }>("retirePlan", { instance: "weekly-digest-helper" });
+    const apply = { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" };
+    await rpc("retireApply", apply);
+    // The roster as the kernel answers it once the agent is retired.
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
+    for (const group of roster.agents) group.instances = group.instances.filter((row: { instance: string }) => row.instance !== "weekly-digest-helper");
+    const receipt = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-apply.json"), "utf8"));
+    await fake.behave({ status: { stdout: JSON.stringify(roster) }, retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { ...receipt, replayed: true } }) } });
+    await rpc("refresh");
+    // Check again: the same revision and key. The kernel is asked, and replays its receipt.
+    expect(await rpc("retireApply", apply)).toMatchObject({ instance: "weekly-digest-helper", removedDir: true, replayed: true });
+    expect((await fake.calls()).filter((call) => call.verb === "retire")).toHaveLength(2);
+    // Another key, or another revision under that key, is no question about that retire: the agent must be one the roster names.
+    expect(await refusalOf(rpc("retireApply", { ...apply, key: "retire-0000aaaa1111" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("retireApply", { ...apply, revision: "0123456789abcdef01234567" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("retirePlan", { instance: "weekly-digest-helper" }))).toMatchObject({ code: "invalid" });
+    expect((await fake.calls()).filter((call) => call.verb === "retire")).toHaveLength(2);
+  }, 20_000);
+
   it("answers the plan as the kernel's facts and retires through its guarded apply, answering the receipt", async () => {
     backend = await startBackend();
     const { rpc, fake } = backend;

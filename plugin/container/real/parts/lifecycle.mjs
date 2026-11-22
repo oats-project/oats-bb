@@ -169,7 +169,7 @@ export default async (run) => {
     await ready();
     said = await dialog(page);
     check(
-      said.title === `Retire ${called}?` && said.about === name && said.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && said.body.includes("Archives its thread in bb.") && said.body.includes("This cannot be undone: a retired agent cannot be started again.") && said.body.includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
+      said.title === `Retire ${called}?` && said.about === name && said.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && said.body.includes("This cannot be undone. Its conversation stays readable in bb, archived.") && said.body.includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
       `${at} the Retire dialog is the kernel's plan for ${name}: what goes, what stays, the worktree's choice, the focus on Cancel`,
       JSON.stringify(said),
     );
@@ -184,7 +184,7 @@ export default async (run) => {
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 300);
     said = await dialog(page);
-    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept at") && said.body.includes("Its thread is archived in bb."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
+    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept at") && said.body.includes("Its conversation stays readable in bb, archived."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
     await until(`${name} to be gone from oats status`, () => (rowOf(name) === undefined ? true : undefined));
     const retire = recorded(["retire", name], ["--plan-revision"]);
     check(retire.argv.includes("--discard-worktree") === discard, `oats retire was asked ${discard ? "with" : "without"} --discard-worktree, under the plan's revision`, JSON.stringify(retire.argv));

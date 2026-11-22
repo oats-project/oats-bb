@@ -99,10 +99,23 @@ export function stopPlanView(plan: StopPlan, archives = false): PlanView {
   };
 }
 
-/** A retire of an agent on bb archives its thread (the provider's `capabilityMeta` in the receipt says how many). */
-export const RETIRE_ARCHIVES = "Archives its thread in bb.";
-/** What the Desktop's sheet leaves unsaid, and a person must know before confirming. */
-export const RETIRE_FOR_GOOD = "This cannot be undone: a retired agent cannot be started again.";
+/**
+ * What the Desktop's sheet leaves unsaid, and a person must know before confirming, said after what
+ * goes and what stays. Every retire of an agent on bb archives its thread (the kernel side's probe,
+ * bb-app 0.50.1): its conversation stays readable there. The plugin never asks to keep the home.
+ */
+export const RETIRE_FOR_GOOD = "This cannot be undone.";
+export const RETIRE_FOR_GOOD_ON_BB = "This cannot be undone. Its conversation stays readable in bb, archived.";
+/** In a retire's result, of the thread the provider archived. */
+export const RETIRE_ARCHIVED = "Its conversation stays readable in bb, archived.";
+/**
+ * In the result of a retire that KEPT the home (its cleanup did not finish): the agent can come
+ * back with no OATS around it. The line, and under Details the release lane's own words (decided
+ * by the release lane, 22 Nov).
+ */
+export const HOME_KEPT = "Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.";
+export const HOME_KEPT_DETAILS =
+  "No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent.";
 
 /** Whether `work/` is the agent's own tree: the kernel's fact, else (a kernel that does not say) the record's work mode. */
 const treeOf = (plan: RetirePlan) => {
@@ -130,7 +143,6 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
   else if (plan.session === "unknown") happens.push("Stops its session, if one is running (its state couldn't be checked).");
   if (plan.children.length > 0) happens.push(`Stops its ${plural(plan.children.length, "child instance")} first: ${names(plan.children)}. They are kept, with their homes.`);
   happens.push("Saves a recovery copy of any uncommitted work, then deletes its home folder.");
-  if (plan.backend === "bb") happens.push(RETIRE_ARCHIVES);
   if (tree.notOwn) kept.push("It has no worktree of its own, so no worktree is kept or deleted. A tree it links to is not touched.");
   else if (tree.unchecked) (discardWorktree ? happens : kept).push(discardWorktree ? "Deletes its worktree, if there is one. It couldn't be checked." : "Keeps its worktree, moved aside, if there is one. It couldn't be checked.");
   else if (tree.own) {
@@ -149,8 +161,8 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
   }
   kept.push("Branches and pull requests are not changed.");
   if (plan.children.length > 0) happens.push("If a child won't stop, nothing is retired.");
-  // The last thing said of what will happen: there is no way back from it.
-  happens.push(RETIRE_FOR_GOOD);
+  // After what goes and what stays: there is no way back from it.
+  attention.unshift(plan.backend === "bb" ? RETIRE_FOR_GOOD_ON_BB : RETIRE_FOR_GOOD);
   if (!tree.notOwn && plan.work.observed && plan.work.drift) {
     attention.push(`The worktree is on ${plan.work.detached ? "a detached commit" : (plan.work.branch ?? "another branch")}, not the branch it was spawned on${plan.recordedBranch ? ` (${plan.recordedBranch})` : ""}.`);
   }
@@ -290,7 +302,11 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   if (receipt.worktree === "retained") lines.push(`Worktree kept${receipt.movedTo ? ` at ${receipt.movedTo}` : ""}.`);
   if (receipt.worktree === "removed") lines.push("Worktree deleted.");
   if (receipt.recoveryPath !== null) lines.push(`Recovery copy saved at ${receipt.recoveryPath}`);
-  if (receipt.threadsArchived > 0) lines.push("Its thread is archived in bb.");
+  // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
+  if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
+  // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.
+  const keptOnBb = !receipt.removedDir && plan.backend === "bb";
+  if (keptOnBb) lines.push(HOME_KEPT);
   if (receipt.compensation !== null) {
     const { branch, deleted, reason } = receipt.compensation;
     lines.push(deleted ? `Branch ${branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${branch} kept: ${reason ?? "no reason given"}`);
@@ -302,7 +318,7 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     title: "Retirement didn't finish",
     lines: ["Retirement didn't finish. Some steps ran:", ...lines, "Check what was kept before trying again.", ...replay],
     code: "RETIRE_INCOMPLETE",
-    details: receipt.incomplete.join("\n") || null,
+    details: [...(keptOnBb ? [HOME_KEPT_DETAILS] : []), ...receipt.incomplete].join("\n") || null,
     offers: ["review"],
   };
 }
@@ -441,7 +457,8 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   // Any other answer of the kernel's: a person's words first, then the kernel's own line under its
   // name, as the Desktop quotes it ("OATS says: …"); the whole message and the code stay under Details.
   // What it did is not known for sure (the Desktop reads every other code as uncertain): the status is read again first.
-  if (code === null) return of("failed", `OATS refused to ${act} ${name}`, [NO_CODE]);
+  // A refusal of the plugin's own server (an agent the roster no longer names, a harness the provider does not declare): OATS was not asked.
+  if (code === null) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [NO_CODE]);
   if (TRANSPORT[code] !== undefined) return of("failed", `OATS refused to ${act} ${name}`, [TRANSPORT[code]!]);
   return of("failed", `OATS refused to ${act} ${name}`, [...oatsSays(refusal.message), "Refresh its status before another try."]);
 }

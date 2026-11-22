@@ -13,6 +13,15 @@ const given = <Fields extends Record<string, unknown>>(fields: Fields): { [Key i
   Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> };
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
+  /**
+   * The retires this server sent, by their key: the instance and the plan's revision each was for.
+   * "Check again" asks for the answer to one of them with the same key, and the kernel replays its
+   * receipt; by then the retire may have removed the agent, and the roster no longer names it. So
+   * a key sent before, for the same instance and revision, is not held to the roster again:
+   * nothing new can be done under it (the kernel answers a used key with what it did). Any other
+   * key is a new act, on an agent the kernel names now.
+   */
+  const retires = new Map<string, { instance: string; revision: string }>();
   /** A harness a caller names must be one the provider declares: nothing else reaches the argv. */
   async function chosen(harness: string | undefined): Promise<string | undefined> {
     if (harness === undefined) return undefined;
@@ -74,7 +83,12 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       return core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal);
     },
     async retireApply({ instance, revision, key, discardWorktree }) {
-      await core.agentForAct(instance);
+      const sent = retires.get(key);
+      if (sent === undefined || sent.instance !== instance || sent.revision !== revision) {
+        await core.agentForAct(instance);
+        if (retires.size >= 200) retires.delete(retires.keys().next().value as string);
+        retires.set(key, { instance, revision });
+      }
       try {
         return await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
       } finally {

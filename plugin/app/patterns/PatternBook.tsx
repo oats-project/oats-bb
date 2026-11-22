@@ -42,6 +42,9 @@ const PHASES: Record<string, Phase> = {
   },
 };
 
+/** A plan that no window shows whole: the dialog's body scrolls, and says that there is more above and below. */
+const LONG_PLAN = Array.from({ length: 40 }, (_, index) => `Stops the session of agent ${index + 1} of 40.`);
+
 export function PatternBook() {
   const [tab, setTab] = useState<"schedules" | "triggers" | "history">("schedules");
   const [filter, setFilter] = useState<"all" | "workspace" | "local">("all");
@@ -210,6 +213,9 @@ export function PatternBook() {
           <Button data-testid="oats-patterns-open-unknown" onClick={() => setDialog({ destructive: true, phase: "unknown" })}>
             A result that is not confirmed
           </Button>
+          <Button data-testid="oats-patterns-open-long" onClick={() => setDialog({ destructive: false, phase: "long" })}>
+            A plan longer than the window
+          </Button>
           <Button data-testid="oats-patterns-open-blocked" onClick={() => setDialog({ destructive: true, phase: "blocked" })}>
             Blocked
           </Button>
@@ -245,7 +251,7 @@ export function PatternBook() {
           about={INSTANCE}
           shownFor={dialog.phase === "other" ? "flaky-ci-developer" : dialog.phase === "unnamed" || dialog.phase === "reading" || dialog.phase === "checking" ? null : INSTANCE}
           blocked={dialog.phase === "blocked" ? "Tick the box to discard its work." : null}
-          happens={dialog.destructive ? ["Its home is removed.", "Its session is open and is stopped first."] : ["Its session is stopped."]}
+          happens={dialog.phase === "long" ? LONG_PLAN : dialog.destructive ? ["Its home is removed.", "Its session is open and is stopped first."] : ["Its session is stopped."]}
           kept={dialog.destructive ? ["Its work tree, moved out of the home, and its branch."] : ["Its home, its work, its transcript and its launch settings. Start brings it back."]}
           confirmLabel={dialog.destructive ? "Retire" : "Stop"}
           destructive={dialog.destructive}

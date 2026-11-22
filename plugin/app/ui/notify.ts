@@ -11,9 +11,11 @@ export type Notification = {
   /**
    * `done` leaves by itself. `failed` and `unknown` stay until a person dismisses them: a failure,
    * and a result that is NOT CONFIRMED (an answer that was lost, an act that goes on in the
-   * background), which is told as a warning and never as a failure.
+   * background), which is told as a warning and never as a failure. `hint` is one line about what
+   * a person just pressed (why a key cannot act): it leaves by itself, as the Desktop's line goes
+   * at the next key.
    */
-  tone: "done" | "failed" | "unknown";
+  tone: "done" | "failed" | "unknown" | "hint";
   /** What happened, in a person's words. */
   title: string;
   /** More of it, each a line under the title. */
@@ -42,9 +44,10 @@ export function notify({ tone, title, lines = [], open }: Notification): void {
     ...(drawn.lines!.length === 0 ? {} : { description: drawn.lines!.join("\n") }),
     ...(drawn.open === undefined ? {} : { action: { label: drawn.open.label, onClick: () => drawn.open!.run() } }),
     // A failure, and a result that is not confirmed, stay until dismissed (the standard): neither is lost to a timer.
-    ...(tone === "done" ? {} : { duration: Number.POSITIVE_INFINITY }),
+    ...(tone === "done" || tone === "hint" ? {} : { duration: Number.POSITIVE_INFINITY }),
   };
   if (tone === "failed") toast.error(drawn.title, options);
   else if (tone === "unknown") toast.warning(drawn.title, options);
+  else if (tone === "hint") toast.info(drawn.title, options);
   else toast.success(drawn.title, options);
 }

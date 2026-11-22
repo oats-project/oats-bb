@@ -81,12 +81,11 @@ describe("a retire plan", () => {
       happens: [
         "Stops its 1 child instance first: Digest links helper. They are kept, with their homes.",
         "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
-        "Archives its thread in bb.",
         "If a child won't stop, nothing is retired.",
-        "This cannot be undone: a retired agent cannot be started again.",
       ],
       kept: ["Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.", "Branches and pull requests are not changed."],
-      attention: [],
+      // After what goes and what stays: what the Desktop's sheet leaves unsaid.
+      attention: ["This cannot be undone. Its conversation stays readable in bb, archived."],
       state: [
         { label: "Session", value: "Not running" },
         { label: "Uncommitted work", value: "1 untracked" },
@@ -107,14 +106,9 @@ describe("a retire plan", () => {
   });
 
   it("a session that runs is stopped; one that could not be checked is said so", () => {
-    expect(retirePlanView(retirePlan({ session: "there", children: [] }), false).happens).toEqual([
-      "Stops its session.",
-      "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
-      "Archives its thread in bb.",
-      "This cannot be undone: a retired agent cannot be started again.",
-    ]);
-    // An agent that is not on bb has no thread to archive; that it cannot be undone is said of every retire.
-    expect(retirePlanView(retirePlan({ backend: "tmux", children: [] }), false).happens).toEqual(["Saves a recovery copy of any uncommitted work, then deletes its home folder.", "This cannot be undone: a retired agent cannot be started again."]);
+    expect(retirePlanView(retirePlan({ session: "there", children: [] }), false).happens).toEqual(["Stops its session.", "Saves a recovery copy of any uncommitted work, then deletes its home folder."]);
+    // An agent that is not on bb has no thread to speak of; that it cannot be undone is said of every retire.
+    expect(retirePlanView(retirePlan({ backend: "tmux", children: [] }), false).attention).toEqual(["This cannot be undone."]);
     expect(retirePlanView(retirePlan({ session: "unknown", children: [] }), false).happens[0]).toBe("Stops its session, if one is running (its state couldn't be checked).");
   });
 
@@ -143,7 +137,10 @@ describe("a retire plan", () => {
 
   it("a worktree on another branch than it was spawned on is brought to attention", () => {
     const plan = retirePlan();
-    expect(retirePlanView({ ...plan, work: { ...plan.work, drift: true, branch: "feat/x" } }, false).attention).toEqual(["The worktree is on feat/x, not the branch it was spawned on (agents/weekly-digest-helper)."]);
+    expect(retirePlanView({ ...plan, work: { ...plan.work, drift: true, branch: "feat/x" } }, false).attention).toEqual([
+      "This cannot be undone. Its conversation stays readable in bb, archived.",
+      "The worktree is on feat/x, not the branch it was spawned on (agents/weekly-digest-helper).",
+    ]);
   });
 
   it("an extra tree the kernel would refuse blocks the retire, and the reason names a control the dialog has", () => {
@@ -231,7 +228,7 @@ describe("a result", () => {
         "Home folder deleted.",
         "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
         "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
-        "Its thread is archived in bb.",
+        "Its conversation stays readable in bb, archived.",
       ],
       code: null,
       details: null,
@@ -247,7 +244,16 @@ describe("a result", () => {
     expect(outcome).toMatchObject({ tone: "failed", title: "Retirement didn't finish", code: "RETIRE_INCOMPLETE", offers: ["review"] });
     expect(outcome.lines).toContain("Home folder kept at /abs/deployment/agents/oats-expert/instances/weekly-digest-helper.");
     expect(outcome.lines).toContain("Cleanup didn't finish.");
-    expect(outcome.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
+    // The home was kept: on bb the agent can come back with no OATS around it. The line, and the release lane's words under Details, before the kernel's own.
+    expect(outcome.lines).toContain("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.");
+    expect(outcome.lines.some((line) => line.includes("stays readable"))).toBe(false);
+    expect(outcome.details).toBe(
+      "No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent.\nretire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)",
+    );
+    // An agent that is not on bb has no thread to unarchive: nothing of it is said.
+    const tmux = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan({ backend: "tmux" }));
+    expect(tmux.lines.some((line) => line.includes("unarchived"))).toBe(false);
+    expect(tmux.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
   });
 
   it("a retire accepted for the background is neither done nor failed", () => {
@@ -309,6 +315,9 @@ describe("a start", () => {
     expect(startRefused("restart", "dev-1", { code: "E_INSTANCE_RETIRING", message: "m" }).lines).toEqual(["This instance is being retired, or has cleanup to finish. Nothing was stopped or started."]);
     expect(startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m" })).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting" });
     expect(startRefused("start", "dev-1", { code: "OATS_TIMEOUT", message: "m" })).toMatchObject({ tone: "unknown", title: "OATS didn't confirm the start" });
+    // A call that failed (nobody answered: the app's own code) is not confirmed either; a refusal of the plugin's own server names no OATS.
+    expect(startRefused("start", "dev-1", { code: "PLUGIN_RPC_FAILED", message: "Failed to fetch" })).toMatchObject({ tone: "unknown", title: "OATS didn't confirm the start" });
+    expect(startRefused("restart", "dev-1", { code: null, message: '"codex" is not a harness the bb session provider declares' })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't restarted", lines: ["The plugin did not ask OATS for this. Details says why."] });
     expect(startRefused("start", "dev-1", { code: "NO_THREAD_NAMED", message: "m" })).toMatchObject({ tone: "unknown", title: "Dev 1 was started, but its thread isn't ready yet", lines: ["Open it from its row when it is."] });
     expect(startRefused("restart", "dev-1", { code: "E_BACKEND_HARNESS", message: "m" })).toMatchObject({ title: "OATS refused to restart Dev 1 on this harness", lines: ["Choose another under Harness, or keep the recorded one."] });
     // A refusal with no sentence of the Desktop's says why in the kernel's own line, under its name; the whole message stays under Details.

@@ -209,8 +209,8 @@ export default [
         check(changed.off === true && changed.focus === "oats-confirm-cancel" && changed.body.includes("Read what changed, then press Review again."), `${at} the changed plan is NOT armed: Stop is off with the reason, and the focus is on Cancel`, JSON.stringify(changed));
         await shot("changed");
         await page.evaluate(click("oats-plan-review"));
-        await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-notice")}`)}) === null && document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled === false`, 20);
-        check(true, `${at} Review again reads the plan once more, and only then can it be confirmed`);
+        const reviewed = await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-notice")}`)}) === null && document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled === false`, 20);
+        check(Boolean(reviewed), `${at} Review again reads the plan once more, and only then can it be confirmed`);
 
         // A refusal (recorded: the kernel no longer has the agent when the apply arrives).
         answers({ "instance stop --apply": gone("stopApply"), "instance stop --plan": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: stale.error.details.plan }) } });
@@ -259,7 +259,7 @@ export default [
         );
         check(!before.body.includes("SIGTERM") && !before.body.includes("the ADE") && !before.body.includes("/abs/"), `${at} none of the kernel's own notes and no path is pasted into the plan`, before.body);
         check(before.act === "Retire" && before.off === false && before.focus === "oats-confirm-cancel", `${at} Retire is destructive: the focus starts on Cancel`, JSON.stringify(before));
-        check(before.body.includes("Archives its thread in bb.") && before.body.includes("This cannot be undone: a retired agent cannot be started again."), `${at} it says that its thread is archived, and that a retire cannot be undone`, before.body);
+        check(before.body.includes("This cannot be undone. Its conversation stays readable in bb, archived."), `${at} it says that a retire cannot be undone, and that its conversation stays readable in bb, archived`, before.body);
         await shot("before");
         const order = await walk(page, 4);
         check(same(order, ["oats-confirm-act", "oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Retire, the choice, Check again, Cancel and round again`, JSON.stringify(order));
@@ -281,7 +281,7 @@ export default [
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
-        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && done.body.includes("Home folder deleted.") && done.body.includes("Worktree kept at") && done.body.includes("Recovery copy saved at") && done.body.includes("Its thread is archived in bb.") && done.focus === "oats-confirm-close", `${at} the result is the Desktop's lines: the children, the home, the worktree, the recovery copy; and the thread`, JSON.stringify(done));
+        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && done.body.includes("Home folder deleted.") && done.body.includes("Worktree kept at") && done.body.includes("Recovery copy saved at") && done.body.includes("Its conversation stays readable in bb, archived.") && done.focus === "oats-confirm-close", `${at} the result is the Desktop's lines: the children, the home, the worktree, the recovery copy; and the thread`, JSON.stringify(done));
         // Behind the result the retired agent is gone from the roster, and its thread offers no Start (the real run shows the same).
         const behind = await page.until(`document.querySelector(${JSON.stringify(testId("oats-status-act"))}) === null && document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${helper.id}"]') === null`, 20);
         check(Boolean(behind), `${at} behind the result the agent is in no row, and its thread offers no Start`);
@@ -307,7 +307,7 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const partial = await dialog(page);
-        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept at") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
+        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept at") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
         await shot("incomplete");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);

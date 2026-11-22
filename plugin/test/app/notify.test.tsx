@@ -7,7 +7,7 @@ import { Button, Confirm, Modal, Notice, notified, notify } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import { resetWindow } from "../../app/store";
 
-const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toasts }));
 
 afterEach(() => {
@@ -16,6 +16,7 @@ afterEach(() => {
   toasts.success.mockClear();
   toasts.error.mockClear();
   toasts.warning.mockClear();
+  toasts.info.mockClear();
 });
 
 test("a result goes to bb's toaster with its lines and its Open; it leaves by itself", () => {
@@ -41,6 +42,12 @@ test("a result that is not confirmed is told as a warning, never as a failure or
   expect(toasts.success).not.toHaveBeenCalled();
   expect(toasts.error).not.toHaveBeenCalled();
   expect(toasts.warning.mock.calls[0]).toEqual(["Retirement accepted", { description: "Retirement was accepted and will finish in the background.", duration: Number.POSITIVE_INFINITY }]);
+});
+
+test("a hint (why a key cannot act) is one line that leaves by itself: not a failure, and not kept", () => {
+  notify({ tone: "hint", title: "This thread is not an OATS agent's." });
+  expect(toasts.error).not.toHaveBeenCalled();
+  expect(toasts.info.mock.calls[0]).toEqual(["This thread is not an OATS agent's.", {}]);
 });
 
 test("text of OATS or an agent goes through the display filter: no line break reaches bb's toast, and what looks like a secret is withheld", () => {
@@ -115,6 +122,11 @@ test("a dialog that holds more than fits says so, above and below, and stops say
   sized(500);
   expect(screen.getByTestId("oats-modal-above")).toBeTruthy();
   expect(screen.queryByTestId("oats-modal-below")).toBeNull();
+  // The two lines keep their room while the body holds more than fits (only their words come and go), so that the body keeps one height as it is scrolled.
+  const rooms = () => Array.from(body.parentElement!.querySelectorAll("p")).filter((line) => /^More (above|below)$/.test(line.textContent ?? ""));
+  expect(rooms().map((line) => [line.textContent, line.getAttribute("aria-hidden")])).toEqual([["More above", null], ["More below", "true"]]);
+  sized(0);
+  expect(rooms().map((line) => [line.textContent, line.getAttribute("aria-hidden")])).toEqual([["More above", "true"], ["More below", null]]);
 });
 
 test("a confirmation's notice stands above the plan, and only while the plan is under review", () => {

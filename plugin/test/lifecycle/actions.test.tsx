@@ -475,10 +475,10 @@ test("Retire opens a dialog that says what goes and what stays; it is destructiv
   expect(texts(happens as HTMLElement, "li")).toEqual([
     "Stops its 1 child instance first: Digest links helper. They are kept, with their homes.",
     "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
-    "Archives its thread in bb.",
     "If a child won't stop, nothing is retired.",
-    "This cannot be undone: a retired agent cannot be started again.", // what the Desktop's sheet leaves unsaid
   ]);
+  // After what goes and what stays: what the Desktop's sheet leaves unsaid.
+  expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual(["This cannot be undone. Its conversation stays readable in bb, archived."]);
   expect(texts(kept as HTMLElement, "li")).toEqual(["Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.", "Branches and pull requests are not changed."]);
   // None of the kernel's own notes is pasted (the first UX read's S9).
   expect(dialog.textContent).not.toContain("SIGTERM");
@@ -520,7 +520,7 @@ test("Retire without the tick applies the plan and keeps the worktree; the resul
     "Home folder deleted.",
     "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
     "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
-    "Its thread is archived in bb.",
+    "Its conversation stays readable in bb, archived.",
   ]);
   expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });
 });
@@ -743,7 +743,7 @@ test("a command acts on the agent whose thread is in view: it opens the act's di
   // A working agent: Start cannot act, and says why in the Desktop's sentence; Stop opens its dialog.
   await press("agent-start", "thr_redesign");
   expect(slot.queryByRole("dialog")).toBeNull();
-  expect(said()).toMatchObject({ tone: "failed", title: "Redesign ui lead is already running." });
+  expect(said()).toMatchObject({ tone: "hint", title: "Redesign ui lead is already running." }); // one line that leaves by itself, not a failure
   // A stopped agent: Restart says to start it instead.
   await press("agent-restart", "thr_digest");
   expect(said()).toMatchObject({ title: "Weekly digest helper is stopped: Start it instead." });
@@ -766,7 +766,7 @@ test("a command pressed while the roster is the last one read is held, and says 
   const { slot } = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   const { commands } = await import("../../app/lifecycle");
   await commands.find((each) => each.id === "agent-stop")!.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
-  expect(notified().at(-1)).toMatchObject({ tone: "failed", title: "Stop, Start, Restart and Retire come back when OATS is read again." });
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Stop, Start, Restart and Retire come back when OATS is read again." });
   expect(slot.queryByRole("dialog")).toBeNull();
 });
 
@@ -959,4 +959,48 @@ test("the dialog gives the focus way to a layer of bb's that holds it for itself
   } finally {
     for (const node of [...layers, plain]) node.remove();
   }
+});
+
+// ---- from the second review round
+
+test("an apply or a start whose CALL failed (nobody answered: bb restarted, the plugin reloaded) is not confirmed: never told as refused, never as nothing happened", async () => {
+  const lost = () => {
+    throw new Error("Failed to fetch"); // no code of the kernel's or of the plugin's: the call itself failed
+  };
+  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: lost });
+  await retire.pick("retire");
+  await ready(retire.slot);
+  fireEvent.click(button(retire.slot, "oats-confirm-act"));
+  await waitFor(() => expect(retire.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  expect(retire.slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Result not confirmed");
+  expect(retire.slot.queryByTestId("oats-act-review")).toBeNull();
+  expect(retire.slot.getByTestId("oats-act-check")).toBeTruthy();
+  resetApp();
+  const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: lost });
+  await start.pick("start");
+  await ready(start.slot);
+  fireEvent.click(button(start.slot, "oats-confirm-act"));
+  await waitFor(() => expect(start.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  expect(start.slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("OATS didn't confirm the start");
+  expect(start.slot.getByTestId("oats-result").textContent).not.toContain("refused");
+});
+
+test("the Start gate is the Desktop's: running is already running; what is not known stopped is not known, and is never started on a guess", async () => {
+  const gated = async (change: Parameters<typeof startCheckOf>[1]) => {
+    const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, change) });
+    await pick("start");
+    await ready(slot);
+    const reason = slot.queryByTestId("oats-confirm-blocked")?.textContent ?? null;
+    resetApp();
+    return reason;
+  };
+  const UNKNOWN = "Could not verify whether this instance is running. Refresh its status before starting.";
+  expect(await gated({ running: true, runtimeState: "unknown" })).toBe("This instance is already running.");
+  expect(await gated({ running: null, runtimeState: "unknown" })).toBe(UNKNOWN);
+  expect(await gated({ running: null, runtimeState: null })).toBe(UNKNOWN);
+  expect(await gated({ running: null, runtimeState: "a-later-word" })).toBe(UNKNOWN);
+  expect(await gated({ running: false, runtimeState: "unreachable" })).toBe(UNKNOWN);
+  expect(await gated({ running: false, runtimeState: "stopped" })).toBeNull();
+  expect(await gated({ running: false, runtimeState: "shell" })).toBeNull();
+  expect(await gated({ running: false, runtimeState: null })).toBeNull();
 });

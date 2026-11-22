@@ -193,7 +193,7 @@ export default [
   {
     stage: "fixtures",
     name: "a confirmation: before the act, in progress, done, refused, and another agent's plan; its focus order",
-    run: async ({ page, at, viewport, check }) => {
+    run: async ({ page, at, viewport, check, sleep }) => {
       const dialog = () => page.evaluate(`JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-about"), phase: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`);
       await page.evaluate(into("oats-patterns-dialogs"));
       await page.evaluate(`document.querySelector('${testId("oats-patterns-open-retire")}').focus()`);
@@ -282,6 +282,30 @@ export default [
       const unknown = JSON.parse(await page.evaluate(`JSON.stringify({ tone: document.querySelector('${testId("oats-confirm")} ${testId("oats-result")}')?.getAttribute("data-tone"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`));
       check(unknown.tone === "unknown" && unknown.body.includes("Result not confirmed") && unknown.body.indexOf("OATS_TIMEOUT") > unknown.body.indexOf("Check again before assuming") && unknown.body.includes("Check again") && unknown.focus === "oats-confirm-close", `${at} a result that is not confirmed is drawn as neither done nor failed: its words, the code after them, Check again, the focus on Close`, JSON.stringify(unknown));
       await page.shot(`patterns-${viewport.name}-confirm-not-confirmed`, { targets: true });
+      await page.press("Escape");
+      await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
+      // A dialog that holds more than the window gives it: it says so above and below, and the room of
+      // those two lines is kept, so that the body does not change height while it is scrolled.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-long")}').focus()`);
+      await page.press("Enter");
+      await page.until(`${visible(testId("oats-confirm"))} && document.querySelector('${testId("oats-modal-below")}') !== null`, 10);
+      const scrolled = `(() => { const body = document.querySelector('${testId("oats-modal-body")}'); return JSON.stringify({ height: body.clientHeight, above: document.querySelector('${testId("oats-modal-above")}')?.innerText ?? null, below: document.querySelector('${testId("oats-modal-below")}')?.innerText ?? null }); })()`;
+      const scrollTo = async (top) => {
+        await page.evaluate(`(() => { const body = document.querySelector('${testId("oats-modal-body")}'); body.scrollTop = ${top === "end" ? "body.scrollHeight" : top}; })()`);
+        await sleep(300);
+        return JSON.parse(await page.evaluate(scrolled));
+      };
+      const atTop = JSON.parse(await page.evaluate(scrolled));
+      await page.shot(`patterns-${viewport.name}-confirm-long`, { targets: true });
+      const atEnd = await scrollTo("end");
+      const midway = await scrollTo(200);
+      const again = await scrollTo(0);
+      check(
+        atTop.above === null && atTop.below === "More below" && atEnd.above === "More above" && atEnd.below === null && midway.above === "More above" && midway.below === "More below" && again.above === null && again.below === "More below",
+        `${at} a dialog longer than the window says "More below" at its top, both in between, "More above" at its end, and "More below" again back at the top`,
+        JSON.stringify({ atTop, midway, atEnd, again }),
+      );
+      check(new Set([atTop.height, atEnd.height, midway.height, again.height]).size === 1, `${at} its body keeps one height while it is scrolled: the two lines keep their room`, JSON.stringify([atTop.height, midway.height, atEnd.height, again.height]));
       await page.press("Escape");
       await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       // A result through bb's own toaster (app/ui/notify.ts): `sonner` is bb's shim in the BUILT plugin, so the

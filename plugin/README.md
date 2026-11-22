@@ -113,7 +113,9 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   with a worktree of its own, with what would be lost said under it; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
   agent's thread (as the provider is today, a message sent in it starts the agent again without
-  OATS); Retire says that its thread is archived and that a retire cannot be undone.
+  OATS); Retire says that it cannot be undone and that the agent's conversation stays readable in
+  bb, archived. Where a retire kept the home (its cleanup did not finish), the result says that
+  the thread can be unarchived in bb and a message there starts the agent with no OATS around it.
 - **Start** and **Restart** first read the agent as the kernel has it now ("Checking
   instance…"), and show its harness, machine and home. **Harness** starts on "Keep the recorded
   harness" and passes nothing; one the bb session provider declares is passed as `--harness`. With

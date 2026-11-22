@@ -136,7 +136,8 @@ const nodeIn = (threadId: string | null): Node | undefined => (roster?.phase ===
 /** A command's key was pressed for the agent of the thread in view: open the act's dialog, or say in one line why it cannot act. */
 function runCommand(verb: Verb, threadId: string | null): void {
   const node = nodeIn(threadId);
-  const say = (title: string) => notify({ tone: "failed", title });
+  // One line about the key that was pressed, not the failure of an act: it leaves by itself.
+  const say = (title: string) => notify({ tone: "hint", title });
   if (node === undefined || roster?.phase !== "ready") return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;

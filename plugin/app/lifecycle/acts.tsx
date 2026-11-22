@@ -7,12 +7,12 @@
 // The words are the OATS Desktop's (./words.ts).
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
-import { useOats } from "../oats";
+import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Confirm, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
@@ -86,11 +86,21 @@ export async function run(verb: RunVerb, instance: string, _rpc?: unknown, _navi
   openAct(verb, instance);
 }
 
-/** A failed call as a refusal: the code that leads it, when one does, and its message. */
+/** bb's codes for a call the plugin's server ANSWERED with a no: a refusal of the kernel's or of its own, an input it did not take. */
+const ANSWERED = new Set(["conflict", "invalid", "invalid_input", "forbidden", "not_found", "unknown_method"]);
+/**
+ * A rejected call, as what it was. A refusal: the code that leads its message (the kernel's, or one
+ * of the plugin's own), or none for a refusal of the plugin's server itself. Or a call that FAILED
+ * (bb restarted, the plugin was reloaded under a long retire, the browser lost the server): then
+ * nobody answered, the act may have run, and its code is the app's own RPC_FAILED, which every
+ * place reads as "not confirmed", never as refused.
+ */
 function refusalOf(cause: unknown): Refusal & { text: string } {
   const text = errorMessage(cause);
   const code = refusalCode(text);
-  return { code, message: code === null ? text : text.slice(code.length + 2), text };
+  if (code !== null) return { code, message: text.slice(code.length + 2), text };
+  const answered = cause instanceof PluginRpcCallError && ANSWERED.has(cause.code);
+  return { code: answered ? null : RPC_FAILED, message: text, text };
 }
 
 /**
@@ -110,6 +120,9 @@ function useRowFocus(threadId: string | null): () => HTMLElement | null {
   }, [threadId]);
 }
 
+/** The lifecycle dialog that is open, as the element that holds the focus; null when none is. */
+const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-testid="oats-confirm"]')?.closest<HTMLElement>('[role="dialog"]') ?? null;
+
 /**
  * The focus when a dialog that was reading becomes ready: on the control the pattern marks (Cancel
  * for a destructive act, a form's first field, else the act), if it was left on the dialog itself
@@ -118,8 +131,8 @@ function useRowFocus(threadId: string | null): () => HTMLElement | null {
 function useFocusWhenReady(ready: boolean): void {
   useEffect(() => {
     if (!ready) return;
-    const dialog = document.querySelector<HTMLElement>('[data-testid="oats-confirm"]')?.closest<HTMLElement>('[role="dialog"]');
-    if (dialog !== null && dialog !== undefined && document.activeElement === dialog) dialog.querySelector<HTMLElement>("[data-autofocus]:not([disabled])")?.focus();
+    const dialog = dialogOf();
+    if (dialog !== null && document.activeElement === dialog) dialog.querySelector<HTMLElement>("[data-autofocus]:not([disabled])")?.focus();
   }, [ready]);
 }
 
@@ -139,8 +152,8 @@ function useKeepFocus(): void {
     const onFocus = (event: FocusEvent) => {
       // Its own focus() lands here again: it is not answered a second time.
       if (returning) return;
-      const dialog = document.querySelector<HTMLElement>('[data-testid="oats-confirm"]')?.closest<HTMLElement>('[role="dialog"]');
-      if (dialog === null || dialog === undefined) return;
+      const dialog = dialogOf();
+      if (dialog === null) return;
       const target = event.target;
       if (target instanceof HTMLElement && dialog.contains(target)) {
         last = target;
@@ -456,9 +469,11 @@ const isModel = (model: string): boolean => model.length <= 256 && !model.starts
 /** Why the agent cannot be started now, by the kernel's own row (the Desktop's start gate); null when it can. */
 function gate(verb: RunVerb, check: Check): { reason: string; running: boolean } | null {
   if (verb === "restart") return null;
-  if (check.runtimeState === "unreachable") return { reason: START.unknownState, running: false };
+  // The Desktop's rule (start-gate.mjs): running is "already running"; anything that is not known
+  // stopped is not known, and is never started on a guess. A session that ended in a shell is stopped.
+  if (check.running === true) return { reason: START.alreadyRunning, running: true };
   const stopped = check.running === false || check.runtimeState === "stopped" || check.runtimeState === "shell";
-  return stopped ? null : { reason: START.alreadyRunning, running: true };
+  return stopped && check.runtimeState !== "unreachable" ? null : { reason: START.unknownState, running: false };
 }
 
 function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {

@@ -165,14 +165,18 @@ export function Modal({
   // The body scrolls between the title and the buttons where the window is short (a phone): what
   // is out of sight above or below is SAID, so that nothing is cut by the buttons without a sign.
   const body = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState({ above: false, below: false });
+  // The two lines keep their room for as long as the body holds more than fits, and only their
+  // words come and go: a line that appeared and took room from the body would move what is read,
+  // and could put the body back over the threshold it had just crossed.
+  const [more, setMore] = useState({ overflows: false, above: false, below: false });
   useEffect(() => {
     const scroller = body.current;
     if (scroller === null) return;
     const measure = () => {
-      const above = scroller.scrollTop > 1;
-      const below = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 1;
-      setMore((now) => (now.above === above && now.below === below ? now : { above, below }));
+      const overflows = scroller.scrollHeight - scroller.clientHeight > 1;
+      const above = overflows && scroller.scrollTop > 1;
+      const below = overflows && scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 1;
+      setMore((now) => (now.overflows === overflows && now.above === above && now.below === below ? now : { overflows, above, below }));
     };
     measure();
     scroller.addEventListener("scroll", measure, { passive: true });
@@ -253,16 +257,16 @@ export function Modal({
         <h2 id={titleId} className="text-base font-semibold">
           {title}
         </h2>
-        {more.above ? (
-          <p data-testid="oats-modal-above" className="text-center text-xs text-muted-foreground">
+        {more.overflows ? (
+          <p {...(more.above ? { "data-testid": "oats-modal-above" } : { "aria-hidden": true })} className={`text-center text-xs text-muted-foreground ${more.above ? "" : "invisible"}`}>
             More above
           </p>
         ) : null}
         <div ref={body} data-testid="oats-modal-body" className="min-h-0 overflow-y-auto">
           {children}
         </div>
-        {more.below ? (
-          <p data-testid="oats-modal-below" className="text-center text-xs text-muted-foreground">
+        {more.overflows ? (
+          <p {...(more.below ? { "data-testid": "oats-modal-below" } : { "aria-hidden": true })} className={`text-center text-xs text-muted-foreground ${more.below ? "" : "invisible"}`}>
             More below
           </p>
         ) : null}

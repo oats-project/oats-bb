@@ -22,8 +22,7 @@ import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
-import { GONE_MARK, GONE_WORD } from "./gone";
-import { agentStatus } from "./status";
+import { agentStatus, drawnState } from "./status";
 import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
@@ -127,17 +126,16 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
-      const isGone = gone.has(node.agent.instance);
-      const word = isGone ? GONE_WORD : status.word;
+      const drawn = drawnState(status, gone.has(node.agent.instance));
       return [
         threadRow(
           thread,
           INDENT[node.depth],
           "oats-agent-row",
           <>
-            <StateMark state={isGone ? GONE_MARK : status.state} hidden />
+            <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, word, shown(oats.soulOf(node.agent)))}
+            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -151,6 +149,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    */
   const threadlessRow = (agent: Agent, where: string) => {
     const status = agentStatus(agent, null, now);
+    const drawn = drawnState(status, gone.has(agent.instance));
     const name = instanceDisplayName(shown(agent.instance));
     return (
       <li key={agent.instance}>
@@ -165,8 +164,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             onNavigate();
           }}
         >
-          <StateMark state={gone.has(agent.instance) ? GONE_MARK : status.state} hidden />
-          {lines(name, status.state === "needs-you", gone.has(agent.instance) ? GONE_WORD : status.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+          <StateMark state={drawn.state} hidden />
+          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`)}
         </button>
       </li>
     );

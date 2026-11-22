@@ -9,7 +9,7 @@ import type { PluginAppBuilder, PluginThreadAction, PluginThreadActionItemInput 
 import type { Agent, AgentState } from "../../model/types";
 import { useOats } from "../oats";
 import { failureWords } from "../roster/unreadable";
-import { readAge } from "../ui/words";
+import { asOf } from "../ui/words";
 import type { Oats } from "../oats";
 import type { Contract, Rpc } from "../store";
 import { ActsOverlay, askPlan, run } from "./acts";
@@ -65,7 +65,7 @@ function lifecycle(
       // On the last roster read, while OATS cannot be read, the acts stay: each goes to the kernel
       // first, which decides it from its own facts, and without them a person is left with bb's
       // own Stop, Archive and Delete only. The entry says how old what it is offered from is.
-      const detail = oats.stale === null ? undefined : `as of ${readAge(oats.stale.at) ?? "the last read"}`;
+      const detail = oats.stale === null ? undefined : asOf(oats.stale.at);
       return { label, icon, variant, ...(detail === undefined ? {} : { detail }), run: () => act(node.agent.instance, input) };
     },
   };

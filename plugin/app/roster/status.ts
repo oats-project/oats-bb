@@ -1,6 +1,7 @@
 // The one function that says where an agent is, in words, for every place that says it: the tree,
 // the line under a thread's header, the home and the instance panel print what this answers
 // (through `State` and `StatusLine`, app/ui.tsx), so they say the same thing. Pure.
+import { GONE_MARK, GONE_WORD } from "./gone";
 import type { Agent, AgentState, BbThread } from "../../model/types";
 import { claimOf, state } from "../../model/view";
 import { STATE, waitingDetail, waitingSince } from "../ui/words";
@@ -38,4 +39,13 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
     default:
       return { ...base, since: null, detail: null };
   }
+}
+
+/**
+ * What a row draws in its state's place: the state's mark and word, or, for an agent the kernel has
+ * since refused as one it does not know, the mark of an agent that does not run and "Not in OATS
+ * any more". The one function for the sidebar's rows and the thread's own row.
+ */
+export function drawnState(status: AgentStatus, gone: boolean): { state: AgentStatus["state"]; word: string } {
+  return gone ? { state: GONE_MARK, word: GONE_WORD } : { state: status.state, word: status.word };
 }

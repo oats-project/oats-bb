@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Button, Card, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import type { AgentState } from "../../model/types";
-import { instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
+import { asOf, instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
 
 afterEach(cleanup);
 
@@ -737,4 +737,12 @@ describe("where a menu's list hangs", () => {
     expect(open([0, 390], [10, 42], 200, "left").getAttribute("data-edge")).toBe("left");
     expect(open([0, 390], [300, 332], 200, "left").getAttribute("data-edge")).toBe("right");
   });
+});
+
+test("as of <age>: the age of a kept roster in a row or an act, and from an hour on the time itself, never \"as of at\"", () => {
+  const now = new Date(2026, 10, 21, 15, 6).getTime();
+  expect(asOf(now - 4_000, now)).toBe("as of just now");
+  expect(asOf(now - 3 * 60_000, now)).toBe("as of 3 min ago");
+  expect(asOf(new Date(2026, 10, 21, 14, 5).getTime(), now)).toBe("as of 14:05"); // 61 minutes
+  expect(asOf("not a time", now)).toBe("as of the last read");
 });

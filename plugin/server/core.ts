@@ -137,7 +137,8 @@ export function createCore(bb: BbPluginApi) {
     if (values.host !== "") {
       chosen = hosts.find((row) => row.id === values.host) ?? hosts.find((row) => row.name === values.host);
       if (!chosen) {
-        return fail(codes.hostNotFound, `The machine "${values.host}" in the OATS plugin's settings is not one of this bb server's machines (${names || "none"}).`);
+        // The machine that was not found is the one the setting names.
+        return fail(codes.hostNotFound, `The machine "${values.host}" in the OATS plugin's settings is not one of this bb server's machines (${names || "none"}).`, values.host);
       }
     } else if (hosts.length === 1) {
       chosen = hosts[0];
@@ -208,11 +209,14 @@ export function createCore(bb: BbPluginApi) {
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
     let root = "";
+    /** The machine `oats` is being called on, once it is known: a call that throws still names it. */
+    let machine: string | null = null;
     try {
       const where = await base(lifetime.signal);
       if ("ok" in where) {
         next = { ...where, at };
       } else {
+        machine = where.target.machine;
         const answer = await host.call("status", where.input, { hostId: where.target.hostId, signal: lifetime.signal, timeoutMs: HOST_TIMEOUT.read });
         if (answer.ok) {
           const workspace = answer.value.workspace ? lastSegment(answer.value.workspace) : lastSegment(where.target.deployment);
@@ -236,7 +240,7 @@ export function createCore(bb: BbPluginApi) {
         }
       }
     } catch (error) {
-      next = { ok: false, at, code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error).message)}` };
+      next = { ok: false, at, code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error).message)}`, machine };
       target = null;
     }
     // A change is a change of anything the kernel printed: a feature may draw a field of a raw row

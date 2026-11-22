@@ -8,18 +8,25 @@ import { onWindowReset } from "../store";
 export const GONE_WORD = "Not in OATS any more";
 export const GONE_MARK = "stopped" as const;
 
-/** The kernel's code for an instance it has no home for (`no instance named "<name>"`). */
+/** The kernel's code when a name is no instance's (`no instance "<name>" under <roots>`). */
 export const UNKNOWN_INSTANCE = "E_SESSION_UNKNOWN";
 
 /**
- * Whether a refusal says the kernel has no such agent. A plan (stop, retire) is refused with this
- * code only for that. Start and restart use the same code for a session whose state cannot be
- * established too, so for those (`plan: false`) the kernel's message must say it: "no instance
- * named …", or "… is not an OATS instance home".
+ * Whether a refusal says the kernel has no such agent. The kernel says it in two ways, as recorded
+ * from it (test/fixtures/lifecycle/gone.json; awebai/oats lib/instance-address.mjs and
+ * lib/core.mjs at 95c7b43b3):
+ * - a stop or a retire, plan or apply, resolves the name first: E_SESSION_UNKNOWN,
+ *   `no instance "<name>" under <roots>`. The code alone is not enough: for a session it also
+ *   means one whose state cannot be established.
+ * - a start or a restart is given the home. For a home that was retired the kernel answers
+ *   `directory instance home was removed or exchanged: <home>; …` (E_WORK_INSPECTION_FAILED, as
+ *   recorded); for a directory that never was one, `<home> is not an OATS instance home (no
+ *   instance.json); nothing was started` (E_RUNTIME_ENDPOINT_UNKNOWN, lib/core.mjs). The message is
+ *   what says it, whatever the code.
  */
-export function saysGone(code: string | null, message: string, { plan }: { plan: boolean }): boolean {
-  if (code !== UNKNOWN_INSTANCE) return false;
-  return plan || /\bno instance named\b|\bis not an (OATS )?instance home\b/.test(message);
+export function saysGone(code: string | null, message: string): boolean {
+  if (/\binstance home was removed or exchanged\b|\bis not an OATS instance home\b/.test(message)) return true;
+  return code === UNKNOWN_INSTANCE && /\bno instance (named )?"/.test(message);
 }
 
 const NONE: ReadonlySet<string> = new Set();

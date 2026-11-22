@@ -402,7 +402,7 @@ async function missingShots(scene, { instance, soul }) {
       // The agent stays in the roster (S3): a row of its own that says where it is in a word, its soul,
       // and that its bb thread is gone. The read waits on that row.
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
-      const facts = await page.until(`(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\s+/g, " ").trim()`, 30);
+      const facts = await page.until(`(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
       check(typeof facts === "string" && facts.endsWith(`· ${soul} · its bb thread is gone`), `${at}: ${instance} stays in the roster: its state in a word, its soul, "its bb thread is gone"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       show("row", facts);
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
@@ -662,6 +662,37 @@ try {
   const left = bbThreads().filter((t) => t.projectId === thread.projectId);
   check(left.length > 0 && left.every((t) => t.archivedAt != null), "bb: every thread the home still has is archived", threadsNow());
   check(snapshotRow(A.instance) === undefined, "the plugin's snapshot no longer has the agent");
+
+  step("A15 edge: every act on the agent that is gone: what the kernel answers (kept, for the plugin's \"not in OATS any more\")");
+  // The roster on a screen can be older than this: an act asked from it reaches the kernel, which
+  // refuses it for an agent it no longer has. The six refusals are recorded as the kernel prints
+  // them, with the argv the plugin's host entry uses, so that the plugin's test of how it tells
+  // "gone" from any other refusal reads the kernel's own words. Each command is refused before it
+  // changes anything: the home is not there, the name is no instance's.
+  const goneActs = {
+    start: ["session", "start", "--home", home, "--json"],
+    restart: ["session", "restart", "--home", home, "--json"],
+    stopPlan: ["instance", "stop", A.instance, "--plan", "--json"],
+    stopApply: ["instance", "stop", A.instance, "--apply", "--plan-revision", "0123456789abcdef01234567", "--idempotency-key", "stop-000000000000", "--json"],
+    retirePlan: ["retire", A.instance, "--plan", "--json"],
+    retireApply: ["retire", A.instance, "--plan-revision", "0123456789abcdef01234567", "--idempotency-key", "retire-000000000000", "--json"],
+  };
+  for (const [verb, argv] of Object.entries(goneActs)) {
+    const run = oats(...argv);
+    let error;
+    try {
+      error = JSON.parse(run.stdout).error;
+    } catch {
+      error = undefined; // no JSON printed: the check below says what was
+    }
+    const refused = run.exit !== 0 && typeof error?.code === "string" && typeof error?.message === "string";
+    check(refused, `oats ${argv.slice(0, 2).join(" ")} on the retired agent (${verb}) is refused, with a code and a message`, `exit ${run.exit}: ${run.stdout || run.stderr}`);
+    if (refused) {
+      show(verb, `${error.code}: ${error.message}`);
+      fixtures.keepIn("lifecycle/gone.json", verb, run.stdout);
+    }
+  }
+  check(!existsSync(home) && rowOf(A.instance) === undefined, "and nothing was made by asking: no home, no row");
 
   // ======================================================================= part B
   /** A child, spawned as its parent would: on the command line, since the plugin's spawn names no parent. With no parent, an agent of its own. */

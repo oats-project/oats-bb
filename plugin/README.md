@@ -188,8 +188,7 @@ alone), since a run that fails writes no event the server watches. A trigger's s
 current list names. An OATS that does not list the feature `automations` (before 0.29) is not
 asked: the page says which OATS it needs.
 
-Not there yet: the selection of the sidebar's Automations row while its page is open (it comes
-with the sidebar's own rework, for every page of the block); acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
+Not there yet: acting on a row (on and off, Run now, Test, Edit summary, Delete, Enable scheduler)
 and creating or editing a schedule; they come in their own changes. Two of the Desktop's ways into
 the page wait for a product decision and are not built: its ⌘3 / Ctrl+3 shortcut and its palette
 entry (bb takes both from a plugin command registered with a default shortcut).

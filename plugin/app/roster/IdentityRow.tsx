@@ -2,7 +2,6 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
-import { GONE_MARK, GONE_WORD } from "./gone";
 import {
   experimental_useAppPanel as useAppPanel,
   experimental_usePluginId as usePluginId,
@@ -18,10 +17,10 @@ import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, LINK, plainClick, StatusLine, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { readAge } from "../ui/words";
+import { asOf } from "../ui/words";
 import { openSoul } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus } from "./status";
+import { agentStatus, drawnState } from "./status";
 import { failureWords } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
@@ -103,14 +102,14 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
   // What is shown is the last roster read while OATS cannot be read: the line says how old it is.
-  const asOf = oats.stale === null ? null : `as of ${readAge(oats.stale.at, now) ?? "the last read"}`;
+  const stale = oats.stale === null ? null : asOf(oats.stale.at, now);
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {gone ? (
-        <StatusLine state={GONE_MARK} word={GONE_WORD} detail={["OATS has no agent of this name now", asOf].filter((part) => part !== null).join(" · ")} />
+        <StatusLine {...drawnState(status, true)} detail={["OATS has no agent of this name now", stale].filter((part) => part !== null).join(" · ")} />
       ) : (
-        <StatusLine state={status.state} since={status.since} detail={[status.detail, asOf].filter((part) => part !== null).join(" · ") || null} action={act} />
+        <StatusLine state={status.state} since={status.since} detail={[status.detail, stale].filter((part) => part !== null).join(" · ") || null} action={act} />
       )}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <RowFact label="Soul" testId="oats-fact-soul">

@@ -1,5 +1,6 @@
 // The roster's live scenes: the sidebar's tree, an agent's thread with its header row, the states
 // of the dot, and the sidebar while OATS cannot be read. (container/live-ui.mjs says what a scene is.)
+import { hostname } from "node:os";
 import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
 
 /** The thread's own row, read once it says `state`: → `{ line, act }` (the status line's words, and its button's), or null. The read waits on the row. */
@@ -29,7 +30,8 @@ export default [
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
       check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.includes("pl-6") === true`), `${at} a child is indented under its parent`);
-      check((await page.evaluate(textOf(testId("oats-workspace-line")))).includes("8 agents"), `${at} the workspace line`, await page.evaluate(textOf(testId("oats-workspace-line"))));
+      // The machine is shown by the name bb gives it, which is the host's own (G1): never an id of bb's.
+      check((await page.evaluate(textOf(testId("oats-workspace-line")))) === `oats · ${hostname()} · 8 agents`, `${at} the workspace line: the workspace, the machine by its name (${hostname()}), and as many agents as rows`, await page.evaluate(textOf(testId("oats-workspace-line"))));
       check((await page.evaluate(textOf(testId("oats-needs-line")))) === "! 3 need you", `${at} "3 need you", with the mark of an agent that waits`, await page.evaluate(textOf(testId("oats-needs-line"))));
       // What the image's name says: every agent a row, each with its state in a word and its soul; the
       // one that runs in tmux among them; the roster first, then who waits, New agent, the pages.
@@ -92,6 +94,20 @@ export default [
       check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
       // At 1280 the sidebar is beside the thread: the image above already shows the open row. At 390 it is bb's drawer, over the thread.
       if (viewport.mobile) await page.shot(`a13-${viewport.name}-sidebar-open-row`);
+
+      // D-037: the row of the plugin's page that is shown is the selected one, and stops being it
+      // when a thread is opened from the sidebar (no reload: bb's own navigation).
+      await page.goto("/plugins/oats/teams");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const current = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-pages")} button`)})].filter((e) => e.getAttribute("aria-current") === "page").map((e) => e.innerText.trim()))`;
+      const onTeams = await page.until(`(() => { const now = ${current}; return now === '["Teams"]' ? now : ""; })()`, 30);
+      check(Boolean(onTeams), `${at} while the Teams page is shown its row is the selected one, and no other`, onTeams ?? (await page.evaluate(current)));
+      if (viewport.mobile) await page.shot(`a13-${viewport.name}-sidebar-page-selected`);
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`)}).click()`);
+      check(Boolean(await page.until(`location.pathname.endsWith("/threads/${release.id}")`, 15)), `${at} a thread opens from the sidebar`, await page.evaluate("location.pathname"));
+      if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const none = await page.until(`(() => { const now = ${current}; return document.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null && now === "[]" ? "none" : ""; })()`, 15);
+      check(none === "none", `${at} and no page's row is selected once a thread is shown`, none ?? (await page.evaluate(current)));
 
       // the thread of an agent OATS stopped: "Stopped", and the act that brings it back
       const digest = threads.get("thr_digest");
@@ -157,11 +173,11 @@ export default [
   {
     stage: "no-oats",
     name: "stale: OATS cannot be read after it was: the notice, the last observation, the tree as last read",
-    run: async ({ page, at, viewport, threads, check, sleep }) => {
+    run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
       // A titled notice in a person's words, with the age of what is still shown and Retry.
-      const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return /^OATS is not installed on /.test(t) ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
+      const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return t === ${JSON.stringify(`OATS is not installed on ${hostname()}`)} ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
       const said = notice ? JSON.parse(notice) : null;
       check(said !== null && said.code === "OATS_NOT_FOUND" && /Showing what was read /.test(said.text) && said.retry && said.settings, `${at} the notice says what is missing in a person's words, how old what is shown is, with Retry and Open settings: ${said?.title ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
       const observed = await page.evaluate(textOf(testId("oats-last-observation")));

@@ -385,7 +385,7 @@ test("until the plan is read the confirmation names no agent", async () => {
 test("an agent the kernel no longer knows: its refusal is a notice in the confirmation, nothing can be confirmed, and its row says so until the next roster", async () => {
   const { slot, pick } = await menu("thr_redesign", {
     stopPlan: () => {
-      throw new Error('E_SESSION_UNKNOWN: no instance named "redesign-ui-lead"');
+      throw new Error('E_SESSION_UNKNOWN: no instance "redesign-ui-lead" under /abs/deployment/agents'); // the kernel's form (test/roster/gone.test.tsx reads the recorded ones)
     },
   });
   await pick("stop");

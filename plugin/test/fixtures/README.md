@@ -39,6 +39,15 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
     plan in `details`), then the apply of the fresh plan.
   - `start.json`, `restart.json`, `retire-plan.json`, `retire-apply.json`: `weekly-digest-helper`,
     an agent on a worktree with one untracked file and one child.
+  - `lifecycle/gone.json`: what the kernel answers when each act is asked for an agent it no
+    longer has (`flaky-ci-2-developer`, after its retire), one refusal per key: `start`, `restart`
+    (given the retired home: `E_WORK_INSPECTION_FAILED`, "directory instance home was removed or
+    exchanged"), `stopPlan`, `stopApply`, `retirePlan`, `retireApply` (given the name:
+    `E_SESSION_UNKNOWN`, `no instance "<name>" under <roots>`). The plugin tells "not in OATS any
+    more" from these words (`app/roster/gone.ts`). Not recorded, a rule for the type only: a
+    stopped row that still carries a claim (the kernel prints none on a stopped row; `claimOf`,
+    `model/view.ts`), and a start given a directory that never was a home ("is not an OATS
+    instance home": no roster names such a home).
   - `version.json`: `oats version --json`, printed in the run's deployment for the run's own call (no
     RPC of the plugin asks for it yet).
   - `servers.json`: two servers registered with `oats server add` (no host is behind them).

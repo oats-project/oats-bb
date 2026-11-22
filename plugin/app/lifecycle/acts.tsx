@@ -8,7 +8,7 @@ import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
 import { useOats } from "../oats";
-import { markGone, saysGone, UNKNOWN_INSTANCE } from "../roster/gone";
+import { markGone, saysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, ErrorLine, Modal, Note, Notice } from "../ui";
 import { refusalCode, shown } from "../ui/text";
@@ -64,7 +64,7 @@ export async function run(verb: RunVerb, instance: string, rpc: Rpc, navigate: B
     // a dialog the person opened meanwhile.
     const message = errorMessage(cause);
     // The kernel has no such agent any more (the roster on screen was read before it went).
-    if (saysGone(refusalCode(message), message, { plan: false })) markGone(instance);
+    if (saysGone(refusalCode(message), message)) markGone(instance);
     const failed: Request = { kind: "failed", verb, instance, message };
     if (current === mine || current === null) set(failed);
     else deferred = failed;
@@ -106,8 +106,9 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         const error = errorMessage(cause);
         // The kernel no longer has an agent of this name (the roster on screen was read before it
         // went): its row says so until the next roster is read.
-        if (saysGone(refusalCode(error), error, { plan: true })) markGone(request.instance);
-        if (wanted) setState({ phase: "unreadable", error, gone: saysGone(refusalCode(error), error, { plan: true }) });
+        const gone = saysGone(refusalCode(error), error);
+        if (gone) markGone(request.instance);
+        if (wanted) setState({ phase: "unreadable", error, gone });
       },
     );
     return () => {
@@ -132,7 +133,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
       (cause: unknown) => {
         const error = errorMessage(cause);
         // The agent went between the plan and the act: nothing is left to confirm.
-        const gone = saysGone(refusalCode(error), error, { plan: false });
+        const gone = saysGone(refusalCode(error), error);
         if (gone) markGone(request.instance);
         if (live.current) setState((now) => (now.phase !== "ready" ? now : gone ? { phase: "unreadable", error, gone } : { ...now, applying: false, error }));
       },
@@ -214,7 +215,7 @@ export function ActsOverlay() {
     );
   }
   const again = () => void run(request.verb, request.instance, rpc, navigate);
-  const gone = saysGone(refusalCode(request.message), request.message, { plan: false });
+  const gone = saysGone(refusalCode(request.message), request.message);
   return (
     <Modal
       // No agent is named in the title: the name asked for is the row's, which may be older than what the kernel knows.
@@ -253,7 +254,7 @@ function Refused({ error, gone, instance, onRetry, footerRetries = false }: { er
   const machine = oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null;
   if (gone) {
     return (
-      <Notice title={`${shown(instance)} is not in OATS any more`} tone="error" code={UNKNOWN_INSTANCE} details={error}>
+      <Notice title={`${shown(instance)} is not in OATS any more`} tone="error" code={code} details={error}>
         <p>OATS has no agent of this name now: it was retired, or removed, after the roster on screen was read. Nothing was changed.</p>
       </Notice>
     );

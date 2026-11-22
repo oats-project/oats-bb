@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs on the host (a developer's machine or a CI runner) and does everything else in a container:
-#   container/ci.sh [all|unit|live|real]   (default: all)
+#   container/ci.sh [all|unit|live|real|pi]   (default: all)
 # The container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's
 # home: the checkout is copied in with tar, and the artefacts (test output, logs, screenshots) are
 # copied out to container/out/ (or, when that holds another's artefacts, container/out.<owner>/:
@@ -12,14 +12,17 @@
 # that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
 # `real` is the run against a real OATS kernel and the bb session provider, in a container of its
 # own (real/run.sh, real/README.md; its artefacts go to container/real/out/); `all` ends with it.
+# `pi` is the pi run (real/pi/README.md): that container with pi, on the kernel a pi deployment
+# runs; not part of `all` (its artefacts go to container/real/pi/out/).
 set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$STAGE" in
   all | unit | live) ;;
   real) exec sh "$HERE/real/run.sh" ;;
+  pi) REAL_PI=1 exec sh "$HERE/real/run.sh" ;;
   *)
-    echo "usage: container/ci.sh [all|unit|live|real]" >&2
+    echo "usage: container/ci.sh [all|unit|live|real|pi]" >&2
     exit 2
     ;;
 esac
@@ -64,7 +67,7 @@ if [ -f "$PLUGIN/../bb-version" ]; then
   [ -n "$BB_VERSION" ] || { echo "ci: $PLUGIN/../bb-version is empty" >&2; exit 2; }
 fi
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

@@ -35,3 +35,19 @@ jobs:
           path: |
             plugin/container/out/
             plugin/container/real/out/
+  # The pi run (plugin/container/real/pi/README.md): a pi agent launched from the New agent form, on
+  # the kernel a pi deployment runs, in a container of its own. A job of its own, so that the main
+  # run's time does not grow.
+  pi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: plugin/container/ci.sh pi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: plugin-pi
+          path: plugin/container/real/pi/out/

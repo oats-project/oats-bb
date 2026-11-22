@@ -30,6 +30,7 @@ This is the run the release lane asks for before an oats-bb release.
 | `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
 | `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` | as `container/ci.sh` | keep the container, name it, the image, extra `docker run` arguments (`--dns 1.1.1.1`) |
+| `REAL_PI` | `0` | `1`: the pi run instead (below, "pi agents"; `container/ci.sh pi`). It changes the default of `KERNEL_NPM` to `0.70.3`, with that tarball's integrity |
 
 A kernel that is on no release yet, the way the run was made before OATS 0.70.0:
 
@@ -75,6 +76,7 @@ together.
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
 | `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
+| `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
@@ -134,6 +136,50 @@ thread's own row says its agent's state at every width).
   real `oats` with the same arguments, passes its output and exit code through, and keeps one file
   per call (`records/`): the argv, the exit code, stdout, stderr. Its configuration can also make
   every call, or the calls of one command, slower: the run's "oats taking seconds".
+
+## pi agents: a run of its own, and what a deployment must have
+
+The run above launches Claude Code only: its bb has no pi, and a spawn with the harness pi is
+refused there (`test/fixtures/spawn/spawn-pi-refused.json` is that refusal, recorded). That a
+person can launch a pi agent from the plugin's New agent form is shown by a second run, in the same
+container and with the same setup, on the kernel a pi deployment runs:
+
+```sh
+plugin/container/ci.sh pi         # or: REAL_PI=1 plugin/container/real/run.sh
+```
+
+`pi/README.md` says what it does and what it found. It is a job of its own in CI, it is not part
+of `ci.sh all`, it leaves this run and its recorded fixtures as they are, and its artefacts are in
+`real/pi/out/`.
+
+What it had to add to this run's setup is what any deployment must have before the New agent form
+can launch a pi agent on bb. In plain words, on the machine that runs bb:
+
+1. **pi is installed, and on the PATH** of both bb's server and the `oats` the plugin runs. bb
+   starts the command `pi` by name. Install it before bb's server starts, or restart bb after:
+   bb then lists pi among its providers as ready.
+2. **The OATS bridge for pi, `@awebai/oats-pi`, is installed in the pi configuration bb's server
+   runs with**, at the same version as the OATS kernel (`pi install npm:@awebai/oats-pi@<the
+   version `oats version` prints>`). The two are released together and tested only as a pair.
+   Without the bridge a pi agent loads none of its skills, so OATS refuses to launch it
+   (`E_BACKEND_NOT_READY`). That configuration is `~/.pi/agent` of the user that runs bb, unless
+   bb's server was started with `PI_CODING_AGENT_DIR`; then name that directory in
+   `settings.oats.bb.piAgentDir` in `oats-local.yaml`. The directory must be writable by that user.
+3. **The aweb extension for pi, `@awebai/pi`, is NOT in that configuration.** A person who also
+   runs pi agents in tmux usually has it in `~/.pi/agent`: OATS then refuses every pi launch on bb
+   (`E_BACKEND_PI_LISTENER`). Give bb's server a pi configuration of its own (point 2).
+4. **A kernel that pairs with a released bridge, 0.70.3 or later for everything shown here.** The
+   question a pi extension's dialog asks reaches the home's card only from bridge 0.70.2.
+5. **A model pi can use.** pi's logins and model list are those of that same configuration. The
+   form's model field lists them (bb's own list for its pi provider): pick one, or give the soul a
+   `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model
+   and is spawned with the harness pi gets NO model from the kernel (the preview's
+   `launch.effective.model` is `null`), and bb's pi then starts on its own default.
+6. Every spawn from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
+   needs.
+
+The provider's README ("pi") has the detail and the reasons; `oats bb doctor` in the deployment and
+the form's own preview say which of these is missing.
 
 ## What the run does
 

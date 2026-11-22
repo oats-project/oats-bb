@@ -252,6 +252,13 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const offer: Offer =
     thread === undefined ? "elsewhere" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
+  // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
+  const instead = (
+    <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
+      <p className="m-0 text-xs text-muted-foreground">{MESSAGE_NOT_ANSWER}</p>
+      {reply}
+    </Disclosure>
+  );
   const where = entry.thread === null ? elsewhere(entry) : null;
   return (
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={answered === null ? offer : "answered"}>
@@ -292,20 +299,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               ))}
               {held ? <DisabledReason>{HELD}</DisabledReason> : null}
             </div>
-            <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
-              <p className="m-0 text-xs text-muted-foreground">{MESSAGE_NOT_ANSWER}</p>
-              {reply}
-            </Disclosure>
+            {instead}
           </>
         ) : offer === "in-thread" ? (
           <>
             <p data-testid="oats-needs-in-thread" className="m-0 text-xs text-muted-foreground">
               {pending ? IN_THREAD : PERMISSION_IN_THREAD}
             </p>
-            <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
-              <p className="m-0 text-xs text-muted-foreground">{MESSAGE_NOT_ANSWER}</p>
-              {reply}
-            </Disclosure>
+            {instead}
           </>
         ) : offer === "reply" ? (
           reply

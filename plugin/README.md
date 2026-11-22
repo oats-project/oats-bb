@@ -159,7 +159,7 @@ shows for it (what happened, how old what is shown is, Retry), and every card's 
 are **held**, with the reason beside them: what is shown may have changed, and a message or an
 answer would go on a question that may no longer be the one asked. Open still opens.
 
-The home has no read of its own: it draws the roster every place shares (`useOats`, called once per
+The home has no read of the roster of its own: it draws the roster every place shares (`useOats`, called once per
 view and passed down), groups it with one pure function (`app/home/board.ts`: every agent in the
 sidebar's order, who needs you, who works, what is finished, and the counts) and says it with
 `app/home/home-words.ts`. The tiles' counts are the four pages' own reads, made only while the

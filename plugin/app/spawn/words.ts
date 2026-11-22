@@ -10,6 +10,7 @@ export const titleFor = (soul: string, workspace: string | null): string => (wor
 
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
+export const READING_SOULS = "Reading the souls…";
 export const NO_SOULS = "This workspace lists no soul to spawn.";
 export const soulUnknown = (soul: string): string => `OATS lists no soul “${soul}” in this deployment. Choose one of these.`;
 export const SOUL_CANNOT = "This soul can’t be spawned.";

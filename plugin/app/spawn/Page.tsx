@@ -394,7 +394,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           {title}
         </h1>
         <RosterNotice oats={oats} />
-        {souls.status === "error" && list === undefined && oats.phase !== "failed" ? (
+        {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
+        {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />
         ) : null}
         <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -414,7 +415,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               >
                 <select data-testid="oats-spawn-soul" data-field="soul" className={INPUT} value={chosen === undefined ? "" : soul} disabled={list === undefined} onChange={(event) => setSoul(event.target.value)}>
                   <option value="" disabled>
-                    {list === undefined ? "Reading the souls…" : W.CHOOSE_SOUL}
+                    {list === undefined && souls.status === "loading" ? W.READING_SOULS : W.CHOOSE_SOUL}
                   </option>
                   {(list ?? []).map((candidate) => (
                     <option key={candidate.name} value={candidate.name}>

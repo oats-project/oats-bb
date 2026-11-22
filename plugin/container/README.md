@@ -18,7 +18,9 @@ host's home; the plugin's directory goes in through `tar` and the artefacts come
 `plugin/container/out/` (ignored by git). The artefacts have an owner (`out/.owner`: the OATS
 instance that ran, else the user; `ARTEFACTS_OWNER` to name one): the first to run in a checkout
 owns `out/`, and a run by another (a reviewer attached to an author's tree) leaves `out/` as it is
-and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them. The real run (`real/`, its own README) has a container
+and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them. A run
+claims its directory when it starts. An `out/` from before this rule has no owner: the next run
+takes it. The real run (`real/`, its own README) has a container
 of its own with the same limits, started after the first is gone, and its artefacts are in
 `plugin/container/real/out/`. bb runs sovereign: no account, `BB_TELEMETRY=false`, bound to loopback.
 
@@ -68,8 +70,9 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
   version, on the real run's mock model (`real/mock-anthropic.mjs`; no login, nothing spent). The
   fixture threads are made on it, and the run checks that each one's turn was answered and bb
   shows it idle before any image is taken: an image of a thread shows a healthy one. Each thread
-  is waited for by name. bb starts the eight turns at once on a cold Claude Code, and now and
-  then leaves one "pending" for good: one that is not idle after 120 s is reported (a `NOTE`,
+  is waited for by name. bb starts the eight turns at once on a cold Claude Code, and a thread
+  has been seen to stay "pending" (a turn in bb's queue) with the others long idle; why is not
+  known. One that is not idle after 120 s is reported (a `NOTE`,
   with what bb says of it), deleted and made again once. A thread that is still not idle fails
   the run, with every thread's name and status, what bb says of the ones that are not idle, and
   the end of bb's and the mock model's logs.

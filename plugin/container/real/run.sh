@@ -36,12 +36,16 @@ OUT=$HERE/out
 # Whose artefacts a directory holds. The first to run in a checkout owns `out/`; a run by another
 # (a reviewer attached to an author's tree: another OATS instance, or ARTEFACTS_OWNER) leaves it as
 # it is and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them.
-OWNER=${ARTEFACTS_OWNER:-${OATS_INSTANCE:-$(id -un)}}
+OWNER=${ARTEFACTS_OWNER:-${OATS_INSTANCE:-$(id -un 2> /dev/null || id -u)}}
 OWNER=$(printf '%s' "$OWNER" | tr -c 'A-Za-z0-9._-' '_')
 if [ -f "$OUT/.owner" ] && [ "$(cat "$OUT/.owner")" != "$OWNER" ]; then
   echo "real: $OUT holds the artefacts of $(cat "$OUT/.owner"); this run's go to $OUT.$OWNER"
   OUT=$OUT.$OWNER
 fi
+# The directory is claimed now, before the run: a run by another that starts beside this one sees
+# whose it is. (An out/ from before this rule has no owner: the next run takes it.)
+mkdir -p "$OUT"
+printf '%s\n' "$OWNER" > "$OUT/.owner"
 if [ -n "$KERNEL_NPM" ]; then
   KERNEL_OID="npm:@awebai/oats@$KERNEL_NPM"
 else

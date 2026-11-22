@@ -17,6 +17,16 @@ test("the provider workflow reads the repository only, pins every action by comm
   assert.doesNotMatch(code, /secrets\.|pull_request_target|workflow_run|docker login|packages: write/);
 });
 
+test("a pull request runs the provider's jobs only for what its tests read; every push to main runs them", () => {
+  const paths = ["oats-package/**", "test/**", "scripts/**", "bb-version", "package.json", "plugin/package.json", "container/**",
+    ".github/workflows/container.yml", ".github/workflows/provider.yml"];
+  // The whole `on:` block, compared entire: a path added or dropped, a filter on push, another trigger changes it.
+  const on = code.match(/^on:\n(?:(?: +.*)?\n)+/m)?.[0].replace(/\n+$/, "\n");
+  const list = paths.map((path) => `      - "${path}"\n`).join("");
+  assert.equal(on, `on:\n  pull_request:\n    paths:\n${list}  push:\n    branches: [main]\n`);
+  assert.equal(code.match(/^on:$/gm).length, 1);
+});
+
 // The second contract file runs Claude Code's sandbox inside its container, which makes a
 // user namespace inside bubblewrap's. Ubuntu's AppArmor forbids that through a profile it
 // attaches to /usr/bin/bwrap by path (bwrap-userns-restrict), which an unconfined

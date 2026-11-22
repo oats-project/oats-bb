@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A11: the Souls page (navPanel `souls`): Preview, Spawn in bb, and a soul that cannot be spawned.
+// A11: the Souls page (navPanel `souls`): a soul with its agents, the way to the New agent form, and a soul that cannot be spawned.
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -26,10 +26,6 @@ async function souls(subPath: string, over: Partial<Handlers> = {}, agents?: Age
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over, agents), sidebarThreads: { status: "ready", threads } });
 }
 
-function fill(slot: Awaited<ReturnType<typeof souls>>, name: string, task: string) {
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: name } });
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: task } });
-}
 const rpcOf = (slot: Awaited<ReturnType<typeof souls>>, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method);
 
 test("the list: each soul with the number of this deployment's agents; a click opens the soul", async () => {
@@ -56,115 +52,12 @@ test("the picked soul: description, origin, capabilities, and its agents by wher
   expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("Kernel fix developeron tmux");
 });
 
-test("the New agent form says, in words and with no control, that the agent runs in bb's full mode", async () => {
+test("a soul that can be spawned: New agent opens the form's own page with that soul chosen", async () => {
   const slot = await souls("oats-developer");
-  await slot.findByTestId("oats-spawn-form");
-  const line = slot.getByTestId("oats-spawn-mode");
-  expect(line.textContent).toBe("Runs in bb's full mode: no sandbox.");
-  expect(line.querySelector("input, button, select, textarea, a")).toBeNull();
-  // It is under the heading and above the form's fields.
-  expect(line.compareDocumentPosition(slot.getByTestId("oats-spawn-form")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-});
-
-test("Preview shows what oats spawn --preview would do, and spawns nothing", async () => {
-  const slot = await souls("oats-developer", {
-    spawnPreview: () => ({
-      summary: {
-        modules: ["oats.core 2.6.0", "oats.aweb 1.28.0"],
-        teams: ["oats (default:oats.aweb.ai)"],
-        launch: "claude-opus on bb",
-        warnings: ["channel-dev-confirmation: OATS confirms the development-channel prompt"],
-        problems: [],
-      },
-    }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep the learning rate.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  const preview = await slot.findByTestId("oats-preview");
-  for (const text of ["oats.core 2.6.0", "oats (default:oats.aweb.ai)", "claude-opus on bb", "channel-dev-confirmation"]) {
-    expect(preview.textContent).toContain(text);
-  }
-  expect(rpcOf(slot, "spawnPreview").map((call) => call.input)).toEqual([
-    { soul: "oats-developer", name: "ranker-v4-probe", task: "Sweep the learning rate." },
-  ]);
-  expect(rpcOf(slot, "spawn")).toEqual([]);
-  expect(slot.inspection.navigateCalls).toEqual([]);
-});
-
-test("Spawn calls spawn once with { soul, name, task, key } and, on ok, navigates to the returned thread", async () => {
-  const slot = await souls("oats-developer", { spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep the learning rate.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_new" }]));
-  const calls = rpcOf(slot, "spawn");
-  expect(calls).toHaveLength(1);
-  const input = calls[0]!.input as { soul: string; name: string; task: string; key: string };
-  expect(Object.keys(input).sort()).toEqual(["key", "name", "soul", "task"]);
-  expect(input).toMatchObject({ soul: "oats-developer", name: "ranker-v4-probe", task: "Sweep the learning rate." });
-  expect(input.key).toMatch(/^[0-9a-f]{32}$/);
-});
-
-test("a refusal's code and message are shown, line by line, nothing is navigated, and a retry of the same form reuses the key", async () => {
-  const refusal = "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists\n  retire it first: oats retire ranker-v4-probe";
-  let refuse = true;
-  const slot = await souls("oats-developer", {
-    spawn: () => {
-      if (refuse) throw new Error(refusal);
-      return { instance: "ranker-v4-probe", threadId: "thr_new" };
-    },
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  // The kernel's code and each of its lines, on a line of its own: no line break is drawn (ui/text.ts).
-  const alert = await slot.findByRole("alert");
-  expect(Array.from(alert.querySelectorAll("span.block")).map((line) => line.textContent)).toEqual([
-    "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists",
-    "retire it first: oats retire ranker-v4-probe",
-  ]);
-  expect(slot.inspection.navigateCalls).toEqual([]);
-
-  refuse = false;
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toHaveLength(1));
-  const keys = rpcOf(slot, "spawn").map((call) => (call.input as { key: string }).key);
-  expect(keys).toHaveLength(2);
-  expect(keys[0]).toBe(keys[1]);
-});
-
-test("a changed form is a new intent: it gets a new key", async () => {
-  const slot = await souls("oats-developer", {
-    spawn: () => {
-      throw new Error("E_SPAWN_REFUSED: no");
-    },
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "one", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await slot.findByRole("alert");
-  fill(slot, "two", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(rpcOf(slot, "spawn")).toHaveLength(2));
-  const keys = rpcOf(slot, "spawn").map((call) => (call.input as { key: string }).key);
-  expect(keys[0]).not.toBe(keys[1]);
-});
-
-test("a name the kernel would refuse never leaves the form", async () => {
-  const slot = await souls("oats-developer");
-  await slot.findByTestId("oats-spawn-form");
-  for (const bad of ["Has Space", "with/slash", "Upper", "-leading-dash", "a".repeat(64)]) {
-    fill(slot, bad, "Task.");
-    expect((slot.getByTestId("oats-spawn-submit") as HTMLButtonElement).disabled).toBe(true);
-    expect((slot.getByTestId("oats-spawn-preview") as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.submit(slot.getByTestId("oats-spawn-form"));
-  }
-  fill(slot, "good-name", "   ");
-  expect((slot.getByTestId("oats-spawn-submit") as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.submit(slot.getByTestId("oats-spawn-form"));
-  expect(rpcOf(slot, "spawn")).toEqual([]);
-  expect(rpcOf(slot, "spawnPreview")).toEqual([]);
+  fireEvent.click(await slot.findByTestId("oats-soul-new-agent"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent", options: { subPath: "oats-developer" } }]);
+  // The form is not on the soul's page: its tests are test/spawn/page.test.tsx.
+  expect(slot.queryByTestId("oats-spawn-form")).toBeNull();
 });
 
 test("spawnable: false shows the problem and no form", async () => {
@@ -216,7 +109,7 @@ test("a package soul's agents are matched by its roster agent name, not by its k
   });
   expect((await slot.findByTestId("oats-soul-agent")).getAttribute("href")).toBe("/projects/proj_harvest/threads/thr_harvest");
   expect(slot.getByTestId("oats-soul-row").textContent).toBe("oats.okf/knowledge-harvester1 agent");
-  expect(slot.getByTestId("oats-spawn-form")).toBeTruthy();
+  expect(slot.getByTestId("oats-soul-new-agent")).toBeTruthy();
   // and the row opens it with the key as bb's unencoded segments
   fireEvent.click(slot.getByTestId("oats-soul-row"));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats.okf/knowledge-harvester" } }]);
@@ -239,47 +132,6 @@ test("while bb is still listing its threads a soul's agents are not shown as mis
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(slot.queryByTestId("oats-soul-agent-detached")).toBeNull();
   expect(slot.queryByText("thread missing")).toBeNull();
-});
-
-test("a preview is taken down when the name or the task it answered for changes", async () => {
-  const slot = await souls("oats-developer", {
-    spawnPreview: () => ({ summary: { modules: ["oats.core 2.6.0"], teams: [], launch: null, warnings: [], problems: [] } }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  for (const change of ["oats-spawn-name", "oats-spawn-task"]) {
-    fill(slot, "a-one", "Task.");
-    fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-    await slot.findByTestId("oats-preview");
-    fireEvent.change(slot.getByTestId(change), { target: { value: "b-two" } });
-    expect(slot.queryByTestId("oats-preview")).toBeNull();
-  }
-});
-
-test("a preview that answers after the name changed is not drawn for the new input", async () => {
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => (release = resolve));
-  const slot = await souls("oats-developer", {
-    spawnPreview: async () => (await held, { summary: { modules: [], teams: [], launch: null, warnings: [], problems: ["E_INSTANCE_EXISTS: first-name exists"] } }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "first-name", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: "second-name" } });
-  release();
-  await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview")); // the call is over
-  expect(slot.queryByTestId("oats-preview")).toBeNull();
-});
-
-test("a preview's refusal that arrives after the task changed is dropped too", async () => {
-  let refuse!: (cause: Error) => void;
-  const slot = await souls("oats-developer", { spawnPreview: () => new Promise<never>((_resolve, reject) => (refuse = reject)) });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "a-name", "First task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: "Second task." } });
-  refuse(new Error("E_TASK_REFUSED: about the first task"));
-  await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview"));
-  expect(slot.queryByRole("alert")).toBeNull();
 });
 
 test("an agent with no bb thread opens its own page, where a feature gives agents one", async () => {

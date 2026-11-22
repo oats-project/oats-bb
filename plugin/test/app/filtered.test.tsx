@@ -111,19 +111,3 @@ test("a soul's page: its description and its problem, and a capability's descrip
   expect(capability.querySelector("span")!.textContent).toBe(`oats${GONE}core`);
   expect(capability.querySelector("p")!.textContent).toBe("[withheld]");
 });
-
-test("the spawn preview: each of the kernel's items is one filtered line", async () => {
-  const slot = await page(
-    "souls",
-    "oats-developer",
-    handlers({
-      spawnPreview: () => ({ summary: { modules: ["oats.core\t2.6.0"], teams: [`oats${BIDI}`], launch: "claude ·\nopus", warnings: ["the hook printed token: abc123"], problems: ["no clone\nof the repository"] } }),
-    }),
-  );
-  await slot.findByTestId("oats-spawn-form");
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: "ranker-v4-probe" } });
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: "Sweep." } });
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  const preview = await slot.findByTestId("oats-preview");
-  await waitFor(() => expect(Array.from(preview.querySelectorAll("li")).map((item) => item.textContent)).toEqual(["no clone of the repository", "[withheld]", "oats.core 2.6.0", `oats${GONE}`, "claude · opus"]));
-});

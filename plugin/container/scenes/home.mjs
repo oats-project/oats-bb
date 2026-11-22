@@ -3,6 +3,7 @@
 //
 //   detached     an agent whose session failed, one the kernel cannot reach, one whose bb thread is
 //                gone: in the summary and in Home › Agents
+//   pages-default  the release's default: the home alone, so the Agents tile and no other
 //   fixtures     the recorded roster: three agents need the person (each card with its own reply),
 //                the summary, the tiles, who works, what is finished; Home › Agents; a tile whose
 //                count cannot be read; how soon a change the kernel records is on the home
@@ -10,8 +11,7 @@
 //   home-empty   a workspace with no agent
 //   home-stale   OATS cannot be read after it was: the roster as last read, its acts held
 //
-// In `fixtures` also: the release's default (the home alone), a first read (loading, and one that
-// fails), the installed oats older than the plugin works with, one that speaks a newer
+// In `fixtures` also: a first read (loading, and one that fails), the installed oats older than the plugin works with, one that speaks a newer
 // desktop API, one of a later minor than the plugin was tested with.
 //
 // A scene that opens, presses or changes something waits on what it then reads, and a failing
@@ -112,24 +112,8 @@ async function untilRoster(matches, seconds = 40) {
   }
   return undefined;
 }
-/** Every page of the plugin, for the setting `pages` (the release's default is `home` alone). Two spellings of one value: setting the other is a change. */
-const EVERY_PAGE = ["home, automations, souls, capabilities, teams, machines", "home,automations,souls,capabilities,teams,machines"];
-let spelled = -1;
-/**
- * Sets which pages are shown. A change of the plugin's settings also makes its server forget the
- * roster it holds (it may be another deployment's): the next read is a first read. `value` left
- * out: every page, in the spelling that is a change from the last one set here.
- */
-function pages(value) {
-  if (value === undefined) spelled = (spelled + 1) % EVERY_PAGE.length;
-  execFileSync("bb", ["plugin", "config", "oats", "set", "pages", value ?? EVERY_PAGE[spelled]], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-}
-/** Every page is shown, and the roster is read: what every scene but the default's starts from. */
-async function everyPage(check, at) {
-  if (spelled === -1) pages();
-  const read = await untilRoster((roster) => roster.ok === true);
-  check(read !== undefined, `${at} every page is shown, and the roster is read`, JSON.stringify(read ?? null).slice(0, 300));
-}
+/** Every page, spelled another way than the harness's ALL_PAGES: setting it is a change of the plugin's settings and no change of what is shown. */
+const ALL_PAGES_AGAIN = "home,automations,souls,capabilities,teams,machines";
 /** No tile still counts: an image shows one state (a scene about "Counting…" would not wait for this). */
 const counted = `![...document.querySelectorAll(${JSON.stringify(`${PAGE} ${testId("oats-home-tiles")} button`)})].some((tile) => tile.innerText.includes("Counting"))`;
 
@@ -163,7 +147,6 @@ export default [
     name: "the home: what needs you, each card with its reply; the summary, the tiles, who works",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       check(await open(page, within("oats-needs-card")), `${at} the home draws its cards`, await page.evaluate(textOf(PAGE)));
       check((await page.evaluate(textOf(within("oats-home-title")))) === "Home", `${at} the page is headed "Home"`, await page.evaluate(textOf(within("oats-home-title"))));
       const needs = await page.until(`${heading("oats-home-needs", "needs you 3")} ? ${headingOf("oats-home-needs")} : ""`, 15);
@@ -229,7 +212,6 @@ export default [
     name: "Home › Agents: every agent OATS has, and the way back",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       check(await open(page, within("oats-tile-agents")), `${at} the home draws the Agents tile`, await page.evaluate(textOf(PAGE)));
       await page.evaluate(click(within("oats-tile-agents")));
       const title = await page.until(`${heading("oats-home-agents", "every agent 8")} ? ${headingOf("oats-home-agents")} : ""`, 15);
@@ -260,7 +242,6 @@ export default [
     name: "a tile whose count cannot be read says so and still leads to its page",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       setVerb("teams", FAILS);
       try {
         refresh();
@@ -283,7 +264,6 @@ export default [
     name: "the installed oats against what the plugin is built for: the card, the card with no command, the one line",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       /** What the fake `oats version --json` answers from now on; the server's kept answer is dropped by a refresh. */
       const installed = (fields) => {
         setVerb("version", fields === null ? null : { stdout: JSON.stringify({ ...VERSION, ...fields }) });
@@ -325,37 +305,29 @@ export default [
     },
   },
   {
-    stage: "fixtures",
+    stage: "pages-default",
     name: "the release's default shows the home alone: the Agents tile and no other",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
-      pages("home");
-      try {
-        check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} the roster is read under the default`, "");
-        check(await open(page, within("oats-home-tiles")), `${at} the home draws its tiles`, await page.evaluate(textOf(PAGE)));
-        const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length === 1 ? JSON.stringify(tiles) : ""; })()`, 20);
-        check(tiles === JSON.stringify(["Agents 8"]), `${at} with the default the one tile is Agents: a tile leads to a page that is shown`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
-        await shown(page, check, at, within("oats-home-summary"), "the summary and the one tile");
-        await sound(page, viewport, check, at, "the home under the default");
-        await page.shot(`home-${viewport.name}-default`);
-      } finally {
-        pages();
-        await untilRoster((roster) => roster.ok === true);
-      }
+      check(await open(page, within("oats-home-tiles")), `${at} the home draws its tiles`, await page.evaluate(textOf(PAGE)));
+      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length === 1 && /\\d$/.test(tiles[0]) ? JSON.stringify(tiles) : ""; })()`, 30);
+      check(Boolean(tiles) && /^\["Agents \d+"\]$/.test(tiles), `${at} with the default the one tile is Agents: a tile leads to a page that is shown`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      await shown(page, check, at, within("oats-home-summary"), "the summary and the one tile");
+      await sound(page, viewport, check, at, "the home under the default");
+      await page.shot(`home-${viewport.name}-default`);
     },
   },
   {
     stage: "fixtures",
     name: "a first read: \"Reading your agents…\" while OATS is read, and what the home says when that read fails",
-    run: async ({ page, at, viewport, check: plain }) => {
+    run: async ({ page, at, viewport, check: plain, pages, ALL_PAGES }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       const status = verbNow("status");
       try {
         // A slow first read: the server holds no roster (its settings changed), and `oats status` takes its time.
+        // A change of the plugin's settings makes its server forget the roster it holds (it may be another deployment's): the next read is a first read.
         setVerb("status", { ...status, sleepMs: 12_000 });
-        pages();
+        pages(ALL_PAGES_AGAIN);
         await page.goto(HOME);
         const reading = await page.until(`(() => { const text = ${textOf(PAGE)}; return text.includes("Reading your agents") ? text : ""; })()`, 10);
         check(reading === "Home Reading your agents…", `${at} while the roster is read for the first time the home says so, and nothing else`, reading ?? (await page.evaluate(textOf(PAGE))));
@@ -367,7 +339,7 @@ export default [
 
         // A first read that fails: no roster was ever read under these settings.
         setVerb("status", FAILS);
-        pages();
+        pages(ALL_PAGES);
         check((await untilRoster((roster) => roster.ok === false && (roster.last === undefined || roster.last === null))) !== undefined, `${at} the server has no roster and its read fails`, JSON.stringify(snapshot()).slice(0, 300));
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
@@ -376,8 +348,8 @@ export default [
         await page.shot(`home-${viewport.name}-unreadable`);
       } finally {
         setVerb("status", status ?? null);
-        pages();
-        await untilRoster((roster) => roster.ok === true);
+        pages(ALL_PAGES);
+        check((await untilRoster((roster) => roster.ok === true)) !== undefined, `${at} and the roster is read again afterwards`, JSON.stringify(snapshot()).slice(0, 300));
       }
     },
   },
@@ -386,7 +358,6 @@ export default [
     name: "an agent whose session failed, one the kernel cannot reach, one whose bb thread is gone: in the summary and in Home › Agents",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       check(await open(page, within("oats-home-summary")), `${at} the home draws its summary`, await page.evaluate(textOf(PAGE)));
       const summary = await page.until(`(() => { const text = ${textOf(within("oats-home-summary"))}; return /1 failed/.test(text) && /1 unreachable/.test(text) ? text : ""; })()`, 20);
       const numbers = String(summary ?? "").split(" · ").map((part) => Number(part.split(" ")[0]));
@@ -406,7 +377,6 @@ export default [
     name: "freshness: a change the kernel records is on the home within 3 s",
     run: async ({ page, at, check: plain, record }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       check(await open(page, within("oats-home-working")), `${at} the home lists who works`, await page.evaluate(textOf(PAGE)));
       const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^working \\d+$/i.test(text) ? text : ""; })()`, 30);
       const n = Number(String(before ?? "").split(" ")[1]);
@@ -424,7 +394,6 @@ export default [
     name: "more agents need the person than the home shows at once: eight, then all; an agent on tmux has its card",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       const all = 3 + MANY;
       check(await open(page, within("oats-home-needs-all")), `${at} the home offers the rest of what needs the person`, await page.evaluate(textOf(PAGE)));
       const first = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => card.dataset.instance))`));
@@ -458,7 +427,6 @@ export default [
     name: "a workspace with no agent: what OATS does, and New agent",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      await everyPage(check, at);
       check(await open(page, within("oats-home-new-agent")), `${at} the home offers New agent`, await page.evaluate(textOf(PAGE)));
       const words = await page.evaluate(textOf(within("oats-empty")));
       check(words === "OATS runs your agents: each one is a soul at work on a machine of yours. Start one, and Home shows what needs you and what you have. New agent", `${at} it says what OATS does in two lines`, words);

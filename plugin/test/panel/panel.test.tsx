@@ -500,11 +500,11 @@ test("the page of an agent with no thread in bb goes back to Home; a name OATS d
   await waitFor(() => expect(text(none.getByTestId("oats-agent-page"))).toContain("No agent is named here."));
 });
 
-test("while OATS cannot be read the page says the kernel's refusal, with Retry", async () => {
+test("while OATS cannot be read the page shows the notice every place shows: what happened in words, the kernel's line and code, Retry", async () => {
   const slot = await agentPage(CHILD, { rpc: handlers({ snapshot: () => ({ ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }) }) });
   const alert = await slot.findByRole("alert");
-  expect(text(within(alert).getByRole("heading"))).toBe("OATS could not be read");
-  expect(text(alert)).toContain("no oats-local.yaml here");
+  expect(text(within(alert).getByRole("heading"))).toBe("OATS could not read this deployment");
+  expect(text(alert)).toContain("OATS says: no oats-local.yaml here");
   expect(text(alert)).toContain("E_LOCAL_MISSING");
   expect(within(alert).getByRole("button", { name: "Retry" })).not.toBeNull();
 });

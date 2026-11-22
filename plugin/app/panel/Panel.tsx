@@ -76,16 +76,8 @@ export function AgentTab({ agent, threadId }: AgentTabProps) {
 /** A thread that holds no question: what the tree's rule is given for an agent with no bb thread. */
 const NO_THREAD: BbThread = { id: "", projectId: null, displayTitle: "", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false };
 
-/**
- * The state the panel draws: the tree's own rule (model/view.ts `state`, over the one gate for a
- * claim, `claimOf`), so the sidebar, the thread's row and the panel say one word for one state,
- * and show a claim or not together. And an agent the kernel calls not running, with no more said (a tmux
- * agent's dead pane), is Stopped: the tree's rule has no word of its own for it.
- */
-function drawnState(agent: Agent, node: Node | undefined): AgentState {
-  const drawn = stateOf(agent, node?.thread ?? NO_THREAD);
-  return drawn === "idle" && agent.running === false ? "stopped" : drawn;
-}
+/** The state the panel draws: the one rule (model/view.ts `state`, over the one gate for a claim), so the sidebar, the thread's row and the panel say one word for one state. */
+const drawnState = (agent: Agent, node: Node | undefined): AgentState => stateOf(agent, node?.thread ?? NO_THREAD);
 
 /**
  * The panel of one agent: by its thread (an agent's thread in bb) or by its instance name (an

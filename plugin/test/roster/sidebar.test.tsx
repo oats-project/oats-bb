@@ -388,3 +388,31 @@ test("the row of the plugin's page that is shown is the selected one (D-037), an
   page.unmount();
   await waitFor(() => expect(current()).toEqual([]));
 });
+
+// One rule for a state (model/view.ts `state`), read by the sidebar's row and by the agent's panel:
+// a tmux agent that is stopped, as the kernel prints it (`{ running: false }`, no runtimeState;
+// awebai/oats lib/instance-listing.mjs at 95c7b43b3), says "Stopped" in both, rendered together.
+test("a stopped tmux agent says Stopped in its sidebar row and in its own panel", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.backend === "tmux" ? { ...agent, running: false, runtimeState: null } : agent));
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const { InstancePanel } = await import("../../app/panel");
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <InstancePanel instance="kernel-fix-developer" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: sidebarThreads() },
+  );
+  const row = (await slot.findAllByTestId("oats-agent-row-threadless")).find((candidate) => candidate.getAttribute("data-instance") === "kernel-fix-developer")!;
+  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Stopped · oats-developer · runs in tmux");
+  expect(row.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("stopped");
+  const header = await slot.findByTestId("oats-panel-state");
+  expect(header.querySelector("[data-state]")!.getAttribute("data-state")).toBe("stopped");
+  expect(header.textContent).toContain("Stopped");
+});

@@ -171,7 +171,7 @@ describe("A2 state(): first match wins", () => {
     expect(state(agent("a", { runtimeState: "shell", running: true }), t)).toBe("error");
     expect(state(agent("a", { running: true }), t)).toBe("working");
     expect(state(agent("a", { running: null }), t)).toBe("idle");
-    expect(state(agent("a", { running: false }), t)).toBe("idle");
+    expect(state(agent("a", { running: false }), t)).toBe("stopped"); // "idle" until A2 was amended on 2026-11-22 (the test below says why)
   });
   test("an unknown runtimeState word is idle", () => {
     expect(state(agent("a", { runtimeState: "hibernating" }), t)).toBe("idle");
@@ -199,6 +199,18 @@ describe("A2 state(): first match wins", () => {
     expect(tmux({ running: null, runtimeState: "unreachable" })).toBe("unreachable");
     expect(tmux({ running: null, runtimeState: null })).toBe("idle");
     expect(tmux({ running: false, runtimeState: "stopped" })).toBe("stopped");
+  });
+  // The spec's author amended A2 on 2026-11-22: an agent the kernel calls not running, with no
+  // other word, is "stopped". It is what the kernel prints for a tmux row whose window is gone or
+  // whose harness does not run: `{ running: false }` and no runtimeState (awebai/oats
+  // lib/instance-listing.mjs:256, :261 at 95c7b43b3). It read "idle" until then.
+  test("an agent the kernel calls not running, with no other word, is stopped: a tmux row as the kernel prints it; a failed or unreachable one is told first", () => {
+    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null }), null)).toBe("stopped");
+    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null, waiting: claim }), null)).toBe("stopped"); // and its claim is not shown
+    expect(state(agent("a", { running: false, runtimeState: null }), t)).toBe("stopped");
+    expect(state(agent("a", { running: false, runtimeState: "shell" }), t)).toBe("error");
+    expect(state(agent("a", { running: false, runtimeState: "unreachable" }), t)).toBe("unreachable");
+    expect(state(agent("a", { running: null, runtimeState: null }), t)).toBe("idle"); // nothing said: idle, as before
   });
   test("the fixtures: three need you, two work, one is stopped, one is idle and unread", () => {
     const v = view(fixtureAgents(), fixtureThreads());

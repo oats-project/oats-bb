@@ -123,8 +123,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
       </section>
       <section className="flex flex-col gap-2">
         <Heading>Agents</Heading>
-        {/* The agents are the roster's: while OATS cannot be read, the notice says so, above the ones last read. */}
-        <RosterNotice oats={oats} />
+        {/* The agents are the roster's, as last read while OATS cannot be read: the page's notice says so. */}
         {oats.phase === "ready" ? <SoulAgents soul={soul} oats={oats} /> : oats.phase === "loading" ? <Loading>Reading your agents…</Loading> : null}
       </section>
       <section className="flex flex-col gap-2">
@@ -162,6 +161,8 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   return (
     <Page testId="oats-souls-page">
       {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : null}
+      {/* Each soul's count of agents, and a soul's agents, are the roster's: while OATS cannot be read the page says so once, above both. */}
+      <RosterNotice oats={oats} />
       <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start">
         {/* At phone width one of the two shows at a time: the list, or the picked soul with Back. */}
         <nav aria-label="Souls" className={`flex-col gap-1 md:flex md:w-64 md:shrink-0 ${picked === null ? "flex" : "hidden"}`}>

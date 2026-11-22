@@ -47,8 +47,12 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
 
-When something is missing, bb stays fully usable: its threads are listed as usual, and the plugin
-shows one line that says what is missing. The line's code:
+When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
+is missing in a person's words, what to do, the code, the plugin's or the kernel's own message
+under Details, Retry, and Open settings where a setting mends it. Where OATS was read before, the
+roster stays as last read, marked with its age ("Last observation — <age>"), and its acts stay,
+each "as of <age>": an act goes to the kernel, which answers for what it knows now. Where it never
+was, bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
 |---|---|
@@ -81,8 +85,9 @@ bb settings ui reset sidebar.threadListProvider
 Stop an OATS agent with **Stop agent (OATS)** in the thread's menu: it stops the agent through
 OATS (the kernel's plan, then one confirmation), so a stopped agent stays stopped. bb's own
 composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts on its
-own when one of them is used: an agent whose thread was archived or deleted in bb leaves the tree
-and shows on its soul's page as "thread missing", with Start and Retire. Nothing is retired because
+own when one of them is used: an agent whose thread was archived or deleted in bb stays in the
+roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its soul's
+page says "thread missing", with Start and Retire. Nothing is retired because
 a thread was deleted.
 
 ## The instance panel
@@ -262,7 +267,7 @@ What the features share, beyond the entries:
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
   on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
   `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
-  button opens it at the phone's width, and an agent with no bb thread opens it from its soul's page.
+  button opens it at the phone's width, and an agent with no bb thread opens it from its row in the sidebar and from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;

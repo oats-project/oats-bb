@@ -695,12 +695,6 @@ try {
       if (verb === "stopPlan" || verb === "retirePlan") check(error.code === "E_SESSION_UNKNOWN", `the ${verb === "stopPlan" ? "stop" : "retire"} plan of an agent that is gone is refused with E_SESSION_UNKNOWN`, error.code);
     }
   }
-  // Asked once, to know it, and built on nowhere: a start addressed by the instance's NAME (the
-  // plugin starts by home, which is what the kernel's contract gives it).
-  for (const verb of ["start", "restart"]) {
-    const byName = oats("session", verb, A.instance, "--json");
-    note(`oats session ${verb} <name> on the retired agent (not used by the plugin) answers exit ${byName.exit}: ${String(byName.stdout || byName.stderr).replace(/\s+/g, " ").trim().slice(0, 400)}`);
-  }
   check(!existsSync(home) && rowOf(A.instance) === undefined, "and nothing was made by asking: no home, no row");
 
   // ======================================================================= part B

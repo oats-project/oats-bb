@@ -30,7 +30,6 @@ import { instanceDisplayName, readAge } from "../ui/words";
 import { Unreadable } from "./unreadable";
 import { useNow } from "./now";
 
-
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {
     id: thread.id,

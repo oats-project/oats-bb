@@ -60,10 +60,9 @@ export async function run(verb: RunVerb, instance: string, rpc: Rpc, navigate: B
     set(null);
     navigate.toThread(threadId);
   } catch (cause) {
-    // The thread menu contains and hides a thrown error: say it here instead, without replacing
-    // a dialog the person opened meanwhile.
-    // The kernel's refusal, as it is. (An agent that is gone is not told from its words: the
-    // server reads the roster again after every act, and that read drops its row.)
+    // The thread menu contains and hides a thrown error: the kernel's refusal is said here instead,
+    // as it is, without replacing a dialog the person opened meanwhile. (An agent that is gone is
+    // not told from a refusal's words: the roster read after every act drops its row.)
     const failed: Request = { kind: "failed", verb, instance, message: errorMessage(cause) };
     if (current === mine || current === null) set(failed);
     else deferred = failed;
@@ -103,9 +102,8 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
       },
       (cause: unknown) => {
         const error = errorMessage(cause);
-        // The kernel no longer has an agent of this name (the roster on screen was read before it
-        // went): its row says so until the next roster is read.
-        // A plan refused for a name the kernel does not know: the agent is gone, and its row says so.
+        // A plan refused for a name the kernel does not know: the agent went after the roster on
+        // screen was read, and its row says so until the next roster.
         const gone = planSaysGone(refusalCode(error));
         if (gone) markGone(request.instance);
         if (wanted) setState({ phase: "unreadable", error, gone });

@@ -21,8 +21,13 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 
 /**
  * The state of one agent on its thread. First match wins. Activity is the kernel's word
- * (`running`), never inferred: bb cannot tell a live idle agent from a settled one, so anything
- * the kernel does not call running is "idle", an unknown `runtimeState` word included.
+ * (`running`), never inferred: bb cannot tell a live idle agent from a settled one, so an agent
+ * the kernel says nothing of (`running` null) is "idle", an unknown `runtimeState` word included.
+ * One the kernel calls not running (`running === false`) with no other word is "stopped": what it
+ * prints for a tmux row whose window is gone or whose harness does not run (awebai/oats
+ * lib/instance-listing.mjs at 95c7b43b3: `{ running: false }`, no `runtimeState`); a bb row comes
+ * with "stopped" beside it. A session that ended in a shell, or that the kernel cannot reach, is
+ * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
  */
 export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
@@ -30,6 +35,7 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
   if (agent.running === true) return "working";
+  if (agent.running === false) return "stopped";
   return "idle";
 }
 

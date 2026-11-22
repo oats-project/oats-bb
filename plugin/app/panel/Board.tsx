@@ -168,7 +168,6 @@ function Questions({
   const [answer, setAnswer] = useState<Answer | null>(null);
   /** The occurrence whose answer went, for the quiet note under it. */
   const [sentFor, setSentFor] = useState<string | null>(null);
-  const [contextOpen, setContextOpen] = useState(false);
   const zone = useRef<HTMLDivElement>(null);
   const live = useRef(true);
   useEffect(() => () => void (live.current = false), []);
@@ -176,8 +175,6 @@ function Questions({
   const at = kept >= 0 ? kept : Math.min(index, Math.max(0, questions.length - 1));
   const question = questions[at];
   const key = question === undefined ? null : occurrence(question);
-  // Another question, or the same id asked again: its context fold starts closed.
-  useEffect(() => setContextOpen(false), [key]);
   if (question === undefined || key === null) return null;
 
   const turn = (step: number) => {
@@ -222,7 +219,9 @@ function Questions({
       zone.current?.focus();
     } else if (event.key === "c" && question.hasContext) {
       event.preventDefault();
-      setContextOpen((open) => !open);
+      // The fold is the browser's own: turned as a press on it turns it.
+      const fold = zone.current?.querySelector<HTMLDetailsElement>('[data-testid="oats-panel-question-context"]');
+      if (fold) fold.open = !fold.open;
     }
   };
 
@@ -288,7 +287,8 @@ function Questions({
           </p>
         )}
         {!question.hasContext ? null : (
-          <Disclosure summary={CONTEXT} open={contextOpen} onToggle={setContextOpen} testId="oats-panel-question-context">
+          // Keyed by the question's occurrence: another question, or the same id asked again, starts with its fold closed.
+          <Disclosure key={key} summary={CONTEXT} testId="oats-panel-question-context">
             <p className="m-0 text-xs text-muted-foreground">{says(name)}</p>
             {context === null ? (
               <p className="m-0 text-muted-foreground">{contextWords}</p>

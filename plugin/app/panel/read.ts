@@ -1,12 +1,17 @@
 // The panel's reads of one instance (app/store.ts says how the plugin's reads work): the facts of
-// the roster's row, kept fresh, and the reads that run a command of their own, read when shown.
-// "When shown" is the first time a part is on the page: whether a part shown again (a tab turned
-// back to) reads again is bb's query client's call, and none of these reads is on a timer.
+// the roster's row, kept fresh, and the reads that run a command of their own. Such a read runs
+// once, when its part is first shown for the instance in this app window, and again only when a
+// person asks (Refresh, Retry) or what it depends on changed (`again`). A part shown again (a tab
+// turned back to) shows what was read: bb's query client would read a mounted query again once
+// its answer is 2 s old, so the query is on only while it holds no answer. None is on a timer.
+// What is left to bb: a read with no answer yet (in flight, or failed) is a query that is on, and
+// bb reads those again when the window takes focus or the network returns while its own realtime
+// connection is down.
 import { useEffect, useRef, useState } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import type { PluginRpcResult, StandardSchemaV1InferInput } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../../contract";
-import { errorMessage, type Read } from "../store";
+import { errorMessage, onWindowReset, type Read } from "../store";
 
 type Contract = typeof rpcContract;
 /** The panel's reads of one instance. */
@@ -31,7 +36,12 @@ function usePanelRead<Method extends PanelMethod>(
   input: StandardSchemaV1InferInput<Contract[Method]["input"]>,
   { enabled = true, live = false, again = "" }: { enabled?: boolean; live?: boolean; again?: string } = {},
 ): PanelRead<Method> {
-  const query = useRpcQuery({ contract: rpcContract, method, input, enabled });
+  // A read that runs a command starts off, is turned on once it is seen to hold no answer, and
+  // off again when it has one: from then on it reads when told to.
+  const [on, setOn] = useState(false);
+  const query = useRpcQuery({ contract: rpcContract, method, input, enabled: enabled && (live || on) });
+  const held = query.data !== undefined;
+  useEffect(() => setOn(!held), [held]);
   const refetch = useRef(query.refetch);
   useEffect(() => {
     refetch.current = query.refetch;
@@ -41,14 +51,18 @@ function usePanelRead<Method extends PanelMethod>(
     if (live && heldAtMount.current) void refetch.current();
   }, [live]);
   // What the read depends on changed (the instance was started again, its soul moved): read again.
-  const readFor = useRef(again);
+  // What the held answer was read for outlives the part (a tab turned away from), so a change
+  // while it was off the page is seen when it comes back.
+  const key = `${method} ${JSON.stringify(input)}`;
+  const readFor = useRef(lastReadFor.get(key) ?? again);
   useEffect(() => {
+    if (again !== "") lastReadFor.set(key, again);
     if (readFor.current === again) return;
     // The first value known is what the first read was for, not a change.
-    const first = readFor.current === "";
+    const unknown = readFor.current === "";
     readFor.current = again;
-    if (enabled && !first) void refetch.current();
-  }, [again, enabled]);
+    if (enabled && !unknown) void refetch.current();
+  }, [again, enabled, key]);
   useRealtime(REALTIME_CHANGED, () => {
     if (live && enabled) void refetch.current();
   });
@@ -60,13 +74,17 @@ function usePanelRead<Method extends PanelMethod>(
   return { status: "ready", data, error: null, retry, fetching };
 }
 
+/** What each read's held answer was read for (`again`), by method and input, in this app window. */
+const lastReadFor = new Map<string, string>();
+onWindowReset(() => lastReadFor.clear());
+
 /** One instance's facts, from the roster the server holds: kept fresh, at no command's cost. */
 export const usePanelInstance = (instance: string): PanelRead<"panelInstance"> => usePanelRead("panelInstance", { instance }, { live: true });
-/** The soul as the instance was spawned from it (`oats inspect --home`): read when shown, and again when `again` changes. */
+/** The soul as the instance was spawned from it (`oats inspect --home`): read when first shown, and again when `again` changes. */
 export const usePanelSoul = (instance: string, again: string): PanelRead<"panelSoul"> => usePanelRead("panelSoul", { instance }, { again });
 /** The instance's recorded lifecycle events (`oats instance events`): read only once a person asks. */
 export const usePanelEvents = (instance: string, asked: boolean): PanelRead<"panelEvents"> => usePanelRead("panelEvents", { instance }, { enabled: asked });
-/** `oats readiness` of the instance's home or of its soul: read when shown, and again when a person asks. */
+/** `oats readiness` of the instance's home or of its soul: read when first shown, and again when a person asks. */
 export const usePanelReadiness = (instance: string, of: "instance" | "soul"): PanelRead<"panelReadiness"> => usePanelRead("panelReadiness", { instance, of });
 
 /**

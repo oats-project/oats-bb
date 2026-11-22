@@ -22,8 +22,10 @@ export function summaryLine(summary: PanelReadiness["summary"]): string {
   if (summary.required === 0) return "Readiness not established — no required checks reported.";
   return `${summary.fail} failing · ${summary.unknown} unknown · ${summary.required} required checks`;
 }
-/** "Observed: <instant>. This is not an atomic snapshot or a permission lease." */
-export const observedLine = (at: string | null): string => `${at === null ? "Observed." : `Observed: ${shown(at)}.`} This is not an atomic snapshot or a permission lease.`;
+/** "Observed: <instant>. Target: instance. This is not an atomic snapshot or a permission lease." */
+export const observedLine = (at: string | null, of: "instance" | "soul"): string => `${at === null ? "Observed." : `Observed: ${shown(at)}.`} Target: ${of}. This is not an atomic snapshot or a permission lease.`;
+/** What was observed, over the checks: "Instance: <instance> · <agents root>" or "Soul: <soul> · <agents root>". */
+export const contextLine = (of: "instance" | "soul", name: string, agentsRoot: string): string => `${of === "soul" ? "Soul" : "Instance"}: ${shown(name)} · ${shown(agentsRoot)}`;
 
 const signIn = (item: PanelReadinessItem): boolean => item.provider?.status === "authorization-required";
 /** A check's state as it is drawn: one failing only because providers need a sign-in is its own state, not broken. */

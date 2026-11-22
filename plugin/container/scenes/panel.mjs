@@ -176,8 +176,8 @@ async function open(page, viewport, threads, agent) {
  * right edge, the page does not scroll sideways, and every control of it is high enough to press.
  * `past` is how far bb's side panel itself reaches past the window: at 1280 with bb's sidebar, a
  * thread and the side panel open, bb 0.50.1 widens the thread's column once its composer has
- * loaded and pushes the side panel off the window (by 1 to about 100 px in the runs so far, as what the
- * page holds moves it). That cut is bb's, on every tab of its side panel; it is printed with the check, not hidden and not held against the panel.
+ * loaded and pushes the side panel off the window (by how much varies with what
+ * the page holds). That cut is bb's, on every tab of its side panel; it is printed with the check, not hidden and not held against the panel.
  */
 async function fits(page, viewport) {
   const need = viewport.mobile ? 44 : 32;
@@ -294,7 +294,7 @@ const second = [
       const ready = await page.until(`${textOf(inPanel("oats-panel-readiness-instance") + " " + testId("oats-panel-readiness-summary"))}`, 30);
       check(ready === "Ready — every required check passes or is not applicable.", `${at} Instance readiness: the summary`, ready);
       const checks = await page.evaluate(openFold("oats-panel-readiness-checks"));
-      check(["Independent kernel observations, not launch permission.", "Installed pass", "Configured not-applicable", "Member pass", "Providers pass", "oats.bb session backend bb · pass · required · 2 warnings", "View policy"].every((part) => checks.includes(part)), `${at} Checks and policy: the four checks with their items, and the policy`, checks);
+      check(["Instance: panel-worktree-helper · ", "Independent kernel observations, not launch permission.", "Target: instance.", "Installed pass", "Configured not-applicable", "Member pass", "Providers pass", "oats.bb session backend bb · pass · required · 2 warnings", "View policy"].every((part) => checks.includes(part)), `${at} Checks and policy: the four checks with their items, and the policy`, checks);
       const policy = await page.evaluate(openFold("oats-panel-policy"));
       check(policy.includes("Lifecycle authority, not an OS sandbox.") && policy.includes("Child spawns: allowed · enforced · default: no spawn option: children allowed"), `${at} View policy: what is allowed, and by whom`, policy);
       await page.evaluate(scroll("oats-panel-readiness-instance"));
@@ -535,6 +535,7 @@ const second = [
         const warnings = await page.evaluate(flat(inPanel("oats-panel-soul-warnings"), true));
         check(/^warnings 1 Warning oats\.okf one declared hook never runs here: bb has no session-end event \S? ?Details Code hook-event-unsupported Path oats\.json$/i.test(warnings), `${at} Warnings: the capability, the kernel's message, and its code and path under Details`, warnings);
         check((await page.evaluate(textOf(inPanel("oats-panel-modules")))) === "Modules as spawned · 3", `${at} Modules as spawned · 3`);
+        check(/^capabilities 2 /i.test(await page.evaluate(flat(inPanel("oats-panel-capabilities")))), `${at} the count beside Capabilities is of the two the instance has: the one turned off is listed, not counted`);
         await page.evaluate(scroll("oats-panel-core"));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with a core capability, one turned off and a warning");

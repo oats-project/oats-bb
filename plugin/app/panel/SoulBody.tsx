@@ -56,7 +56,8 @@ function Spawned({ soul }: { soul: PanelSoul }) {
           </Facts>
         </Card>
       </Section>
-      <Section title="Capabilities" n={soul.capabilities.length} testId="oats-panel-capabilities">
+      {/* The count is of the capabilities the instance has: one the soul turned off is listed, not counted. */}
+      <Section title="Capabilities" n={soul.capabilities.filter((capability) => capability.why !== "off").length} testId="oats-panel-capabilities">
         {soul.capabilities.length === 0 ? (
           <p className="m-0 text-muted-foreground">{soul.modules === 0 ? NO_CAPABILITIES : NO_OTHER_CAPABILITIES}</p>
         ) : (

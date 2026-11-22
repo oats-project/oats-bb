@@ -42,7 +42,7 @@ const ACTIVITY: Sentences = {
 };
 
 // The Desktop's sentence names itself ("an inspection this Desktop cannot read"): here it is the plugin that
-// reads, the one word changed. WORDS.md (a shared file) gets its row from its owner.
+// reads, the one word changed (WORDS.md, "The instance panel").
 const UNREADABLE_INSPECTION = "The installed OATS CLI returned an inspection this plugin cannot read. Update OATS and retry.";
 const SOUL: Sentences = { [codes.badAnswer]: UNREADABLE_INSPECTION, [codes.notJson]: UNREADABLE_INSPECTION };
 

@@ -140,8 +140,8 @@ describe("readiness' words", () => {
     expect(summaryLine(home.summary)).toBe("Ready — every required check passes or is not applicable.");
     expect(summaryLine({ ready: false, required: 0, fail: 0, unknown: 0 })).toBe("Readiness not established — no required checks reported.");
     expect(summaryLine({ ready: false, required: 5, fail: 2, unknown: 1 })).toBe("2 failing · 1 unknown · 5 required checks");
-    expect(observedLine("2026-11-21T18:25:22.386Z")).toBe("Observed: 2026-11-21T18:25:22.386Z. This is not an atomic snapshot or a permission lease.");
-    expect(observedLine(null)).toBe("Observed. This is not an atomic snapshot or a permission lease.");
+    expect(observedLine("2026-11-21T18:25:22.386Z", "instance")).toBe("Observed: 2026-11-21T18:25:22.386Z. Target: instance. This is not an atomic snapshot or a permission lease.");
+    expect(observedLine(null, "soul")).toBe("Observed. Target: soul. This is not an atomic snapshot or a permission lease.");
   });
   it("the recorded checks: their labels and states, and each item on one line", () => {
     expect(home.checks.map((check) => `${checkLabel(check.key)} ${checkState(check)}`)).toEqual(["Installed pass", "Configured not-applicable", "Member pass", "Providers pass"]);

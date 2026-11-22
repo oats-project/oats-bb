@@ -21,6 +21,7 @@ import { openSoul } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
+import { contextLine } from "./readiness-words";
 import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
@@ -172,6 +173,7 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
 
 function InstancePage({ oats, agent, node, read, now, state: readState }: { oats: Roster; agent: Agent; node: Node | undefined; read: InstanceRead; now: number; state: ReactNode }) {
   const facts = read.data?.facts;
+  const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
   const state = drawnState(agent, node);
   // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
@@ -224,7 +226,7 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
 
       {readState}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
-      <Readiness instance={agent.instance} of="instance" now={now} />
+      <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : contextLine("instance", agent.instance, answerRoot)} now={now} />
       <Activity instance={agent.instance} now={now} />
     </>
   );
@@ -388,7 +390,7 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
       </header>
       {readState}
       <SoulBody read={soul} now={now} />
-      {key === null ? null : <Readiness instance={agent.instance} of="soul" now={now} />}
+      {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : contextLine("soul", key, answer.agentsRoot)} now={now} />}
       {answer === undefined || answer.agentsRoot === null ? null : (
         <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>

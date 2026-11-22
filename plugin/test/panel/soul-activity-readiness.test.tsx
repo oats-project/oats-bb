@@ -79,6 +79,8 @@ test("a filled core slot names its source and why; a capability the soul turned 
   expect(facts(slot.getByTestId("oats-panel-core"))).toEqual([
     "Knowledge: oats.okf 2.1.3Resolved the workspace default at spawn", "Messaging: oats.awebResolved the eng team's default at spawn", "Tasks: Not reported",
   ]);
+  // One the soul turned off is listed and not counted.
+  expect(text(slot.getByTestId("oats-panel-capabilities").querySelector("h3, h2, h4")!)).toMatch(/^Capabilities\s*0$/);
   const off = within(slot.getByTestId("oats-panel-capabilities")).getByTestId("oats-panel-capability");
   expect(text(off)).toBe("oats.jiraturned off by soul");
   expect(off.querySelector(".line-through")).not.toBeNull();
@@ -243,7 +245,9 @@ test("the instance's readiness: the summary up front, the four checks with their
   const checks = slot.getByTestId("oats-panel-readiness-checks");
   expect(text(checks.querySelector("summary")!)).toContain("Checks and policy");
   expect(text(checks)).toContain("Independent kernel observations, not launch permission. Unknown is not granted; an empty required set is not Ready.");
-  expect(text(checks)).toMatch(/Observed: 2026-11-21T\d\d:\d\d:\d\d\.\d{3}Z\. This is not an atomic snapshot or a permission lease\./);
+  expect(text(checks)).toMatch(/Observed: 2026-11-21T\d\d:\d\d:\d\d\.\d{3}Z\. Target: instance\. This is not an atomic snapshot or a permission lease\./);
+  // what was observed, over the checks: the instance and the agents root the roster names
+  expect(text(within(checks).getByTestId("oats-panel-readiness-context"))).toMatch(new RegExp(`^Instance: ${CHILD} · /.+/agents$`));
   expect(["installed", "configured", "member", "providers"].map((key) => text(slot.getByTestId(`oats-panel-check-${key}`).firstElementChild!))).toEqual(["Installedpass", "Configurednot-applicable", "Memberpass", "Providerspass"]);
   const provider = within(slot.getByTestId("oats-panel-check-providers")).getByTestId("oats-panel-check-item");
   expect(text(provider.querySelector("summary")!)).toContain("oats.bb session backend bb · pass · required · 2 warnings");
@@ -358,4 +362,34 @@ test("the recorded readiness that is not ready: the summary's counts, the failin
     "Problem code: E_BACKEND_VERSION",
   ]);
   expect(text(item)).toContain("The provider says: needs configuration.");
+});
+
+test("a tab turned back to shows what was read: readiness and the soul are not read again until asked or until the instance changed", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const slot = panel();
+  await slot.findByTestId("oats-panel-readiness-summary");
+  act(() => showPanelTab("soul"));
+  await within(await slot.findByTestId("oats-panel-readiness-soul")).findByTestId("oats-panel-readiness-summary");
+  await slot.findByTestId("oats-panel-spawned-from");
+  // Long after bb's query client calls an answer stale.
+  vi.setSystemTime(NOW + 10 * 60_000);
+  act(() => showPanelTab("instance"));
+  await slot.findByTestId("oats-panel-readiness-summary");
+  act(() => showPanelTab("soul"));
+  await slot.findByTestId("oats-panel-spawned-from");
+  await act(async () => { await new Promise((done) => setTimeout(done, 50)); });
+  expect(calls(slot, "panelReadiness").map((call) => (call.input as { of: string }).of)).toEqual(["instance", "soul"]);
+  expect(calls(slot, "panelSoul")).toHaveLength(1);
+  // Refresh readiness still reads.
+  fireEvent.click(within(slot.getByTestId("oats-panel-readiness-soul")).getByTestId("oats-panel-readiness-refresh"));
+  await waitFor(() => expect(calls(slot, "panelReadiness").map((call) => (call.input as { of: string }).of)).toEqual(["instance", "soul", "soul"]));
+});
+
+test("a readiness note of the kernel's goes through the display filter", async () => {
+  const slot = panel({ panelReadiness: () => ({ ...recordedReadiness("instance"), notes: ["note \u202Egnp.exe", "token: abc123"] }) });
+  await slot.findByTestId("oats-panel-readiness-summary");
+  const checks = text(slot.getByTestId("oats-panel-readiness-checks"));
+  expect(checks).toContain("note \uFFFDgnp.exe");
+  expect(checks).not.toContain("\u202E");
+  expect(checks).not.toContain("abc123");
 });

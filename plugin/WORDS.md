@@ -13,3 +13,9 @@ instance's name as words).
 | The state of an agent, as a word beside its mark | no word: the dot alone, named "running", "stopped" or "status unknown" for a screen reader | **Working**, **Idle**, **Needs you**, **Stopped**, **Failed**, **Unreachable**, each beside its mark | The standard: a state is always a mark and its word. bb's kernel rows say more than running or not: a session that fell back to a shell (Failed) and one the kernel cannot reach (Unreachable). |
 | The accessible name of a state's mark that stands alone | "running", "stopped", "status unknown", "Needs input" | the same four; "failed" and "unreachable" for the two states the Desktop does not draw | The Desktop's names where it has one. |
 | An agent the kernel does not call running | "status unknown" (a grey bullseye) | **Idle** (named "status unknown") | On bb the kernel reports an agent that waits between turns as neither running nor stopped: it is there and not working, which a person reads as idle. |
+
+## The instance panel
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| An inspection the installed OATS answered and the reader cannot read (the Soul tab, `app/panel/refusal-words.ts`) | "The installed OATS CLI returned an inspection this Desktop cannot read. Update OATS and retry." | "The installed OATS CLI returned an inspection this plugin cannot read. Update OATS and retry." | It is the plugin that reads it, not the Desktop. |

@@ -131,10 +131,14 @@ and the roster's root), parsed by `kernel/panel-instance.ts`. It starts no proce
 again at every `oats/changed`; when a read fails it keeps what it read and says how old that is,
 with Retry; a first read that fails is a notice in words, the kernel's code after them and its
 message under Details. The other three reads each run one command on the home the kernel named: `panelSoul`
-(`oats inspect --home`), read when the Soul tab shows and again when the instance was started
+(`oats inspect --home`), read when the Soul tab first shows and again when the instance was started
 again or what it was built from moved; `panelReadiness` (`oats readiness --home|--soul --policy`),
-read when its tab shows and on Refresh; `panelEvents` (`oats instance events`), read only when
-asked. None is read again in the background. A soul's readiness is asked by the key the roster
+read when its tab first shows and on Refresh; `panelEvents` (`oats instance events`), read only when
+asked. A tab turned back to shows what was read and runs nothing (bb's query client would read a
+mounted query again once its answer is 2 s old, so each of these queries is on only until it holds
+an answer: `app/panel/read.ts`). None is on a timer. One case is bb's: a first read that is still
+in flight or that failed is read again by bb when the window takes focus or the network returns
+while bb's own connection is down. A soul's readiness is asked by the key the roster
 names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).

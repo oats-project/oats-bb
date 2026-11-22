@@ -65,7 +65,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
   // stopped (and when its row is come back to), events already held are read again.
   const eventsNow = useRef(events);
-  eventsNow.current = events;
+  // Kept in an effect, never written while rendering; declared BEFORE the effect that reads it, so
+  // that in one commit it holds this render's read when that effect runs (effects run in order).
+  useEffect(() => {
+    eventsNow.current = events;
+  });
   const stoppedInstance = stopped ? mine?.agent.instance : undefined;
   useEffect(() => {
     if (stoppedInstance !== undefined && eventsNow.current.data !== undefined) eventsNow.current.retry();

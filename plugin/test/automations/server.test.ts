@@ -178,6 +178,27 @@ describe("the acts", () => {
     expect(await argvs(backend, "schedule list")).toHaveLength(2);
   }, 20_000);
 
+  it("an act that ends while the lists are being read makes the next lists a read after it, never one beside it", async () => {
+    backend = await startBackend();
+    const running = backend;
+    await running.rpc("automations");
+    await running.fake.behave({
+      "schedule enable": { file: "automations/schedule-enable.json", sleepMs: 2_000 },
+      "schedule list": { file: "automations/schedule-list.json", sleepMs: 5_000 },
+      "trigger list": { file: "automations/trigger-list.json", sleepMs: 5_000 },
+    });
+    const act = running.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true });
+    await running.rpc("refresh");
+    const during = running.rpc<Lists>("automations"); // a read of the lists that starts before the act ends
+    await act;
+    const after = running.rpc<Lists>("automations");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const calls = (await running.fake.calls()).filter((call) => call.verb.endsWith(" list"));
+    expect((await Promise.all(calls.map((call) => alive(call.pid)))).filter(Boolean)).toHaveLength(2);
+    expect((await after).at).not.toBe((await during).at);
+    expect(await argvs(running, "schedule list")).toHaveLength(3);
+  }, 40_000);
+
   it("only a confirmed test of a capability source's trigger carries --run-source", async () => {
     backend = await startBackend();
     await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: true });

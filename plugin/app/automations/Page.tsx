@@ -164,6 +164,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     summaries: descriptions,
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
+    hostId,
     onRemoved: (row) => {
       if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });
     },

@@ -12,13 +12,13 @@ import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result, Swi
 import type { ConfirmProps, MenuItem } from "../ui";
 import { displayLine, shown } from "../ui/text";
 import type { DetailProps } from "./Detail";
-import { fileOf } from "./Detail";
 import { FactList, Quote } from "./parts";
 import {
   capabilitySource,
   causeWords,
   DESCRIPTION_MAX,
   EVENTS_SHOWN,
+  fileTarget,
   LEAD_INS,
   NAME_CUT,
   NOTHING_RAN,
@@ -33,7 +33,7 @@ import {
   switchTitle,
   TEST_TIMED_OUT,
 } from "./words";
-import type { CapabilitySource } from "./words";
+import type { CapabilitySource, FileTarget } from "./words";
 
 /** A test's answer, or why there is none. */
 type Tested = { test: AutomationTest } | { error: string; code: string | null };
@@ -240,14 +240,16 @@ export type Acts = {
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, onRemoved }: {
+export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, hostId, onRemoved }: {
   rpc: Rpc;
   /** Reads the lists again. */
   refresh: () => void;
   /** This OATS writes summaries (feature automation-descriptions). */
   summaries: boolean;
   onOpen: (row: AutomationRow) => void;
-  onOpenFile?: (row: AutomationRow) => void;
+  onOpenFile?: (target: FileTarget) => void;
+  /** The bb machine that holds the deployment, once known. */
+  hostId: string | null;
   /** A row was deleted: its page, if open, has nothing to show. */
   onRemoved: (row: AutomationRow) => void;
 }): Acts {
@@ -388,8 +390,8 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, onRemoved
     items.push({ id: "test", label: "Test", disabled: busy, onSelect: () => void test(row) });
     if (row.kind === "schedule" && row.runsHere) items.push({ id: "run", label: "Run now", disabled: busy, onSelect: () => void runNow(row) });
     if (row.group !== "elsewhere") items.push({ id: "toggle", label: row.enabledHere ? "Turn off here" : "Turn on here", disabled: busy, onSelect: () => void toggle(row) });
-    const file = fileOf(row);
-    if (onOpenFile !== undefined && (file.path !== null || file.url !== null)) items.push({ id: "file", label: "Open file", onSelect: () => onOpenFile(row) });
+    const file = fileTarget(row, hostId).target;
+    if (onOpenFile !== undefined && file !== null) items.push({ id: "file", label: "Open file", onSelect: () => onOpenFile(file) });
     if (canDescribe(row)) items.push({ id: "describe", label: "Edit summary", disabled: busy, onSelect: () => describe(row) });
     // An unknown last run is checked through the kernel's reconcile, wherever the schedule comes from.
     if (row.kind === "schedule" && row.runsHere && runState(row)?.unknown) items.push({ id: "reconcile", label: "Check run state", disabled: busy, onSelect: () => void reconcile(row) });
@@ -399,7 +401,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, onRemoved
   };
 
   const switchOf = (row: AutomationRow): ReactNode =>
-    row.group === "elsewhere" ? null : <Switch label="This computer" title={switchTitle(row)} checked={row.enabledHere} disabled={busy} onChange={() => void toggle(row)} />;
+    row.group === "elsewhere" ? null : <Switch label="This computer" name={`${row.id} enabled on this computer`} title={switchTitle(row)} checked={row.enabledHere} disabled={busy} onChange={() => void toggle(row)} />;
 
   const rowParts: Acts["rowParts"] = (row, now, host) => {
     const source = row.kind === "trigger" ? capabilitySource(row.on) : null;
@@ -501,7 +503,7 @@ export function useActs({ rpc, refresh, summaries, onOpen, onOpenFile, onRemoved
       <Confirm
         title="Enable scheduler"
         about="this computer"
-        shownFor={null}
+        shownFor="this computer"
         happens={[
           "OATS installs its scheduler's timer on this computer, for the account bb's machine runs as: a systemd user timer (oats-schedule-tick.timer) on Linux, a launchd agent (ai.oats.schedule-tick) on macOS.",
           "Every minute the timer runs `oats schedule tick`, which launches what this deployment's schedules and triggers say is due.",

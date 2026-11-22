@@ -25,8 +25,8 @@ function failed(error: unknown): ListAnswer {
 }
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
-  /** The lists, the roster read they were made beside (its `at`), and whether that read has ended. */
-  let held: { at: number; roster: string; value: Promise<Lists>; settled: boolean } | null = null;
+  /** The lists, the roster read they were made beside (its `at`), whether that read has ended, and whether an act has run since it started. */
+  let held: { at: number; roster: string; value: Promise<Lists>; settled: boolean; stale: boolean } | null = null;
   /** The one read that waits behind a read still running: every ask of a newer roster shares it. */
   let queued: Promise<Lists> | null = null;
   /** The newest roster read an ask waits with: the queued read is made beside it. */
@@ -41,7 +41,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   const lists = async (): Promise<Lists> => {
     const snapshot = await core.clientSnapshot();
     const roster = snapshot.at;
-    if (held !== null && held.roster === roster && Date.now() - held.at < LISTS_TTL_MS) return held.value;
+    if (held !== null && !held.stale && held.roster === roster && Date.now() - held.at < LISTS_TTL_MS) return held.value;
     // What the plugin itself lacks (no machine, no deployment, no `oats` there) is said once, in
     // the server's own words for it, which name the machine and what to do: no list is asked for.
     if (!snapshot.ok && !isKernelCode(snapshot.code)) {
@@ -72,7 +72,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
       return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, oats, schedule, trigger };
     })();
-    const entry = { at: Date.now(), roster, value, settled: false };
+    const entry = { at: Date.now(), roster, value, settled: false, stale: false };
     const done = () => {
       entry.settled = true;
     };
@@ -90,7 +90,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   };
   /** After an act: the lists are read again for the next client, and so is the roster (a run launches an agent). */
   const changed = () => {
-    held = null;
+    // Not dropped: a read still running is waited for, so the next lists are read after it and never beside it.
+    if (held !== null) held.stale = true;
     core.rereadSoon();
   };
   /** An act is not ended by its caller going away: only by the plugin's own end. */

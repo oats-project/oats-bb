@@ -181,18 +181,18 @@ export default [
       await page.evaluate(click(testId("oats-automation-test-button")));
       const fires = await said(testId("oats-automation-test"));
       check(/gh acts as ana Would fire now: #41 → oats-developer-review-pr-41 #42 → oats-developer-review-pr-42 #43 → oats-developer-review-pr-43 \(held: concurrency\.max 2 reached \(2 live\)\)$/.test(fires ?? ""), `${at} a pull-request trigger's Test says who gh acts as, what would fire and what is held`, fires);
-      await page.shot(`automations-${viewport.name}-test-result`, { targets: true });
+      await shotOf(page, testId("oats-automation-test"), `automations-${viewport.name}-test-result`);
 
       // Test of a capability source's trigger: first what will run, then Run test
       await open(page, "/triggers/oats-real/harvest-review", testId("oats-automation-test-button"));
       await page.evaluate(click(testId("oats-automation-test-button")));
       const confirm = await said(testId("oats-automation-test-confirm"));
       check(/^Test this trigger This runs acme\.graph's source command on this computer, now, once\. Nothing is recorded and nothing is spawned\./.test(confirm ?? ""), `${at} a capability source's Test first says what will run on this computer`, confirm);
-      await page.shot(`automations-${viewport.name}-test-confirm`, { targets: true });
+      await shotOf(page, testId("oats-automation-test-confirm"), `automations-${viewport.name}-test-confirm`);
       await page.evaluate(click(testId("oats-automation-test-run")));
       const answered = await said(testId("oats-automation-test"));
       check(/^Test result The source answered: 2 events, 1 filtered, 2 skipped, 2 refused/.test(answered ?? ""), `${at} Run test says what the source answered`, answered);
-      await page.shot(`automations-${viewport.name}-test-source-result`, { targets: true });
+      await shotOf(page, testId("oats-automation-test"), `automations-${viewport.name}-test-source-result`);
 
       // Check run state, from the run-state card
       await open(page, "/schedules/local/status-check", testId("oats-automation-reconcile"));

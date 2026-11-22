@@ -1,7 +1,8 @@
 // Automations' live scenes: the page with each list, a row's page of each kind, the notices of
 // a host with no name and no scheduler, and the page with `oats` gone. The lists are what the real
-// kernel printed (test/fixtures/automations/); their times are the recording's, so "2 d ago" moves
-// with the day the checks run.
+// kernel printed (test/fixtures/automations/); their times are the recording's, so each scene runs
+// with the page's clock at the recording's own time: a last run is in the past and a next run ahead.
+import { readFileSync } from "node:fs";
 import { fill, FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 
 const ROW = testId("oats-automation-row");
@@ -24,7 +25,30 @@ async function open(page, route, wait) {
   return page.until(`(() => { const t = ${textOf(wait)}; return t === "" ? "" : t; })()`, 30);
 }
 
-export default [
+/**
+ * The instant the recording's lists were printed: the scheduler's last tick in them, and a moment.
+ * At it every "Last" of the lists is behind and every "Next" ahead, as they were for the kernel.
+ */
+const RECORDED_AT = new Date(Date.parse(JSON.parse(readFileSync(new URL("../../test/fixtures/automations/schedule-list.json", import.meta.url), "utf8")).result.scheduler.lastTick) + 15_000).toISOString();
+/** Stages whose scene asserts an instant the server stamps itself (how old a read is): they keep the real clock. */
+const REAL_CLOCK = new Set(["automations-slow"]);
+/** A scene at the recording's time, with the real clock given back after it, whatever it did. */
+const atTheRecording = (scene) =>
+  REAL_CLOCK.has(scene.stage)
+    ? scene
+    : {
+        ...scene,
+        run: async (context) => {
+          await context.page.clock(RECORDED_AT);
+          try {
+            await scene.run(context);
+          } finally {
+            await context.page.clock(null);
+          }
+        },
+      };
+
+const scenes = [
   {
     stage: "fixtures",
     name: "the two lists",
@@ -341,6 +365,8 @@ export default [
     },
   },
 ];
+
+export default scenes.map(atTheRecording);
 
 const lists = (schedule, trigger) => ({ "schedule list": { file: `automations/${schedule}` }, "trigger list": { file: `automations/${trigger}` } });
 const settled = (untilSnapshot) => untilSnapshot((snapshot) => snapshot.ok === true);

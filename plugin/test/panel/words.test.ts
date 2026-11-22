@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, driftLines, harnessName, markText, modelFromText, runtimeErrorLine, sessionLine, sharedWork, shortAge, workFolder, workSentence } from "../../app/panel/words";
+import { ageText, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, staleAge, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -9,7 +9,10 @@ const HOUR = 60 * MIN;
 
 describe("ages", () => {
   it("ages: compact for the header, in words for the session", () => {
-    expect([shortAge(ago(20_000), NOW), shortAge(ago(59 * MIN), NOW), shortAge(ago(3 * HOUR), NOW), shortAge(ago(49 * HOUR), NOW), shortAge("soon", NOW), shortAge(null, NOW)]).toEqual(["<1m", "59m", "3h", "2d", null, null]);
+    // The age of what is still shown under a failed read: always relative, never "just now".
+    expect([staleAge(ago(20_000), NOW), staleAge(ago(12 * MIN), NOW), staleAge(ago(15 * HOUR), NOW), staleAge(ago(49 * HOUR), NOW), staleAge(NOW - 5 * MIN, NOW), staleAge("soon", NOW), staleAge(null, NOW)]).toEqual([
+      "less than a minute ago", "12 min ago", "15 h ago", "2 d ago", "5 min ago", null, null,
+    ]);
     expect([ageText(ago(20_000), NOW), ageText(ago(5 * MIN), NOW), ageText(ago(3 * HOUR), NOW), ageText(ago(49 * HOUR), NOW), ageText(ago(40 * 24 * HOUR), NOW), ageText("soon", NOW)]).toEqual([
       "just now", "5 min ago", "3 h ago", "2 d ago", "2026-10-12", "soon",
     ]);
@@ -80,12 +83,16 @@ describe("the Session card", () => {
     expect(modelFromText({ model: "m", modelFrom: "toString" })).toBeNull();
   });
   it("says where the session runs", () => {
-    expect(sessionLine({ backend: "bb", threadId: "thr_gx4sgexjgw", tmuxSession: null })).toBe("bb · thread thr_gx4sgexjgw");
-    expect(sessionLine({ backend: "bb", threadId: null, tmuxSession: null })).toBe("bb");
-    expect(sessionLine({ backend: "tmux", threadId: null, tmuxSession: "oats-main" })).toBe("tmux · oats-main");
-    expect(sessionLine({ backend: null, threadId: null, tmuxSession: "oats-main" })).toBe("tmux · oats-main");
-    expect(sessionLine({ backend: null, threadId: null, tmuxSession: null })).toBe("");
-    expect(runtimeErrorLine("bb did not answer")).toBe("OATS says: bb did not answer");
+    expect(sessionWhere({ backend: "bb", threadId: "thr_gx4sgexjgw", tmuxSession: null })).toEqual({ where: "bb thread", id: "thr_gx4sgexjgw", idName: "the thread's id in bb" });
+    expect(sessionWhere({ backend: "bb", threadId: null, tmuxSession: null })).toEqual({ where: "bb", id: null, idName: "the thread's id in bb" });
+    expect(sessionWhere({ backend: "tmux", threadId: null, tmuxSession: "oats-main" })).toEqual({ where: "tmux session", id: "oats-main", idName: "the tmux session's name" });
+    expect(sessionWhere({ backend: null, threadId: null, tmuxSession: "oats-main" })?.id).toBe("oats-main");
+    expect(sessionWhere({ backend: null, threadId: null, tmuxSession: null })).toBeNull();
+    // An instant in the plugin's one form: the time today, the date another day, local; what is no instant as sent.
+    const noon = new Date(2026, 10, 21, 12, 0, 0).getTime();
+    expect(whenText(new Date(2026, 10, 21, 9, 5, 0).toISOString(), noon)).toBe("09:05");
+    expect(whenText(new Date(2026, 10, 20, 18, 23, 0).toISOString(), noon)).toBe("Nov 20, 18:23");
+    expect(whenText("never", noon)).toBe("never");
   });
 });
 

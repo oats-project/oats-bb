@@ -6,16 +6,19 @@
 // no React import.
 import type { PanelEvent, PanelEvents } from "../../kernel/panel-events";
 import { shown } from "../ui/text";
+import { whenText } from "./words";
 
 export const ACTIVITY = "Reported lifecycle activity";
 export const LOAD = "Load activity";
 export const REFRESH = "Refresh activity";
-export const READING = "Reading reported lifecycle activity…";
+export const READING = "Reading the recorded activity…";
+/** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
+export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first. It is history, not what the agent does now.";
+export const PROVENANCE_PLAIN = "Reading this starts nothing and allows nothing.";
 export const LOADED = "Reported observation loaded. Runtime state is shown separately.";
 export const LAST_OBSERVATION = "Last observation retained; refresh required.";
 export const RECENT = "Recent lifecycle events";
 export const NO_EVENTS = "No recorded lifecycle events in this observed window.";
-export const PROVENANCE = "Null waiting means unknown, not “not waiting”. Paths and past plans are provenance only; no action is authorized by these events.";
 
 const TITLES: Record<string, string> = {
   spawned: "Spawned", launched: "Launched", restarted: "Restarted", stopped: "Stopped", "stop-refused": "Stop refused", "retire-planned": "Retirement planned", retired: "Retired",
@@ -65,16 +68,16 @@ export const incompleteLine = (events: Pick<PanelEvents, "truncated" | "integrit
   `Incomplete evidence: ${events.integrity.unreadableRows} unreadable rows · ${events.integrity.foreignRows} foreign rows${events.truncated ? " · window or source truncated" : ""}${events.integrity.sources.some((source) => source.status === "refused") ? " · source refused" : ""}.`;
 /** "home: ok (834 bytes reported) · workspace: ok (834 bytes reported)". */
 export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => events.integrity.sources.map((source) => `${shown(source.path)}: ${shown(source.status)} (${source.bytes} bytes reported)`).join(" · ");
-/** "oats.board: reported waiting · 2026-11-21T18:23:39.829Z · attention". */
-export const claimLine = (claim: PanelEvents["waitingClaims"][number]): string => `${shown(claim.producer)}: ${claim.waiting ? "reported waiting" : "claim cleared"} · ${shown(claim.since)}${claim.reason === null ? "" : ` · ${shown(claim.reason)}`}`;
-
-/** The one line over the list: the last event, and what a producer reports of waiting. */
-export function summaryLine(events: PanelEvents): string {
+/**
+ * The one line over the list: the last recorded event. The Desktop's line also says what a
+ * producer reported of waiting when the log was read ("Reported waiting: …", "Waiting on you:
+ * unknown"); here what an agent waits for has one place, the panel's header and Needs input, read
+ * from the roster as it is now, so the summary never says another thing under it (plugin/WORDS.md).
+ */
+export function summaryLine(events: PanelEvents, now: number): string {
   const last = events.events[events.events.length - 1];
-  const waiting = events.waitingOnYou;
-  const lastPart = last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${shown(last.at)} · ${INCARNATION[last.incarnation]}`;
-  const waitingPart = waiting === null ? "Waiting on you: unknown" : `Reported waiting: ${shown(waiting.producer)} since ${shown(waiting.since)}${waiting.message === null ? "" : ` — ${shown(waiting.message)}`}`;
-  return `${lastPart} · ${waitingPart}`;
+  // What it is, in words: the newest row of the record, not what the agent does now. Which incarnation it is of is the row's to say.
+  return last === undefined ? NO_EVENTS : `Last recorded: ${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
 }
 
 // ---- what a blocked launch's screen differed in

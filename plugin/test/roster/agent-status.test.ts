@@ -80,4 +80,8 @@ test("a stopped agent's time is its last \"stopped\" event's; none when its even
   expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], at(11, 0), now)).toBeNull();
   expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], null, now)).toBe("since 10:00");
   expect(stoppedSince([{ kind: "stopped", at: at(10, 0) }], "not a time", now)).toBe("since 10:00");
+  // A stop of an earlier instance of the same name (the events are the address's history) is not this one's.
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0), incarnation: "earlier" }], null, now)).toBeNull();
+  expect(stoppedSince([{ kind: "stopped", at: at(9, 0), incarnation: "current" }, { kind: "stopped", at: at(10, 0), incarnation: "earlier" }], null, now)).toBe("since 09:00");
+  expect(stoppedSince([{ kind: "stopped", at: at(10, 0), incarnation: "unknown" }], null, now)).toBe("since 10:00");
 });

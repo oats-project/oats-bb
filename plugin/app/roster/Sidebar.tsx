@@ -165,7 +165,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           title={shown(agent.instance)}
           className={`${ROW} w-full pl-2 text-left`}
           onClick={() => {
-            if (!openAgentPage(navigate, agent.instance)) openSoul(navigate, oats.soulOf(agent));
+            // With no page for one agent (no feature names one): its soul's page, where that page is shown.
+            if (!openAgentPage(navigate, agent.instance) && pagesNow.has("souls")) openSoul(navigate, oats.soulOf(agent));
             onNavigate();
           }}
         >

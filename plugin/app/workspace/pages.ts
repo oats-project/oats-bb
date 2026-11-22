@@ -140,7 +140,8 @@ export function showEveryPageWhenUnset(on: boolean): void {
  */
 export function pagesShown(value: unknown): { has(id: string): boolean } {
   if (typeof value !== "string" && everyPageWhenUnset) return { has: () => true };
-  const ids = new Set((typeof value === "string" ? value : DEFAULT_PAGES).split(/[\s,]+/).map((id) => id.trim().toLowerCase()).filter((id) => id !== ""));
+  // A cleared field is the default, as for every other setting of the plugin.
+  const ids = new Set((typeof value === "string" && value.trim() !== "" ? value : DEFAULT_PAGES).split(/[\s,]+/).map((id) => id.trim().toLowerCase()).filter((id) => id !== ""));
   return { has: (id) => ids.has(id.toLowerCase()) };
 }
 

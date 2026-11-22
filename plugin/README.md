@@ -46,7 +46,7 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
-| `pages` | `"home"` | The plugin's pages that are shown, by id, with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. Not behind the setting yet, each its owner's to close: the home's Workspace tiles and the panel's "Open soul page" still lead to a hidden page (which answers "not shown"), and the home's own route answers under every value. |
+| `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. Not behind the setting yet, each its owner's to close: the home's Workspace tiles and the panel's "Open soul page" still lead to a hidden page (which answers "not shown"), and the home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words, what to do, the code, the plugin's or the kernel's own message
@@ -404,7 +404,7 @@ What the features share, beyond the entries:
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
   on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
-  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's "Instance panel"
   button opens it at the phone's width, and an agent with no bb thread opens it from its row in the sidebar and from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
 - **Whether a page is shown** (the setting `pages`). A page's `navPanel` component is

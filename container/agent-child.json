@@ -1,7 +1,7 @@
 {
   "name": "bb",
-  "command": ["/usr/local/bin/bb-app", "--no-in-app-updates", "--server-bind-host", "127.0.0.1"],
-  "env": { "BB_TELEMETRY": "false" },
+  "command": ["/usr/local/bin/bb-server", "--no-in-app-updates", "--server-bind-host", "127.0.0.1"],
+  "env": { "BB_TELEMETRY": "false", "PI_CODING_AGENT_DIR": "/state/home/.bb-pi" },
   "envFromFile": { "CLAUDE_CODE_OAUTH_TOKEN": "/etc/agent-login/claude-token" },
   "ready": { "url": "http://127.0.0.1:38887/status", "field": "connected" },
   "listen": [38886, 38887],

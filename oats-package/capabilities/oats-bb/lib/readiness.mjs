@@ -8,7 +8,8 @@ import { bbClient } from "./bb.mjs";
 import { checkDataDir, sandboxDeny } from "./deny.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
-import { harnessRefusal, permissionMode, sandboxRefusal, sandboxedModeRefusal } from "./mode.mjs";
+import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
+import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems } from "./pi-config.mjs";
 import { gapList, missingRemedy, readSandbox, sandboxKeysOf } from "./local-settings.mjs";
 import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
@@ -54,8 +55,12 @@ async function getJson(url, timeoutMs = HTTP_TIMEOUT_MS) {
 /** Every reason this bb must not run a home now, in the order a person would fix them.
  *  → { problems, server, daemon, bb, listable, credential } (the addresses as origins,
  *  null when refused; `listable` when bb's CLI runs and its server answers; `credential`
- *  names where bb's Claude takes its credential from, when bb reports it ready). */
-export async function backendProblems(settings, { deadline = Date.now() + 16_000, env = process.env, http = getJson, exposure = exposedListeners } = {}) {
+ *  names where bb's agent takes its credential from, when bb reports it ready).
+ *  `harness`: whose launch this is asked for (claude or pi): bb's provider for that
+ *  harness is the one that must be ready. With none (a readiness read with no planned
+ *  launch) it is Claude's, as it was before the provider ran pi. */
+export async function backendProblems(settings, { deadline = Date.now() + 16_000, env = process.env, http = getJson, exposure = exposedListeners, harness = null } = {}) {
+  const bbProvider = BB_PROVIDER[harness ?? "claude"] ?? BB_PROVIDER.claude;
   const problems = [];
   const add = (code, status, message) => problems.push({ code, message, status });
   const left = (cap) => Math.min(cap, deadline - Date.now());
@@ -67,6 +72,9 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       ? "settings.oats.bb.trust is not set. bb's API has no login and its loopback port is reachable by every local user's processes: set it in oats-local.yaml to single-user (this host is one person's) or container (one OATS team container with one bb server)"
       : `settings.oats.bb.trust is ${JSON.stringify(settings.trust)}; it must be single-user or container`);
   }
+  // A host-only path of the provider's is an absolute path, whichever harness is asked for
+  // (contract r23, A13(2)): the pi configuration directory bb's server runs pi with.
+  if (!absolutePath(settings.piAgentDir)) add(PI_AGENT_DIR_SHAPE.code, PI_AGENT_DIR_SHAPE.status, PI_AGENT_DIR_SHAPE.message);
   if (settings.version == null) {
     add("E_BACKEND_VERSION", "needs-configuration", "settings.oats.bb.version is not set: pin the bb-app version this deployment runs (the output of `bb --version`)");
   }
@@ -126,15 +134,11 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
     }
   }
   if (server) {
-    const state = await http(`${server}/api/v1/system/providers/state?providerId=claude-code`, left(PROVIDER_STATE_TIMEOUT_MS));
-    const provider = state.ok && isObject(state.value) && Array.isArray(state.value.providers)
-      ? state.value.providers.find((entry) => isObject(entry) && entry.providerId === "claude-code") : null;
-    if (!provider || typeof provider.status !== "string") {
-      add("E_BACKEND_NOT_READY", "unavailable", `bb did not report its claude-code provider's status (${state.ok ? "no claude-code entry" : state.message})`);
-    } else if (provider.status !== "ready") {
-      const hint = typeof provider.loginCommand === "string" && PROVIDER_STATUS[provider.status] === "authorization-required" ? `: run \`${provider.loginCommand}\` as bb's user, or give bb's server the credential in its environment` : "";
-      const detail = typeof provider.statusMessage === "string" && provider.statusMessage ? ` (${provider.statusMessage.slice(0, 300)})` : "";
-      add("E_BACKEND_NOT_READY", PROVIDER_STATUS[provider.status] ?? "unavailable", `bb reports its claude-code provider as ${provider.status}${detail}${hint}`);
+    const { problem, provider } = await providerState(server, bbProvider, http, left(PROVIDER_STATE_TIMEOUT_MS));
+    if (problem !== null) problems.push(problem);
+    else if (bbProvider === BB_PROVIDER.pi) {
+      // bb reports no account for pi: pi keeps its own logins and model configuration.
+      credential = "pi's own logins and model configuration, of bb's user, or a credential in the bb server's environment";
     } else {
       // Where the credential comes from, by bb's own report; never the credential, and
       // no account name.
@@ -143,7 +147,58 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
         : "no Claude login: a credential in bb's own configuration or in the bb server's environment";
     }
   }
+  // A pi launch also needs bb's pi to load the home's skills and to leave the agent's
+  // mail alone: read from the pi configuration bb's server runs with, never changed here.
+  if (harness === "pi") problems.push(...await piConfiguration(settings, bb));
   return { problems, server, daemon, bb, listable: server !== null && cliRuns, credential };
+}
+
+/** What bb says of one of its providers. → { problem: {code, status, message} | null,
+ *  provider: bb's entry | null }. */
+async function providerState(server, bbProvider, http, timeoutMs) {
+  const problem = (status, message) => ({ problem: { code: "E_BACKEND_NOT_READY", message, status }, provider: null });
+  const state = await http(`${server}/api/v1/system/providers/state?providerId=${bbProvider}`, timeoutMs);
+  const provider = state.ok && isObject(state.value) && Array.isArray(state.value.providers)
+    ? state.value.providers.find((entry) => isObject(entry) && entry.providerId === bbProvider) : null;
+  if (!provider || typeof provider.status !== "string") {
+    return problem("unavailable", `bb did not report its ${bbProvider} provider's status (${state.ok ? `no ${bbProvider} entry` : state.message})`);
+  }
+  if (provider.status !== "ready") {
+    const hint = typeof provider.loginCommand === "string" && PROVIDER_STATUS[provider.status] === "authorization-required" ? `: run \`${provider.loginCommand}\` as bb's user, or give bb's server the credential in its environment` : "";
+    const detail = typeof provider.statusMessage === "string" && provider.statusMessage ? ` (${provider.statusMessage.slice(0, 300)})` : "";
+    return { ...problem(PROVIDER_STATUS[provider.status] ?? "unavailable", `bb reports its ${bbProvider} provider as ${provider.status}${detail}${hint}`), provider };
+  }
+  return { problem: null, provider };
+}
+
+/** The problems of the pi configuration bb's server runs with (lib/pi-config.mjs). bb's
+ *  machine env is read only where @awebai/pi is listed; a bb that cannot give it is a
+ *  problem of its own: nothing then says the extension is silenced. */
+async function piConfiguration(settings, bb) {
+  // A setting of the wrong shape is every launch's problem already (backendProblems).
+  if (!absolutePath(settings.piAgentDir)) return [];
+  try { return await piConfigurationProblems(settings.piAgentDir, () => bb.machineEnvNames()); }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    // The remedy before bb's own words, which may be long.
+    return [{ code: "E_BACKEND_PI_LISTENER", status: "unavailable", message: `bb's pi may take this agent's mail: ${PI_AWEB_EXTENSION} is in bb's pi configuration, and bb's machine env could not be read to see whether ${DELIVERY_VARIABLE} silences it there. Make \`bb machine env list\` answer, or give bb's server a pi configuration without ${PI_AWEB_EXTENSION}. bb said: ${error.message}` }];
+  }
+}
+
+/** What a readiness read with no planned launch says of pi (it cannot know which harness
+ *  a launch would run): nothing where bb has no pi installed, and otherwise, as ONE
+ *  warning, what a pi launch would be refused for. A warning here, because a deployment
+ *  that runs Claude alone is ready; the launch itself, and the check of a planned pi
+ *  launch, refuse. → warnings. */
+async function piWarnings(settings, { server, bb, http = getJson, deadline = Date.now() + 16_000 }) {
+  if (!server) return [];
+  const { problem, provider } = await providerState(server, BB_PROVIDER.pi, http, Math.min(PROVIDER_STATE_TIMEOUT_MS, deadline - Date.now()));
+  // No word of bb's on pi, or pi not installed in it: this bb runs no pi, and nothing is said.
+  if (provider === null || provider.status === "not_installed") return [];
+  const found = [...(problem !== null ? [problem] : []), ...await piConfiguration(settings, bb)];
+  if (found.length === 0) return [];
+  // Short, and before the finding's own words: those end with the path that was read, which is what a cut may take.
+  return [{ code: "session-provider-pi-not-ready", message: `a pi launch would be refused here (${found.map((entry) => entry.code).join(", ")}); Claude launches are not held up. ${found[0].message}` }];
 }
 
 /** Whether the value is an address a bb server can have: an http or https URL with a host. */
@@ -202,8 +257,11 @@ function sandboxRuntimeWarning(settings, env) {
  *  as a providers item. `status` is ready (no problem), needs-configuration,
  *  authorization-required or unavailable. `credential` is for a person's report only. */
 export async function readinessResult(settings, options = {}) {
-  const { problems, bb, listable, credential } = await backendProblems(settings, options);
-  const warnings = sandboxRuntimeWarning(settings, options.env ?? process.env);
+  const { problems, bb, listable, credential, server } = await backendProblems(settings, options);
+  // (Claude's sandbox is nothing a pi launch runs in: its planned launch is not told of bubblewrap.)
+  const warnings = options.harness === "pi" ? [] : sandboxRuntimeWarning(settings, options.env ?? process.env);
+  // With no planned launch, the harness is not known: Claude's state is the problem above, and pi's is said here.
+  if ((options.harness ?? null) === null && !problems.some((problem) => problem.code === "E_BACKEND_UNREACHABLE")) warnings.push(...await piWarnings(settings, { server, bb, http: options.http, deadline: options.deadline }));
   if (listable) {
     try { warnings.push(...await orphanedThreads(bb, options)); }
     catch (error) {
@@ -266,16 +324,19 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
   if (unsupported !== null) return { problems: [{ ...unsupported, status: "needs-configuration" }], warnings };
   let mode, allowances;
   try {
-    mode = permissionMode(planned.args, planned.yolo);
-    // A mode the command does not launch in (not offered): that is the whole answer, as it is the
-    // launch's own first refusal.
-    const notOffered = sandboxedModes ? null : sandboxedModeRefusal(mode);
+    mode = permissionMode(planned.args, planned.yolo, planned.harness);
+    // A mode the command does not launch in (not offered), or one bb's pi does not have:
+    // that is the whole answer, as it is the launch's own first refusal.
+    const notOffered = modeRefusal(mode, planned.harness, { sandboxedModes });
     if (notOffered !== null) return { problems: [{ ...notOffered, status: "needs-configuration" }], warnings };
-    allowances = readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
+    allowances = planned.harness === "pi" ? null : readSandbox(planned.sandbox, { sandboxed: mode !== "full" });
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     return { problems: [{ code: error.code, message: error.message, status: "needs-configuration" }], warnings };
   }
+  // A planned pi launch that got here runs in full mode, and bb's pi has no sandbox: nothing
+  // of the allowances, the deny rules or the gaps is said of it.
+  if (planned.harness === "pi") return { problems, warnings };
   const refusal = sandboxRefusal(mode, allowances);
   if (refusal !== null) problems.push({ ...refusal, status: refusal.code === "E_BACKEND_SANDBOX_UNAVAILABLE" ? "unavailable" : "needs-configuration" });
   else if (allowances.unavailable !== null) {

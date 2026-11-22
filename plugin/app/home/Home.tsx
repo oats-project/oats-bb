@@ -95,7 +95,8 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
     const element = box.current;
     if (element === null) return;
     element.style.height = "auto";
-    if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight}px`;
+    // `height` is of the box with its border: what the text needs, and the border around it.
+    if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight + (element.offsetHeight - element.clientHeight)}px`;
   }, [text]);
   return (
     <form

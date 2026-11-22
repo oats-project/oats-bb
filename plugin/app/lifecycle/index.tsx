@@ -141,7 +141,7 @@ function runCommand(verb: Verb, threadId: string | null): void {
   const say = (title: string) => notify({ tone: "hint", title });
   // Whose thread it is is known only from a roster that was read: until then the line says what the thread's menu says.
   if (roster === null || roster.phase === "loading") return say("OATS agents: reading…");
-  if (roster.phase === "failed") return say(`OATS agents: can't be read. ${failureWords(roster, roster.machine).title}`);
+  if (roster.phase === "failed") return say(`OATS agents: can't be read. ${failureWords(roster, roster.machine).title}.`);
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;

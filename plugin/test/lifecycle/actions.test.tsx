@@ -1115,6 +1115,7 @@ test("a command's key pressed before OATS was read says that, never that the thr
   const said = notified().at(-1)!;
   expect(said.tone).toBe("hint");
   expect(said.title.startsWith("OATS agents: can't be read. ")).toBe(true);
+  expect(said.title).toMatch(/[^.]\.$/); // two sentences, each with its full stop
   expect(said.title).not.toContain("not an OATS agent");
   expect(failed.slot.queryByRole("dialog")).toBeNull();
   resetApp();

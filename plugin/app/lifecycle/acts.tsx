@@ -261,6 +261,11 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
   }, []);
 
+  // Whether the provider archives the thread of a home it stops: from its version, which the spawn
+  // module's read of the provider will expose; until it does the version is not known here, and
+  // the answer is the one that is true of every provider released so far.
+  const archives = stopArchivesThread(null);
+
   const read = useCallback(
     (why: string, withChildren: boolean, changedFrom: Plan | null = null) => {
       const mine = ++ticket.current;
@@ -269,7 +274,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       asked.then(
         (plan) => {
           // A new plan is a new intent: it gets its own idempotency key.
-          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan) });
+          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, archives) });
         },
         (cause: unknown) => {
           const refusal = refusalOf(cause);
@@ -281,7 +286,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
         },
       );
     },
-    [rpc, verb, instance],
+    [rpc, verb, instance, archives],
   );
   useEffect(() => {
     read(checking(verb, instance), true);
@@ -318,10 +323,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     if (current === request) set(null);
   };
   const plan = state.phase === "ready" || state.phase === "applying" ? state.plan : state.phase === "reading" ? state.kept : (state.sent?.plan ?? null);
-  // Whether the provider archives the thread of a home it stops: from its version, which the spawn
-  // module's read of the provider will expose; until it does the version is not known here, and
-  // the answer is the one that is true of every provider released so far.
-  const archives = stopArchivesThread(null);
   const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, archives) : retirePlanView(plan, discard);
   const shownFor = plan === null ? null : plan.instance;
   const choose = (checked: boolean) => {

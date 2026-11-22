@@ -68,8 +68,9 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **`page.clock(at)`** runs the page with its clock at an instant (`"2026-11-21T20:21:00.000Z"`),
   from the next navigation on, going on at the real pace; `page.clock(null)` gives the real clock
   back. For a scene on recorded answers, whose times are older than the run: call it with the
-  recording's own time and clear it in a `finally`. Only the page's clock moves: the plugin's
-  server and OATS keep the real one.
+  recording's own time and clear it in a `finally`. Only `Date` in the page's documents moves: the
+  plugin's server and OATS keep the real clock, and so do, in the page, a formatter called with no
+  date, a worker and `performance.now()`.
 - **`page.press(key)`** sends a real key ("Tab", "Shift+Tab", "Enter", "Escape", an arrow): it
   moves the focus and closes a dialog as a person's key does. `FOCUSED` names what holds the focus.
   So a scene can open a menu, walk a dialog's focus order, and take the image of a dialog before
@@ -114,7 +115,7 @@ colours). It covers every rendered element with text of its own inside the plugi
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
-placeholder of an empty one), and the state dots, in each of their six states. A failing scene
+placeholder of an empty one), and the marks (a state's in each of its six states, a toned dot, a row's mark). A failing scene
 prints every distinct row that fails. What it checks is
 what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
 closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted

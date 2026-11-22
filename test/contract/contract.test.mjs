@@ -132,13 +132,17 @@ after(async () => {
   await run("docker", ["rm", "-f", NAME]).catch(() => {});
 });
 
-/** Stop the extra bb server whose data directory is ~/<dir>: its server, daemon and their children end with it.
+/** Stop the extra bb server whose data directory is ~/<dir>: its launcher, which shuts its server, daemon and their
+ *  children down before it exits (bb-app 0.50.1's own SIGTERM handling).
  *  By the start of its command line (`node …/bb-app --data-dir …/<dir>`), which this shell's own does not have.
  *  The container has two CPUs: a bb a test is done with is stopped, so the next test's bb starts at full speed. */
 async function stopExtraBb(dir) {
-  await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir "*"/${dir} "*) kill \${p#/proc/} ;; esac; done`);
-  await waitFor(`the bb of ~/${dir} to stop`, async () => !(await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir "*"/${dir} "*) echo alive ;; esac; done`)).includes("alive"), { timeoutMs: 60_000, everyMs: 500 });
+  const each = (act) => `for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir "*"/${dir} "*) ${act} ;; esac; done`;
+  await sh(each("kill ${p#/proc/}")); // a plain string: the shell expands ${p#/proc/}
+  await waitFor(`the bb of ~/${dir} to stop`, async () => !(await sh(each("echo alive"))).includes("alive"), { timeoutMs: 60_000, everyMs: 500 });
 }
+/** What a container read says, for a failure's message: never a second error that hides the first. */
+const said = (command) => sh(command).catch((error) => `(not read: ${error.message})`);
 
 test("the image runs the pinned bb-app, and readiness reads it ready", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
@@ -679,10 +683,11 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   await run("docker", ["exec", "-d", NAME, "sh", "-c",
     "cd ~ && env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL bb-app --data-dir ~/bbdata-signed-out --server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887 --no-in-app-updates > bb-app-signed-out.out 2>&1"]);
   const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
+  try {
   // This wait has timed out twice in some ten runs with no cause found: when it does, say
   // what that bb printed and what its daemon answered, so the next one is read, not rerun.
   await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 180_000, everyMs: 1_000 })
-    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await sh("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await sh("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}`); });
+    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await said("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}`, { cause: error }); });
 
   const result = (await check(signedOut)).result;
   assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);
@@ -697,7 +702,7 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb thread list --json")), [], "nothing was started");
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb project list --json")), [], "nothing was created");
   assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
-  await stopExtraBb("bbdata-signed-out");
+  } finally { await stopExtraBb("bbdata-signed-out"); }
 });
 
 // Last: it starts another bb server, bound to every address, beside the first.
@@ -708,7 +713,7 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   // It timed out once on a CI runner (oats-bb#30's run 45006374572) with no cause seen: when it does, say what that bb
   // printed and what it answered, so the next one is read, not rerun.
   await waitFor("the second bb to answer", async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'), { timeoutMs: 240_000, everyMs: 1_000 })
-    .catch(async (error) => { throw new Error(`${error.message}. It answered: ${(await sh("curl -s -m 2 http://127.0.0.1:48886/health || echo nothing")).slice(0, 300)}. bb-app printed: ${(await sh("tail -c 1500 bb-app-exposed.out 2>&1 || true"))}`); });
+    .catch(async (error) => { throw new Error(`${error.message}. It answered: ${(await said("curl -s -m 2 http://127.0.0.1:48886/health || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-exposed.out 2>&1 || true"))}`, { cause: error }); });
 
   const result = (await check(exposed)).result;
   assert.ok(result.problems.some((p) => p.code === "E_BACKEND_EXPOSED"), JSON.stringify(result));

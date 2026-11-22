@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A8: the Sidebar (experimental_threadList) with the pinned fixtures.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
@@ -11,14 +11,14 @@ import type { Contract, Handlers } from "../helpers/render";
 
 afterEach(resetApp);
 
-async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null) {
+async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads()) {
   const app = await loadApp();
   expect(app.threadLists.map((list) => list.id)).toEqual(["agents"]);
   let navigated = 0;
   const slot = renderSlot<PluginThreadListProps, Contract>(
     app.threadLists[0]!,
     { activeThreadId, activeProjectId: null, isCompactViewport: false, onNavigate: () => void navigated++, searchQuery: "" },
-    { rpc: handlers(over), sidebarThreads: sidebarThreads() },
+    { rpc: handlers(over), sidebarThreads: threads },
   );
   return { slot, navigated: () => navigated };
 }
@@ -41,22 +41,53 @@ test("the tree: every bb agent has a row with both data-sidebar-thread-* attribu
   }
 });
 
-test("a row shows the title, the soul, its state as the dot's label, and ? or new at the end", async () => {
+test("a row is two lines: its name, then its state in a word and its soul; the mark sits beside the word, and no ? or new", async () => {
   const { slot } = await sidebar();
   const rows = await slot.findAllByTestId("oats-agent-row");
   const row = (id: string) => rows.find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === id)!;
-  const dot = (id: string) => row(id).querySelector("[role=img]")!.getAttribute("aria-label");
+  const facts = (id: string) => within(row(id)).getByTestId("oats-row-facts").textContent;
+  const mark = (id: string) => row(id).querySelector("[data-mark]")!;
 
   expect(row("thr_release").textContent).toContain("Release 0.70");
-  expect(row("thr_release").textContent).toContain("oats-maintainer");
-  expect(row("thr_release").textContent!.endsWith("?")).toBe(true);
-  expect(dot("thr_release")).toBe("needs you");
-  expect(dot("thr_ci")).toBe("needs you"); // a claim, and a bb pending interaction
-  expect(dot("thr_redesign")).toBe("working");
-  expect(dot("thr_harvest")).toBe("idle");
-  expect(row("thr_harvest").textContent!.endsWith("new")).toBe(true); // unread
-  expect(dot("thr_digest")).toBe("stopped");
-  expect(row("thr_digest").textContent).toContain("oats-expert · stopped");
+  expect(facts("thr_release")).toBe("Needs you · oats-maintainer");
+  expect(facts("thr_ci")).toBe("Needs you · oats-developer"); // a claim, and a bb pending interaction
+  expect(facts("thr_redesign")).toBe("Working · oats-product-expert");
+  expect(facts("thr_harvest")).toBe("Idle · knowledge-harvester");
+  expect(facts("thr_digest")).toBe("Stopped · oats-expert");
+  // The mark says the state too, and is hidden from a screen reader beside its word.
+  for (const [id, state] of [["thr_release", "needs-you"], ["thr_redesign", "working"], ["thr_harvest", "idle"], ["thr_digest", "stopped"]] as const) {
+    expect(mark(id).getAttribute("data-state")).toBe(state);
+    expect(mark(id).getAttribute("aria-hidden")).toBe("true");
+  }
+  expect(mark("thr_release").textContent).toBe("!"); // the Desktop's mark for an agent that waits
+  for (const one of rows) expect(one.textContent).not.toMatch(/(\?|new)$/);
+  // The name is bold while the agent waits on a person, read or not.
+  expect(row("thr_release").querySelector(".font-semibold")).not.toBeNull();
+});
+
+test("two failures are two words: Failed for a session that ended, Unreachable for one the kernel cannot reach", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, runtimeState: "shell" } : agent.instance === "weekly-digest-helper" ? { ...agent, running: null, runtimeState: "unreachable" } : agent));
+  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  const rows = await slot.findAllByTestId("oats-agent-row");
+  const facts = (id: string) => within(rows.find((row) => row.getAttribute("data-sidebar-thread-id") === id)!).getByTestId("oats-row-facts").textContent;
+  expect(facts("thr_harvest")).toBe("Failed · knowledge-harvester");
+  expect(facts("thr_digest")).toBe("Unreachable · oats-expert");
+});
+
+test("an agent with no bb thread stays in the roster: one that runs in tmux, and one whose thread is gone; each opens its own page", async () => {
+  const { slot, navigated } = await sidebar({}, null, { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_digest") });
+  const rows = await slot.findAllByTestId("oats-agent-row-threadless");
+  expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
+    ["weekly-digest-helper", "Stopped · oats-expert · its bb thread is gone"],
+    ["kernel-fix-developer", "Working · oats-developer · runs in tmux"],
+  ]);
+  expect(rows[1]!.textContent).toContain("Kernel fix developer");
+  // The count of the workspace line is the count of rows.
+  expect(slot.getByTestId("oats-workspace-line").textContent).toBe("oats · falcon · 8 agents");
+  expect(slot.getAllByTestId("oats-agent-row").length + rows.length).toBe(8);
+  fireEvent.click(rows[0]!);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "weekly-digest-helper" } }]); // the agent's own page, where its acts are
+  expect(navigated()).toBe(1);
 });
 
 test("children are indented one step under their parent", async () => {
@@ -104,11 +135,16 @@ test('"Other threads" lists the thread that is no OATS agent, and it opens like 
   expect(navigated()).toBe(1);
 });
 
-test("the workspace line, the needs line and + New agent", async () => {
+test("the workspace line; at the roster's foot the needs line and New agent; then the pages under their heading", async () => {
   const { slot, navigated } = await sidebar();
   expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe("oats · falcon · 8 agents");
   const needs = slot.getByTestId("oats-needs-line");
-  expect(needs.textContent).toBe("3 need you");
+  expect(needs.textContent).toBe("!3 need you");
+  // The order a person reads: the agents, who waits, the act that makes one, then the workspace's pages.
+  const order = ["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map((id) => slot.getByTestId(id));
+  for (let i = 1; i < order.length; i += 1) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(slot.getByTestId("oats-new-agent").tagName).toBe("BUTTON");
+  expect(slot.getByTestId("oats-new-agent").textContent).toBe("New agent");
   fireEvent.click(needs);
   fireEvent.click(slot.getByTestId("oats-new-agent"));
   expect(slot.inspection.navigateCalls).toEqual([
@@ -315,10 +351,11 @@ test("while OATS cannot be read after it was, the tree stays as last read, under
   const { slot } = await sidebar({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) });
   const rows = await slot.findAllByTestId("oats-agent-row");
   expect(rows).toHaveLength(7); // the same seven agents, joined to their threads
+  expect(slot.getAllByTestId("oats-agent-row-threadless")).toHaveLength(1); // and the one that runs in tmux
   const notice = slot.getByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
   expect(notice.textContent).toContain("Showing what was read 2 min ago.");
   expect(slot.getByTestId("oats-last-observation").textContent).toBe("Last observation — 2 min ago");
-  expect(slot.getByTestId("oats-needs-line").textContent).toBe("3 need you");
+  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });

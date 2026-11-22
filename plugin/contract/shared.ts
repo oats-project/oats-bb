@@ -7,7 +7,7 @@ export const instanceName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
 /** An idempotency key: one per intent, made by the app. */
 export const key = z.string().min(8).max(128);
 /** A kernel plan, as the lines a confirmation shows, with the revision an apply names. */
-export const plan = z.object({ revision: z.string(), lines: z.array(z.string()) });
+export const plan = z.object({ revision: z.string(), lines: z.array(z.string()), instance: z.string().nullable() });
 
 // ---- The host contract: every method that runs `oats` answers
 // `{ ok: true, value } | { ok: false, error: { code, message } }` and never throws for a kernel

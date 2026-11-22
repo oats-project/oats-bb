@@ -54,6 +54,11 @@ const INDENT = ["pl-2", "pl-6", "pl-10"] as const;
 const ROW = `flex ${TARGET} min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-sm text-foreground hover:bg-accent`;
 const HEADING = "px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
+/** What a row says in its state's place once the kernel has refused its agent as one it does not know. */
+const GONE = "Not in OATS any more";
+
+const NO_ONE: ReadonlySet<string> = new Set();
+
 const noMark = () => null;
 
 /** One row of the "oats" block: a page of the plugin, and the mark its feature gives it, if any. */
@@ -74,6 +79,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
   const now = useNow();
   const navigate = useBbNavigate();
+  const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
 
@@ -120,6 +126,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
+      const word = gone.has(node.agent.instance) ? GONE : status.word;
       return [
         threadRow(
           thread,
@@ -128,7 +135,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={status.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, status.word, shown(oats.soulOf(node.agent)))}
+            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, word, shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -157,7 +164,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={status.state} hidden />
-          {lines(name, status.state === "needs-you", status.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+          {lines(name, status.state === "needs-you", gone.has(agent.instance) ? GONE : status.word, `${shown(oats.soulOf(agent))} · ${where}`)}
         </button>
       </li>
     );

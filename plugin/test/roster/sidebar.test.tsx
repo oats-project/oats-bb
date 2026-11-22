@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A8: the Sidebar (experimental_threadList) with the pinned fixtures.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
@@ -358,4 +358,19 @@ test("while OATS cannot be read after it was, the tree stays as last read, under
   expect(slot.getByTestId("oats-last-observation").textContent).toBe("Last observation — 2 min ago");
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
+});
+
+test("an agent the kernel refused as one it does not know says so in its row, until the next roster is read", async () => {
+  let at = "2026-11-19T12:30:00.000Z";
+  const { slot } = await sidebar({ snapshot: () => ({ ...fixtureSnapshot(), at }) });
+  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_release")!).getByTestId("oats-row-facts").textContent;
+  await slot.findByTestId("oats-tree");
+  expect(facts()).toBe("Needs you · oats-maintainer");
+  const { markGone } = await import("../../app/roster/gone");
+  act(() => markGone("release-070-maintainer"));
+  expect(facts()).toBe("Not in OATS any more · oats-maintainer");
+  // The next roster: the kernel lists it after all, and the row says what the kernel says.
+  at = "2026-11-19T12:31:00.000Z";
+  await slot.behavior.emitRealtime("oats/changed", { at });
+  await waitFor(() => expect(facts()).toBe("Needs you · oats-maintainer"));
 });

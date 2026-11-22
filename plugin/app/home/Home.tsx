@@ -20,7 +20,8 @@ import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Dot, ErrorLine, Heading, Note, Page, plainClick } from "../ui";
+import { Button, Dot, ErrorLine, Heading, Loading, Note, Page, plainClick } from "../ui";
+import { Unreadable } from "../roster/unreadable";
 import { PAGES } from "../workspace/pages";
 import { shown } from "../ui/text";
 
@@ -281,11 +282,14 @@ function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
 
 function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {
   const now = useNow();
-  if (oats.phase === "loading") return <Note>Reading OATS…</Note>;
-  if (oats.phase === "failed") return <ErrorLine onRetry={oats.retry}>{failureLine(oats)}</ErrorLine>;
+  // The same words as the sidebar's, from the same components: what is read, what cannot be, and
+  // (the roster kept as last read) how old what is shown is.
+  if (oats.phase === "loading") return <Loading>Reading your agents…</Loading>;
+  if (oats.phase === "failed") return <Unreadable failure={oats} machine={null} onRetry={oats.retry} />;
   const { view } = oats;
   return (
     <>
+      {oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <section data-testid="oats-home-needs" className="flex flex-col gap-2">
         <Heading n={view.needsYou.length}>Needs you</Heading>
         {view.needsYou.length === 0 ? (

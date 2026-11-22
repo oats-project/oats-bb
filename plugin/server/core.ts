@@ -289,10 +289,16 @@ export function createCore(bb: BbPluginApi) {
     return cached ?? (await (running ?? reread()));
   }
 
-  /** The agent the kernel's snapshot names; an instance it does not name is refused. */
+  /**
+   * The agent the kernel's snapshot names; an instance it does not name is refused. While OATS
+   * cannot be read after it was, the agent is the one of the last roster read: every act goes to
+   * the kernel, which plans it or refuses it on what it knows now, so an act on what was last read
+   * is the kernel's to answer, not this server's to hold. With no roster ever read, the failure is the refusal.
+   */
   async function agentOf(instance: string): Promise<Agent> {
-    const now = await current();
-    if (!now.ok) throw refusal({ code: now.code, message: now.message });
+    const read = await current();
+    if (!read.ok && lastRoster === null) throw refusal({ code: read.code, message: read.message });
+    const now = read.ok ? read : lastRoster!;
     const found = now.agents.find((agent) => agent.instance === instance);
     if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
     return found;

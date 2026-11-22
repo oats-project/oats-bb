@@ -7,8 +7,9 @@ import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Rpc } from "../store";
-import { Button, ErrorLine, Modal, Note } from "../ui";
-import { shown } from "../ui/text";
+import { markGone, UNKNOWN_INSTANCE } from "../roster/gone";
+import { Button, ErrorLine, Modal, Note, Notice } from "../ui";
+import { refusalCode, shown } from "../ui/text";
 
 export type PlanVerb = "stop" | "retire";
 export type RunVerb = "start" | "restart";
@@ -72,7 +73,7 @@ const PLAN = {
 
 type PlanState =
   | { phase: "reading" }
-  | { phase: "ready"; revision: string; lines: string[]; key: string; error: string | null; applying: boolean }
+  | { phase: "ready"; revision: string; lines: string[]; instance: string | null; key: string; error: string | null; applying: boolean }
   | { phase: "unreadable"; error: string };
 
 function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }) {
@@ -97,7 +98,11 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
         if (wanted) setState({ phase: "ready", ...plan, key: newKey(), error: null, applying: false });
       },
       (cause: unknown) => {
-        if (wanted) setState({ phase: "unreadable", error: errorMessage(cause) });
+        const error = errorMessage(cause);
+        // The kernel no longer has an agent of this name (the roster on screen was read before it
+        // went): its row says so until the next roster is read.
+        if (refusalCode(error) === UNKNOWN_INSTANCE) markGone(request.instance);
+        if (wanted) setState({ phase: "unreadable", error });
       },
     );
     return () => {
@@ -127,7 +132,9 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
 
   return (
     <Modal
-      title={`${words.title} ${shown(request.instance)}?`}
+      // The agent is named from the kernel's plan, never from the row that was pressed: the roster
+      // on screen may be older than what the kernel knows. Until the plan is read no agent is named.
+      title={state.phase === "ready" && state.instance !== null ? `${words.title} ${shown(state.instance)}?` : state.phase === "ready" ? `${words.title} this agent?` : `${words.title} an agent`}
       onCancel={cancel}
       footer={
         <>
@@ -153,7 +160,13 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
       <div data-testid="oats-plan" className="flex flex-col gap-2">
         {state.phase === "reading" ? <Note>Reading the plan from OATS…</Note> : null}
         {state.phase === "unreadable" ? (
-          <ErrorLine onRetry={() => setAttempt((n) => n + 1)}>{state.error}</ErrorLine>
+          refusalCode(state.error) === UNKNOWN_INSTANCE ? (
+            <Notice title={`${shown(request.instance)} is not in OATS any more`} tone="error" code={UNKNOWN_INSTANCE} details={state.error}>
+              <p>OATS has no agent of this name now: it was retired, or removed, after the roster on screen was read. Nothing was changed.</p>
+            </Notice>
+          ) : (
+            <ErrorLine onRetry={() => setAttempt((n) => n + 1)}>{state.error}</ErrorLine>
+          )
         ) : null}
         {state.phase === "ready" ? (
           <>

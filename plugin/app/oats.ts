@@ -1,5 +1,6 @@
 // What every slot reads: the kernel's snapshot (through the plugin's server) joined to bb's own
 // live thread list. bb's thread fields cost no `oats` call.
+import { useGone } from "./roster/gone";
 import { useMemo } from "react";
 import { experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
@@ -44,6 +45,8 @@ export type Oats = {
       deployment: Deployment;
       agents: readonly Agent[];
       view: View;
+      /** Agents of this roster the kernel has since refused as ones it does not know: "not in OATS any more" until the next roster. */
+      gone: ReadonlySet<string>;
       /** Every drawn node by its thread id, and by its instance. */
       nodeByThread: ReadonlyMap<string, Node>;
       nodeByInstance: ReadonlyMap<string, Node>;
@@ -73,6 +76,7 @@ export function useOats(): Oats {
     };
   }, [roster, threads]);
 
+  const gone = useGone(roster?.at ?? null);
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);
   const soulOf = (agent: Agent) => soulNames.get(agent.soul) ?? agent.soul;
   const base = { threads, threadById, retry: read.retry, soulOf };
@@ -89,7 +93,7 @@ export function useOats(): Oats {
     return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them." };
   }
   if (sidebar.status !== "ready" || joined === null) return { ...base, phase: "loading" };
-  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, ...joined };
+  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, gone, ...joined };
 }
 
 /** The first line of a message: what the sidebar's one status line has room for. */

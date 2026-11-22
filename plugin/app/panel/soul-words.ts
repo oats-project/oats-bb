@@ -24,8 +24,12 @@ export function coreNote(core: Pick<PanelCore, "why" | "team">): string | null {
   return null;
 }
 
-/** A source in one line: its name, then its version. */
-export const sourceText = (source: PanelSource): string => (source.version === null ? source.name : `${source.name} ${source.version}`);
+/** A version as it is drawn: a commit id (40 hex characters) by its first seven, anything else whole. */
+export const shortVersion = (version: string): string => (/^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version);
+/** A source in one line: its name, then its version (a commit id short: the whole is the line's title). */
+export const sourceText = (source: PanelSource): string => (source.version === null ? source.name : `${source.name} ${shortVersion(source.version)}`);
+/** The same with the version whole, for the line's title. */
+export const sourceWhole = (source: PanelSource): string => (source.version === null ? source.name : `${source.name} ${source.version}`);
 /** What kind of source it is, in a word, for the line's accessible reading. */
 export const sourceKind = (source: PanelSource): string => (source.kind === "package" ? "package" : source.kind === "home" ? "the soul's own repository" : "repository");
 
@@ -48,7 +52,5 @@ export function whyTag(capability: PanelCapability): { label: string; title: str
 
 /** "Spawned from <soul> @ <commit>", the commit by its first seven characters. */
 export const spawnedFrom = (soul: { name: string; commit: string | null }): string => `Spawned from ${soul.name}${soul.commit === null ? "" : ` @ ${soul.commit.slice(0, 7)}`}`;
-/** "Modules as spawned · N". */
-export const modulesAsSpawned = (n: number): string => `Modules as spawned · ${n}`;
-/** The soul's repository and the teams it may join, on one line; null when the kernel says neither. */
-export const soulMeta = (soul: { repo: string | null; teams: string[] }): string | null => [soul.repo, soul.teams.join(", ") || null].filter((part) => part !== null).join(" · ") || null;
+/** The label of the count of modules the instance was spawned with (the Desktop's "Modules as spawned · N", as a labelled fact). */
+export const MODULES_AS_SPAWNED = "Modules as spawned";

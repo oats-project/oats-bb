@@ -98,7 +98,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 
 | Part | What it shows |
 |---|---|
-| **Needs you** | one card per agent that waits on you, the newest claim first; eight, then **Show all N**. A card says who (the instance's name as words, its soul and the machine), its state on the shared status line with since when it waits, and what it asks in the agent's own words. Where bb lists choices for the question (a confirmation, a selection, an approval, a question with options), they are buttons on the card and answer it in place. The **reply** is on the card of the agent it goes to and names it ("Write to Release 070 maintainer…"): there is no reply apart from a card, so a message cannot go to another agent than the one read. **Open** and the name lead to the agent's thread. With none: "Nothing needs you." |
+| **Needs you** | one card per agent that waits on you: those you can answer here (they have a thread in bb) first, then those answered elsewhere; within each, the newest claim first. Eight, then **Show all N**. A card says who (the instance's name as words, its soul and the machine), its state on the shared status line with since when it waits, what it asks in the agent's own words, and offers the answer its request takes (below). **Open thread** and the name lead to the agent's thread. With none: "Nothing needs you." |
 | the summary | one line, "8 agents · 3 working · 3 need you · 1 idle · 1 stopped": every agent OATS has counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's. Working and need you are always said; another state only when it has agents |
 | the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the mark its row in the sidebar carries (Automations, while a run failed), read only while the home is seen |
 | **Working** | the agents at work, five, then **Show all N working** / **Show fewer**; each row opens its agent |
@@ -126,12 +126,24 @@ shows (the plugin's setting `pages`; the default is `home` alone, and then the t
 only), and reads a page's count only then. New agent on the empty home is offered where it has
 somewhere to open.
 
-An agent with no thread in bb (it runs in tmux, or its thread was archived or deleted) that needs
-you has its card too: what it asks, "Runs in tmux: answer it in its terminal." in place of the
-reply (nothing can be sent to it from bb), and Open, which leads to the agent's own page.
+**What a card offers.** An agent is answered by the answer its request takes, and the card offers
+that one, not a free-text box beside it as an equal:
+
+| The agent | The card offers |
+|---|---|
+| bb lists choices for its request (a confirmation, a selection, an approval, a question with options) | the choices, as buttons: pressing one answers it in place (`threads.interactions.respond` / `resolve`). The card then says "Answered: Allow. Waiting for the agent to go on." until the agent goes on and its card leaves, or it asks again |
+| bb shows its request in a form the card cannot draw (a plugin's form, free text) | "bb shows its request in its thread: open the thread to answer it.", and **Open thread** |
+| the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.", and **Open thread**. The card cannot grant what bb does not list, and does not pretend to |
+| it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
+| it has no thread in bb: it runs in tmux | "It runs in tmux on <machine>, where bb cannot write to it. Answer it in its terminal, in the OATS deployment there:", the kernel's own command to copy (`oats session attach --instance <instance>`), and **Open its page**, with "Open its page shows who it is and how it runs." |
+| it has no thread in bb: its thread was archived or deleted | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+
+Beside choices, or a request answered in the thread, a message is still possible, behind **Write a
+message instead**, which first says what a message does not do: "A message does not answer its
+request: it grants nothing, and the request stays open."
 
 While OATS cannot be read the home keeps the roster as last read, under the one notice every place
-shows for it (what happened, how old what is shown is, Retry), and every card's answers and reply
+shows for it (what happened, how old what is shown is, Retry), and every card's choices and reply
 are **held**, with the reason beside them: what is shown may have changed, and a message or an
 answer would go on a question that may no longer be the one asked. Open still opens.
 

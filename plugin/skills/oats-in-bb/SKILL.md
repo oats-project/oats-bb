@@ -40,13 +40,17 @@ agents, their homes, identities and mail are OATS's and aweb's.
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
   the OATS tab of a thread that is no agent's): **Needs you** first, one card per agent that waits
-  (who, since when, what it asks; bb's choices as buttons; a reply box on the card that writes to
-  that agent through bb's own send; Open), then a summary line ("8 agents · 3 working · 3 need
-  you · …"), tiles for Agents and the workspace's pages with their counts, **Working** and
-  **Finished, not looked at**. The **Agents** tile opens Home › Agents: every agent OATS has, the
-  stopped ones and the ones with no bb thread among them, with its state and who started it. An
-  agent on tmux that needs you has a card with no reply box: answer it in its terminal. While
-  OATS cannot be read the cards' answers and replies are held until it is read again.
+  (who, since when, what it asks), then a summary line ("8 agents · 3 working · 3 need you · …"),
+  tiles for Agents and the pages this release shows, **Working** and **Finished, not looked at**.
+  A card offers the answer the request takes: bb's choices as buttons (an approval, a question
+  with options); a reply box that writes to that agent through bb's own send, for an agent that
+  asks in its own words; "open its thread" where the answer is in the thread; for an agent on
+  tmux, the command that reaches its terminal (`oats session attach --instance <instance>`).
+  A message never grants an approval: beside choices it is behind "Write a message instead".
+  The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
+  with no bb thread among them, with its state and who started it. While OATS cannot be read the
+  cards' choices and replies are held until it is read again. The home also says when the
+  installed `oats` is older than the plugin works with, or newer than it reads.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
   to copy), its harness, model and thread, its messaging id, its parent, whether it is ready

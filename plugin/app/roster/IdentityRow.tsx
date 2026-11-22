@@ -11,7 +11,6 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
-import { count } from "../format";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
 import { useOats } from "../oats";
@@ -106,17 +105,35 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
 
+  // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
+  // the act that applies (B2): the line's height does not change with the state.
+  const panelButton = (
+    <Button data-testid="oats-open-panel" title="Open this agent's instance panel" onClick={openPanel}>
+      Instance panel
+    </Button>
+  );
+
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {gone ? (
-        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" />
+        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={panelButton} />
       ) : (
-        <StatusLine state={status.state} since={status.since} detail={status.detail} action={act} />
+        <StatusLine
+          state={status.state}
+          since={status.since}
+          detail={status.detail}
+          action={
+            <>
+              {act}
+              {panelButton}
+            </>
+          }
+        />
       )}
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <RowFact label="Soul" testId="oats-fact-soul">
+        <RowFact label="instance of" testId="oats-fact-soul">
           {/* A link to the soul's page where that page is shown in this release; else its name alone: no link leads nowhere. */}
           {soulsShown ? (
             <a
@@ -135,7 +152,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           )}
         </RowFact>
         {agent.parent !== null ? (
-          <RowFact label="Under" testId="oats-fact-parent">
+          <RowFact label="Parent" testId="oats-fact-parent">
             {parentThread === undefined ? (
               agentName(agent.parent)
             ) : (
@@ -153,29 +170,20 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
             )}
           </RowFact>
         ) : agent.human !== null ? (
-          <RowFact label="Started by" testId="oats-fact-parent">
+          <RowFact label="Owning human" testId="oats-fact-parent">
             {shown(agent.human)}
           </RowFact>
         ) : null}
         {children > 0 ? (
-          <span data-testid="oats-fact-children" className="text-muted-foreground">
-            {count(children, "child", "children")}
-          </span>
+          <RowFact label="Children" testId="oats-fact-children">
+            {String(children)}
+          </RowFact>
         ) : null}
         {identity === null ? null : (
-          <RowFact label={agent.team === null ? "Identity" : `Identity in ${shown(agent.team)}`} testId="oats-fact-identity">
+          <RowFact label="Messaging ID" testId="oats-fact-identity">
             {shown(identity)}
           </RowFact>
         )}
-        <button
-          type="button"
-          data-testid="oats-open-panel"
-          title="Open this agent's panel"
-          className={`${TARGET} ml-auto inline-flex shrink-0 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent`}
-          onClick={openPanel}
-        >
-          OATS
-        </button>
       </div>
     </div>
   );

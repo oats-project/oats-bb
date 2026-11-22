@@ -62,12 +62,12 @@ test("the status line comes first and says where the agent is in words: a workin
   const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Working");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingInstance panel"); // the state, then the one row of buttons
   expect(slot.queryByTestId("oats-status-act")).toBeNull();
   // Each fact has its label; the instance is not repeated (the thread's title is it), and there is no "✓".
-  expect(fact(slot, "oats-fact-soul")).toBe("Souloats-desktop-developer");
-  expect(fact(slot, "oats-fact-parent")).toBe("UnderRedesign ui lead");
-  expect(fact(slot, "oats-fact-identity")).toBe("Identity in default:oats.aweb.aidesktop-mockups-developer");
+  expect(fact(slot, "oats-fact-soul")).toBe("instance ofoats-desktop-developer");
+  expect(fact(slot, "oats-fact-parent")).toBe("ParentRedesign ui lead");
+  expect(fact(slot, "oats-fact-identity")).toBe("Messaging IDdesktop-mockups-developer") // the Desktop's label; no team id in it;
   expect(block.textContent).not.toContain("✓");
   // The parent is a link to its thread; the soul opens the soul's page.
   const parent = slot.getByTestId("oats-fact-parent").querySelector("a")!;
@@ -91,12 +91,12 @@ test("an agent that needs you: since when and its question, on its own thread", 
   const slot = await render("thr_release", agents);
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?$/);
+  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?Instance panel$/);
 });
 
 test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says what OATS says, with Retry", async () => {
   const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }) });
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStart");
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   await vi.waitFor(() => expect(stopped.inspection.rpcCalls.filter((call) => call.method === "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]));
   stopped.unmount();
@@ -108,18 +108,18 @@ test("a stopped agent says Stopped and offers Start, through OATS; one whose ses
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestart");
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestartInstance panel");
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
-  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("Unreachable· OATS says: bb did not answerRetry");
+  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("Unreachable· OATS says: bb did not answerRetryInstance panel");
 });
 
 test("for a root agent with children: who started it, not a link, and the number of children", async () => {
   const slot = await row("thr_redesign");
   const parent = await slot.findByTestId("oats-fact-parent");
-  expect(parent.textContent).toBe("Started byjoan");
+  expect(parent.textContent).toBe("Owning humanjoan");
   expect(parent.querySelector("a")).toBeNull();
-  expect(slot.getByTestId("oats-fact-children").textContent).toBe("2 children");
+  expect(slot.getByTestId("oats-fact-children").textContent).toBe("Children2");
 });
 
 test("the address is shown instead of the alias when the row carries one; no identity fact without either", async () => {
@@ -131,7 +131,7 @@ test("the address is shown instead of the alias when the row carries one; no ide
         : agent,
   );
   const withAddress = await render("thr_redesign", agents);
-  expect((await withAddress.findByTestId("oats-fact-identity")).textContent).toBe("Identity in default:oats.aweb.aioats.aweb.ai/redesign-ui-lead");
+  expect((await withAddress.findByTestId("oats-fact-identity")).textContent).toBe("Messaging IDoats.aweb.ai/redesign-ui-lead");
   withAddress.unmount();
   const without = await render("thr_ci", agents);
   await without.findByTestId("oats-fact-soul");
@@ -142,7 +142,7 @@ test("a parent that is not in bb is named, without a link", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "ranker-v3-probe" ? { ...agent, parent: "kernel-fix-developer" } : agent));
   const slot = await render("thr_research", agents);
   const parent = await slot.findByTestId("oats-fact-parent");
-  expect(parent.textContent).toBe("UnderKernel fix developer");
+  expect(parent.textContent).toBe("ParentKernel fix developer");
   expect(parent.querySelector("a")).toBeNull();
 });
 
@@ -185,7 +185,7 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
-  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("Working");
+  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingInstance panel");
   const stale = slot.getByTestId("oats-unreadable");
   expect(stale.getAttribute("data-compact")).toBe("");
   expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.Retry");
@@ -215,6 +215,6 @@ test("the soul is a link to its page where that page is shown, and its name alon
   resetApp();
   const hidden = await row("thr_mockups", { settings: { pages: "home" } });
   const fact = await hidden.findByTestId("oats-fact-soul");
-  expect(fact.textContent).toBe("Souloats-desktop-developer");
+  expect(fact.textContent).toBe("instance ofoats-desktop-developer");
   expect(fact.querySelector("a")).toBeNull();
 });

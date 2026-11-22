@@ -159,8 +159,11 @@ export default [
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-task"));
       await page.shot(`spawn-${viewport.name}-filled`, { targets: true });
-      await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
-      await page.shot(`spawn-${viewport.name}-preview`);
+      // On a phone the column is under the fields: its own image, down to the buttons. (On a wide page it is beside them, in the image above.)
+      if (viewport.mobile) {
+        await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
+        await page.shot(`spawn-${viewport.name}-preview`);
+      }
       // The soul's list, open: the souls OATS lists, each with its description, a filter, the chosen one marked; all of it on screen.
       await page.evaluate(`window.scrollTo(0, 0); document.querySelector(${q("oats-new-agent-page")}).scrollTop = 0`);
       await page.evaluate(click(testId("oats-spawn-soul")));
@@ -181,7 +184,7 @@ export default [
       await page.shot(`spawn-${viewport.name}-harness-open`, { targets: true });
       await page.press("Escape");
       check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} pi can still be chosen`, await whole(page));
-      const said = await page.until(`/bb has not installed pi on this machine, so a spawn on it is refused\. Install it in bb’s settings, or pick another harness\./.test(document.querySelector(${q("oats-spawn-form")}).innerText) && document.querySelector(${q("oats-spawn-harness")}).innerText.replace(/\s+/g, " ").trim()`, 10);
+      const said = await page.until(`/bb has not installed pi on this machine, so a spawn on it is refused\\. Install it in bb’s settings, or pick another harness\\./.test(document.querySelector(${q("oats-spawn-form")}).innerText) && document.querySelector(${q("oats-spawn-harness")}).innerText.replace(/\\s+/g, " ").trim()`, 10);
       check(said === "pi · not installed in bb ▾", `${at} chosen, the field keeps the mark and says under it what bb lacks and what to do, before any press`, said ?? (await whole(page)));
       await page.evaluate(show("oats-spawn-harness"));
       await page.shot(`spawn-${viewport.name}-harness-not-installed`, { targets: true });
@@ -225,8 +228,10 @@ export default [
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-relation"));
       await page.shot(`spawn-${viewport.name}-relation`, { targets: true });
-      await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
-      await page.shot(`spawn-${viewport.name}-relation-preview`);
+      if (viewport.mobile) {
+        await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
+        await page.shot(`spawn-${viewport.name}-relation-preview`);
+      }
     },
   },
   {

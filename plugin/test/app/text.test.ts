@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { cleanLine, DETAIL_WITHHELD, displayLine, MAX_DISPLAY_LINE, NOT_NOTE_TEXT, refusalLines, shown, shownBlock, UNSAFE } from "../../app/ui/text";
+import { cleanLine, DETAIL_WITHHELD, displayLine, MAX_DISPLAY_LINE, NOT_NOTE_TEXT, refusalCode, refusalLines, shown, shownBlock, UNSAFE } from "../../app/ui/text";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const at = (codePoint: number) => String.fromCodePoint(codePoint);
@@ -198,6 +198,12 @@ describe("what the plugin adds", () => {
     expect(refusalLines("oats was not found on falcon")).toEqual(["oats was not found on falcon"]);
     expect(refusalLines("")).toEqual([]);
     expect(refusalLines(undefined)).toEqual([]);
+  });
+
+  test("refusalCode: the code that leads a refusal, the kernel's or the plugin's own, and nothing else", () => {
+    expect(refusalCode("E_PLAN_STALE: the plan moved since it was read")).toBe("E_PLAN_STALE");
+    expect(refusalCode("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped")).toBe("OATS_TIMEOUT");
+    for (const none of ["TOKEN: abc123", "NOTE: nothing to do", "oats was not found on falcon", "E_SOUL_INVALID:", "E_: m", " E_X: m", "e_x: m", "the E_X: m", "E_X:\nm", "E_X:\tm", "", undefined, 7]) expect(refusalCode(none), String(none)).toBeNull();
   });
 
   test("refusalLines: each line of the kernel's is a line of its own, and no line break is left in one", () => {

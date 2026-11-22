@@ -1,13 +1,14 @@
 // The contrast check of the app's live checks (container/live-ui.mjs): for what the plugin draws
 // on a page, the WCAG contrast ratio of each text against its effective background, and of each
-// state dot against what is behind it. One expression, evaluated in the page.
+// mark against what is behind it. One expression, evaluated in the page.
 //
 // What it covers: inside every element the plugin marks with `data-testid="oats-…"` (the sidebar
 // block and tree, the identity row, the home, the four pages, the dialogs and the running line),
 // every rendered element that has text of its own (rows, chips, card text, headings, links,
 // buttons, the dialog's lines), what a field shows (the value typed into an input or a textarea,
-// the chosen option of a select, or the placeholder of an empty one), and every state dot
-// (`role="img"` with `data-state`). A row's thread title is bb's own component, drawn inside the
+// the chosen option of a select, or the placeholder of an empty one), and every drawn mark
+// (`data-mark`: a state's dot or "!", a toned dot, a row's mark, whether a screen reader is told of
+// it or it sits beside its word). A row's thread title is bb's own component, drawn inside the
 // plugin's row: it is covered too.
 //
 // How: the colours are the computed ones. A colour is resolved to sRGB by painting it on a
@@ -24,7 +25,7 @@
 //     filled forms with their buttons enabled, the plan dialog);
 //   - a disabled control, and what is inside one: skipped, as WCAG exempts it;
 //   - the options of an open select: the browser draws that list, not the page;
-//   - what is drawn but is no text and no state dot: borders, icons, focus rings;
+//   - what is drawn but is no text and no mark: borders, icons, focus rings;
 //   - the text of a `display: contents` element: it has no box of its own, so it counts as not
 //     rendered and is skipped, though its text is drawn;
 //   - `::before` and `::after` content: generated text is no text node of the page;
@@ -88,8 +89,10 @@ function contrastInPage() {
     for (const element of [root, ...root.querySelectorAll("*")]) {
       if (!rendered(element)) continue;
       const style = getComputedStyle(element);
-      if (element.getAttribute("role") === "img" && element.hasAttribute("data-state")) {
-        // A state dot: its fill, or its border where it has no fill, against what is behind it.
+      if (element.hasAttribute("data-mark")) {
+        // A drawn mark (a state's dot or "!", a toned dot, a row's mark), named for a screen reader
+        // or hidden from it beside its word: its fill, or its border where it has no fill, against
+        // what is behind it.
         const filled = over(style.backgroundColor, [1, 2, 3]).join() !== "1,2,3";
         const dot = resolve(element.parentElement, filled ? style.backgroundColor : style.borderTopColor);
         // No fill and no border: a class that gives the dot no colour at all (a token bb does not have).

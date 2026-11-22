@@ -87,15 +87,24 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  */
 export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
   const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
+  // No line of it starts with a separator. Each part after the word carries its "·" in its own
+  // left padding, and the row is pulled left by as much inside a frame that clips: a part that
+  // wraps to the start of a line has its separator in the clipped strip, and the line starts
+  // with its words. (The frame's own padding keeps a focus ring of the act from being clipped.)
   return (
-    <div data-testid="oats-status-line" data-state={state} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground">
-      <span className="font-semibold">
-        <State state={state} word={word} />
-      </span>
-      {said.map((part, index) => (
-        <span key={index} className="min-w-0 break-words text-muted-foreground">{`· ${part}`}</span>
-      ))}
-      {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2">{action}</span>}
+    <div data-testid="oats-status-line" data-state={state} className="-m-1 min-w-0 overflow-hidden p-1 text-sm text-foreground">
+      <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
+        <span className="pl-4 font-semibold">
+          <State state={state} word={word} />
+        </span>
+        {said.map((part, index) => (
+          <span key={index} data-testid="oats-status-part" className="relative min-w-0 break-words pl-4 text-muted-foreground">
+            <span className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
+            {part}
+          </span>
+        ))}
+        {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2 pl-4">{action}</span>}
+      </div>
     </div>
   );
 }

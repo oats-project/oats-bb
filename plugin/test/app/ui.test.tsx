@@ -105,6 +105,16 @@ describe("a state", () => {
     const line = screen.getByTestId("oats-status-line");
     expect(line.textContent).toBe("!Needs you· waiting 12 min (since 14:03)· [withheld]Open");
     expect(within(line).getByRole("button", { name: "Open" })).toBeTruthy();
+    // No line of it starts with a separator: each part carries its "·" in its own left padding, in a
+    // strip the frame clips where a part wraps to the start of a line (a scene measures it drawn).
+    expect(line.className).toContain("overflow-hidden");
+    const parts = within(line).getAllByTestId("oats-status-part");
+    expect(parts.map((part) => part.textContent)).toEqual(["· waiting 12 min (since 14:03)", "· [withheld]"]);
+    for (const part of parts) {
+      expect(part.className).toContain("pl-4");
+      expect(part.firstElementChild!.className).toContain("absolute left-0");
+    }
+    expect(line.firstElementChild!.className).toContain("-ml-4");
     cleanup();
     render(<StatusLine state="working" since={null} detail="" />);
     expect(screen.getByTestId("oats-status-line").textContent).toBe("Working");

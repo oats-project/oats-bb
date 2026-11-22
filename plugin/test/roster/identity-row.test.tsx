@@ -178,7 +178,8 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
     expect(part.className).not.toMatch(/overflow-x-auto|whitespace-nowrap|truncate/);
   }
   expect(slot.getByTestId("oats-identity-facts").className).toContain("flex-wrap");
-  expect(slot.getByTestId("oats-status-line").className).toContain("flex-wrap");
+  // The status line wraps inside its frame (the frame clips only the strip a separator at a line's start falls in).
+  expect(slot.getByTestId("oats-status-line").firstElementChild!.className).toContain("flex-wrap");
 });
 
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {

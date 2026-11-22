@@ -291,3 +291,82 @@ describe("triggerStatus", () => {
     await expect(backend.rpc("triggerStatus", { id: "local/pr-triage" })).rejects.toThrow('E_TRIGGER_UNKNOWN: no trigger "local/pr-triage" in /abs/deployment');
   });
 });
+
+describe("creating and editing a schedule", () => {
+  const KEEPER = "/abs/deployment/agents/note-keeper/instances/team-notes-keeper";
+  const wakeSpec = (home: string) => ({ kind: "wake" as const, cron: "*/15 * * * *", tz: "UTC", enabled: true, home, message: "Anything?" });
+  const spawnSpec = (agent: string) => ({ kind: "spawn" as const, cron: "0 9 * * *", tz: "UTC", enabled: true, agent, task: "Look.", backend: "bb", yolo: true });
+  type Targets = { souls: { key: string; spawnable: boolean }[]; homes: { instance: string; home: string; backend: string }[] };
+
+  it("what the form chooses among is the deployment's souls and the homes of its roster", async () => {
+    backend = await startBackend();
+    const targets = await backend.rpc<Targets>("scheduleTargets");
+    expect(targets.souls.length).toBeGreaterThan(0);
+    expect(targets.homes.length).toBeGreaterThan(0);
+    expect(targets.homes.every((home) => home.home.startsWith("/"))).toBe(true);
+  });
+
+  it("a schedule is created with one --spec-json element, for a soul the deployment lists or a home of its roster", async () => {
+    backend = await startBackend();
+    const targets = await backend.rpc<Targets>("scheduleTargets");
+    const home = targets.homes[0]!.home;
+    const soul = targets.souls[0]!.key;
+    await backend.rpc("scheduleAdd", { id: "form-wake", spec: wakeSpec(home) });
+    await backend.rpc("scheduleAdd", { id: "form-spawn", spec: spawnSpec(soul) });
+    const added = await argvs(backend, "schedule add");
+    const more = await argvs(backend, "schedule add form-spawn");
+    expect(added).toHaveLength(1);
+    expect(added[0]!.slice(0, 3)).toEqual(["schedule", "add", "form-wake"]);
+    expect([added[0]!.length, added[0]![4]]).toEqual([5, "--json"]);
+    expect(JSON.parse(added[0]![3]!.slice("--spec-json=".length))).toEqual(wakeSpec(home));
+    expect(JSON.parse(more[0]![3]!.slice("--spec-json=".length))).toEqual(spawnSpec(soul));
+  }, 20_000);
+
+  it("a home that is no agent's, a soul nobody lists, a name that is none or a key the form does not make starts no process", async () => {
+    backend = await startBackend();
+    const targets = await backend.rpc<Targets>("scheduleTargets");
+    await expect(backend.rpc("scheduleAdd", { id: "x", spec: wakeSpec("/etc") })).rejects.toThrow("the home is not one of this OATS deployment's agents");
+    await expect(backend.rpc("scheduleAdd", { id: "x", spec: wakeSpec(KEEPER + "/../..") })).rejects.toThrow();
+    await expect(backend.rpc("scheduleAdd", { id: "x", spec: spawnSpec("no-such-soul") })).rejects.toThrow('"no-such-soul" is not a soul of this OATS deployment');
+    await expect(backend.rpc("scheduleAdd", { id: "--force", spec: wakeSpec(targets.homes[0]!.home) })).rejects.toThrow();
+    await expect(backend.rpc("scheduleAdd", { id: "x", spec: { ...wakeSpec(targets.homes[0]!.home), argv: ["rm", "-rf"] } })).rejects.toThrow();
+    await expect(backend.rpc("scheduleAdd", { id: "x", spec: { ...wakeSpec(targets.homes[0]!.home), kind: "command" } })).rejects.toThrow();
+    await expect(backend.rpc("scheduleHomeOperations", { home: "/etc" })).rejects.toThrow("the home is not one of this OATS deployment's agents");
+    await expect(backend.rpc("scheduleSoulBackends", { soul: "no-such-soul" })).rejects.toThrow();
+    for (const verb of ["schedule add", "schedule update", "inspect --home", "inspect --soul"]) expect(await argvs(backend, verb)).toEqual([]);
+  }, 20_000);
+
+  it("Edit is for a local schedule of the current list: a workspace one, and an id the list does not name, are refused before any process", async () => {
+    backend = await startBackend();
+    const targets = await backend.rpc<Targets>("scheduleTargets");
+    const spec = wakeSpec(targets.homes[0]!.home);
+    await expect(backend.rpc("scheduleDraft", { id: "oats-real/nightly-digest" })).rejects.toThrow("is a workspace schedule, defined in Git");
+    await expect(backend.rpc("scheduleUpdate", { id: "oats-real/nightly-digest", spec })).rejects.toThrow("is a workspace schedule, defined in Git");
+    await expect(backend.rpc("scheduleUpdate", { id: "local/no-such", spec })).rejects.toThrow("is not a schedule of this OATS deployment's current list");
+    expect(await argvs(backend, "schedule show")).toEqual([]);
+    expect(await argvs(backend, "schedule update")).toEqual([]);
+    await backend.rpc("scheduleUpdate", { id: "daily-review", spec });
+    const updated = await argvs(backend, "schedule update");
+    expect(updated[0]!.slice(0, 3)).toEqual(["schedule", "update", "local/daily-review"]);
+    expect(JSON.parse(updated[0]![3]!.slice("--spec-json=".length))).toEqual(spec);
+  }, 20_000);
+
+  it("what Edit starts from is the kernel's stored definition; one the form cannot keep whole is no draft", async () => {
+    backend = await startBackend({ verbs: { "inspect --soul": { file: "automations/inspect-home.json" } } });
+    const kept = await backend.rpc<{ draft: { id: string; spec: { kind: string; backend?: string } } | null }>("scheduleDraft", { id: "local/daily-review" });
+    expect(kept.draft).toMatchObject({ id: "daily-review", spec: { kind: "spawn", backend: "bb", yolo: true } });
+    // The stored job is on bb: the providers its soul can launch on are asked for, once.
+    expect(await argvs(backend, "inspect --soul")).toEqual([["inspect", "--soul", "oats-developer", "--json"]]);
+    expect((await backend.rpc<{ draft: unknown }>("scheduleDraft", { id: "local/status-check" })).draft).toBeNull();
+    expect((await backend.rpc<{ draft: unknown }>("scheduleDraft", { id: "local/legacy-herdr" })).draft).toBeNull();
+  }, 20_000);
+
+  it("the kernel's refusal of a save is shown with its code and message, and the lists are read again after a save", async () => {
+    backend = await startBackend({ verbs: { "schedule add": { file: "automations/schedule-add-spec-invalid.json" } } });
+    const targets = await backend.rpc<Targets>("scheduleTargets");
+    await backend.rpc("automations");
+    await expect(backend.rpc("scheduleAdd", { id: "form-bad", spec: { ...wakeSpec(targets.homes[0]!.home), cron: "every day" } })).rejects.toThrow("E_SCHEDULE_INVALID: cron: five fields required (minute hour day month weekday)");
+    await backend.rpc("automations");
+    expect(await argvs(backend, "schedule list")).toHaveLength(2);
+  }, 20_000);
+});

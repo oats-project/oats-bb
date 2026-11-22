@@ -80,7 +80,7 @@ const menuItems = `[...document.querySelectorAll('[role="menuitem"]')]`;
  * taken before that shows the page through the menu, or the menu half way.
  */
 const menuSettled = `(() => { const item = document.querySelector('[role="menuitem"]'); if (!item) return false; for (let node = item; node && node !== document.body; node = node.parentElement) if (Number(getComputedStyle(node).opacity) < 1) return false; const box = item.getBoundingClientRect(); const at = [Math.round(box.left), Math.round(box.top), Math.round(box.width)].join(","); const same = window.__oatsMenuAt === at; window.__oatsMenuAt = at; return same; })()`;
-const menuTexts = (page) => page.evaluate(`JSON.stringify(${menuItems}.map((item) => item.innerText.replace(/\\s+/g, " ").trim()))`).then(JSON.parse);
+export const menuTexts = (page) => page.evaluate(`JSON.stringify(${menuItems}.map((item) => item.innerText.replace(/\\s+/g, " ").trim()))`).then(JSON.parse);
 export const pick = (page, label) => page.evaluate(`(() => { const item = ${menuItems}.find((each) => each.innerText.includes(${JSON.stringify(label)})); if (!item) return false; item.click(); return true; })()`);
 
 /**

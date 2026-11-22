@@ -99,7 +99,7 @@ export function StatusLine({ state, word, since, detail, action }: { state: Agen
         </span>
         {said.map((part, index) => (
           <span key={index} data-testid="oats-status-part" className="relative min-w-0 break-words pl-4 text-muted-foreground">
-            <span className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
+            <span data-sep="" className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
             {part}
           </span>
         ))}

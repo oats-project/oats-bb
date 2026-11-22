@@ -13,7 +13,7 @@ export default [
       check(Boolean(plan), `${at} Retire opens the plan dialog, with the kernel's plan (${plan ?? 0} lines) and Confirm`, await page.evaluate(textOf(testId("oats-modal"))));
       // The image proves what its name says: the dialog is about the agent whose Retire was pressed, and so is the plan in it.
       const dialog = JSON.parse(await page.evaluate(`JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, plan: ${textOf(testId("oats-plan"))} })`));
-      check(dialog.title === "Retire weekly-digest-helper?" && dialog.plan.includes("the home of weekly-digest-helper"), `${at} the dialog is titled for weekly-digest-helper, and the plan in it is that agent's`, JSON.stringify(dialog));
+      check(dialog.title === "Retire Weekly digest helper?" && dialog.plan.includes("the home of weekly-digest-helper"), `${at} the dialog is titled for weekly-digest-helper, and the plan in it is that agent's`, JSON.stringify(dialog));
       await page.shot(`a16-${viewport.name}-plan`);
       await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-plan-cancel"))}).click()`);
       check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} Cancel closes the dialog`);

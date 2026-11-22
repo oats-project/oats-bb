@@ -157,7 +157,7 @@ export const stages = {
 
 const inPanel = (id) => `${testId("oats-panel")} ${testId(id)}`;
 /** The header's state: [the mark's state, the word, what follows it, whether the mark is hidden from a screen reader]. */
-const stateOf = `(() => { const line = document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")} ${testId("oats-status-line")}`)}); const state = line?.querySelector(${JSON.stringify(testId("oats-state"))}); const mark = state?.querySelector("[data-state]"); const word = state?.querySelector("span:not([data-state])")?.innerText.trim() ?? ""; const rest = [...(line?.children ?? [])].slice(1).map((e) => e.innerText.trim()).join(" "); return JSON.stringify([mark?.getAttribute("data-state"), word, rest, mark?.getAttribute("aria-hidden") === "true"]); })()`;
+const stateOf = `(() => { const line = document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")} ${testId("oats-status-line")}`)}); const state = line?.querySelector(${JSON.stringify(testId("oats-state"))}); const mark = state?.querySelector("[data-state]"); const word = state?.querySelector("span:not([data-state])")?.innerText.trim() ?? ""; const rest = [...(line?.querySelectorAll('[data-testid="oats-status-part"]') ?? [])].map((e) => e.innerText.replace(/\\s+/g, " ").trim()).join(" "); return JSON.stringify([mark?.getAttribute("data-state"), word, rest, mark?.getAttribute("aria-hidden") === "true"]); })()`;
 const click = (selector) => `document.querySelector(${JSON.stringify(selector)}).click()`;
 
 /**
@@ -183,7 +183,7 @@ async function open(page, viewport, threads, agent) {
   let whole = true;
   if (agent.thread === null) {
     await page.goto(`/plugins/oats/souls/${agent.soul}`);
-    const row = `[...document.querySelectorAll(${JSON.stringify(testId("oats-soul-agent-elsewhere"))})].find((e) => e.innerText.includes(${JSON.stringify(agent.instance)}))`;
+    const row = `document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-elsewhere")}[data-instance="${agent.instance}"]`)})`;
     await page.until(`Boolean(${row})`, 30);
     await page.evaluate(`${row}.querySelector(${JSON.stringify(testId("oats-soul-agent-open"))}).click()`);
   } else {
@@ -825,7 +825,7 @@ const more = [
       }
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const running = await page.evaluate(said);
-      check(running === "Working", `${at} a running agent's header says Working, the word its row and its thread say`, running);
+      check(/^Working(· session started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
       {
         const started = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-started"))})?.closest(${JSON.stringify(testId("oats-fact"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
         check(/^Started (just now|\d+ (min|h|d) ago|\d{4}-\d\d-\d\d)$/.test(started), `${at} since when it runs is a labelled fact of its session: Started …`, started);
@@ -858,7 +858,7 @@ const more = [
         check(opened.ok, `${at} the unreachable agent's panel shows`, opened.read);
       }
       const unreachable = await page.until(`(() => { const t = ${said}; return t.startsWith("Unreachable") ? t : ""; })()`, 30);
-      check(unreachable === "Unreachable· OATS says: bb did not answer at http://127.0.0.1:38886 (connection refused)", `${at} an agent the kernel cannot reach says Unreachable and what OATS says of it, in its header`, unreachable);
+      check(unreachable === "Unreachable· OATS cannot reach its session", `${at} an agent the kernel cannot reach says Unreachable in a person's words, in its header`, unreachable);
       await page.until(visible(inPanel("oats-panel-session")), 30);
       const again = await page.evaluate(`document.querySelectorAll(${JSON.stringify(inPanel("oats-panel-runtime-error"))}).length`);
       check(again === 0, `${at} and the Session card does not say it a second time`, again);

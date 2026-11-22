@@ -3,6 +3,7 @@ import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
 import { bounded } from "./errors.mjs";
+import { HARNESSES } from "./mode.mjs";
 import { FULL_MODE_ONLY, homeSandboxWarnings, plannedLaunchFindings, readinessResult } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
 import { stop } from "./stop.mjs";
@@ -39,7 +40,10 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       const planned = plannedLaunch(input);
       const settings = readSettings(rawSettings);
       const home = input !== null && typeof input === "object" ? input.home : null;
-      const { result } = await readinessResult(settings, { ...options, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      // bb runs each harness with a provider of its own: the planned launch says whose state
+      // must be ready. A harness the provider does not run is the planned launch's own finding.
+      const harness = planned !== null && HARNESSES.includes(planned.harness) ? planned.harness : null;
+      const { result } = await readinessResult(settings, { ...options, harness, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
       // For a home, what its own settings say of the sandbox (a report only). Where no
       // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
       if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));

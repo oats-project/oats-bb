@@ -85,6 +85,30 @@ own when one of them is used: an agent whose thread was archived or deleted in b
 and shows on its soul's page as "thread missing", with Start and Retire. Nothing is retired because
 a thread was deleted.
 
+## The instance panel
+
+On an agent's own thread, the **OATS** tab of bb's side panel is that agent's panel, as the OATS
+Desktop's instance panel: who the agent is and how it runs. On any other thread the tab is the
+home. On a phone, where bb has no side panel, and for an agent with no bb thread, the same panel is
+a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
+
+| Tab | Shows |
+|---|---|
+| **Instance** | the soul's mark and the instance's name as words, its state as a mark and its word with since when ("Running · 42m" since its last start, "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words, how long and since when, and its message. **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs (`bb · thread <id>`), since when, and the kernel's runtime error when it has one. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent and the sibling, each a link when it has a thread in bb. |
+| **Soul** | the soul's mark, key and description, **Details** (the agents root, with its Copy) and **Open soul page**. |
+
+A fact the kernel does not report is not drawn: the panel never says "Not reported" and never
+guesses. The words are the Desktop's (`app/panel/words.ts` and `app/ui/words.ts` name where each
+comes from), and it is drawn with the patterns of `app/ui.tsx`.
+
+How it reads: `panelInstance` (`contract/panel.ts`) answers one instance's facts from what the one
+status read kept, as the kernel printed it (`core.rowOf`: the instance's row, its agent group's row
+and the roster's root), parsed by `kernel/panel-instance.ts`. It starts no process. The panel reads
+again at every `oats/changed`; when a read fails it keeps what it read and says how old that is,
+with Retry; a first read that fails is a notice in words, the kernel's code after them and its
+message under Details. Another feature opens the panel on one of its tabs with
+`showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
+
 ## How it is built
 
 | File | Runs in | Does |
@@ -102,8 +126,8 @@ a thread was deleted.
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations` and `panel` (the instance panel; these two are registered and empty until
-their pieces land). Each has one module, or one directory, in every layer, and the entry of a layer
+retire), `automations` (registered and empty until its piece lands) and `panel` (the instance
+panel). Each has one module, or one directory, in every layer, and the entry of a layer
 only composes them:
 
 | Layer | A feature's own | Composed by | Shared by all |

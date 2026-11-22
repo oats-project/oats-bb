@@ -3,6 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "dependencies": {
-    "bb-app": "0.50.1"
+    "bb-app": "0.50.1",
+    "@earendil-works/pi-coding-agent": "1.5.2",
+    "@awebai/oats-pi": "0.70.0"
   }
 }

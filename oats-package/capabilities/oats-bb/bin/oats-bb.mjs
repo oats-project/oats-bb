@@ -4,6 +4,7 @@
 import { sessionHandlers } from "../lib/commands.mjs";
 import { bounded } from "../lib/errors.mjs";
 import { removeLaunchSettings, removeLeftovers, sandboxKeysOf } from "../lib/local-settings.mjs";
+import { clearHomeProjectEnv } from "../lib/project-env.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
 import { readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
@@ -30,13 +31,16 @@ const USAGE = `oats bb: the bb session provider (oats.bb)
 
   oats bb doctor [--json] [--soul <name>]
                              check this deployment's bb: server, host daemon, version,
-                             exposure, trust, bb's claude-code provider, orphaned threads
+                             exposure, trust, bb's claude-code provider (and, as a warning, what
+                             a pi launch would be refused for), orphaned threads
                              (--soul: whose settings to read; the kernel resolves them)
 
 Called by the kernel (JSON on stdin, one JSON document on stdout):
   session launch | inspect | inspectMany | input | stop | check
   launch-hook                on another backend, removes what the provider wrote into the home
-  retire-hook                archives the home's bb threads at retire
+                             and into the env of its bb project
+  retire-hook                archives the home's bb threads at retire, and removes the env of
+                             its bb project
 `;
 
 async function main(argv) {
@@ -69,11 +73,25 @@ async function main(argv) {
       return 0;
     }
     if (previous !== PROVIDER) return 0;
+    // The kernel relays the warning of the hook's last line, 500 characters of it: everything is
+    // said in one, each part short and with its remedy before its cause, so that both remedies
+    // fit when both things fail.
+    const said = [];
+    // Why the settings file could not be changed goes last: it may be long, and a cut takes it.
+    let why = "";
     try {
-      if (removeLaunchSettings(home)) print({ warning: `this home starts on ${backend}, no longer on bb: the bb provider removed its keys from .claude/settings.local.json (env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories)` });
+      if (removeLaunchSettings(home)) said.push("the bb provider removed its keys from .claude/settings.local.json");
     } catch (error) {
-      print({ warning: `the bb provider could not remove its keys from .claude/settings.local.json (${error?.message ?? error}); remove env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories there by hand` });
+      said.push(`the bb provider's keys could not be removed from .claude/settings.local.json: remove env, sandbox, permissions.deny and permissions.blockWritesOutsideWorkingDirectories there by hand`);
+      why = ` Why the file could not be changed: ${error?.message ?? error}`;
     }
+    // And what a pi launch wrote into the env of the home's bb project (contract r23,
+    // A12(2)): bb is asked, and a bb that cannot be asked is a warning, never a failed
+    // start on the other backend.
+    const env = await clearHomeProjectEnv(home, () => readSettings(settingsFromEnv(process.env)), { deadline: Date.now() + 15_000 });
+    if (env.warning !== null) said.push(env.warning);
+    else if (env.removed.length > 0) said.push(`the bb provider removed the launch env it kept in the home's bb project (${env.removed.length} variable${env.removed.length > 1 ? "s" : ""})`);
+    if (said.length > 0) print({ warning: `this home starts on ${backend}, no longer on bb: ${said.join(". ")}${why ? `.${why}` : ""}` });
     return 0;
   }
   if (command === "retire-hook" && rest.length === 0) {

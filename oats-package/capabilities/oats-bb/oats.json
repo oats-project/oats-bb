@@ -5,7 +5,7 @@
   "compatibility": {
     "oats": ">=0.70.0"
   },
-  "description": "Session provider bb: runs an instance as one bb thread (Claude Code) through bb's public CLI, at one pinned bb-app version, instead of a tmux session.",
+  "description": "Session provider bb: runs an instance as one bb thread (Claude Code or pi) through bb's public CLI, at one pinned bb-app version, instead of a tmux session.",
   "commands": {
     "session-launch": "bin/oats-bb.mjs session launch",
     "session-inspect": "bin/oats-bb.mjs session inspect",
@@ -27,7 +27,8 @@
         "check": "session-check"
       },
       "harnesses": [
-        "claude"
+        "claude",
+        "pi"
       ],
       "description": "One bb thread per home, in a bb project rooted at the home. No terminal: open the thread in bb."
     }
@@ -67,6 +68,10 @@
     "dataDir": {
       "hostOnly": true,
       "description": "bb's data directory on this host (bb-app's --data-dir), an absolute path. Unset: .bb in the home of the user that runs bb. bb does not say where it is; a launch in bb's sandboxed modes keeps the agent's tools off bb's thread storage there, and is refused where the directory holds no thread-storage. Set it only in oats-local.yaml."
+    },
+    "piAgentDir": {
+      "hostOnly": true,
+      "description": "The pi configuration directory bb's server runs pi with (pi's PI_CODING_AGENT_DIR in the bb server's environment), an absolute path. Unset: .pi/agent in the home of the user that runs bb. bb does not say where it is. A pi launch is refused unless its settings.json lists @awebai/oats-pi (E_BACKEND_NOT_READY) and does not list @awebai/pi (E_BACKEND_PI_LISTENER): the provider reads it and never changes it. Set it only in oats-local.yaml."
     }
   }
 }

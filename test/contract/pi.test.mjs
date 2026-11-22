@@ -1,0 +1,499 @@
+// The contract test of pi as a harness (spec P2, items 1 to 6): the provider against the
+// pinned bb-app and pi, in a container, with a mock OpenAI-compatible model endpoint. No
+// credential, no OATS kernel run: the provider's commands are called on their wire, as the
+// kernel calls them. (The image holds the kernel's package only because @awebai/oats-pi,
+// the bridge that loads a home's skills into pi, loads it.)
+//
+// Run: npm run test:contract (needs docker; builds test/contract/pi/Dockerfile at the
+// bb-app version in the repository's bb-version file). Again on every bump of bb-app or pi.
+import assert from "node:assert/strict";
+import { after, afterEach, before, test } from "node:test";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { BB_VERSION, rig, waitFor } from "./rig.mjs";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
+const MODEL = "mock/echo";
+const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
+// A check as the kernel makes it before a pi launch: with the launch it plans.
+const PLANNED = { harness: "pi", yolo: true, args: [] };
+
+const box = rig({
+  name: `oats-bb-contract-pi-${process.pid}`,
+  image: `oats-bb-contract-pi:${BB_VERSION}`,
+  dockerfileDir: resolve(here, "pi"),
+  settings: SETTINGS,
+  // Both model endpoints: pi's (OpenAI-compatible, 9998) and Claude's (9999), for the test
+  // that moves a home between the two harnesses.
+  mock: ["mock-openai.mjs", "mock-anthropic.mjs"],
+  // CONTRACT_AMBIENT stands for a variable bb's server happens to carry: bb's pi inherits it.
+  bbEnv: { CONTRACT_AMBIENT: "from-the-bb-server", ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" },
+  ready: async () => (await box.provider("check", { home: null, soul: null, launch: PLANNED })).result?.status === "ready",
+});
+const { sh, bbJson, provider, threadStatus, pending } = box;
+
+/** The pi mock's log of model requests, and its next scripted reply: a shell command (a
+ *  bash call), or a tool call as JSON. (The rig's own `requests` and `arm` are the
+ *  Anthropic mock's, for the Claude threads of the harness-switch test.) */
+async function piRequests() {
+  const text = await sh("cat pi-mock-requests.jsonl 2>/dev/null || true");
+  return text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+const arm = (call) => sh("cat > pi-mock-next-cmd", { input: call });
+
+/** The model requests of threads' turns (each offers the agent's tools). */
+const turns = async () => (await piRequests()).filter((request) => request.url.includes("chat/completions") && request.tools.length > 0);
+/** How many turns a person's message opened: it is the request's last message. */
+const landed = async (marker) => (await turns()).filter((request) => request.lastRole === "user" && request.lastText.includes(marker)).length;
+const idle = (id, timeoutMs = 120_000) => waitFor(`${id} to be idle`, async () => (await threadStatus(id)) === "idle", { timeoutMs });
+
+/** A fresh home in the container, as the kernel leaves one for a pi agent: TASK.md, its
+ *  record, a skill composed into it, and its kernel shim directory. */
+async function makeHome(name) {
+  const home = `/home/node/homes/${name}`;
+  await sh([
+    `mkdir -p ${home}/.oats/bin ${home}/.agents/skills/contract-skill ${home}/work`,
+    `chmod 700 ${home}`,
+    `printf 'TASK-${name} say hi.\\n' > ${home}/TASK.md`,
+    `echo '{"name":"${name}"}' > ${home}/instance.json`,
+    `printf -- '---\\nname: contract-skill\\ndescription: The skill the contract test composed into this home.\\n---\\n# Contract skill\\n' > ${home}/.agents/skills/contract-skill/SKILL.md`,
+    // Found by its bare name only if the launch's pathPrepend reached the thread's PATH.
+    `printf '#!/bin/sh\\necho shim-on-path\\n' > ${home}/.oats/bin/contract-shim && chmod 755 ${home}/.oats/bin/contract-shim`,
+  ].join(" && "));
+  return home;
+}
+const launchInput = (home, name, extra = {}) => ({
+  home, instance: name, harness: "pi", model: MODEL, yolo: true,
+  env: [{ name: "OATS_INSTANCE", value: name, source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }],
+  unset: [], pathPrepend: [`${home}/.oats/bin`], args: [], promptFile: `${home}/TASK.md`, previous: null, ...extra,
+});
+/** Launch a pi thread in a fresh home and wait for its first turn to be over. */
+async function launched(name, extra) {
+  const home = await makeHome(name);
+  const since = (await turns()).length;
+  const answer = await provider("launch", launchInput(home, name, extra));
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  const { endpoint } = answer.result;
+  started.push(endpoint.threadId);
+  await waitFor(`the first turn of ${endpoint.threadId}`, async () => (await turns()).length > since, { timeoutMs: 120_000 });
+  await idle(endpoint.threadId);
+  return { home, endpoint, since };
+}
+const hook = async (which, home, env = {}) => {
+  const out = await sh(`${Object.entries({ OATS_INSTANCE_HOME: home, ...env }).map(([key, value]) => `${key}=${value}`).join(" ")} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} ${which}`);
+  const lines = out.trim().split("\n").filter(Boolean);
+  return lines.length ? JSON.parse(lines[lines.length - 1]) : null;
+};
+const projectEnv = async (projectId) => (await bbJson(`machine env list --project ${projectId}`)).variables.map((variable) => variable.name).sort();
+
+/** The pi processes that work in the home (pi names its process `pi`), and every process. */
+const pisIn = async (home) => Number((await sh(`for p in $(pgrep -x pi); do readlink /proc/$p/cwd 2>/dev/null; done | grep -c '^${home}$' || true`)).trim());
+const processesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim());
+const nothingIn = (home, why) => waitFor(`no process to work in ${home} (${why})`, async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+/** The names of the processes that carry the thread's id (bb's BB_THREAD_ID). */
+const carriers = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then cat $p/comm; fi; done 2>/dev/null || true`)).split("\n").filter(Boolean);
+
+/** One turn of the thread in which the agent runs one shell command. → what the command
+ *  printed, as the model saw it. */
+async function bash(threadId, command) {
+  const before = (await piRequests()).length;
+  await arm(command);
+  await sh(`bb thread tell ${threadId} 'contract: next tool call' >/dev/null`);
+  const result = await waitFor(`the tool call of ${threadId}`, async () => (await piRequests()).slice(before).find((request) => request.lastRole === "tool") ?? null, { timeoutMs: 120_000, everyMs: 500 });
+  await idle(threadId);
+  return result.lastText;
+}
+
+// The threads the tests launched, stopped after each test: an idle thread keeps its pi.
+const started = [];
+afterEach(async () => {
+  await sh("rm -f pi-mock-error pi-mock-next-cmd mock-error mock-next-cmd; pkill -f 'sleep 90[0]' || true");
+  for (const id of started.splice(0)) await sh(`bb thread stop ${id} --json >/dev/null 2>&1 || true`);
+});
+before(() => box.start(), { timeout: 900_000 });
+after(() => box.stop());
+
+test("the image runs the pinned bb-app with pi, and the check of a planned pi launch reads it ready", async () => {
+  assert.equal((await sh("bb --version")).trim(), BB_VERSION);
+  const state = JSON.parse(await sh("curl -s 'http://127.0.0.1:38886/api/v1/system/providers/state?providerId=pi'"));
+  assert.equal(state.providers.length, 1);
+  assert.equal(state.providers[0].providerId, "pi");
+  assert.equal(state.providers[0].status, "ready", "what the provider reads: bb's own word for its pi provider");
+  const ready = (await provider("check", { home: null, soul: null, launch: PLANNED })).result;
+  assert.equal(ready.status, "ready");
+  assert.deepEqual(ready.problems, []);
+});
+
+test("P1 launch: a pi thread in a project rooted at the home, with the launch's model, and nothing of Claude's written", async () => {
+  const { home, endpoint, since } = await launched("p1");
+  const { thread, environment } = await bbJson(`thread show ${endpoint.threadId}`);
+  assert.equal(thread.providerId, "pi");
+  assert.equal(thread.projectId, endpoint.projectId);
+  assert.equal(thread.title, "p1");
+  assert.equal(environment.path, home);
+  const project = (await bbJson("project list")).find((candidate) => candidate.id === endpoint.projectId);
+  assert.deepEqual(project.sources.map((source) => source.path), [home]);
+  // The prompt file's text is the first turn, on the mock model: bb split provider/id itself.
+  const first = (await turns())[since];
+  assert.match(first.lastText, /TASK-p1 say hi\./);
+  assert.equal((await sh(`ls -a ${home}`)).split("\n").includes(".claude"), false, "a pi launch writes nothing of Claude's");
+  const inspected = (await provider("inspect", { home, endpoint })).result;
+  assert.deepEqual(inspected, { present: true, state: "unknown", running: null, open: { label: "Open in bb", url: `http://127.0.0.1:38886/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+});
+
+test("P1 bb itself runs pi in full mode only, and the provider refuses the same launch before bb is asked", async () => {
+  const home = await makeHome("p1-mode");
+  const project = await bbJson(`project create --name p1-mode --root ${home}`);
+  const raw = await sh(`bb thread spawn --project ${project.id} --provider pi --model ${MODEL} --environment ${home} --prompt-file ${home}/TASK.md --permission-mode accept-edits --json 2>&1`, { ok: false });
+  assert.match(raw, /Provider pi only supports full permission mode/);
+  for (const yolo of [false, null]) {
+    const answer = await provider("launch", launchInput(home, "p1-mode", { yolo }));
+    assert.equal(answer.error.code, "E_BACKEND_SANDBOXED_MODE");
+  }
+  const withArgs = await provider("launch", launchInput(home, "p1-mode", { args: ["--thinking", "high"] }));
+  assert.equal(withArgs.error.code, "E_BACKEND_LAUNCH_ARG");
+  assert.deepEqual((await bbJson("thread list --include-hidden")).filter((thread) => thread.projectId === project.id), [], "no thread was started");
+});
+
+test("P2 the kernel's two variables and the PATH reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
+  const { home, endpoint, since } = await launched("p2", {
+    // As the kernel hands a launch of a home with messaging: oats.aweb's entries beside its own.
+    env: [{ name: "OATS_INSTANCE", value: "p2", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: "/home/node/homes/p2", source: "kernel" },
+      { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "AWEB_IDENTITY_HOME", value: "/home/node/homes/p2/.aw", source: "capability", capability: "oats.aweb" }],
+    unset: ["CONTRACT_AMBIENT"],
+  });
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "only these three ever go into bb's database");
+  // bb shows no value back: nothing of the launch's env can be read out of bb's CLI.
+  for (const variable of (await bbJson(`machine env list --project ${endpoint.projectId}`)).variables) assert.equal(variable.value, null, variable.name);
+  // The agent's own shell: the kernel's two variables, and the home's shim found by its
+  // bare name. A capability's entry did not come, and neither did the launch's unset: the
+  // thread's pi inherits what the bb server's own environment holds.
+  const seen = await bash(endpoint.threadId, `printf '%s|%s|%s|%s|%s|%s|' "$OATS_INSTANCE" "$OATS_INSTANCE_HOME" "$(contract-shim)" "\${AWEB_DELIVERY-unset}" "\${AWEB_IDENTITY_HOME-unset}" "\${CONTRACT_AMBIENT-unset}"`);
+  assert.ok(seen.includes(`p2|${home}|shim-on-path|unset|unset|from-the-bb-server|`), seen);
+  // @awebai/oats-pi loads the home's composed skills only when OATS_INSTANCE_HOME names the home.
+  const first = (await turns())[since];
+  assert.ok(first.sys.includes("contract-skill"), "the home's skill is in pi's system prompt");
+});
+
+test("P2 without the project's env the home's skills do not load: the env is what carries them", async () => {
+  const home = await makeHome("p2-bare");
+  const project = await bbJson(`project create --name p2-bare --root ${home}`);
+  const since = (await turns()).length;
+  const thread = await bbJson(`thread spawn --project ${project.id} --provider pi --model ${MODEL} --environment ${home} --prompt-file ${home}/TASK.md --permission-mode full`);
+  started.push(thread.id);
+  await waitFor("the bare thread's first turn", async () => (await turns()).length > since, { timeoutMs: 120_000 });
+  assert.equal((await turns())[since].sys.includes("contract-skill"), false);
+});
+
+test("P2 every pi launch rewrites the project's env whole; the retire hook and a move to another backend remove it", async () => {
+  const { home, endpoint } = await launched("p2-again");
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  // A launch configuration's variable is refused for pi, by name, and nothing is started.
+  const refused = await provider("launch", launchInput(home, "p2-again", { previous: endpoint, env: [{ name: "OATS_INSTANCE", value: "p2-again", source: "kernel" }, { name: "CONTRACT_PROBE", value: "probe-value", source: "launch-config" }] }));
+  assert.equal(refused.error.code, "E_BACKEND_LAUNCH_ENV");
+  assert.match(refused.error.message, /the launch sets CONTRACT_PROBE/);
+  // A variable set in the home's project by anyone else is not kept: the project is the provider's.
+  await sh(`bb machine env set A_PERSONS_OWN --project ${endpoint.projectId} --json >/dev/null`, { input: "theirs" });
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  const again = await provider("launch", launchInput(home, "p2-again", { previous: endpoint }));
+  assert.equal(again.ok, true, JSON.stringify(again));
+  started.push(again.result.endpoint.threadId);
+  assert.equal(again.result.endpoint.projectId, endpoint.projectId);
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  await idle(again.result.endpoint.threadId);
+
+  // The home moves to tmux: the launch hook removes it, on the kernel's word.
+  assert.equal(await hook("launch-hook", home, { OATS_BACKEND: "tmux" }), null);
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "no word on the previous backend: nothing is removed");
+  const moved = await hook("launch-hook", home, { OATS_BACKEND: "tmux", OATS_PREVIOUS_BACKEND: "bb" });
+  assert.match(moved.warning, /removed the launch env it kept in the home's bb project \(3 variables\)/);
+  assert.deepEqual(await projectEnv(endpoint.projectId), []);
+
+  // And the retire hook: set again by hand, as a launch would have left it.
+  await sh(`bb machine env set OATS_INSTANCE --project ${endpoint.projectId} --json >/dev/null`, { input: "p2-again" });
+  const retired = await hook("retire-hook", home);
+  assert.deepEqual(retired.meta, { retired: true, archived: [again.result.endpoint.threadId], env: 1 });
+  assert.deepEqual(await projectEnv(endpoint.projectId), []);
+});
+
+test("P4 a failed turn: with its pi alive the thread is there and at rest, and an input recovers it; with its pi gone it is a lost session, and an input makes bb start pi again for one turn", async () => {
+  const { home, endpoint } = await launched("p4");
+  // A command the agent starts and leaves running: it inherits bb's BB_THREAD_ID, and is not
+  // the thread's harness. (Its working directory is not the home: the kernel's own rule keeps
+  // a resume off a home in which a process still works.)
+  assert.match(await bash(endpoint.threadId, "cd / && setsid nohup sleep 900 >/dev/null 2>&1 & echo started"), /started/);
+  const carriersNow = await carriers(endpoint.threadId);
+  assert.ok(["pi", "sleep"].every((name) => carriersNow.includes(name)), carriersNow.join(" "));
+  await sh("touch pi-mock-error");
+  const failing = await provider("input", { home, endpoint, text: "this turn fails MARK-P4-FAIL" });
+  assert.deepEqual(failing.result, { submitted: true, verified: true });
+  await waitFor("the thread to be in error", async () => (await threadStatus(endpoint.threadId)) === "error", { timeoutMs: 60_000 });
+  // bb keeps the thread's pi loaded after a failed turn, and that process carries the
+  // thread's id: what the provider looks for. A resume beside it is what the kernel refuses.
+  assert.ok((await pisIn(home)) >= 1);
+  assert.ok((await carriers(endpoint.threadId)).includes("pi"), "the thread's pi carries BB_THREAD_ID");
+  const inspected = (await provider("inspect", { home, endpoint })).result;
+  assert.deepEqual([inspected.present, inspected.state, inspected.running], [true, "unknown", null]);
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.present), [true]);
+  await sh("rm pi-mock-error");
+  const recovering = await provider("input", { home, endpoint, text: "this turn works MARK-P4-OK" });
+  assert.deepEqual(recovering.result, { submitted: true, verified: true });
+  await waitFor("the recovering turn", async () => (await landed("MARK-P4-OK")) === 1, { timeoutMs: 60_000 });
+  await idle(endpoint.threadId);
+  assert.equal(await landed("MARK-P4-OK"), 1);
+
+  // The other `error`: the turn failed and the thread's pi is gone (stopped in bb, here).
+  // bb still says error; no process carries the thread's id: a lost session.
+  await sh("touch pi-mock-error");
+  assert.equal((await provider("input", { home, endpoint, text: "this turn fails too MARK-P4-FAIL-2" })).ok, true);
+  await waitFor("the thread to be in error again", async () => (await threadStatus(endpoint.threadId)) === "error", { timeoutMs: 60_000 });
+  await sh(`bb thread stop ${endpoint.threadId} --json >/dev/null`);
+  await nothingIn(home, "after bb's stop of the errored thread");
+  assert.equal(await threadStatus(endpoint.threadId), "error", "bb's word did not change: only the process did");
+  // What the agent left running outlives its harness, and still carries the thread's id:
+  // it does not make the thread present.
+  const left = await carriers(endpoint.threadId);
+  assert.ok(left.includes("sleep") && !left.includes("pi"), left.join(" "));
+  const lost = (await provider("inspect", { home, endpoint })).result;
+  assert.deepEqual([lost.present, lost.state, lost.running], [false, "stopped", false]);
+  await sh("rm pi-mock-error");
+  // An input to it is told: bb answers sent, starts pi again in the same thread and runs the
+  // turn, once. (Under the kernel that input is its resume of the lost session, which it
+  // counts against the home's cap before it calls the provider: test/contract/kernel/pi-run.mjs.)
+  // A bb that stops doing this fails here: the rule rests on it (contract r23, A14(3)).
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-P4-RESUMED" })).result, { submitted: true, verified: true });
+  await waitFor("bb's restart of the errored thread", async () => (await landed("MARK-P4-RESUMED")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  assert.equal(await landed("MARK-P4-RESUMED"), 1, "one turn");
+  assert.ok((await carriers(endpoint.threadId)).includes("pi"), "the thread's pi runs again");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.present, true);
+});
+
+test("P6 input is one turn per tell: to an idle thread, as two steers during a turn, and to a stopped thread, which restarts", async () => {
+  const { home, endpoint } = await launched("p6");
+  // Idle.
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-P6-IDLE" })).result, { submitted: true, verified: true });
+  await waitFor("the idle tell's turn", async () => (await landed("MARK-P6-IDLE")) === 1);
+  await idle(endpoint.threadId);
+
+  // During a turn (a tool call that runs for a while): each tell is taken (a steer), none
+  // is held in line, and each opens a model request of its own once the tool call is over.
+  await arm("sleep 12");
+  await sh(`bb thread tell ${endpoint.threadId} 'contract: a long tool call' >/dev/null`);
+  await waitFor("the thread to be in its turn", async () => (await threadStatus(endpoint.threadId)) === "active", { timeoutMs: 30_000 });
+  for (const marker of ["MARK-P6-STEER-ONE", "MARK-P6-STEER-TWO"]) {
+    assert.deepEqual((await provider("input", { home, endpoint, text: marker })).result, { submitted: true, verified: true }, marker);
+  }
+  assert.deepEqual(await bbJson(`thread queue list ${endpoint.threadId}`), [], "nothing is held in line");
+  await waitFor("both steers to reach the model", async () => (await landed("MARK-P6-STEER-ONE")) === 1 && (await landed("MARK-P6-STEER-TWO")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  for (const marker of ["MARK-P6-IDLE", "MARK-P6-STEER-ONE", "MARK-P6-STEER-TWO"]) assert.equal(await landed(marker), 1, `${marker} opened one turn, once`);
+
+  // Stopped (bb has no stopped state: its pi is gone, the thread reads idle): the tell
+  // starts pi again on the same conversation, and runs one turn.
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  await nothingIn(home, "after the stop");
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-P6-RESTART" })).result, { submitted: true, verified: true });
+  await waitFor("the restarted thread's turn", async () => (await landed("MARK-P6-RESTART")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  assert.equal(await landed("MARK-P6-RESTART"), 1);
+  assert.ok((await pisIn(home)) >= 1, "the thread's pi runs again");
+});
+
+test("P6 a dialog a pi extension opens is a pending interaction: input refuses E_SESSION_PROMPT_OPEN and sends nothing", async () => {
+  const { home, endpoint } = await launched("p6-dialog");
+  await arm(JSON.stringify({ name: "contract_confirm", arguments: {} }));
+  await sh(`bb thread tell ${endpoint.threadId} 'contract: open a dialog' >/dev/null`);
+  const [waiting] = await waitFor("the dialog to wait on a person", async () => { const open = await pending(endpoint.threadId); return open.length > 0 ? open : null; }, { timeoutMs: 60_000 });
+  assert.equal(waiting.payload.kind, "provider-pi/extension-ui");
+  const refused = await provider("input", { home, endpoint, text: "MARK-P6-DIALOG must not land" });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error.code, "E_SESSION_PROMPT_OPEN");
+  assert.match(refused.error.message, /1 pending provider-pi\/extension-ui/);
+  assert.ok(refused.error.message.includes(waiting.id));
+  assert.equal(await landed("MARK-P6-DIALOG"), 0);
+  assert.deepEqual(await bbJson(`thread queue list ${endpoint.threadId}`), [], "nothing was left in line behind the dialog");
+  assert.deepEqual((await pending(endpoint.threadId)).map((interaction) => interaction.id), [waiting.id], "the dialog still waits: an input never answers it");
+  // A person answers it in bb, and the turn goes on with their answer.
+  await sh(`bb thread interactions respond ${waiting.id} ${endpoint.threadId} --value true --json >/dev/null`);
+  await waitFor("the answer to reach the model", async () => (await piRequests()).some((request) => request.lastRole === "tool" && request.lastText.includes("confirm answered: true")), { timeoutMs: 60_000 });
+  await idle(endpoint.threadId);
+  assert.equal(await landed("MARK-P6-DIALOG"), 0);
+});
+
+test("P3 nothing in bb's pi may hold the agent's mail: a pi configuration with @awebai/pi, or without @awebai/oats-pi, refuses the pi launch", async () => {
+  const home = await makeHome("p3");
+  const planned = async (settings) => (await provider("check", { home, soul: null, launch: PLANNED }, settings)).result;
+  // The container's own configuration (what bb's server runs with here): as `pi install
+  // npm:@awebai/oats-pi` wrote it. Ready.
+  assert.match(await sh("cat ~/.pi/agent/settings.json"), /"npm:@awebai\/oats-pi@/);
+  assert.equal((await planned({})).status, "ready");
+  // A configuration as a host that also runs tmux pi agents has it: `pi install` of both.
+  const both = { piAgentDir: "/home/node/pi-with-aweb" };
+  assert.match(await sh("cat /home/node/pi-with-aweb/settings.json"), /"npm:@awebai\/pi@/);
+  const listening = await planned(both);
+  assert.equal(listening.status, "needs-configuration");
+  assert.deepEqual(listening.problems.map((problem) => problem.code), ["E_BACKEND_PI_LISTENER"]);
+  const refused = await provider("launch", launchInput(home, "p3"), both);
+  assert.equal(refused.error.code, "E_BACKEND_PI_LISTENER");
+  assert.deepEqual((await bbJson("project list")).filter((project) => project.sources.some((source) => source.path === home)), [], "nothing was made in bb");
+  // A read with no planned launch warns of it, and is not held up: Claude is not this image's business.
+  const plain = (await provider("check", { home: null, soul: null }, both)).result;
+  assert.ok(plain.warnings.some((warning) => warning.code === "session-provider-pi-not-ready" && warning.message.includes("E_BACKEND_PI_LISTENER")), JSON.stringify(plain.warnings));
+  // A configuration with neither package: the home's skills would not load.
+  await sh("mkdir -p /home/node/pi-empty");
+  assert.deepEqual((await planned({ piAgentDir: "/home/node/pi-empty" })).problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"]);
+
+  // The other accepted state: AWEB_DELIVERY in bb's machine env, set by the operator. bb
+  // shows the name and no value, and gives it to every pi it starts, the hidden one too.
+  await sh("bb machine env set AWEB_DELIVERY --json >/dev/null", { input: "session" });
+  try {
+    assert.deepEqual((await bbJson("machine env list")).variables.map((variable) => [variable.name, variable.value]), [["AWEB_DELIVERY", null]]);
+    assert.equal((await planned(both)).status, "ready");
+    const { home: silenced, endpoint } = await launched("p3-silenced");
+    const seen = await sh(`for p in $(pgrep -x pi); do if [ "$(readlink /proc/$p/cwd)" = "${silenced}" ]; then tr '\\0' '\\n' < /proc/$p/environ | grep -c '^AWEB_DELIVERY=session$'; fi; done`);
+    const counts = seen.split("\n").filter(Boolean);
+    assert.ok(counts.length >= 2, `the thread's pi and its catalog pi both work in the home: ${seen}`);
+    assert.ok(counts.every((count) => count === "1"), `every pi bb started in the home has the variable: ${seen}`);
+    assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "and it is not the provider that set it");
+    // A pi that bb did not start (a tmux pi home's, on the same host, as the same user,
+    // with a pi configuration that lists @awebai/pi) does not get the variable: bb's
+    // machine env goes only to the processes bb runs. So that home's aweb extension
+    // still decides for channel delivery, and keeps its own mail stream. (The stream
+    // itself is not opened here: it needs an aweb identity, and this test has none.)
+    const outside = "/home/node/homes/p3-tmux-pi";
+    await sh(`mkdir -p ${outside} && cd ${outside} && (sleep 30 | PI_CODING_AGENT_DIR=/home/node/pi-with-aweb pi --mode rpc --no-session >/dev/null 2>&1 &)`);
+    const variableIn = (dir) => sh(`for p in $(pgrep -x pi); do if [ "$(readlink /proc/$p/cwd)" = "${dir}" ]; then tr '\\0' '\\n' < /proc/$p/environ | grep -c '^AWEB_DELIVERY=' || true; fi; done`);
+    const outsideCount = await waitFor("the pi outside bb", async () => (await variableIn(outside)).trim() || null, { timeoutMs: 20_000 });
+    assert.equal(outsideCount, "0", "a pi outside bb has no AWEB_DELIVERY from bb's machine env");
+    assert.match(await sh(`PI_CODING_AGENT_DIR=/home/node/pi-with-aweb pi list`), /npm:@awebai\/pi@/, "and its configuration does load the aweb extension");
+    await sh(`for p in $(pgrep -x pi); do if [ "$(readlink /proc/$p/cwd)" = "${outside}" ]; then kill $p; fi; done`);
+  } finally {
+    await sh("bb machine env unset AWEB_DELIVERY --json >/dev/null");
+  }
+  assert.equal((await planned(both)).status, "needs-configuration");
+});
+
+test("P5 stop ends the thread's pi, its bridge and its catalog pi: no process is left in the home after the stop, nor after the retire", async () => {
+  const { home, endpoint } = await launched("p5");
+  // bb runs two pi processes for a thread, both in the home: the thread's, and a catalog
+  // pi its bridge worker starts to list models.
+  assert.ok((await pisIn(home)) >= 1);
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  await nothingIn(home, "after the stop");
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+
+  // A thread stopped while it runs a turn.
+  const busy = await launched("p5-busy");
+  await arm("sleep 60");
+  await sh(`bb thread tell ${busy.endpoint.threadId} 'contract: a long tool call' >/dev/null`);
+  await waitFor("the thread to be in its turn", async () => (await threadStatus(busy.endpoint.threadId)) === "active", { timeoutMs: 30_000 });
+  assert.equal((await provider("stop", { home: busy.home, endpoint: busy.endpoint, graceSeconds: 20 })).ok, true);
+  await nothingIn(busy.home, "after the stop of a thread in a turn");
+
+  // The retire hook, on a thread that was never stopped: stopped, archived, nothing left.
+  const retiring = await launched("p5-retire");
+  assert.ok((await pisIn(retiring.home)) >= 1);
+  const retired = await hook("retire-hook", retiring.home);
+  assert.deepEqual(retired.meta.archived, [retiring.endpoint.threadId]);
+  assert.equal(retired.warning, undefined);
+  await nothingIn(retiring.home, "after the retire");
+  assert.deepEqual((await bbJson(`thread list --project ${retiring.endpoint.projectId} --archived --include-hidden`)).map((thread) => thread.id), [retiring.endpoint.threadId]);
+});
+
+test("P5 a model listing's catalog pi works in the home with no thread running, no bb command ends it, and it leaves by itself", async () => {
+  const { home, endpoint } = await launched("p5-listing");
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  await nothingIn(home, "after the stop");
+  // What bb's UI does when a person opens the thread's model picker.
+  const models = await bbJson(`provider models pi --project ${endpoint.projectId}`);
+  assert.ok(models.some((model) => model.id === MODEL));
+  await waitFor("the listing's catalog pi in the home", async () => (await pisIn(home)) >= 1, { timeoutMs: 20_000 });
+  assert.deepEqual(await carriers(endpoint.threadId), [], "it is no process of the thread");
+  // The provider's stop answers stopped, and that pi is still there: it belongs to a
+  // bridge worker of its own, which no stop of a thread ends. The provider signals no
+  // process. While it is there, the kernel's retire of the home refuses, naming it.
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  assert.equal((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).ok, true);
+  assert.ok((await pisIn(home)) >= 1, "bb ended a listing's catalog pi at a thread's stop: the docs' note on a retire after a model listing may no longer be needed");
+  // It leaves by itself (about 70 s at this bb): the retire then goes through.
+  await waitFor("the listing's catalog pi to leave", async () => (await processesIn(home)) === 0, { timeoutMs: 120_000, everyMs: 2_000 });
+});
+
+test("K-28 a home moves between the harnesses on bb: claude, then pi, then claude again; each start is a new thread of that bb provider, with the previous one archived", async () => {
+  const home = await makeHome("k28");
+  // As the kernel composes a Claude home: its skills where Claude looks for them.
+  await sh(`mkdir -p ${home}/.claude && ln -s ../.agents/skills ${home}/.claude/skills`);
+  const CLAUDE_MODEL = "claude-opus-5-5";
+  const claudeTurns = async () => (await box.requests()).filter((request) => request.url.startsWith("/v1/messages") && !request.url.includes("count_tokens") && request.tools.length > 0);
+  const claudeLanded = async (marker) => (await claudeTurns()).filter((request) => request.lastText.includes(marker)).length;
+  /** Whether a model request of Claude's, from the mock's request number `since` on, carried the home's skill. */
+  const claudeSawSkill = async (since) => (await sh(`for f in $(ls mock-req-*.json 2>/dev/null); do n=\${f#mock-req-}; n=\${n%.json}; if [ "$n" -gt ${since} ] && grep -q contract-skill "$f"; then echo "$f"; fi; done`)).trim() !== "";
+  const claudesIn = async () => Number((await sh(`for p in /proc/[0-9]*; do case "$(readlink $p/cwd 2>/dev/null)" in ${home}*) tr '\\0' ' ' < $p/cmdline | grep -c 'bin/claude ' ;; esac; done | grep -c 1 || true`)).trim());
+  const threadsOf = async (projectId, archived) => (await bbJson(`thread list --project ${projectId} ${archived ? "--archived " : ""}--include-hidden`)).map((thread) => thread.id).sort();
+  const start = async (harness, previous) => {
+    const answer = await provider("launch", launchInput(home, "k28", { harness, model: harness === "pi" ? MODEL : CLAUDE_MODEL, previous }));
+    assert.equal(answer.ok, true, `${harness}: ${JSON.stringify(answer)}`);
+    started.push(answer.result.endpoint.threadId);
+    return answer.result.endpoint;
+  };
+  const stop = async (endpoint) => assert.equal((await provider("stop", { home, endpoint, graceSeconds: 15 })).ok, true);
+
+  // 1. Claude.
+  let since = (await box.requests()).length;
+  const first = await start("claude", null);
+  await box.firstTurnOver(first.threadId, since);
+  assert.equal((await bbJson(`thread show ${first.threadId}`)).thread.providerId, "claude-code");
+  assert.equal(await claudeSawSkill(since), true, "Claude was given the home's skill");
+  assert.deepEqual((await provider("input", { home, endpoint: first, text: "MARK-K28-CLAUDE-ONE" })).result, { submitted: true, verified: true });
+  await waitFor("the first Claude thread's turn", async () => (await claudeLanded("MARK-K28-CLAUDE-ONE")) === 1, { timeoutMs: 90_000 });
+  await idle(first.threadId);
+  assert.deepEqual(await projectEnv(first.projectId), [], "a Claude launch writes nothing into the project's env");
+
+  // 2. The same home, started with pi: the kernel stops it, then launches with the previous endpoint.
+  await stop(first);
+  const piSince = (await turns()).length;
+  const second = await start("pi", first);
+  assert.equal(second.projectId, first.projectId, "the home's one bb project");
+  assert.notEqual(second.threadId, first.threadId);
+  await waitFor("the pi thread's first turn", async () => (await turns()).length > piSince, { timeoutMs: 120_000 });
+  await idle(second.threadId);
+  assert.equal((await bbJson(`thread show ${second.threadId}`)).thread.providerId, "pi");
+  assert.deepEqual(await threadsOf(first.projectId, true), [first.threadId], "the Claude thread is archived");
+  assert.deepEqual(await threadsOf(first.projectId, false), [second.threadId]);
+  assert.ok((await turns())[piSince].sys.includes("contract-skill"), "pi was given the home's skill");
+  assert.deepEqual((await provider("input", { home, endpoint: second, text: "MARK-K28-PI" })).result, { submitted: true, verified: true });
+  await waitFor("the pi thread's turn", async () => (await landed("MARK-K28-PI")) === 1, { timeoutMs: 90_000 });
+  await idle(second.threadId);
+  assert.equal(await claudesIn(), 0, "no Claude is left in the home");
+  assert.ok((await pisIn(home)) >= 1);
+  assert.deepEqual(await projectEnv(first.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+
+  // 3. And back to Claude.
+  await stop(second);
+  since = (await box.requests()).length;
+  const third = await start("claude", second);
+  assert.equal(third.projectId, first.projectId);
+  await box.firstTurnOver(third.threadId, since);
+  assert.equal((await bbJson(`thread show ${third.threadId}`)).thread.providerId, "claude-code");
+  assert.deepEqual(await threadsOf(first.projectId, true), [first.threadId, second.threadId].sort(), "the pi thread is archived too");
+  assert.deepEqual(await threadsOf(first.projectId, false), [third.threadId]);
+  assert.equal(await claudeSawSkill(since), true);
+  assert.deepEqual((await provider("input", { home, endpoint: third, text: "MARK-K28-CLAUDE-TWO" })).result, { submitted: true, verified: true });
+  await waitFor("the second Claude thread's turn", async () => (await claudeLanded("MARK-K28-CLAUDE-TWO")) === 1, { timeoutMs: 90_000 });
+  await idle(third.threadId);
+  assert.equal(await pisIn(home), 0, "no pi is left in the home");
+  assert.ok((await claudesIn()) >= 1);
+  for (const marker of ["MARK-K28-CLAUDE-ONE", "MARK-K28-CLAUDE-TWO"]) assert.equal(await claudeLanded(marker), 1, marker);
+  assert.equal(await landed("MARK-K28-PI"), 1);
+  // What the pi launch left in the project's env is gone: bb gives a project's env to every
+  // thread of it, and starts `claude` by a project PATH. Claude's own launch env is its
+  // settings file's, written by this launch.
+  assert.deepEqual(await projectEnv(first.projectId), []);
+  assert.deepEqual(Object.keys(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).env).sort(), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  // The retire leaves nothing: no thread live, no env, no process.
+  const retired = await hook("retire-hook", home);
+  assert.deepEqual(retired.meta, { retired: true, archived: [third.threadId] });
+  await nothingIn(home, "after the retire");
+});

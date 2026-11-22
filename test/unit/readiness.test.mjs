@@ -30,7 +30,7 @@ test("a bb that is fit answers ready: {status, problems, warnings}, the shape oa
   assert.match(answer.result.warnings[0].message, /full mode only \(sandboxed modes are not offered\): a spawn or start that does not choose it \(--yolo, or a launch configuration.s --permission-mode bypassPermissions\) .* is refused before anything starts \(E_BACKEND_SANDBOXED_MODE\)/);
   assert.ok(answer.result.warnings[0].message.length < 500);
   assert.equal(bb.calls().every((c) => c.server === backend.server), true);
-  assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
+  assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code", "/api/v1/system/providers/state?providerId=pi"], "a read with no planned launch asks of both harnesses");
   assert.deepEqual(backend.daemonRequests, ["/status"]);
 });
 
@@ -454,8 +454,8 @@ test("a bb server bound to every address is E_BACKEND_EXPOSED, naming where it a
 });
 
 test("settings: defaults, and shapes that are refused", () => {
-  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: null, trust: null, cli: "bb", dataDir: join(homedir(), ".bb") });
-  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container", dataDir: "/srv/bb/" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb", dataDir: "/srv/bb" });
+  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: null, trust: null, cli: "bb", dataDir: join(homedir(), ".bb"), piAgentDir: join(homedir(), ".pi", "agent") });
+  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container", dataDir: "/srv/bb/", piAgentDir: "/srv/pi-agent/" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb", dataDir: "/srv/bb", piAgentDir: "/srv/pi-agent" });
   assert.throws(() => readSettings([]), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ cli: "./bb" }), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ server: 38886 }), { code: "E_BACKEND_SETTINGS" });

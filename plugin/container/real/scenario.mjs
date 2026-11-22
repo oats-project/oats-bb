@@ -375,9 +375,15 @@ async function shots(scene, { instance, soul, threadId, state }) {
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
       // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
-      const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
+      // The line's time comes from a read of its own for a stopped agent (its last "stopped" event), which
+      // answers after the state is drawn: the line is WAITED for whole, so the image holds what a person
+      // ends up seeing, and a time that never came fails the check (part A's UX read, S3).
       const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
-      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}", the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
+      const WHOLE = { working: "^Working · session started \\S", idle: "^Idle\\b", "needs-you": "^(! )?Needs you\\b", stopped: "^Stopped · since \\S" };
+      const lineNow = `JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`;
+      await page.until(`(() => { const line = JSON.parse(${lineNow}); return line.state === ${JSON.stringify(state)} && new RegExp(${JSON.stringify(WHOLE[state])}).test(line.status); })()`, 30);
+      const line = JSON.parse(await page.evaluate(lineNow));
+      check(line.state === state && new RegExp(WHOLE[state]).test(line.status) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}"${state === "stopped" ? ", since when (its last recorded stop)" : state === "working" ? ", when its session started" : ""}, the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {

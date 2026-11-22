@@ -87,3 +87,32 @@ A time is said only where the kernel recorded one; the plugin invents none.
 | Another agent in Lineage | its instance name ("redesign-ui-lead") | its name as words ("Redesign ui lead"); the instance name is the title | One name for an agent everywhere the plugin draws it (R1). |
 | After a refusal of the soul's read that reading again cannot change | nothing to press | a button under the notice, "Read the soul again" | Readiness and the activity keep their Refresh for whoever mended what was wrong; the Soul tab had no such button. |
 | A refusal that is no fault: OATS has none of it for this kind of agent (`E_UNSUPPORTED_MODE`) | the sentence in the error colour, as every refusal | a notice that is no failure, titled with the sentence ("OATS keeps no record of what this kind of agent was spawned from"), with nothing to press in any of the three parts | A state that is not a fault is not drawn as one. |
+
+## The lifecycle dialogs: Stop, Start, Restart, Retire
+
+The sentences are the Desktop's (`app/lifecycle/words.ts` names each source). These differ.
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| The agent in a dialog's title and sentences | the instance name ("Stop redesign-ui-lead?") | its name as words ("Stop Redesign ui lead?") | One name for an agent everywhere the plugin draws it (R1). |
+| The sections of a plan | **What will happen** (every line) and **Current state** | **What will happen**, **What is kept**, then **Current state**: the Desktop's lines, each under the heading it belongs to ("Nothing is deleted. …", "Keeps its worktree, moved aside …", "Branches and pull requests are not changed." are what is kept) | The standard's confirmation says what is kept under its own heading. No sentence is changed. |
+| The two choices (**Include child instances**, **Also delete the worktree**) | a tick box | the plugin's switch, with the Desktop's label and "On" or "Off" beside it | One pattern for a choice that is on or off (`Switch`); it says its state in a word. |
+| An apply refused with `E_SESSION_UNKNOWN` | "This instance is no longer in the current roster." | "OATS no longer knows this agent, or cannot tell the state of its session. Review again to see which." | On an apply the kernel answers the code for both; only a plan's refusal says that the agent is gone, and Review again reads one. |
+| The primary button | **Stop session** / **Stop sessions**, **Retire instance** | **Stop**, **Retire** | The standard: the button is named for the act, as the menu names it. |
+| The button after a result | **Done** | **Close** | The `Confirm` pattern has one button that leaves a settled dialog. |
+| While the act runs | "… This can take up to a minute." and "You can close this window; stopping continues." | the first sentence alone; the dialog cannot be closed | The standard: a dialog is not dismissed into a lost result. |
+| A retire accepted for the background | "… Check the roster for its result." | "… Its row in the sidebar shows the result." | bb has a sidebar, not a roster view. |
+| The tick that cannot apply | "Only an instance with its own worktree can delete it. Review the choice again." | "Only an instance with its own worktree can delete it. Untick “Also delete the worktree”." | A blocked state names a control that exists (R9). |
+| An agent's extra worktrees in a retire plan | not drawn | "Keeps its extra worktree on branch <b>, moved aside.", "Deletes its extra worktree on branch <b>: it holds no uncommitted work. …"; one the kernel would refuse blocks Retire: "OATS would refuse: … Remove it with OATS on the machine that holds it, then press Check again." | The kernel's plan says what it does with each (`facts.extraWorktrees`), and a retire that would be refused is said before it is asked. |
+| A pull request in a retire plan | "Pull request #12 · … (not changed)" from a forge connection | not drawn; "Branches and pull requests are not changed." stays | The plugin has no forge connection. |
+| A busy refusal | by who holds the home: "Another OATS command is already running. Wait …", "… can't tell whether another command is still running", "… there is no other command to wait for" | always the weakest: "Nothing was done: OATS refused this as busy.", with "Details has what OATS says to check." | The holder is in the refusal's `details`, which the plugin's host answer does not carry (a code and a message). |
+| A start that stopped at a launch prompt | "OATS could not confirm that <name> finished starting: <reason>. … open its terminal to read what it shows. …", with what the screen differed in | "OATS could not confirm that <name> finished starting", "Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."; the kernel's message under Details | The same: the reason is in `details`. "terminal" is "thread". |
+| A start with no confirmation | "OATS didn't confirm the start. It may still be running: check the roster before you start it again." | "… check its row in the sidebar before you start it again." | The sidebar, as above. |
+| A started agent whose thread is not known yet | "<name> was started, but its terminal isn't ready yet. Open it from its row when it is." | "… but its thread isn't ready yet. …" | "terminal" is "thread". |
+| Any other refusal of a start | the kernel's message as the dialog's status | "OATS refused to start <name>", the code after, the kernel's message under Details | A refusal leads with a person's words (R9). |
+| The Start dialog's context | one line, "<harness> · <machine> · <home>" | three labelled facts: Harness, Machine, Home | A fact has its label. |
+| The harness field's first entry | "Keep recorded harness" | "Keep the recorded harness: <its label>" | The harness interface (v4, point 6); it says which harness that is. |
+| Start on an agent that already runs | the button becomes **Open terminal** | Start is off with "This instance is already running.", and **Open <name>** beside it | One button, one act: the dialog's button stays the act. |
+| A key that has no agent to act on | "No instance is focused or selected." | "This thread is not an OATS agent's." | A command acts on the thread in view; bb has no selection. |
+| Permissions and Launch configuration in the Start dialog | two more fields | not there | A start from bb keeps the home's recorded choice; launch configurations are a later piece. |
+

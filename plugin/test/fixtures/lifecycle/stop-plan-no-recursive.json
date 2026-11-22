@@ -1,0 +1,65 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "lifecycleApi": 1,
+  "action": "stop",
+  "instance": "dialogs-1-helper",
+  "home": "/abs/deployment/agents/oats-expert/instances/dialogs-1-helper",
+  "recursive": false,
+  "at": "2026-11-22T17:53:35.622Z",
+  "targets": [
+   {
+    "instance": "dialogs-1-helper",
+    "agent": "oats-expert",
+    "home": "/abs/deployment/agents/oats-expert/instances/dialogs-1-helper",
+    "depth": 0,
+    "workMode": "worktree",
+    "launched": true,
+    "session": {
+     "state": "unknown",
+     "present": true,
+     "backend": "bb",
+     "established": true
+    },
+    "work": {
+     "observed": true,
+     "revision": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+     "branch": "agents/dialogs-1-helper",
+     "detached": false,
+     "drift": false,
+     "changed": 0,
+     "untracked": 0,
+     "upstream": {
+      "ref": null,
+      "ahead": null,
+      "behind": null
+     },
+     "base": {
+      "ref": "origin/main",
+      "ahead": 0,
+      "behind": 0
+     },
+     "remote": {
+      "host": null,
+      "path": null
+     }
+    },
+    "retiring": false,
+    "stopPending": false,
+    "midTask": "unknown"
+   }
+  ],
+  "skipped": [
+   {
+    "instance": "dialogs-1-child",
+    "agent": "oats-expert",
+    "home": "/abs/deployment/agents/oats-expert/instances/dialogs-1-child",
+    "reason": "recursive=false"
+   }
+  ],
+  "ambiguous": [],
+  "planRevision": "935e7b3d5c41a5e1efd4a53a",
+  "notes": []
+ }
+}

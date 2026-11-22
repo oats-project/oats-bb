@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // A12: Stop, Start, Restart and Retire in the thread menu (experimental_threadAction), and the
-// plan dialog the plugin's overlay draws.
+// dialog of each that the plugin's overlay draws: the kernel's plan as what will happen and what
+// is kept, the act in progress, its result and its refusal (parity D-158 to D-173).
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -8,6 +9,8 @@ import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { modelsSdk, retirePlanOf, retireReceiptOf, startCheckOf, startedIn, stopPlanOf, stopReceiptOf } from "./handlers";
+import { notified } from "../../app/ui";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
@@ -60,7 +63,7 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
       },
     },
     {},
-    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads() },
+    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
   );
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -160,33 +163,101 @@ test("while the first read is in flight the menu says so only once it has taken 
   slot.unmount();
 });
 
-test("Stop shows the kernel's plan; Confirm calls stopPlan then stopApply with the plan's revision", async () => {
-  const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => ({ revision: "rev-7f3a", lines: ["Stops the bb thread thr_redesign", "Keeps the home and its identity"], instance: "redesign-ui-lead" }),
-    stopApply: () => ({ ok: true }),
-  });
+
+const button = (slot: Awaited<ReturnType<typeof menu>>["slot"], id: string) => slot.getByTestId(id) as HTMLButtonElement;
+const ready = (slot: Awaited<ReturnType<typeof menu>>["slot"]) => waitFor(() => expect(slot.getByTestId("oats-confirm").getAttribute("data-phase")).toBe("ready"));
+const phase = (slot: Awaited<ReturnType<typeof menu>>["slot"], kind: string) => waitFor(() => expect(slot.getByTestId("oats-confirm").getAttribute("data-phase")).toBe(kind));
+/** The texts of what `selector` finds in `root`, outside a disclosure: what is on screen before Details is pressed. */
+const texts = (root: HTMLElement, selector: string) =>
+  Array.from(root.querySelectorAll(selector))
+    .filter((node) => root.tagName === "DETAILS" || node.closest("details") === null)
+    .map((node) => node.textContent);
+
+// ---- Stop (D-167, D-168, D-171) ----
+
+test("Stop opens a dialog titled with the act and the agent, says what will happen and what is kept in the Desktop's sentences, and asks the kernel for nothing more", async () => {
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => stopReceiptOf() });
   expect(slot.queryByRole("dialog")).toBeNull();
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  expect(dialog.textContent).toContain("Stop Redesign ui lead?");
-  await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Stops the bb thread thr_redesignKeeps the home and its identity"));
+  await ready(slot);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
+  const [happens, kept] = Array.from(slot.getByTestId("oats-confirm").querySelectorAll(":scope > section"));
+  expect(happens!.querySelector("h3")!.textContent).toBe("What will happen");
+  expect(texts(happens as HTMLElement, "li")).toEqual(["Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.", "A session that refuses to stop is left running; nothing is forced."]);
+  expect(kept!.querySelector("h3")!.textContent).toBe("What is kept");
+  expect(texts(kept as HTMLElement, "li")).toEqual(["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."]);
+  // An agent in the middle of a task is said before the act, and the state of each session.
+  expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual(["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."]);
+  expect(texts(slot.getByTestId("oats-plan"), "dt")).toEqual(["Redesign ui lead", "Desktop mockups developer", "Harvest knowledge helper"]);
+  // The button is named for the act; a stop is not destructive, so the focus starts on it.
+  expect(button(slot, "oats-confirm-act").textContent).toBe("Stop");
+  expect(document.activeElement).toBe(button(slot, "oats-confirm-act"));
   expect(calls(slot, "stopPlan", "stopApply").map((call) => call.method)).toEqual(["stopPlan"]); // asked once, nothing applied
+});
 
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+test("Stop applies the plan with its revision, a key and its choice; the act in progress and the result are said in the dialog", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => stopReceiptOf()) });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Stopping Redesign ui lead. This can take up to a minute.");
+  // While it runs the dialog cannot be dismissed into a lost result.
+  expect(button(slot, "oats-confirm-cancel").disabled).toBe(true);
+  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
+  expect(slot.getByRole("dialog")).toBeTruthy();
+  release();
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("3 sessions stopped.");
+  expect(texts(result, "p")).toEqual(["Harvest knowledge helper: Was already stopped", "Desktop mockups developer: Stopped", "Redesign ui lead: Stopped"]);
+  expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
   const made = calls(slot, "stopPlan", "stopApply");
   expect(made.map((call) => call.method)).toEqual(["stopPlan", "stopApply"]);
-  expect(made[0]!.input).toEqual({ instance: "redesign-ui-lead" });
-  const apply = made[1]!.input as { instance: string; revision: string; key: string };
-  expect(apply).toMatchObject({ instance: "redesign-ui-lead", revision: "rev-7f3a" });
+  expect(made[0]!.input).toEqual({ instance: "redesign-ui-lead", recursive: true });
+  const apply = made[1]!.input as { instance: string; revision: string; key: string; recursive: boolean };
+  expect(apply).toMatchObject({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", recursive: true });
   expect(apply.key).toMatch(/^[0-9a-f]{32}$/);
+  fireEvent.click(button(slot, "oats-confirm-close"));
+  expect(slot.queryByRole("dialog")).toBeNull();
+});
+
+test("Include child instances: unticking it reads the plan again for the agent alone, keeps the plan on screen meanwhile, and the apply names the choice", async () => {
+  const whole = stopPlanOf();
+  const alone = { ...whole, revision: "aaaaaaaaaaaaaaaaaaaaaaaa", recursive: false, targets: whole.targets.slice(0, 1), skipped: whole.targets.slice(1).map((target) => target.instance) };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: ({ recursive }) => (recursive === false ? held.then(() => alone) : whole),
+    stopApply: () => ({ ...stopReceiptOf(), results: stopReceiptOf().results.slice(2) }),
+  });
+  await pick("stop");
+  await ready(slot);
+  const tick = within(slot.getByTestId("oats-plan-choice")).getByRole("switch");
+  expect(tick.textContent).toBe("Include child instancesOn");
+  expect(tick.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(tick);
+  // The plan under review stays; nothing can be confirmed until the new one is read, and the dialog says why.
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Stops 3 sessions");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Updating for this choice…");
+  release();
+  await waitFor(() => expect(slot.getByTestId("oats-confirm").textContent).toContain("Stops the session of Redesign ui lead."));
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Not stopped: Desktop mockups developer, Harvest knowledge helper (children not included).");
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Redesign ui lead stopped.");
+  expect(calls(slot, "stopApply")[0]!.input).toMatchObject({ revision: "aaaaaaaaaaaaaaaaaaaaaaaa", recursive: false });
 });
 
 test("Cancel calls neither apply; Escape cancels too", async () => {
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => ({ revision: "r1", lines: ["Stops the thread"], instance: "redesign-ui-lead" }) });
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
   await pick("stop");
-  await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Stops the thread"));
-  fireEvent.click(slot.getByTestId("oats-plan-cancel"));
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-cancel"));
   expect(slot.queryByRole("dialog")).toBeNull();
 
   await pick("stop");
@@ -195,214 +266,544 @@ test("Cancel calls neither apply; Escape cancels too", async () => {
   expect(calls(slot, "stopApply", "retireApply")).toEqual([]);
 });
 
-test("Confirm is not offered before the plan is read", async () => {
+test("until the plan is read the dialog names no agent, says what it checks, and cannot be confirmed", async () => {
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: async () => (await held, { revision: "r1", lines: [], instance: "redesign-ui-lead" }) });
-  await pick("stop");
-  await slot.findByRole("dialog");
-  expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(true);
-  release();
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-});
-
-test("a refused apply shows the kernel's code and message unchanged, keeps the dialog, and a retry reuses the key", async () => {
-  const refusal = "E_PLAN_STALE: the plan revision rev-1 is no longer current\n  read the plan again";
-  let refuse = true;
-  const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => ({ revision: "rev-1", lines: ["Stops the thread"], instance: "redesign-ui-lead" }),
-    stopApply: () => {
-      if (refuse) throw new Error(refusal);
-      return { ok: true };
-    },
-  });
-  await pick("stop");
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  // The kernel's code and each of its lines, on a line of its own: no line break is drawn (ui/text.ts).
-  const alert = await slot.findByRole("alert");
-  expect(Array.from(alert.querySelectorAll("span.block")).map((line) => line.textContent)).toEqual([
-    "E_PLAN_STALE: the plan revision rev-1 is no longer current",
-    "read the plan again",
-  ]);
-  expect(slot.getByRole("dialog")).toBeTruthy();
-
-  refuse = false;
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
-  const keys = calls(slot, "stopApply").map((call) => (call.input as { key: string }).key);
-  expect(keys).toHaveLength(2);
-  expect(keys[0]).toBe(keys[1]);
-});
-
-test("after a refusal, reading the plan again asks the kernel for a new plan, applied with its revision and a new key", async () => {
-  let revision = 1;
-  const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => ({ revision: `rev-${revision++}`, lines: ["Stops the thread"], instance: "redesign-ui-lead" }),
-    stopApply: ({ revision: asked }) => {
-      if (asked === "rev-1") throw new Error("E_PLAN_STALE: stale");
-      return { ok: true };
-    },
-  });
-  await pick("stop");
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await slot.findByRole("alert");
-  fireEvent.click(slot.getByTestId("oats-plan-reread"));
-  await waitFor(() => expect(calls(slot, "stopPlan")).toHaveLength(2));
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
-  const applies = calls(slot, "stopApply").map((call) => call.input as { revision: string; key: string });
-  expect(applies.map((apply) => apply.revision)).toEqual(["rev-1", "rev-2"]);
-  expect(applies[0]!.key).not.toBe(applies[1]!.key);
-});
-
-test("a plan the kernel refuses to give is shown unchanged, with Retry and no Confirm", async () => {
-  const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => {
-      throw new Error("E_INSTANCE_UNKNOWN: no instance named redesign-ui-lead");
-    },
-  });
-  await pick("stop");
-  expect((await slot.findByRole("alert")).textContent).toBe("E_INSTANCE_UNKNOWN: no instance named redesign-ui-leadRetry");
-  expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(true);
-});
-
-test("Retire shows the kernel's plan and applies it with its revision", async () => {
-  const { slot, pick, label } = await menu("thr_digest", {
-    retirePlan: () => ({ revision: "rev-r", lines: ["Removes the home", "Keeps the branch agents/weekly-digest-helper"], instance: "weekly-digest-helper" }),
-    retireApply: () => ({ ok: true }),
-  });
-  expect(label("retire")).toBe("Retire agent (OATS)");
-  await pick("retire");
-  expect((await slot.findByRole("dialog")).textContent).toContain("Retire Weekly digest helper?");
-  await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the homeKeeps the branch agents/weekly-digest-helper"));
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
-  const made = calls(slot, "retirePlan", "retireApply", "stopPlan", "stopApply");
-  expect(made.map((call) => call.method)).toEqual(["retirePlan", "retireApply"]);
-  expect(made[1]!.input).toMatchObject({ instance: "weekly-digest-helper", revision: "rev-r" });
-});
-
-test("Start goes through OATS with no dialog, and opens the thread the kernel answers with", async () => {
-  const { slot, pick } = await menu("thr_digest", { start: () => ({ threadId: "thr_digest_2" }) });
-  await pick("start");
-  expect(slot.queryByRole("dialog")).toBeNull();
-  expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest_2" }]);
-});
-
-test("Restart goes through OATS, and a refusal is shown with the kernel's code and message", async () => {
-  const { slot, pick } = await menu("thr_redesign", {
-    restart: () => {
-      throw new Error("E_SESSION_BUSY: a start is already in progress for redesign-ui-lead");
-    },
-  });
-  await pick("restart");
-  expect((await slot.findByRole("alert")).textContent).toBe("E_SESSION_BUSY: a start is already in progress for redesign-ui-lead");
-  expect(slot.inspection.navigateCalls).toEqual([]);
-  fireEvent.click(slot.getByTestId("oats-act-close"));
-  expect(slot.queryByRole("dialog")).toBeNull();
-});
-
-test("a Start that fails while a plan dialog is open does not replace it: the failure shows when the dialog closes", async () => {
-  let fail!: (cause: Error) => void;
-  const { slot, pick } = await menu("thr_digest", {
-    start: () => new Promise<never>((_resolve, reject) => (fail = reject)),
-    retirePlan: () => ({ revision: "rev-r", lines: ["Removes the home"], instance: "weekly-digest-helper" }),
-  });
-  const starting = pick("start");
-  await slot.findByTestId("oats-act-running");
-  await pick("retire"); // the person moves on before Start answers
-  await waitFor(() => expect(slot.getByTestId("oats-plan").textContent).toBe("Removes the home"));
-  fail(new Error("E_SESSION_START_FAILED: the harness did not come up"));
-  await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?"); // still the plan
-  expect(slot.queryByRole("alert")).toBeNull();
-  fireEvent.click(slot.getByTestId("oats-plan-cancel"));
-  expect((await slot.findByRole("alert")).textContent).toBe("E_SESSION_START_FAILED: the harness did not come up");
-  expect(slot.inspection.navigateCalls).toEqual([]);
-});
-
-test("a Start that succeeds after the person opened a plan dialog leaves their screen alone", async () => {
-  let done!: (answer: { threadId: string }) => void;
-  const { slot, pick } = await menu("thr_digest", {
-    start: () => new Promise<{ threadId: string }>((resolve) => (done = resolve)),
-    retirePlan: () => ({ revision: "rev-r", lines: ["Removes the home"], instance: "weekly-digest-helper" }),
-  });
-  const starting = pick("start");
-  await slot.findByTestId("oats-act-running");
-  await pick("retire");
-  await slot.findByRole("dialog");
-  done({ threadId: "thr_digest_2" });
-  await starting;
-  expect(slot.getByRole("dialog").textContent).toContain("Retire Weekly digest helper?");
-  expect(slot.inspection.navigateCalls).toEqual([]);
-});
-
-test("while an apply is in flight the dialog cannot be closed, and its refusal is shown", async () => {
-  let refuse!: (cause: Error) => void;
-  const { slot, pick } = await menu("thr_digest", {
-    retirePlan: () => ({ revision: "rev-r", lines: ["Removes the home"], instance: "weekly-digest-helper" }),
-    retireApply: () => new Promise<never>((_resolve, reject) => (refuse = reject)),
-  });
-  await pick("retire");
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(slot.getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(slot.getByTestId("oats-plan-confirm").textContent).toBe("Working…"));
-  expect((slot.getByTestId("oats-plan-cancel") as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(slot.getByTestId("oats-plan-cancel"));
-  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
-  fireEvent.mouseDown(slot.getByTestId("oats-modal"));
-  expect(slot.getByRole("dialog")).toBeTruthy();
-  refuse(new Error("E_RETIRE_REFUSED: the work tree holds uncommitted work"));
-  expect((await slot.findByRole("alert")).textContent).toBe("E_RETIRE_REFUSED: the work tree holds uncommitted work");
-  fireEvent.click(slot.getByTestId("oats-plan-cancel")); // and now it closes
-  expect(slot.queryByRole("dialog")).toBeNull();
-});
-
-test("the plan's lines are the kernel's, each one filtered line: a line break is folded, and one that looks like a secret is withheld", async () => {
-  const { slot, pick } = await menu("thr_redesign", {
-    stopPlan: () => ({ revision: "rev-1", lines: ["Stop redesign-ui-lead:\n\trunning", "its hook printed password: hunter2", "kept\u202E: its home"], instance: "redesign-ui-lead" }),
-  });
-  await pick("stop");
-  await waitFor(() => expect((slot.getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  expect(Array.from(slot.getByTestId("oats-plan").querySelectorAll("li")).map((line) => line.textContent)).toEqual(["Stop redesign-ui-lead: running", "[withheld]", "kept\uFFFD: its home"]);
-});
-
-// The roster on screen may be older than what the kernel knows (it is kept while OATS cannot be
-// read): a confirmation is titled with the agent the KERNEL's plan names, never with the row pressed.
-test("the confirmation names the agent from the kernel's plan, not from the row that was pressed", async () => {
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => ({ revision: "r1", lines: ["Stop design-lead-2: running"], instance: "design-lead-2" }) });
-  await pick("stop");
-  const dialog = await slot.findByRole("dialog");
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Design lead 2?"));
-  expect(dialog.textContent).not.toContain("Redesign ui lead?");
-});
-
-test("until the plan is read the confirmation names no agent", async () => {
-  let release = () => undefined as void;
-  const held = new Promise<void>((done) => (release = done));
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: async () => (await held, { revision: "r1", lines: [], instance: "redesign-ui-lead" }) });
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => held.then(() => stopPlanOf()) });
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop an agent");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   release();
-  await waitFor(() => expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?"));
+  await ready(slot);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
 });
 
-test("an agent the kernel no longer knows: its refusal is a notice in the confirmation, nothing can be confirmed, and its row says so until the next roster", async () => {
+test("the dialog names the agent from the kernel's plan, never from the row that was pressed; a plan that is another agent's is not shown and cannot be confirmed", async () => {
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf("flaky-ci-developer") });
+  await pick("stop");
+  const dialog = await slot.findByRole("dialog");
+  await ready(slot);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Stop Flaky ci developer?");
+  expect(dialog.textContent).toContain("This is not the plan for this agent.");
+  expect(dialog.textContent).not.toContain("What will happen");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+});
+
+test("a plan that changed under the confirmation (E_PLAN_STALE) comes back for review as it is now, with the Desktop's sentence, and is applied with a new key", async () => {
+  let stale = true;
+  const fresh = { ...stopPlanOf(), revision: "bbbbbbbbbbbbbbbbbbbbbbbb" };
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => (stale ? stopPlanOf() : fresh),
+    stopApply: ({ revision }) => {
+      if (revision !== fresh.revision) {
+        stale = false;
+        throw new Error("E_PLAN_STALE: the stop plan changed since it was shown; review the fresh plan");
+      }
+      return stopReceiptOf();
+    },
+  });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(slot.getByTestId("oats-notice").textContent).toBe("Something changed since you opened this. Review it and confirm again."));
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  const applies = calls(slot, "stopApply").map((call) => call.input as { revision: string; key: string });
+  expect(applies.map((apply) => apply.revision)).toEqual(["9c1f2e3d4b5a69788796a5b4", fresh.revision]);
+  expect(applies[0]!.key).not.toBe(applies[1]!.key);
+});
+
+test("a refused apply leads with a person's words, the kernel's code after them and its message under Details; Review again reads a new plan", async () => {
+  const { slot, pick } = await menu("thr_digest", {
+    retirePlan: () => retirePlanOf(),
+    retireApply: () => {
+      throw new Error("E_CHILDREN_RUNNING: 1 child still runs: digest-links-helper\n  stop it first");
+    },
+  });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  const result = slot.getByTestId("oats-result");
+  expect(result.getAttribute("role")).toBe("alert");
+  expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper wasn't retired");
+  expect(texts(result, "p")).toEqual(["A child instance wouldn't stop, so nothing was retired. Other children may already have stopped.", "E_CHILDREN_RUNNING"]);
+  // The kernel's own message is one press away, each of its lines a line.
+  const details = slot.getByTestId("oats-act-details");
+  expect((details as HTMLDetailsElement).open).toBe(false);
+  expect(texts(details, "span.block")).toEqual(["1 child still runs: digest-links-helper", "stop it first"]);
+  expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+  fireEvent.click(button(slot, "oats-act-review"));
+  await ready(slot);
+  expect(calls(slot, "retirePlan")).toHaveLength(2);
+});
+
+test("an apply whose answer was lost is \"Result not confirmed\": Check again asks for the answer to what was sent, with the same revision and key", async () => {
+  let lost = true;
+  const { slot, pick } = await menu("thr_digest", {
+    retirePlan: () => retirePlanOf(),
+    retireApply: () => {
+      if (lost) throw new Error("OATS_TIMEOUT: `oats` did not answer within 1500 s and was stopped");
+      return { ...retireReceiptOf(), replayed: true };
+    },
+  });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown")); // neither done nor failed
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Result not confirmed");
+  expect(texts(slot.getByTestId("oats-result"), "p").at(-1)).toBe("OATS_TIMEOUT");
+  expect(slot.getByTestId("oats-result").textContent).toContain("OATS didn't confirm the result. Check again before assuming nothing happened.");
+  expect(slot.queryByTestId("oats-act-review")).toBeNull();
+  lost = false;
+  fireEvent.click(button(slot, "oats-act-check"));
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("done"));
+  expect(slot.getByTestId("oats-result").textContent).toContain("This is the result already recorded for this confirmation; nothing ran again.");
+  const applies = calls(slot, "retireApply").map((call) => call.input as { revision: string; key: string });
+  expect(applies).toHaveLength(2);
+  expect(applies[0]).toEqual(applies[1]);
+});
+
+test("a plan the kernel refuses to give says what could not be checked, in words, with Review again and nothing to confirm", async () => {
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => {
+      throw new Error("E_LIFECYCLE_BUSY: redesign-ui-lead is being retired");
+    },
+  });
+  await pick("stop");
+  await phase(slot, "failed");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Couldn't check what stopping Redesign ui lead will do");
+  expect(texts(result, "span.block")).toEqual(["Nothing was done: OATS refused this as busy.", "Nothing was changed."]);
+  expect(texts(result, "p").at(-1)).toBe("E_LIFECYCLE_BUSY"); // the code, after the words
+  expect(slot.queryByTestId("oats-confirm-act")).toBeNull();
+  expect(slot.getByTestId("oats-act-review")).toBeTruthy();
+});
+
+test("when OATS itself cannot be read, the dialog shows the notice every place shows, with Retry", async () => {
+  let down = true;
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => {
+      if (down) throw new Error("OATS_NOT_FOUND: `oats` could not be run (ENOENT)");
+      return stopPlanOf();
+    },
+  });
+  await pick("stop");
+  const notice = await slot.findByTestId("oats-unreadable");
+  expect(notice.getAttribute("data-code")).toBe("OATS_NOT_FOUND");
+  down = false;
+  fireEvent.click(within(notice).getByText("Retry"));
+  await ready(slot);
+});
+
+test("an agent the kernel no longer knows: the dialog says it is not in OATS any more, nothing can be confirmed or tried again, and its row says so until the next roster", async () => {
   const { slot, pick } = await menu("thr_redesign", {
     stopPlan: () => {
       throw new Error('E_SESSION_UNKNOWN: no instance "redesign-ui-lead" under /abs/deployment/agents'); // the kernel's form (test/roster/gone.test.tsx reads the recorded ones)
     },
   });
   await pick("stop");
+  await phase(slot, "failed");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Redesign ui lead is not in OATS any more");
+  expect(result.textContent).toContain("Nothing was changed.");
+  expect(result.textContent).toContain("E_SESSION_UNKNOWN");
+  expect(slot.queryByTestId("oats-confirm-act")).toBeNull();
+  expect(slot.queryByTestId("oats-act-review")).toBeNull();
+});
+
+test("text of the kernel's in a dialog is drawn through the display filter: a name that looks like a secret is withheld", async () => {
+  const plan = stopPlanOf();
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => ({ ...plan, ambiguous: ["ghp_abcdefghijklmnopqrstuvwxyz0123456789"] }) });
+  await pick("stop");
+  await ready(slot);
+  expect(slot.getByTestId("oats-plan").textContent).not.toContain("ghp_");
+});
+
+// ---- Retire (D-169, D-170, D-171) ----
+
+test("Retire opens a dialog that says what goes and what stays; it is destructive, so the focus starts on Cancel", async () => {
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf() });
+  await pick("retire");
   const dialog = await slot.findByRole("dialog");
-  const notice = await within(dialog).findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("Redesign ui lead is not in OATS any more");
-  expect(notice.textContent).toContain("Nothing was changed.");
-  expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
-  expect((within(dialog).getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(true);
+  await ready(slot);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?");
+  const [happens, kept] = Array.from(slot.getByTestId("oats-confirm").querySelectorAll(":scope > section"));
+  expect(texts(happens as HTMLElement, "li")).toEqual([
+    "Stops its 1 child instance first: Digest links helper. They are kept, with their homes.",
+    "Saves a recovery copy of any uncommitted work, then deletes its home folder.",
+    "If a child won't stop, nothing is retired.",
+  ]);
+  expect(texts(kept as HTMLElement, "li")).toEqual(["Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.", "Branches and pull requests are not changed."]);
+  // None of the kernel's own notes is pasted (the first UX read's S9).
+  expect(dialog.textContent).not.toContain("SIGTERM");
+  expect(dialog.textContent).not.toContain("the ADE reports");
+  expect(button(slot, "oats-confirm-act").textContent).toBe("Retire");
+  expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel"));
+});
+
+test("Also delete the worktree: the tick changes what goes and what stays, warns in words what is lost, and the apply asks for it", async () => {
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), worktree: "removed" as const, movedTo: null }) });
+  await pick("retire");
+  await ready(slot);
+  const tick = within(slot.getByTestId("oats-plan-choice")).getByRole("switch");
+  expect(tick.textContent).toBe("Also delete the worktreeOff");
+  expect(tick.getAttribute("aria-checked")).toBe("false");
+  expect(slot.queryByTestId("oats-plan-warning")).toBeNull();
+  fireEvent.click(tick);
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Deletes its worktree. Branch agents/weekly-digest-helper stays in the repository.");
+  expect(slot.getByTestId("oats-confirm").textContent).not.toContain("Keeps its worktree");
+  expect(slot.getByTestId("oats-plan-warning").textContent).toBe("Deletes the worktree folder, including 1 uncommitted change (a recovery copy is saved first). Branch agents/weekly-digest-helper stays in the repository.");
+  expect(calls(slot, "retirePlan")).toHaveLength(1); // the plan is the same: only what the apply asks changes
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", discardWorktree: true });
+  expect(texts(slot.getByTestId("oats-result"), "p")).toContain("Worktree deleted.");
+});
+
+test("Retire without the tick applies the plan and keeps the worktree; the result is the Desktop's lines", async () => {
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => retireReceiptOf() });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper retired.");
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper"); // answered: the title asks nothing
+  expect(texts(result, "p")).toEqual([
+    "1 child instance stopped and kept.",
+    "Home folder deleted.",
+    "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
+    "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+  ]);
+  expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });
+});
+
+test("an agent with no worktree of its own is offered no tick", async () => {
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => ({ ...retirePlanOf(), ownWorktree: false, workMode: "directory" }) });
+  await pick("retire");
+  await ready(slot);
+  expect(slot.queryByTestId("oats-plan-choice")).toBeNull();
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("It has no worktree of its own, so no worktree is kept or deleted.");
+});
+
+test("a retire the kernel would refuse is blocked, and the reason beside Retire names a control the dialog has (the second UX read's A9)", async () => {
+  const blocked = { ...retirePlanOf(), extraTrees: [{ path: "/h/.work-docs", branch: "agents/x-docs", disposition: "refuse", reason: "its target exists" }] };
+  let mended = false;
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => (mended ? retirePlanOf() : blocked) });
+  await pick("retire");
+  await ready(slot);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("OATS would refuse: its extra worktree on branch agents/x-docs cannot be moved aside. Remove it with OATS on the machine that holds it, then press Check again.");
+  mended = true;
+  fireEvent.click(within(slot.getByTestId("oats-plan-observed")).getByText("Check again"));
+  await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
+  expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+});
+
+// ---- Start and Restart (D-158 to D-166) ----
+
+test("Start opens a dialog first: nothing is started on one press; it checks the agent as the kernel has it now and is titled with that", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  await pick("start");
+  const dialog = await slot.findByRole("dialog");
+  await ready(slot);
+  expect(calls(slot, "start", "restart")).toEqual([]);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
+  expect(texts(slot.getByTestId("oats-start"), "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
+  expect(dialog.textContent).toContain("This starts a new conversation using the saved briefing and state.");
+  expect(dialog.textContent).toContain("Continue in this instance’s existing home, with its identity, work and notes.");
+  expect(slot.getByTestId("oats-start-status").textContent).toContain("Ready to start.");
+  // The harness field starts on the recorded harness; the focus on the form's first field.
+  const harness = slot.getByTestId("oats-start-harness") as HTMLSelectElement;
+  expect(harness.value).toBe("");
+  expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
+  // bb reports no model for the harness in this test: the field says that any id can be typed.
+  expect(slot.getByTestId("oats-start").textContent).toContain("No model suggestions reported. Any model ID can be typed.");
+  expect(document.activeElement).toBe(harness);
+  expect(button(slot, "oats-confirm-act").textContent).toBe("Start");
+});
+
+test("Start with nothing chosen passes neither a harness nor a model; the thread the kernel answers with opens, and the dialog says that it started", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest_2" }]);
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Weekly digest helper started.");
+});
+
+test("a chosen harness and a typed model are passed; a model that is no model name is refused before any call", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  await pick("start");
+  await ready(slot);
+  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  const model = slot.getByTestId("oats-start-model") as HTMLInputElement;
+  fireEvent.change(model, { target: { value: "--yolo" } });
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByRole("alert").textContent).toBe("Enter a model name, not a command-line option.");
+  fireEvent.change(model, { target: { value: " anthropic/claude-opus-5-5 " } });
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper", harness: "pi", model: "anthropic/claude-opus-5-5" }]);
+});
+
+test("with one harness declared no choice is shown, and the focus starts on the model", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { harnesses: ["claude"] }) });
+  await pick("start");
+  await ready(slot);
+  expect(slot.queryByTestId("oats-start-harness")).toBeNull();
+  expect(texts(slot.getByTestId("oats-start"), "dt, dd").slice(0, 2)).toEqual(["Harness", "Claude Code"]); // the recorded one, as a fact
+  expect(document.activeElement).toBe(slot.getByTestId("oats-start-model"));
+});
+
+test("Restart opens its dialog with the Desktop's warning, and nothing restarts until its button is pressed", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "unknown" }), restart: () => held.then(() => startedIn("thr_redesign_2", "redesign-ui-lead")) });
+  await pick("restart");
+  const dialog = await slot.findByRole("dialog");
+  await ready(slot);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Restart Redesign ui lead");
+  expect(dialog.textContent).toContain("Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.");
+  expect(calls(slot, "restart")).toEqual([]);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Checking configuration and restarting…");
+  release();
+  await phase(slot, "done");
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Redesign ui lead restarted.");
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_redesign_2" }]);
+});
+
+test("a refused start says in words what was not started, with the kernel's code and Details; Refresh status reads the agent again before another try", async () => {
+  const { slot, pick } = await menu("thr_digest", {
+    startCheck: ({ instance }) => startCheckOf(instance),
+    start: () => {
+      throw new Error("E_SESSION_START_BUSY: a start is already in progress for weekly-digest-helper");
+    },
+  });
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper wasn't started");
+  expect(texts(result, "p")).toEqual(["OATS refused this start as busy. Nothing was started.", "E_SESSION_START_BUSY"]);
+  expect(texts(slot.getByTestId("oats-act-details"), "p")).toEqual(["a start is already in progress for weekly-digest-helper"]);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  fireEvent.click(button(slot, "oats-start-refresh"));
+  await ready(slot);
+  expect(calls(slot, "startCheck")).toHaveLength(2);
+});
+
+test("a start that stopped at a launch prompt, or whose answer was lost, is neither called started nor failed", async () => {
+  for (const [refusal, title] of [
+    ["E_SPAWN_INCOMPLETE: launch requires inspection", "OATS could not confirm that Weekly digest helper finished starting"],
+    ["OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped", "OATS didn't confirm the start"],
+    ["NO_THREAD_NAMED: Started weekly-digest-helper, but the kernel named no bb thread for it", "Weekly digest helper was started, but its thread isn't ready yet"],
+  ] as const) {
+    const { slot, pick } = await menu("thr_digest", {
+      startCheck: ({ instance }) => startCheckOf(instance),
+      start: () => {
+        throw new Error(refusal);
+      },
+    });
+    await pick("start");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+    expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe(title);
+    resetApp();
+  }
+});
+
+test("Start on an agent the kernel says runs is held: the dialog says so and offers its thread", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "unknown" }) });
+  await pick("start");
+  await ready(slot);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("This instance is already running.");
+  fireEvent.click(within(slot.getByTestId("oats-start-status")).getByText("Open Weekly digest helper"));
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+  expect(calls(slot, "start")).toEqual([]);
+});
+
+test("Start on an agent whose state the kernel cannot tell is held until its status is read again", async () => {
+  let known = false;
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => (known ? startCheckOf(instance) : startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" })) });
+  await pick("start");
+  await ready(slot);
+  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  known = true;
+  fireEvent.click(button(slot, "oats-start-refresh"));
+  await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
+});
+
+test("the Start dialog is titled from the kernel's answer; an answer for another agent is not shown and cannot be confirmed", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: () => startCheckOf("flaky-ci-developer") });
+  await pick("start");
+  const dialog = await slot.findByRole("dialog");
+  await ready(slot);
+  expect(dialog.querySelector("h2")!.textContent).toBe("Start Flaky ci developer");
+  expect(dialog.textContent).toContain("This is not the plan for this agent.");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+});
+
+test("an act that ends after the person opened another act's dialog leaves their screen alone and tells them through the toaster, with Open", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held.then(() => startedIn("thr_digest_2")), retirePlan: () => retirePlanOf() });
+  const before = notified().length;
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  await pick("retire"); // from a menu: the running dialog gives way to the one just asked
+  await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?"));
+  release();
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Weekly digest helper started.", open: { label: "Open Weekly digest helper" } });
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?");
+  expect(slot.inspection.navigateCalls).toEqual([]);
+});
+
+// ---- the four acts as commands, with their shortcuts (D-174)
+
+test("each act is a command of bb's palette with a default shortcut a person rebinds: the Desktop's letters on bb's own chord", async () => {
+  const { commands } = await import("../../app/lifecycle");
+  expect(commands.map((command) => [command.id, command.title, command.defaultShortcut])).toEqual([
+    ["agent-stop", "OATS: Stop agent…", { key: "x", alt: true, shift: true }],
+    ["agent-start", "OATS: Start agent…", { key: "s", alt: true, shift: true }],
+    ["agent-restart", "OATS: Restart agent…", { key: "r", alt: true, shift: true }],
+    ["agent-retire", "OATS: Retire agent…", { key: "d", alt: true, shift: true }],
+  ]);
+});
+
+test("a command acts on the agent whose thread is in view: it opens the act's dialog; where it cannot act it says why in one line, and does nothing", async () => {
+  const { slot } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+  const { commands } = await import("../../app/lifecycle");
+  const command = (id: string) => commands.find((each) => each.id === id)!;
+  const press = (id: string, threadId: string | null) => command(id).run({ threadId, projectId: null, experimental_panel: {} as never });
+  const said = () => notified().at(-1);
+  const before = notified().length;
+
+  // A working agent: Start cannot act, and says why in the Desktop's sentence; Stop opens its dialog.
+  await press("agent-start", "thr_redesign");
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(said()).toMatchObject({ tone: "failed", title: "Redesign ui lead is already running." });
+  // A stopped agent: Restart says to start it instead.
+  await press("agent-restart", "thr_digest");
+  expect(said()).toMatchObject({ title: "Weekly digest helper is stopped: Start it instead." });
+  // A thread that is no agent's, and no thread at all.
+  await press("agent-stop", "thr_plain");
+  expect(said()).toMatchObject({ title: "This thread is not an OATS agent's." });
+  await press("agent-retire", null);
+  expect(said()).toMatchObject({ title: "This thread is not an OATS agent's." });
+  expect(notified().length).toBe(before + 4);
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(calls(slot, "stopPlan", "retirePlan", "startCheck")).toEqual([]);
+
+  await press("agent-stop", "thr_redesign");
+  await ready(slot);
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
+});
+
+test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const { slot } = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
+  const { commands } = await import("../../app/lifecycle");
+  await commands.find((each) => each.id === "agent-stop")!.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
+  expect(notified().at(-1)).toMatchObject({ tone: "failed", title: "Stop, Start, Restart and Retire come back when OATS is read again." });
+  expect(slot.queryByRole("dialog")).toBeNull();
+});
+
+test("AgentActs places the acts of one agent as buttons: the ones that apply, each opening its dialog", async () => {
+  const { AgentActs } = await import("../../app/lifecycle");
+  const app = await loadApp();
+  const Overlay = app.appOverlays[0]!.component;
+  const slot = renderSlot<object, Contract>(
+    { component: () => (<><AgentActs instance="weekly-digest-helper" /><Overlay /></>) },
+    {},
+    { rpc: handlers({ retirePlan: () => retirePlanOf() }), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
+  );
+  const acts = await slot.findByTestId("oats-agent-acts");
+  expect(Array.from(acts.querySelectorAll("button")).map((each) => each.textContent)).toEqual(["Start…", "Retire…"]); // a stopped agent
+  fireEvent.click(slot.getByTestId("oats-agent-act-retire"));
+  await ready(slot);
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?");
+});
+
+test("the focus stays in an open dialog: what takes it outside (bb's composer, when a thread opens behind a result) gives it back", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  const outside = document.createElement("textarea");
+  document.body.append(outside);
+  try {
+    await pick("start");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "done");
+    expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+    outside.focus(); // as bb's composer does when the agent's new thread opens
+    expect(document.activeElement).toBe(button(slot, "oats-confirm-close"));
+    fireEvent.click(button(slot, "oats-confirm-close"));
+    // With no dialog open the focus is nobody's to hold.
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+  } finally {
+    outside.remove();
+  }
+});
+
+test("the model field suggests bb's own models for the harness that will run, and asks again when another harness is chosen", async () => {
+  const asked: unknown[] = [];
+  const app = await loadApp();
+  const Overlay = app.appOverlays[0]!.component;
+  const { openAct } = await import("../../app/lifecycle");
+  const slot = renderSlot<object, Contract>(
+    { component: () => <Overlay /> },
+    {},
+    {
+      rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance) }),
+      sidebarThreads: sidebarThreads(),
+      sdk: { providers: { models: (async (args: { providerId?: string }) => (asked.push(args), { models: args.providerId === "pi" ? [{ model: "anthropic/claude-opus-5-5", displayName: "Opus 5.5" }] : [{ model: "opus", displayName: "Opus" }] })) as never } },
+    },
+  );
+  await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+  openAct("start", "weekly-digest-helper");
+  await ready(slot);
+  const options = () => Array.from(slot.getByRole("dialog").querySelectorAll("datalist option")).map((option) => option.getAttribute("value"));
+  await waitFor(() => expect(options()).toEqual(["opus"])); // the recorded harness's (Claude Code)
+  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  await waitFor(() => expect(options()).toEqual(["anthropic/claude-opus-5-5"]));
+  // Asked of the machine that holds the deployment, with no project: never a listing that starts a harness in an agent's home.
+  expect(asked).toEqual([{ hostId: "host_falcon", providerId: "claude-code", preferCached: true }, { hostId: "host_falcon", providerId: "pi", preferCached: true }]);
+});
+
+test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; Stop and Retire alone for one on tmux; held, with the reason, on a roster that is the last one read", async () => {
+  const { AgentActs } = await import("../../app/lifecycle");
+  const acts = async (instance: string, over: Partial<Handlers> = {}, threads = fixtureThreads()) => {
+    const slot = renderSlot<object, Contract>({ component: () => <AgentActs instance={instance} /> }, {}, { rpc: handlers(over), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const found = slot.queryByTestId("oats-agent-acts");
+    const answer = { labels: found === null ? [] : Array.from(found.querySelectorAll("button")).map((each) => `${each.textContent}${each.disabled ? " (off)" : ""}`), reason: slot.queryByTestId("oats-disabled-reason")?.textContent ?? null };
+    resetApp();
+    return answer;
+  };
+  // Its bb thread is gone (deleted in bb): the agent stays in OATS, stopped.
+  expect(await acts("weekly-digest-helper", {}, fixtureThreads().filter((thread) => thread.id !== "thr_digest"))).toEqual({ labels: ["Start…", "Retire…"], reason: null });
+  const tmux = fixtureAgents().find((agent) => agent.backend === "tmux")!;
+  expect(await acts(tmux.instance)).toEqual({ labels: ["Stop…", "Retire…"], reason: null });
+  expect(await acts("no-such-agent")).toEqual({ labels: [], reason: null });
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  expect(await acts("redesign-ui-lead", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) })).toEqual({
+    labels: ["Stop… (off)", "Restart… (off)", "Retire… (off)"],
+    reason: "Comes back when OATS is read again",
+  });
 });

@@ -2,7 +2,7 @@
 // panel (packages/desktop/renderer/context-panel.mjs). It reads one instance by its name and never
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";

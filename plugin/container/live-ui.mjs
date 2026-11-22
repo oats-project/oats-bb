@@ -155,25 +155,26 @@ async function healthyThreads() {
   };
   let threads;
   let now;
+  const again = [];
   try {
     if (holding) writeFileSync(HOLD_FILE, "");
     threads = threadsByFixtureId();
     now = await rest(threads, START_SECONDS);
+    // One thread at a time, decided on what bb says of it NOW (the others' notes and deletes take
+    // time, and a turn may have ended meanwhile): one that came to rest is left as it is.
+    for (const thread of now.filter((candidate) => candidate.status !== "idle")) {
+      const status = statusNow(thread.id);
+      if (status === "idle") continue;
+      console.log(`NOTE the fixture thread "${thread.title}" (${thread.id}) is ${status} after ${START_SECONDS} s, not idle; bb says: ${bbSays(thread.id, status)}\n     It is deleted and made again, once.`);
+      const deleted = tell("thread", "delete", thread.id, "--yes");
+      if (deleted.startsWith("(bb thread delete failed")) console.log(`NOTE ${deleted}: the thread is kept as it is`);
+      else again.push(thread);
+    }
   } finally {
-    // The proof's hold is lifted whatever happened: a thread made from here on is a healthy one.
+    // The proof's hold is lifted here, after the stuck thread was judged and deleted and before
+    // any is made again (and whatever was thrown): a thread made from here on is a healthy one.
     holding = false;
     rmSync(HOLD_FILE, { force: true });
-  }
-  // One thread at a time, decided on what bb says of it NOW (the others' notes and deletes take
-  // time, and a turn may have ended meanwhile): one that came to rest is left as it is.
-  const again = [];
-  for (const thread of now.filter((candidate) => candidate.status !== "idle")) {
-    const status = statusNow(thread.id);
-    if (status === "idle") continue;
-    console.log(`NOTE the fixture thread "${thread.title}" (${thread.id}) is ${status} after ${START_SECONDS} s, not idle; bb says: ${bbSays(thread.id, status)}\n     It is deleted and made again, once.`);
-    const deleted = tell("thread", "delete", thread.id, "--yes");
-    if (deleted.startsWith("(bb thread delete failed")) console.log(`NOTE ${deleted}: the thread is kept as it is`);
-    else again.push(thread);
   }
   if (again.length > 0) threads = threadsByFixtureId(); // makes the ones that are gone, by their titles
   if (now.some((thread) => thread.status !== "idle")) now = await rest(threads, again.length > 0 ? AGAIN_SECONDS : 0);

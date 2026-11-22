@@ -92,7 +92,12 @@ describe("a refusal, in a person's words, with what to do", () => {
     }
     // The bb session provider's own refusals, in the plugin's words.
     expect(spawnProblem({ code: "E_BACKEND_HARNESS", message: "the bb session provider cannot launch codex" })).toEqual({ sentence: "bb can’t run the harness this soul would use. Pick one of the harnesses above.", next: "change-options", code: "E_BACKEND_HARNESS", detail: "the bb session provider cannot launch codex" });
-    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "bb reports its pi provider as not_installed" }, "spawn").sentence).toBe("The instance was created, but bb isn’t ready to launch it. Details says what bb needs; then start it from the sidebar instead of spawning again.");
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "bb reports its pi provider as not_installed" }, "spawn").sentence).toBe("bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs.");
+    // As the real kernel printed it for a spawn on pi where bb has no pi provider: rolled back, and its words are the detail.
+    const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+    const problem = spawnProblem(refused, "spawn");
+    expect([problem.code, problem.sentence]).toEqual(["E_BACKEND_NOT_READY", "bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."]);
+    expect(problem.detail).toMatch(/bb reports its pi provider as not_installed.*spawn rolled back$/);
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");
     expect(spawnProblem({ code: "E_PACKAGE_MISSING", message: null }).sentence).toBe("A package this soul uses isn’t installed yet. Run oats sync in the deployment, then try again.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }).sentence).toBe("OATS took too long to work out this soul’s defaults. Try again.");

@@ -203,8 +203,9 @@ const SPAWN_FACTS: Record<string, Said> = {
   E_INTENT_EXPIRED: said("This spawn request expired. Check the instance list before spawning again."),
   E_PREFLIGHT_INCOMPLETE: said("OATS couldn’t finish checking this spawn. Try again."),
   E_BACKEND_UNAVAILABLE: said("That session backend isn’t installed on this machine.", "change-options"),
-  // The bb session provider's own refusal at the launch: the instance exists, and bb cannot run it yet. The plugin's words (WORDS.md).
-  E_BACKEND_NOT_READY: said("The instance was created, but bb isn’t ready to launch it. Details says what bb needs; then start it from the sidebar instead of spawning again."),
+  // The bb session provider's own refusal at the launch: bb cannot run this agent yet, and the kernel rolls the spawn back
+  // (test/fixtures/spawn/spawn-pi-refused.json, the real kernel's). The plugin's words (WORDS.md).
+  E_BACKEND_NOT_READY: said("bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."),
   E_INSTANCE_GONE: said("The instance that was created isn’t there anymore. Check the instance list."),
   E_OUTCOME_UNKNOWN: said("We couldn’t confirm whether the instance was created.", "check-result"),
   E_SPAWN_INCOMPLETE: said("The instance was created but didn’t finish starting. Open it from the instance list instead of spawning again."),

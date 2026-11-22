@@ -18,5 +18,8 @@ edit. `../README.md` says how the first two were recorded.
 - `spawn-decision-stale.json`: the kernel's refusal of an apply whose `--expect-decision` is not
   the decision it holds (`E_DECISION_STALE`): what a spawn meets when something moved between the
   preview a person saw and their press. Nothing is created.
-  These three were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
+- `spawn-pi-refused.json`: the kernel's refusal of a spawn with `--harness pi` where bb has no pi
+  provider it can launch (`E_BACKEND_NOT_READY`, the bb session provider's; the spawn is rolled
+  back). The preview of the same choices answers: the provider is asked at the launch.
+  These four were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
   npm); the live checks' stages `spawn-slow`, `spawn-name-taken` and `spawn-refused` answer them.

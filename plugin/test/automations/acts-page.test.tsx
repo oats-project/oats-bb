@@ -572,8 +572,10 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     expect((await enable()).disabled).toBe(true);
     // The Triggers list was read: there the same act is not held.
     await go(slot, "triggers");
-    await row(slot, "local/pr-triage");
+    const triage = await row(slot, "local/pr-triage");
     expect((await enable()).disabled).toBe(false);
+    // A row's acts follow its own kind's list: the Triggers rows are not held by the Schedules list.
+    expect((within(triage).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("a delete the kernel refuses because the row is already gone: closed, the focus is on the row that was beside it", async () => {
@@ -602,26 +604,31 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     let rows = all.rows;
     const slot = await page("", {
       automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
-      scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/hourly-check")), { removed: "hourly-check" }),
+      scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/status-check")), { removed: "status-check" }),
     });
     const ids = () => slot.getAllByTestId("oats-automation-row").map((entry) => entry.dataset.id!);
-    await row(slot, "local/hourly-check");
-    const all11 = ids();
+    await row(slot, "local/status-check");
+    const whole = ids();
     fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "check th" } });
-    await waitFor(() => expect(ids().length).toBeLessThan(all11.length));
+    await waitFor(() => expect(ids().length).toBeLessThan(whole.length));
     const shown = ids();
-    const beside = shown[shown.indexOf("local/hourly-check") + 1] ?? shown[shown.indexOf("local/hourly-check") - 1]!;
-    // The search hides the row that is beside it in the whole list: the neighbour is another row.
-    expect(shown).toContain("local/hourly-check");
-    expect(beside).not.toBe(all11[all11.indexOf("local/hourly-check") + 1]);
-    (await menu(slot, "local/hourly-check")).press("Delete…");
+    const at = shown.indexOf("local/status-check");
+    const beside = shown[at + 1]!;
+    // The deleted row is not the first one shown, and the search hides the row that is beside it
+    // in the whole list: neither the first shown row nor that hidden one is the neighbour.
+    expect(at).toBeGreaterThan(0);
+    expect(beside).toBeDefined();
+    expect(shown).not.toContain(whole[whole.indexOf("local/status-check") + 1]);
+    (await menu(slot, "local/status-check")).press("Delete…");
     const dialog = await slot.findByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
     await waitFor(() => expect(dialog.textContent).toContain("was deleted"));
-    await waitFor(() => expect(ids()).not.toContain("local/hourly-check"));
+    await waitFor(() => expect(ids()).not.toContain("local/status-check"));
+    expect(ids()[0]).not.toBe(beside);
     fireEvent.click(within(dialog).getByTestId("oats-confirm-close"));
     await waitFor(() => expect((document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-testid="oats-automation-row"]')?.dataset.id).toBe(beside));
   });
+
 
 
   it("a delete or a summary the kernel refuses is followed by a new read of the lists", async () => {

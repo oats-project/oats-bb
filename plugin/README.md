@@ -90,6 +90,39 @@ roster, as a row that says "its bb thread is gone" and opens the agent's own pag
 page says "thread missing", with Start and Retire. Nothing is retired because
 a thread was deleted.
 
+## The home
+
+The OATS home (the Bot entry in bb's navigation, with a count when agents need you, the page
+`/plugins/oats/home`; on desktop the same view is the OATS tab of a thread that is no agent's) is
+the OATS Desktop's Home: what needs you first, then what you have.
+
+| Part | What it shows |
+|---|---|
+| **Needs you** | one card per agent that waits on you, the newest claim first; eight, then **Show all N**. A card says who (the instance's name as words, its soul and the machine), its state on the shared status line with since when it waits, and what it asks in the agent's own words. Where bb lists choices for the question (a confirmation, a selection, an approval, a question with options), they are buttons on the card and answer it in place. The **reply** is on the card of the agent it goes to and names it ("Write to Release 070 maintainer…"): there is no reply apart from a card, so a message cannot go to another agent than the one read. **Open** and the name lead to the agent's thread. With none: "Nothing needs you." |
+| the summary | one line, "8 agents · 3 working · 3 need you · 1 idle · 1 stopped": every agent OATS has counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's. Working and need you are always said; another state only when it has agents |
+| the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why) |
+| **Working** | the agents at work, five, then **Show all N working** / **Show fewer**; each row opens its agent |
+| **Finished, not looked at** | idle agents whose thread holds something you have not read; not drawn with none |
+| **Home › Agents** | `/plugins/oats/home/agents` (in the tab, a view of the tab): **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its soul and machine, its state in words and who started it ("started by Ana": the person OATS attributes it to, else its parent), and **Back to Home** |
+| an empty workspace | what OATS does in two lines, and **New agent** |
+
+An agent with no thread in bb (it runs in tmux, or its thread was archived or deleted) that needs
+you has its card too: what it asks, "Runs in tmux: answer it in its terminal." in place of the
+reply (nothing can be sent to it from bb), and Open, which leads to the agent's own page.
+
+While OATS cannot be read the home keeps the roster as last read, under the one notice every place
+shows for it (what happened, how old what is shown is, Retry), and every card's answers and reply
+are **held**, with the reason beside them: what is shown may have changed, and a message or an
+answer would go on a question that may no longer be the one asked. Open still opens.
+
+The home has no read of its own: it draws the roster every place shares (`useOats`, called once per
+view and passed down), groups it with one pure function (`app/home/board.ts`: every agent in the
+sidebar's order, who needs you, who works, what is finished, and the counts) and says it with
+`app/home/home-words.ts`. The tiles' counts are the four pages' own reads, made only while the
+home is visible. Answering is the person's act through bb's SDK (`threads.interactions.respond` /
+`resolve` for a choice bb offers, `threads.send` for a reply, as the person at the screen): the
+home never calls OATS to act, and never types into a session.
+
 ## The instance panel
 
 On an agent's own thread, the **OATS** tab of bb's side panel is that agent's panel, as the OATS

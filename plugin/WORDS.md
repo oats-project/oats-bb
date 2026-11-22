@@ -36,6 +36,20 @@ instance's name as words).
 | The act that makes an agent | **New agent** | the same, a button at the roster's foot | none. |
 | The plugin's pages in the sidebar | one **Workspace** row (a page with tabs) | the heading **Workspace** over a row per page | bb's pages are routes, not tabs of one page; the Workspace page with its tabs is a later piece. |
 
+## The home
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| The summary line (`app/home/home-words.ts` `summaryLine`) | "24 agents · 21 running · 3 need you · 0 stopped", and "· N status unknown" when there are any: the kernel's liveness (`packages/desktop/renderer/views/home.mjs` `summaryLine`) | "8 agents · 3 working · 3 need you · 1 idle · 1 stopped", and "· N failed", "· N unreachable" when there are any | The plugin's states (the first table of this file): the line counts by the one function every place reads for an agent's state, so its numbers are the sidebar's. Working and need you are always said, as the Desktop says running and need you; idle and stopped only when there are any, since the plugin has more states than fit a line of zeros. "N need you" whatever the number, as the Desktop's line and the sidebar's foot. |
+| The agents at work | **Running**, "Show all N running" | **Working**, "Show all N working" | The plugin's word for the state (first table). "Show fewer" is the Desktop's. |
+| Agents that finished and were not looked at | (no such group) | **Finished, not looked at** | bb knows which threads a person has not read; the Desktop has no such fact. Not drawn when there is none. |
+| The reply on a card | (none: a card of the Desktop's Home opens the instance, where its terminal is) | a box on the card, "Write to <name>…", named "Reply to <name>" for a screen reader, with **Send** | An addition: in bb an agent is a thread a person writes in, so the card can take the answer. It is bb's own send, as the person at the screen. On the card and named for the agent, so a message cannot go to another one than the one read. |
+| A card of an agent with no bb thread | (the same card) | "Runs in tmux: answer it in its terminal." / "Its bb thread is gone: answer it in its terminal.", and no reply | The plugin never types into a session; bb can send only to a thread it has. |
+| A card while the roster is the last one read | acts on a held roster are held | the answers and the reply are off, with "Held until OATS is read again: what is shown may have changed." | The Desktop's rule, said as a reason beside the control (the standard: a control that is off says why). |
+| A sent reply, a reply or an answer that failed | (no act on a card) | "Sent to <name>." on the card; a notice on the card titled **The message was not sent** / **The answer was not sent**, with what bb said | In place, on the card it is about. |
+| Who started an agent, in Home › Agents | "started by <human or parent>" | the same; a parent by its name as words | none. |
+| The empty workspace | "OATS runs your agents: each one is a soul at work on a machine of yours." / "Start one, and Home shows what needs you and what you have." | the same two lines, the first as the title | none. |
+
 ## The instance panel
 
 | Thing | The Desktop says | The plugin says | Why |

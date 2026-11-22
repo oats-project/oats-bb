@@ -24,12 +24,12 @@ export const SHOW_FEWER = "Show fewer";
 /** The states the summary names, in its order; the first two always, the others only when they have agents. */
 const SUMMARY: readonly AgentState[] = ["working", "needs-you", "idle", "stopped", "error", "unreachable"];
 const ALWAYS: ReadonlySet<AgentState> = new Set<AgentState>(["working", "needs-you"]);
-/** A state as the summary counts it: "2 working", "1 needs you" / "3 need you". */
+/** A state as the summary counts it: "2 working"; "3 need you" as the sidebar's foot says it, whatever the number (the Desktop's line). */
 function counted(state: AgentState, n: number): string {
-  if (state === "needs-you") return `${n} ${n === 1 ? "needs you" : "need you"}`;
+  if (state === "needs-you") return `${n} need you`;
   return `${n} ${STATE[state].word.toLowerCase()}`;
 }
-/** "8 agents · 2 working · 1 needs you · 3 idle · 1 stopped · 1 failed": every agent is counted once. */
+/** "8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed": every agent is counted once. */
 export function summaryLine(counts: Record<AgentState, number>): string {
   const agents = Object.values(counts).reduce((sum, n) => sum + n, 0);
   return [count(agents, "agent"), ...SUMMARY.filter((state) => ALWAYS.has(state) || counts[state] > 0).map((state) => counted(state, counts[state]))].join(" · ");

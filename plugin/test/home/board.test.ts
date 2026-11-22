@@ -57,7 +57,7 @@ describe("the home's board", () => {
 
 describe("the home's words", () => {
   it("the summary: every agent once, the plugin's state words, a state with no agent left out but for working and needs you", () => {
-    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0 })).toBe("8 agents · 2 working · 1 needs you · 3 idle · 1 stopped · 1 failed");
+    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0 })).toBe("8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed");
     expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2 })).toBe("5 agents · 0 working · 3 need you · 2 unreachable");
     expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0 })).toBe("1 agent · 1 working · 0 need you");
   });

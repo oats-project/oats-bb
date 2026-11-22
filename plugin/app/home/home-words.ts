@@ -59,8 +59,24 @@ export const NOT_SENT = "The message was not sent";
 export const NOT_ANSWERED = "The answer was not sent";
 /** Why a card's acts are off while the roster shown is not a current one (the standard: acts are held on stale data). */
 export const HELD = "Held until OATS is read again: what is shown may have changed.";
-/** An agent with no bb thread: nothing can be sent to it from bb. */
-export const tmuxNote = (where: string): string => `${where}: answer it in its terminal.`;
+// ---- what a card offers, by what its agent asks
+export const OPEN_THREAD = "Open thread";
+export const OPEN_PAGE = "Open its page";
+/** A choice was pressed and bb took it. */
+export const answeredWith = (label: string): string => `Answered: ${label}. Waiting for the agent to go on.`;
+/** bb shows the request in the thread, in a form the card cannot draw. */
+export const IN_THREAD = "bb shows its request in its thread: open the thread to answer it.";
+/** The kernel says it waits for a tool approval, and bb lists no request to answer (the claim is older than bb's request, or already answered there). */
+export const PERMISSION_IN_THREAD = "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.";
+export const MESSAGE_INSTEAD = "Write a message instead";
+/** What a message does not do, beside a request that has an answer of its own. */
+export const MESSAGE_NOT_ANSWER = "A message does not answer its request: it grants nothing, and the request stays open.";
+/** An agent on tmux: where its terminal is. The command is the kernel's own way into a session (`oats session attach`). */
+export const tmuxWhere = (machine: string): string => `It runs in tmux on ${machine}, where bb cannot write to it. Answer it in its terminal, in the OATS deployment there:`;
+export const attachCommand = (instance: string): string => `oats session attach --instance ${instance}`;
+export const THREAD_GONE = "Its bb thread is gone, so nothing can be sent to it from here.";
+/** Where Open leads for an agent with no thread. */
+export const PAGE_LEADS = "Open its page shows who it is and how it runs.";
 
 // ---- the installed `oats` against what the plugin is built for (kernel/compat.ts)
 // As the OATS Desktop's CLI card and its one line (packages/desktop/renderer/views/cli-status.mjs,

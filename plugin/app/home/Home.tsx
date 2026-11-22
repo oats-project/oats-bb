@@ -7,7 +7,7 @@
 // Answering is the person's act through bb's SDK: a choice bb offers, or a message sent as the
 // person at the screen (bb's own send). The plugin never types into a session. While the roster
 // shown is not a current one, those acts are held and the card says why.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { experimental_useTabVisible as useTabVisible, useBbNavigate, useSdk } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, ExperimentalBadge, ExperimentalThreadTabProps, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
@@ -18,7 +18,7 @@ import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat"
 import { useNow } from "../roster/now";
 import { Unreadable } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Card, Code, CopyButton, DisabledReason, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { Button, Card, Code, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
@@ -27,8 +27,9 @@ import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, r
 import { board } from "./board";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD, NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, WORKING, WORKING_SHOWN,
-  detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxNote,
+  BACK_TO_HOME, CLI_NEWER_API, CLI_REQUIRED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, THREAD_GONE, WORKING, WORKING_SHOWN,
+  answeredWith, attachCommand, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
@@ -83,9 +84,67 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
 /** Where an agent with no bb thread is, in words. */
 const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "Runs in tmux" : "Its bb thread is gone");
 
+/** How a card is answered: what the agent asks decides what the card offers (`offer`, below). */
+type Offer = "choices" | "in-thread" | "reply" | "elsewhere";
+
+/** The reply to one agent: one line that grows with its text, Send beside it, on that agent's card. */
+function Reply({ name, text, onText, busy, held, said, onSend }: { name: string; text: string; onText: (text: string) => void; busy: boolean; held: boolean; said: string | null; onSend: () => void }) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  // The box is as high as what is written in it: every line of what will be sent is in view.
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element === null) return;
+    element.style.height = "auto";
+    if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight}px`;
+  }, [text]);
+  return (
+    <form
+      data-testid="oats-reply"
+      className="flex min-w-0 flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSend();
+      }}
+    >
+      <div className="flex min-w-0 items-end gap-2">
+        <textarea
+          ref={box}
+          data-testid="oats-reply-text"
+          aria-label={replyLabel(name)}
+          rows={1}
+          className={`${INPUT} min-w-0 flex-1 resize-none overflow-hidden py-2`}
+          placeholder={replyPlaceholder(name)}
+          value={text}
+          disabled={busy || held}
+          onChange={(event) => onText(event.target.value)}
+        />
+        <Button type="submit" variant="primary" data-testid="oats-reply-send" disabled={busy || held || text.trim() === ""}>
+          {busy ? SENDING : SEND}
+        </Button>
+      </div>
+      {held ? <DisabledReason>{HELD}</DisabledReason> : null}
+      {said === null ? null : (
+        <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
+          {said}
+        </span>
+      )}
+    </form>
+  );
+}
+
 /**
- * One agent that needs the person: who, since when, what it asks; where bb lists choices, the
- * answer in place; and the reply to it, on its own card, named for the agent it goes to.
+ * One agent that needs the person: who, since when, what it asks, and the answer its request takes.
+ *
+ * What it asks decides what the card offers (the lead's ruling on the home's UX read):
+ * - bb lists choices for its request (a confirmation, a selection, an approval, a question with
+ *   options): the choices are the answer, as buttons;
+ * - its request is one the card cannot answer (bb shows it in the thread in a form of its own, or
+ *   the kernel says it waits for a tool approval and bb lists none to answer): the answer is in
+ *   its thread, and the card says so and opens it;
+ * - it asks in its own words (a question, its attention): the reply, on its card, named for it;
+ * - it has no thread in bb: where to answer it, to copy.
+ * Beside choices or a request answered in the thread, a message is not offered as an equal: it is
+ * behind "Write a message instead", with what a message does not do.
  */
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const sdk = useSdk();
@@ -96,6 +155,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const [busy, setBusy] = useState<"answer" | "send" | null>(null);
   const [failure, setFailure] = useState<{ kind: "answer" | "send"; message: string } | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /** The choice pressed, once bb took it: said on the card until the agent goes on, or asks again. */
+  const [answered, setAnswered] = useState<{ interactionId: string; label: string } | null>(null);
   const [text, setText] = useState("");
   const pending = thread?.hasPendingInteraction === true;
   const threadId = thread?.id;
@@ -109,7 +170,11 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     const controller = new AbortController();
     attempt(() => sdk.threads.interactions.list({ threadId, signal: controller.signal })).then(
       (list) => {
-        if (!controller.signal.aborted) setAsked(question(list as readonly Interaction[]));
+        if (controller.signal.aborted) return;
+        const next = question(list as readonly Interaction[]);
+        setAsked(next);
+        // It asks again: what was answered before is no longer what the card is about.
+        if (next !== null) setAnswered((last) => (last !== null && last.interactionId !== next.interactionId ? null : last));
       },
       () => {
         // bb could not list them: the card keeps the claim's text and Open.
@@ -139,7 +204,10 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     if (asked === null || threadId === undefined) return;
     const target = { threadId, interactionId: asked.interactionId };
     const { answer: how } = choice;
-    act("answer", () => (how.via === "respond" ? sdk.threads.interactions.respond({ ...target, value: how.value }) : sdk.threads.interactions.resolve({ ...target, resolution: how.resolution })), () => setAsked(null));
+    act("answer", () => (how.via === "respond" ? sdk.threads.interactions.respond({ ...target, value: how.value }) : sdk.threads.interactions.resolve({ ...target, resolution: how.resolution })), () => {
+      setAnswered({ interactionId: target.interactionId, label: choice.label });
+      setAsked(null);
+    });
   };
   const send = () => {
     const body = text.trim();
@@ -155,16 +223,21 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== message ? asked.title : null;
+  const offer: Offer =
+    thread === undefined ? "elsewhere" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+  const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
+  const where = entry.thread === null ? elsewhere(entry) : null;
   return (
-    <li data-testid="oats-needs-card" data-instance={entry.agent.instance}>
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
+            <span className="break-words text-xs text-muted-foreground">{[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), where === null ? null : where.toLowerCase()].filter((part) => part !== null).join(" · ")}</span>
           </div>
-          <Button data-testid="oats-needs-open" aria-label={`Open ${name}`} onClick={(event) => open.onClick(event)}>
-            Open
+          {/* The button says where it leads: the agent's thread, or, for an agent with none, its own page. */}
+          <Button data-testid="oats-needs-open" aria-label={`${thread === undefined ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
+            {thread === undefined ? OPEN_PAGE : OPEN_THREAD}
           </Button>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
@@ -178,52 +251,54 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {shown(detail)}
           </p>
         )}
-        {asked === null || asked.choices.length === 0 ? null : (
-          <div className="flex flex-wrap items-center gap-2">
-            {asked.choices.map((choice, index) => (
-              <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
-                {shown(choice.label)}
-              </Button>
-            ))}
-          </div>
-        )}
-        {thread === undefined ? (
-          // Nothing can be sent from bb to an agent that has no thread in it.
-          <p data-testid="oats-needs-elsewhere" className="m-0 text-xs text-muted-foreground">
-            {tmuxNote(elsewhere(entry))}
+        {answered !== null ? (
+          // A choice was pressed and bb took it: said here until the agent goes on (its card then leaves) or asks again.
+          <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
+            {answeredWith(shown(answered.label))}
           </p>
-        ) : (
-          // The reply is on the card of the agent it goes to, and names it: one line that grows, Send beside it.
-          <form
-            data-testid="oats-reply"
-            className="flex min-w-0 flex-col gap-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              send();
-            }}
-          >
-            <div className="flex min-w-0 items-end gap-2">
-              <textarea
-                data-testid="oats-reply-text"
-                aria-label={replyLabel(name)}
-                rows={text.includes("\n") || text.length > 80 ? 3 : 1}
-                className={`${INPUT} min-w-0 flex-1 resize-none py-2`}
-                placeholder={replyPlaceholder(name)}
-                value={text}
-                disabled={busy !== null || held}
-                onChange={(event) => setText(event.target.value)}
-              />
-              <Button type="submit" variant="primary" data-testid="oats-reply-send" disabled={busy !== null || held || text.trim() === ""}>
-                {busy === "send" ? SENDING : SEND}
-              </Button>
+        ) : offer === "choices" ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {(asked?.choices ?? []).map((choice, index) => (
+                <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
+                  {shown(choice.label)}
+                </Button>
+              ))}
+              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
             </div>
-            {held ? <DisabledReason>{HELD}</DisabledReason> : null}
-            {said === null ? null : (
-              <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
-                {said}
-              </span>
+            <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
+              <p className="m-0 text-xs text-muted-foreground">{MESSAGE_NOT_ANSWER}</p>
+              {reply}
+            </Disclosure>
+          </>
+        ) : offer === "in-thread" ? (
+          <>
+            <p data-testid="oats-needs-in-thread" className="m-0 text-xs text-muted-foreground">
+              {pending ? IN_THREAD : PERMISSION_IN_THREAD}
+            </p>
+            <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
+              <p className="m-0 text-xs text-muted-foreground">{MESSAGE_NOT_ANSWER}</p>
+              {reply}
+            </Disclosure>
+          </>
+        ) : offer === "reply" ? (
+          reply
+        ) : (
+          // Nothing can be sent from bb to an agent that has no thread in it: where to answer it, to copy.
+          <div data-testid="oats-needs-elsewhere" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+            {entry.agent.backend === "tmux" ? (
+              <>
+                <p className="m-0">{tmuxWhere(shown(oats.deployment.machine))}</p>
+                <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
+                  <Code>{attachCommand(entry.agent.instance)}</Code>
+                  <CopyButton text={attachCommand(entry.agent.instance)} name="Copy the command" />
+                </p>
+              </>
+            ) : (
+              <p className="m-0">{THREAD_GONE}</p>
             )}
-          </form>
+            <p className="m-0">{PAGE_LEADS}</p>
+          </div>
         )}
         {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}
       </Card>

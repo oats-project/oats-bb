@@ -233,17 +233,17 @@ test("a kind the plugin cannot answer in place keeps Open only", async () => {
 
 test("each card has its own reply, named for its agent, and sends through bb's own send to that agent's thread", async () => {
   const slot = await homePage({ sdk: { threads: { ...NO_INTERACTIONS.threads, send: async () => ({ ok: true }) as never } } });
-  const card = await cardOf(slot, "flaky-ci-developer");
-  const text = within(card).getByLabelText("Reply to Flaky ci developer") as HTMLTextAreaElement;
-  expect(text.placeholder).toBe("Write to Flaky ci developer…");
+  const card = await cardOf(slot, "ranker-v3-probe");
+  const text = within(card).getByLabelText("Reply to Ranker v3 probe") as HTMLTextAreaElement;
+  expect(text.placeholder).toBe("Write to Ranker v3 probe…");
   const send = within(card).getByTestId("oats-reply-send") as HTMLButtonElement;
   expect(send.disabled).toBe(true);
   fireEvent.change(text, { target: { value: "  Use the darker palette.  " } });
   fireEvent.click(send);
   await waitFor(() => expect(text.value).toBe(""));
-  expect(within(card).getByTestId("oats-reply-sent").textContent).toBe("Sent to Flaky ci developer.");
+  expect(within(card).getByTestId("oats-reply-sent").textContent).toBe("Sent to Ranker v3 probe.");
   expect(slot.inspection.sdkCalls.filter((call) => call.method !== "threads.interactions.list")).toEqual([
-    { method: "threads.send", args: [{ threadId: "thr_ci", mode: "auto", input: [{ type: "text", text: "Use the darker palette.", mentions: [] }] }] },
+    { method: "threads.send", args: [{ threadId: "thr_research", mode: "auto", input: [{ type: "text", text: "Use the darker palette.", mentions: [] }] }] },
   ]);
   // No reply stands apart from a card: every box is inside the card of the agent it writes to.
   for (const box of slot.getAllByTestId("oats-reply")) expect(box.closest('[data-testid="oats-needs-card"]')).not.toBeNull();
@@ -261,7 +261,7 @@ test("a failed send says why, on the card, and keeps the text", async () => {
       },
     },
   });
-  const card = await cardOf(slot, "flaky-ci-developer");
+  const card = await cardOf(slot, "ranker-v3-probe");
   const text = within(card).getByTestId("oats-reply-text") as HTMLTextAreaElement;
   fireEvent.change(text, { target: { value: "hello" } });
   fireEvent.click(within(card).getByTestId("oats-reply-send"));
@@ -345,18 +345,18 @@ test("a message being typed stays on its agent's card when the order changes, an
     rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }),
     sdk: { threads: { ...NO_INTERACTIONS.threads, send: async () => ({ ok: true }) as never } },
   });
-  const card = await cardOf(slot, "flaky-ci-developer");
+  const card = await cardOf(slot, "ranker-v3-probe");
   fireEvent.change(within(card).getByTestId("oats-reply-text"), { target: { value: "yes, force-push it" } });
   // another agent now waits too
   agents = fixtureAgents();
   await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-19T12:45:00.000Z" });
   await waitFor(() => expect(slot.getAllByTestId("oats-needs-card").map((each) => each.dataset.instance)).toContain("release-070-maintainer"));
-  const still = await cardOf(slot, "flaky-ci-developer");
+  const still = await cardOf(slot, "ranker-v3-probe");
   expect((within(still).getByTestId("oats-reply-text") as HTMLTextAreaElement).value).toBe("yes, force-push it");
   expect((within(await cardOf(slot, "release-070-maintainer")).getByTestId("oats-reply-text") as HTMLTextAreaElement).value).toBe("");
   fireEvent.click(within(still).getByTestId("oats-reply-send"));
   await waitFor(() => expect(slot.inspection.sdkCalls.filter((call) => call.method === "threads.send")).toHaveLength(1));
-  expect((slot.inspection.sdkCalls.find((call) => call.method === "threads.send")!.args[0] as { threadId: string }).threadId).toBe("thr_ci");
+  expect((slot.inspection.sdkCalls.find((call) => call.method === "threads.send")!.args[0] as { threadId: string }).threadId).toBe("thr_research");
 });
 
 test("when an agent stops needing the person its card, and its reply, leave", async () => {
@@ -403,7 +403,7 @@ test("while a message is being sent the box cannot be edited, so nothing typed m
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const slot = await homePage({ sdk: { threads: { ...NO_INTERACTIONS.threads, send: async () => (await held, { ok: true }) as never } } });
-  const card = await cardOf(slot, "flaky-ci-developer");
+  const card = await cardOf(slot, "ranker-v3-probe");
   const text = within(card).getByTestId("oats-reply-text") as HTMLTextAreaElement;
   fireEvent.change(text, { target: { value: "first" } });
   fireEvent.click(within(card).getByTestId("oats-reply-send"));
@@ -590,8 +590,15 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     const card = await cardOf(slot, "night-watch-helper");
     expect(heading(slot.getByTestId("oats-home-needs"))).toBe("Needs you4");
     expect(within(card).getByTestId("oats-needs-question").textContent).toBe("Which branch do I watch?");
-    expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Runs in tmux: answer it in its terminal.");
+    // where it runs is on its line, as in every list; then where to answer it, with the kernel's own command to copy, and where Open leads
+    expect(card.textContent).toContain(" · falcon · runs in tmux");
+    expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe(
+      "It runs in tmux on falcon, where bb cannot write to it. Answer it in its terminal, in the OATS deployment there:oats session attach --instance night-watch-helperCopyOpen its page shows who it is and how it runs.",
+    );
+    expect(within(card).getByRole("button", { name: "Copy the command" })).toBeTruthy();
+    expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open its page");
     expect(within(card).queryByTestId("oats-reply")).toBeNull();
+    expect(within(card).queryByTestId("oats-needs-message")).toBeNull();
     fireEvent.click(within(card).getByTestId("oats-needs-open"));
     expect(opened).toBe("night-watch-helper");
     expect(slot.inspection.navigateCalls).toEqual([]);
@@ -656,9 +663,12 @@ test("while what is shown is the roster as last read, a card's answers and its r
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice")).toHaveLength(2));
   for (const choice of within(card).getAllByTestId("oats-needs-choice")) expect((choice as HTMLButtonElement).disabled).toBe(true);
-  expect((within(card).getByTestId("oats-reply-text") as HTMLTextAreaElement).disabled).toBe(true);
-  expect((within(card).getByTestId("oats-reply-send") as HTMLButtonElement).disabled).toBe(true);
-  expect(within(card).getByTestId("oats-disabled-reason").textContent).toBe("Held until OATS is read again: what is shown may have changed.");
+  expect(within(card).getAllByTestId("oats-disabled-reason")[0]!.textContent).toBe("Held until OATS is read again: what is shown may have changed.");
+  // a card answered by a reply holds it too
+  const asks = await cardOf(slot, "ranker-v3-probe");
+  expect((within(asks).getByTestId("oats-reply-text") as HTMLTextAreaElement).disabled).toBe(true);
+  expect((within(asks).getByTestId("oats-reply-send") as HTMLButtonElement).disabled).toBe(true);
+  expect(within(asks).getByTestId("oats-disabled-reason").textContent).toBe("Held until OATS is read again: what is shown may have changed.");
   expect((within(card).getByTestId("oats-needs-open") as HTMLButtonElement).disabled).toBe(false);
   // the one notice of the roster's, once
   expect(slot.getAllByRole("alert")).toHaveLength(1);
@@ -765,4 +775,74 @@ test("the home's count of who needs you is the sidebar's: an agent on tmux that 
   const slot = await homePage({ rpc: handlers({}, agents) });
   expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you4");
   expect(slot.getByTestId("oats-home-summary").textContent).toContain(" · 4 need you");
+});
+
+// ---- what a card offers, by what its agent asks (the lead's ruling on the home's UX read)
+
+const offerOf = (card: HTMLElement) => card.dataset.offer;
+/** Whether an element is inside a fold that a person has to open first. */
+const folded = (element: HTMLElement) => element.closest("details") !== null && !(element.closest("details") as HTMLDetailsElement).open;
+
+test("an agent that asks in its own words is answered by the reply, on its card; one that waits for an approval is not", async () => {
+  const slot = await homePage({ sidebarThreads: calm() }); // bb lists no pending request for any thread
+  const asks = await cardOf(slot, "ranker-v3-probe");
+  expect(offerOf(asks)).toBe("reply");
+  expect(within(asks).getByTestId("oats-reply-text").closest("details")).toBeNull();
+  expect(within(asks).getByTestId("oats-needs-open").textContent).toBe("Open thread");
+  // The kernel says it waits for a tool approval, and bb lists no request to answer: the answer is in its thread.
+  const permission = await cardOf(slot, "flaky-ci-developer");
+  expect(offerOf(permission)).toBe("in-thread");
+  expect(within(permission).getByTestId("oats-needs-in-thread").textContent).toBe("It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.");
+  // a message is not offered beside it as an equal: it is behind a fold, with what a message does not do
+  const fold = within(permission).getByTestId("oats-needs-message");
+  expect(fold.querySelector("summary")!.textContent).toContain("Write a message instead");
+  expect((fold as HTMLDetailsElement).open).toBe(false);
+  expect(folded(within(permission).getByTestId("oats-reply-text"))).toBe(true);
+  expect(fold.textContent).toContain("A message does not answer its request: it grants nothing, and the request stays open.");
+});
+
+test("while bb lists choices the choices are the answer: the reply is behind the fold, and a pressed choice is said on the card", async () => {
+  let pending = true;
+  const slot = await homePage({
+    sdk: {
+      threads: {
+        interactions: {
+          list: async () => (pending ? [{ id: "pint_9", threadId: "thr_ci", status: "pending", payload: { kind: "approval", reason: "scripted", subject: { kind: "command", command: "git push --force" }, availableDecisions: ["allow_once", "deny"] } }] : []) as never,
+          resolve: async () => ((pending = false), {}) as never,
+        },
+      },
+    },
+  });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(offerOf(card)).toBe("choices"));
+  expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["Allow", "Deny"]);
+  expect(within(card).queryByTestId("oats-needs-in-thread")).toBeNull();
+  expect(folded(within(card).getByTestId("oats-reply-text"))).toBe(true);
+  expect(within(card).getByTestId("oats-needs-message").textContent).toContain("A message does not answer its request");
+  fireEvent.click(within(card).getAllByTestId("oats-needs-choice")[0]!);
+  // what the card says after a choice is pressed: the answer, and nothing left to press but Open
+  expect((await within(card).findByTestId("oats-needs-answered")).textContent).toBe("Answered: Allow. Waiting for the agent to go on.");
+  expect(offerOf(card)).toBe("answered");
+  expect(within(card).queryAllByTestId("oats-needs-choice")).toEqual([]);
+  expect(within(card).queryByTestId("oats-reply")).toBeNull();
+  expect(within(card).queryByTestId("oats-needs-in-thread")).toBeNull();
+  expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open thread"]);
+});
+
+test("a request bb shows in a form the card cannot draw is answered in the thread, and the card says so", async () => {
+  const slot = await homePage({
+    sdk: { threads: { interactions: { list: async () => [{ id: "pint_4", threadId: "thr_ci", status: "pending", payload: { kind: "plugin", title: "A plugin's form", data: {} } }] as never } } },
+  });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(slot.inspection.sdkCalls.length).toBeGreaterThan(0));
+  expect(offerOf(card)).toBe("in-thread");
+  expect(within(card).getByTestId("oats-needs-in-thread").textContent).toBe("bb shows its request in its thread: open the thread to answer it.");
+});
+
+test("those a person can answer here come first: an agent with no bb thread comes after, however new its claim", async () => {
+  const slot = await homePage({ rpc: handlers({}, [...fixtureAgents(), { ...TMUX_ASKS, waiting: { ...TMUX_ASKS.waiting!, since: "2026-11-19T12:59:00.000Z" } }]) });
+  await cardOf(slot, "night-watch-helper");
+  const order = slot.getAllByTestId("oats-needs-card").map((card) => card.dataset.instance);
+  expect(order).toHaveLength(4);
+  expect(order[3]).toBe("night-watch-helper");
 });

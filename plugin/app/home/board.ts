@@ -13,7 +13,7 @@ export type Entry = { agent: Agent; thread: BbThread | null; status: AgentStatus
 export type Board = {
   /** every agent OATS has, in the sidebar's order: the tree, then the agents whose thread is gone, then the ones on tmux */
   all: Entry[];
-  /** the agents that need the person, newest claim first (one with no instant last), then the sidebar's order */
+  /** the agents that need the person: those with a thread in bb (answered here) first; within each, newest claim first (one with no instant last), then the sidebar's order */
   needsYou: Entry[];
   /** the agents that work and do not need the person, in the sidebar's order */
   working: Entry[];
@@ -36,9 +36,12 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
   const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0 };
   for (const entry of all) counts[entry.status.state] += 1;
   const order = new Map(all.map((entry, index) => [entry.agent.instance, index]));
+  // Those a person can answer here (they have a thread in bb) come before those answered elsewhere;
+  // within each, the newest claim first, then the sidebar's order.
+  const here = (entry: Entry): number => (entry.thread === null ? 1 : 0);
   const needsYou = all
     .filter((entry) => entry.status.state === "needs-you")
-    .sort((a, b) => instant(b) - instant(a) || (order.get(a.agent.instance) ?? 0) - (order.get(b.agent.instance) ?? 0));
+    .sort((a, b) => here(a) - here(b) || instant(b) - instant(a) || (order.get(a.agent.instance) ?? 0) - (order.get(b.agent.instance) ?? 0));
   const unread = new Set(view.finished.map((node) => node.agent.instance));
   return {
     all,

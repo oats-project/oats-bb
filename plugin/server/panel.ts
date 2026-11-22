@@ -19,7 +19,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     const { at, root, row, agent } = await core.rowOf(instance);
     const facts = parsePanelInstance(row);
     if (!facts.ok) throw refusal(facts.error);
-    return { at, facts: facts.value, board: rowBoard(row), boardClaim: record(row.waitingOnYou)?.producer === BOARD_PRODUCER, agentsRoot: text(root), soul: { key: text(agent.key), description: text(agent.description) } };
+    return { at, facts: facts.value, board: rowBoard(row), boardClaim: record(row.waitingOnYou)?.producer === BOARD_PRODUCER, answerable: record(row.session) !== null, agentsRoot: text(root), soul: { key: text(agent.key), description: text(agent.description) } };
   },
   /** The soul as the instance was spawned from it: `oats inspect --home`, of the home the kernel named. */
   async panelSoul({ instance }, context) {
@@ -55,6 +55,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   async panelBoardAnswer({ instance, id, since, option, text: confirmed }) {
     const { home } = await core.agentOf(instance);
     const { row } = await core.rowOf(instance);
+    // Only where a session provider runs the agent: the provider refuses an input while a prompt
+    // is open on the session. On tmux the kernel types whatever the pane shows, and its Enter can
+    // answer an open dialog: that is for a person who sees the pane, which nobody does from bb.
+    if (record(row.session) === null) throw invalid(`"${instance}" runs in a terminal, not in a bb thread: type the answer in its terminal. Nothing was sent`);
     const question = rowBoard(row).questions.find((each) => each.id === id && each.since === since);
     if (question === undefined) throw invalid(`Question ${id} is no longer open on the board of "${instance}": nothing was sent`);
     const line = answerText(question, option);

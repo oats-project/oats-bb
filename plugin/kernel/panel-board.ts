@@ -208,7 +208,9 @@ export function answerText(question: PanelQuestion, index: number): Result<strin
  */
 export function checkAnswerText(text: string): Result<string> {
   const parts = /^([a-z0-9][a-z0-9-]{0,15}): (.+)$/su.exec(text);
-  if (parts === null || !line(parts[2], BOARD_LIMITS.option) || !shown(text)) return err(codes.invalidInput, "a board answer is one line, `<question id>: <option>`, within the board's bounds");
+  // The option alone is tested for a secret's shape, as where the line is made: an id is the agent's
+  // own short name ("api-key", "reset-token"), and with the ": " after it would read as one.
+  if (parts === null || !line(parts[2], BOARD_LIMITS.option) || !shown(parts[2] ?? "")) return err(codes.invalidInput, "a board answer is one line, `<question id>: <option>`, within the board's bounds");
   return ok(text);
 }
 

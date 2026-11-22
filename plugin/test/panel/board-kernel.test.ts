@@ -168,6 +168,15 @@ describe("the answer's file", () => {
   it("a text that is no board answer starts no process and writes no file", () => {
     for (const bad of ["", "q4", "q4: ", "Q4: yes", "q4: one\ntwo", "q4: use token=abc123", "q4: \u202Eevil", `q4: ${"x".repeat(61)}`, "--home: /tmp", "q4:yes"]) expect(checkAnswerText(bad).ok, bad).toBe(false);
     expect(checkAnswerText("q4: Squash: one clean commit")).toEqual({ ok: true, value: "q4: Squash: one clean commit" });
+    // An id is the agent's own short name: one that ends in a word a secret starts with is still an id.
+    for (const id of ["api-key", "token", "reset-token", "db-password"]) {
+      const question: PanelQuestion = { id, question: "Rotate the key?", options: ["Rotate it", "Keep it"], withheld: false, optionsWithheld: [false, false], since: "2026-11-21T18:00:00.000Z", hasContext: false, context: null };
+      const made = answerText(question, 0);
+      expect(made).toEqual({ ok: true, value: `${id}: Rotate it` });
+      expect(checkAnswerText(`${id}: Rotate it`)).toEqual({ ok: true, value: `${id}: Rotate it` });
+    }
+    // The option is what may hold a secret.
+    expect(checkAnswerText("q4: token: abc123").ok).toBe(false);
   });
   it("holds exactly the line, is the caller's alone (0600) for the length of the call, and is gone after it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oats-board-"));

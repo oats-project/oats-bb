@@ -112,6 +112,11 @@ export function answerLine(question: PanelQuestion, index: number): string | nul
 export const dialogOpen = (claim: { reason: string } | null): boolean => claim !== null && (claim.reason === "permission" || claim.reason === "question");
 /** What the zone says while a harness prompt is open: the answers are off. */
 export const DIALOG_NOTE = "The agent's thread is showing a prompt: answer it there first.";
+/**
+ * What the zone says for an agent no session provider runs (one on tmux): bb cannot see its pane,
+ * so nothing is sent from here. `example` is the shown question's first answer.
+ */
+export const terminalNote = (example: string): string => `This agent runs in a terminal, not in a bb thread: type the answer in its terminal (for example ${example}).`;
 /** The zone's key hint, for the shown question's own number keys. */
 export const zoneHint = (options: number, questions: number): string => `1–${options} choose an answer${questions > 1 ? " · ← → the other questions" : ""} · c the context`;
 
@@ -122,6 +127,11 @@ export const SEND = "Send answer";
 export const SENDING = "Sending the answer…";
 export const SENT = "Answer sent";
 export const NOT_SENT = "The answer was not sent";
+/** A failure that is no refusal (a timeout, a lost answer, an unreachable machine): the input may have gone. */
+export const MAYBE_SENT = "It is not known whether the answer was sent";
+export const MAYBE_SENT_NEXT = "OATS did not answer, so the answer may have reached the agent. Do not send it again unless the agent asks.";
+/** Whether a failure says that nothing was sent: the kernel's own refusal (`E_…`), or the plugin's before any process (no code). */
+export const refusedUnsent = (code: string | null): boolean => code === null || code.startsWith("E_") || code === "INVALID_INPUT";
 /** The quiet note under a question once its answer went: the question stays until the agent clears it. */
 export const SENT_NOTE = "Sent to the agent as its next input. The question stays until the agent clears it.";
 /** The kernel's `verified: false`: no change was seen on the session after the input, which proves nothing either way. */

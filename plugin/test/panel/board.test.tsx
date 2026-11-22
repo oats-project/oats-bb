@@ -161,6 +161,7 @@ test("an option opens a dialog with the exact line; nothing is sent until Send a
   expect(text(slot.getByRole("dialog").querySelector("h2, h1, h3")!)).toBe("Answer Panel worktree helper?");
   expect(text(dialog)).toContain("OATS sends this line to Panel worktree helper as its next input, and Panel worktree helper starts a turn with it.");
   expect(text(slot.getByTestId("oats-panel-answer"))).toBe("How should I merge the pull request?q4: Squash: one clean commit");
+  expect(text(slot.getByTestId("oats-panel-answer-line"))).toBe("q4: Squash: one clean commit");
   expect(text(slot.getByTestId("oats-confirm-act"))).toBe("Send answer");
   expect(calls(slot, "panelBoardAnswer")).toHaveLength(0);
   fireEvent.click(slot.getByTestId("oats-confirm-act"));
@@ -206,6 +207,67 @@ test("an answer the kernel refuses: why, in words, then the kernel's code and me
   expect(text(dialog)).toContain("nothing was sent. Answer it in bb.");
   fireEvent.click(slot.getByTestId("oats-confirm-close"));
   expect(slot.queryByTestId("oats-panel-question-sent")).toBeNull();
+});
+
+test("a failure that is no refusal says the answer may have gone, and not to send it again", async () => {
+  const slot = panel({
+    panelBoardAnswer: () => {
+      throw new Error("OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped");
+    },
+  });
+  await slot.findByTestId("oats-panel-question");
+  fireEvent.click(options(slot)[0]!);
+  fireEvent.click(await slot.findByTestId("oats-confirm-act"));
+  const dialog = slot.getByTestId("oats-confirm");
+  await waitFor(() => expect(dialog.getAttribute("data-phase")).toBe("failed"));
+  expect(text(dialog)).toContain("It is not known whether the answer was sent");
+  expect(text(dialog)).not.toContain("The answer was not sent");
+  expect(text(dialog)).toContain("OATS did not answer, so the answer may have reached the agent. Do not send it again unless the agent asks.");
+  expect(text(dialog)).toContain("OATS_TIMEOUT");
+});
+
+test("the line in the dialog is the line sent, character for character: an id that ends in a secret's word, an option with spaces", async () => {
+  const slot = panel({}, { board: (board) => ({ ...board, questions: [{ ...board.questions[0]!, id: "api-key", options: ["yes   please", "Keep it"] }] }) });
+  await slot.findByTestId("oats-panel-question");
+  expect(options(slot).map((option) => (option as HTMLButtonElement).disabled)).toEqual([false, false]);
+  fireEvent.click(options(slot)[0]!);
+  expect(text(await slot.findByTestId("oats-panel-answer-line"))).toBe("api-key: yes   please");
+  fireEvent.click(slot.getByTestId("oats-confirm-act"));
+  await waitFor(() => expect(calls(slot, "panelBoardAnswer")).toHaveLength(1));
+  expect((calls(slot, "panelBoardAnswer")[0]!.input as { text: string }).text).toBe("api-key: yes   please");
+});
+
+test("an agent on tmux: its questions are shown, the answers are off, and the zone says to type the answer in its terminal", async () => {
+  const slot = panel({}, { answer: (answer) => ({ ...answer, answerable: false }) });
+  await slot.findByTestId("oats-panel-question");
+  expect(text(slot.getByTestId("oats-panel-question-note"))).toBe("This agent runs in a terminal, not in a bb thread: type the answer in its terminal (for example q3: main: the default).");
+  expect(options(slot).every((option) => (option as HTMLButtonElement).disabled)).toBe(true);
+  fireEvent.keyDown(slot.getByTestId("oats-panel-question"), { key: "1" });
+  expect(slot.queryByTestId("oats-confirm")).toBeNull();
+});
+
+test("a detail read again keeps what the last one showed until the next lands: an open context, a sparkline", async () => {
+  let release: (() => void) | null = null;
+  let reads = 0;
+  let board: PanelBoard | null = null;
+  const slot = panel(
+    { panelBoard: () => (++reads === 1 ? recordedBoard() : new Promise((done) => (release = () => done(recordedBoard())))) },
+    { board: (recorded) => board ?? recorded },
+  );
+  await slot.findByTestId("oats-panel-question");
+  fireEvent.click(slot.getByTestId("oats-panel-question-next"));
+  const fold = await slot.findByTestId("oats-panel-question-context");
+  await waitFor(() => expect(text(fold)).toContain("I rebased the branch"));
+  await waitFor(() => expect(slot.queryByTestId("oats-panel-fact-spark")).not.toBeNull());
+  // a fact changes: the detail is read again, and that read is slow
+  const recorded = instanceAnswer(CHILD, undefined, ROSTER).board;
+  board = { ...recorded, facts: recorded.facts.map((fact) => (fact.key === "pr" ? { ...fact, at: "2026-11-21T18:29:35.000Z" } : fact)) };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:50.000Z" }));
+  await waitFor(() => expect(reads).toBe(2));
+  expect(text(fold)).toContain("I rebased the branch");
+  expect(text(fold)).not.toContain("Reading the context…");
+  expect(slot.queryByTestId("oats-panel-fact-spark")).not.toBeNull();
+  act(() => release?.());
 });
 
 test("an answer OATS could not see land says so, and not to send it again", async () => {

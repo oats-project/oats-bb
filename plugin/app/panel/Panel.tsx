@@ -229,7 +229,7 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
 
       {readState}
       {read.data === undefined ? null : (
-        <Board instance={agent.instance} board={read.data.board} home={read.data.facts.home} name={instanceDisplayName(shown(agent.instance))} dialog={dialogOpen(claim)} now={now} />
+        <Board instance={agent.instance} board={read.data.board} home={read.data.facts.home} name={instanceDisplayName(shown(agent.instance))} dialog={dialogOpen(claim)} answerable={read.data.answerable} now={now} />
       )}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} now={now} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : contextLine("instance", agent.instance, answerRoot)} now={now} />

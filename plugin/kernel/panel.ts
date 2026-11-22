@@ -1,5 +1,6 @@
 // The `oats` commands of the instance panel, each as the argv it builds and the answer it reads
 // (kernel/panel-*.ts hold them, one file per command's answer).
+import { checkHome } from "./input.js";
 import { boardAnswerArgv, checkAnswerText, panelBoardArgv, parseBoardAnswer, parsePanelBoard, type PanelBoard, type PanelBoardAnswer } from "./panel-board.js";
 import { panelEventsArgv, parsePanelEvents, type PanelEvents } from "./panel-events.js";
 import { panelReadinessArgv, panelSoulReadinessArgv, parsePanelReadiness, type PanelReadiness } from "./panel-readiness.js";
@@ -29,11 +30,10 @@ export const verbs = (oats: Runner) => ({
   async panelBoardAnswer(home: string, text: string, tempDir: string, signal?: AbortSignal): Promise<Result<PanelBoardAnswer>> {
     const checked = checkAnswerText(text);
     if (!checked.ok) return checked;
-    const argvFor = (file: string) => boardAnswerArgv(home, file);
     // The home is checked before the file is written.
-    const first = argvFor("unused");
-    if (!first.ok) return first;
-    return withTaskFile(tempDir, checked.value, (file) => oats.run(argvFor(file), parseBoardAnswer, oats.timeouts.act, signal));
+    const where = checkHome(home);
+    if (!where.ok) return where;
+    return withTaskFile(tempDir, checked.value, (file) => oats.run(boardAnswerArgv(where.value, file), parseBoardAnswer, oats.timeouts.act, signal));
   },
   /** `oats readiness --soul <key> --policy --json`; `knownSouls` is what `oats souls` lists. */
   panelSoulReadiness: (soul: string, knownSouls: readonly string[], signal?: AbortSignal): Promise<Result<PanelReadiness>> =>

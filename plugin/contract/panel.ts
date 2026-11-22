@@ -19,6 +19,8 @@ export const instanceFacts = z.object({
   board: panelBoard,
   /** the row's waiting claim is the board's own (producer `oats.board`): its questions are shown as questions, not as a second message */
   boardClaim: z.boolean(),
+  /** a session provider runs the agent (the row has a `session`): where a board answer may be sent as its next input; false for an agent on tmux */
+  answerable: z.boolean(),
   /** the roster's `root`: `<deployment>/agents` */
   agentsRoot: z.string().nullable(),
   /** the instance's soul, from the roster's row of its agent group; each null when that row does not say */

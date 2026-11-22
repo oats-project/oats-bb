@@ -35,7 +35,7 @@ export const PANEL_AT = "2026-11-21T18:30:00.000Z";
 /** The answer of `panelInstance` for one instance of the recorded roster, changed by `change`. */
 export function instanceAnswer(instance: string, change: (facts: PanelInstance) => PanelInstance = (facts) => facts, file?: string) {
   const { facts, board, boardClaim, description, root } = recordedFacts(instance, file);
-  return { at: PANEL_AT, facts: change(facts), board, boardClaim, agentsRoot: root, soul: { key: facts.soul, description } };
+  return { at: PANEL_AT, facts: change(facts), board, boardClaim, answerable: facts.backend !== "tmux", agentsRoot: root, soul: { key: facts.soul, description } };
 }
 
 /** The pinned sample roster the other features' slot tests draw (test/fixtures/roster/status.json). */

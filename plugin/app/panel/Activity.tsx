@@ -114,8 +114,8 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
         <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
           {held || asked ? REFRESH : LOAD}
         </Button>
-        {/* A read again over what is shown says so, in the words of the first read; after a failed one the line above says it. */}
-        {held && (read.fetching ? read.status === "ready" : !asked || read.status === "ready") ? (
+        {/* A read again over what is shown says so, in the words of the first read; after a failed one the line above says it. A first read still running when its tab is come back to says so too. */}
+        {(held && (read.fetching ? read.status === "ready" : !asked || read.status === "ready")) || (!held && !asked && read.fetching) ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
             {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
           </span>

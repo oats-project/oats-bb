@@ -15,13 +15,13 @@ import type { KeyboardEvent } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { PanelBoard, PanelFact, PanelQuestion } from "../../kernel/panel-board";
 import { errorMessage, type Contract } from "../store";
-import { Button, Code, Confirm, Disclosure, LINK, Section, TARGET } from "../ui";
+import { Button, Confirm, Disclosure, LINK, Section, TARGET } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { shown, shownBlock } from "../ui/text";
 import {
-  BOARD_MALFORMED, CONTEXT, DETAIL_NOTES, DIALOG_NOTE, FACTS, FOLD, HIDE_TITLE, NEXT, NOT_SENT, NO_CONTEXT, OPEN_IN_BROWSER, PREVIOUS, QUESTIONS, READING_CONTEXT, SEND, SENDING, SENT, SENT_NOTE,
+  BOARD_MALFORMED, CONTEXT, DETAIL_NOTES, DIALOG_NOTE, FACTS, FACTS_SHOWN, FOLD, HIDE_TITLE, MAYBE_SENT, MAYBE_SENT_NEXT, NEXT, NOT_SENT, NO_CONTEXT, OPEN_IN_BROWSER, PREVIOUS, QUESTIONS, READING_CONTEXT, SEND, SENDING, SENT, SENT_NOTE,
   UNVERIFIED, addressName, answerHappens, answerLine, answerRefusal, answerTitle, askedText, boardDropped, detailSignature, factName, factsView, hiddenFacts, hideName, linkName, moreFacts,
-  occurrence, questionTag, says, sparkNote, sparkValues, turnQuestion, updatedText, wantsDetail, zoneHint, zoneName, type DetailState,
+  occurrence, questionTag, refusedUnsent, says, sparkNote, sparkValues, terminalNote, turnQuestion, updatedText, wantsDetail, zoneHint, zoneName, type DetailState,
 } from "./board-words";
 import { hiddenOf, hideFact, showAllFacts } from "./hidden-facts";
 import { usePanelBoard } from "./read";
@@ -131,9 +131,9 @@ function Facts({ board, detail, detailState, home, name, now }: { board: PanelBo
           </Button>
         </div>
       )}
-      {view.folded.length === 0 && !(unfolded && view.shown.length > 3) && view.hidden.length === 0 ? null : (
+      {view.folded.length === 0 && !(unfolded && view.shown.length > FACTS_SHOWN) && view.hidden.length === 0 ? null : (
         <div className="flex flex-wrap items-center gap-2">
-          {view.folded.length === 0 && !(unfolded && view.shown.length > 3) ? null : (
+          {view.folded.length === 0 && !(unfolded && view.shown.length > FACTS_SHOWN) ? null : (
             <Button data-testid="oats-panel-facts-more" aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
               {unfolded ? FOLD : moreFacts(view.folded.length)}
             </Button>
@@ -158,8 +158,8 @@ function Facts({ board, detail, detailState, home, name, now }: { board: PanelBo
 type Answer = { question: PanelQuestion; option: number; text: string; phase: ConfirmProps["phase"] };
 
 function Questions({
-  instance, board, detail, detailState, name, dialog, now,
-}: { instance: string; board: PanelBoard; detail: PanelBoard | undefined; detailState: DetailState; name: string; dialog: boolean; now: number }) {
+  instance, board, detail, detailState, detailReading, name, dialog, answerable, now,
+}: { instance: string; board: PanelBoard; detail: PanelBoard | undefined; detailState: DetailState; detailReading: boolean; name: string; dialog: boolean; answerable: boolean; now: number }) {
   const rpc = useRpc<Contract>();
   const questions = board.questions;
   // The question shown stays the same one across reads, by id; a closed one gives way to its neighbour.
@@ -184,7 +184,7 @@ function Questions({
   };
   const choose = (option: number) => {
     const text = answerLine(question, option);
-    if (text === null || dialog) return;
+    if (text === null || dialog || !answerable) return;
     setAnswer({ question, option, text, phase: { kind: "ready" } });
   };
   const send = () => {
@@ -200,8 +200,9 @@ function Questions({
       (cause: unknown) => {
         if (!live.current) return;
         const refusal = errorMessage(cause);
-        const sentence = answerRefusal(codeOf(refusal));
-        setAnswer((now) => (now === null ? null : { ...now, phase: { kind: "failed", title: NOT_SENT, refusal: sentence === null ? refusal : `${sentence}\n${refusal}` } }));
+        const code = codeOf(refusal);
+        const sentence = refusedUnsent(code) ? answerRefusal(code) : MAYBE_SENT_NEXT;
+        setAnswer((now) => (now === null ? null : { ...now, phase: { kind: "failed", title: refusedUnsent(code) ? NOT_SENT : MAYBE_SENT, refusal: sentence === null ? refusal : `${sentence}\n${refusal}` } }));
       },
     );
   };
@@ -229,8 +230,9 @@ function Questions({
   const read = detailState === "ok" ? detail?.questions.find((each) => each.id === question.id) : undefined;
   const proven = read !== undefined && read.since === question.since;
   const context = proven ? read.context : null;
-  const contextWords = detailState === "reading" || (read !== undefined && !proven) ? READING_CONTEXT : detailState === "ok" ? NO_CONTEXT : DETAIL_NOTES[detailState].context;
-  const note = dialog ? DIALOG_NOTE : null;
+  // No context to show yet while a read runs: it is still being read, whatever the last read held.
+  const contextWords = detailState === "reading" || detailReading || (read !== undefined && !proven) ? READING_CONTEXT : detailState === "ok" ? NO_CONTEXT : DETAIL_NOTES[detailState].context;
+  const note = !answerable ? terminalNote(answerLine(question, 0) ?? `${question.id}: …`) : dialog ? DIALOG_NOTE : null;
 
   return (
     <Section title={QUESTIONS} n={questions.length} testId="oats-panel-questions">
@@ -262,7 +264,7 @@ function Questions({
                 type="button"
                 data-testid="oats-panel-question-option"
                 aria-keyshortcuts={String(each + 1)}
-                disabled={dialog || answerLine(question, each) === null}
+                disabled={dialog || !answerable || answerLine(question, each) === null}
                 className={`${TARGET} flex w-full min-w-0 items-center rounded-md border border-border bg-card px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50`}
                 onClick={() => choose(each)}
               >
@@ -318,7 +320,10 @@ function Questions({
             <p dir="auto" className="m-0 break-words text-muted-foreground">
               {shown(answer.question.question)}
             </p>
-            <Code>{answer.text}</Code>
+            {/* The line as it is sent, character for character: one line the server makes again from the kernel's board. */}
+            <code data-testid="oats-panel-answer-line" className="whitespace-pre-wrap break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">
+              {answer.text}
+            </code>
           </div>
         </Confirm>
       )}
@@ -328,9 +333,10 @@ function Questions({
 
 /**
  * `board` is the board of the instance's row; `dialog` says a harness prompt is open on the
- * agent's thread (the answers are off); `name` is the agent's name as words.
+ * agent's thread, and `answerable` that a session provider runs the agent (the answers are off
+ * with a prompt open, and for an agent on tmux); `name` is the agent's name as words.
  */
-export function Board({ instance, board, home, name, dialog, now }: { instance: string; board: PanelBoard; home: string; name: string; dialog: boolean; now: number }) {
+export function Board({ instance, board, home, name, dialog, answerable, now }: { instance: string; board: PanelBoard; home: string; name: string; dialog: boolean; answerable: boolean; now: number }) {
   const signature = detailSignature(board);
   const detail = usePanelBoard(instance, wantsDetail(board), signature);
   // A detail held from before that does not name a question the row asks with a context is behind
@@ -346,11 +352,13 @@ export function Board({ instance, board, home, name, dialog, now }: { instance: 
     rereadFor.current = signature;
     retry.current();
   }, [behind, detail.fetching, signature]);
-  const detailState: DetailState = !wantsDetail(board) ? "ok" : detail.status === "error" ? "failed" : detail.data === undefined || detail.fetching ? "reading" : detail.data.state;
+  // A detail being read again stays as it was read until the next one lands: nothing an open
+  // context or a sparkline shows goes blank for the length of a read.
+  const detailState: DetailState = !wantsDetail(board) ? "ok" : detail.data !== undefined ? (detail.status === "error" ? "failed" : detail.data.state) : detail.status === "error" ? "failed" : "reading";
   if (board.state === "unsupported" || board.state === "none") return null;
   return (
     <>
-      <Questions instance={instance} board={board} detail={detail.data} detailState={detailState} name={name} dialog={dialog} now={now} />
+      <Questions instance={instance} board={board} detail={detail.data} detailState={detailState} detailReading={detail.fetching} name={name} dialog={dialog} answerable={answerable} now={now} />
       <Facts board={board} detail={detail.data} detailState={detailState} home={home} name={name} now={now} />
     </>
   );

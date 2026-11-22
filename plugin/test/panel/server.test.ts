@@ -1,5 +1,7 @@
 // The instance panel's RPC verbs, through the whole backend: bb's fake plugin host, the real host
 // entry and the fake `oats` (test/support/backend.ts).
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { startBackend, type Backend } from "../support/backend.js";
 
@@ -33,7 +35,7 @@ describe("panelInstance", () => {
     backend = await startBackend({ verbs: recorded });
     const answer = await backend.rpc<{ facts: Record<string, unknown>; soul: Record<string, unknown> } & Record<string, unknown>>("panelInstance", { instance: "panel-worktree-helper" });
     // The schema of contract/panel.ts (`instanceFacts`), field by field: what the app is given.
-    expect(Object.keys(answer).sort()).toEqual(["agentsRoot", "at", "board", "boardClaim", "facts", "soul"]);
+    expect(Object.keys(answer).sort()).toEqual(["agentsRoot", "answerable", "at", "board", "boardClaim", "facts", "soul"]);
     // The board is the agent's own words for a person, picked field by field too (kernel/panel-board.ts).
     expect(Object.keys(answer.board as object).sort()).toEqual(["dropped", "facts", "questions", "state"]);
     expect(answer.boardClaim).toBe(true);
@@ -168,6 +170,19 @@ describe("panelBoard, panelBoardAnswer", () => {
     await expect(backend.rpc("panelBoardAnswer", { ...q4, option: 4 })).rejects.toThrow();
     await expect(backend.rpc("panelBoardAnswer", { ...q4, home: "/tmp" })).rejects.toThrow();
     await expect(backend.rpc("panelBoardAnswer", { ...q4, instance: "gone-helper" })).rejects.toThrow("is not an agent of this OATS deployment's current snapshot");
+    expect(await backend.verbs()).not.toContain("session input");
+  });
+
+  it("an agent on tmux is never sent an answer: no session provider would hold it back from an open dialog", async () => {
+    // The recorded roster, with the child's row as the kernel prints a tmux home's: a `tmux`, no `session`.
+    const roster = JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/panel/status-board.json"), "utf8")) as { agents: { instances: Record<string, unknown>[] }[] };
+    const row = roster.agents.flatMap((group) => group.instances).find((each) => each.instance === "panel-worktree-helper")!;
+    delete row.session;
+    Object.assign(row, { backend: "tmux", tmux: { session: "oats-agents", socket: "/tmp/tmux-1000/oats" }, running: true });
+    backend = await startBackend({ verbs: { status: { stdout: JSON.stringify(roster) } } });
+    const answer = await backend.rpc<{ answerable: boolean; board: { questions: unknown[] } }>("panelInstance", { instance: "panel-worktree-helper" });
+    expect([answer.answerable, answer.board.questions.length]).toEqual([false, 2]);
+    await expect(backend.rpc("panelBoardAnswer", q4)).rejects.toThrow("runs in a terminal, not in a bb thread: type the answer in its terminal. Nothing was sent");
     expect(await backend.verbs()).not.toContain("session input");
   });
 

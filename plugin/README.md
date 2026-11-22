@@ -166,8 +166,17 @@ clears it, with a note that its answer went. While the agent's thread shows a pr
 (a waiting claim whose reason is `question` or `permission`) the options are off and the zone says
 to answer there first. A refusal says why in words, then the kernel's code and message:
 `E_SESSION_PROMPT_OPEN` (a prompt is open in bb), `E_SESSION_INPUT_QUEUED` (the agent is in the
-middle of a turn), `E_SESSION_NOT_RUNNING`. When the kernel answers `verified: false` the dialog
-says that no change was seen yet and not to send it again.
+middle of a turn), `E_SESSION_NOT_RUNNING`. A failure that is no refusal (a timeout, an answer that
+could not be read, a machine that did not answer) says that it is not known whether the answer was
+sent, and not to send it again unless the agent asks. When the kernel answers `verified: false` the
+dialog says that no change was seen yet and not to send it again.
+
+An agent on **tmux** is never sent an answer from bb: only a session provider refuses an input
+while a prompt is open on the session; on tmux the kernel types whatever the pane shows, and its
+Enter can answer an open dialog, which is for a person who sees the pane. Its questions are
+shown, the options are off, and the zone says to type the answer in its terminal, with the line
+to type; the server refuses the answer too (`answerable` in `panelInstance`'s answer: the row has
+a `session`).
 
 **Facts**: what the agent keeps in view, one row each: label, value and unit, "updated 4 min ago",
 and a sparkline once its history holds two numbers. Three show, then **N more**. A fact's link

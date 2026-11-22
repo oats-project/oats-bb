@@ -39,7 +39,8 @@ KERNEL_NPM= KERNEL_REPO=<a clone of the OATS repository> KERNEL_REF=<commit> REQ
 
 The container is the one of the other tests (`container/Dockerfile`): `--cpus 2 --memory 6g`, no
 mount, no port, no Docker socket, nothing of the host's home. The trees go in through `tar` and the
-artefacts come out to `plugin/container/real/out/` (ignored by git, and its own directory: the other
+artefacts come out to `plugin/container/real/out/` (or `real/out.<owner>/` when `out/` holds
+another's: container/README.md) (ignored by git, and its own directory: the other
 tests' `container/out/` is emptied at each of their runs): the run's log is what `run.sh`
 prints, and beside it are the screenshots, `fixtures/` (the recorded answers), `answers/` (two more
 kernel answers kept as evidence), `doctor.txt` (the provider's readiness), `install.txt` (the

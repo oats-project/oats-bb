@@ -130,7 +130,7 @@ test("P1 launch: a pi thread in a project rooted at the home, with the launch's 
   const { thread, environment } = await bbJson(`thread show ${endpoint.threadId}`);
   assert.equal(thread.providerId, "pi");
   assert.equal(thread.projectId, endpoint.projectId);
-  assert.equal(thread.title, "p1");
+  assert.equal(thread.title, "P1", "the instance's name as words, still so after pi's first turn");
   assert.equal(environment.path, home);
   const project = (await bbJson("project list")).find((candidate) => candidate.id === endpoint.projectId);
   assert.deepEqual(project.sources.map((source) => source.path), [home]);

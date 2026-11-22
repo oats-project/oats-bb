@@ -46,7 +46,7 @@ test("launch spawns one thread in the home's project and answers its endpoint", 
     result: { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_new" } } });
   const spawn = bb.calls().find((c) => c.argv[1] === "spawn");
   assert.deepEqual(spawn.argv, ["thread", "spawn", "--project", "proj_a", "--provider", "claude-code", "--model", "claude-opus-5-5",
-    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "full", "--title", "dev-a", "--json"]);
+    "--environment", home, "--prompt-file", join(home, "TASK.md"), "--permission-mode", "full", "--title", "Dev a", "--json"]);
   assert.equal(spawn.server, backend.server);
   assert.deepEqual(effects(bb), ["thread spawn"], "the home's existing project is reused");
   assert.ok(Buffer.byteLength(JSON.stringify(answer.result.endpoint)) < 4096);
@@ -377,6 +377,21 @@ test("with no model the spawn names none (bb's own default)", async (t) => {
   const { bb, run } = await setup(t);
   assert.equal((await run({ model: null })).ok, true);
   assert.equal(bb.calls().find((c) => c.argv[1] === "spawn").argv.includes("--model"), false);
+});
+
+test("the thread's title is the instance's name as words, at a first start and at a restart; the project's name stays the name", async (t) => {
+  const titleOf = (bb) => { const { argv } = bb.calls().find((c) => c.argv[1] === "spawn"); return argv[argv.indexOf("--title") + 1]; };
+  const first = await setup(t, (h) => ({ "project list": { stdout: [] }, "project create": { stdout: projectRow("proj_made", h) }, "thread spawn": spawned("thr_new", "proj_made") }));
+  assert.equal((await first.run({ instance: "release-070-maintainer" })).ok, true);
+  assert.equal(titleOf(first.bb), "Release 070 maintainer");
+  assert.deepEqual(first.bb.calls().find((c) => c.argv[1] === "create").argv, ["project", "create", "--name", "release-070-maintainer", "--root", first.home, "--json"]);
+  // A restart is a new thread, and is titled the same way: nothing of the previous one is read for it.
+  const again = await setup(t, {
+    "thread list": { stdout: [threadRow("thr_prev", "proj_a", "idle", { title: "Renamed in bb" })] },
+    "thread archive": { stdout: { ok: true, threadId: "thr_prev", alreadyArchived: false, archivedAt: 9, archivedThreadIds: ["thr_prev"] } },
+  });
+  assert.equal((await again.run({ instance: "tui-leader--hint-developer-2", previous: { server: again.backend.server, projectId: "proj_a", threadId: "thr_prev" } })).ok, true);
+  assert.equal(titleOf(again.bb), "Tui leader hint developer 2");
 });
 
 test("a home with no bb project gets one, rooted at the home and named after the instance", async (t) => {

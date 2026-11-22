@@ -43,7 +43,7 @@ BB_VERSION=
 [ ! -f "$REPOSITORY/bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$REPOSITORY/bb-version")
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e REQUIRE_REAL_FLOOR=1 -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/provider /home/node/out/real /home/node/out/automations
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude ./container/real/out --exclude ./test/fixtures/automations/record/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./test/fixtures/automations/record/out .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 git -C "$REPOSITORY" archive HEAD oats-package | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
 printf '{"kernel":"npm:@awebai/oats@%s","provider":"%s"}\n' "$KERNEL_NPM" "$PROVIDER_OID" | docker exec -i -u node "$NAME" sh -c 'cat > /home/node/real/refs.json'
 

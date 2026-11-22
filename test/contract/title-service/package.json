@@ -1,0 +1,13 @@
+{
+  "name": "bb-plugin-contract-titles",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": { "bb": ">=0.50" },
+  "bb": {
+    "name": "Contract titles",
+    "description": "A title service for the contract test: it answers one fixed title and records what it was asked.",
+    "branding": { "icon": "Type" },
+    "server": "./server.js"
+  }
+}

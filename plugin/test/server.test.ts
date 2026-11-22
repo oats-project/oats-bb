@@ -427,7 +427,7 @@ describe("the host-call limits", () => {
     // the pages, spawn and the lifecycle; another feature holds the list of its own verbs in its tests.
     const mine = { ...rosterHost, ...workspaceHost, ...spawnHost, ...lifecycleHost };
     const retryable = Object.entries(mine).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams", "version"]);
+    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnHarnesses", "spawnPreview", "status", "stopPlan", "teams", "version"]);
   });
 });
 

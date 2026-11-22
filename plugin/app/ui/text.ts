@@ -6,7 +6,7 @@
 // The result is lossy and for display only: it is never evidence of identity, never authority for
 // an action, and never what is sent back to OATS (an instance, a soul or a revision is sent as the
 // kernel gave it). Pure: no bb, no React, no DOM; never throws.
-import { codes } from "../../kernel/result";
+import { codes, isKernelCode } from "../../kernel/result";
 
 /**
  * Not text a one-line note may hold, an exact set (the kernel's rule for a waiting message):
@@ -100,6 +100,17 @@ const OWN_CODES: ReadonlySet<string> = new Set(Object.values(codes));
 const LEADING_CODE = /^([A-Z][A-Z0-9_]*): /;
 
 /**
+ * The code that leads a refusal (`<code>: <message>`), the kernel's or one of the plugin's own; null
+ * when the text leads with none. It is for a place to choose its words by a code it knows, and to
+ * draw it: text that leads with a code is not proof that the kernel said it.
+ */
+export function refusalCode(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const lead = LEADING_CODE.exec(text);
+  return lead !== null && (isKernelCode(lead[1]!) || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
+}
+
+/**
  * A refusal or a failure, as the lines to draw. The server words a refusal `<code>: <message>`
  * and a few messages hold several lines of the kernel's (what a retire left). The code is always
  * shown; the message goes through the filter by itself, as the Desktop filters a refusal's code
@@ -108,8 +119,7 @@ const LEADING_CODE = /^([A-Z][A-Z0-9_]*): /;
  */
 export function refusalLines(text: unknown): string[] {
   if (typeof text !== "string") return [];
-  const lead = LEADING_CODE.exec(text);
-  const code = lead !== null && (lead[1]!.startsWith("E_") || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
+  const code = refusalCode(text);
   const message = code === null ? text : text.slice(code.length + 2);
   const lines = UNSAFE.test(message)
     ? [DETAIL_WITHHELD]

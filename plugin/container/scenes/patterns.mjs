@@ -42,6 +42,31 @@ export default [
   },
   {
     stage: "fixtures",
+    name: "the harness can run a page at a given instant, and give the real clock back",
+    run: async ({ page, at, check }) => {
+      // page.clock(at): what a scene on recorded answers runs under, so that "3 h ago" is not the
+      // age of the recording. Proven here on the page itself: the instant, the pace, a date built
+      // from parts, and the real clock afterwards.
+      const AT = "2026-11-21T20:21:00.000Z";
+      try {
+        await page.clock(AT);
+        await page.goto("/plugins/oats/patterns");
+        const first = JSON.parse(await page.evaluate(`JSON.stringify({ now: Date.now(), made: new Date().getTime(), fixed: new Date(2020, 0, 2, 3, 4).getFullYear(), parsed: new Date("2026-01-01T00:00:00.000Z").toISOString(), is: new Date() instanceof Date, bare: typeof Date(), cloned: structuredClone(new Date()) instanceof Date, name: Date.name })`));
+        const near = (ms) => Math.abs(ms - Date.parse(AT)) < 60_000;
+        check(near(first.now) && near(first.made) && first.fixed === 2020 && first.parsed === "2026-01-01T00:00:00.000Z" && first.is && first.bare === "string" && first.cloned && first.name === "Date", `${at} the page's clock starts at the instant asked for; a date built from parts or a string is itself, and Date is still a faithful Date (called bare, cloned, by name)`, JSON.stringify(first));
+        const later = await page.evaluate(`new Promise((done) => setTimeout(() => done(Date.now()), 1200))`);
+        check(later - first.now >= 1000 && later - first.now < 10_000, `${at} and goes on at the real pace`, String(later - first.now));
+      } finally {
+        await page.clock(null);
+      }
+      await page.goto("/plugins/oats/patterns");
+      await page.until(visible(testId("oats-patterns-notices")), 30); // the next scenes read the pattern book as it is drawn
+      const real = await page.evaluate(`Date.now()`);
+      check(Math.abs(real - Date.now()) < 60_000, `${at} cleared, the next page has the real clock`, String(real - Date.now()));
+    },
+  },
+  {
+    stage: "fixtures",
     name: "notices, empty, loading, stale, results",
     run: async ({ page, at, viewport, check }) => {
       await page.evaluate(into("oats-patterns-notices"));

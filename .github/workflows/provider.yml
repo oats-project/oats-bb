@@ -2,10 +2,27 @@
 # Both read the bb-app pin from the repository's bb-version file.
 name: provider
 
+# What the provider's tests read: a change elsewhere (the plugin, the image, the docs) does not run them.
 on:
   pull_request:
+    paths:
+      - "oats-package/**"
+      - "test/**"
+      - "scripts/**"
+      - "bb-version"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/provider.yml"
   push:
     branches: [main]
+    paths:
+      - "oats-package/**"
+      - "test/**"
+      - "scripts/**"
+      - "bb-version"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/provider.yml"
 
 permissions:
   contents: read

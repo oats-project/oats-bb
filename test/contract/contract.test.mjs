@@ -141,6 +141,9 @@ async function stopExtraBb(dir) {
   await sh(each("kill ${p#/proc/}")); // a plain string: the shell expands ${p#/proc/}
   await waitFor(`the bb of ~/${dir} to stop`, async () => !(await sh(each("echo alive"))).includes("alive"), { timeoutMs: 60_000, everyMs: 500 });
 }
+/** Every bb process in the container, with how long it has run, its state and what it waits on in the kernel: when a
+ *  second bb prints nothing, whether it started at all, and where it is stuck. */
+const BB_PROCESSES = "ps -eo pid,ppid,etime,stat,wchan:24,args | grep -E '[b]b-app|[s]erver/dist|[d]aemon' | cut -c1-200 || echo none";
 /** What a container read says, for a failure's message: never a second error that hides the first. */
 const said = (command) => sh(command).catch((error) => `(not read: ${error.message})`);
 
@@ -687,7 +690,7 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   // This wait has timed out twice in some ten runs with no cause found: when it does, say
   // what that bb printed and what its daemon answered, so the next one is read, not rerun.
   await waitFor("the signed-out bb's daemon to connect", async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'), { timeoutMs: 180_000, everyMs: 1_000 })
-    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await said("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}`, { cause: error }); });
+    .catch(async (error) => { throw new Error(`${error.message}. Its daemon answered: ${(await said("curl -s -m 2 http://127.0.0.1:58887/status || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-signed-out.out 2>&1 || true"))}. Its processes: ${await said(BB_PROCESSES)}`, { cause: error }); });
 
   const result = (await check(signedOut)).result;
   assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);
@@ -716,7 +719,7 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   // It timed out once on a CI runner (oats-bb#30's run 45006374572) with no cause seen: when it does, say what that bb
   // printed and what it answered, so the next one is read, not rerun.
   await waitFor("the second bb to answer", async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'), { timeoutMs: 240_000, everyMs: 1_000 })
-    .catch(async (error) => { throw new Error(`${error.message}. It answered: ${(await said("curl -s -m 2 http://127.0.0.1:48886/health || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-exposed.out 2>&1 || true"))}`, { cause: error }); });
+    .catch(async (error) => { throw new Error(`${error.message}. It answered: ${(await said("curl -s -m 2 http://127.0.0.1:48886/health || echo nothing")).slice(0, 300)}. bb-app printed: ${(await said("tail -c 1500 bb-app-exposed.out 2>&1 || true"))}. Its processes: ${await said(BB_PROCESSES)}`, { cause: error }); });
 
   const result = (await check(exposed)).result;
   assert.ok(result.problems.some((p) => p.code === "E_BACKEND_EXPOSED"), JSON.stringify(result));

@@ -8,7 +8,7 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, BbThread, Node } from "../../model/types";
+import type { Agent, Node } from "../../model/types";
 import { claimOf, state as stateOf } from "../../model/view";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
@@ -72,12 +72,6 @@ onWindowReset(() => showPanelTab("instance"));
 export function AgentTab({ agent, threadId }: AgentTabProps) {
   return <InstancePanel threadId={threadId} known={agent} />;
 }
-
-/** A thread that holds no question: what the tree's rule is given for an agent with no bb thread. */
-const NO_THREAD: BbThread = { id: "", projectId: null, displayTitle: "", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false };
-
-/** The state the panel draws: the one rule (model/view.ts `state`, over the one gate for a claim), so the sidebar, the thread's row and the panel say one word for one state. */
-const drawnState = (agent: Agent, node: Node | undefined): AgentState => stateOf(agent, node?.thread ?? NO_THREAD);
 
 /**
  * The panel of one agent: by its thread (an agent's thread in bb) or by its instance name (an
@@ -155,7 +149,9 @@ function InstancePage({ oats, agent, node, read, now, state: readState }: { oats
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
-  const state = drawnState(agent, node);
+  // The one rule for a state (model/view.ts `state`, over the one gate for a claim), read as the
+  // sidebar's and the thread's rows read it; an agent with no bb thread has none to give it.
+  const state = stateOf(agent, node?.thread ?? null);
   // Since when: for an agent that waits, how long it has waited; for one that runs, since its last start.
   // An agent that needs you for a question bb shows, with no claim, has no instant to count from.
   const since = state === "needs-you" ? (claim === null ? null : waitingSince(claim.since, now)) : state === "working" ? shortAge(facts?.startedAt ?? null, now) : null;

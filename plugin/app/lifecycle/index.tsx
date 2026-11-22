@@ -83,9 +83,11 @@ export function register(app: PluginAppBuilder): void {
       1,
       "Start agent (OATS)",
       ICON.start,
-      // A stopped agent can always be started, also one that still holds a claim and so counts as
-      // needing you rather than as stopped: the kernel's word, not the drawn state.
-      (state, agent) => state === "error" || agent.runtimeState === "stopped",
+      // An agent that does not run can be started: one whose session ended, one that is stopped, and
+      // one the kernel calls stopped while bb holds a question on its thread (it then counts as
+      // needing you, so the kernel's word is asked too). The thread's own row offers Start for the
+      // same agents.
+      (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped",
       (instance, { data, navigate }) => run("start", instance, data.rpc, navigate),
     ),
   );

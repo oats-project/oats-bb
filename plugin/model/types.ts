@@ -21,7 +21,7 @@ export type Agent = {
   threadId: string | null;
   /** The kernel's word. Never inferred. */
   running: true | false | null;
-  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word is drawn as idle */
+  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `running` decides */
   runtimeState: string | null;
   runtimeError: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;

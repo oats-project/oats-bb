@@ -169,6 +169,29 @@ export default [
   },
   {
     stage: "fixtures",
+    name: "a menu opened at the page's lower left edge is whole on screen",
+    run: async ({ page, at, viewport, check }) => {
+      // The last thing on the page, at its left edge: under the button there is no room, nor to its
+      // left, where the list hangs by default. The list takes the other edge and is brought into view.
+      const button = `${testId("oats-patterns-edges")} ${testId("oats-menu")} button`;
+      await page.evaluate(`document.querySelector(${JSON.stringify(button)}).focus()`);
+      await page.press("Enter");
+      const list = `document.querySelector(${JSON.stringify(`${testId("oats-patterns-edges")} [role="menu"]`)})`;
+      const whole = `(() => { const e = ${list}; if (!e) return ""; const r = e.getBoundingClientRect(); const p = document.querySelector(${JSON.stringify(testId("oats-patterns-page"))}).getBoundingClientRect(); return r.width > 0 && r.left >= Math.max(0, p.left) && r.right <= Math.min(innerWidth, p.right) && r.top >= 0 && r.bottom <= innerHeight ? JSON.stringify({ edge: e.getAttribute("data-edge"), items: e.querySelectorAll('[role="menuitem"]').length, focus: ${FOCUSED} }) : ""; })()`;
+      const seen = await page.until(whole, 10);
+      const drawn = seen ? JSON.parse(seen) : null;
+      check(
+        drawn !== null && drawn.edge === "left" && drawn.items === 7 && drawn.focus === "oats-menu-item-Run now",
+        `${at} the menu's seven items are all inside the page and the window, hung from the button's left edge, the focus on the first`,
+        seen ?? (await page.evaluate(`(() => { const e = ${list}; if (!e) return "no menu"; const r = e.getBoundingClientRect(); return JSON.stringify({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, innerWidth, innerHeight, edge: e.getAttribute("data-edge") }); })()`)),
+      );
+      await page.shot(`patterns-${viewport.name}-menu-at-the-edge`, { targets: true });
+      await page.press("Escape");
+      check(Boolean(await page.until(`${list} === null`, 10)), `${at} Escape closes it`);
+    },
+  },
+  {
+    stage: "fixtures",
     name: "a confirmation: before the act, in progress, done, refused, and another agent's plan; its focus order",
     run: async ({ page, at, viewport, check }) => {
       const dialog = () => page.evaluate(`JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-about"), phase: document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`);

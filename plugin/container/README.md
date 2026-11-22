@@ -88,16 +88,21 @@ Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plu
 open, a confirmation before its act, in progress, done, refused and with another agent's plan.
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
-  that needs you (its row is the open one, with its dot and its "?"), the home (its badge
+  that needs you (the thread's own row says "Needs you", since when and its question; in the sidebar
+  its row is the open one, with its "!"), the thread of a stopped agent ("Stopped", Start), the home (its badge
   shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
   and their preview (Preview and Spawn enabled).
-- **A14** with `oats` removed: bb's threads are listed, the "not found" line shows, a thread opens.
+- **A14** with `oats` removed after it was read: the roster stays as last read under the notice
+  ("OATS is not installed on …", "Showing what was read <age>", Retry, Open settings) and "Last
+  observation — <age>"; a thread opens from it and its own row says "as of <age>"; the home keeps
+  its cards under the same notice.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
-  Retire opens the plan dialog with the kernel's plan. Then the tree with the two states no
-  fixture row is in: an agent the kernel cannot reach, on the open thread (its row drawn as bb
-  draws the open one), and an agent whose session fell back to a shell. With A13's rows, all six
-  states of the dot are drawn.
+  Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
+  each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
+  ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "Its session
+  ended", Restart); and the agent whose bb thread is gone, which stays in the roster and says so.
+  With A13's rows, all six states are drawn, each with its word.
 
 **The theme** is bb's own appearance choice, not the browser's colour scheme. bb 0.50.1 keeps it in
 the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: what its Settings,
@@ -109,9 +114,9 @@ runs, and each check asserts the theme bb then draws. The screenshots are
 
 **The contrast check** runs at every screenshot, in the theme of that page, and fails the run: each
 text the plugin draws there reads at 4.5:1 or more against its effective background, and each
-state dot at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
+mark at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
 colours). It covers every rendered element with text of its own inside the plugin's elements
-(`data-testid="oats-…"`: the sidebar block and tree, the identity row and its chips, the home's
+(`data-testid="oats-…"`: the sidebar block and tree, the thread's row, the home's
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the

@@ -1,12 +1,12 @@
 // One agent's panel as a page of its own, `/plugins/oats/agent/<instance>`: where the panel is on
 // a phone (bb's compact layout has no side panel to show the thread's tab in), and for an agent
 // that has no bb thread at all. The page shows one agent and a way back.
+import { Unreadable } from "../roster/unreadable";
 import { useRef } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { failureLine, useOats } from "../oats";
-import { isKernelCode } from "../../kernel/result";
-import { Button, Empty, Loading, Notice } from "../ui";
+import { useOats } from "../oats";
+import { Button, Empty, Loading } from "../ui";
 import { shown } from "../ui/text";
 import { InstancePanel } from "./Panel";
 
@@ -64,7 +64,8 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
           {oats.phase === "loading" ? (
             <Loading />
           ) : oats.phase === "failed" ? (
-            <Notice title="OATS could not be read" tone="error" code={isKernelCode(oats.code) ? oats.code : null} details={failureLine(oats)} actions={<Button onClick={oats.retry}>Retry</Button>} />
+            // The notice every place shows when OATS cannot be read: what is missing in a person's words, on which machine, the code, Retry.
+            <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
           ) : (
             <Empty>{instance === null ? "No agent is named here." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}</Empty>
           )}

@@ -7,7 +7,7 @@ export type Agent = {
   home: string;
   /** parentInstance */
   parent: string | null;
-  /** attributedHuman; drawn as "parent · <human>" when parent is null */
+  /** attributedHuman; drawn as "Started by <human>" in the thread's row when parent is null */
   human: string | null;
   alias: string | null;
   team: string | null;
@@ -21,7 +21,7 @@ export type Agent = {
   threadId: string | null;
   /** The kernel's word. Never inferred. */
   running: true | false | null;
-  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word is drawn as idle */
+  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `running` decides */
   runtimeState: string | null;
   runtimeError: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;

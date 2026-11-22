@@ -100,3 +100,13 @@ export function readAge(at: string | number, now: number = Date.now()): string |
   const d = new Date(then);
   return `at ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/**
+ * "as of <age>", for a row or an act drawn from the last roster read while OATS cannot be read:
+ * "as of just now", "as of 3 min ago", and from an hour on the time itself, "as of 14:05" (where
+ * `readAge` alone says "at 14:05"); "as of the last read" for an instant that cannot be read.
+ */
+export function asOf(at: string | number, now: number = Date.now()): string {
+  const age = readAge(at, now);
+  return `as of ${age === null ? "the last read" : age.replace(/^at /, "")}`;
+}

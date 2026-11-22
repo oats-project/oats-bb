@@ -415,3 +415,40 @@ test("Refresh activity over what is shown says that it reads, until the kernel a
   act(() => answer?.());
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Reported observation loaded. Runtime state is shown separately."));
 });
+
+test("a Refresh activity still running when its tab is come back to says that it reads, and cannot be pressed again; one after a failed refresh says it once", async () => {
+  let answer: (() => void) | null = null;
+  let mode: "ok" | "pending" | "fail" = "ok";
+  const slot = panel({
+    panelEvents: () => {
+      if (mode === "fail") throw new Error("E_NOT_IN_SCOPE: outside this deployment");
+      if (mode === "ok") return recordedEvents();
+      return new Promise((done) => {
+        answer = () => done(recordedEvents());
+      });
+    },
+  });
+  fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
+  await slot.findByTestId("oats-panel-activity-summary");
+  mode = "pending";
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Reading reported lifecycle activity…"));
+  act(() => showPanelTab("soul"));
+  await slot.findByTestId("oats-panel-soul-body");
+  act(() => showPanelTab("instance"));
+  // the read asked for before the tab was left still runs
+  expect(text(await slot.findByTestId("oats-panel-activity-status"))).toBe("Reading reported lifecycle activity…");
+  expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(true);
+  act(() => answer?.());
+  await waitFor(() => expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(false));
+  // a refresh that fails, then one more while the first failure is still shown: said once, by the line that holds the failure
+  mode = "fail";
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  const stale = await within(slot.getByTestId("oats-panel-activity")).findByTestId("oats-stale");
+  mode = "pending";
+  fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
+  await waitFor(() => expect(text(stale)).toContain("Refreshing…"));
+  expect(slot.queryByTestId("oats-panel-activity-status")).toBeNull();
+  expect(within(slot.getByTestId("oats-panel-activity")).getAllByRole("status")).toHaveLength(1);
+  act(() => answer?.());
+});

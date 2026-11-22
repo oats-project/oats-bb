@@ -110,11 +110,12 @@ export function Activity({ instance, now }: { instance: string; now: number }) {
       {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} /> : null}
       {read.data === undefined ? null : <Events events={read.data} />}
       <div className="flex flex-wrap items-center gap-2">
-        <Button data-testid="oats-panel-activity-load" disabled={asked && read.fetching} onClick={ask}>
+        {/* Off while a read runs, also one asked for before the tab was left. */}
+        <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
           {held || asked ? REFRESH : LOAD}
         </Button>
-        {/* A read again over what is shown says so, in the words of the first read. */}
-        {held && (read.fetching ? asked : !asked || read.status === "ready") ? (
+        {/* A read again over what is shown says so, in the words of the first read; after a failed one the line above says it. */}
+        {held && (read.fetching ? read.status === "ready" : !asked || read.status === "ready") ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
             {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
           </span>

@@ -97,20 +97,20 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
        * `Date.now()` and `new Date()` in the page start at that instant, from the NEXT navigation on,
        * and go on at the real pace; `clock(null)` gives the real clock back, again from the next
        * navigation. A scene clears it in a `finally`, so that the next scene has the real clock.
-       * Only the page's clock moves: the plugin's server and OATS keep the real one, so an instant
-       * the server stamps itself ("as of", "showing what was read") is not one to read under it.
+       * Only `Date` in the page's documents moves. The plugin's server and OATS keep the real clock,
+       * so an instant the server stamps itself ("as of", "showing what was read") is not one to read
+       * under it; and in the page a formatter called with no date (`Intl.DateTimeFormat().format()`),
+       * a worker and `performance.now()` keep the real clock too.
        */
       clock: async (at) => {
+        const then = at === null ? null : Date.parse(at);
+        if (then !== null && !Number.isFinite(then)) throw new Error(`browser: clock(${JSON.stringify(at)}) is not an instant`);
         if (clockScript !== null) {
           await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier: clockScript });
           clockScript = null;
         }
-        if (at === null) return;
-        const then = Date.parse(at);
-        if (!Number.isFinite(then)) throw new Error(`browser: clock(${JSON.stringify(at)}) is not an instant`);
-        const shift = then - Date.now();
-        const source = `(() => { const Real = Date; const shift = ${shift}; class Shifted extends Real { constructor(...args) { if (args.length === 0) super(Real.now() + shift); else super(...args); } static now() { return Real.now() + shift; } } globalThis.Date = Shifted; })();`;
-        clockScript = (await cdp("Page.addScriptToEvaluateOnNewDocument", { source })).identifier;
+        if (then === null) return;
+        clockScript = (await cdp("Page.addScriptToEvaluateOnNewDocument", { source: shiftedDate(then - Date.now()) })).identifier;
       },
       goto: async (path) => {
         await cdp("Page.navigate", { url: base + path });
@@ -164,6 +164,15 @@ const KEYS = {
 
 /** What holds the focus, as a person would name it: its test id, else its accessible name or its text. */
 export const FOCUSED = `(() => { const e = document.activeElement; if (!e || e === document.body) return ""; return e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").replace(/\\s+/g, " ").trim() || e.tagName.toLowerCase(); })()`;
+
+/**
+ * The script that shifts `Date` in a page by `shift` ms (page.clock). `Date` stays a faithful Date:
+ * a function on the real prototype, not a subclass, so that `Date()` without `new` answers a string,
+ * a Date the browser makes itself (a structured clone, a message, a stored value) is still
+ * `instanceof Date`, and its name is "Date". Only "now" moves: `new Date()` and `Date.now()`.
+ */
+export const shiftedDate = (shift) =>
+  `(() => { const Real = Date; const shift = ${Number(shift)}; function Shifted(...args) { if (new.target === undefined) return new Real(Real.now() + shift).toString(); return Reflect.construct(Real, args.length === 0 ? [Real.now() + shift] : args, new.target); } Object.defineProperty(Shifted, "name", { value: "Date" }); Shifted.prototype = Real.prototype; Shifted.now = () => Real.now() + shift; Shifted.parse = Real.parse; Shifted.UTC = Real.UTC; Real.prototype.constructor = Shifted; globalThis.Date = Shifted; })();`;
 
 /**
  * The plugin's controls on screen that are lower than a person can press: under `min` px (32 at

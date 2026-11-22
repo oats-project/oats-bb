@@ -6,7 +6,7 @@
 // The result is lossy and for display only: it is never evidence of identity, never authority for
 // an action, and never what is sent back to OATS (an instance, a soul or a revision is sent as the
 // kernel gave it). Pure: no bb, no React, no DOM; never throws.
-import { codes } from "../../kernel/result";
+import { codes, isKernelCode } from "../../kernel/result";
 
 /**
  * Not text a one-line note may hold, an exact set (the kernel's rule for a waiting message):
@@ -99,11 +99,15 @@ export function shownBlock(text: unknown): string {
 const OWN_CODES: ReadonlySet<string> = new Set(Object.values(codes));
 const LEADING_CODE = /^([A-Z][A-Z0-9_]*): /;
 
-/** The code that leads a refusal (`<code>: <message>`), the kernel's or one of the plugin's own; null when the text leads with none. */
+/**
+ * The code that leads a refusal (`<code>: <message>`), the kernel's or one of the plugin's own; null
+ * when the text leads with none. It is for a place to choose its words by a code it knows, and to
+ * draw it: text that leads with a code is not proof that the kernel said it.
+ */
 export function refusalCode(text: unknown): string | null {
   if (typeof text !== "string") return null;
   const lead = LEADING_CODE.exec(text);
-  return lead !== null && (lead[1]!.startsWith("E_") || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
+  return lead !== null && (isKernelCode(lead[1]!) || OWN_CODES.has(lead[1]!)) ? lead[1]! : null;
 }
 
 /**

@@ -142,7 +142,7 @@ async function themedPage(browser, viewport, theme, at) {
     const lowest = (kinds) => shown(Math.min(...rows.filter((row) => kinds.includes(row.kind)).map((row) => row.ratio)));
     const TEXTS = ["text", "value", "placeholder"];
     const texts = rows.filter((row) => TEXTS.includes(row.kind)).length;
-    const dots = count("dot") === 0 ? "no state dot" : `its ${count("dot")} state dots at 3:1 or more (lowest ${lowest(["dot"])}:1)`;
+    const dots = count("dot") === 0 ? "no mark" : `its ${count("dot")} marks at 3:1 or more (lowest ${lowest(["dot"])}:1)`;
     const ok = drawn === theme && (rows.length > 0 || !plugin) && bad.length === 0;
     check(ok, `${at} ${name}: bb draws its ${theme} theme, and ${rows.length === 0 ? "nothing of the plugin is in the page" : `the plugin's ${texts} texts read at 4.5:1 or more (lowest ${lowest(TEXTS)}:1), ${dots}`}`);
     // Every distinct failing row, whole: one run names all there is to fix in the scene.

@@ -262,7 +262,12 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   assert.deepEqual(inspect.result, { present: true, state: "unknown", running: null, open: { label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
-test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers sent and lands once", async () => {
+// Changed with contract r24, A15(1). This test said "input to a stopped thread answers sent
+// and lands once": a tell restarted a thread OATS had stopped, which is what a message in
+// bb's composer did behind OATS's back. The provider's stop now archives the thread, and
+// the stopped step says what follows: the tell is refused and nothing restarts, and the
+// restart bb makes at a tell (still bb's fact, still pinned) is reached by unarchiving first.
+test("T2 input to an idle, a mid-tool and an errored thread answers sent and lands once; a thread OATS stopped is archived: a tell to it is refused and restarts nothing, until a person unarchives it", async () => {
   const { home, endpoint } = await launched("t2");
   const id = endpoint.threadId;
   await waitStatus(id, "idle");
@@ -283,11 +288,51 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await tell("T2-IDLE marker");
   await once("T2-IDLE");
 
-  // stopped by the provider: bb shows idle again, and a tell restarts the thread
+  // stopped by the provider: the thread is settled and archived, and no Claude is left in the home
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
   assert.equal(await threadStatus(id), "idle");
-  await tell("T2-STOPPED marker");
-  await once("T2-STOPPED");
+  assert.notEqual((await bbJson(`thread show ${id}`)).thread.archivedAt, null, "the stop archived the thread");
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  // the conversation is still bb's, readable, among the project's archived threads
+  assert.deepEqual((await bbJson(`thread list --archived --project ${endpoint.projectId}`)).map((thread) => thread.id), [id]);
+  // a message to it, as bb's composer or a person's `bb thread tell` sends one: bb refuses
+  // it, in its own words (a bb that takes it again fails here: the stop's archive rests on it)
+  const raw = JSON.parse(await sh(`bb thread tell ${id} 'T2-STOPPED-RAW marker' --json`, { ok: false }));
+  assert.equal(raw.ok, false, JSON.stringify(raw));
+  assert.match(raw.error.message, /archived/i);
+  // and through the provider: refused, nothing sent
+  const refused = await provider("input", { home, endpoint, text: "T2-STOPPED marker" });
+  assert.equal(refused.error?.code, "E_SESSION_INPUT_FAILED", JSON.stringify(refused));
+  assert.match(refused.error.message, /archived/i);
+  // nothing restarted: no turn reached the model, no harness process in the home, and the
+  // provider reads the home's session as gone
+  await sleep(6_000);
+  assert.equal(await landed("T2-STOPPED"), 0, "a tell to a thread OATS stopped reached the model");
+  assert.equal(await processesIn(home), 0, "a tell to a thread OATS stopped started a process in the home");
+  assert.deepEqual(await carriers(id), []);
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
+  // unarchived by hand (a person's act in bb, outside OATS): bb's own restart at a tell
+  // is still there. The tell answers sent, Claude starts again on the same conversation
+  // and runs the turn once, and the provider reads the thread present
+  await sh(`bb thread unarchive ${id} --json`);
+  assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null);
+  await tell("T2-UNARCHIVED marker");
+  await once("T2-UNARCHIVED");
+  assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.present, true);
+  assert.equal(await landed("T2-STOPPED"), 0);
+
+  // stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
+  // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
+  // stopped and NOT archived, and the input starts Claude again on the same conversation
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
+  const hostStopped = await provider("inspect", { home, endpoint });
+  assert.deepEqual({ present: hostStopped.result.present, state: hostStopped.result.state, running: hostStopped.result.running }, { present: true, state: "unknown", running: null });
+  await tell("T2-HOST-RESUMED marker");
+  await once("T2-HOST-RESUMED");
+  assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
 
   // mid-tool: a turn that runs an 8 s tool; the tell is steered into the turn
   await armTool("node -e \"setTimeout(()=>console.log('T2-SLEPT'),8000)\"");
@@ -424,7 +469,10 @@ test("T4 a queued tell is withdrawn: INPUT_QUEUED, and nothing lands later", asy
   await waitFor("T4-AGAIN to land", async () => (await landed("T4-AGAIN")) === 1);
 });
 
-test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's stoppedAt is what refuses (provider half)", async () => {
+// Changed with contract r24, A15(1): after the stop the thread was live and at rest, and
+// only the retire hook archived it. The stop archives it now, so what the provider says
+// of a stopped thread is "gone" from the stop on, and the retire finds nothing live.
+test("T5 stop, then inspect and input: the stop archives the thread, so the provider reads it gone and bb refuses a tell (provider half; the kernel's stoppedAt refuses before either)", async () => {
   const { home, endpoint } = await launched("t5");
   await waitStatus(endpoint.threadId, "idle");
   await armTool("node -e \"setTimeout(()=>console.log('T5-SLEPT'),30000)\"");
@@ -438,26 +486,71 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   // tool it ran (the kernel scans the home for such processes before it retires it).
   const working = async () => (await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim();
   await waitFor("no process to work in the home", async () => (await working()) === "0", { timeoutMs: 20_000 });
-  // What the provider can say of a stopped thread is bb's word: settled, running unknown.
-  // "stopped, input refused" is the kernel's answer from its own stoppedAt, without calling
-  // the provider (contract item 1; spec K1 T4).
-  const inspect = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: inspect.result.present, state: inspect.result.state, running: inspect.result.running }, { present: true, state: "unknown", running: null });
-  // The retire hook then archives the thread; after that nothing live runs in the home.
-  // A stop with no endpoint (the kernel after a launch whose answer was lost) finds the
-  // home's thread by itself, and has nothing left to stop.
-  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
-  const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
-  assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
+  // The stop archived the thread (bb has no stopped state: it reads idle, archived).
+  const shown = (await bbJson(`thread show ${endpoint.threadId}`)).thread;
+  assert.equal(shown.status, "idle");
+  assert.notEqual(shown.archivedAt, null);
   // An archived thread is no longer the home's session: bb refuses a tell to it, so the
   // provider reads it as missing (a person archiving it in bb's UI gives the same).
+  // "stopped, input refused" is also the kernel's answer from its own stoppedAt, without
+  // calling the provider (contract item 1; spec K1 T4).
   assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
+  // A stop with no endpoint (the kernel after a launch whose answer was lost) finds the
+  // home's threads by itself, and has nothing live left to stop; nor has the retire hook
+  // anything left to archive.
+  assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
+  const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+  assert.deepEqual(retired, { meta: { retired: false, reason: "nothing-to-delete" } });
   const told = await provider("input", { home, endpoint, text: "T5-ARCHIVED marker" });
   assert.equal(told.ok, false);
   assert.equal(told.error.code, "E_SESSION_INPUT_FAILED");
   assert.match(told.error.message, /archived/i);
   assert.equal(await landed("T5-ARCHIVED"), 0);
+});
+
+// Contract r24, A15(1), its safety edge: the stop archives the home's own thread, and
+// never a thread a person opened in the home's bb project for other work.
+test("a person's own thread in the home's bb project is never archived by the provider's stop, with or without an endpoint", async () => {
+  const { home, endpoint } = await launched("person");
+  await waitStatus(endpoint.threadId, "idle");
+  // A person's own thread, made with bb's own spawn in that project: nothing of the provider's.
+  // (A first turn's prompt is not the last message of its model request: it is counted, not searched for.)
+  const since = (await modelRequests()).length;
+  const own = await bbJson(`thread spawn --project ${endpoint.projectId} --provider claude-code --model ${MODEL} --permission-mode full --prompt 'MARK-PERSON-OWN say hi' --title 'A person own thread'`);
+  started.push(own.id);
+  await waitFor("the person's thread's first turn", async () => (await modelRequests()).length > since, { timeoutMs: 120_000 });
+  await waitStatus(own.id, "idle");
+  const asItIs = async () => {
+    const { thread } = await bbJson(`thread show ${own.id}`);
+    return { status: thread.status, archivedAt: thread.archivedAt ?? null, deletedAt: thread.deletedAt ?? null, title: thread.title, projectId: thread.projectId };
+  };
+  const before = await asItIs();
+  assert.deepEqual(before, { status: "idle", archivedAt: null, deletedAt: null, title: "A person own thread", projectId: endpoint.projectId });
+  const live = async () => (await bbJson(`thread list --project ${endpoint.projectId} --include-hidden`)).map((thread) => thread.id).sort();
+  assert.deepEqual(await live(), [endpoint.threadId, own.id].sort());
+
+  // A stop with the home's endpoint: that thread is stopped and archived, and the person's
+  // is as it was: not archived, and not stopped either (its agent is still loaded).
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
+  assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
+  assert.deepEqual(await asItIs(), before);
+  assert.deepEqual(await live(), [own.id]);
+  assert.ok((await carriers(own.id)).includes("claude"), "a stop with an endpoint touched a thread that is not the home's");
+
+  // A stop with no endpoint stops every live thread that runs in the home, as it did
+  // before (the kernel sends it when a launch may have started a thread nobody recorded),
+  // and archives only one bb made at or after the time that launch was sent: with no time,
+  // and with a time after the person's thread was made, theirs is stopped and never archived.
+  for (const extra of [{}, { launchSent: new Date().toISOString() }]) {
+    assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10, ...extra })).result, { stopped: true });
+    assert.deepEqual(await asItIs(), before, JSON.stringify(extra));
+    assert.deepEqual(await live(), [own.id]);
+  }
+  await waitFor("the person's thread's agent to be gone", async () => !(await carriers(own.id)).includes("claude"), { timeoutMs: 20_000 });
+  // It is still theirs to use: bb takes a message to it, and runs the turn.
+  await sh(`bb thread tell ${own.id} 'MARK-PERSON-AGAIN' >/dev/null`);
+  await waitFor("the person's next turn", async () => (await landed("MARK-PERSON-AGAIN")) === 1, { timeoutMs: 90_000 });
+  await waitStatus(own.id, "idle");
 });
 
 // What the kernel relies on after a spawn that died while the launch ran: its receipt says
@@ -539,7 +632,8 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
 
     // A second home is launched behind it: bb makes the thread and holds its first turn.
     const held = await launched("queue-held");
-    const row = async () => (await bbJson("thread list --include-hidden")).find((thread) => thread.id === held.endpoint.threadId);
+    // (Archived threads included: the stop below archives this one, contract r24, A15(1).)
+    const row = async () => (await bbJson("thread list --include-hidden --include-archived")).find((thread) => thread.id === held.endpoint.threadId);
     await waitFor("bb to hold the second home's turn in line", async () => (await row()).queuedWork === "waiting");
     assert.equal((await row()).status, "pending");
     const queue = await bbJson(`thread queue list ${held.endpoint.threadId}`);
@@ -552,6 +646,7 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
     assert.deepEqual((await provider("stop", { home: held.home, endpoint: held.endpoint, graceSeconds: 10 })).result, { stopped: true });
     assert.deepEqual(await bbJson(`thread queue list ${held.endpoint.threadId}`), [], "the held turn was withdrawn");
     assert.equal((await row()).queuedWork, "none");
+    assert.notEqual((await row()).archivedAt, null, "and the stopped thread is archived");
 
     // A third home, held the same way, is retired instead of stopped: the retire hook
     // withdraws its held turn before it archives the thread.

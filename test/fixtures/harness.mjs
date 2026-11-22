@@ -161,7 +161,13 @@ export const requestFor = (verb, input, extra = {}) => ({ schemaVersion: 1, wire
  *  OATS_SETTINGS. → the answer envelope, asserted to be the wire's: exactly one JSON
  *  document on stdout, exit 0, the five header keys echoed, then a result or a refusal of
  *  {code, message} and nothing else. */
-export async function call(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false }) {
+export async function call(verb, input, options) {
+  return (await callSeen(verb, input, options)).doc;
+}
+
+/** The same call, with what the command wrote beside its answer. → { doc, stderr }:
+ *  the kernel does not read a provider's stderr, and a person running the command does. */
+export async function callSeen(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false }) {
   const request = requestFor(verb, input);
   const run = await runBin(["session", verb], { bin: sandboxedModes ? sandboxedBin : providerBin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
   if (run.status !== 0 || run.doc === null) throw new Error(`the provider did not answer one JSON document (exit ${run.status}): ${run.stdout}\n${run.stderr}`);
@@ -172,7 +178,7 @@ export async function call(verb, input, { settings = {}, bb, env = {}, sandboxed
     if (run.doc[key] !== request[key]) throw new Error(`the answer does not echo ${key}: ${run.stdout}`);
   }
   if (run.doc.ok === false && (JSON.stringify(Object.keys(run.doc.error)) !== '["code","message"]' || !/^E_[A-Z0-9_]{1,60}$/.test(run.doc.error.code))) throw new Error(`a refusal is {code, message}: ${run.stdout}`);
-  return run.doc;
+  return { doc: run.doc, stderr: run.stderr };
 }
 
 export const endpointOf = (backend, projectId = "proj_a", threadId = "thr_a") => ({ server: backend.server, projectId, threadId });

@@ -4,6 +4,51 @@
 
 ### The session provider
 
+- **A stop archives the thread: an agent OATS stopped stays stopped.** bb starts a
+  stopped thread's agent again at the next message to it, in the same conversation, so a
+  message typed in bb's composer restarted an agent OATS had stopped, behind OATS's back.
+  bb refuses every message to an archived thread. The provider's stop now archives the
+  thread once it has seen it stopped (`bb thread archive`), for pi and for Claude.
+  - Nothing of the conversation is lost: it stays in bb as an archived thread (bb's
+    thread list under Archived; `bb thread list --archived --project <id>`). A start was
+    already a new thread.
+  - A stop with no endpoint (the kernel's cleanup after a launch whose answer was lost)
+    archives what it archived before: the threads bb made at or after the time the launch
+    was sent. A thread that may be a person's is stopped and never archived.
+  - An archive bb refuses fails no stop: the answer is `{stopped: true}`, and the
+    provider's command writes one warning line on its standard error naming the thread
+    (the wire's stop result has no place for it). The next start archives that thread or
+    refuses, naming it.
+  - A thread a person unarchives in bb takes messages again, and the next one starts its
+    agent outside OATS; stop it or start it with OATS.
+  - A stop with the host is not archived: where the stop input carries `reason: "host"`
+    (the kernel's word for `oats host run`'s shutdown), the thread is stopped and left
+    live, since the kernel resumes such a home by an input to that thread.
+  - **The OATS floor rises to 0.70.5** (`compatibility.oats`; **PLACEHOLDER(A16): the
+    number of the OATS release that sends `reason: "host"`, set before this is
+    released**), so that no supported pairing loses a reboot's resume. With an older
+    kernel (a trial), the key is absent and every stop archives: bb then refuses the input
+    the kernel resumes a host-stopped home by, the home is not resumed when the host
+    starts again, and `oats session start` gives it a new thread.
+  - The window: a host-stopped home's thread is live and unarchived from the host's
+    shutdown until the first resume sweep after it is back (the time the host is off,
+    plus up to about a minute after boot). A message in it lands in a home OATS means to
+    run.
+  - **Upgrade: close the homes that are already stopped, once.** A home OATS stopped
+    with an earlier oats.bb still has its thread live in bb, and a message there starts
+    its agent again. A home also runs the provider from its own copy of the package, so a
+    home spawned before this release stops with the old provider until its copy moves.
+    After pinning this release and `oats sync`, for each bb home: stop it if it runs
+    (`oats instance stop <name>`), move its copy (`oats instance upgrade <name>`), then
+    run `oats instance stop <name>` once more. The kernel asks the provider to stop a home
+    it already holds stopped, by its recorded thread, and that stop archives it
+    (`test/contract/kernel/pi-run.mjs` pins it under a real kernel). It archives the
+    home's own recorded thread and no other thread of its bb project. Nothing is archived
+    by a status read.
+  - The retire hook finds no live thread in a home OATS stopped, so it names none in
+    `archived` (for a Claude home with nothing else to remove, its answer is
+    `{retired: false, reason: "nothing-to-delete"}`).
+
 - **A home's bb thread is titled with the instance's name as words.** bb's header and
   thread list now show the name the OATS Desktop and the OATS plugin for bb draw:
   `release-070-maintainer` is "Release 070 maintainer" (every run of `-` one space, the

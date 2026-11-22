@@ -41,7 +41,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
-| stop | `{home, endpoint or null, graceSeconds, launchSent?}` | `{stopped: true}` |
+| stop | `{home, endpoint or null, graceSeconds, launchSent?, reason?}` | `{stopped: true}` |
 | check | `{home or null, soul or null, settings?, launch?}` | `{status, problems: [{code, message}], warnings: [{code, message}]}` |
 
 - **launch `env`** is a list of `{name, value, source, capability?, secret?}`. (For Claude;
@@ -100,6 +100,44 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   again, since bb may have started it as a turn in the same instant. Anything else by the
   end of the grace is `E_SESSION_STOP_FAILED`. Inspect reads a settled thread with work
   in line as `running: true`.
+- **stop archives the thread it stopped** (contract r24, A15(1)). bb has no stopped
+  state: a stopped thread reads `idle`, and bb starts its agent again at the next message
+  to it, from bb's composer or `bb thread tell`, in the same conversation. bb refuses
+  every message to an archived thread. So once a stop is confirmed the provider archives
+  the thread (`bb thread archive`), and an instance OATS stopped stays stopped from bb's
+  side too, until OATS starts it: a start is a new thread, as it always was. A stop with
+  an endpoint archives that thread; a stop with `endpoint: null` archives the threads it
+  takes to be the failed launch's (below), never one that may be a person's. A thread bb
+  no longer has is not asked for, and one bb had archived already is left as it is.
+  - Nothing of the conversation is lost: it stays in bb, readable, as an archived thread
+    (bb's thread list under Archived; `bb thread list --archived --project <id>`).
+  - An archive bb refuses, or does not answer for, fails no stop: the thread is stopped,
+    the answer is `{stopped: true}`, and the provider writes one warning line on its
+    standard error, naming the thread and the remedy (`bb thread archive <id>`). The wire
+    has no other place for it: a stop's result is exactly `{stopped: true}`, and the
+    kernel does not read a provider's standard error. Such a thread stays live in bb: a
+    message to it there starts its agent again, and the next launch archives it (it is the
+    launch's `previous` thread) or refuses, naming it.
+  - A thread a person unarchives in bb (`bb thread unarchive <id>`) takes messages again,
+    and the next one starts its agent, outside OATS: the provider's inspect then reads the
+    thread present. OATS still holds the home stopped; stop it or start it with OATS.
+  - **A stop with the host is not archived** (contract r25, A16). `reason: "host"` in the stop input is the
+    kernel's word for a stop made by `oats host run`'s shutdown. Such a home is lost, not
+    stopped: the kernel resumes it by an input to the recorded thread, which bb would
+    refuse of an archived one. So the provider stops that thread by the same rule and
+    leaves it live. Only that exact value does: any other, and none, is a stop that
+    archives. (With no endpoint the key changes nothing: that stop settles a launch nobody
+    recorded, which no resume brings back.)
+  - Where the key is absent (a kernel below the package's floor, which is the OATS
+    release that sends it), the provider archives at every stop: a home stopped with the
+    host is then archived like any other, its resume's input is refused by bb, and the
+    home is not resumed. `oats session start` gives it a new thread. The provider never
+    refuses a stop for the key's absence.
+  - The window: a host-stopped home's thread is live and unarchived from the host's
+    shutdown until the first resume sweep after the host is back (`oats host run` runs it
+    at its start and each minute; the clients when they open): the time the host is off,
+    plus up to about a minute after boot. A message in it lands in a home OATS means to
+    run.
 - **A refusal means nothing was changed.** A launch reads everything it needs first (bb's
   projects and threads, the home's archived threads, its own files in the home). From the first call that may have
   changed something, it no longer answers a refusal: a stop of an earlier thread of the
@@ -200,15 +238,19 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   - `launchSent` (the receipt's record that a launch was sent, in the form the kernel
     writes: an ISO 8601 UTC time ending in `Z`; the kernel change that passes it is not
     released yet) says which threads are taken to be that launch's: one bb created at or
-    after it (bb's `createdAt`, milliseconds) is archived once stopped, so the next start
-    is not refused for a thread nobody recorded. The archive is best effort: where bb does
-    not archive it, the stop still answers `stopped` and the next launch names the thread.
+    after it (bb's `createdAt`, milliseconds) is archived once stopped, so no message in
+    bb starts it again and the next start is not refused for a thread nobody recorded.
+    Where bb does not archive it, the stop still answers `stopped`, warns on its standard
+    error (above), and the next launch names the thread.
     A thread created before it, and every thread when `launchSent` is absent or is not in
     that form, is stopped and not archived: it may be a person's, and the next launch
     names it.
-  - The rule's reach: a thread a person starts in the home after the failed launch was
-    sent is at or after that time too, and is stopped and archived with it, whenever the
-    kernel's next stop, start or retire comes. It stays in bb, archived.
+  - The rule's reach, a stated limit: with no endpoint nothing names the home's own
+    thread, so a thread a person starts in the home's project after the failed launch was
+    sent, and before the kernel settles that launch, is at or after that time too, and is
+    stopped and archived with the launch's, whenever the kernel's next stop, start or
+    retire comes. It stays in bb, archived and readable, and the person can unarchive it
+    (`bb thread unarchive <id>`). A stop with an endpoint never touches a person's thread.
   - A limit: the stop sees what bb shows when it is called. The kernel kills a provider
     command's whole process group, and the provider's bb calls stay in that group (below),
     so no bb call outlives a killed launch; but bb's server may still be making the thread
@@ -339,7 +381,11 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn` (with `--title`), `bb thread tell`, `bb thread interactions list`,
   `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
-  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. For pi:
+  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. The
+  contract test also pins what the stop's archive rests on, for pi and for Claude: bb
+  refuses a tell to an archived thread and starts nothing, lists it under
+  `bb thread list --archived --project <id>`, and after `bb thread unarchive` takes a
+  tell again and starts the agent in the same conversation. For pi:
   `bb machine env list` (with and without `--project`), `bb machine env set <NAME>
   --project <id>` and `bb machine env unset <NAME> --project <id>`, of whose answers only
   the `variables` names are read. The

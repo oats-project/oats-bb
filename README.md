@@ -37,9 +37,12 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 
 > **What it needs.**
 >
-> - OATS 0.70.0 or later (the manifests' `compatibility.oats` floor): the first OATS
->   release that speaks this provider's wire, version 1.3 (see [docs/wire.md](docs/wire.md)),
->   and that protects a provider home's own files from its agent.
+> - OATS 0.70.5 or later (the manifests' `compatibility.oats` floor; **PLACEHOLDER(A16):
+>   the number is set before this is released**): the first OATS release whose host
+>   shutdown says so in its stop (`reason: "host"`), so that a home stopped with the host
+>   is not archived and is resumed ([Stops](#stops)). The provider's wire, version 1.3
+>   (see [docs/wire.md](docs/wire.md)), and the kernel's protection of a provider home's
+>   own files from its agent are in OATS since 0.70.0.
 > - For a bb home with aweb messaging, oats.aweb 1.48.0 or later. That release requires
 >   the channel packages of `tmux` launches only, holds an installed `aweb-channel` or
 >   `@awebai/pi` to versions that don't open their own stream beside the wake broker's on a
@@ -140,9 +143,9 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600); for a pi launch, the three variables into the env of the home's bb project instead ([pi](#pi)). Runs `bb thread spawn --provider claude-code` (or `--provider pi`) `--environment <home> --prompt-file <home>/TASK.md --title <the instance's name as words>` ("The thread's title", below). Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error`, also looks at this host's processes for one of the thread's. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
-| stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. |
+| stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. Then archives the thread (`bb thread archive`): bb starts a stopped thread's agent again at the next message to it and refuses every message to an archived one, so an agent OATS stopped stays stopped ("Stops", below). An archive bb refuses fails no stop: `stopped`, and a warning on the command's standard error that names the thread. |
 | retire (hook) | For each of the home's live threads: withdraws what bb holds in line for it, stops it, and archives it once the stop is confirmed (a thread it could not stop is left, and named in a warning). Then stops the home's threads that were archived before, and removes the env of the home's bb project (what a pi launch wrote there). It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. |
-| stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home, and its archived threads: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so the next start launches (if bb does not archive it, the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
+| stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home, and its archived threads: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so no message in bb starts it again and the next start launches (if bb does not archive it, the stop warns on its standard error and the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
 
 | bb thread | present | state | running |
 |---|---|---|---|
@@ -162,7 +165,8 @@ many, and the remedy. Remove old archived threads of that project in bb: for eac
 `bb thread stop <id>`, then `bb thread delete --yes <id>`.
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
-turn. The kernel records its own stop and answers "stopped" itself.
+turn. The kernel records its own stop and answers "stopped" itself, and the provider's
+stop archives the thread, so the provider reads it missing from then on.
 
 bb says `error` of a thread whose last turn failed (the model endpoint refused it, for
 one) and of one whose agent is gone, and they are not the same for OATS. After a failed
@@ -652,7 +656,37 @@ run commands as bb's user. Serve the route on its default port (443). A route th
 on bb's own port number (38886 or 38887) on the tailnet address looks the same as an
 exposed bb to the check, and is refused.
 
-## Stops made outside OATS
+## Stops
+
+**A thread OATS stopped is archived.** `oats instance stop <instance>` records the stop,
+stops the thread and archives it. bb starts a stopped thread's agent again at the next
+message to it, in the same conversation, so before oats.bb archived at a stop, a message
+typed in bb's composer restarted an agent OATS had stopped. bb refuses every message to
+an archived thread, so the agent stays stopped until OATS starts it, and a start is a new
+thread, as before.
+
+- The conversation is not lost: it is in bb, readable, under the project's archived
+  threads (`bb thread list --archived --project <id>`).
+- If bb does not archive the thread, the stop still succeeds, and the provider's command
+  writes a warning on its standard error naming the thread; archive it in bb
+  (`bb thread archive <id>`), or start the agent with OATS, which archives it.
+- If you unarchive the thread in bb (`bb thread unarchive <id>`) and message it, bb
+  starts its agent again, outside OATS: OATS still holds the instance stopped. Stop it
+  with `oats instance stop <instance>`, or start it with OATS.
+- A home stopped with the host (`oats host run`'s shutdown) is one OATS brings back, by
+  an input to its thread, so that stop must not archive. The provider leaves the thread
+  live when the kernel says the stop is the host's (`reason: "host"` in the stop input).
+  An OATS below this package's floor does not say so: with one (a trial against an
+  older kernel), a bb home stopped with the host is archived like any other and is not
+  resumed after the host starts again. Start it with `oats session start`, which gives
+  it a new thread.
+- The window that leaves: a home stopped with the host has its thread live and
+  unarchived from the host's shutdown until the first resume sweep after the host is
+  back (`oats host run` runs one at its start and each minute; the clients when they
+  open): the time the host is off, plus up to about a minute after boot. A message
+  typed in it then lands in a home OATS means to run.
+
+### Stops made outside OATS
 
 A thread stopped in bb's own UI is not stopped for OATS: bb shows it `idle`, OATS has no
 record of the stop, and the next mail's tell restarts it. **Stop an OATS agent with OATS**
@@ -692,9 +726,10 @@ Readiness says so wherever bubblewrap is missing
 
 ## A trial against an unreleased kernel
 
-The manifests' floor (`compatibility.oats`, `>=0.70.0`) is OATS 0.70.0, the first OATS
-release that carries both the session-provider wire 1.3 and the kernel's protection of a
-provider home's files ([What it needs](#the-session-provider)). A kernel built from an
+The manifests' floor (`compatibility.oats`, `>=0.70.5`; PLACEHOLDER(A16): set before this
+is released) is the first OATS release that marks a host shutdown's stop; the
+session-provider wire 1.3 and the kernel's protection of a provider home's files are in
+OATS since 0.70.0 ([What it needs](#the-session-provider)). A kernel built from an
 unmerged branch reports an older version and refuses the capability
 (`E_CAPABILITY_INCOMPATIBLE`). A kernel that has session providers but not yet wire 1.3
 refuses this manifest for its `wire` key (`E_BACKEND_UNKNOWN`): that is intended, the two
@@ -729,8 +764,9 @@ Ubuntu.
 A third (`test/contract/pi.test.mjs`, its own image: bb-app, pi, the OATS kernel's
 package and @awebai/oats-pi, and a mock OpenAI-compatible endpoint) runs pi threads: the
 launch, the three variables through bb's project env, the home's skills, the readiness
-of bb's pi configuration, a failed turn, input (idle, steering, a stopped thread, a
-dialog), and that no process is left in a home after a stop or a retire. Run it again
+of bb's pi configuration, a failed turn, input (idle, steering, a dialog), a thread OATS
+stopped (archived: a tell is refused and starts nothing; unarchived by hand, a tell
+starts pi again), and that no process is left in a home after a stop or a retire. Run it again
 on every bump of bb-app or pi.
 
 A fourth (`test/contract/title.test.mjs`, the first file's image) pins what bb does to a

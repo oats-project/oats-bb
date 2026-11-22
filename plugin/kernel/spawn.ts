@@ -128,8 +128,33 @@ export function parseSpawn(document: unknown): Result<{ instance: string; thread
   return ok({ instance: parsed.value.instance, threadId: parsed.value.session?.endpoint?.threadId ?? null });
 }
 
+// ---- the harnesses the bb session provider launches ----
+/**
+ * The ONE read of the list (the harness interface, point 1): the bb capability as the deployment
+ * resolves it, whose manifest declares the harnesses its session provider can launch.
+ */
+export const harnessListArgv = (): string[] => ["capabilities", "show", "oats.bb", "--json"];
+/** A harness's id as a manifest declares it: never an option, never a path. */
+const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
+const shownCapability = z.looseObject({ sessionProviders: z.looseObject({ bb: z.looseObject({ harnesses: z.unknown().optional() }).nullish() }).nullish() });
+/**
+ * `result.sessionProviders.bb.harnesses`, in the manifest's order, each once. A provider from
+ * before the list carries none: the answer is then empty, and a form offers no choice and passes
+ * no `--harness`.
+ */
+export function parseHarnessList(document: unknown): Result<{ harnesses: string[] }> {
+  const parsed = shaped(shownCapability, document, "oats capabilities show oats.bb");
+  if (!parsed.ok) return parsed;
+  const declared = parsed.value.sessionProviders?.bb?.harnesses;
+  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
+  return ok({ harnesses: [...new Set(harnesses)] });
+}
+
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
+  /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
+  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[] }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
+
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the
    * call. A soul not in the list or a name that is no instance name starts no process and writes

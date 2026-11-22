@@ -1,0 +1,104 @@
+// The harness and model choice, for every place that offers it: the New agent form and the Start
+// and Restart dialogs (the harness interface: specs' bb-plugin-harness-interface, v4).
+//
+//   - The harnesses are the ones the bb session provider declares (`spawnHarnesses`, one read).
+//     With one in the list no choice is shown and none is passed.
+//   - A harness's model suggestions are bb's own: what bb can launch for that harness's bb
+//     provider on the machine that holds the deployment, asked WITHOUT a project (a per-project
+//     listing starts a pi in the agent's home, which blocks its retire for about a minute). There
+//     is no kernel verb for them. With none reported the field is "Default" plus free text.
+//
+// What the kernel cannot launch it refuses at the preview, in its own words: nothing here decides.
+import { useEffect, useState } from "react";
+import { useSdk } from "@get-bb/plugin-sdk/app";
+import { harnessLabel } from "../../model/spawn";
+import { useRead } from "../store";
+
+/**
+ * The bb provider that runs each harness, as the bb session provider maps them (oats-bb
+ * oats-package/capabilities/oats-bb/lib/mode.mjs BB_PROVIDER). A harness this does not know has no
+ * model list to ask for.
+ */
+export const BB_PROVIDER: Readonly<Record<string, string>> = { claude: "claude-code", pi: "pi" };
+
+/** A harness as a choice: its id (what `--harness` takes) and its name for a person. */
+export type HarnessOption = { id: string; label: string };
+/**
+ * The harness choice. `choice` is false when there is nothing to choose (one harness, or none
+ * declared): the field is then not drawn and no `--harness` is passed. `hostId` is the machine
+ * bb's model list is asked of.
+ */
+export type Harnesses = { status: "loading" | "ready" | "failed"; options: HarnessOption[]; choice: boolean; hostId: string | null; error: string | null; retry(): void };
+/** The first entry of the harness field: selected at the start, and nothing is passed while it is. */
+export const SOUL_DEFAULT = "The soul's default";
+/** The first entry of a Start or Restart's harness field. */
+export const KEEP_HARNESS = "Keep the recorded harness";
+/** The first entry said with what the kernel resolved, once a preview answered: "The soul's default: pi". */
+export const resolvedLabel = (first: string, harness: string | null): string => (harness === null ? first : `${first}: ${harnessLabel(harness)}`);
+
+/** The harnesses the bb session provider declares, read once for the window and shared. */
+export function useHarnesses(): Harnesses {
+  const read = useRead("spawnHarnesses", { live: false });
+  const ids = read.data?.harnesses ?? [];
+  return {
+    status: read.status === "ready" ? "ready" : read.status === "error" ? "failed" : "loading",
+    options: ids.map((id) => ({ id, label: harnessLabel(id) })),
+    choice: ids.length > 1,
+    hostId: read.data?.hostId ?? null,
+    error: read.status === "error" ? read.error : null,
+    retry: read.retry,
+  };
+}
+
+/** A model bb can launch: its id (what `--model` takes) and bb's name for it. */
+export type ModelOption = { id: string; label: string };
+/** The first entry of the model field: selected at the start, and no `--model` is passed while it is. */
+export const MODEL_DEFAULT = "Default";
+/** Under the field when bb reports no model for the harness (the Desktop's sentence). */
+export const NO_SUGGESTIONS = "No model suggestions reported. Any model ID can be typed.";
+export type ModelSuggestions = { status: "loading" | "ready"; models: ModelOption[]; note: string | null };
+
+/** bb's answer as suggestions: each model once by its id, in bb's order; ids that could be read as an option are left out. */
+export function modelOptions(answer: unknown): ModelOption[] {
+  const listed = typeof answer === "object" && answer !== null && Array.isArray((answer as { models?: unknown }).models) ? (answer as { models: unknown[] }).models : [];
+  const seen = new Set<string>();
+  const options: ModelOption[] = [];
+  for (const entry of listed) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { model, displayName } = entry as { model?: unknown; displayName?: unknown };
+    if (typeof model !== "string" || model === "" || model.startsWith("-") || model.includes("\0") || seen.has(model)) continue;
+    seen.add(model);
+    options.push({ id: model, label: typeof displayName === "string" && displayName !== "" && displayName !== model ? `${displayName} · ${model}` : model });
+  }
+  return options;
+}
+
+/**
+ * bb's models for a harness, on the machine that holds the deployment. Asked again when the
+ * harness changes; an answer for a harness that is no longer the chosen one is dropped. A harness
+ * with no bb provider, a machine not known yet, and a list bb could not give all read as no
+ * suggestion: the field stays "Default" plus free text, and says so.
+ */
+export function useModelSuggestions(harness: string | null, hostId: string | null): ModelSuggestions {
+  const sdk = useSdk();
+  const providerId = harness === null ? undefined : BB_PROVIDER[harness];
+  const [answer, setAnswer] = useState<{ of: string; models: ModelOption[] } | null>(null);
+  const of = providerId === undefined || hostId === null ? null : `${hostId}\n${providerId}`;
+  useEffect(() => {
+    if (of === null || providerId === undefined || hostId === null) return;
+    let current = true;
+    const none = () => {
+      if (current) setAnswer({ of, models: [] });
+    };
+    // No projectId: the machine's own list, never a listing that starts a harness in a project.
+    sdk.providers.models({ hostId, providerId, preferCached: true }).then((listed) => {
+      if (current) setAnswer({ of, models: modelOptions(listed) });
+    }, none);
+    return () => {
+      current = false;
+    };
+  }, [sdk, of, providerId, hostId]);
+  if (of === null) return { status: "ready", models: [], note: NO_SUGGESTIONS };
+  if (answer === null || answer.of !== of) return { status: "loading", models: [], note: null };
+  return { status: "ready", models: answer.models, note: answer.models.length === 0 ? NO_SUGGESTIONS : null };
+}

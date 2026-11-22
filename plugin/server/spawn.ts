@@ -8,6 +8,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /** key -> the decision a spawn with that key applies, so that a retry replays it. */
   const spawns = new Map<string, { soul: string; name: string; revision: string }>();
   return {
+    /** What the bb session provider declares: one read for every client and every place that offers the choice. */
+    async spawnHarnesses() {
+      const { harnesses } = await core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
+      return { harnesses, hostId: core.target()?.hostId ?? null };
+    },
     async spawnPreview({ soul, name, task }, context) {
       if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
       const { summary } = await core.call("spawnPreview", { soul, name, task }, HOST_TIMEOUT.preview, context.experimental_signal);

@@ -268,15 +268,9 @@ function snapshotRow(instance) {
  * the event log, or the server's own reread behind a snapshot older than its 15 s poll: this check
  * holds the delay a client sees, not the watch by itself (live.sh's L2 holds the watch, with the
  * poll off). `recordedAt` is taken before the command that makes the change, so the delay holds the
- * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake).
- *
- * The bound: 3 s is the plugin's number on a kernel that answers at once, and the live scenes hold
- * it strictly against the fake `oats`. Here the kernel is the real one, and its own time is in the
- * delay (the command that makes the change, and the `oats status` that brings it): the bound is
- * 3 s plus the time the kernel's own `oats status` took, measured right after, and both are printed.
- * A kernel whose status takes over a second is given twice that time and the pause, so a slow
- * kernel is told apart from a slow plugin. (A run on a slow runner read 3044 ms at a 512 ms status
- * with nothing of the plugin slow; the ten green runs before it: 238 to 2427 ms.)
+ * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
+ * own time is measured and said beside the delay, and a slower kernel is given twice that time and
+ * the pause, so a slow kernel is told apart from a slow plugin.
  */
 async function fresh(what, instance, matches, recordedAt) {
   let seen = null;
@@ -293,7 +287,7 @@ async function fresh(what, instance, matches, recordedAt) {
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
-  const limit = statusMs <= 1000 ? 3000 + statusMs : 2 * statusMs + 2000;
+  const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
   check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
 }
 /** The plugin's snapshot agrees with the kernel's row: the thread, and the kernel's words for whether it runs. */

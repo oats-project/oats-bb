@@ -10,6 +10,7 @@ import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writePro
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, samePath } from "./threads.mjs";
+import { threadTitle } from "./title.mjs";
 
 // After a spawn whose fate is unknown: how often, and how far apart, the home's threads
 // are read for the thread it may have made.
@@ -25,7 +26,8 @@ function readInput(input) {
   const unsupported = harnessRefusal(harness);
   if (unsupported !== null) throw fail(unsupported.code, unsupported.message);
   if (typeof home !== "string" || !isAbsolute(home)) throw fail("E_SESSION_START_FAILED", "the launch input's home must be an absolute path");
-  // The name becomes bb's project name and thread title: an argument, never an option.
+  // The name becomes bb's project name, and as words its thread's title (lib/title.mjs):
+  // arguments, never options. (The words of a name that starts so start with a letter or digit too.)
   if (typeof instance !== "string" || !/^[A-Za-z0-9][^\0\n\r]*$/.test(instance)) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name (one line, starting with a letter or digit)");
   if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
   if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
@@ -200,8 +202,12 @@ export async function launch(input, settings, { deadline, env = process.env, spa
 
   } catch (error) { throw inDoubtAfter(error); }
 
+  // The thread's title is the instance's name as words, given at the spawn, so at every
+  // start: each one is a new thread. bb writes a title of its own only for a thread that
+  // has none, and never replaces one (test/contract/title.test.mjs), so nothing sets it
+  // again later. The project's name stays the name itself: it identifies the home.
   const args = ["--project", project.id, "--provider", BB_PROVIDER[harness], ...(model ? ["--model", model] : []),
-    "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", instance];
+    "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", threadTitle(instance)];
   const askedAt = Date.now();
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;

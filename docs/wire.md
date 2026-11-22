@@ -78,6 +78,16 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   bb created after the spawn was asked for (bb's `createdAt`; bb and the provider are on
   one host), so an older thread of the home that shows again is not answered (the launch
   stays in doubt). The kernel may tell a new session from an old one by its endpoint.
+- **The thread's title is the instance's name as words.** The launch passes it to the
+  spawn (`--title`): `instance` with every run of `-` as one space, the ends trimmed, and
+  only the first character upper-cased (`tui-leader-hint-developer-2` is "Tui leader hint
+  developer 2"), the rule of OATS's `instanceDisplayName`. The project the launch creates
+  is named `instance` as it is. The title is given at the spawn and by no other verb:
+  inspect and input read and write none. At the pinned bb a thread spawned with a title
+  keeps it (bb asks its title service only for a thread with none, and applies a
+  generated title only to a thread with none); what changes it is `bb thread update
+  --title` or `bb thread regenerate-title`, a person's or an agent's own act, which
+  stays until the next launch.
 - **stop is complete only when nothing of the thread can run.** bb's concurrency limit
   holds a turn in line (the thread is `pending`, its list row says `queuedWork`), and
   `bb thread stop` leaves it there: bb starts it by itself when a slot frees. So a stop is
@@ -326,14 +336,17 @@ nothing on stdout.
 At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
-  `bb thread show`, `bb thread spawn`, `bb thread tell`, `bb thread interactions list`,
+  `bb thread show`, `bb thread spawn` (with `--title`), `bb thread tell`, `bb thread interactions list`,
   `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
   thread), `bb thread archive`, and `bb thread list --project <id> --archived`. For pi:
   `bb machine env list` (with and without `--project`), `bb machine env set <NAME>
   --project <id>` and `bb machine env unset <NAME> --project <id>`, of whose answers only
   the `variables` names are read. The
   contract test also sets bb's limit (`bb concurrency-limit global`), to pin what a held
-  turn looks like and that a stop withdraws it. A list is read row by
+  turn looks like and that a stop withdraws it. It also pins bb's own handling of a
+  thread's title (`bb thread update --title`, `bb thread regenerate-title`, and a title
+  service registered by a test plugin: `bb plugin install`, `bb settings ai-services
+  show`), none of which the provider runs. A list is read row by
   row: a project needs an `id` and its `sources` (each with its `type`, and a local one
   its `path`), a thread an `id` and a `status` that is one of bb's words (`pending`,
   `idle`, `starting`, `active`, `stopping`, `error`), with a `projectId`, `archivedAt`,

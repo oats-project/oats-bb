@@ -94,9 +94,23 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
     execFileSync("docker", ["build", "-q", "--build-arg", `BB_APP_VERSION=${BB_VERSION}`, "-t", image, dockerfileDir], { stdio: ["ignore", "ignore", "inherit"] });
     execFileSync("docker", ["run", "-d", "--name", name, "--init", "--cpus", "2", "--memory", "4g", ...runArgs, "-v", `${repo}:/repo:ro`, image], { stdio: ["ignore", "ignore", "inherit"] });
     for (const script of [mock].flat()) await run("docker", ["exec", "-d", name, "sh", "-c", `cd ~ && node /repo/test/contract/${script} > ${script}.out 2>&1`]);
+    await startBb();
+  }
+
+  const isReady = ready ?? (async () => (await provider("check", { home: null, soul: null })).result?.status === "ready");
+  async function startBb() {
     await run("docker", ["exec", "-d", ...Object.entries(bbEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]), name, "sh", "-c",
-      "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates > bb-app.out 2>&1"]);
-    await waitFor("bb to be ready", ready ?? (async () => (await provider("check", { home: null, soul: null })).result?.status === "ready"), { timeoutMs: 180_000, everyMs: 1_000 });
+      "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates >> bb-app.out 2>&1"]);
+    await waitFor("bb to be ready", isReady, { timeoutMs: 180_000, everyMs: 1_000 });
+  }
+
+  /** Restart bb: end its server (bb-app, which ends its host daemon with it), wait until
+   *  nothing answers on its port, and start it again on the same data directory. */
+  async function restartBb() {
+    // By the start of its command line (`node …/bb-app --data-dir`), which this shell's own does not have.
+    await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir"*) kill \${p#/proc/} ;; esac; done`);
+    await waitFor("bb to be gone", async () => (await sh("bb project list --json >/dev/null 2>&1 && echo up || echo down")).trim() === "down", { timeoutMs: 60_000 });
+    await startBb();
   }
 
   async function stop() {
@@ -112,5 +126,5 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
     await waitFor(`${threadId} to be idle`, async () => (await threadStatus(threadId)) === "idle", { timeoutMs: 120_000 });
   }
 
-  return { sh, bbJson, provider, requests, arm, toolCall, threadStatus, pending, firstTurnOver, start, stop };
+  return { sh, bbJson, provider, requests, arm, toolCall, threadStatus, pending, firstTurnOver, start, stop, restartBb };
 }

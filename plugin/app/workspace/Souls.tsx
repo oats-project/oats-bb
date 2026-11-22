@@ -1,12 +1,12 @@
 // Souls (`oats souls --json`): the deployment's souls, each with its agents here, and the New
 // agent form (app/spawn/) on a soul that can be spawned.
-import { ThreadTitle, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
-import { RosterNotice } from "../roster/unreadable";
+import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
@@ -14,6 +14,7 @@ import { useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, Page, plainClick } from "../ui";
 import { shown } from "../ui/text";
+import { agentName } from "../ui/words";
 
 type Soul = Result<"souls">["souls"][number];
 type Ready = Extract<Oats, { phase: "ready" }>;
@@ -43,6 +44,8 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
   const mine = oats.agents.filter((agent) => agent.soul === soul.agent);
   if (mine.length === 0) return <Note>No agent of this soul in this deployment.</Note>;
   const detached = new Set(oats.view.detached);
+  // On the last roster read the OATS acts are held: each stays in its place, off, with the reason.
+  const held = oats.stale !== null;
   return (
     <ul data-testid="oats-soul-agents" className="flex flex-col gap-1">
       {mine.map((agent) => {
@@ -53,6 +56,7 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
             <li key={agent.instance}>
               <a
                 data-testid="oats-soul-agent"
+                data-instance={agent.instance}
                 href={thread.href}
                 className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
                 onClick={(event) => {
@@ -62,31 +66,30 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
                 }}
               >
                 <Dot state={node.state} />
-                <span className="min-w-0 flex-1 truncate">
-                  <ThreadTitle threadId={thread.id} />
+                <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>
+                  {agentName(agent.instance)}
                 </span>
-                <span className="shrink-0 truncate text-xs text-muted-foreground">{shown(agent.instance)}</span>
               </a>
             </li>
           );
         }
         if (detached.has(agent)) {
           return (
-            <li key={agent.instance} data-testid="oats-soul-agent-detached" className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 truncate">{shown(agent.instance)}</span>
+            <li key={agent.instance} data-testid="oats-soul-agent-detached" data-instance={agent.instance} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+              <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
               <span className="text-xs text-muted-foreground">thread missing</span>
-              <Button data-testid="oats-detached-start" onClick={() => void run("start", agent.instance, rpc, navigate)}>
+              <Button data-testid="oats-detached-start" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
                 Start
               </Button>
-              <Button data-testid="oats-detached-retire" onClick={() => askPlan("retire", agent.instance)}>
+              <Button data-testid="oats-detached-retire" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => askPlan("retire", agent.instance)}>
                 Retire
               </Button>
             </li>
           );
         }
         return (
-          <li key={agent.instance} data-testid="oats-soul-agent-elsewhere" className="flex items-center gap-2 px-2 py-1.5">
-            <span className="min-w-0 flex-1 truncate">{shown(agent.instance)}</span>
+          <li key={agent.instance} data-testid="oats-soul-agent-elsewhere" data-instance={agent.instance} className="flex items-center gap-2 px-2 py-1.5">
+            <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
             <span className="text-xs text-muted-foreground">{`on ${shown(agent.backend)}`}</span>
             {/* An agent with no bb thread has its own page, where a feature gives agents one. */}
             {hasAgentPage() ? (

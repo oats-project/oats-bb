@@ -64,8 +64,30 @@ function rpc(method) {
 const fake = (verbs = {}) =>
   writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
-const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/threads.json"), "utf8")).threads;
+/** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. */
+const ALL_PAGES = "home, automations, souls, capabilities, teams, machines";
+const pages = (value) => void bb("plugin", "config", "oats", "set", "pages", value);
+
 const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
+/**
+ * The title the bb session provider gives an agent's thread: the instance's name as words (oats-bb
+ * `oats-package/capabilities/oats-bb/lib/title.mjs` `threadTitle`, the Desktop's
+ * `instanceDisplayName`; bb keeps a title given at the spawn). THE ONE PLACE to change if the
+ * provider's rule changes: the images then show in bb's own header what a person will see.
+ */
+const providerTitle = (instance) => {
+  const words = instance.replace(/-+/g, " ").trim();
+  const first = String.fromCodePoint(words.codePointAt(0));
+  return first.toUpperCase() + words.slice(first.length);
+};
+/** The instance whose session is on a fixture thread, by the fixture's status; undefined for a thread that is no agent's. */
+const instanceOn = (fixtureThreadId) => fixtureStatus.agents.flatMap((group) => group.instances).find((row) => row.session?.threadId === fixtureThreadId)?.instance;
+// The fixture threads, each titled as it is in a deployment: an agent's thread as the provider
+// titles it, a thread that is no agent's by the title a person gave it (the fixture's own).
+const fixtureThreads = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/threads.json"), "utf8")).threads.map((thread) => {
+  const instance = instanceOn(thread.id);
+  return instance === undefined ? thread : { ...thread, title: providerTitle(instance) };
+});
 
 /** One bb thread per fixture thread, found or made by its title: fixture thread id -> bb's thread. */
 function threadsByFixtureId() {
@@ -322,6 +344,17 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
+  // The release's default: only the home is a page that is shown. Every other stage runs with all
+  // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
+  // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
+  "pages-default": {
+    label: "PG",
+    enter: async ({ threads }) => {
+      fake({ status: { stdout: statusWithRealIds(threads) } });
+      pages("home");
+    },
+    leave: async () => pages(ALL_PAGES),
+  },
   // The fake oats is removed for the length of the stage, then put back.
   "no-oats": {
     label: "A14",
@@ -370,7 +403,7 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, record: (changes) => record(threads, changes) });
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes) });
           } finally {
             await page.close();
           }

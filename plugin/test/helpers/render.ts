@@ -5,6 +5,7 @@ import { loadPluginApp } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginRpcTestHandlers } from "@get-bb/plugin-sdk/testing/app";
 import type { rpcContract } from "../../contract";
 import { resetWindow } from "../../app/store";
+import { PAGE_IDS, showEveryPageWhenUnset } from "../../app/workspace/pages";
 import type { Agent } from "../../model/types";
 import * as automations from "../automations/handlers";
 import * as home from "../home/handlers";
@@ -14,6 +15,12 @@ import * as roster from "../roster/handlers";
 import * as spawn from "../spawn/handlers";
 import * as workspace from "../workspace/handlers";
 import { fixtureAgents, fixtureThreads } from "./fixtures";
+
+// The unit tests draw every page: a slot rendered with no settings stands for a deployment that
+// shows them all. The release's default (`home` alone) is what a test names: `settings: { pages: "home" }`.
+showEveryPageWhenUnset(true);
+/** Every page's id, for a test that names the setting. */
+export const ALL_PAGES = PAGE_IDS.join(", ");
 
 export type Contract = typeof rpcContract;
 export type Handlers = PluginRpcTestHandlers<Contract>;

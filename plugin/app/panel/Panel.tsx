@@ -15,7 +15,7 @@ import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable"
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
-import { Button, Card, Chip, Code, Disclosure, Fact, Facts, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Chip, Code, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
 import { instanceDisplayName, waitingLabel } from "../ui/words";
@@ -177,6 +177,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
         <div data-testid="oats-panel-state">
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here. */}
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
+          <KernelSays text={status.kernel} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>

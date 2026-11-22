@@ -83,8 +83,8 @@ test("the thread's row: a soul's name and an alias with a character that is no t
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer`, alias: `flaky\u200Bci`, address: null } : agent));
   const app = await loadApp();
   const row = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId: "thr_ci", projectId: "proj_ci", environment: null }, { rpc: handlers({ souls: () => ({ souls: [] }) }, agents), sidebarThreads: sidebarThreads() });
-  expect((await row.findByTestId("oats-fact-soul")).textContent).toBe(`Souloats${GONE}developer`);
-  expect(row.getByTestId("oats-fact-identity").textContent).toBe(`Identity in default:oats.aweb.aiflaky${GONE}ci`);
+  expect((await row.findByTestId("oats-fact-soul")).textContent).toBe(`instance ofoats${GONE}developer`);
+  expect(row.getByTestId("oats-fact-identity").textContent).toBe(`Messaging IDflaky${GONE}ci`);
 });
 
 test("a soul's page: its description and its problem, and a capability's description, are one filtered line each", async () => {

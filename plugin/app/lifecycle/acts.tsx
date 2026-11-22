@@ -12,6 +12,7 @@ import { markGone, planSaysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, ErrorLine, Modal, Note, Notice } from "../ui";
 import { refusalCode, shown } from "../ui/text";
+import { agentName } from "../ui/words";
 
 export type PlanVerb = "stop" | "retire";
 export type RunVerb = "start" | "restart";
@@ -138,7 +139,7 @@ function PlanDialog({ request }: { request: Extract<Request, { kind: "plan" }> }
     <Modal
       // The agent is named from the kernel's plan, never from the row that was pressed: the roster
       // on screen may be older than what the kernel knows. Until the plan is read no agent is named.
-      title={state.phase === "ready" && state.instance !== null ? `${words.title} ${shown(state.instance)}?` : state.phase === "ready" ? `${words.title} this agent?` : `${words.title} an agent`}
+      title={state.phase === "ready" && state.instance !== null ? `${words.title} ${agentName(state.instance)}?` : state.phase === "ready" ? `${words.title} this agent?` : `${words.title} an agent`}
       onCancel={cancel}
       footer={
         <>
@@ -204,7 +205,7 @@ export function ActsOverlay() {
         data-testid="oats-act-running"
         className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-lg"
       >
-        {`${RUN[request.verb].doing} ${shown(request.instance)} through OATS…`}
+        {`${RUN[request.verb].doing} ${agentName(request.instance)} through OATS…`}
       </div>
     );
   }
@@ -226,7 +227,7 @@ export function ActsOverlay() {
       }
     >
       <div data-testid="oats-act-failed" className="flex flex-col gap-2">
-        <p>{`OATS was asked to ${request.verb} ${shown(request.instance)}.`}</p>
+        <p>{`OATS was asked to ${request.verb} ${agentName(request.instance)}.`}</p>
         <Refused error={request.message} gone={false} instance={request.instance} onRetry={again} footerRetries />
       </div>
     </Modal>
@@ -245,7 +246,7 @@ function Refused({ error, gone, instance, onRetry, footerRetries = false }: { er
   const machine = oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null;
   if (gone) {
     return (
-      <Notice title={`${shown(instance)} is not in OATS any more`} tone="error" code={code} details={error}>
+      <Notice title={`${agentName(instance)} is not in OATS any more`} tone="error" code={code} details={error}>
         <p>OATS has no agent of this name now: it was retired, or removed, after the roster on screen was read. Nothing was changed.</p>
       </Notice>
     );

@@ -377,7 +377,7 @@ async function shots(scene, { instance, soul, threadId, state }) {
       // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
       const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
       const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
-      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`Soul ${soul}`) && line.row.includes("OATS"), `${at}: the thread's row says "${WORD[state]}", and the soul`, JSON.stringify(line));
+      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}", the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
@@ -393,7 +393,7 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes(${JSON.stringify(instance)}) ? t : ""; })()`, 30);
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
       check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
@@ -536,6 +536,8 @@ try {
       await page.goto("/plugins/oats/home");
       const choices = await page.until(`(() => { const c = ${card}; const b = c ? [...c.querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].map((e) => e.innerText.trim()) : []; return b.length > 0 ? JSON.stringify({ question: c.querySelector(${JSON.stringify(testId("oats-needs-question"))})?.innerText.trim(), choices: b }) : ""; })()`, 30);
       check(choices === JSON.stringify({ question: QUESTION, choices: ["Retry", "Mark failed"] }), `${at}: the home's card shows the question and its two choices`, choices ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
+      // The home's tiles count what OATS lists: the image is taken once none still says "Counting…" (one state in an image). True at once on a home with no tiles.
+      await page.until(`![...document.querySelectorAll('[data-testid="oats-home-tiles"] button')].some((tile) => tile.innerText.includes("Counting"))`, 20);
       await page.shot(`real-question-${viewport.name}-home${suffix}`);
       if (view !== VIEWS[VIEWS.length - 1]) continue;
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
@@ -834,7 +836,26 @@ try {
   // files' order). A part's default export is `async (run) => {…}`: `run` holds this script's own
   // helpers, so its acts go through the plugin's RPC and are recorded like the ones above.
   const PARTS = join(HERE, "parts");
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, VIEWPORTS, DEPLOY, OUT };
+  /**
+   * For a part that takes images of its own screens on the run's real agents: `draw` is called once
+   * per view (bb's light and dark themes, at each width), with a page of that view whose theme is
+   * checked, and `shot(name)`, which saves `<scene>-<width>x<height>-<name>[-dark].png` beside the
+   * run's other images. The part navigates, WAITS on what it reads (`page.until`), checks it with
+   * `check`, then shoots: the image-set rule is one state per scene in both themes.
+   */
+  const views = async (scene, draw) => {
+    for (const view of VIEWS) {
+      const { viewport, theme, suffix } = view;
+      const at = `${scene} ${theme} ${viewport.name}`;
+      const page = await viewPage(browser, view, at);
+      try {
+        await draw({ page, at, viewport, theme, shot: (name) => page.shot(`${scene}-${viewport.name}-${name}${suffix}`) });
+      } finally {
+        await page.close();
+      }
+    }
+  };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

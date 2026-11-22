@@ -9,14 +9,17 @@ import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
 const MACHINE = process.env.MACHINE_NAME || hostname();
 
 /** The thread's own row, read once it says `state`: → `{ line, act }` (the status line's words, and its button's), or null. The read waits on the row. */
-const statusOf = async (page, state) => {
+const statusOf = async (page, state, want = null) => {
   const line = testId("oats-status-line");
-  const read = await page.until(
-    // The words as the page lays them out (innerText of the drawn line), without the act's own.
-    `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${line}`)}); if (!e || e.getAttribute("data-state") !== ${JSON.stringify(state)}) return ""; const act = e.querySelector(${JSON.stringify(testId("oats-status-act"))})?.innerText.trim() ?? null; const all = e.innerText.replace(/\\s+/g, " ").trim(); return JSON.stringify({ line: act !== null && all.endsWith(act) ? all.slice(0, -act.length).trim() : all, act }); })()`,
-    30,
-  );
-  return read ? JSON.parse(read) : null;
+  // The line's words as a person reads them: the state's word, then each part with the separator
+  // before it; and its act (Start, Restart, Retry) apart. The way to the panel is not the line's words.
+  // `want` (a RegExp) is what the line is waited for: a part that arrives after the state (a stopped
+  // agent's "since", read from its events) is waited on, not read at once. When the wait runs out
+  // the line is read as it is, for the failing check to print.
+  const read = (wanted) =>
+    `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${line}`)}); if (!e || e.getAttribute("data-state") !== ${JSON.stringify(state)}) return ""; const flat = (x) => x.innerText.replace(/\\s+/g, " ").trim(); const words = [flat(e.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...e.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${wanted === null ? "false" : `!new RegExp(${JSON.stringify(wanted.source)}).test(words)`}) return ""; return JSON.stringify({ line: words, act: e.querySelector(${JSON.stringify(testId("oats-status-act"))})?.innerText.trim() ?? null, panel: e.querySelector(${JSON.stringify(testId("oats-open-panel"))})?.innerText.trim() ?? null }); })()`;
+  const found = (await page.until(read(want), 30)) ?? (want === null ? undefined : await page.evaluate(read(null)));
+  return found ? JSON.parse(found) : null;
 };
 /** What the page shows of the thread's row when a read of it found nothing: for a failing check's line. */
 const rowText = (page) => page.evaluate(textOf(testId("oats-identity-row")));
@@ -68,17 +71,22 @@ export default [
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at} an agent's thread shows the identity row`);
       // The image's name says a thread with its row: the row says where the agent is in words, then who it is, each fact with its label.
-      const row = JSON.parse(await page.evaluate(`JSON.stringify({ status: ${textOf(testId("oats-status-line"))}, state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state"), facts: ${texts(`${testId("oats-identity-facts")} > *`)} })`));
+      const line = await statusOf(page, "working");
+      const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        row.state === "working" && row.status === "Working" && JSON.stringify(row.facts) === JSON.stringify(["Soul oats-desktop-developer", "Under redesign-ui-lead", "Identity in default:oats.aweb.ai desktop-mockups-developer", "OATS"]),
-        `${at} the row: the state in words, then the soul, the parent, the identity, each with its label, and OATS`,
-        JSON.stringify(row),
+        line !== null && /^Working( · session started .+)?$/.test(line.line) && line.act === null && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        `${at} the row: the state in words and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
+        JSON.stringify({ line, facts }),
       );
-      // Nothing of the row is cut or scrolls out of sight: it is as wide as its place, and every part of it is inside it.
-      const whole = await page.evaluate(
-        `(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const box = row.getBoundingClientRect(); return row.scrollWidth <= row.clientWidth + 1 && [...row.querySelectorAll("*")].every((e) => { const r = e.getBoundingClientRect(); return r.width === 0 || (r.left >= box.left - 1 && r.right <= Math.min(box.right, innerWidth) + 1); }); })()`,
+      // Nothing of the row is cut or scrolls out of sight: it is as wide as its place, and every piece
+      // of TEXT in it is drawn inside it and inside the window. (The text itself is measured, not its
+      // box: a separator that would start a line of the status line is clipped on purpose.)
+      const outside = JSON.parse(
+        await page.evaluate(
+          `(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const box = row.getBoundingClientRect(); const out = []; const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (node.data.trim() === "" || node.parentElement.closest("[data-sep]")) continue; const range = document.createRange(); range.selectNodeContents(node); for (const r of range.getClientRects()) if (r.width > 0 && (r.left < box.left - 1 || r.right > Math.min(box.right, innerWidth) + 1)) out.push(node.data.trim().slice(0, 40)); } return JSON.stringify({ scrolls: row.scrollWidth > row.clientWidth + 1, out }); })()`,
+        ),
       );
-      check(whole, `${at} nothing of the row is cut or out of sight`);
+      check(outside.scrolls === false && outside.out.length === 0, `${at} nothing of the row is cut or out of sight`, JSON.stringify(outside));
       await page.shot(`a13-${viewport.name}-thread`, { targets: true });
 
       // the thread of an agent that needs you: its row is the open one, with the "!" and "Needs you"
@@ -92,6 +100,14 @@ export default [
         `${at} the thread of an agent that waits says so in its own row: "Needs you", since when, and its question`,
         needs === null ? await rowText(page) : JSON.stringify(needs),
       );
+      // No line of it starts with a separator (B4): the "·" of a part that begins a line is outside what
+      // the line's frame shows, and the "·" of a part that follows another on its line is inside it.
+      const seps = JSON.parse(
+        await page.evaluate(
+          `(() => { const line = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-line")}`)}); const frame = line.getBoundingClientRect(); const first = line.querySelector(${JSON.stringify(testId("oats-state"))}).getBoundingClientRect(); const out = { starts: 0, shown: 0, wrong: [] }; for (const part of line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})) { const range = document.createRange(); range.selectNodeContents(part.querySelector("[data-sep]")); const dot = [...range.getClientRects()].find((r) => r.width > 0); const starts = part.getBoundingClientRect().top > first.bottom - 1 && part.getBoundingClientRect().left <= frame.left; if (!dot) { out.wrong.push("no separator drawn: " + part.innerText.slice(0, 30)); continue; } if (starts) { out.starts += 1; if (dot.right > frame.left + 0.5) out.wrong.push("a line starts with the separator: " + part.innerText.slice(0, 30)); } else { out.shown += 1; if (dot.left < frame.left) out.wrong.push("a separator between two parts is cut: " + part.innerText.slice(0, 30)); } } return JSON.stringify(out); })()`,
+        ),
+      );
+      check(seps.wrong.length === 0 && seps.starts + seps.shown === 2 && (!viewport.mobile || seps.starts >= 1), `${at} no line of the status line starts with a separator (${seps.starts} part(s) begin a line, ${seps.shown} follow another)`, JSON.stringify(seps));
       await page.shot(`a13-${viewport.name}-thread-needs`, { targets: true });
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
@@ -118,8 +134,9 @@ export default [
       // the thread of an agent OATS stopped: "Stopped", and the act that brings it back
       const digest = threads.get("thr_digest");
       await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
-      const stopped = await statusOf(page, "stopped");
-      check(stopped !== null && stopped.line === "Stopped" && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped", with Start`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
+      const STOPPED = /^Stopped · since (\w+ \d+, )?\d\d:\d\d$/; // the time comes from the agent's events, after the state: waited for
+      const stopped = await statusOf(page, "stopped", STOPPED);
+      check(stopped !== null && STOPPED.test(stopped.line) && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped", since when (its last recorded stop), with Start`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
       await page.shot(`a13-${viewport.name}-thread-stopped`, { targets: true });
 
       // a thread that is no agent has no row
@@ -156,7 +173,7 @@ export default [
       const unreachable = threads.get("thr_mockups");
       await page.goto(`/projects/${unreachable.projectId}/threads/${unreachable.id}`);
       const cut = await statusOf(page, "unreachable");
-      check(cut !== null && cut.line === "Unreachable" && cut.act === "Retry", `${at} the thread of an agent the kernel cannot reach says "Unreachable", with Retry`, cut === null ? await rowText(page) : JSON.stringify(cut));
+      check(cut !== null && cut.line === "Unreachable · OATS cannot reach its session" && cut.act === "Retry", `${at} the thread of an agent the kernel cannot reach says "Unreachable", in a person's words, with Retry`, cut === null ? await rowText(page) : JSON.stringify(cut));
       await page.shot(`a16-${viewport.name}-thread-unreachable`, { targets: true });
 
       const failed = threads.get("thr_harvest");
@@ -178,7 +195,7 @@ export default [
   },
   {
     stage: "no-oats",
-    name: "stale: OATS cannot be read after it was: the notice, the last observation, the tree as last read",
+    name: "stale: OATS cannot be read after it was: the one notice (its age once, the acts held, Retry), the tree as last read",
     run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is still drawn`);
@@ -186,8 +203,10 @@ export default [
       const notice = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-unreadable"))}); const t = e?.querySelector("h3")?.innerText ?? ""; return t === ${JSON.stringify(`OATS is not installed on ${MACHINE}`)} ? JSON.stringify({ title: t, code: e.getAttribute("data-code"), text: e.innerText.replace(/\\s+/g, " "), retry: [...e.querySelectorAll("button")].some((b) => b.innerText.trim() === "Retry"), settings: [...e.querySelectorAll("a")].some((a) => a.innerText.trim() === "Open settings") }) : ""; })()`, 30);
       const said = notice ? JSON.parse(notice) : null;
       check(said !== null && said.code === "OATS_NOT_FOUND" && /Showing what was read /.test(said.text) && said.retry && said.settings, `${at} the notice says what is missing in a person's words, how old what is shown is, with Retry and Open settings: ${said?.title ?? ""}`, await page.evaluate(textOf(testId("oats-sidebar"))));
-      const observed = await page.evaluate(textOf(testId("oats-last-observation")));
-      check(/^Last observation — /.test(observed), `${at} the roster is marked as the last observation (${observed})`);
+      // One drawing, the age said once and in one form, and the acts held: the sentence names Retry first.
+      const AGE = "(less than a minute ago|\\d+ min ago|\\d+ h ago)";
+      const once = JSON.parse(await page.evaluate(`JSON.stringify({ held: ${textOf(`${testId("oats-sidebar")} ${testId("oats-held")}`)}, ages: (document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).innerText.match(/${AGE}/g) ?? []).length, second: document.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null })`));
+      check(once.held === "Press Retry: Stop, Start, Restart and Retire come back when OATS is read again." && once.ages === 1 && once.second === false, `${at} the notice says that the acts are held, Retry first, and the age of what is shown once, in one form`, JSON.stringify(once));
       // The roster stays: the agents as last read, joined to their threads, never bb's flat list.
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
       check(rows.length >= 6 && rows.includes(threads.get("thr_release").id), `${at} the tree is still drawn, as last read (${rows.length} agents)`, JSON.stringify(rows));
@@ -197,9 +216,15 @@ export default [
       await page.evaluate(`document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
       const opened = await page.until(`location.pathname.endsWith("/threads/${target.id}")`, 15);
       check(Boolean(opened), `${at} a thread opens from the tree`, await page.evaluate("location.pathname"));
-      // The thread's own row is still there, from the last roster, and says that it is: "as of <age>".
-      const line = await page.until(`(() => { const t = ${textOf(`${testId("oats-identity-row")} ${testId("oats-status-line")}`)}; return / as of /.test(t) ? t : ""; })()`, 15);
-      check(/^Working · as of (just now|\d+s ago|\d+ min ago)$/.test(line ?? ""), `${at} the open thread keeps its OATS row, from the last roster, and says how old it is`, line ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
+      // The thread's own row is still there, from the last roster: its line as last read, and under it
+      // the same notice on one line: the title, the age, that the acts are held, Retry.
+      const kept = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const said = row?.querySelector(${JSON.stringify(`${testId("oats-unreadable")}[data-compact]`)}); return said ? JSON.stringify({ line: row.querySelector(${JSON.stringify(testId("oats-status-line"))}).getAttribute("data-state"), said: said.innerText.replace(/\\s+/g, " ").trim() }) : ""; })()`, 15);
+      const row = kept ? JSON.parse(kept) : null;
+      check(
+        row !== null && row.line === "working" && new RegExp(`^OATS is not installed on ${MACHINE} Showing what was read ${AGE}\\. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again\\. Retry$`).test(row.said),
+        `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, the acts held, Retry`,
+        kept ?? (await page.evaluate(textOf(testId("oats-identity-row")))),
+      );
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.
@@ -209,6 +234,31 @@ export default [
       check(shown !== null && /^OATS is not installed on /.test(shown.title) && /Showing what was read /.test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
+    },
+  },
+  {
+    stage: "pages-default",
+    name: "the release's default: only the home is a page; no link, no mark, no route and no dangling link to another",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const mockups = threads.get("thr_mockups");
+      await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      // The sidebar: the roster and who waits; no list of pages, no link to one, no mark of one.
+      const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
+      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // The thread's own row: the soul by its name alone (its page is not shown: no link leads nowhere).
+      // Read AFTER the sidebar: the needs line is a button only once bb has given the settings, and
+      // until then no page is known shown under any value, so an earlier read would prove nothing.
+      const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-fact-soul"))}); return e ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, " ").trim(), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
+      check(soul === JSON.stringify({ text: "instance of oats-desktop-developer", links: 0 }), `${at} the thread's row names the soul with no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
+      await page.shot(`pages-default-${viewport.name}-sidebar`, { targets: true });
+      // A page that is not shown has no route: its path answers one line and the way back.
+      for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) {
+        await page.goto(`/plugins/oats/${path}`);
+        const said = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-page-not-shown")}[data-page="${path}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
+        check(said === "This page is not shown in this release of the OATS plugin. Back to Home", `${at} /plugins/oats/${path} says it is not shown, with the way back`, said ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      }
+      await page.shot(`pages-default-${viewport.name}-not-shown`, { targets: true });
     },
   },
 ];

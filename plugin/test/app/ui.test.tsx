@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Button, Card, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import type { AgentState } from "../../model/types";
-import { asOf, instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
+import { instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
 
 afterEach(cleanup);
 
@@ -59,10 +59,12 @@ describe("the words", () => {
     expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("waiting 27 min (since 14:03)");
     expect(waitingSince(null, now)).toBeNull();
     expect(waitingSince("not a date", now)).toBeNull();
-    // The age of a read, as the Desktop says it: seconds, rounded minutes, then the local time.
-    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["just now", "45s ago", "3 min ago", "59 min ago"]);
-    expect(readAge(new Date(2026, 10, 21, 11, 5).getTime(), now)).toBe("at 11:05");
-    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "just now"]); // not readable: no age, as the Desktop
+    // The age of a read: always relative and in one form, never a bare clock time and never "just
+    // now" (a kept read is not fresh): under a minute, minutes to the nearest, whole hours, whole days.
+    expect([readAge(now - 5_000, now), readAge(now - 45_000, now), readAge(ago(2 * 60_000 + 40_000), now), readAge(ago(59 * 60_000), now)]).toEqual(["less than a minute ago", "less than a minute ago", "3 min ago", "59 min ago"]);
+    expect([readAge(ago(61 * 60_000), now), readAge(ago(3 * 3_600_000 + 50 * 60_000), now), readAge(ago(23 * 3_600_000 + 59 * 60_000), now)]).toEqual(["1 h ago", "3 h ago", "23 h ago"]);
+    expect([readAge(ago(24 * 3_600_000), now), readAge(ago(2 * 86_400_000 + 5 * 3_600_000), now)]).toEqual(["1 d ago", "2 d ago"]);
+    expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "less than a minute ago"]); // not readable: no age
   });
 });
 
@@ -105,6 +107,16 @@ describe("a state", () => {
     const line = screen.getByTestId("oats-status-line");
     expect(line.textContent).toBe("!Needs you· waiting 12 min (since 14:03)· [withheld]Open");
     expect(within(line).getByRole("button", { name: "Open" })).toBeTruthy();
+    // No line of it starts with a separator: each part carries its "·" in its own left padding, in a
+    // strip the frame clips where a part wraps to the start of a line (a scene measures it drawn).
+    expect(line.className).toContain("overflow-hidden");
+    const parts = within(line).getAllByTestId("oats-status-part");
+    expect(parts.map((part) => part.textContent)).toEqual(["· waiting 12 min (since 14:03)", "· [withheld]"]);
+    for (const part of parts) {
+      expect(part.className).toContain("pl-4");
+      expect(part.firstElementChild!.className).toContain("absolute left-0");
+    }
+    expect(line.firstElementChild!.className).toContain("-ml-4");
     cleanup();
     render(<StatusLine state="working" since={null} detail="" />);
     expect(screen.getByTestId("oats-status-line").textContent).toBe("Working");
@@ -739,10 +751,23 @@ describe("where a menu's list hangs", () => {
   });
 });
 
-test("as of <age>: the age of a kept roster in a row or an act, and from an hour on the time itself, never \"as of at\"", () => {
-  const now = new Date(2026, 10, 21, 15, 6).getTime();
-  expect(asOf(now - 4_000, now)).toBe("as of just now");
-  expect(asOf(now - 3 * 60_000, now)).toBe("as of 3 min ago");
-  expect(asOf(new Date(2026, 10, 21, 14, 5).getTime(), now)).toBe("as of 14:05"); // 61 minutes
-  expect(asOf("not a time", now)).toBe("as of the last read");
+test("a fold's mark turns for its own fold alone: one inside an open fold is not turned by it", () => {
+  render(
+    <Disclosure summary="Checks and policy" open testId="outer">
+      <Disclosure summary="oats.bb" testId="inner">
+        <p>pass</p>
+      </Disclosure>
+    </Disclosure>,
+  );
+  // The rule is on the mark's own details (a direct summary of an open details), not on any open ancestor.
+  for (const id of ["outer", "inner"]) {
+    const mark = within(screen.getByTestId(id)).getAllByTestId("oats-disclosure-mark")[0]!;
+    expect(mark.className).toContain("[details[open]>summary>&]:rotate-90");
+    expect(mark.className).not.toContain("group-open");
+    expect(mark.parentElement!.tagName).toBe("SUMMARY");
+    expect(mark.parentElement!.parentElement).toBe(screen.getByTestId(id));
+  }
+  expect(screen.getByTestId("outer").className).not.toMatch(/\bgroup\b/);
+  expect((screen.getByTestId("inner") as HTMLDetailsElement).open).toBe(false);
+  expect(screen.getByTestId("inner").matches("details[open] > summary > *")).toBe(false);
 });

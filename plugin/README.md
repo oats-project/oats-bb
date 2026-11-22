@@ -181,30 +181,33 @@ Another feature opens the panel on one of its tabs with
 
 ## The New agent form
 
-**New agent** (at the roster's foot in the sidebar, on the home, and on a soul's page where the
-Souls page is shown) opens the form: a page of its own, `/plugins/oats/new-agent`, or
+**New agent** (at the roster's foot in the sidebar, and on the home of a workspace with no agent
+yet) opens the form: a page of its own, `/plugins/oats/new-agent`, or
 `/new-agent/<soul>` with that soul chosen. It is the OATS Desktop's Spawn dialog, in its order and
 its words, and it is not one of the pages the setting `pages` can leave out: whatever a release
 shows, an agent can be started.
 
 | Field | What it is |
 |---|---|
-| **Soul** | the souls OATS lists; the chosen one's description is under the field. A soul that cannot be spawned says why there. |
+| **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
 | **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. With one harness declared there is no field. |
 | **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…** with a typed model id. |
-| **Relationship** | Independent, Child of, Sibling of or Parent of, then which instance: one of the roster's. |
+| **Relationship** | Independent, Child of, Sibling of or Parent of, then which instance: one of the roster's, by its name as words with its soul. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent. A name that cannot be used says its fault under the field. |
 
 Beside the fields (under them on a phone) stands **What will be created**: the kernel's own
 preview (`oats spawn … --preview --json`) of exactly the values on screen, in a person's words: the
 name and the home, where it works, the harness and the model and where they came from, the team,
-the relationship, the core capabilities and the capabilities. It is read again 0.4 s after the
+the relationship, the core capabilities and the capabilities. So nothing is defaulted in silence:
+the team the agent joins and where it will work are lines of it, read from the kernel's answer. It is read again 0.4 s after the
 last change; meanwhile the last facts stay, marked "Updating…" ("Reading defaults…" before the
 first), and an answer for values that are no longer on screen is never drawn. A warning is drawn
-only where the kernel gives one, as a warning. The app never gets the kernel's preview whole: the
-host entry answers these facts and the decision's revision (`contract/spawn.ts` `spawnFacts`,
-`model/spawn.ts` `previewFacts`).
+only where the kernel gives one, as a warning. The form reads `spawnPlan`, which never answers the
+kernel's preview whole: the host entry answers these facts and the decision's revision
+(`contract/spawn.ts` `spawnFacts`, `model/spawn.ts` `previewFacts`). A preview that is no decision
+a spawn could apply (a launch with a problem, checks that did not finish, a backend that is not
+installed) is a refusal there, with the kernel's code.
 
 **Spawn** applies the decision that preview showed (its revision goes with the call), so "Spawn
 refuses if this changes before you confirm" is true: a decision that moved is refused by the
@@ -222,18 +225,31 @@ progress." and starts no second one.
 While OATS cannot be read the form is held like the acts: the roster's own notice, the fields and
 Spawn off with the acts' reason, and nothing asked of the kernel.
 
-Keys, as the Desktop's dialog has them, handled by the form itself: Mod+Enter spawns; Mod+1 the
-instruction, Mod+2 the harness, Mod+3 the model, Mod+4 the relationship, Mod+6 the name (Mod is ⌘
-on a Mac, Ctrl elsewhere). In a browser tab the browser may keep Ctrl or ⌘ with a digit for its
-own tabs; Tab walks the same order.
+Mod+Enter spawns from any field (⌘ on a Mac, Ctrl elsewhere), as in the Desktop's dialog. The
+Desktop's Mod+1 to Mod+7, which go to a field, are not built: in a browser tab the browser keeps
+Ctrl or ⌘ with a digit for its own tabs, and a hint for a chord that does not fire would mislead.
+Tab walks the fields in the form's order.
+
+The soul, the harness, the model and the instance are each a field that opens a list
+(`app/spawn/Choice.tsx`: the WAI-ARIA combobox that only selects, in the shared look of a field):
+the form's own for now, offered to `app/ui` afterwards.
+
+A relation names its anchor with `--relation <kind> --relative-to <instance> --relative-root <agents
+root>`: the root is the anchor's home, as the roster's row names it, without its
+`<agent>/instances/<instance>` (the kernel's status names no agents root on a row); a home of
+another shape passes none.
 
 Every spawn is `--backend bb --yolo`: the form says so in one line, "Runs in bb's full mode: no
 sandbox.", with no control ([How it is built](#how-it-is-built)).
 
+A soul's page (the Souls page is not shown in a release's default) still holds the earlier form: a
+name, a task, Preview (`spawnPreview`, the kernel's preview as short lines) and Spawn in bb. It
+goes when the workspace's pages are rebuilt.
+
 Not in the form yet (a later change): teams to join, Run in background, the developer settings
 (work area, launch configuration, messaging identity), the Setup and Launch prompts of the
-preview, a failed spawn kept with Reopen and the draft kept, a name from the task, and a wake-up
-at spawn.
+preview, a failed spawn kept with Reopen and the draft kept, a name from the task, a wake-up
+at spawn, and the Desktop's keys to a field.
 
 ## Automations
 
@@ -440,7 +456,8 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   plugin's RPC. No RPC takes a path, a flag or a command. A soul must be one `oats souls` lists; a
   name must match `^[a-z0-9][a-z0-9-]{0,62}$` and is one argv element; a harness must be one the bb
   session provider declares; a model is one line that cannot be read as an option; a relation is
-  one of three words and an instance of the current snapshot; a task travels as a 0600
+  one of three words and an instance of the current snapshot, whose agents root the server takes
+  from the roster and never from the caller; a task travels as a 0600
   file in the host worker's temporary directory, removed when the call ends; an instance must be in
   the current snapshot, and its home is the one the kernel named. The plugin adds no power a caller
   of bb's own API lacks.

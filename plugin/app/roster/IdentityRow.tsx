@@ -14,7 +14,7 @@ import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
-import { run } from "../lifecycle/acts";
+import { askPlan, run } from "../lifecycle/acts";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
@@ -110,6 +110,12 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
         {verb[1]}
+      </Button>
+    ) : status.state === "working" || status.state === "idle" ? (
+      // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
+      // with it), then the confirmation. bb's own stop of a turn is not this.
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
+        Stop
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>

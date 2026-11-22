@@ -4,5 +4,8 @@
  },
  "spawn": {
   "file": "spawn.json"
+ },
+ "capabilities show": {
+  "file": "capabilities-show-bb.json"
  }
 }

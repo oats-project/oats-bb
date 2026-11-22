@@ -496,3 +496,22 @@ test("the foot counts every agent that waits, the ones with no bb thread include
   const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
   expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · runs in tmux");
 });
+
+// On a deployment that shows more than the default, a page opened by its path must not say "not
+// shown" for the moment bb takes to read the settings (round 1 of the second pass).
+test("while bb is still reading the settings no page is known to be shown or hidden; settings bb cannot give are the default's", async () => {
+  const { pagesOf, showEveryPageWhenUnset } = await import("../../app/workspace/pages");
+  showEveryPageWhenUnset(false); // as in the built app
+  try {
+    const loading = pagesOf({ values: undefined, isLoading: true });
+    expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
+    const unavailable = pagesOf({ values: undefined, isLoading: false });
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
+    const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
+    expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // The values of a read before stay while bb reads them again.
+    expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
+  } finally {
+    showEveryPageWhenUnset(true);
+  }
+});

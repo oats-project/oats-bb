@@ -46,13 +46,17 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
+| `pages` | `"home"` | The plugin's pages that are shown, by id, with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from another place, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words, what to do, the code, the plugin's or the kernel's own message
 under Details, Retry, and Open settings where a setting mends it. Where OATS was read before, the
-roster stays as last read, marked with its age ("Last observation — <age>"), and its acts stay,
-each "as of <age>": an act goes to the kernel, which answers for what it knows now. Where it never
-was, bb's threads are listed as usual under the notice. The notice's code:
+roster stays as last read under that notice, which says its age once ("Showing what was read
+<age>."), and the OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start,
+Restart and Retire stay in their place, off, each with the reason, the notice says so in one
+sentence with Retry first, and the plugin's server takes no act meanwhile. What a place still
+shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
 |---|---|
@@ -328,6 +332,17 @@ What the features share, beyond the entries:
   `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
   button opens it at the phone's width, and an agent with no bb thread opens it from its row in the sidebar and from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+- **Whether a page is shown** (the setting `pages`). A page's `navPanel` component is
+  `shownPage("<id>", Page)` (`app/workspace/pages.ts`): it draws the page where the release shows
+  it, the "not shown" line where it does not, and nothing while bb is still reading the settings.
+  A place that links to a page asks `usePageShown("<id>")` (or `usePagesShown()` for several) and
+  draws plain text, or nothing, where the page is not shown. A feature tests both cases: a slot
+  rendered with no settings stands for every page shown (`test/helpers/render.ts`), and a test
+  of the default names `settings: { pages: "home" }`.
+- **"New agent".** The form's feature names how to open it, once, in its `register`:
+  `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
+  "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
+  page where that page is shown, and is absent where it is not.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.

@@ -11,12 +11,13 @@ import {
   useRpc,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, Disclosure, LINK, plainClick, StatusLine, TARGET } from "../ui";
+import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
@@ -60,6 +61,15 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
   const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
   const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
+  // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
+  // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
+  // stopped (and when its row is come back to), events already held are read again.
+  const eventsNow = useRef(events);
+  eventsNow.current = events;
+  const stoppedInstance = stopped ? mine?.agent.instance : undefined;
+  useEffect(() => {
+    if (stoppedInstance !== undefined && eventsNow.current.data !== undefined) eventsNow.current.retry();
+  }, [stoppedInstance]);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -75,7 +85,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
 
   const { agent } = node;
   const read = agentStatus(agent, node.thread, now);
-  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, now) } : read;
+  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;
@@ -95,14 +105,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
+  const verb = status.state === "stopped" ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
   const act =
-    status.state === "stopped" ? (
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
-        Start
-      </Button>
-    ) : status.state === "error" ? (
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("restart", agent.instance, rpc, navigate)}>
-        Restart
+    verb !== null ? (
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
+        {verb[1]}
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>
@@ -139,11 +146,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         />
       )}
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
-      {gone || status.kernel === null || shown(status.kernel) === "" ? null : (
-        <Disclosure summary="Details" testId="oats-status-kernel">
-          <p className="text-xs text-muted-foreground">{`OATS says: ${shown(status.kernel)}`}</p>
-        </Disclosure>
-      )}
+      {gone ? null : <KernelSays text={status.kernel} />}
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">

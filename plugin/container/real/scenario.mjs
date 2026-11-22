@@ -263,32 +263,60 @@ function snapshotRow(instance) {
   return snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((agent) => agent.instance === instance) : undefined;
 }
 /**
- * Freshness (the UX standard, section 6): how long after the kernel recorded a change the plugin's
- * own snapshot has it, read as a client reads it (no refresh asked). What brings it is the watch on
- * the event log, or the server's own reread behind a snapshot older than its 15 s poll: this check
- * holds the delay a client sees, not the watch by itself (live.sh's L2 holds the watch, with the
- * poll off). `recordedAt` is taken before the command that makes the change, so the delay holds the
- * command's own run too. That the change reaches the tree and the home is the live scenes' (the fake). 3 s at most on a kernel whose `oats status` answers in under a second; the status's
- * own time is measured and said beside the delay, and a slower kernel is given twice that time and
- * the pause, so a slow kernel is told apart from a slow plugin.
+ * Freshness (the UX standard, section 6: "within 3 s of the kernel recording it"): how long after
+ * the kernel recorded a change the plugin's own snapshot has it, read as a client reads it (no
+ * refresh asked). What brings it is the watch on the event log, or the server's own reread behind a
+ * snapshot older than its 15 s poll: this check holds the delay a client sees, not the watch by
+ * itself (live.sh's L2 holds the watch, with the poll off). That the change reaches the tree and the
+ * home is the live scenes' (the fake).
+ *
+ * The delay runs from the kernel's own record: the time of the event the change wrote, as
+ * `oats instance events --json` gives it (`kind`, at or after `since`, the moment before the command
+ * that made the change), to the moment the snapshot was seen to have it. So it holds the plugin's
+ * time and not the `oats` command's own start-up, which on a slow runner is half a second (a run
+ * read 3044 ms from before the command, with nothing of the plugin slow). The snapshot is polled
+ * first and the event read after, so reading the event costs the measure nothing; the poll starts
+ * when the command has returned, so the delay is never less than the truth. With no such event in
+ * the kernel's answer the delay runs from `since` instead, and the check's line says so.
+ *
+ * 3 s at most on a kernel whose `oats status` answers in under a second; the status's own time is
+ * measured and said beside the delay. A kernel slower than that cannot be shown in 3 s by the pause
+ * rule itself (the gap between two reads is the time the last one took): it is given twice its
+ * status time and the pause, so a slow kernel is told apart from a slow plugin.
  */
-async function fresh(what, instance, matches, recordedAt) {
-  let seen = null;
+async function fresh(what, { instance, home, kind, since }, matches) {
+  let seenAt = null;
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const snapshot = rpc("snapshot");
     const agent = snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((candidate) => candidate.instance === instance) : undefined;
     if (agent !== undefined && matches(agent)) {
-      seen = Date.now() - recordedAt;
+      seenAt = Date.now();
       break;
     }
     await sleep(100);
   }
+  const recorded = recordedAt(instance, home, kind, since);
+  const from = recorded ?? since;
+  const counted = recorded === null ? `counted from before the command: the kernel's events hold no "${kind}" event since then` : `the kernel's "${kind}" event at ${new Date(recorded).toISOString()}`;
+  const seen = seenAt === null ? null : Math.max(0, seenAt - from);
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
   const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
-  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
+  check(seen !== null && seen <= limit, `freshness: the plugin's snapshot has ${what} ${seen === null ? "never" : `${seen} ms`} after the kernel recorded it (${counted}; ${limit} ms at most; the kernel's own oats status took ${statusMs} ms)`);
+}
+/** When the kernel recorded a change: the time of the newest `kind` event of the instance at or after `since` (epoch ms), or null when its events hold none. */
+function recordedAt(instance, home, kind, since) {
+  const answer = oats("instance", "events", instance, "--home", home, "--limit", "20", "--json");
+  let events = [];
+  try {
+    events = JSON.parse(answer.stdout).result?.events ?? [];
+  } catch {
+    events = []; // no answer to read: the caller counts from before the command, and says so
+  }
+  const times = events.filter((event) => event.kind === kind).map((event) => Date.parse(event.at)).filter((at) => Number.isFinite(at) && at >= since);
+  return times.length === 0 ? null : Math.max(...times);
 }
 /** The plugin's snapshot agrees with the kernel's row: the thread, and the kernel's words for whether it runs. */
 function agrees(instance, row) {
@@ -437,10 +465,10 @@ try {
   step("A5b the agent asks for a person (a waiting claim): needs you");
   // As the agent's own session does it: `oats instance attention` in the home, with the session's environment.
   const asInstance = (...args) => spawnSync(OATS, args, { cwd: home, encoding: "utf8", env: { ...process.env, OATS_INSTANCE: A.instance, OATS_INSTANCE_HOME: home } });
-  const askedAt = Date.now(); // before the command: the delay then counts the command's own run too, never less than the truth
+  const askedAt = Date.now(); // before the command: the kernel's event of the claim is at or after it
   const asked = asInstance("instance", "attention", "--message", "Keep the retry, or fail the job?");
   check(asked.status === 0, "oats instance attention, run in the agent's home", asked.stdout + asked.stderr);
-  await fresh("the claim", A.instance, (agent) => agent.waiting !== null, askedAt);
+  await fresh("the claim", { instance: A.instance, home, kind: "waiting", since: askedAt }, (agent) => agent.waiting !== null);
   row = await untilRow(A.instance, "a waiting claim", (r) => r.waitingOnYou != null);
   show("oats status", brief(row));
   const waiting = snapshotRow(A.instance)?.waiting;
@@ -449,7 +477,7 @@ try {
   await shots("real-needs-you", { ...A, threadId, state: "needs-you" });
   const clearedAt = Date.now();
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
-  await fresh("the claim cleared", A.instance, (agent) => agent.waiting === null, clearedAt);
+  await fresh("the claim cleared", { instance: A.instance, home, kind: "waiting", since: clearedAt }, (agent) => agent.waiting === null);
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
@@ -532,9 +560,10 @@ try {
   const idlePlan = recorded(["instance", "stop", A.instance], ["--plan"]);
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
+  const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
   // The stop is the plugin's own act: it rereads by itself afterwards, so this one holds that an act's result is on hand at once, not the watch.
-  await fresh("the agent stopped (the plugin's own act, counted from its answer)", A.instance, (agent) => agent.runtimeState === "stopped", Date.now());
+  await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
   show("oats status", brief(row));

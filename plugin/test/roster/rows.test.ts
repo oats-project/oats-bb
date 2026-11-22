@@ -95,10 +95,9 @@ describe("the raw rows of the snapshot", () => {
     const one = await core.rowOf("redesign-ui-lead");
     expect([one.at, one.stale, one.row.instance]).toEqual([read.at, true, "redesign-ui-lead"]);
     expect(await refusalOf(core.rowOf("nobody-here"))).toEqual({ code: "invalid", message: '"nobody-here" is not an agent of this OATS deployment\'s last snapshot' });
-    // An act still finds its agent, the one of the last roster: the act goes to the kernel, which
-    // plans or refuses it on what it knows now.
-    expect((await core.agentOf("redesign-ui-lead")).instance).toBe("redesign-ui-lead");
-    expect((await refusalOf(core.agentOf("nobody-here"))).code).toBe("invalid");
+    // The acts are held while OATS cannot be read (the lead's ruling R4, the Desktop's D-085): the
+    // server finds no agent for one, also in the roster it still shows, and says why.
+    expect(await refusalOf(core.agentOf("redesign-ui-lead"))).toEqual({ code: "conflict", message: "E_NO_WORKSPACE: no workspace here" });
     // The failure is published once; the same failure again is not.
     const published = backend.server.harness.realtimeSignals.length;
     await core.clientRefresh();

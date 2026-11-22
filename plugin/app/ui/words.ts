@@ -4,6 +4,7 @@
 // instance-display-name.mjs; packages/desktop/renderer/loading.mjs `observedAgeText`), and the plugin's own where bb's nature changes one (plugin/WORDS.md
 // holds each such pair). Pure: no bb, no React, never throws.
 import type { AgentState } from "../../model/types";
+import { shown } from "./text";
 
 /**
  * A state, as a person reads it and as a screen reader says it. `word` stands beside the mark,
@@ -84,29 +85,35 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
 }
 
 /**
- * How old a read is, for a place that shows what it read earlier ("showing what was read <age>"):
- * the Desktop's `observedAgeText` (packages/desktop/renderer/loading.mjs at 95c7b43b3): "just now"
- * under 10 s, "45s ago", "3 min ago" (rounded), and from an hour on the local time, "at 14:05";
- * null for an instant that cannot be read, and the place then says "showing what was last read".
+ * How old a read is, for a place that shows what it read earlier ("Showing what was read <age>."):
+ * always relative, in ONE form everywhere: "less than a minute ago", "12 min ago", "3 h ago",
+ * "2 d ago" (minutes to the nearest one, hours and days whole). Never a bare clock time, and never "just now": what is
+ * shown is from a read that could not be made again, and must not read as fresh (the lead's ruling
+ * on the stale state; the Desktop's `observedAgeText` says "just now" and "at 14:05"). null for an
+ * instant that cannot be read, and the place then says "Showing what was last read.".
  */
 export function readAge(at: string | number, now: number = Date.now()): string | null {
   const then = typeof at === "number" ? at : Date.parse(at);
   if (!Number.isFinite(then)) return null;
-  const s = Math.round(Math.max(0, now - then) / 1000);
-  if (s < 10) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const d = new Date(then);
-  return `at ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const elapsed = Math.max(0, now - then);
+  if (elapsed < 60_000) return "less than a minute ago";
+  const minutes = Math.round(elapsed / 60_000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
 }
 
 /**
- * "as of <age>", for a row or an act drawn from the last roster read while OATS cannot be read:
- * "as of just now", "as of 3 min ago", and from an hour on the time itself, "as of 14:05" (where
- * `readAge` alone says "at 14:05"); "as of the last read" for an instant that cannot be read.
+ * The Desktop's sentence for content read earlier, the ONE form the age of a kept roster is said
+ * in: with its age (`readAge`), or without one when the age is not known.
  */
-export function asOf(at: string | number, now: number = Date.now()): string {
-  const age = readAge(at, now);
-  return `as of ${age === null ? "the last read" : age.replace(/^at /, "")}`;
-}
+export const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
+
+/**
+ * An agent's NAME, the one every place of the plugin draws (a row, the thread's row, a page, a
+ * confirmation): its instance name as words (`instanceDisplayName`, the Desktop's rule), through
+ * the display filter; the instance itself where that leaves nothing. bb's title for the agent's
+ * thread is bb's, never the name. The instance stays where it identifies the agent (a tooltip, a
+ * command, the kernel).
+ */
+export const agentName = (instance: string): string => instanceDisplayName(shown(instance)) || shown(instance);

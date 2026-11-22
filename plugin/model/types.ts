@@ -24,6 +24,8 @@ export type Agent = {
   /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `running` decides */
   runtimeState: string | null;
   runtimeError: string | null;
+  /** The row's startedAt: when the session started. Absent or null where the kernel's row names none. */
+  startedAt?: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;
 };
 
@@ -59,7 +61,10 @@ export type View = {
   detached: Agent[];
   /** agents on tmux */
   elsewhere: Agent[];
+  /** The nodes of the tree that wait on a person (agents with a bb thread). */
   needsYou: Node[];
+  /** Every agent that waits on a person, the ones with no bb thread included (on tmux, or whose thread is gone): the one count of who waits. */
+  needing: Agent[];
   working: Node[];
   /** state idle and the thread unread */
   finished: Node[];

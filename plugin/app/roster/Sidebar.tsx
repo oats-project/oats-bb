@@ -23,10 +23,10 @@ import { useOats } from "../oats";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
-import { openSoul, pageLinks, useOpenPage } from "../workspace/pages";
+import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
-import { instanceDisplayName, readAge } from "../ui/words";
+import { agentName } from "../ui/words";
 import { Unreadable } from "./unreadable";
 import { useNow } from "./now";
 
@@ -78,6 +78,12 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
+  // The pages this release shows (the plugin's setting `pages`): a page that is not shown has no
+  // link here, and no mark.
+  const pagesNow = usePagesShown();
+  const links = pageLinks().filter((page) => pagesNow.has(page.path));
+  const homeShown = pagesNow.has("home");
+  const newAgentShown = hasNewAgent(pagesNow.has("souls"));
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
 
@@ -134,7 +140,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(<ThreadTitle threadId={thread.id} />, status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -149,7 +155,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const threadlessRow = (agent: Agent, where: string) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
-    const name = instanceDisplayName(shown(agent.instance));
+    const name = agentName(agent.instance);
     return (
       <li key={agent.instance}>
         <button
@@ -214,17 +220,15 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   }
 
   const { view, deployment } = oats;
-  const needs = view.needsYou.length;
+  // Every agent that waits, the ones with no bb thread included: the number the home says too.
+  const needs = view.needing.length;
   // Every agent OATS has is a row: the count in the workspace line is the count of rows.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
       {oats.stale === null ? null : (
-        <>
-          <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
-          <p data-testid="oats-last-observation" className="px-2 pt-2 text-xs text-muted-foreground">{`Last observation — ${readAge(oats.stale.at, now) ?? "its time is not known"}`}</p>
-        </>
+        <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
@@ -241,28 +245,47 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}
-      <button
-        type="button"
-        data-testid="oats-needs-line"
-        title={`${needsYouLabel(needs)}: open the OATS home`}
-        className={`${ROW} w-full pl-2 text-left ${needs > 0 ? "font-semibold" : "text-muted-foreground"}`}
-        onClick={() => openPage("home")}
-      >
-        {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
-        {needs > 0 ? `${needs} need you` : "Nothing needs you."}
-      </button>
-      <div className="px-2 py-1">
-        <Button data-testid="oats-new-agent" onClick={() => openPage("souls")}>
-          New agent
-        </Button>
-      </div>
+      {homeShown ? (
+        <button
+          type="button"
+          data-testid="oats-needs-line"
+          title={`${needsYouLabel(needs)}: open the OATS home`}
+          className={`${ROW} w-full pl-2 text-left ${needs > 0 ? "font-semibold" : "text-muted-foreground"}`}
+          onClick={() => openPage("home")}
+        >
+          {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
+          {needs > 0 ? `${needs} need you` : "Nothing needs you."}
+        </button>
+      ) : (
+        // The home is not shown in this release: the count is said, and opens nothing.
+        <p data-testid="oats-needs-line" className={`flex items-center gap-2 px-2 py-1.5 text-sm ${needs > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+          {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
+          {needs > 0 ? `${needs} need you` : "Nothing needs you."}
+        </p>
+      )}
+      {newAgentShown ? (
+        <div className="px-2 py-1">
+          <Button
+            data-testid="oats-new-agent"
+            onClick={() => {
+              if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
+            }}
+          >
+            New agent
+          </Button>
+        </div>
+      ) : null}
 
-      <h2 className={HEADING}>Workspace</h2>
-      <ul data-testid="oats-pages" className="flex flex-col">
-        {pageLinks().map((page) => (
-          <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
-        ))}
-      </ul>
+      {links.length === 0 ? null : (
+        <>
+          <h2 className={HEADING}>Workspace</h2>
+          <ul data-testid="oats-pages" className="flex flex-col">
+            {links.map((page) => (
+              <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
+            ))}
+          </ul>
+        </>
+      )}
 
       {view.others.length > 0 ? (
         <>

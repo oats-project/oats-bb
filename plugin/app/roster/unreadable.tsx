@@ -10,7 +10,7 @@ import type { Oats } from "../oats";
 import { useNow } from "./now";
 import { Button, LINK, Notice, TARGET } from "../ui";
 import { shown } from "../ui/text";
-import { readAge } from "../ui/words";
+import { readAge, showingRead } from "../ui/words";
 
 export type Failure = { code: string; message: string };
 
@@ -55,12 +55,37 @@ export function useSettingsHref(): string {
 }
 
 /**
- * The Notice. `at` is when what is still shown was read (a stale roster); left out when nothing is
- * shown. `testId` wraps it so a place's test finds its own.
+ * While the roster shown is the last one read, the OATS acts are HELD (the Desktop's rule, D-085):
+ * the one sentence that says so, in the notice; and the reason an act that is off carries, in a
+ * menu or beside a button. It names Retry first, so that a person is not left with bb's own Stop.
+ * plugin/WORDS.md holds both.
  */
-export function Unreadable({ failure, machine, at, now, onRetry }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void }) {
+export const HELD = "Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.";
+export const HELD_REASON = "Comes back when OATS is read again";
+
+/**
+ * The Notice: the ONE drawing of "OATS cannot be read". `at` is when what is still shown was read
+ * (the roster kept as last read): the notice then says its age, once and in one form ("Showing what
+ * was read <age>."), and that the acts are held; left out when nothing is shown. `compact` is the
+ * same words on one wrapping line, for the thread's own row: the title, the age, the held
+ * sentence, Retry.
+ */
+export function Unreadable({ failure, machine, at, now, onRetry, compact = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean }) {
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
+  if (compact) {
+    return (
+      <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
+        <span className="font-semibold text-destructive-text">{words.title}</span>
+        <span className="min-w-0 text-muted-foreground">{at === undefined ? (words.sentence ?? "") : `${showingRead(readAge(at, now))} ${HELD}`}</span>
+        {words.retry ? (
+          <span className="ml-auto shrink-0">
+            <Button onClick={onRetry}>Retry</Button>
+          </span>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div data-testid="oats-unreadable" data-code={failure.code}>
       <Notice
@@ -81,6 +106,7 @@ export function Unreadable({ failure, machine, at, now, onRetry }: { failure: Fa
         }
       >
         {words.sentence === null ? null : <p>{words.sentence}</p>}
+        {at === undefined ? null : <p data-testid="oats-held">{HELD}</p>}
       </Notice>
     </div>
   );

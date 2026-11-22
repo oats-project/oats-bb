@@ -23,6 +23,7 @@ const row = z.looseObject({
   running: z.boolean().nullish(),
   runtimeState: text,
   runtimeError: text,
+  startedAt: text,
   waitingOnYou: z.looseObject({ since: text, reason: text, message: text }).nullish(),
 });
 const roster = z.looseObject({
@@ -86,6 +87,8 @@ function toAgent(group: { name: string }, source: z.output<typeof row>): Agent {
     running: source.running ?? null,
     runtimeState: source.runtimeState ?? null,
     runtimeError: source.runtimeError ?? null,
+    // When the session started, where the kernel's row says it (a row of a kernel that does not is left without).
+    ...(source.startedAt ? { startedAt: source.startedAt } : {}),
     waiting: waiting
       ? { reason: waiting.reason ?? "attention", message: waiting.message ?? null, since: waiting.since ?? null }
       : null,

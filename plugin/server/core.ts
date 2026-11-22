@@ -101,6 +101,14 @@ export function createCore(bb: BbPluginApi) {
       description: "The bb machine (its name or id) that holds the OATS homes. Empty: this server's only machine.",
       default: "",
     },
+    // Read by the app alone (app/workspace/pages.ts `pagesShown`): the server keeps no page.
+    pages: {
+      type: "string",
+      label: "Pages shown",
+      description:
+        "The plugin's pages that are shown, by id, separated by commas. The default is home. The others are not finished yet and are left out until they are: automations, souls, capabilities, teams, machines.",
+      default: "home",
+    },
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });
   const lifetime = new AbortController();
@@ -257,6 +265,14 @@ export function createCore(bb: BbPluginApi) {
       // What was read before stays, with its age: no place falls back to nothing where there was a roster.
       next = { ...next, last: lastRoster === null ? null : { at: lastRoster.at, deployment: lastRoster.deployment, agents: lastRoster.agents } };
     }
+    // A read that began under settings that have changed since is not this deployment's answer:
+    // nothing keeps it (the change emptied `cached`, and the read it queued brings the new one), so
+    // no client is shown it and no act finds an agent, or a home, of the old deployment in it.
+    if (generation !== settingsGeneration) {
+      lastEnd = Date.now();
+      lastTook = 0;
+      return next;
+    }
     const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
@@ -296,21 +312,30 @@ export function createCore(bb: BbPluginApi) {
     if (!lifetime.signal.aborted) void reread();
   };
 
-  /** The cached snapshot; before the first one, the read in flight, or one started now. */
+  /**
+   * The cached snapshot; before the first one (and after a settings change, which empties it), the
+   * answer of the read in flight or of one started now. A read that ended under other settings than
+   * it began with keeps nothing: the next one is waited for.
+   */
   async function current(): Promise<Snapshot> {
-    return cached ?? (await (running ?? reread()));
+    for (;;) {
+      if (cached !== null) return cached;
+      const answer = await (running ?? reread());
+      if (cached !== null) return cached;
+      // Nothing was kept: the read ended under other settings than it began with, and the one the
+      // change queued is waited for; or the plugin is stopping, and the answer is all there is.
+      if (lifetime.signal.aborted) return answer;
+    }
   }
 
   /**
    * The agent the kernel's snapshot names; an instance it does not name is refused. While OATS
-   * cannot be read after it was, the agent is the one of the last roster read: every act goes to
-   * the kernel, which plans it or refuses it on what it knows now, so an act on what was last read
-   * is the kernel's to answer, not this server's to hold. With no roster ever read, the failure is the refusal.
+   * cannot be read no act is taken, also where the last roster is still shown: the acts are held
+   * until it is read again (the Desktop's rule), and the failure is the refusal.
    */
   async function agentOf(instance: string): Promise<Agent> {
-    const read = await current();
-    if (!read.ok && lastRoster === null) throw refusal({ code: read.code, message: read.message });
-    const now = read.ok ? read : lastRoster!;
+    const now = await current();
+    if (!now.ok) throw refusal({ code: now.code, message: now.message });
     const found = now.agents.find((agent) => agent.instance === instance);
     if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
     return found;
@@ -427,7 +452,10 @@ export function createCore(bb: BbPluginApi) {
     bb.events.on("thread.deleted", rereadSoon);
     settings.onChange(() => {
       settingsGeneration += 1;
-      // Another machine or deployment: what was read of the old one is not this one's last roster.
+      // Another machine or deployment: what was read of the old one is not this one's roster, nor
+      // its last one. Until the new one is read there is none: a client and an act wait for it.
+      cached = null;
+      comparable = "";
       lastRoster = null;
       rawRows = null;
       target = null;

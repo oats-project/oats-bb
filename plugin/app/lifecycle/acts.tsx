@@ -515,9 +515,15 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
-  /** bb's own row of the agent's thread as it is at each render: read when the check answers. */
+  /**
+   * bb's own row of the agent's thread, as it is when the check answers: kept for that answer by an
+   * effect after each draw (never written while drawing), declared before the effect that asks.
+   */
+  const thread = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const threadNow = useRef<{ id: string; status: string } | null>(null);
-  threadNow.current = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
+  useEffect(() => {
+    threadNow.current = thread;
+  }, [thread]);
   const [state, setState] = useState<StartState>({ phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
   const [harness, setHarness] = useState("");
@@ -538,16 +544,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       (answer) => {
         if (!live.current || mine !== ticket.current) return;
         // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
-        const thread = threadNow.current;
+        const threadThen = threadNow.current;
         setState({
           phase: "ready",
           check: {
             ...answer,
             // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
-            begins: thread === null ? START.fresh : START.newThread,
+            begins: threadThen === null ? START.fresh : START.newThread,
             // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
             // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
-            carryOn: thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
+            carryOn: threadThen !== null && carriesOn(answer, threadThen) ? threadThen.id : null, // (the first check narrows it for its id)
           },
         });
       },

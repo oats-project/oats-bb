@@ -29,6 +29,9 @@ export const UNCONFIRMED_ISSUE = { message: "unconfirmed", path: ["details", "un
  * Whether a failed call is the refusal of an error the kernel marked unconfirmed: the one reader of
  * the marker, for every place of the app that needs it. Nothing draws a refusal's issues: no place
  * of the plugin reads them but this, and bb's app (0.50.1) only copies them onto the call's error.
+ * An issue of this message and path comes from the plugin's own server alone: bb's issues are those
+ * of a validator (its message, the path into the call's input or output), and no verb of the
+ * plugin has a `details.unconfirmed` in either. So a place may trust it.
  */
 export function isUnconfirmed(cause: unknown): boolean {
   const issues = typeof cause === "object" && cause !== null ? (cause as { issues?: unknown }).issues : undefined;

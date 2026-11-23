@@ -11,6 +11,7 @@ import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, u
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { threadWorks } from "../../model/view";
 import { newKey } from "../keys";
+import { isUnconfirmed } from "../../contract/shared";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
@@ -127,9 +128,11 @@ const ANSWERED = new Set(["conflict", "invalid", "invalid_input", "forbidden", "
 function refusalOf(cause: unknown): Refusal & { text: string } {
   const text = errorMessage(cause);
   const code = refusalCode(text);
-  if (code !== null) return { code, message: text.slice(code.length + 2), text };
+  // The kernel's marker that it could not confirm what is left comes beside the text (contract/shared.ts).
+  const unconfirmed = isUnconfirmed(cause);
+  if (code !== null) return { code, message: text.slice(code.length + 2), text, unconfirmed };
   const answered = cause instanceof PluginRpcCallError && ANSWERED.has(cause.code);
-  return { code: answered ? null : RPC_FAILED, message: text, text };
+  return { code: answered ? null : RPC_FAILED, message: text, text, unconfirmed };
 }
 
 /**
@@ -267,13 +270,11 @@ type PlanState =
   | { phase: "settled"; outcome: Outcome; refusal: Refusal | null; sent: { plan: Plan; key: string } | null };
 
 /**
- * Whether bb holds the thread archived NOW, as bb itself answers (`sdk.threads.get`): true or
- * false; null when bb cannot be asked or does not say. Read after a stop, for what its result
- * says of the thread: the provider's release decides whether a stop archives, and what a person
- * is told is what happened, not what a version number promises.
+ * bb's own word on a thread NOW (`sdk.threads.get`): that it HAS it, and whether it holds it
+ * archived; null when bb cannot be asked, has no such thread (it was deleted), or does not say.
+ * Never waited for long: what asks it has the kernel's answer already.
  */
-async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string): Promise<boolean | null> {
-  // The stop is done and the kernel has answered: its result never waits long on this read.
+async function threadInBb(sdk: ReturnType<typeof useSdk>, threadId: string): Promise<{ archived: boolean } | null> {
   const limit = new AbortController();
   const timer = setTimeout(() => limit.abort(), THREAD_READ_MS);
   try {
@@ -282,16 +283,22 @@ async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string):
       new Promise<null>((resolve) => limit.signal.addEventListener("abort", () => resolve(null), { once: true })),
     ]);
     if (typeof thread !== "object" || thread === null || !("archivedAt" in thread)) return null;
-    return thread.archivedAt !== null && thread.archivedAt !== undefined;
+    return { archived: thread.archivedAt !== null && thread.archivedAt !== undefined };
   } catch {
-    // bb could not be asked (or this bb has no such read): not known, and the result says what the confirmation said.
+    // bb could not be asked, has no such thread, or this bb has no such read: not known.
     return null;
   } finally {
     clearTimeout(timer);
   }
 }
-/** How long a stop's result waits for bb's word on the thread before it says what the confirmation said. */
+/** How long a dialog waits for bb's word on a thread before it goes on without it. */
 const THREAD_READ_MS = 5_000;
+/**
+ * Whether bb holds the thread archived NOW: true or false; null when it is not known. Read after
+ * a stop, for what its result says of the thread: the provider's release decides whether a stop
+ * archives, and what a person is told is what happened, not what a version number promises.
+ */
+const threadArchived = async (sdk: ReturnType<typeof useSdk>, threadId: string): Promise<boolean | null> => (await threadInBb(sdk, threadId))?.archived ?? null;
 
 /**
  * The bb session provider's version, by which the dialog knows whether a stop archives the
@@ -586,6 +593,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
    */
   const thread = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const threadNow = useRef<{ id: string; status: string } | null>(null);
+  /** The bb thread the kernel's row RECORDS for the agent, listed by bb or not (archived, deleted): asked of bb when bb lists none. */
+  const recordedThread = oats.phase === "ready" ? (oats.agents.find((agent) => agent.instance === instance)?.threadId ?? null) : null;
+  const recordedNow = useRef<string | null>(null);
+  useEffect(() => {
+    recordedNow.current = recordedThread;
+  }, [recordedThread]);
+  const sdk = useSdk();
   useEffect(() => {
     threadNow.current = thread;
   }, [thread]);
@@ -609,16 +623,21 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const mine = ++ticket.current;
     setState({ phase: "checking" });
     rpc.call("startCheck", { instance }).then(
-      (answer) => {
+      async (answer) => {
         if (!live.current || mine !== ticket.current) return;
         // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
         const threadThen = threadNow.current;
+        // A start archives the thread the agent HAS in bb, and one a stop archived stays where it is: either way
+        // its conversation is in bb, archived, after the start. bb lists no archived thread, so where it lists
+        // none the recorded one is asked of bb itself; one bb no longer has (deleted) is no conversation to speak of.
+        const inBb = threadThen !== null || (recordedNow.current !== null && (await threadInBb(sdk, recordedNow.current)) !== null);
+        if (!live.current || mine !== ticket.current) return;
         setState({
           phase: "ready",
           check: {
             ...answer,
             // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
-            begins: threadThen === null ? START.fresh : START.newThread,
+            begins: inBb ? START.newThread : START.fresh,
             // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
             // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
             carryOn: threadThen !== null && carriesOn(answer, threadThen) ? threadThen.id : null, // (the first check narrows it for its id)
@@ -630,7 +649,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         if (live.current && mine === ticket.current) setState({ phase: "settled", check: null, outcome: startRefused(verb, instance, refusal), refusal, threadId: null });
       },
     );
-  }, [rpc, verb, instance]);
+  }, [rpc, sdk, verb, instance]);
   useEffect(() => {
     // Opened again on a result: nothing is asked until the person asks (Refresh status).
     if (resumed === null) check();

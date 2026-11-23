@@ -69,3 +69,13 @@ Neither is a file, and neither was met by a run of ours to record:
   `result.session.endpoint.threadId` taken out, answered over a roster row changed to
   `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
   `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).
+
+## An act refused with the kernel's marker (shaped, no file)
+
+The four refusals that carry the kernel's marker that it cannot confirm what is left
+(`error.details.unconfirmed: true` in its envelope, which the plugin's server hands on as
+`UNCONFIRMED_ISSUE`, `contract/shared.ts`) are SHAPED in the tests, not recorded: no real kernel
+was made to give one for a stop, a start, a restart or a retire. The envelope's form and the
+codes are the kernel's; that it marks them, and the messages, are ours. The tests: `test/lifecycle/words.test.ts` ("an act
+the kernel refused and marked unconfirmed…", one case per verb, and "only with the marker") and
+`test/lifecycle/actions.test.tsx` (the retire's dialog; the stop's and the start's).

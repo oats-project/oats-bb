@@ -577,3 +577,45 @@ describe("an outcome as the toaster tells it, when its dialog is gone", () => {
     expect(toasted("retire", kept)).toEqual({ plain: false, tone: "failed", title: kept.title, lines: [kept.warning!.title] });
   });
 });
+
+describe("an act the kernel refused and marked unconfirmed", () => {
+  // SHAPED, from the envelope's form (the kernel's `error.details.unconfirmed: true`, which the plugin's server
+  // hands on beside the refusal's text; #52's fixtures hold the form): no run of ours has met one for these acts.
+  const marked = { code: "E_RETIRE_INCOMPLETE", message: "the home was moved aside and the retire hooks did not answer\nmore of it", unconfirmed: true };
+  it("one code keeps its own sentence though the kernel marks it too: a start that did not finish (its session is there), with the same Refresh status", () => {
+    const own = { tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting", lines: ["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."], offers: ["refresh"] };
+    expect(startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m", unconfirmed: true })).toMatchObject(own);
+    expect(startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m" })).toMatchObject(own);
+  });
+  it("a retire: not confirmed, OATS's own line, the code, Check again; never \"wasn't retired\"", () => {
+    expect(applyRefused("retire", "dev-1", marked)).toEqual({
+      tone: "unknown",
+      title: "Result not confirmed",
+      lines: ["OATS could not confirm what the retire left. Check again before assuming nothing happened.", "OATS says: the home was moved aside and the retire hooks did not answer"],
+      code: "E_RETIRE_INCOMPLETE",
+      details: marked.message,
+      offers: ["check"],
+    });
+  });
+  it("a stop: the same, with Check again for the same apply", () => {
+    const outcome = applyRefused("stop", "dev-1", { code: "E_SESSION_STOP_FAILED", message: "its harness was signalled; whether it ended is not known", unconfirmed: true });
+    expect(outcome).toMatchObject({ tone: "unknown", title: "Result not confirmed", code: "E_SESSION_STOP_FAILED", offers: ["check"] });
+    expect(outcome.lines).toEqual(["OATS could not confirm what the stop left. Check again before assuming nothing happened.", "OATS says: its harness was signalled; whether it ended is not known"]);
+  });
+  it.each([["start", "E_SESSION_START_BUSY"], ["restart", "E_BACKEND_NOT_READY"]] as const)("a %s: not confirmed, with what its dialog offers for that (Refresh status), never \"wasn't started\"", (verb, code) => {
+    const outcome = startRefused(verb, "dev-1", { code, message: "the launch was sent and its session was not seen", unconfirmed: true });
+    expect(outcome).toMatchObject({ tone: "unknown", title: "Result not confirmed", code, offers: ["refresh"] });
+    expect(outcome.lines).toEqual([`OATS could not confirm what the ${verb} left. Refresh its status before another try.`, "OATS says: the launch was sent and its session was not seen"]);
+    // The same code without the marker is the kernel's plain refusal.
+    expect(startRefused(verb, "dev-1", { code, message: "m" }).tone).toBe("failed");
+  });
+  it("only with the marker", () => {
+    expect(applyRefused("retire", "dev-1", { ...marked, unconfirmed: false })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired" });
+    expect(applyRefused("retire", "dev-1", { code: marked.code, message: marked.message })).toMatchObject({ tone: "failed" });
+    expect(applyRefused("stop", "dev-1", { code: "E_SESSION_STOP_FAILED", message: "m" })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't stopped" });
+  });
+  it("asked again, the kernel's same marked answer stays not confirmed, and the toaster tells it by its title, to be shown again", () => {
+    expect(checkAgainRefused("retire", "dev-1", marked)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"] });
+    expect(toasted("retire", applyRefused("retire", "dev-1", marked))).toEqual({ plain: false, tone: "unknown", title: "Result not confirmed", lines: [] });
+  });
+});

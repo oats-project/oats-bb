@@ -275,7 +275,7 @@ describe("retire", () => {
     worktree: "retained",
     movedTo: "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
     recoveryPath: "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
-    threadsArchived: 1, // the provider archived the home's thread (capabilityMeta["oats.bb"].archived)
+    threadsArchived: 1, // the home's thread is archived in bb when the retire ends (capabilityMeta["oats.bb"].archived: the hook's own, or one the stop archived)
     children: [{ instance: "digest-links-helper", ok: true, alreadyIdle: true, code: null, stillRunning: null, detail: null }],
     incomplete: [],
     compensation: null,

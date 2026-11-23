@@ -829,7 +829,9 @@ Directories are `0700`, files `0600`.
 - Each launch adds its thread's id. Only the retire hook reads it, for this one
   question, and removes it once it has decided: the environment deleted, or a no that
   rests on what it read (a thread that is not the home's own, the wrong kind, a record
-  that cannot be read). After such a no, the home is archived only for good. No other
+  that is malformed). After such a no, the home is archived only for good. A record
+  the hook does not read (another mode or owner, a link, a second name) is left as it
+  is: it is not the provider's to remove. No other
   command reads it: which threads are a home's stays by project, environment and the
   recorded endpoint.
 - Its place is read from the environment of the process that runs OATS
@@ -959,11 +961,6 @@ entry: it is where the deny rules are shown to hold, and where their limit is pi
 container must be able to make user namespaces; the CI job says what that takes on
 Ubuntu.
 
-The first and the third file also pin the retire's delete of the home's bb environment,
-for Claude and for pi: the kept home byte for byte unchanged, the conversation readable,
-an Unarchive plus a message refused with nothing started, a person's thread on the
-environment leaving it alone, and the door bb's own Restore leaves.
-
 A third (`test/contract/pi.test.mjs`, its own image: bb-app, pi, the OATS kernel's
 package and @awebai/oats-pi, and a mock OpenAI-compatible endpoint) runs pi threads: the
 launch, the three variables through bb's project env, the home's skills, the readiness
@@ -971,6 +968,12 @@ of bb's pi configuration, a failed turn, input (idle, steering, a dialog), a thr
 stopped (archived: a tell is refused and starts nothing; unarchived by hand, a tell
 starts pi again), and that no process is left in a home after a stop or a retire. Run it again
 on every bump of bb-app or pi.
+
+The first and the third file also pin the retire's delete of the home's bb environment,
+for Claude and for pi: the kept home byte for byte unchanged, an Unarchive plus a
+message refused with nothing started, and a person's thread on the environment leaving
+it alone. The first file also pins that the conversation stays readable, and the door
+bb's own Restore leaves.
 
 A fourth (`test/contract/title.test.mjs`, the first file's image) pins what bb does to a
 thread's title by itself, and that a launched thread's title is the instance's name as

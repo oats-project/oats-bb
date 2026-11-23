@@ -410,12 +410,19 @@ try {
   // that pi to leave, says how long, and retires.
   const workingIn = () => execFileSync("sh", ["-c", `for p in /proc/[0-9]*; do [ "$(readlink $p/cwd 2>/dev/null)" = "$1" ] && cat $p/comm; done; true`, "sh", HOME], { encoding: "utf8" }).split("\n").filter(Boolean);
   const stoppedAt = Date.now();
-  show("working in the home right after the stop", workingIn());
+  // Read once: what is printed is what decides.
+  const afterStop = workingIn();
+  show("working in the home right after the stop", afterStop);
+  /** The retire's plan is for the pi agent, by the kernel's facts; shown, as the plan the retire is applied on. */
+  const planHolds = (plan) => {
+    show("the retire plan", plan);
+    check(plan?.instance === NAME && plan.home === HOME && plan.backend === "bb" && plan.session === "none" && plan.children?.length === 0, "the retire plan is for the pi agent: its home, on bb, no session left, no child", JSON.stringify(plan));
+  };
   // Whether that pi is there is bb's to decide: with none in the home the step says so, keeps
   // nothing and fails nothing.
   let retired = false;
-  if (!workingIn().includes("pi")) {
-    note("NO REFUSED RETIRE IN THIS RUN: no pi works in the agent's home right after the stop, so a retire asked at once would go through; nothing is kept of it");
+  if (!afterStop.includes("pi")) {
+    note("NO REFUSED RETIRE IN THIS RUN: no pi works in the agent's home right after the stop; nothing is kept");
   } else {
     const EARLY = "retire-1f2e3d4c5b6a";
     const early = rpc("retirePlan", { instance: NAME });
@@ -429,7 +436,10 @@ try {
     }
     if (asked.ok) {
       // That pi left between the look and the retire: the retire went through, and it is the run's retire.
+      // Its plan is held to the same facts as the later one, and its answer is shown.
       retired = true;
+      planHolds(early.value);
+      show("the retire's answer", asked.value);
       note("NO REFUSED RETIRE IN THIS RUN: the pi in the agent's home left before the retire was asked, and the retire went through");
     } else {
       check(refusal?.code === "E_RUNTIME_QUIESCE_FAILED" && /\bpi\b/.test(refusal.message), `a retire asked at once is refused by the kernel while that pi works in the home, ${early.ok ? "at the apply" : "at the plan"}, naming it (E_RUNTIME_QUIESCE_FAILED)`, call?.stdout || call?.stderr || asked.message);
@@ -448,9 +458,10 @@ try {
   if (!retired) {
     const empty = await until("no process to work in the agent's home", () => workingIn().length === 0, 150);
     check(Boolean(empty), `no process is left working in the agent's home ${Math.round((Date.now() - stoppedAt) / 1000)} s after the stop`, JSON.stringify(workingIn()));
-    const retirePlan = act("retire plan", "retirePlan", { instance: NAME });
-    check(retirePlan?.instance === NAME && retirePlan.home === HOME && retirePlan.backend === "bb" && retirePlan.session === "none" && retirePlan.children?.length === 0, "the retire plan is for the pi agent: its home, on bb, no session left, no child", JSON.stringify(retirePlan));
-    act("retire apply", "retireApply", { instance: NAME, revision: retirePlan?.revision, key: "retire-0a1b2c3d4e5f" });
+    const retirePlan = rpc("retirePlan", { instance: NAME });
+    check(retirePlan.ok, "retire plan (rpc retirePlan)", retirePlan.ok ? "" : retirePlan.message);
+    planHolds(retirePlan.ok ? retirePlan.value : undefined);
+    act("retire apply", "retireApply", { instance: NAME, revision: retirePlan.ok ? retirePlan.value.revision : undefined, key: "retire-0a1b2c3d4e5f" });
   }
   check(rowOf(NAME) === undefined && !existsSync(HOME), "oats status: no row is left, and the home is removed");
   check(bbThread(threadId)?.archivedAt != null, "bb: the agent's thread is archived", JSON.stringify(bbThread(threadId)));

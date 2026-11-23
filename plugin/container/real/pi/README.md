@@ -89,8 +89,10 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   question with Yes and No, and the thread's status line says it. The last view presses Yes on the
   card: bb has no pending interaction left, pi's tool gets `true`, the claim is gone, the agent is
   idle.
-- **P5** The plugin stops the agent and retires it (the stop leaves the pi thread as the provider leaves one: archived, from the provider that archives at stop, or open and not active; the run says which), each from its plan: the plan's facts (what the
-  dialogs word) name the pi agent, its soul, its home and bb, and no other agent. Between the two,
+- **P5** The plugin stops the agent and retires it, each from its plan: the plan's facts (what the
+  dialogs word) name the pi agent, its soul, its home and bb, and no other agent. The stop leaves
+  the pi thread as the provider leaves one (archived, from the provider that archives at stop, or
+  open and not active), and the run says which. Between the two,
   where a pi of bb's own still works in the home (below, "What the run found"), the retire is
   asked at once: the kernel refuses it (`E_RUNTIME_QUIESCE_FAILED`, naming that pi), the plugin
   shows the refusal unchanged, nothing is removed, and the kernel's answer is kept as
@@ -117,5 +119,6 @@ Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 3
   when asked again. It is the provider's documented limit (its README, "Stopping"). The run asks
   once while that pi is there, keeps the refusal (P5), waits for the pi to leave and retires; it
   prints how long it waited (33 to 55 s).
-- **The claim of a dialog reads `running: true`** in `oats status` while the dialog is open (the
-  thread is in its turn), as the question Claude Code asks does in the main run.
+- **`running` in `oats status` is true from the spawn to the stop**: it says that a harness (pi) is
+  loaded, not that the agent works. It is the same while the agent is idle, while its own claim is
+  set and while a dialog is open; that the agent is idle is bb's word for the thread.

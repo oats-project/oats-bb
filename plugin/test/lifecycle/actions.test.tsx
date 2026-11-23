@@ -1720,8 +1720,8 @@ test("an agent whose thread a stop archived: bb lists no such thread, and Start 
 });
 
 // ---- a retire the kernel refused and marked unconfirmed
-// (SHAPED: no real kernel was made to give a marked refusal; the envelope's form is the kernel's, the code and
-// the message are ours. test/fixtures/lifecycle/README.md, "An act refused with the kernel's marker".)
+// (SHAPED: no real kernel was made to give a marked refusal; the envelope's form and the code are the kernel's;
+// that it marks it, and the message, are ours. test/fixtures/lifecycle/README.md, "An act refused with the kernel's marker".)
 
 test("a retire the kernel refuses with its marker that it cannot confirm what is left is told as not confirmed, with OATS's line and Check again; never as not retired", async () => {
   let marked = true;

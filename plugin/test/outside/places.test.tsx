@@ -515,6 +515,7 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
   // What the notice NAMES for it: Stop alone, and a sentence that does not say to start it.
   expect(named(other)).toEqual(["Stopstops the harness that runs outside OATS"]);
+  expect(other.getByTestId("oats-outside-agent-block").querySelector("h3")!.textContent).toBe("Weekly digest helper is running, but OATS recorded it as stopped."); // "in bb" is said of an agent on bb alone
   const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-notice"] p')!.textContent;
   expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it."); // (the kernel's own sentence stays under Details)
   other.unmount();

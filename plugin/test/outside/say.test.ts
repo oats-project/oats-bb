@@ -66,7 +66,7 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
   it("sessionEnd \"lost\" (its session ended without OATS stopping it) is the one stop that is spared the warning", () => {
     expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "lost-open", tone: "plain", acts: ["start"] });
   });
-  it("with its thread archived in bb: the fact, the row's reason in the soul's place, and the way to it; no warning", () => {
+  it("with its thread archived in bb: the fact, no reason on its row (the soul stays), and the way to it; no warning", () => {
     expect(said(operator, "archived", false)).toEqual({ ...PLAIN, kind: "stopped-archived", sentence: "Its conversation is archived in bb. Start begins a new one.", note: null, archived: true }); // the soul stays on its row
   });
   it("with its thread deleted in bb: that it was deleted, and to start it for a new one, as a warning; never \"its bb thread is gone\"", () => {

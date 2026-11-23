@@ -134,7 +134,7 @@ export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Sai
   const startable = said.warning.backend === "bb";
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
-      <Notice title={outsideTitle(instance)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
+      <Notice title={outsideTitle(instance, startable)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
         <p>{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {(

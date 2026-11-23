@@ -117,7 +117,8 @@ function whereNote(where: ThreadWhere): string | null {
  *
  * `where` is bb's answer for the row's thread; `attached`: whether the roster draws the agent on
  * its bb thread (a row that opens the thread). An agent it does not (its thread archived, deleted,
- * hidden or another's) always gets a `note` that says where its thread is, once bb has answered.
+ * hidden or another's) gets a `note` that says where its thread is, once bb has answered; but an
+ * agent OATS stopped whose thread bb has archived, which keeps its soul on its row.
  *
  * By the agent's state, as the one state function gives it (without bb's own question on its
  * thread, which the roster says first):

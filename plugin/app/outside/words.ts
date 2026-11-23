@@ -70,7 +70,7 @@ export const FAILED_OPEN = "Its session ended. Restart it, or send a message her
 /** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
 export const OUTSIDE_RECORDED = "recorded stopped";
 /** The notice, in a person's words: what is so, what happened, what to do. The kernel's own sentence and its code are behind Details. */
-export const outsideTitle = (instance: string): string => `${agentName(instance)} is running in bb, but OATS recorded it as stopped.`;
+export const outsideTitle = (instance: string, onBb = true): string => `${agentName(instance)} is running${onBb ? " in bb" : ""}, but OATS recorded it as stopped.`; // ("in bb" of an agent on bb only: the report's backend is the row's)
 export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is not bb): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";

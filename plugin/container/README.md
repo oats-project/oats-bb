@@ -145,7 +145,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
   roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
-- **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
+- **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the
   kernel's `outsideOats`, a session lost with its thread archived and with its thread deleted,

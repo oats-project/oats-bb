@@ -1901,30 +1901,60 @@ test("a resume the kernel refuses because the session is not lost any more goes 
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }, { instance: TMUX }]);
 });
 
-test("a resume refused because the launch settings changed names the tick that is its remedy, with OATS's line; back at the dialog the tick starts it fresh", async () => {
-  const slot = await tmuxStart({
+test("a resume refused because the launch settings changed says that it can only start fresh, OATS's line under Details; Refresh status brings the dialog back with the fresh start already chosen and its line on what is lost", async () => {
+  const refusing = (): Partial<Handlers> => ({
     startCheck: () => lostCheck(),
     start: ({ resume }) => {
       if (resume === true) throw Object.assign(new Error("E_LAUNCH_ENV_CHANGED: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL"), { code: "conflict" });
       return { threadId: null, instance: TMUX, harness: "claude", model: null, warnings: [], resume: null };
     },
   });
+  const slot = await tmuxStart(refusing());
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   const refused = slot.getByTestId("oats-result").textContent!;
-  expect(refused).toContain("Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.");
-  expect(refused).toContain("OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL");
-  // The choice is one made before a press: it is not drawn, off, beside the result that names it.
+  expect(refused).toContain("Its launch settings changed, so it can only start fresh.");
+  // No sentence names a control that is not on the screen: the choice is not drawn beside a result, and is not named.
+  expect(refused).not.toContain("Tick");
   expect(slot.queryByTestId("oats-start-fresh-choice")).toBeNull();
-  // Refresh status brings the dialog back, where the tick is; nothing is started until it is pressed again.
+  // OATS's own line is one press away, under Details.
+  expect(slot.getByTestId("oats-act-details").textContent).toContain("a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL");
+  // Refresh status: the dialog again, with the plain start ALREADY chosen and what it loses said; nothing is started by that.
   fireEvent.click(button(slot, "oats-start-refresh"));
   await ready(slot);
   expect(calls(slot, "start")).toHaveLength(1);
-  fireEvent.click(within(slot.getByTestId("oats-start-fresh-choice")).getByRole("switch"));
+  expect(within(slot.getByTestId("oats-start-fresh-choice")).getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  expect(slot.getByTestId("oats-start-fresh-warning").textContent).toBe("This starts a new conversation on its task. Its last conversation is not brought back.");
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual(["This starts a new conversation using the saved briefing and state."]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }, { instance: TMUX }]);
   expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer started.");
+  resetApp();
+  // The person may turn it off again: the resume is asked once more (and the kernel answers as it will).
+  const again = await tmuxStart(refusing());
+  fireEvent.click(button(again, "oats-confirm-act"));
+  await phase(again, "failed");
+  fireEvent.click(button(again, "oats-start-refresh"));
+  await ready(again);
+  fireEvent.click(within(again.getByTestId("oats-start-fresh-choice")).getByRole("switch"));
+  expect(again.queryByTestId("oats-start-fresh-warning")).toBeNull();
+  fireEvent.click(button(again, "oats-confirm-act"));
+  await phase(again, "failed");
+  expect(calls(again, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }, { instance: TMUX, resume: true }]);
+  resetApp();
+  // Left while it ran: Show result opens the result, and Refresh status from there has the choice on too.
+  let fail!: (cause: unknown) => void;
+  const held = new Promise<never>((_, reject) => (fail = reject));
+  const left = await tmuxStart({ startCheck: () => lostCheck(), start: () => held });
+  const before = await leave(left);
+  fail(Object.assign(new Error("E_LAUNCH_ENV_CHANGED: a launch value differs"), { code: "conflict" }));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  act(() => notified().at(-1)!.open!.run());
+  await phase(left, "failed");
+  fireEvent.click(button(left, "oats-start-refresh"));
+  await ready(left);
+  expect(within(left.getByTestId("oats-start-fresh-choice")).getByRole("switch").getAttribute("aria-checked")).toBe("true");
 });
 
 test("a resume is for tmux alone: a lost agent on bb keeps its dialog (a new thread, the carry-on line), and a tmux agent an operator stopped starts plainly", async () => {

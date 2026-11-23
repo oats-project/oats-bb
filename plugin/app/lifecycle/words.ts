@@ -568,18 +568,6 @@ export const modelHelp = (recorded: string | null): string =>
  * where a plain start begins fresh on its task. The words never promise what the kernel may not
  * give: before the press they are conditional; after it they say what the kernel answered.
  */
-/**
- * What the dialog says a start or a restart does, before the press. On bb: a new thread (`begins`:
- * what becomes of the conversation it has), in bb's full mode. On tmux: no thread and no full mode
- * of bb's to speak of; a resume says what it tries, and no more (the result says which happened).
- */
-export function startSays(verb: RunVerb, { onBb, resumes, harness, begins }: { onBb: boolean; resumes: boolean; harness: string | null; begins: string }): string[] {
-  const warning = verb === "restart" ? [START.restartWarning] : [];
-  if (onBb) return [...warning, begins, FULL_MODE];
-  if (resumes) return [RESUME.tries, ...(harness === "claude" ? [RESUME.claudeAsks] : [])];
-  return [...warning, START.fresh];
-}
-
 export const RESUME = {
   /** Final: the kernel has no preview of a resume for one agent, so nothing more is promised; the result says which happened. */
   tries: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
@@ -595,9 +583,22 @@ export const RESUME = {
   fresh: "started fresh: its last conversation was not brought back.",
   waiting: "It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.",
   /** Names the tick that is the remedy: a resume the kernel refuses for its launch settings has no other. */
-  envChanged: "Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.",
+  /** The kernel refuses to resume with launch settings that changed. The dialog comes back, on Refresh status, with the plain start chosen. */
+  envChanged: "Its launch settings changed, so it can only start fresh.",
   notLost: "Its session is no longer lost, so there is no conversation to bring back. Read what Start does now.",
 } as const;
+
+/**
+ * What the dialog says a start or a restart does, before the press. On bb: a new thread (`begins`:
+ * what becomes of the conversation it has), in bb's full mode. On tmux: no thread and no full mode
+ * of bb's to speak of; a resume says what it tries, and no more (the result says which happened).
+ */
+export function startSays(verb: RunVerb, { onBb, resumes, harness, begins }: { onBb: boolean; resumes: boolean; harness: string | null; begins: string }): string[] {
+  const warning = verb === "restart" ? [START.restartWarning] : [];
+  if (onBb) return [...warning, begins, FULL_MODE];
+  if (resumes) return [RESUME.tries, ...(harness === "claude" ? [RESUME.claudeAsks] : [])];
+  return [...warning, START.fresh];
+}
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {
   "no-conversation": "Its last conversation was not found.",
@@ -653,9 +654,9 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, 
   // known (the session is there). Its sentence is as unsure, says more, and offers the same Refresh status.
   if (refusal.unconfirmed === true) return of("unknown", "Result not confirmed", [`OATS could not confirm what the ${act} left. Refresh its status before another try.`, ...oatsSays(refusal.message)]);
   // A resume the kernel refused: its session is not lost any more (the row changed after the check), or the
-  // launch settings changed since it last ran (the remedy is a plain start, fresh: one more press).
+  // launch settings changed since it last ran (the one remedy is a plain start, fresh: the dialog comes back with it chosen).
   if (code === "E_RESUME_NOT_LOST") return of("failed", `${name} wasn't started`, [RESUME.notLost]);
-  if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged, ...oatsSays(refusal.message)]);
+  if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged]); // (OATS's own line is under Details)
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may still be running: check its row in the sidebar before you start it again."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!, ...(code === "E_SESSION_START_LOCK_STUCK" ? oatsSays(refusal.message) : [])]); // the sentence says OATS's message names what blocks: it stands under it
   if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);

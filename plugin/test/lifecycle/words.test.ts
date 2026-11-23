@@ -630,7 +630,7 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
   it("a start that asked for no resume says nothing of a conversation", () => {
     expect(startOutcome("start", "weekly-digest-helper", value(parseSessionStart(fixture("start.json")))).lines).toEqual([]);
   });
-  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, with the tick that is the remedy named", () => {
+  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, so that it can only start fresh (OATS's line under Details)", () => {
     expect(startRefused("start", "kernel-fix-developer", { code: "E_RESUME_NOT_LOST", message: "kernel-fix-developer did not lose its session (stopped)" })).toMatchObject({
       tone: "failed",
       title: "Kernel fix developer wasn't started",
@@ -640,7 +640,8 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(startRefused("start", "kernel-fix-developer", { code: "E_LAUNCH_ENV_CHANGED", message: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key" })).toMatchObject({
       tone: "failed",
       title: "Kernel fix developer wasn't started",
-      lines: ["Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.", "OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key"],
+      lines: ["Its launch settings changed, so it can only start fresh."],
+      details: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key",
       offers: ["refresh"],
     });
   });

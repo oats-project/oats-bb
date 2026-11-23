@@ -715,8 +715,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           return;
         }
         const outcome = startRefused(verb, checked.instance, refusal, checked.backend === "tmux");
+        // Launch settings that changed leave one way to start it: fresh. The dialog that Refresh status brings back
+        // has that choice ON, with its line on what is lost: the person sees it and presses Start, or turns it off.
+        const onlyFresh = refusal.code === "E_LAUNCH_ENV_CHANGED";
+        if (onlyFresh && live.current) setFresh(true);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
-        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model, fresh }, null);
+        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model, fresh: fresh || onlyFresh }, null);
       },
     );
   };

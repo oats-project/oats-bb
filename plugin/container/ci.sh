@@ -21,8 +21,9 @@ STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$STAGE" in
   all | live)
-    # A wrong LIVE_THEMES is refused here, before anything starts. live-ui.mjs, which reads it,
-    # refuses it too, and takes spaces around a name; unset or empty is both themes.
+    # A wrong LIVE_THEMES is refused here, before anything starts; unset or empty is both themes.
+    # live-ui.mjs, which reads it, refuses it too. It also takes spaces around a name; this
+    # does not.
     case "${LIVE_THEMES:-light,dark}" in
       light | dark | light,dark | dark,light) ;;
       *)

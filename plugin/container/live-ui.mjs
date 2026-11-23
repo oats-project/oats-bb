@@ -45,7 +45,7 @@ const VIEWPORTS = [
 // anything else stops the run: a typo must not pass as a run that drew nothing.
 const ALL_THEMES = ["light", "dark"];
 const THEMES = (process.env.LIVE_THEMES ?? "").trim() === "" ? ALL_THEMES : process.env.LIVE_THEMES.split(",").map((theme) => theme.trim());
-if (THEMES.length === 0 || new Set(THEMES).size !== THEMES.length || THEMES.some((theme) => !ALL_THEMES.includes(theme))) {
+if (new Set(THEMES).size !== THEMES.length || THEMES.some((theme) => !ALL_THEMES.includes(theme))) {
   console.error(`live-ui: LIVE_THEMES is ${JSON.stringify(process.env.LIVE_THEMES)}: it names the themes to draw, "light", "dark" or "light,dark"`);
   process.exit(2);
 }

@@ -903,7 +903,7 @@ of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake 
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
 CI runs the same three stages, as jobs side by side (`ci.sh unit`, `ci.sh live` once per theme, `ci.sh real`),
-and the pi run as a fourth (`ci.sh pi`):
+and the pi run as one more (`ci.sh pi`):
 `.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`

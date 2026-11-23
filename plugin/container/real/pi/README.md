@@ -10,8 +10,8 @@ plugin/container/ci.sh pi         # or: REAL_PI=1 plugin/container/real/run.sh
 ```
 
 It is not part of `ci.sh all`: CI runs it as a job of its own (`.github/workflows/plugin.yml`,
-`plugin-pi`, the fourth beside `plugin-unit`, `test` and `plugin-real`), so the main run's time does
-not grow. It changes nothing of the main run: it records no
+`plugin-pi`, one more beside `plugin-unit`, the two live jobs and `plugin-real`), so the main run's
+time does not grow. It changes nothing of the main run: it records no
 fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/` (or
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
 are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the

@@ -106,7 +106,10 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **`record(changes)`** makes a change as the kernel records one (the fake's status with
   `changes` by instance, and a line in the deployment's event log) and answers when: the freshness
   scenes time from it to the row or the count on screen, 3 s at most.
-- **No two images of a run are the same image** (`images.mjs`), checked at the end.
+- **No two images of a run are the same image** (`images.mjs`), checked at the end. A run that
+  draws one theme (`LIVE_THEMES`, as each of CI's two live jobs does) compares that theme's images
+  with each other: a light image is then never compared with a dark one. That the theme asked for
+  is the one bb draws is checked at every screenshot.
 
 Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plugins/oats/patterns`,
 `../README.md`, "The patterns: one component each"): every pattern in each of its states, the menu

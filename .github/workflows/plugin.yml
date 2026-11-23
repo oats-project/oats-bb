@@ -11,7 +11,9 @@
 # (plugin/container/README.md; plugin/container/real/README.md). Each job installs and builds what
 # it needs by itself: none waits for another. The live stage is two jobs because it is the longest
 # by far and every scene runs in both themes at both widths: as one job it took 41 min 36 s of its
-# limit of 60 (the two themes cost the same), as two it is about 24 each. The live and the real
+# limit of 60 (the two themes cost the same), as two each draws half of the scenes. One comparison
+# is narrower for it: "no two images of this run are the same image" is within a theme, no longer
+# between a light image and a dark one (plugin/container/README.md). The live and the real
 # jobs keep their files as the artefacts `plugin-live`, `plugin-live-dark` and `plugin-real` (the
 # unit stage writes none). The light live job keeps the name `test`, the one job this workflow
 # had: a required status check bound to that name keeps a job to wait for. A repository that

@@ -20,7 +20,18 @@ set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$STAGE" in
-  all | unit | live) ;;
+  all | live)
+    # A wrong LIVE_THEMES is refused here, before anything starts. live-ui.mjs, which reads it,
+    # refuses it too, and takes spaces around a name; unset or empty is both themes.
+    case "${LIVE_THEMES:-light,dark}" in
+      light | dark | light,dark | dark,light) ;;
+      *)
+        echo "ci: LIVE_THEMES is \"${LIVE_THEMES}\": it names the themes the live stage draws, light, dark or light,dark" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  unit) ;;
   real) exec sh "$HERE/real/run.sh" ;;
   pi) REAL_PI=1 exec sh "$HERE/real/run.sh" ;;
   *)

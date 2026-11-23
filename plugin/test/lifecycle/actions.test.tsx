@@ -100,9 +100,10 @@ test("each action shows only in the states it applies to", async () => {
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
   // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
-  // is loaded) is IDLE, not stopped: the menu is an idle agent's, and the thread's own row says
-  // what a message and Start each do, with Start (app/outside; the state's rule: test/model/view.test.ts).
-  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "restart", "retire"]);
+  // is loaded) is IDLE, not stopped: the menu is an idle agent's WITH START, since its row says
+  // that it does not run ("not loaded"); the thread's own row says what a message and Start each
+  // do, with Start (app/outside; the state's rule: test/model/view.test.ts). The key follows the menu.
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "start", "restart", "retire"]);
   expect(await by("thr_harvest", with_({ running: false, runtimeState: null }))).toEqual(["start", "retire"]);
   // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
   // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.
@@ -1794,4 +1795,30 @@ test("a stop and a start refused with the kernel's marker are told as not confir
   expect(said).toContain("OATS says: the launch was sent and its session was not seen");
   expect(said).not.toContain("wasn't started");
   expect(start.slot.getByTestId("oats-start-refresh")).toBeTruthy();
+});
+
+// ---- an agent that is idle with no harness loaded ("Idle · not loaded") does not run: Start is for it
+
+test("the Start key on an agent that is idle with no harness loaded opens Start, and never says that it is already running; with a harness loaded it still says so", async () => {
+  // The kernel's row of a provider's session that is there with no harness: running false beside "unknown", no end of a session.
+  const idle = (running: boolean) => fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, running, runtimeState: "unknown", sessionEnd: null } : agent));
+  const { slot, shown } = await menu("thr_digest", { startCheck: () => startCheckOf("weekly-digest-helper", { running: false, runtimeState: "unknown", sessionEnd: null }) }, idle(false));
+  // The thread's menu follows the same rule as the key: Start is among its acts.
+  expect(shown()).toEqual(["stop", "start", "restart", "retire"]);
+  const { commands } = await import("../../app/lifecycle");
+  const press = (id: string) => commands.find((each) => each.id === id)!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  const before = notified().length;
+  await press("agent-start");
+  await ready(slot);
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
+  expect(notified().length).toBe(before);
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/already running/);
+  resetApp();
+  // Idle WITH a harness loaded (the kernel's `running: true`): it runs, and the key says so.
+  const loaded = await menu("thr_digest", {}, idle(true));
+  expect(loaded.shown()).toEqual(["stop", "restart", "retire"]);
+  const again = await import("../../app/lifecycle");
+  await again.commands.find((each) => each.id === "agent-start")!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Weekly digest helper is already running." });
+  expect(loaded.slot.queryByRole("dialog")).toBeNull();
 });

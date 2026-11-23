@@ -103,7 +103,11 @@ one whose session ended), on a soul's page for an agent whose thread bb does not
 The letters are the OATS Desktop's (after its leader key); the chord is bb's, and every one is
 rebound in bb's Settings, Keyboard. A key that cannot act says why in one line, through bb's
 toaster ("Weekly digest helper is stopped: Start it instead.", "This thread is not an OATS
-agent's."). bb does not run a plugin command's shortcut while its Terminal tab has the focus.
+agent's."). Start is for an agent that does not run: one that is stopped or failed, and one
+that is idle with NO HARNESS LOADED ("Idle · not loaded": the kernel's `running: false` beside a
+session that is there), whose key and menu entry open Start and never say "is already running";
+its dialog says that it begins a new conversation. bb does not run a plugin command's shortcut
+while its Terminal tab has the focus.
 
 - **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
   PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of

@@ -140,3 +140,11 @@ const shellWord = (text: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(tex
 export const attachCommand = (home: string): string => `oats session attach --home ${shellWord(home)}`;
 /** Where an agent on tmux runs, and that its session is reached from a terminal; the command follows. */
 export const attachWhere = (machine: string | null): string => (machine === null ? "Runs in tmux. Attach from a terminal:" : `Runs in tmux on ${machine}. Attach from a terminal:`);
+/**
+ * Whether the attach line is drawn: for an agent on tmux, while the kernel's own word is that it
+ * runs (`running === true`) and its state is one of an agent that runs (it works, or it waits on a
+ * person). Not for a stopped one (no session), nor for one the kernel cannot reach or says nothing
+ * of (`oats session attach` refuses), also when such an agent needs the person by a claim it still
+ * carries: the state alone would then say yes.
+ */
+export const attachOffered = (onTmux: boolean, running: boolean | null, state: string): boolean => onTmux && running === true && (state === "working" || state === "needs-you");

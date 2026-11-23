@@ -28,7 +28,7 @@ import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, attachCommand, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, attachCommand, attachOffered, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
@@ -418,7 +418,7 @@ function InstanceFacts({ oats, facts, state, running, now }: { oats: Roster; fac
               )}
             </Facts>
             {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel itself says it runs (`running: true`; it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses, also when such an agent still carries a claim. */}
-            {where?.where === "tmux session" && running === true && (state === "working" || state === "needs-you") ? (
+            {attachOffered(where?.where === "tmux session", running, state) ? (
               <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
                 <p className="m-0">{attachWhere(oats.machine === null ? null : shown(oats.machine))}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">

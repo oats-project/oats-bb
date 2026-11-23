@@ -313,8 +313,10 @@ test("the attach command is for an agent on tmux the kernel says runs: none for 
     expect(slot.queryByTestId("oats-panel-attach"), what).toBeNull();
     slot.unmount();
   }
-  // One the kernel cannot reach that still carries a claim needs the person by the one claim rule, and
-  // has no command all the same: the kernel does not say it runs, and `oats session attach` refuses.
+  // One the kernel cannot reach that still carries a claim has no command: the kernel does not say it runs,
+  // and `oats session attach` refuses. (Today the model hides such a claim, so its state is unreachable and
+  // the state alone decides; under the one claim rule it will be needs-you, and then the kernel's own
+  // `running` is what decides: test/panel/words.test.ts holds that case of the rule itself.)
   const unreachableClaim = onTmux({ running: null, runtimeState: "unreachable", waiting: { reason: "attention", message: "Which branch?", since: "2026-11-21T18:20:00.000Z" } });
   await unreachableClaim.findByTestId("oats-panel-session-line");
   expect(unreachableClaim.queryByTestId("oats-panel-attach")).toBeNull();

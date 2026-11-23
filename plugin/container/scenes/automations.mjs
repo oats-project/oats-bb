@@ -525,7 +525,7 @@ const scenes = [
       // Waited for: the line of THIS re-read ("Refreshing…"), not any line about the list's age (one stands there by itself once the list is 30 s old).
       const stale = `${testId("oats-automations-page")} ${testId("oats-stale")}`;
       const again = (await page.until(`(() => { const t = ${textOf(stale)}; return t.startsWith("Refreshing…") ? t : ""; })()`, 15)) ?? (await page.evaluate(textOf(stale)));
-      check(/^Refreshing… showing what was read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
+      check(/^Refreshing… read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
       await page.shot(`automations-${viewport.name}-refreshing`, { targets: true });
       // The re-read has ended when its line is gone, or no longer says "Refreshing…" (a list older than 30 s keeps a line of its age).
       await page.until(`(() => { const t = ${textOf(stale)}; return !t.startsWith("Refreshing…") ? "done" : ""; })()`, 60);

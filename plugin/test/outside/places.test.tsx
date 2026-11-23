@@ -311,3 +311,35 @@ test("on a roster that is the last one read the acts are held, on the archived t
   const buttons = within(await open.findByTestId("oats-outside-warning")).getAllByTestId("oats-status-act") as HTMLButtonElement[];
   expect(buttons.map((button) => [button.textContent, button.disabled])).toEqual([["Stop", true], ["Start", true]]);
 });
+
+// ---- one state, everywhere
+
+test("a session OATS lost whose thread bb has archived says the same word in every place: the sidebar's row, the archived thread's row, and the instance panel's header on the agent's own page", async () => {
+  const app = await loadApp();
+  const Sidebar = app.threadLists[0]!.component;
+  const Row = app.threadHeaderRows[0]!.component;
+  const Page = app.navPanels.find((candidate) => candidate.id === "agent")!.component;
+  const slot = renderSlot<object, Contract>(
+    {
+      component: function Everywhere() {
+        return (
+          <>
+            <Sidebar activeThreadId={null} activeProjectId={null} isCompactViewport={false} onNavigate={() => undefined} searchQuery="" />
+            <Row threadId="thr_digest" projectId="proj_x" environment={null} />
+            <Page subPath={DIGEST} />
+          </>
+        );
+      },
+    },
+    {},
+    { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk },
+  );
+  const places = () => ({
+    sidebar: rowFacts(threadless(slot)).split(" · ")[0],
+    thread: within(within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line")).getByTestId("oats-state").textContent,
+    panel: within(within(slot.getByTestId("oats-panel-header")).getByTestId("oats-panel-state")).getByTestId("oats-state").textContent,
+  });
+  await waitFor(() => expect(places()).toEqual({ sidebar: "Archived in bb", thread: "Archived in bb", panel: "Archived in bb" }));
+  // And each mark is that state's.
+  for (const place of [threadless(slot), slot.getByTestId("oats-identity-row"), slot.getByTestId("oats-panel-state")]) expect(place.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("archived");
+});

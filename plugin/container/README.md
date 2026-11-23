@@ -142,7 +142,7 @@ colours). It covers every rendered element with text of its own inside the plugi
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
-placeholder of an empty one), and the marks (a state's in each of its six states, a toned dot, a row's mark). A failing scene
+placeholder of an empty one), and the marks (a state's in each of its eight states, a toned dot, a row's mark). A failing scene
 prints every distinct row that fails. What it checks is
 what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
 closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted

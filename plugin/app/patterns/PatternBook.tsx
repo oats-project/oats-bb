@@ -5,7 +5,7 @@ import { Button, Card, Chip, Code, Confirm, CopyButton, DisabledReason, Disclosu
 import type { ConfirmProps } from "../ui";
 import { instanceDisplayName, waitingLabel, waitingSince } from "../ui/words";
 
-const STATES: AgentState[] = ["needs-you", "working", "idle", "stopped", "error", "unreachable"];
+const STATES: AgentState[] = ["needs-you", "working", "idle", "stopped", "error", "unreachable", "archived", "deleted"];
 const INSTANCE = "weekly-digest-helper";
 const NAME = instanceDisplayName(INSTANCE);
 // A fixed instant, so the page reads the same at every run.

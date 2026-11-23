@@ -20,6 +20,9 @@ const STATES = [
   ["stopped", "Stopped", "stopped"],
   ["error", "Failed", "failed"],
   ["unreachable", "Unreachable", "unreachable"],
+  // A session OATS lost to an act in bb (the outside feature: README, "Outside OATS").
+  ["archived", "Archived in bb", "archived in bb"],
+  ["deleted", "Deleted in bb", "deleted in bb"],
 ];
 
 export default [
@@ -34,7 +37,7 @@ export default [
           `JSON.stringify([...document.querySelectorAll('${testId("oats-patterns-state-list")} li')].map((li) => [li.querySelector('${testId("oats-state")}').getAttribute("data-state"), li.querySelector('${testId("oats-state")}').innerText.replace(/^!\\s*/, "").trim(), li.querySelector('[role="img"]').getAttribute("aria-label"), li.querySelector('${testId("oats-state")} [aria-hidden="true"]') !== null]))`,
         ),
       );
-      check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the six states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
+      check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the eight states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
       const lines = await page.evaluate(texts(book("oats-status-line")));
       check(lines[0] === "! Needs you · waiting 27 min (since 14:03) · Asked you a question Open" && lines[1] === "Working", `${at} the status line: the word, since when, the reason, the act`, JSON.stringify(lines));
       await page.shot(`patterns-${viewport.name}-states`, { targets: true });

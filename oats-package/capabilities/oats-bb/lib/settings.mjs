@@ -4,7 +4,9 @@ import { isAbsolute, join } from "node:path";
 import { fail, isObject } from "./errors.mjs";
 
 const DEFAULT_SERVER = "http://127.0.0.1:38886";
-const DEFAULT_DAEMON = "http://127.0.0.1:38887";
+// bb's host daemon listens on 38887 unless bb-app was started with --host-daemon-port.
+export const DEFAULT_DAEMON_PORT = 38887;
+const DEFAULT_DAEMON = `http://127.0.0.1:${DEFAULT_DAEMON_PORT}`;
 const DEFAULT_CLI = "bb";
 export const TRUST_VALUES = Object.freeze(["single-user", "container"]);
 
@@ -36,6 +38,18 @@ export function loopbackOrigin(value, name) {
   return url.origin;
 }
 
+/** `settings.oats.bb.hostDaemonPort`: the port of this bb's host daemon, where it is not
+ *  bb's default (contract A23). An integer from 1 to 65535, or unset (null). Anything else
+ *  is refused, never dropped: a port that was meant and is not passed would aim every bb
+ *  command at another bb's daemon. */
+function hostDaemonPortOf(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 65535) {
+    throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.hostDaemonPort must be a whole number from 1 to 65535 (the port bb-app was started with: its --host-daemon-port), written as a number, not as text; it is ${typeof value === "string" ? "text" : typeof value === "number" ? String(value) : `a ${Array.isArray(value) ? "list" : typeof value}`}`);
+  }
+  return value;
+}
+
 export function portOf(origin) {
   const url = new URL(origin);
   return url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
@@ -43,7 +57,14 @@ export function portOf(origin) {
 
 /** The settings with their defaults, shapes checked. `trust` and `version` stay as given
  *  (possibly absent): readiness names what is missing. The addresses are checked where
- *  they are used, so a refusal there carries its own code. */
+ *  they are used, so a refusal there carries its own code.
+ *
+ *  `hostDaemonPort` and `daemon` name one thing, this bb's host daemon: the port bb's CLI
+ *  is told to find it at (BB_HOST_DAEMON_PORT), and the address its /status is read at.
+ *  Where only the port is set, the address is that port on 127.0.0.1; where both are set
+ *  and name different ports, that is refused. `daemonKey` is the setting that decided the
+ *  address, for a message that must name what to change: "daemon", "hostDaemonPort", or
+ *  null where neither is set and the address is bb's default. */
 export function readSettings(raw) {
   if (raw !== undefined && raw !== null && !isObject(raw)) throw fail("E_BACKEND_SETTINGS", "settings.oats.bb must be a map");
   const given = raw ?? {};
@@ -64,9 +85,21 @@ export function readSettings(raw) {
   // server has it): bb does not say which it is. pi's default is `.pi/agent` in the home of the
   // user that runs it. Read only for a pi launch and its readiness, which check its shape.
   const piAgentDir = text("piAgentDir", join(homedir(), ".pi", "agent")).replace(/(?<=.)\/+$/, "");
+  const hostDaemonPort = hostDaemonPortOf(given.hostDaemonPort);
+  const daemonGiven = text("daemon", null);
+  if (hostDaemonPort !== null && daemonGiven !== null) {
+    // Only where the address reads as one: a `daemon` that is no URL is readiness's to refuse, with its own words.
+    let port = null;
+    try { port = portOf(new URL(daemonGiven).origin); } catch { /* refused where it is used */ }
+    if (port !== null && port !== hostDaemonPort) {
+      throw fail("E_BACKEND_SETTINGS", `settings.oats.bb.hostDaemonPort is ${hostDaemonPort} and settings.oats.bb.daemon names port ${port}: they are the same host daemon. Set hostDaemonPort alone (the daemon's address follows it), or make the two agree`);
+    }
+  }
   return {
     server: text("server", DEFAULT_SERVER),
-    daemon: text("daemon", DEFAULT_DAEMON),
+    daemon: daemonGiven ?? (hostDaemonPort !== null ? `http://127.0.0.1:${hostDaemonPort}` : DEFAULT_DAEMON),
+    daemonKey: daemonGiven !== null ? "daemon" : hostDaemonPort !== null ? "hostDaemonPort" : null,
+    hostDaemonPort,
     version: text("version", null),
     trust: text("trust", null),
     cli,

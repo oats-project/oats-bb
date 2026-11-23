@@ -24,7 +24,7 @@ export type Agent = {
   /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `state()` goes on to `running` and bb's thread */
   runtimeState: string | null;
   runtimeError: string | null;
-  /** The row's startedAt: when the session started. Absent or null where the kernel's row names none. */
+  /** The row's startedAt: the last time OATS started it (a spawn, a session start or restart). Absent or null where the kernel's row names none. */
   startedAt?: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;
   /**

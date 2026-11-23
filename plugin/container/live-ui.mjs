@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
+import { TMUX_ROSTER } from "./tmux-roster.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -151,6 +152,13 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
  * with every thread's name and status, what bb says of the ones that are not idle, and the end of
  * bb's and the mock model's logs.
  */
+// By hand only, for a look at a real deployment's roster: LIVE_UI_STATUS_FILE is the path (inside
+// the container) of an `oats status --json` answer. With it this run draws ONLY the stage
+// "local-roster" from that file; without it that stage is skipped. The file is never part of the
+// repository, and its scene prints counts only, never a name (container/README.md).
+const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
+/** The bb threads the local stage archived for its image, to put back when it leaves. */
+const archivedForLocal = [];
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
 const AGAIN_SECONDS = 180;
 // To PROVE the path a stuck thread takes (not part of a normal run): LIVE_UI_PROVE_STUCK=1 makes
@@ -232,6 +240,40 @@ function statusWithRealIds(threads, changes = {}) {
   return JSON.stringify(status);
 }
 
+/**
+ * A roster that is MOSTLY tmux agents, as a deployment that ran on tmux before bb has it: three
+ * agents on bb threads (one of them waiting) and nineteen on tmux, over a few souls, some waiting on
+ * the person, some stopped, some with a parent. The real run holds no tmux-backed agent, so these
+ * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
+ * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
+ * a waiting one carries the claim the kernel printed for release-070-maintainer; and each says
+ * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
+ * runtimeState word (README).
+ */
+function tmuxRoster(threads) {
+  const status = JSON.parse(statusWithRealIds(threads));
+  const rows = status.agents.flatMap((group) => group.instances);
+  const model = rows.find((row) => row.instance === "kernel-fix-developer");
+  const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
+  for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
+  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
+  for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
+    const row = structuredClone(model);
+    Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
+    row.tmux = { ...model.tmux, window: instance };
+    if (row.identity) row.identity = { ...row.identity, alias: instance };
+    if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
+    // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
+    // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
+    // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
+    // the kernel it was recorded with.)
+    delete row.runtimeState;
+    row.running = how !== "stopped";
+    status.agents.find((group) => group.name === soul).instances.push(row);
+  }
+  return JSON.stringify(status);
+}
+
 async function untilSnapshot(matches, seconds = 30) {
   const deadline = Date.now() + seconds * 1000;
   let last;
@@ -275,7 +317,7 @@ async function themedPage(browser, viewport, theme, at) {
     // Every distinct failing row, whole: one run names all there is to fix in the scene.
     if (!ok) {
       console.log(`     theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}`);
-      for (const line of new Set(bad.map((row) => `${row.kind} ${row.what} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))) console.log(`     ${line}`);
+      for (const line of new Set(bad.map((row) => `${row.kind} ${LOCAL_STATUS === "" ? row.what : "(text not printed: a real deployment's roster)"} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))) console.log(`     ${line}`);
     }
     await shot(theme === "light" ? name : `${name}-${theme}`);
   };
@@ -347,11 +389,64 @@ const BUILT_IN = {
   // The release's default: only the home is a page that is shown. Every other stage runs with all
   // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
+  // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.
+  "tmux-roster": {
+    label: "TM",
+    enter: async ({ threads }) => {
+      fake({ status: { stdout: tmuxRoster(threads) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
+    },
+  },
+  "local-roster": {
+    label: "LR",
+    // With the release's default pages: what a person of that deployment sees first. Nothing of the
+    // file is printed, on any path: a file that is no JSON names its path alone, and a roster that
+    // does not arrive is told by its counts. The run's own bb threads (the fixtures') are archived
+    // first, so that what stands under the roster is what that deployment's bb would show, not the
+    // test container's threads.
+    enter: async ({ threads }) => {
+      let agents;
+      const status = readFileSync(LOCAL_STATUS, "utf8");
+      try {
+        agents = JSON.parse(status).agents.flatMap((group) => group.instances).length;
+      } catch {
+        throw new Error(`the status file at ${LOCAL_STATUS} is not an oats status --json answer`);
+      }
+      for (const thread of threads.values()) {
+        bb("thread", "archive", thread.id);
+        archivedForLocal.push(thread.id);
+      }
+      fake({ status: { stdout: status } });
+      pages("home");
+      const deadline = Date.now() + 60_000;
+      let seen = "no answer";
+      for (;;) {
+        try {
+          rpc("refresh");
+          const snapshot = rpc("snapshot");
+          seen = `ok ${snapshot.ok}, ${snapshot.ok ? snapshot.agents.length : 0} agents`;
+          if (snapshot.ok === true && snapshot.agents.length === agents) break;
+        } catch {
+          seen = "the snapshot could not be read";
+        }
+        if (Date.now() > deadline) throw new Error(`the roster of the status file did not arrive: ${seen}, of ${agents} in the file`);
+        await sleep(1500);
+      }
+    },
+    // Only what `enter` archived is put back: a stage that failed before it archived anything leaves bb as it was.
+    leave: async () => {
+      pages(ALL_PAGES);
+      for (const id of archivedForLocal.splice(0)) bb("thread", "unarchive", id);
+    },
+  },
   "pages-default": {
     label: "PG",
     enter: async ({ threads }) => {
       fake({ status: { stdout: statusWithRealIds(threads) } });
       pages("home");
+      // The fixtures' roster is WAITED for: the stage before this one drew another (found by a run whose
+      // image of this stage was the tmux roster's).
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper") && snapshot.agents.length === 8);
     },
     leave: async () => pages(ALL_PAGES),
   },
@@ -441,8 +536,10 @@ try {
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
+    if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
     // The hold for this stage: taken, or lifted where the stage tells a thread itself.
-    const wantsHold = !(stage.tellsAThread === true || TELLS_A_THREAD.has(name));
+    // (None for the local stage either: it archives the fixtures' threads, and no turn is held on an archived thread.)
+    const wantsHold = !(stage.tellsAThread === true || TELLS_A_THREAD.has(name) || name === "local-roster");
     if (wantsHold !== holdsNow) await (wantsHold ? holdWorking : releaseWorking)(name);
     try {
       await stage.enter({ fake, statusWithRealIds, threads, untilSnapshot });

@@ -176,7 +176,7 @@ export async function clearHomeProjectEnv(home, readSettings, { deadline, env = 
     let client = bb;
     if (client === null) {
       const settings = readSettings();
-      client = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
+      client = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: loopbackOrigin(settings.server, "server"), deadline, env });
     }
     const mine = projects ?? projectsOfHome(await client.projects(), home);
     for (const project of mine) await clearProjectEnv(client, project.id, removed, sharedProjectRefusal(project, home) === null ? null : PI_ENV_NAMES);

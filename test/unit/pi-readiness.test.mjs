@@ -55,7 +55,7 @@ for (const [name, packages] of [
     assert.ok(answer.error.message.includes(backend.piAgentDir), "the directory read is named");
     assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
     assert.equal(spawned(bb), false);
-    assert.deepEqual(bb.calls().map((c) => c.argv.slice(0, 3).join(" ")), ["--version", "machine env list"], "bb was only read");
+    assert.deepEqual(bb.calls().map((c) => c.argv.slice(0, 3).join(" ")), ["--version", "host list --json", "machine env list"], "bb was only read");
     const planned = (await check(PI_LAUNCH)).result;
     assert.equal(planned.status, "needs-configuration");
     assert.deepEqual(planned.problems.map((problem) => problem.code), ["E_BACKEND_PI_LISTENER"]);

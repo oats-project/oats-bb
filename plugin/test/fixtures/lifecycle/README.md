@@ -70,13 +70,30 @@ Neither is a file, and neither was met by a run of ours to record:
   `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
   `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).
 
+## A resume that started fresh, and one whose harness waits (shaped)
+
+`start-resume-fresh.json`, `start-resume-waiting.json`: SHAPED, not recorded: no real run has met
+either yet. They are from the kernel's doc at v0.70.5 (docs/desktop-cli-api.md, "Resume a lost
+session (`--resume`)": "the ordinary start answer plus one object", `resume: {resumed, reason,
+harness, sessionId, waiting}`). Each holds only the keys the plugin reads of a start's answer, for
+the sample roster's agent on tmux (`kernel-fix-developer`), and the `resume` object of one case:
+it started fresh (`reason: "no-conversation"`); it continues and the harness waits for its person
+(`waiting: "resume-confirmation"`). The refusal `E_LAUNCH_ENV_CHANGED` is shaped in the tests as an
+envelope of the kernel's form, with a message of ours. The resume that continues, the plain start,
+the restart and the two refusals a real home gave are recorded (the section below);
+`verbs.json` answers `session start --resume` with the recorded `tmux-start-resume.json`; the
+live scene of the lifecycle (`container/scenes/lifecycle.mjs`) gives it, and the recorded plain
+start (`tmux-start.json`), with ONE substitution, the
+name of the agent it was recorded on (`lost-tmux-developer`) for the sample roster's agent on tmux,
+since the result is named from the kernel's answer.
+
 ## An agent on tmux: its rows, and the kernel's answers for a start, a resume and a restart
 
 Recorded by the lost session's part of the real run (`container/real/parts/lost.mjs`) on 2026-11-23,
 OATS 0.70.5 from npm, on ONE agent on the tmux backend (`lost-tmux-developer` of `oats-developer`,
 Claude Code on the run's mock model in a window of the OATS tmux server), with the one substitution
 (the paths) and no other edit. Each is what the kernel printed for the command named, made on the
-command line (the plugin offers no Start and no Restart for an agent on tmux yet); `<home>` is
+command line (the plugin offered no Start and no Restart for an agent on tmux when they were recorded); `<home>` is
 `/abs/deployment/agents/oats-developer/instances/lost-tmux-developer`. None is a default answer of
 the fake (`verbs.json`): a test names the file for the verb it asks.
 
@@ -100,3 +117,12 @@ the fake (`verbs.json`): a test names the file for the verb it asks.
 - `tmux-resume-running.json`: `--resume` on the home while it runs: `E_SESSION_RUNNING` ("… is
   running (unknown); nothing was started"), not `E_RESUME_NOT_LOST`.
 
+## An act refused with the kernel's marker (shaped, no file)
+
+The four refusals that carry the kernel's marker that it cannot confirm what is left
+(`error.details.unconfirmed: true` in its envelope, which the plugin's server hands on as
+`UNCONFIRMED_ISSUE`, `contract/shared.ts`) are SHAPED in the tests, not recorded: no real kernel
+was made to give one for a stop, a start, a restart or a retire. The envelope's form and the
+codes are the kernel's; that it marks them, and the messages, are ours. The tests: `test/lifecycle/words.test.ts` ("an act
+the kernel refused and marked unconfirmed…", one case per verb, and "only with the marker") and
+`test/lifecycle/actions.test.tsx` (the retire's dialog; the stop's and the start's).

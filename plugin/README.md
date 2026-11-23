@@ -106,7 +106,11 @@ waits for), on a soul's page for an agent whose thread bb does not have (**Start
 The letters are the OATS Desktop's (after its leader key); the chord is bb's, and every one is
 rebound in bb's Settings, Keyboard. A key that cannot act says why in one line, through bb's
 toaster ("Weekly digest helper is stopped: Start it instead.", "This thread is not an OATS
-agent's."). bb does not run a plugin command's shortcut while its Terminal tab has the focus.
+agent's."). Start is for an agent that does not run: one that is stopped or failed, and one
+that is idle with NO HARNESS LOADED ("Idle · not loaded": the kernel's `running: false` beside a
+session that is there), whose key and menu entry open Start and never say "is already running";
+its dialog says that it begins a new conversation. bb does not run a plugin command's shortcut
+while its Terminal tab has the focus.
 
 - **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
   PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
@@ -381,7 +385,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off, with the reason beside them, while the roster is the last one read; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop… and Retire… for one on tmux), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off, with the reason beside them, while the roster is the last one read; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
@@ -806,11 +810,32 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
+- **An agent on tmux starts, restarts and comes back from bb.** Start and Restart are offered for
+  an agent on tmux as for one on bb (its page, the panel): a stopped one starts plainly, a
+  running one restarts, and neither opens a thread: the result says where the agent runs, with
+  the command that attaches (the instance panel's words). Start of an agent on tmux whose session was LOST (the
+  kernel's row at the dialog's check: backend `tmux`, `sessionEnd: "lost"`) is `oats session start
+  --resume`: the harness's own last conversation, where a plain start begins fresh on its task.
+  The dialog says what it tries and offers no harness or model (the kernel takes none beside
+  `--resume`); the plain start stays as a choice that is off. The result says what the kernel
+  answered (`resume`): back in its last conversation, started fresh and why, or back and waiting
+  in its terminal, with the command that attaches. An agent on tmux has no bb thread: none is
+  waited for and none opens. The app sends `resume: true` only from that dialog; the server
+  refuses it for a home that is not on tmux and never turns a resume into another start; whether
+  the session is still lost is the kernel's to say (`E_RESUME_NOT_LOST`: the dialog goes back to
+  its check). A lost agent on bb is unchanged (a new thread; the carry-on line). No harness or
+  model is offered for an agent on tmux, by a resume, a plain start or a restart: the only
+  harness list and model suggestions the dialog has are the bb session provider's, which say
+  nothing of a tmux home, so the kernel starts it with the launch its home recorded. The
+  sentences of a resume are this plugin's own (the Desktop resumes without a screen; WORDS.md).
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
   say so before the act ("Starts a new conversation. The current one stays readable in bb,
-  archived."), and the result opens the new thread. For an agent that was cut off the Start
+  archived."), and the result opens the new thread. The sentence follows the thread the kernel's
+  row RECORDS for the agent, as bb has it: listed, or archived already (a provider that archives
+  at stop; bb lists no archived thread, so bb is asked for that one). An agent whose thread bb
+  no longer has keeps the Desktop's sentence. For an agent that was cut off the Start
   and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
@@ -888,13 +913,15 @@ plugin/container/ci.sh            # the image, the installs, typecheck, unit tes
 plugin/container/ci.sh unit       # typecheck, unit tests and the build
 plugin/container/ci.sh live       # the live tests only (bb-app, the plugin installed, a fake oats)
 plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, the bb session provider)
+plugin/container/ci.sh pi         # the pi run only: a pi agent launched from the New agent form (container/real/pi/README.md)
 ```
 
 `plugin/container/README.md` says what each script does and how to keep a container for a session
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`):
+CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`),
+and the pi run as a fourth (`ci.sh pi`):
 `.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`

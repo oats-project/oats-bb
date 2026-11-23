@@ -46,6 +46,7 @@ This is the run the release lane asks for before an oats-bb release.
 | `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
 | `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` | as `container/ci.sh` | keep the container, name it, the image, extra `docker run` arguments (`--dns 1.1.1.1`) |
+| `REAL_PI` | `0` | `1`: the pi run instead (below, "pi agents"; `container/ci.sh pi`). It is on the same kernel: `KERNEL_NPM` and `KERNEL_INTEGRITY` are this run's |
 
 A kernel that is on no release yet, the way the run was made before OATS 0.70.0:
 
@@ -93,6 +94,7 @@ together.
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
 | `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
+| `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
@@ -153,6 +155,52 @@ thread's own row says its agent's state at every width).
   per call (`records/`): the argv, the exit code, stdout, stderr. Its configuration can also make
   every call, or the calls of one command, slower: the run's "oats taking seconds".
 
+## pi agents: a run of its own, and what a deployment must have
+
+The run above launches Claude Code only: its bb has no pi, and a preview or a spawn with the
+harness pi is refused there (`test/fixtures/spawn/spawn-preview-pi-refused.json` and
+`spawn-pi-refused.json` are that refusal, recorded). That a person can launch a pi agent from the
+plugin's New agent form is shown by a second run, in the same container, with the same setup and
+on the same kernel, with what pi needs added:
+
+```sh
+plugin/container/ci.sh pi         # or: REAL_PI=1 plugin/container/real/run.sh
+```
+
+`pi/README.md` says what it does and what it found. It is a job of its own in CI (`plugin-pi`), it is not
+part of `ci.sh all`, it leaves this run and its recorded fixtures as they are, and its artefacts are in
+`real/pi/out/`.
+
+What it had to add to this run's setup is what any deployment must have before the New agent form
+can launch a pi agent on bb. In plain words, on the machine that runs bb:
+
+1. **pi is installed, and on the PATH** of both bb's server and the `oats` the plugin runs. bb
+   starts the command `pi` by name. Install it before bb's server starts, or restart bb after:
+   bb then lists pi among its providers as ready.
+2. **The OATS bridge for pi, `@awebai/oats-pi`, is installed in the pi configuration bb's server
+   runs with**, at the same version as the OATS kernel (`pi install npm:@awebai/oats-pi@<version>`, with
+   the version `oats version` prints). The two are released together and tested only as a pair.
+   Without the bridge a pi agent loads none of its skills, so OATS refuses to launch it
+   (`E_BACKEND_NOT_READY`). That configuration is `~/.pi/agent` of the user that runs bb, unless
+   bb's server was started with `PI_CODING_AGENT_DIR`; then name that directory in
+   `settings.oats.bb.piAgentDir` in `oats-local.yaml`. The directory must be writable by that user.
+3. **The aweb extension for pi, `@awebai/pi`, is NOT in that configuration.** A person who also
+   runs pi agents in tmux usually has it in `~/.pi/agent`: OATS then refuses every pi launch on bb
+   (`E_BACKEND_PI_LISTENER`). Give bb's server a pi configuration of its own (point 2).
+4. **A kernel that pairs with a released bridge.** The pi run is on 0.70.5, and before that on
+   0.70.3: those two are what was run. By the provider's README the question a pi extension's
+   dialog asks sets a claim, and so reaches the home's card, only from bridge 0.70.2.
+5. **A model pi can use.** pi's logins and model list are those of that same configuration. The
+   form's model field lists them (bb's own list for its pi provider): pick one, or give the soul a
+   `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model
+   and is spawned with the harness pi gets NO model from the kernel (the preview's
+   `launch.effective.model` is `null`), and bb's pi then starts on its own default.
+6. Every spawn from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
+   needs.
+
+The provider's README ("pi") has the detail and the reasons; `oats bb doctor` in the deployment and
+the form's own preview say which of these is missing.
+
 ## What the run does
 
 Everything the plugin can do, it does through the plugin: `bb plugin rpc call oats <method>`, the
@@ -170,6 +218,30 @@ stop), a stop on a stopped agent, the thread archived in bb and then Start, the 
 bb. Screenshots at 1280x800 and 390x800 of the tree's row and the thread's header row for the agent
 working, idle, waiting for a person and stopped by OATS, and of its soul's page ("thread missing")
 once its thread is deleted in bb.
+
+**What a stop leaves of the thread, and the two providers.** The bb provider up to 0.3 stops a
+home's thread and leaves it open in bb; from the release that archives at stop (oats-bb #40) it
+stops and archives it. The run is right with both, and reads which one it has: from what its
+first stop did (A7: the thread is archived, or there and not active), not from the provider's
+manifest, whose version is the same in both until a release names the new one. It says so in a
+NOTE and in its last line, and every later stop must leave the same (`run.stopArchives()`,
+`run.stoppedThread()`, for the parts). With a provider that keeps the thread, everything is as
+above. With one that archives: the images of the stopped agent are of its row of the roster on no
+thread ("Stopped", its soul, the plain tone; bb lists no archived thread), which opens the
+archived conversation, and of that thread's own row ("Stopped", since when, "Its conversation is
+archived in bb. Start begins a new one.", with Start… and Retire…); and the lifecycle's part
+presses Start from that row instead of the row's menu, where the Start dialog says "This starts a
+new conversation using the saved briefing and state.". What the read cannot tell: a provider that
+changed what its stop does, at every stop alike, passes as the other kind; the NOTE is where to
+look.
+
+The Stop dialog says two things of the thread, and the lifecycle's part holds each to its own
+fact: before the stop, what a provider of the version the kernel prints does (`oats capabilities
+show oats.bb --json`, compared as the plugin compares it: a release from 0.4.0 archives); after
+it, what bb shows of the thread. This run's workspace pins the provider by commit, and the kernel
+then prints the commit as its version: a commit pin reads as "not known to archive", so the
+confirmation warns on both providers here, and only the result differs. A provider pinned by a
+release is not exercised by this run.
 
 **The question** (A5c): a message in the agent's thread makes the mock have Claude Code call
 AskUserQuestion. bb then holds a pending interaction, and the hook oats.core wrote into the home's

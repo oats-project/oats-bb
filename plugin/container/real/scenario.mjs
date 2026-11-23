@@ -165,6 +165,38 @@ const untilRest = async (instance, what, matches, seconds = 60) => {
   const matched = await untilRow(instance, what, matches, seconds);
   return matched === undefined ? matched : (rowOf(instance) ?? matched);
 };
+/**
+ * What a stop by OATS leaves of the home's bb thread, and it differs by provider: the bb provider
+ * up to 0.3 stops the thread and leaves it open in bb ("kept"); from the release that archives at
+ * stop (oats-bb #40) it stops and ARCHIVES it ("archived"), so that a message in bb cannot start
+ * the agent again outside OATS. Which one this run has is READ, once, from what the run's first
+ * stop did (A7) and not from the provider's manifest: the manifest's version is the same in both
+ * until a release names the new one. Every later stop of the run must then leave the same.
+ * → "kept" (there, not archived, not active), "archived", "active" (there, not archived, in a
+ * turn: no stop leaves that) or "gone" (bb has no such thread). What the read cannot tell: a
+ * provider that changed what its stop does, the same way at every stop, passes as the other kind;
+ * the run's NOTE and its last line say which kind it read.
+ */
+const stopLeft = (of) => {
+  // Given the thread's id, or the thread as bb answered it (so that what a check prints is what it judged).
+  const thread = typeof of === "string" ? bbThread(of) : of;
+  // Anything that is not a thread of bb's (none, or a value that is no thread) is no thread kept.
+  if (thread === undefined || thread === null || typeof thread !== "object" || typeof thread.id !== "string") return "gone";
+  if (thread.archivedAt != null) return "archived";
+  return thread.status === "active" ? "active" : "kept";
+};
+/** Whether this run's provider archives a home's thread at its stop; null until the first stop said (A7). */
+let archivesAtStop = null;
+const stopArchives = () => archivesAtStop;
+/** The thread of a home OATS stopped (its id, or the thread as bb answered it) is as this run's provider leaves one: archived, or kept and not active. */
+const stoppedThread = (of) => archivesAtStop !== null && stopLeft(of) === (archivesAtStop ? "archived" : "kept");
+/** The same in words, for a check's line. */
+const stoppedAs = () => (archivesAtStop ? "archived (this provider archives at stop)" : "kept, and no longer active");
+/** An instance's name as the plugin draws it (app/ui/words.ts `agentName`): "flaky-ci-2-developer" is "Flaky ci 2 developer". */
+const nameOf = (instance) => {
+  const text = instance.replace(/-+/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 /** An agent at rest, for a part of the run: the kernel's row says it is there and not gone (`idleRunning`), and bb says its turn is over. */
 const atRest = (row) => row !== undefined && idleRunning(row) && settled(row);
 
@@ -413,6 +445,54 @@ async function shots(scene, { instance, soul, threadId, state }) {
   }
 }
 /**
+ * For a provider that archives at stop (`stopArchives()`), at both widths: the stopped agent keeps a
+ * row in the roster, on no thread (bb lists no archived thread), that says "Stopped" and its soul in
+ * the plain tone and opens its archived conversation; and that thread's own row says who it is,
+ * "Stopped", since when, "Its conversation is archived in bb. Start begins a new one.", with
+ * Start… and Retire… and the way to the instance panel (the plugin's WORDS.md, "Outside OATS"). Each read waits for what it asserts and
+ * prints what is there when it is not.
+ */
+async function archivedShots(scene, { instance, soul, threadId }) {
+  for (const view of VIEWS) {
+    const { viewport, suffix } = view;
+    const at = `${scene} ${view.theme} ${viewport.name}`;
+    const page = await viewPage(browser, view, at);
+    try {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
+      // The row's words and where it opens come with bb's own answer for the thread, after the roster: both are waited for.
+      const ROW = `(() => { const e = document.querySelector(${JSON.stringify(row)}); return JSON.stringify({ facts: (e?.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), opens: e?.getAttribute("data-opens") ?? null, mark: e?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null, tone: e?.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null, onItsThread: document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`)}) !== null }); })()`;
+      const wanted = JSON.stringify({ facts: `Stopped · ${soul}`, opens: "thread", mark: "stopped", tone: null, onItsThread: false });
+      const drawn = (await page.until(`(() => { const read = ${ROW}; return read === ${JSON.stringify(wanted)} ? read : ""; })()`, 30)) || (await page.evaluate(ROW));
+      check(drawn === wanted, `${at}: ${instance} keeps its row in the roster, on no thread: "Stopped", its soul, the plain tone, and it opens its archived thread`, `${drawn}; the sidebar: ${await page.evaluate(textOf(testId("oats-sidebar")))}`);
+      show("row", await page.evaluate(textOf(row)));
+      await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
+
+      // The row opens the archived conversation, as a person's press does.
+      await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.click()`);
+      const opened = await page.until(`location.pathname.endsWith(${JSON.stringify(`/threads/${threadId}`)}) ? location.pathname : ""`, 30);
+      check(Boolean(opened), `${at}: the row opens the archived thread ${threadId}`, opened ?? (await page.evaluate("location.pathname")));
+      // That thread's own row, once it says where the agent is: the state, the fact, and the two acts that can be pressed.
+      const LINE = `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")}[data-outside="stopped-archived"]`)}); const acts = [...(e?.querySelectorAll(${JSON.stringify('[data-testid^="oats-agent-act-"]')}) ?? [])]; return JSON.stringify({ state: e?.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, agent: (e?.querySelector(${JSON.stringify(testId("oats-outside-agent"))})?.innerText ?? "").trim(), line: (e?.querySelector(${JSON.stringify(testId("oats-status-line"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), acts: acts.map((act) => [act.getAttribute("data-testid"), act.innerText.trim(), act.disabled]), panel: e?.querySelector(${JSON.stringify(testId("oats-open-panel"))})?.innerText.trim() ?? null }); })()`;
+      // The whole line: the state, since when (read from the agent's recorded stop, after the row is drawn), the sentence, the acts.
+      const WHOLE = String.raw`^Stopped · since .+ · ` + ARCHIVED_IN_BB.replace(/\./g, String.raw`\.`) + String.raw` Start… Retire… Instance panel$`;
+      const line = JSON.parse((await page.until(`(() => { const read = JSON.parse(${LINE}); return read.state === "stopped" && new RegExp(${JSON.stringify(WHOLE)}).test(read.line) && read.acts.every((act) => act[2] === false) ? JSON.stringify(read) : ""; })()`, 30)) || (await page.evaluate(LINE)));
+      check(
+        line.state === "stopped" && new RegExp(WHOLE).test(line.line) && line.agent === nameOf(instance) && JSON.stringify(line.acts) === JSON.stringify([["oats-agent-act-start", "Start…", false], ["oats-agent-act-retire", "Retire…", false]]) && line.panel === "Instance panel",
+        `${at}: the archived thread's own row names the agent and says "Stopped", since when, and "${ARCHIVED_IN_BB}", with Start… and Retire… that can be pressed and the way to the instance panel`,
+        JSON.stringify(line),
+      );
+      show("header row", `${line.agent} | ${line.line}`);
+      await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
+    } finally {
+      await page.close();
+    }
+  }
+}
+/** What the archived thread's row says of a stopped agent: the plugin's sentence (WORDS.md, "Outside OATS"; app/outside/words.ts). */
+const ARCHIVED_IN_BB = "Its conversation is archived in bb. Start begins a new one.";
+/**
  * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
  * sidebar holds the real agent's row and who waits, and no link to a page that is not shown.
  */
@@ -659,11 +739,16 @@ try {
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
   show("oats status", brief(row));
   thread = bbThread(threadId);
-  check(thread !== undefined && thread.status !== "active" && thread.archivedAt == null, "bb: the thread is kept, and no longer active", JSON.stringify(thread));
+  // The run's first stop: what it left of the thread says which provider this is (stopLeft, above).
+  const afterStop = stopLeft(thread);
+  archivesAtStop = afterStop === "archived";
+  check(afterStop === "kept" || afterStop === "archived", `bb: the stopped home's thread is ${afterStop}: one of the two a stop leaves (kept and no longer active, or archived)`, JSON.stringify(thread));
+  note(archivesAtStop ? "THIS PROVIDER ARCHIVES A HOME'S THREAD AT ITS STOP (read from this stop): the run expects every stop to archive, and the screen to show a stopped agent on its archived thread" : "this provider keeps a stopped home's thread open in bb (read from this stop): the run expects every stop to leave the thread there and not active");
   show("bb thread", { id: thread?.id, status: thread?.status, archivedAt: thread?.archivedAt });
   agrees(A.instance, row);
   keepStatus("stoppedByOats", { [A.instance]: (r) => r.running === false && r.runtimeState === "stopped" && r.sessionEnd === "stopped" && r.session?.threadId === threadId });
-  await shots("real-stopped", { ...A, threadId, state: "stopped" });
+  if (archivesAtStop) await archivedShots("real-stopped", { ...A, threadId });
+  else await shots("real-stopped", { ...A, threadId, state: "stopped" });
 
   step("A8 edge: a stale stop plan (apply after another stop)");
   refused("the apply of the plan read before the stop", "E_PLAN_STALE", "stopApply", { instance: A.instance, revision: stale.revision, key: "stop-0f0e0d0c0b0a" }, ["instance", "stop"], ["--apply", "stop-0f0e0d0c0b0a"]);
@@ -830,7 +915,7 @@ try {
     const stopped = await untilRow(name, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
     show(name, brief(stopped));
     const its = bbThread(stopped?.session?.threadId);
-    check(its !== undefined && its.status !== "active" && its.archivedAt == null, `bb: the thread of ${name} is kept, and no longer active`, JSON.stringify(its));
+    check(stoppedThread(its), `bb: the thread of ${name} is ${stoppedAs()}`, JSON.stringify(its));
   }
   release(lead);
   release("desktop-mockups-developer");
@@ -917,7 +1002,7 @@ try {
       }
     }
   };
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, idleRunning, atRest, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);
@@ -931,6 +1016,9 @@ try {
 
 // The mock's own log of the model requests, beside the other artefacts.
 if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
+
+// The run's last line says which kind of provider it read (stopLeft): a log's verdict is read with it.
+const onProvider = archivesAtStop === null ? "" : archivesAtStop ? ", on a provider that ARCHIVES a home's thread at its stop" : ", on a provider that keeps a stopped home's thread open";
 
 step("the images");
 // Two scenes of different states never produce the same image. The state each scene is in:
@@ -959,7 +1047,7 @@ for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
 
 if (failures > 0) {
-  say(`\n== real run: ${failures} check(s) failed`);
+  say(`\n== real run: ${failures} check(s) failed${onProvider}`);
   process.exit(1);
 }
-say("\n== real run: all checks passed");
+say(`\n== real run: all checks passed${onProvider}`);

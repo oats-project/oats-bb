@@ -87,7 +87,7 @@ for (const harness of ["pi", "claude"]) {
   };
   const inspect = async (home) => (await json(oats(`session inspect --home ${home} --json`))).result;
 
-  test(`a ${harness} home under the kernel: spawned on bb, told, a failed turn, a lost session resumed by an input and counted once, stopped and retired`, async () => {
+  test(`a ${harness} home under the kernel: spawned on bb, told, a failed turn, a lost session resumed by an input and counted once, stopped (its thread archived, and again by a second stop) and retired`, async () => {
     const since = (await turns()).length;
     const spawned = await oats(`spawn ${soul} --name ${instance} --backend bb --task-file ~/task.md 2>&1`);
     assert.match(spawned, new RegExp(`Spawned ${instance} .* bb session`), spawned);
@@ -164,16 +164,48 @@ for (const harness of ["pi", "claude"]) {
 
     // The kernel's stop and retire: nothing left in the home, the thread archived.
     // The kernel's stop is a plan, then its apply at that plan's revision.
-    const plan = await json(oats(`instance stop ${instance} --plan --json`));
-    const revision = plan.planRevision ?? plan.result?.planRevision;
-    assert.match(String(revision), /^[0-9a-f]{24}$/, JSON.stringify(plan).slice(0, 300));
-    await oats(`instance stop ${instance} --apply --plan-revision ${revision} --idempotency-key pi-kernel-run-${instance} --json 2>&1`);
+    const kernelStop = async (key) => {
+      const plan = await json(oats(`instance stop ${instance} --plan --json`));
+      const revision = plan.planRevision ?? plan.result?.planRevision;
+      assert.match(String(revision), /^[0-9a-f]{24}$/, JSON.stringify(plan).slice(0, 300));
+      return oats(`instance stop ${instance} --apply --plan-revision ${revision} --idempotency-key ${key} --json 2>&1`);
+    };
+    const archivedAt = async () => (await bbJson(`thread show ${threadId}`)).thread.archivedAt ?? null;
+    await kernelStop(`pi-kernel-run-${instance}`);
     await waitFor("no process in the home after the stop", async () => (await processesIn(home)) === 0, { timeoutMs: 30_000 });
+    // The provider's stop archived the thread (contract r24, A15(1)): a message to it in
+    // bb, as its composer sends one, is refused by bb and starts nothing.
+    assert.notEqual(await archivedAt(), null, "the kernel's stop left the home's thread archived");
+    const composer = JSON.parse(await sh(`bb thread tell ${threadId} 'MARK-${harness}-COMPOSER' --json`, { ok: false }));
+    assert.equal(composer.ok, false, JSON.stringify(composer));
     const refused = await input(home, `MARK-${harness}-AFTER-STOP`);
     assert.equal(refused.ok, false);
     assert.equal(refused.error.code, "E_SESSION_NOT_RUNNING", "a home OATS stopped is refused before any provider call");
+
+    // A home OATS stopped before oats.bb archived at a stop is in this state: recorded
+    // stopped, its thread live in bb (here: unarchived by hand). The kernel's stop of a
+    // home it already holds stopped asks the provider once more, by the recorded
+    // endpoint, so the same command closes it: `oats instance stop <name>`, run again.
+    await sh(`bb thread unarchive ${threadId} --json`);
+    assert.equal(await archivedAt(), null);
+    // And a thread of a person's own in the home's bb project, opened for other work with
+    // bb's own spawn: the stop archives the home's recorded thread and no other.
+    // (A first turn's prompt is not always the last message of its model request: it is counted, not searched for.)
+    const turnsBefore = (await turns()).length;
+    const own = await bbJson(`thread spawn --project ${projectId} --provider ${providerId} --model ${harness === "pi" ? "mock/echo" : "claude-opus-5-5"} --permission-mode full --prompt 'MARK-${harness}-PERSON say hi' --title 'A person own thread'`);
+    await waitFor("the person's thread's first turn", async () => (await turns()).length > turnsBefore, { timeoutMs: 120_000 });
+    await idle(own.id);
+    await kernelStop(`pi-kernel-run-${instance}-again`);
+    assert.notEqual(await archivedAt(), null, "a second stop of a home recorded stopped archived its thread");
+    const ownNow = (await bbJson(`thread show ${own.id}`)).thread;
+    assert.deepEqual([ownNow.status, ownNow.archivedAt ?? null, ownNow.deletedAt ?? null], ["idle", null, null], "a person's own thread in the home's project was archived by oats instance stop");
+    assert.ok((await carriers(own.id)).includes(HARNESS[harness].process), "nor was it stopped: the stop is of the recorded thread alone");
+    // (The retire below is the home's end: its hook stops and archives every live thread of the home's project.)
+    await sh(`bb thread stop ${own.id} --json >/dev/null`);
+    await waitFor("no process in the home after the second stop", async () => (await processesIn(home)) === 0, { timeoutMs: 30_000 });
+    assert.equal(await landed(`MARK-${harness}-COMPOSER`), 0, "a message in bb to a stopped agent's thread reached the model");
     await oats(`retire ${instance} --force 2>&1`);
-    assert.ok((await bbJson("thread list --include-archived --include-hidden")).find((row) => row.id === threadId)?.archivedAt, "the retire archived the home's thread");
+    assert.ok((await bbJson("thread list --include-archived --include-hidden")).find((row) => row.id === threadId)?.archivedAt, "the home's thread is archived after the retire");
     assert.deepEqual((await bbJson(`machine env list --project ${projectId}`)).variables, [], "and removed the project's env");
     assert.equal(await landed(`MARK-${harness}-AFTER-STOP`), 0);
   });

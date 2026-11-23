@@ -10,7 +10,10 @@
 # what it needs by itself: none waits for another. The live and the real stages keep their files as
 # the artefacts `plugin-live` and `plugin-real` (the unit stage writes none). The live stage keeps
 # the name `test`, the one job this workflow had: a required status check bound to that name keeps
-# a job to wait for. A repository that requires the plugin's checks requires all three.
+# a job to wait for. A repository that requires the plugin's checks requires all of them.
+# A fourth job, of the same shape, is the pi run:
+#   plugin-pi    `ci.sh pi`: a pi agent launched from the New agent form, in the real run's container
+#                with pi, the OATS bridge for pi and a mock model (plugin/container/real/pi/README.md)
 name: plugin
 on:
   pull_request:
@@ -66,3 +69,17 @@ jobs:
         with:
           name: plugin-real
           path: plugin/container/real/out/
+  # The pi run: not a stage of `ci.sh all`, a run of its own beside the real run.
+  plugin-pi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: plugin/container/ci.sh pi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: plugin-pi
+          path: plugin/container/real/pi/out/

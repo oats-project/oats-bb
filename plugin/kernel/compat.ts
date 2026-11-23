@@ -3,8 +3,13 @@
 // the plugin needs) reads these two, next to the version the kernel answers (`oats version --json`,
 // kernel/roster.ts `parseVersion`; `core.versionOf()` on the server).
 
-/** The oldest OATS the plugin works with: its verbs and JSON answers exist from here on. */
-export const OATS_FLOOR = "0.70.0";
+/**
+ * The oldest OATS the plugin works with: its verbs and JSON answers exist from here on. Never
+ * below the floor of the bb session provider it ships beside (`compatibility.oats` of
+ * oats-package/'s two manifests), and never above the minor of the kernel the real run pins: a
+ * test holds both.
+ */
+export const OATS_FLOOR = "0.70.5";
 
 /**
  * The newest OATS minor the plugin was tested against: the minor of the kernel the real run pins
@@ -22,6 +27,9 @@ export function versionParts(version: string): [number, number, number] | null {
   return match === null ? null : [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
+/** Whether version `a` is below version `b`, each as `versionParts` gives it. */
+export const below = (a: readonly number[], b: readonly number[]): boolean => a[0]! < b[0]! || (a[0] === b[0] && (a[1]! < b[1]! || (a[1] === b[1] && a[2]! < b[2]!)));
+
 /**
  * Where an installed OATS stands: "older" than the floor, "tested" (from the floor up to the tested
  * minor), "newer" than what was tested, or "unknown" for a version that cannot be read.
@@ -31,7 +39,6 @@ export function compatibility(version: string | null | undefined): "older" | "te
   const floor = versionParts(OATS_FLOOR)!;
   const tested = versionParts(`${OATS_TESTED_MINOR}.0`)!;
   if (have === null) return "unknown";
-  const below = (a: readonly number[], b: readonly number[]) => a[0]! < b[0]! || (a[0] === b[0] && (a[1]! < b[1]! || (a[1] === b[1] && a[2]! < b[2]!)));
   if (below(have, floor)) return "older";
   return have[0]! > tested[0] || (have[0] === tested[0] && have[1]! > tested[1]) ? "newer" : "tested";
 }

@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "name": "@awebai/oats",
- "version": "0.70.0",
+ "version": "0.70.5",
  "desktopApi": 1,
  "harnesses": [
   "pi",
@@ -130,7 +130,8 @@
   "schedule-host-register-only",
   "spawn-task-stdin",
   "instance-board",
-  "session-providers"
+  "session-providers",
+  "provider-outside-oats"
  ],
  "automationsApi": 1,
  "workspaceApi": 2,

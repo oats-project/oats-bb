@@ -22,7 +22,7 @@ export const showAllWorking = (n: number): string => `Show all ${n} working`;
 export const SHOW_FEWER = "Show fewer";
 
 /** The states the summary names, in its order; the first two always, the others only when they have agents. */
-const SUMMARY: readonly AgentState[] = ["working", "needs-you", "idle", "stopped", "error", "unreachable"];
+const SUMMARY: readonly Exclude<AgentState, "outside">[] = ["working", "needs-you", "idle", "stopped", "error", "unreachable"];
 const ALWAYS: ReadonlySet<AgentState> = new Set<AgentState>(["working", "needs-you"]);
 /** A state as the summary counts it: "2 working"; "3 need you" as the sidebar's foot says it, whatever the number (the Desktop's line). */
 function counted(state: AgentState, n: number): string {
@@ -32,7 +32,10 @@ function counted(state: AgentState, n: number): string {
 /** "8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed": every agent is counted once. */
 export function summaryLine(counts: Record<AgentState, number>): string {
   const agents = Object.values(counts).reduce((sum, n) => sum + n, 0);
-  return [count(agents, "agent"), ...SUMMARY.filter((state) => ALWAYS.has(state) || counts[state] > 0).map((state) => counted(state, counts[state]))].join(" · ");
+  // "N need you" is the sidebar's foot and the home's heading: an agent that runs outside OATS is one of them
+  // (`view.needing`), so it is counted there and has no count of its own. Every agent is still counted once.
+  const of = (state: Exclude<AgentState, "outside">): number => (state === "needs-you" ? counts["needs-you"] + counts.outside : counts[state]);
+  return [count(agents, "agent"), ...SUMMARY.filter((state) => ALWAYS.has(state) || of(state) > 0).map((state) => counted(state, of(state)))].join(" · ");
 }
 
 /** A tile's count as it reads: the number, "Counting…" while it is read, "Couldn't count" when that failed. */

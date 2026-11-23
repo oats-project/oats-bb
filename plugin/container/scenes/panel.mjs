@@ -852,7 +852,7 @@ const more = [
       }
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const running = await page.evaluate(said);
-      check(/^Working(· session started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
+      check(/^Working(· started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
       {
         // The lifecycle's acts for its state stand under it, in the header.
         const acts = await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-header")} ${testId("oats-agent-acts")} button`)})].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")))`);

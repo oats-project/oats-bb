@@ -68,7 +68,7 @@ test("a running agent says Working, as the tree and the thread do, and since whe
   const running = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, running: true, waiting: null }) });
   await running.findByTestId("oats-panel-work");
   // started 12:14:30Z, read at 12:30:30Z
-  expect(stateOf(running)).toBe("Working· session started 12:14");
+  expect(stateOf(running)).toBe("Working· started 12:14");
   // started 12:14:30Z, read at 12:30:30Z: a labelled fact of the session
   expect(text(running.getByTestId("oats-panel-started").closest('[data-testid="oats-fact"]')!)).toBe("Started16 min ago");
   running.unmount();
@@ -284,7 +284,7 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
     sidebarThreads: panelThreads(agents),
   });
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
-  expect(stateOf(slot)).toBe("Working· session started 12:14");
+  expect(stateOf(slot)).toBe("Working· started 12:14");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   // Where its session is and how to reach it: one sentence, and the command to copy (the one function the home's card uses).
   const attach = slot.getByTestId("oats-panel-attach");
@@ -432,13 +432,14 @@ test("an agent with no thread that waits on a person says Needs you, as its Need
   expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${waitingClock("2026-11-23T12:14:33.506Z", NOW)})`);
 });
 
-test("an agent on tmux shows a claim only while the kernel says it runs: one it cannot reach says Unreachable and shows none", async () => {
+// One claim rule for bb and tmux (the spec's author, 2026-11-23): a claim is hidden only for an agent the kernel calls stopped.
+test("an agent on tmux that the kernel cannot reach still shows what it waits for: a claim wins, as on bb", async () => {
   const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: null, runtimeState: "unreachable" } : agent));
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-work");
-  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
-  expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
+  expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${waitingClock("2026-11-23T12:14:33.506Z", NOW)})`);
+  expect(slot.getByTestId("oats-panel-waiting")).toBeTruthy();
 });
 
 test("an agent that needs you for a question bb shows, with no claim, says Needs you with no time, never the age of its start", async () => {

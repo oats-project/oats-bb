@@ -290,6 +290,37 @@ the line of a thread that belonged to a RETIRED agent;
 the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
 come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
 
+### A provider home's row, case by case
+
+One table for the two sides that must agree on it: the bb session provider, which answers
+`running` and the state of a home's thread (`inspectAnswer`,
+`oats-package/capabilities/oats-bb/lib/threads.mjs`, from bb's status of the thread and from the
+harness process it finds in the home), and the plugin, which says the state from the kernel's row
+and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
+endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
+agent works. Each row below that names a recording is the kernel's row as printed on that
+provider (OATS 0.70.5, the provider at oats-bb #40), and a test reads every recorded row against
+this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
+it with the thread as the column gives it. A dash is a field the row does not carry.
+
+| Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
+|---|---|---|---|---|---|---|---|
+| in a turn | true | unknown | - | - | in a turn | Working | `roster/status-recorded.json#working` |
+| at rest, its harness loaded | true | unknown | - | - | at rest | Idle | `outside/status-at-rest.json` |
+| at rest, no harness loaded (its process ended; a reboot without `oats host run`) | false | unknown | - | - | at rest | Idle | `outside/status-not-loaded.json` |
+| stopped with OATS; the provider archived its thread | false | stopped | stopped | - | archived | Stopped | `outside/status-stopped-archived.json` |
+| stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
+| its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
+| its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
+| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
+| the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
+
+What comes after the state's word (the reason, the tone, the acts) is the table at the head of
+this section; this one holds only what the two functions must agree on. An agent on tmux is not
+in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
+for whether it works.
+
 ## The home
 
 The OATS home (the Bot entry in bb's navigation, with a count when agents need you, the page

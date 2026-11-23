@@ -8,7 +8,7 @@ import { Chip, Empty, Menu, Notice, SearchField, Segmented, TARGET, Toned } from
 import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
 import { useHere } from "./here";
-import { Tokens } from "./parts";
+import { Token, Tokens } from "./parts";
 import {
   actsAs,
   capabilitySource,
@@ -142,8 +142,8 @@ function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; li
             </span>
             {/* The cron itself goes under its words; with no words, the line above is already the cron. */}
             <span className={`${SUB} font-mono`}>
-              {/* The cron is one piece and the time zone another: a line ends between them, and inside one only when it is longer than the line (a cron of many minutes), never cut. */}
-              {words !== null && row.cron !== null ? <span data-token="" className="inline-block max-w-full break-words align-bottom">{`${shown(row.cron)}${row.tz !== null ? " ·" : ""}`}</span> : null}
+              {/* The cron (one the page has words for: five short fields) is one piece and the time zone another: a line ends between them, never inside one. */}
+              {words !== null && row.cron !== null ? <Token>{`${shown(row.cron)}${row.tz !== null ? " ·" : ""}`}</Token> : null}
               {words !== null && row.cron !== null && row.tz !== null ? " " : null}
               {row.tz === null ? null : <Tokens text={shown(row.tz)} />}
             </span>
@@ -185,7 +185,7 @@ function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; li
             </span>
             <span data-testid="oats-automation-last" data-tone={cell.lastTone ?? undefined} title={cell.lastTitle ?? undefined} className={SUB}>
               {/* When, then what the last run did: each word whole, the separator with the time; one that did not happen, or whose state nobody knows, is marked. What fired a trigger is a source's text of any length: it wraps, and is never cut. */}
-              <span data-token="" className="inline-block max-w-full break-words align-bottom">{`${cell.last}${cell.lastOutcome !== null && cell.lastTone === null ? " ·" : ""}`}</span>
+              <Token>{`${cell.last}${cell.lastOutcome !== null && cell.lastTone === null ? " ·" : ""}`}</Token>
               {cell.lastOutcome === null ? null : " "}
               {cell.lastOutcome === null ? null : cell.lastTone === null ? (
                 <Tokens text={shown(cell.lastOutcome)} />
@@ -283,7 +283,7 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
                   </span>
                 ))}
                 {/* The rows' last column holds their ⋯ menu: the headings leave it the same room, so each sits over its column. */}
-                {acts === undefined ? null : <span aria-hidden="true" className={`${TARGET} invisible w-8`} />}
+                {acts === undefined ? null : <span aria-hidden="true" className="w-8" />}
               </div>
               {group.rows.map((row) => (
                 <Row key={row.id} row={row} list={list} now={now} running={running} onOpen={onOpen} acts={acts} />

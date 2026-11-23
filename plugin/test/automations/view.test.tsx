@@ -707,6 +707,32 @@ describe("a trigger's page (D-279, D-280, D-283)", () => {
   const status = (name?: string) => (id: string) => statusOf(id, name);
   const text = (view: ReturnType<typeof page>, testId: string) => view.getByTestId(testId).textContent;
 
+  it("a history line gives its text the page's whole line when the page is narrow: an instance's id of 34 characters is one piece, under the time", () => {
+    // A made-up value, not a recorded one: the recording's instance ids on a trigger are 27 characters, and a kernel-named one with a timestamp is longer.
+    const LONG = "oats-developer-review-202611212017";
+    expect(LONG).toHaveLength(34);
+    const view = page({
+      kind: "trigger",
+      status: (id: string) => {
+        const read = statusOf(id);
+        return { ...read, fired: read.fired.map((fire, at) => (at === 0 ? { ...fire, instance: LONG } : fire)) };
+      },
+    });
+    view.open("oats-real/proposal-review");
+    const line = view.getAllByTestId("oats-automation-run").find((entry) => entry.textContent!.includes(LONG))!;
+    // The id is one token: it moves to the next line whole.
+    expect(Array.from(line.querySelectorAll("[data-token]")).map((token) => token.textContent)).toContain(LONG);
+    // Narrow, the line is a stack (the time over the text, no column taken from the text); the time is a column at its side only from a wider page up.
+    const classes = line.className.split(" ");
+    expect([classes.includes("flex-col"), classes.includes("@xl:flex-row"), classes.includes("flex-row")]).toEqual([true, true, false]);
+    const time = line.firstElementChild!;
+    expect([time.querySelector("time") !== null, time.className.split(" ").includes("@xl:w-24"), time.className.split(" ").includes("w-24")]).toEqual([true, true, false]);
+    // The same line draws a schedule's runs.
+    const schedule = page();
+    schedule.open("local/daily-review");
+    expect(schedule.getAllByTestId("oats-automation-run")[0]!.className.split(" ")).toContain("flex-col");
+  });
+
   it("a pull-request trigger: its event, repo, labels, base and poll; what it spawns; its prompt with the event's fields marked", () => {
     const view = page({ kind: "trigger", status: status() });
     view.open("oats-real/proposal-review");

@@ -286,10 +286,16 @@ function SpawnsCard({ row }: { row: AutomationRow }) {
 }
 
 /** One line of the history: when, then what. */
+/**
+ * A line of a row's history: when, and what. In a narrow page (a phone) it is a stack, the time
+ * over the text, so that the text has the page's whole line: an instance's id is some 35
+ * characters, and beside a column for the time it would not be whole. From a wider page up the
+ * time is a column at the line's side.
+ */
 function HistoryLine({ iso, now, children, testId }: { iso: string | null; now: number; children: ReactNode; testId: string }) {
   return (
-    <li data-testid={testId} className="flex min-w-0 items-baseline gap-3 border-t border-border py-1.5 text-sm first:border-t-0">
-      <span className="w-24 shrink-0">
+    <li data-testid={testId} className="flex min-w-0 flex-col gap-0.5 border-t border-border py-1.5 text-sm first:border-t-0 @xl:flex-row @xl:items-baseline @xl:gap-3">
+      <span className="shrink-0 @xl:w-24">
         <Time iso={iso} now={now} />
       </span>
       <div className="min-w-0 flex-1 break-words text-foreground">{children}</div>

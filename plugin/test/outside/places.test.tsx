@@ -202,7 +202,7 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("stopped-archived");
   expect(within(row).getByTestId("oats-outside-agent").textContent).toBe("Weekly digest helper");
-  expect(words(slot)).toEqual(["Stopped", "Its conversation is archived in bb"]);
+  expect(words(slot)).toEqual(["Stopped", "Its conversation is archived in bb. Start begins a new one."]);
   // Its acts are on this row: bb's menu of an archived thread has none of the roster's.
   expect(acts(slot)).toEqual(["Start…", "Retire…"]);
   fireEvent.click(within(row).getByRole("button", { name: "Start…" }));
@@ -338,7 +338,7 @@ test("an agent whose session OATS lost and whose thread bb archived: its own pag
 test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire", async () => {
   const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
-  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", tone: null, acts: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb. Start begins a new one.", tone: null, acts: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
   resetApp();
   const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(deleted).kind).toBe("deleted"));

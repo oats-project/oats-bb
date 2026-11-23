@@ -267,11 +267,11 @@ export default [
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const digest = threads.get("thr_digest");
-      await page.until(`(${rowOf(threadless("weekly-digest-helper"))})?.facts.includes("archived in bb") === true`, 30);
+      await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${digest.id}")`, 15)), `${at} the row of a stopped agent whose conversation is archived opens that thread in bb`, await page.evaluate("location.pathname"));
-      let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`));
-      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`).test(line.words) && same(line.acts, ["Start…", "Retire…"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and "Its conversation is archived in bb", with the lifecycle's Start… and Retire…`, line === null ? await shown() : JSON.stringify(line));
+      let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb\\. Start begins a new one\\.$`));
+      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb\\. Start begins a new one\\.$`).test(line.words) && same(line.acts, ["Start…", "Retire…"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped", since when, and "Its conversation is archived in bb. Start begins a new one.", with the lifecycle's Start… and Retire…`, line === null ? await shown() : JSON.stringify(line));
       // What bb 0.50.1 itself does with an archived thread opened by its id: the conversation, no composer, and its own bar.
       const bar = await page.until(`(() => { const text = document.body.innerText.replace(/\\s+/g, " "); return /Thread is archived/.test(text) ? JSON.stringify({ composer: document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length, unarchive: [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Unarchive") }) : ""; })()`, 15);
       check(bar === JSON.stringify({ composer: 0, unarchive: true }), `${at} bb shows the archived thread to read: no composer, "Thread is archived" and its own Unarchive`, bar ?? (await page.evaluate(`document.body.innerText.replace(/\\s+/g, " ").slice(-300)`)));

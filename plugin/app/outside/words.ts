@@ -29,7 +29,7 @@ export const STOPPED_HOST = "with the machine. OATS starts it again when the mac
 export const STOPPED_HOST_NOTE = "with the machine";
 
 /** Stopped (its session not lost), and bb has its thread archived (what a stop leaves once the provider archives at stop): the fact, and the row opens the conversation to read. */
-export const ARCHIVED_FACT = "Its conversation is archived in bb";
+export const ARCHIVED_FACT = "Its conversation is archived in bb. Start begins a new one.";
 /** The reason on a row, for every agent whose thread bb has archived. */
 export const ARCHIVED_NOTE = "archived in bb";
 

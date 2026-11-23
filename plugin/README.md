@@ -685,7 +685,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
   say so before the act ("Starts a new conversation. The current one stays readable in bb,
-  archived."), and the result opens the new thread. For an agent that was cut off the Start
+  archived."), and the result opens the new thread. The sentence follows the thread the kernel's
+  row RECORDS for the agent, as bb has it: listed, or archived already (a provider that archives
+  at stop; bb lists no archived thread, so bb is asked for that one). An agent whose thread bb
+  no longer has keeps the Desktop's sentence. For an agent that was cut off the Start
   and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its

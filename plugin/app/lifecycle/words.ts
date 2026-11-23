@@ -409,7 +409,8 @@ const unidentified = (verb: Verb) =>
     ? "OATS can't tell what this home's capabilities created, or can't run their cleanup, so nothing was removed. Details says what may be left and how to finish."
     : "OATS couldn't find or read what it needs in this instance's home folder, so nothing was done.";
 
-export type Refusal = { code: string | null; message: string };
+/** `unconfirmed`: the kernel's own marker that it could not confirm what its act left (`error.details.unconfirmed`). */
+export type Refusal = { code: string | null; message: string; unconfirmed?: boolean };
 /** The kernel's own line under its name, as the Desktop quotes a refusal: the first line of its message (the display filter draws it). Nothing for an empty message. */
 export const oatsSays = (message: string): string[] => {
   const line = message.split(/[\n\u2028\u2029]/).find((part) => part.trim() !== "");
@@ -449,6 +450,11 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal,
   const name = agentName(instance);
   if (refusal.code !== null && LOST.has(refusal.code)) {
     return { tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
+  }
+  // A retire the kernel refused AND marked unconfirmed: it says itself that it cannot tell what is left. Never
+  // "wasn't retired", whatever the code: not confirmed, with OATS's own line and Check again (as the New agent form reads the marker).
+  if (verb === "retire" && refusal.unconfirmed === true) {
+    return { tone: "unknown", title: "Result not confirmed", lines: ["OATS could not confirm what the retire left. Check again before assuming nothing happened.", ...oatsSays(refusal.message)], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.

@@ -529,3 +529,26 @@ describe("an outcome as the toaster tells it, when its dialog is gone", () => {
     expect(toasted("retire", kept)).toEqual({ plain: false, tone: "failed", title: kept.title, lines: [kept.warning!.title] });
   });
 });
+
+describe("a retire the kernel refused and marked unconfirmed", () => {
+  const marked = { code: "E_RETIRE_INCOMPLETE", message: "the home was moved aside and the retire hooks did not answer\nmore of it", unconfirmed: true };
+  it("is not confirmed: OATS's own line, the code, Check again; never \"wasn't retired\"", () => {
+    expect(applyRefused("retire", "dev-1", marked)).toEqual({
+      tone: "unknown",
+      title: "Result not confirmed",
+      lines: ["OATS could not confirm what the retire left. Check again before assuming nothing happened.", "OATS says: the home was moved aside and the retire hooks did not answer"],
+      code: "E_RETIRE_INCOMPLETE",
+      details: marked.message,
+      offers: ["check"],
+    });
+  });
+  it("only with the marker, and only for a retire", () => {
+    expect(applyRefused("retire", "dev-1", { ...marked, unconfirmed: false })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired" });
+    expect(applyRefused("retire", "dev-1", { code: marked.code, message: marked.message })).toMatchObject({ tone: "failed" });
+    expect(applyRefused("stop", "dev-1", { ...marked, code: "E_SESSION_STOP_FAILED" })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't stopped" });
+  });
+  it("asked again, the kernel's same marked answer stays not confirmed, and the toaster tells it by its title, to be shown again", () => {
+    expect(checkAgainRefused("retire", "dev-1", marked)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"] });
+    expect(toasted("retire", applyRefused("retire", "dev-1", marked))).toEqual({ plain: false, tone: "unknown", title: "Result not confirmed", lines: [] });
+  });
+});

@@ -85,7 +85,12 @@ export type RetireReceipt = {
   worktree: "retained" | "removed" | "absent" | null;
   movedTo: string | null;
   recoveryPath: string | null;
-  /** The bb threads the provider archived with the home (`capabilityMeta["oats.bb"].archived`). */
+  /**
+   * The bb threads of the home that are archived in bb when the retire ends
+   * (`capabilityMeta["oats.bb"].archived`): those the retire hook archived itself and, from the
+   * provider that archives at stop, those it found archived already (the stop's). A home at a path
+   * an earlier home used lists that home's archived threads too (the kernel side's known edge).
+   */
   threadsArchived: number;
   children: StoppedRow[];
   /** What the kernel says its cleanup left (`rollbackIncomplete`); empty when it finished. */

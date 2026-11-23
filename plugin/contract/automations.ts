@@ -11,7 +11,7 @@ const text = z.string().nullable();
 const count = z.number().int().nullable();
 
 export const automationKind = z.enum(["schedule", "trigger"]);
-/** Where the page lists a row: this computer runs it (or would), it needs attention here, or it runs elsewhere. */
+/** Where the page lists a row: the machine runs it (or would), it needs attention here, or it runs elsewhere. */
 export const automationGroup = z.enum(["here", "attention", "elsewhere"]);
 /** Why a row does not run here. `other` is a reason this plugin does not know: it does not run here, as sent. */
 export const automationReason = z.enum(["host-unnamed", "assigned-elsewhere", "owner-mismatch", "untrusted", "other"]);
@@ -95,7 +95,7 @@ export const automationRow = z.object({
   backend: text,
   yolo: z.boolean().nullable(),
   wake: z.object({ cron: z.string(), tz: text, message: text }).nullable(),
-  /** the job's lock on this computer: a host slot, not proof of a launch */
+  /** the job's lock on the machine: a host slot, not proof of a launch */
   running: z.boolean(),
   /** a launch with no recorded result */
   attempt: z
@@ -289,6 +289,8 @@ export const rpc = defineRpcContract({
     output: z.object({
       at: z.string(),
       hostId: z.string().nullable(),
+      /** that machine's name as bb gives it, where one is known: for the notice of an OATS that cannot be read */
+      machine: z.string().nullable().optional(),
       /** what this OATS says of itself (`oats version --json`); null when it could not be asked */
       oats: z.object({ version: z.string(), features: z.array(z.string()), automationsApi: z.number().nullable() }).nullable(),
       schedule: automationListAnswer,
@@ -299,7 +301,7 @@ export const rpc = defineRpcContract({
   triggerStatus: { input: z.object({ id: z.string().regex(TRIGGER_ID) }).strict(), output: triggerStatus },
 
   // ---- the acts on a row of the current list; an id it does not name starts no process ----
-  /** On or off on this computer: a local item's own switch, a workspace item's entry in this host's opt-outs. */
+  /** On or off on the machine: a local item's own switch, a workspace item's entry in this host's opt-outs. */
   automationEnable: { input: z.object({ kind: automationKind, id: automationId, enabled: z.boolean() }).strict(), output: z.object({ row: automationRow }) },
   /** Run a schedule now. A launch can take as long as a spawn. */
   scheduleRun: { input: z.object({ id: automationId }).strict(), output: scheduleRunReceipt },

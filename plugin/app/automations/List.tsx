@@ -1,5 +1,5 @@
 // One Automations list (Schedules or Triggers): the rows grouped by where they run, because the
-// first question is what THIS computer does. Workspace (Git) and local items sit together, each
+// first question is what the machine that holds the deployment does. Workspace (Git) and local items sit together, each
 // marked with where it comes from. A row opens its page. In the Desktop's words and order
 // (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
 import type { ReactNode } from "react";
@@ -7,21 +7,26 @@ import type { AutomationList, AutomationRow } from "../../contract/automations";
 import { Chip, Empty, Menu, Notice, SearchField, Segmented, TARGET, Toned } from "../ui";
 import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
+import { useHere } from "./here";
+import { Tokens } from "./parts";
 import {
   actsAs,
   capabilitySource,
   cronInWords,
+  emptyHow,
   filterRows,
   groupRows,
-  HOST_UNNAMED,
+  hostNameHow,
+  hostUnnamed,
   hostUnnamedDetail,
   lastNext,
   listBanners,
-  NOUNS,
+  notRunHere,
   onSummary,
   ORIGIN_FILTERS,
   placementText,
-  SCHEDULER_OFF,
+  schedulerOff,
+  schedulerOn,
   snapshotLine,
   soulOriginText,
   summaryLine,
@@ -34,14 +39,18 @@ const HEADS = ["Automation", "Soul", "When", "Runs on", "Last · next"] as const
 /** What a row's acts add to it, where the page has them: its switch before its name, its menu after its facts. */
 export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
 // One row is a grid of five cells from bb's wide layout up, and a stack below it.
-const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] @4xl:gap-3";
+// From bb's wide layout up a row is two lines: its name, with its tags and summary, across the whole
+// row (an id can be forty characters, and no column of five holds that whole), then its four facts
+// under their headings. Below it a row is a stack.
+const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] @4xl:gap-x-3 @4xl:gap-y-1";
 const CELL = "flex min-w-0 flex-col gap-0.5";
 const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 
 /** Where a row comes from: "local", or the member whose repository holds it. */
 export function OriginTag({ row }: { row: AutomationRow }) {
+  const here = useHere();
   const local = row.origin.kind === "local";
-  return <Chip title={local ? "Local to this computer" : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>{local ? "local" : shown(row.origin.member ?? "workspace")}</Chip>;
+  return <Chip title={local ? `Local to ${here.on}` : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>{local ? "local" : shown(row.origin.member ?? "workspace")}</Chip>;
 }
 
 /** What is to be said of a row's state: off here, a failed source check, invalid, unreadable, its package template. */
@@ -79,17 +88,19 @@ export function Summary({ row }: { row: AutomationRow }) {
   );
 }
 
-function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: AutomationList; now: number; onOpen: (id: string) => void; acts?: RowActs }) {
+function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; list: AutomationList; now: number; /** false while the host scheduler is off */ running: boolean; onOpen: (id: string) => void; acts?: RowActs }) {
+  const here = useHere();
   const off = !row.enabledHere && row.group !== "elsewhere";
   const main = `min-w-0 break-words ${off ? "text-muted-foreground" : "text-foreground"}`;
-  const place = placementText(row, list.host);
-  const cell = lastNext(row, now);
+  const place = placementText(row, list.host, running, here);
+  const cell = lastNext(row, now, running, here);
   const on = row.kind === "trigger" ? onSummary(row.on) : null;
   const words = cronInWords(row.cron);
   const label = (head: string): ReactNode => <span className="sr-only @4xl:hidden">{`${head}: `}</span>;
   return (
     <div role="row" data-testid="oats-automation-row" data-id={row.id} data-group={row.group} className={`${GRID} flex flex-col gap-2 border-t border-border px-3 py-2 text-sm first:border-t-0`}>
-      <div role="cell" className={CELL}>
+      {/* Wide: the switch, the name with its tags, and the summary on one line, wrapping whole when they are long. */}
+      <div role="cell" className={`${CELL} @4xl:col-span-full @4xl:flex-row @4xl:flex-wrap @4xl:items-center @4xl:gap-x-3 @4xl:gap-y-1`}>
         {acts === undefined ? null : <div data-testid="oats-automation-switch">{acts.switchOf(row)}</div>}
         <button
           type="button"
@@ -98,15 +109,14 @@ function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: Autom
           className={`${TARGET} flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded text-left hover:underline`}
           onClick={() => onOpen(row.id)}
         >
-          <span title={shown(row.id)} className={`min-w-0 break-all font-mono font-semibold ${off ? "text-muted-foreground" : "text-foreground"}`}>
-            {shown(row.name)}
+          <span title={shown(row.id)} className={`min-w-0 break-words font-mono text-[13px] font-semibold @4xl:text-sm ${off ? "text-muted-foreground" : "text-foreground"}`}>
+            <Tokens text={shown(row.name)} />
           </span>
           <OriginTag row={row} />
           <StateTags row={row} />
         </button>
         <Summary row={row} />
-        {/* Not trusted here: the kernel's words, which name the oats-local.yaml line to add, in the row itself. */}
-        {row.reason === "untrusted" && row.reasonDetail !== null ? <span className={SUB}>{shown(row.reasonDetail)}</span> : null}
+        {/* Not trusted here: the row says so in "Runs on"; what to add to oats-local.yaml is on the row's page, where there is room for it. */}
       </div>
       <div role="cell" className={CELL}>
         {label("Soul")}
@@ -115,9 +125,11 @@ function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: Autom
         ) : (
           <>
             <span title={shown(`${row.soul.name} · ${soulOriginText(row.soul.origin).long}`)} className={`${main} font-mono`}>
-              {shown(row.soul.name)}
+              <Tokens text={shown(row.soul.name)} />
             </span>
-            <span className={SUB}>{shown(soulOriginText(row.soul.origin).short)}</span>
+            <span className={SUB}>
+              <Tokens text={shown(soulOriginText(row.soul.origin).short)} />
+            </span>
           </>
         )}
       </div>
@@ -129,33 +141,59 @@ function Row({ row, list, now, onOpen, acts }: { row: AutomationRow; list: Autom
               {shown(words ?? row.cron ?? "Not reported")}
             </span>
             {/* The cron itself goes under its words; with no words, the line above is already the cron. */}
-            <span className={`${SUB} font-mono`}>{shown([words !== null ? row.cron : null, row.tz].filter(Boolean).join(" · "))}</span>
+            <span className={`${SUB} font-mono`}>
+              {/* The cron and the time zone are each one token: a line ends between them, never inside one. */}
+              {words !== null && row.cron !== null ? <span className="whitespace-nowrap">{shown(row.cron)}</span> : null}
+              {words !== null && row.cron !== null && row.tz !== null ? " " : null}
+              {row.tz === null ? null : <span className="whitespace-nowrap">{`${words !== null && row.cron !== null ? "· " : ""}${shown(row.tz)}`}</span>}
+            </span>
           </>
         ) : (
           <>
-            <span className={main}>{shown(on?.title ?? "Not reported")}</span>
-            {on === null ? null : <span className={SUB}>{shown([on.repo, ...on.labels.map((entry) => `#${entry}`)].filter(Boolean).join(" · "))}</span>}
+            <span className={main}>
+              <Tokens text={shown(on?.title ?? "Not reported")} />
+            </span>
+            {/* A capability source's trigger has no repo and no labels: then there is no second line. */}
+            {on === null || (on.repo === null && on.labels.length === 0) ? null : (
+              <span className={SUB}>
+                <Tokens text={shown([on.repo, ...on.labels.map((entry) => `#${entry}`)].filter(Boolean).join(" · "))} />
+              </span>
+            )}
           </>
         )}
       </div>
       <div role="cell" className={CELL}>
         {label("Runs on")}
-        <span data-testid="oats-automation-place" title={place.detail === null ? undefined : shown(place.detail)} className={`${place.tone === "bad" ? "font-semibold" : ""} ${main}`}>
-          <Toned tone={place.tone}>{shown(place.label)}</Toned>
+        <span data-testid="oats-automation-place" data-tone={place.tone} title={place.detail === null ? undefined : shown(place.detail)} className={`${place.tone === "bad" ? "font-semibold" : ""} ${main}`}>
+          <Toned tone={place.tone}>
+            <Tokens text={shown(place.label)} />
+          </Toned>
         </span>
-        <span className={SUB}>{shown(actsAs(row))}</span>
+        <span className={SUB}>
+          <Tokens text={shown(actsAs(row))} />
+        </span>
       </div>
       <div role="cell" className={CELL}>
         {label("Last and next")}
         {cell === null ? (
-          <span className={SUB}>—</span>
+          <span className={SUB}>{notRunHere(here)}</span>
         ) : (
           <>
-            <span title={cell.nextTitle} className={main}>
-              {cell.next}
+            {/* A next run is whole on its line. "Does not run on <machine>" holds the machine's name, which is free text of any length: it wraps, the name whole. */}
+            <span data-testid="oats-automation-next" title={cell.nextTitle} className={cell.next === notRunHere(here) ? main : `${main} whitespace-nowrap`}>
+              {cell.next === notRunHere(here) ? <Tokens text={cell.next} /> : cell.next}
             </span>
-            <span title={cell.lastTitle ?? undefined} className={SUB}>
-              {shown(cell.last)}
+            <span data-testid="oats-automation-last" data-tone={cell.lastTone ?? undefined} title={cell.lastTitle ?? undefined} className={SUB}>
+              <span className="whitespace-nowrap">{cell.last}</span>
+              {/* What the last run did, whole on its line; one that did not happen, or whose state nobody knows, is marked. */}
+              {cell.lastOutcome === null ? null : " "}
+              {cell.lastOutcome === null ? null : cell.lastTone === null ? (
+                <span className="whitespace-nowrap">{`· ${shown(cell.lastOutcome)}`}</span>
+              ) : (
+                <span className="whitespace-nowrap font-semibold text-foreground">
+                  <Toned tone={cell.lastTone}>{shown(cell.lastOutcome)}</Toned>
+                </span>
+              )}
             </span>
           </>
         )}
@@ -183,24 +221,28 @@ export type ListProps = {
 };
 
 export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, schedulerAction, acts }: ListProps) {
+  const here = useHere();
   const title = TITLES[list.kind];
   const lower = title.toLowerCase();
   const rows = list.rows;
   const banners = listBanners(list);
+  // Nothing runs here while the host scheduler is off: no row is drawn as running, and none has a next run.
+  const running = list.scheduler === null || schedulerOn(list.scheduler);
   const shown_ = filterRows(rows, { origin, query });
   return (
     <div data-testid="oats-automations-list" className="flex flex-col gap-4">
       {banners.hostUnnamed ? (
         <div data-testid="oats-automations-host-unnamed">
-          <Notice tone="warning" title={HOST_UNNAMED.title}>
-            {hostUnnamedDetail(list.kind)}
+          <Notice tone="warning" title={hostUnnamed(here).title}>
+            <p>{hostUnnamedDetail(list.kind)}</p>
+            <p>{hostNameHow(here)}</p>
           </Notice>
         </div>
       ) : null}
       {banners.schedulerOff ? (
         <div data-testid="oats-automations-scheduler-off">
-          <Notice tone="warning" title={SCHEDULER_OFF.title} actions={schedulerAction}>
-            {SCHEDULER_OFF.detail}
+          <Notice tone="warning" title={schedulerOff(here).title} actions={schedulerAction}>
+            {schedulerOff(here).detail}
           </Notice>
         </div>
       ) : null}
@@ -217,12 +259,12 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
       </div>
       {rows.length === 0 ? (
         <div data-testid="oats-automations-empty">
-          <Empty title={`No ${lower} yet`}>{`Commit one to a member repository's ${NOUNS[list.kind]}s folder to share it with the workspace, or add a local one on this computer.`}</Empty>
+          <Empty title={`No ${lower} yet`}>{emptyHow(list.kind, here)}</Empty>
         </div>
       ) : shown_.length === 0 ? (
         <Empty>{`No ${lower} match.`}</Empty>
       ) : null}
-      {groupRows(shown_).map((group) => {
+      {groupRows(shown_, running, here).map((group) => {
         const headId = `oats-automations-${list.kind}-${group.id}`;
         return (
           <section key={group.id} data-testid="oats-automations-group" data-group={group.id} className="flex flex-col gap-2">
@@ -233,13 +275,14 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
             <div role="table" aria-labelledby={headId} className="overflow-hidden rounded-md border border-border bg-card">
               <div role="row" className={`${GRID} hidden border-b border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
                 {HEADS.map((head) => (
-                  <span key={head} role="columnheader">
+                  // The name's line needs no heading over it: its heading is there for a screen reader, and takes no column.
+                  <span key={head} role="columnheader" className={head === "Automation" ? "sr-only" : undefined}>
                     {head}
                   </span>
                 ))}
               </div>
               {group.rows.map((row) => (
-                <Row key={row.id} row={row} list={list} now={now} onOpen={onOpen} acts={acts} />
+                <Row key={row.id} row={row} list={list} now={now} running={running} onOpen={onOpen} acts={acts} />
               ))}
             </div>
           </section>

@@ -92,15 +92,17 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - **Automations** (sidebar, under Machines) lists OATS's own schedules and triggers, local and
   from the workspace's members. They are the kernel's: never use bb's own automations for an OATS
   agent. What the page shows is `oats schedule list` and `oats trigger list`.
-- Rows are grouped by where they run: on this computer, needing attention here, elsewhere. A row
+- Rows are grouped by where they run: on the machine that holds the deployment (named by bb's
+  name for it, which need not be the computer you sit at), needing attention here, elsewhere. A row
   opens its page: what it sends, when, what it spawns, its recent runs or fires, where it runs and
   where it comes from. A trigger's page also shows what is live, fired and waiting.
 - A red dot on the sidebar's Automations row means a schedule's last run is launch failed or
   invalid: open its page, the run says why in the kernel's words.
 - "Scheduler off" in the header means the host timer is not installed, active and registered:
-  nothing scheduled runs on this computer until it is (`oats schedule host install` in the
-  deployment).
-- A row's switch turns it on or off on this computer. Its ⋯ menu and its page have Test (runs
+  nothing scheduled runs on that machine until it is (Enable scheduler on the page, or
+  `oats schedule host install` in the deployment). Rows then read "Set to run on <machine>" and
+  "Scheduler off", never as running.
+- A row's switch turns it on or off on that machine. Its ⋯ menu and its page have Test (runs
   nothing; for a trigger on a capability's source it asks first, then Run test runs that source's
   command once), Run now, Edit summary, Check run state and, for a local schedule, Delete….
   Enable scheduler installs the host timer after saying what it installs.

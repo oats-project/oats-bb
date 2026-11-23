@@ -50,6 +50,8 @@ export type ViewProps = {
   rowActs?: RowActs;
   /** Why the shown kind's acts are held (its list could not be read again), where the page has acts. */
   held?: string | null;
+  /** In place of the page's own cannot-show notice, where OATS itself cannot be read: the plugin's one notice for that. */
+  gateNotice?: ReactNode;
   /** A re-read is in flight. */
   refreshing?: boolean;
   /** Above the list: what an act just did (a result). */
@@ -60,7 +62,7 @@ const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
+export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
   const read = reads[kind];
   const list = read.list;
   const title = TITLES[kind];
@@ -115,7 +117,10 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
       )}
       {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
       <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${kind}`} aria-label={onRowPage ? title : undefined} className="flex flex-col gap-4">
-        {gate !== null ? (
+        {gate !== null && gateNotice !== undefined && gateNotice !== null ? (
+          // OATS itself cannot be read (no `oats`, no deployment, no machine): the one notice every place of the plugin shows for it.
+          <div data-testid="oats-automations-gate">{gateNotice}</div>
+        ) : gate !== null ? (
           <div data-testid="oats-automations-gate">
             <Notice title={gate.title} code={gate.code}>
               {gate.detail === null ? null : (
@@ -138,6 +143,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                   tone="error"
                   title={`${title} could not be read`}
                   code={read.error.code}
+                  details={read.error.message}
                   {...(list !== undefined && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
                   actions={
                     <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
@@ -145,9 +151,8 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                     </Button>
                   }
                 >
-                  <p>
-                    <Lines text={read.error.message} />
-                  </p>
+                  {/* A person's words; what OATS or the plugin's server said is one press away, under Details. */}
+                  <p>{list === undefined ? `Nothing can be shown of this deployment's ${title.toLowerCase()} until they are read.` : `What is below is the last list that was read.`}</p>
                   {/* The rows are still shown, and the page has acts: they are held, and that is said here. */}
                   {list !== undefined && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
                   {refreshing ? (
@@ -168,6 +173,7 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
                 row={row}
                 host={list.host}
                 now={now}
+                running={list.scheduler === null || schedulerOn(list.scheduler)}
                 status={row.kind === "trigger" ? status : null}
                 statusFailure={row.kind === "trigger" ? statusFailure : null}
                 onBack={() => onOpen(null)}

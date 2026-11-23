@@ -2,21 +2,22 @@
 // its route (…/schedules, …/triggers, …/triggers/<id>), so Back and a link both work. It reads
 // the two lists through the plugin's server and a trigger's recorded state when its page opens;
 // View.tsx draws them.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { NO_AUTOMATIONS } from "../../contract/automations";
 import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
-import { codes } from "../../kernel/result";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
+import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
 import { Page } from "../ui";
 import { useActs } from "./acts";
+import { HereContext } from "./here";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead } from "./View";
-import { capabilitySource, GROUPS, refusalParts, TITLES } from "./words";
-import type { FileTarget } from "./words";
+import { capabilitySource, GROUPS, HERE, hereOf, refusalParts, TITLES } from "./words";
+import type { FileTarget, Here } from "./words";
 
 export const PATH = "automations";
 /** Why a list's acts are held while it is one that could not be read again (the UX standard, Stale). */
@@ -38,16 +39,14 @@ export function routeOf(subPath: string): { kind: AutomationKind; openId: string
 export const subPathOf = (kind: AutomationKind, openId: string | null = null): string => (openId === null ? SEGMENT[kind] : `${SEGMENT[kind]}/${openId}`);
 
 /**
- * Why a list cannot be shown at all, in the Desktop's words where it has them: no `oats` on the
- * machine, or an OATS from before the lists (the server says which). The server's own message
- * (which machine, what to install or set) and its code follow the title.
+ * Why a list cannot be shown at all though OATS answers: an OATS from before the lists (the server
+ * says so), in the Desktop's words. An OATS that cannot be read at all (no `oats`, no deployment,
+ * no machine) is the plugin's one notice for that, the sidebar's (app/roster/unreadable.tsx).
  */
-export function gateOf(kind: AutomationKind, answer: { code: string; message: string } | null): Gate | null {
+export function gateOf(kind: AutomationKind, answer: { code: string; message: string } | null, here: Here = HERE): Gate | null {
   const title = TITLES[kind];
-  if (answer === null) return null;
-  if (answer.code === codes.notFound) return { title: `${title} need the OATS CLI`, detail: answer.message, code: answer.code };
-  if (answer.code === NO_AUTOMATIONS) return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and this computer's own, and where each one runs.`, code: answer.code };
-  return null;
+  if (answer === null || answer.code !== NO_AUTOMATIONS) return null;
+  return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and ${here.on}'s own, and where each one runs.`, code: answer.code };
 }
 
 type Lists = Result<"automations">;
@@ -119,8 +118,14 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
       if (mounted.current) setRefreshing(false);
     });
   }, []);
+  /** The machine the page is about, by bb's name for it. */
+  const machine = read.data?.machine ?? null;
+  const here = useMemo(() => hereOf(machine), [machine]);
   const answer = read.data?.[kind];
-  const gate = gateOf(kind, answer !== undefined && !answer.ok ? answer : null);
+  const refused = answer !== undefined && !answer.ok ? answer : null;
+  // What takes the list's place: an OATS without the lists, or an OATS that cannot be read at all
+  // while nothing read before is shown (with a list kept, the notice goes over it and holds its acts).
+  const gate = gateOf(kind, refused, here) ?? (refused !== null && isUnreadable(refused.code) && reads[kind].list === undefined ? { title: `${TITLES[kind]} could not be read`, detail: refused.message, code: refused.code } : null);
 
   // A trigger's recorded state, read when its page opens and again when the lists are. An answer
   // for a row that is no longer the open one changes nothing. A read that fails is said, over the
@@ -175,12 +180,14 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
   const list = reads[kind].list;
   const acts = useActs({
+    here,
     rpc,
     refresh,
     summaries: descriptions,
     kind,
     open: openId === null ? null : { kind, id: openId },
-    held: { schedule: reads.schedule.error === null ? null : HELD, trigger: reads.trigger.error === null ? null : HELD },
+    // The reason an act that is off carries is the one the roster's acts carry; the notice above the list says why.
+    held: { schedule: reads.schedule.error === null ? null : HELD_REASON, trigger: reads.trigger.error === null ? null : HELD_REASON },
     onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
     onOpenFile,
     hostId,
@@ -203,11 +210,13 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   });
 
   return (
+    <HereContext.Provider value={here}>
     <Page testId="oats-automations-page">
       {acts.dialog}
       <View
         rowActs={acts}
         held={reads[kind].error === null ? null : HELD}
+        gateNotice={gate !== null && gate.code !== null && isUnreadable(gate.code) ? <Unreadable failure={{ code: gate.code, message: gate.detail ?? "" }} machine={machine} onRetry={refresh} /> : null}
         rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
         schedulerAction={acts.schedulerAction}
         result={acts.result}
@@ -228,5 +237,6 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         onOpenCapability={onOpenCapability}
       />
     </Page>
+    </HereContext.Provider>
   );
 }

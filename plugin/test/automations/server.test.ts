@@ -58,6 +58,8 @@ describe("automations", () => {
     expect(lists.schedule).toMatchObject({ ok: false, code: "OATS_NOT_FOUND", message: expect.stringMatching(/^oats was not found on .+: install OATS there, or set the path to oats in the OATS plugin's settings\./) });
     expect(lists.trigger).toEqual(lists.schedule);
     expect([lists.hostId, lists.oats]).toEqual([null, null]);
+    // The machine's name travels with it, for the notice of an OATS that cannot be read.
+    expect(typeof (lists as { machine?: string | null }).machine).toBe("string");
     expect(await backend.verbs()).toEqual([]);
   });
 

@@ -1,4 +1,4 @@
-// kernel/automations.ts against what the real kernel printed (OATS 0.70.0: the fixtures' README).
+// kernel/automations-read.ts (through kernel/automations.ts) against what the real kernel printed (OATS 0.70.0: the fixtures' README).
 import { describe, expect, it } from "vitest";
 import { automationList, triggerStatus } from "../../contract/automations";
 import { automationRowOf, checkAutomationId, parseScheduleList, parseTriggerList, parseTriggerStatus, scheduleListArgv, triggerListArgv, triggerStatusArgv } from "../../kernel/automations";

@@ -173,21 +173,29 @@ const untilRest = async (instance, what, matches, seconds = 60) => {
  * stop did (A7) and not from the provider's manifest: the manifest's version is the same in both
  * until a release names the new one. Every later stop of the run must then leave the same.
  * → "kept" (there, not archived, not active), "archived", "active" (there, not archived, in a
- * turn: no stop leaves that) or "gone" (bb has no such thread).
+ * turn: no stop leaves that) or "gone" (bb has no such thread). What the read cannot tell: a
+ * provider that changed what its stop does, the same way at every stop, passes as the other kind;
+ * the run's NOTE and its last line say which kind it read.
  */
-const stopLeft = (id) => {
-  const thread = bbThread(id);
-  if (thread === undefined) return "gone";
+const stopLeft = (of) => {
+  // Given the thread's id, or the thread as bb answered it (so that what a check prints is what it judged).
+  const thread = typeof of === "string" ? bbThread(of) : of;
+  if (thread === undefined || thread === null) return "gone";
   if (thread.archivedAt != null) return "archived";
   return thread.status === "active" ? "active" : "kept";
 };
 /** Whether this run's provider archives a home's thread at its stop; null until the first stop said (A7). */
 let archivesAtStop = null;
 const stopArchives = () => archivesAtStop;
-/** The thread of a home OATS stopped is as this run's provider leaves one: archived, or kept and not active. */
-const stoppedThread = (id) => archivesAtStop !== null && stopLeft(id) === (archivesAtStop ? "archived" : "kept");
+/** The thread of a home OATS stopped (its id, or the thread as bb answered it) is as this run's provider leaves one: archived, or kept and not active. */
+const stoppedThread = (of) => archivesAtStop !== null && stopLeft(of) === (archivesAtStop ? "archived" : "kept");
 /** The same in words, for a check's line. */
 const stoppedAs = () => (archivesAtStop ? "archived (this provider archives at stop)" : "kept, and no longer active");
+/** An instance's name as the plugin draws it (app/ui/words.ts `agentName`): "flaky-ci-2-developer" is "Flaky ci 2 developer". */
+const nameOf = (instance) => {
+  const text = instance.replace(/-+/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 /** An agent at rest, for a part of the run: the kernel's row says it is there and not gone (`idleRunning`), and bb says its turn is over. */
 const atRest = (row) => row !== undefined && idleRunning(row) && settled(row);
 
@@ -464,7 +472,7 @@ async function archivedShots(scene, { instance, soul, threadId }) {
       const WHOLE = String.raw`^Stopped · since .+ · ` + ARCHIVED_IN_BB.replace(/\./g, String.raw`\.`) + String.raw` Start… Retire… Instance panel$`;
       const line = JSON.parse((await page.until(`(() => { const read = JSON.parse(${LINE}); return read.state === "stopped" && new RegExp(${JSON.stringify(WHOLE)}).test(read.line) && read.acts.every((act) => act[2] === false) ? JSON.stringify(read) : ""; })()`, 30)) || (await page.evaluate(LINE)));
       check(
-        line.state === "stopped" && new RegExp(WHOLE).test(line.line) && line.agent !== "" && JSON.stringify(line.acts) === JSON.stringify([["oats-agent-act-start", "Start…", false], ["oats-agent-act-retire", "Retire…", false]]) && line.panel === "Instance panel",
+        line.state === "stopped" && new RegExp(WHOLE).test(line.line) && line.agent === nameOf(instance) && JSON.stringify(line.acts) === JSON.stringify([["oats-agent-act-start", "Start…", false], ["oats-agent-act-retire", "Retire…", false]]) && line.panel === "Instance panel",
         `${at}: the archived thread's own row names the agent and says "Stopped", since when, and "${ARCHIVED_IN_BB}", with Start… and Retire… that can be pressed and the way to the instance panel`,
         JSON.stringify(line),
       );
@@ -697,7 +705,7 @@ try {
   show("oats status", brief(row));
   thread = bbThread(threadId);
   // The run's first stop: what it left of the thread says which provider this is (stopLeft, above).
-  const afterStop = stopLeft(threadId);
+  const afterStop = stopLeft(thread);
   archivesAtStop = afterStop === "archived";
   check(afterStop === "kept" || afterStop === "archived", `bb: the stopped home's thread is ${afterStop}: one of the two a stop leaves (kept and no longer active, or archived)`, JSON.stringify(thread));
   note(archivesAtStop ? "THIS PROVIDER ARCHIVES A HOME'S THREAD AT ITS STOP (read from this stop): the run expects every stop to archive, and the screen to show a stopped agent on its archived thread" : "this provider keeps a stopped home's thread open in bb (read from this stop): the run expects every stop to leave the thread there and not active");
@@ -872,7 +880,7 @@ try {
     const stopped = await untilRow(name, "stopped", (r) => r.running === false && r.runtimeState === "stopped");
     show(name, brief(stopped));
     const its = bbThread(stopped?.session?.threadId);
-    check(stoppedThread(stopped?.session?.threadId), `bb: the thread of ${name} is ${stoppedAs()}`, JSON.stringify(its));
+    check(stoppedThread(its), `bb: the thread of ${name} is ${stoppedAs()}`, JSON.stringify(its));
   }
   release(lead);
   release("desktop-mockups-developer");
@@ -959,7 +967,7 @@ try {
       }
     }
   };
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, idleRunning, atRest, stopArchives, stoppedThread, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);
@@ -973,6 +981,9 @@ try {
 
 // The mock's own log of the model requests, beside the other artefacts.
 if (existsSync(join(REAL, "mock", "requests.jsonl"))) writeFileSync(join(OUT, "mock-requests.jsonl"), readFileSync(join(REAL, "mock", "requests.jsonl")));
+
+// The run's last line says which kind of provider it read (stopLeft): a log's verdict is read with it.
+const onProvider = archivesAtStop === null ? "" : archivesAtStop ? ", on a provider that ARCHIVES a home's thread at its stop" : ", on a provider that keeps a stopped home's thread open";
 
 step("the images");
 // Two scenes of different states never produce the same image. The state each scene is in:
@@ -1001,7 +1012,7 @@ for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
 
 if (failures > 0) {
-  say(`\n== real run: ${failures} check(s) failed`);
+  say(`\n== real run: ${failures} check(s) failed${onProvider}`);
   process.exit(1);
 }
-say("\n== real run: all checks passed");
+say(`\n== real run: all checks passed${onProvider}`);

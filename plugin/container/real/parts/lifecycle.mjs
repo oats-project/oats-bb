@@ -4,7 +4,8 @@
 // For each view (bb's light and dark themes, at each width) one agent of its own is spawned as a
 // person's would be, on its worktree, and then, as a person does it:
 //   Stop     from the row's menu in the sidebar: the plan, confirmed; the kernel's row reads stopped
-//   Start    from the row's menu: the agent as the kernel has it now; started on a new thread
+//   Start    from the row's menu, or, on a provider that archived the thread at the stop, from the
+//            archived thread's own row: the agent as the kernel has it now; started on a new thread
 //   Restart  from the thread's own menu: restarted on a new thread
 //   Retire   from the thread's own menu: the plan, confirmed; the kernel has no such agent after it
 // A state is the same in both themes, so that each is real in light and in dark: at 1280 the agent
@@ -114,7 +115,8 @@ export default async (run) => {
     check(await close(), `${at} Close closes the dialog`);
 
     // ---- Start: from the row's menu, or, where the provider archived the thread at the stop, from the archived thread's own row
-    check(run.stoppedThread(spawnedOn), `bb: the stop left the thread as this run's provider leaves one (${run.stopArchives() ? "archived" : "kept, and no longer active"})`, JSON.stringify(run.bbJson("thread", "list", "--include-archived").find((thread) => thread.id === spawnedOn) ?? null));
+    const stoppedOn = run.bbThread(spawnedOn);
+    check(run.stoppedThread(stoppedOn), `bb: the stop left the thread as this run's provider leaves one: ${run.stoppedAs()}`, JSON.stringify(stoppedOn ?? null));
     if (!run.stopArchives()) {
       check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
       check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);

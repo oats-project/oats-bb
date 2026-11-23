@@ -380,6 +380,8 @@ try {
 
   step("P5 the plugin stops and retires the pi agent");
   const stopPlan = act("stop plan", "stopPlan", { instance: NAME });
+  // The plan is the kernel's facts (the dialogs word them): this agent, alone, on bb.
+  check(stopPlan?.instance === NAME && stopPlan.targets?.length === 1 && stopPlan.targets[0].instance === NAME && stopPlan.targets[0].soul === SOUL && stopPlan.targets[0].backend === "bb", "the stop plan names the pi agent, its soul and bb, and no other agent", JSON.stringify(stopPlan));
   act("stop apply", "stopApply", { instance: NAME, revision: stopPlan?.revision, key: "stop-a1b2c3d4e5f6" });
   row = await untilRow(NAME, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   show("oats status", brief(row));
@@ -393,6 +395,7 @@ try {
   const empty = await until("no process to work in the agent's home", () => workingIn().length === 0, 150);
   check(Boolean(empty), `no process is left working in the agent's home ${Math.round((Date.now() - stoppedAt) / 1000)} s after the stop`, JSON.stringify(workingIn()));
   const retirePlan = act("retire plan", "retirePlan", { instance: NAME });
+  check(retirePlan?.instance === NAME && retirePlan.home === HOME && retirePlan.backend === "bb" && retirePlan.session !== "there" && retirePlan.children?.length === 0, "the retire plan is for the pi agent: its home, on bb, its session not there, no child", JSON.stringify(retirePlan));
   act("retire apply", "retireApply", { instance: NAME, revision: retirePlan?.revision, key: "retire-0a1b2c3d4e5f" });
   check(rowOf(NAME) === undefined && !existsSync(HOME), "oats status: no row is left, and the home is removed");
   check(bbThread(threadId)?.archivedAt != null, "bb: the agent's thread is archived", JSON.stringify(bbThread(threadId)));

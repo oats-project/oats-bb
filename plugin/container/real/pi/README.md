@@ -87,7 +87,8 @@ read.
   question with Yes and No, and the thread's status line says it. The last view presses Yes on the
   card: bb has no pending interaction left, pi's tool gets `true`, the claim is gone, the agent is
   idle.
-- **P5** The plugin stops the agent and retires it.
+- **P5** The plugin stops the agent and retires it, each from its plan: the plan's facts (what the
+  dialogs word) name the pi agent, its soul, its home and bb, and no other agent.
 
 Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 390x800:
 `real-pi-form-…-preview` (and `-fields` at the phone's width, where the form is two screens),

@@ -431,6 +431,17 @@ export { FULL_MODE };
 export const START = {
   continues: "Continue in this instance’s existing home, with its identity, work and notes.",
   fresh: "This starts a new conversation using the saved briefing and state.",
+  /**
+   * For an agent that has a thread in bb: a start, and a restart, ALWAYS make a new bb thread; the
+   * launch stops and archives the one it had (the bb session provider's launch:
+   * oats-package/capabilities/oats-bb/lib/launch.mjs). Said in place of `fresh`.
+   */
+  newThread: "Starts a new conversation. The current one stays readable in bb, archived.",
+  /**
+   * For an agent that was cut off (`carriesOn`): a message in its thread carries its conversation
+   * on, which a start does not, and neither does a restart. Said first in both dialogs; the act stays possible.
+   */
+  carryOn: "To carry on its conversation, send it a message in its thread instead.",
   checking: "Checking instance…",
   ready: "Ready to start.",
   restartWarning: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
@@ -443,6 +454,24 @@ export const START = {
   alreadyRunning: "This instance is already running.",
   unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
 } as const;
+/**
+ * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
+ * conversation on. Two facts, both read, neither inferred:
+ * - the kernel's row says the agent does NOT run and that no operator stopped it: its session was
+ *   lost (`running: false`, "stopped", `sessionEnd: "lost"`: with the host, or its harness gone),
+ *   or its thread is at rest with no harness loaded (`running: false` with a runtime state that
+ *   is not "stopped"; test/fixtures/lifecycle/README.md says which provider prints that row). An operator's stop
+ *   (`sessionEnd: "stopped"`) never gets the line, and neither does a stopped row that does not
+ *   say how its session ended;
+ * - bb has its thread, in the sidebar (not archived, not hidden), and not in error: a thread that
+ *   can take a message. `thread` is bb's own row of it, or null when bb shows none.
+ */
+export function carriesOn(row: { running: boolean | null; runtimeState: string | null; sessionEnd: string | null }, thread: { status: string } | null): boolean {
+  if (row.running !== false || row.sessionEnd === "stopped") return false;
+  if (row.runtimeState === "stopped" && row.sessionEnd !== "lost") return false;
+  return thread !== null && thread.status !== "error";
+}
+
 /** Under the model field: what a blank field means, for the harness that will run. */
 export const modelHelp = (recorded: string | null): string =>
   `Leave blank to use ${recorded ?? "the selected harness’s default model"}. This choice is saved for later starts of this instance.`;

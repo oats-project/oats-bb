@@ -550,14 +550,18 @@ test("a retire the kernel would refuse is blocked, and the reason beside Retire 
 // ---- Start and Restart (D-158 to D-166) ----
 
 test("Start opens a dialog first: nothing is started on one press; it checks the agent as the kernel has it now and is titled with that", async () => {
-  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") }); // (an operator's stop: the recorded row)
   await pick("start");
   const dialog = await slot.findByRole("dialog");
   await ready(slot);
   expect(calls(slot, "start", "restart")).toEqual([]);
   expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
   expect(texts(slot.getByTestId("oats-start"), "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
-  expect(dialog.textContent).toContain("This starts a new conversation using the saved briefing and state.");
+  // A start always makes a NEW bb thread and archives the one the agent had: said in place of the Desktop's sentence.
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual(["Starts a new conversation. The current one stays readable in bb, archived.", "Runs in bb's full mode: no sandbox."]);
+  expect(dialog.textContent).not.toContain("This starts a new conversation using the saved briefing and state.");
+  // Not cut off (the kernel says stopped): nothing points at its thread.
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // A start from bb runs in bb's full mode: there is no control for it, and one line says so before the act.
   expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toContain("Runs in bb's full mode: no sandbox.");
   expect(dialog.textContent).toContain("Continue in this instance’s existing home, with its identity, work and notes.");
@@ -1157,4 +1161,124 @@ test("a start the lock blocks says OATS's own line under the sentence that point
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: /abs/home/.oats/start.lock is held by pid 4242");
+});
+
+// ---- a start begins a new conversation
+
+test("Restart says, with the Desktop's warning, that it starts a new conversation and that the current one stays readable in bb, archived", async () => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }) });
+  await pick("restart");
+  await ready(slot);
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual([
+    "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
+    "Starts a new conversation. The current one stays readable in bb, archived.",
+    "Runs in bb's full mode: no sandbox.",
+  ]);
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+});
+
+test("an agent with no thread in bb has no conversation to archive: its Start says the Desktop's sentence", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, threadId: "thr_not_in_bb" } : agent));
+  const { slot } = await menu("thr_plain", { startCheck: ({ instance }) => startCheckOf(instance) }, agents);
+  const { openAct } = await import("../../app/lifecycle");
+  openAct("start", "weekly-digest-helper");
+  await ready(slot);
+  const happens = texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li");
+  expect(happens).toEqual(["This starts a new conversation using the saved briefing and state.", "Runs in bb's full mode: no sandbox."]);
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+});
+
+// The rows an agent that does not run can read (test/fixtures/lifecycle/README.md says which are recorded and which are shaped from the contract).
+const LOST = { running: false, runtimeState: "stopped", sessionEnd: "lost" } as const; // its session was lost with the host, or its harness is gone
+const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // its thread at rest, no harness loaded (the bb provider's A15(1) change: the fixtures' README)
+const OPERATOR_STOP = { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as const;
+
+test.each([
+  ["whose session was lost", LOST],
+  ["whose thread is at rest with no harness loaded", AT_REST],
+])("an agent that was cut off (%s): Start says first to send a message in its thread to carry on, with the way there; Start stays possible", async (_, row) => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, row), start: () => startedIn("thr_digest_2") });
+  await pick("start");
+  await ready(slot);
+  const confirm = slot.getByTestId("oats-confirm");
+  const notice = within(confirm).getByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("To carry on its conversation, send it a message in its thread instead.");
+  // Said FIRST: before what the start will do.
+  expect(confirm.firstElementChild).toBe(notice);
+  expect(notice.nextElementSibling!.textContent).toContain("What will happen");
+  expect(button(slot, "oats-start-thread").textContent).toBe("Open Weekly digest helper");
+  // Start stays possible, and still says that it begins a new conversation.
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  expect(confirm.textContent).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
+  // The way there: the dialog closes on the agent's thread, and nothing was started.
+  fireEvent.click(button(slot, "oats-start-thread"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+  expect(calls(slot, "start", "restart")).toEqual([]);
+});
+
+test("the cut-off line is for that state alone: never after an operator's stop, never for a row that does not say how its session ended, never for an agent that runs or whose state is not known", async () => {
+  const pointed = async (verb: "start" | "restart", thread: string, change: Parameters<typeof startCheckOf>[1]) => {
+    const { slot, pick } = await menu(thread, { startCheck: ({ instance }) => startCheckOf(instance, change) });
+    await pick(verb);
+    await ready(slot);
+    const there = slot.queryByTestId("oats-start-thread") !== null;
+    resetApp();
+    return there;
+  };
+  expect(await pointed("start", "thr_digest", LOST)).toBe(true);
+  expect(await pointed("start", "thr_digest", OPERATOR_STOP)).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "unknown", sessionEnd: "stopped" })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "stopped", sessionEnd: null })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: null, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+  // Restart says it under the same condition (below), and not otherwise.
+  expect(await pointed("restart", "thr_redesign", OPERATOR_STOP)).toBe(false);
+  expect(await pointed("restart", "thr_redesign", { running: true, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+  expect(await pointed("restart", "thr_redesign", { running: null, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+});
+
+test.each([
+  ["whose session was lost", LOST],
+  ["whose thread is at rest with no harness loaded", AT_REST],
+])("Restart of an agent that was cut off (%s) says the same line first: a restart loses its place in the conversation as a start does; Restart stays possible", async (_, row) => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, row), restart: () => startedIn("thr_redesign_2") });
+  await pick("restart");
+  await ready(slot);
+  const confirm = slot.getByTestId("oats-confirm");
+  const notice = within(confirm).getByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("To carry on its conversation, send it a message in its thread instead.");
+  expect(confirm.firstElementChild).toBe(notice);
+  expect(notice.nextElementSibling!.textContent).toContain("What will happen");
+  expect(button(slot, "oats-start-thread").textContent).toBe("Open Redesign ui lead");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  expect(button(slot, "oats-confirm-act").textContent).toBe("Restart");
+  fireEvent.click(button(slot, "oats-start-thread"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_redesign" }]);
+  expect(calls(slot, "start", "restart")).toEqual([]);
+});
+
+test("a cut-off agent whose thread cannot take a message gets no line: bb says its thread is in error, or shows none", async () => {
+  const withThreads = async (threads: ReturnType<typeof fixtureThreads>) => {
+    const app = await loadApp();
+    const Overlay = app.appOverlays[0]!.component;
+    const slot = renderSlot<object, Contract>({ component: () => <Overlay /> }, {}, { rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance, LOST) }), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { openAct } = await import("../../app/lifecycle");
+    openAct("start", "weekly-digest-helper");
+    await ready(slot);
+    const said = { line: slot.queryByTestId("oats-start-thread") !== null, text: slot.getByTestId("oats-confirm").textContent! };
+    resetApp();
+    return said;
+  };
+  const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)));
+  expect(inError.line).toBe(false);
+  // Its thread is still there for bb: a start archives it, and the dialog says so.
+  expect(inError.text).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
+  const archived = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, isArchived: true } : thread)));
+  expect(archived.line).toBe(false);
+  expect(archived.text).toContain("This starts a new conversation using the saved briefing and state.");
+  const there = await withThreads(fixtureThreads());
+  expect(there.line).toBe(true);
 });

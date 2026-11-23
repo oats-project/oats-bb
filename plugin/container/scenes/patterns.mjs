@@ -313,21 +313,28 @@ export default [
       await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       // A result through bb's own toaster (app/ui/notify.ts): `sonner` is bb's shim in the BUILT plugin, so the
       // toast is one bb draws. A result leaves by itself; a failure stays until it is dismissed.
-      const toasts = `[...document.querySelectorAll("[data-sonner-toast]")].map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      // bb puts toasts of its own in the same toaster (seen: "Enjoying bb? A star on GitHub helps bb grow."):
+      // the plugin's are found by what they say, never by their place or their number among bb's.
+      const ours = `[...document.querySelectorAll("[data-sonner-toast]")].filter((toast) => toast.innerText.includes("Weekly digest helper"))`;
+      const toasts = `${ours}.map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      const STARTED = "Weekly digest helper started.";
+      const REFUSED = "Weekly digest helper wasn't started";
+      const says = (text) => `${toasts}.some((toast) => toast.text.includes(${JSON.stringify(text)}))`;
       await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-failed")}').click()`);
       await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-done")}').click()`);
-      const drawn = await page.until(`(() => { const all = ${toasts}; return all.length === 2 ? JSON.stringify(all) : null; })()`, 10);
+      const drawn = await page.until(`${says(STARTED)} && ${says(REFUSED)} ? JSON.stringify(${toasts}) : null`, 10);
       const both = drawn ? JSON.parse(drawn) : [];
       check(
-        both.some((toast) => toast.text.startsWith("Weekly digest helper started.") && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes("Weekly digest helper wasn't started") && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
+        both.some((toast) => toast.text.startsWith(STARTED) && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes(REFUSED) && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
         `${at} a result and a failure are told through bb's own toaster: the result with "Open <agent>", the failure with its sentence`,
         JSON.stringify(both),
       );
       await page.shot(`patterns-${viewport.name}-toasts`);
-      const left = await page.until(`(() => { const all = ${toasts}; return all.length === 1 ? JSON.stringify(all) : null; })()`, 15);
-      check(Boolean(left) && JSON.parse(left)[0].text.includes("wasn't started"), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
-      await page.evaluate(`document.querySelector('[data-sonner-toast] button[aria-label="Dismiss notification"]')?.click()`);
-      await page.until(`document.querySelectorAll("[data-sonner-toast]").length === 0`, 10);
+      const left = await page.until(`!${says(STARTED)} && ${says(REFUSED)} ? JSON.stringify(${toasts}) : null`, 15);
+      check(Boolean(left), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
+      // Its own Dismiss, not the first toast's: bb's may stand before it.
+      await page.evaluate(`${ours}.find((toast) => toast.innerText.includes(${JSON.stringify(REFUSED)}))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+      check(Boolean(await page.until(`${ours}.length === 0`, 10)), `${at} the failure leaves when it is dismissed`);
     },
   },
 ];

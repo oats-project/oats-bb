@@ -338,7 +338,7 @@ Another feature opens the panel on one of its tabs with
 
 ## The New agent form
 
-**New agent** (at the roster's foot in the sidebar) opens the form: a page of its own,
+**New agent** (at the roster's foot in the sidebar, and in the heading of the home) opens the form: a page of its own,
 `/plugins/oats/new-agent`, or `/new-agent/<soul>` with that soul chosen. It is the OATS Desktop's
 Spawn dialog, in its order and its words, and it is not one of the pages the setting `pages` can
 leave out: whatever a release shows, an agent can be started.
@@ -444,8 +444,7 @@ session backend as a choice (D-254: it is always a bb thread, and the preview sa
 at spawn (D-255, D-264); the Launch prompts of the preview (D-256; what sets up the work tree is
 shown); "Changed: press Spawn again" (D-257: Spawn is off while the values on screen have no
 preview, so a press is never for other values); the keys to a field (D-258); "Show its row" for a
-spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept (D-265). New
-agent on the home is the home's own change.
+spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept (D-265).
 
 ## Automations
 

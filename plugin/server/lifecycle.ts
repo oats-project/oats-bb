@@ -45,6 +45,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // takes no harness and no model. Whether its session is still LOST is the kernel's to say, under its own
     // claim (E_RESUME_NOT_LOST): this never turns a resume into a plain start, nor the reverse.
     if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
+    // The harness list and the models the plugin knows are the bb session provider's: no other home is started with
+    // a choice of them. It starts with the launch its home recorded.
+    if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
     const choice = given({ harness: await chosen(harness), model, resume });
     let started: Value<"start">;
     try {

@@ -103,8 +103,8 @@ function reopen(verb: Verb, instance: string, resume: Resume): void {
  * Tell the result of an act whose dialog is gone (`toasted`): a plain one whole, with the way to
  * the agent; any other by its title, staying until dismissed, with "Show result".
  */
-function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null): void {
-  const { plain, ...toast } = toasted(verb, outcome);
+function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null, threadless = false): void {
+  const { plain, ...toast } = toasted(verb, outcome, threadless);
   if (plain) notify({ ...toast, ...(open === null ? {} : { open }) });
   else notify({ ...toast, stays: true, open: { label: SHOW_RESULT, run: () => reopen(verb, instance, resume) } });
 }
@@ -661,13 +661,20 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     if (resumed === null) check();
   }, [check, resumed]);
 
+  /** Refresh status: the row is read again, and what was said of the row before it no longer stands. */
+  const refresh = () => {
+    setChanged(false);
+    check();
+  };
+
   const known = state.phase === "checking" ? null : state.check;
   const name = known?.instance ?? instance;
   const typed = model.trim();
   const badModel = typed !== "" && !isModel(typed);
   // The harness that will run: the chosen one, else the recorded one. Its models are the ones suggested.
   const running = harness !== "" ? harness : (known?.harness ?? null);
-  const suggestions = useModelSuggestions(known === null ? null : running);
+  // (An agent that is not on bb has no model field: nothing is asked of bb for it.)
+  const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
@@ -693,7 +700,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           setState({ phase: "settled", check: checked, outcome, refusal: null, threadId });
           // The agent's new thread opens behind the result, as the Desktop opens its terminal: Close leaves the person on it.
           if (threadId !== null) navigate.toThread(threadId);
-        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId }, harness, model, fresh }, open);
+        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId }, harness, model, fresh }, open, checked.backend !== "bb");
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
@@ -732,7 +739,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                 state.outcome,
                 <>
                   {state.outcome.offers.includes("refresh") ? (
-                    <Button data-testid="oats-start-refresh" onClick={check}>
+                    <Button data-testid="oats-start-refresh" onClick={refresh}>
                       {START.refresh}
                     </Button>
                   ) : null}
@@ -742,8 +749,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                       <Notice title={RESUME.waiting} tone="warning" />
                     </div>
                   ) : null}
-                  {state.outcome.tone === "done" && state.check !== null && state.check.backend !== "bb" ? (
-                    // An agent that is not on bb has no thread to open: where it runs, and the way into it (the panel's own words and command).
+                  {(state.outcome.tone === "done" || state.outcome.tone === "unknown") && state.check !== null && state.check.backend === "tmux" ? (
+                    // An agent on tmux has no thread to open: where it runs, and the way into it (the panel's own words and
+                    // command). Under a start that is done, and under one whose end is not known: its session is or may be there.
                     <div data-testid="oats-start-where" className="flex w-full min-w-0 flex-col gap-1 text-sm">
                       <p>{shown(attachWhere(state.check.machine === "" ? null : state.check.machine))}</p>
                       <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -854,11 +862,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             />
           </Field>
           )}
+          {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
             {suggestions.models.map((each) => (
               <option key={each.id} value={each.id} label={shown(each.label)} />
             ))}
           </datalist>
+          )}
           {state.phase === "ready" ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{held === null ? START.ready : held.reason}</span>
@@ -868,7 +878,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                   {`Open ${agentName(name)}`}
                 </Button>
               ) : null}
-              <Button variant="ghost" data-testid="oats-start-refresh" onClick={check}>
+              <Button variant="ghost" data-testid="oats-start-refresh" onClick={refresh}>
                 {START.refresh}
               </Button>
             </p>

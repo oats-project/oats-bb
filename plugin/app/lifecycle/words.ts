@@ -501,10 +501,12 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
  *   "Show result", which opens the dialog again on that result, with everything it offers.
  */
 export const SHOW_RESULT = "Show result";
-export function toasted(verb: Verb, outcome: Outcome): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
-  // (A start whose harness waits in its terminal has a command to copy: a toast cannot hold it either.)
-  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined && outcome.waiting !== true && outcome.attention !== true;
-  return { plain, tone: outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
+export function toasted(verb: Verb, outcome: Outcome, threadless = false): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
+  // `threadless`: a start or a restart of an agent with no bb thread (on tmux). Its result says where it runs, with
+  // a command to copy, which a toast cannot hold: never plain, whatever it came to. And one that started FRESH after
+  // a dialog that said it would try to continue is told in the warning tone, as the dialog draws it.
+  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined && outcome.waiting !== true && outcome.attention !== true && !threadless;
+  return { plain, tone: outcome.attention === true && outcome.tone === "done" ? "unknown" : outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
 }
 
 // ---- Start and Restart ----

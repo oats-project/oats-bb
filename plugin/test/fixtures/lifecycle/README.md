@@ -82,7 +82,8 @@ it started fresh (`reason: "no-conversation"`); it continues and the harness wai
 envelope of the kernel's form, with a message of ours. The resume that continues, the plain start,
 the restart and the two refusals a real home gave are recorded (the section below);
 `verbs.json` answers `session start --resume` with the recorded `tmux-start-resume.json`; the
-live scene of the lifecycle (`container/scenes/lifecycle.mjs`) gives it with ONE substitution, the
+live scene of the lifecycle (`container/scenes/lifecycle.mjs`) gives it, and the recorded plain
+start (`tmux-start.json`), with ONE substitution, the
 name of the agent it was recorded on (`lost-tmux-developer`) for the sample roster's agent on tmux,
 since the result is named from the kernel's answer.
 
@@ -92,7 +93,7 @@ Recorded by the lost session's part of the real run (`container/real/parts/lost.
 OATS 0.70.5 from npm, on ONE agent on the tmux backend (`lost-tmux-developer` of `oats-developer`,
 Claude Code on the run's mock model in a window of the OATS tmux server), with the one substitution
 (the paths) and no other edit. Each is what the kernel printed for the command named, made on the
-command line (the plugin offers no Start and no Restart for an agent on tmux yet); `<home>` is
+command line (the plugin offered no Start and no Restart for an agent on tmux when they were recorded); `<home>` is
 `/abs/deployment/agents/oats-developer/instances/lost-tmux-developer`. None is a default answer of
 the fake (`verbs.json`): a test names the file for the verb it asks.
 

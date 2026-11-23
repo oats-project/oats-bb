@@ -606,8 +606,18 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(because("resume-unproven")).toEqual(["OATS cannot yet bring a Codex conversation back."]);
     expect(because("a-later-reason")).toEqual(["OATS says: a-later-reason"]);
     expect(because(null)).toEqual([]);
-    // Never told by the toaster as a plain success: it is opened again.
-    expect(toasted("start", startOutcome("start", "kernel-fix-developer", fresh)).plain).toBe(false);
+    // Never told by the toaster as a plain success: it is opened again, and in the warning tone, as the dialog draws it.
+    expect(toasted("start", startOutcome("start", "kernel-fix-developer", fresh), true)).toEqual({ plain: false, tone: "unknown", title: "Kernel fix developer started fresh: its last conversation was not brought back.", lines: [] });
+  });
+  it("no start or restart of an agent with no bb thread is told whole by a toast: its result holds where it runs and a command to copy", () => {
+    const back = startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json"));
+    const plainStart = startOutcome("start", "lost-tmux-developer", answered("tmux-start.json"));
+    const restarted = startOutcome("restart", "lost-tmux-developer", value(parseSessionStart(fixture("tmux-restart.json").result, "restart")));
+    for (const [verb, outcome] of [["start", back], ["start", plainStart], ["restart", restarted]] as const) {
+      expect(toasted(verb, outcome, true)).toEqual({ plain: false, tone: "done", title: outcome.title, lines: [] });
+      // The same result of an agent on bb, which has a thread to open, is told whole.
+      expect(toasted(verb, outcome).plain).toBe(true);
+    }
   });
   it("marks a start whose harness waits for its person in its terminal, which a toast cannot tell whole", () => {
     const waiting = startOutcome("start", "kernel-fix-developer", answered("start-resume-waiting.json"));

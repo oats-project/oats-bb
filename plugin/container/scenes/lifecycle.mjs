@@ -665,7 +665,8 @@ export default [
         await page.until(closed, 10);
 
         // The plain start, on purpose: the choice says what it loses.
-        answers({ "session start": { file: "lifecycle/start-resume-fresh.json" } });
+        // (The recorded answer of a plain start of a real tmux home, with the one substitution: the agent's name.)
+        answers({ "session start": { stdout: readFileSync(join(FIXTURES, "tmux-start.json"), "utf8").replaceAll("lost-tmux-developer", TMUX) } });
         await open();
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)}).click()`);
         await page.until(`document.querySelector(${JSON.stringify(testId("oats-start-fresh-warning"))}) !== null`, 10);

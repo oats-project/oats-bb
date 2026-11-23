@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -564,5 +564,53 @@ describe("an act the kernel refused and marked unconfirmed", () => {
   it("asked again, the kernel's same marked answer stays not confirmed, and the toaster tells it by its title, to be shown again", () => {
     expect(checkAgainRefused("retire", "dev-1", marked)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"] });
     expect(toasted("retire", applyRefused("retire", "dev-1", marked))).toEqual({ plain: false, tone: "unknown", title: "Result not confirmed", lines: [] });
+  });
+});
+
+describe("the start of a tmux agent whose session was lost (a resume)", () => {
+  // The answers are SHAPED from the kernel's doc (test/fixtures/lifecycle/README.md).
+  const answered = (file: string) => value(parseSessionStart(fixture(file).result)); // (the envelope's result, as the runner hands it to the parser)
+  it("is decided from the kernel's row: tmux, and a session that was lost; nothing else", () => {
+    expect(resumable({ backend: "tmux", sessionEnd: "lost" })).toBe(true);
+    expect(resumable({ backend: "tmux", sessionEnd: "stopped" })).toBe(false);
+    expect(resumable({ backend: "tmux", sessionEnd: "exited" })).toBe(false);
+    expect(resumable({ backend: "tmux", sessionEnd: null })).toBe(false);
+    expect(resumable({ backend: "bb", sessionEnd: "lost" })).toBe(false);
+    expect(resumable({ backend: null, sessionEnd: "lost" })).toBe(false);
+  });
+  it("says after the press what the kernel answered: back in its last conversation", () => {
+    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer started.", lines: ["Back in its last conversation."], code: null, details: null, offers: [] });
+  });
+  it("says that it started FRESH, first, with the kernel's reason in words; a reason it does not know is OATS's own word", () => {
+    const fresh = answered("start-resume-fresh.json");
+    expect(startOutcome("start", "kernel-fix-developer", fresh)).toMatchObject({ tone: "done", title: "Kernel fix developer started fresh.", lines: ["Started fresh on its task: its last conversation was not found."] });
+    const because = (reason: string | null) => startOutcome("start", "kernel-fix-developer", { ...fresh, resume: { resumed: false, reason, waiting: null } }).lines;
+    expect(because("no-receipts")).toEqual(["Started fresh on its task: OATS has no record of where its harness kept it."]);
+    expect(because("resume-unproven")).toEqual(["Started fresh on its task: OATS cannot yet bring a Codex conversation back."]);
+    expect(because("a-later-reason")).toEqual(["Started fresh on its task.", "OATS says: a-later-reason"]);
+    expect(because(null)).toEqual(["Started fresh on its task."]);
+  });
+  it("marks a start whose harness waits for its person in its terminal, which a toast cannot tell whole", () => {
+    const waiting = startOutcome("start", "kernel-fix-developer", answered("start-resume-waiting.json"));
+    expect(waiting).toMatchObject({ tone: "done", title: "Kernel fix developer started.", lines: ["Back in its last conversation."], waiting: true });
+    expect(toasted("start", waiting)).toEqual({ plain: false, tone: "done", title: "Kernel fix developer started.", lines: [] });
+    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json")).waiting).toBeUndefined();
+  });
+  it("a start that asked for no resume says nothing of a conversation", () => {
+    expect(startOutcome("start", "weekly-digest-helper", value(parseSessionStart(fixture("start.json")))).lines).toEqual([]);
+  });
+  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, with the way to start it fresh", () => {
+    expect(startRefused("start", "kernel-fix-developer", { code: "E_RESUME_NOT_LOST", message: "kernel-fix-developer did not lose its session (stopped)" })).toMatchObject({
+      tone: "failed",
+      title: "Kernel fix developer wasn't started",
+      lines: ["Its session is no longer lost, so there is no conversation to bring back. Read what Start does now."],
+      offers: ["refresh"],
+    });
+    expect(startRefused("start", "kernel-fix-developer", { code: "E_LAUNCH_ENV_CHANGED", message: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key" })).toMatchObject({
+      tone: "failed",
+      title: "Kernel fix developer wasn't started",
+      lines: ["Its launch settings changed since it last ran, so OATS will not bring the old conversation back. Start it fresh instead.", "OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key"],
+      offers: ["fresh"],
+    });
   });
 });

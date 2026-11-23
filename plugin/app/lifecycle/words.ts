@@ -302,7 +302,17 @@ export type Outcome = {
    */
   warning?: { title: string; details: string };
   /** What the dialog offers beside Close: read a new plan (Review again), ask for the answer to what was sent (Check again), read the agent's status again (Refresh status). */
-  offers: readonly ("review" | "check" | "refresh")[];
+  /**
+   * The same and, after a resume the kernel refused because the launch settings changed, start
+   * fresh ("fresh": back to the dialog, set to the plain start, for one more press).
+   */
+  offers: readonly ("review" | "check" | "refresh" | "fresh")[];
+  /**
+   * The start SUCCEEDED and the harness waits for its person in its terminal before it loads the
+   * conversation (the kernel's `waiting: "resume-confirmation"`): said on a line of its own, in
+   * the attention tone, with the command that attaches to it.
+   */
+  waiting?: true;
 };
 
 /** One row of a stop's results, or of a retire's stopped children: its line, after its name. */
@@ -493,7 +503,8 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
  */
 export const SHOW_RESULT = "Show result";
 export function toasted(verb: Verb, outcome: Outcome): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
-  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined;
+  // (A start whose harness waits in its terminal has a command to copy: a toast cannot hold it either.)
+  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined && outcome.waiting !== true;
   return { plain, tone: outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
 }
 
@@ -548,10 +559,51 @@ export function carriesOn(row: { running: boolean | null; runtimeState: string |
 export const modelHelp = (recorded: string | null): string =>
   `Leave blank to use ${recorded ?? "the selected harness’s default model"}. This choice is saved for later starts of this instance.`;
 
-/** A start or a restart that the kernel answered: started. Its warnings, when a capability's launch hook gave any, are its lines. */
+/**
+ * The start of a TMUX agent whose session was LOST (the kernel's row: backend tmux, sessionEnd
+ * "lost"): `oats session start --resume` brings it back in the harness's own last conversation,
+ * where a plain start begins fresh on its task. The words never promise what the kernel may not
+ * give: before the press they are conditional; after it they say what the kernel answered.
+ */
+export const RESUME = {
+  tries: "Start tries to bring it back in its last conversation. If that is gone, it starts fresh on its task.",
+  same: "It comes back with the harness and model it had.",
+  /** The dialog's one choice for such an agent, off by default: the plain start, on purpose. */
+  freshChoice: "Start fresh on its task instead",
+  /** Under the choice while it is on. */
+  freshWarning: "This starts a new conversation on its task. Its last conversation is not brought back.",
+  back: "Back in its last conversation.",
+  fresh: "Started fresh on its task",
+  waiting: "It is waiting for you in its terminal: the harness asks before it loads the conversation.",
+  attach: "Attach from a terminal:",
+  envChanged: "Its launch settings changed since it last ran, so OATS will not bring the old conversation back. Start it fresh instead.",
+  startFresh: "Start fresh",
+  notLost: "Its session is no longer lost, so there is no conversation to bring back. Read what Start does now.",
+} as const;
+/** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
+const FRESH_BECAUSE: Readonly<Record<string, string>> = {
+  "no-conversation": "its last conversation was not found.",
+  "no-receipts": "OATS has no record of where its harness kept it.",
+  "resume-unproven": "OATS cannot yet bring a Codex conversation back.",
+};
+/** Whether a start of this agent is a resume: the kernel's row at the check says tmux and a lost session. Nothing else. */
+export const resumable = (row: { backend: string | null; sessionEnd: string | null }): boolean => row.backend === "tmux" && row.sessionEnd === "lost";
+
+/**
+ * A start or a restart that the kernel answered: started. Its warnings, when a capability's launch
+ * hook gave any, are its lines. For a resume: what the kernel's `resume` object says, never a
+ * guess: back in its last conversation, or started fresh with the kernel's reason in words (a
+ * reason this does not know is OATS's own word, under its name).
+ */
 export function startOutcome(verb: RunVerb, instance: string, started: Started): Outcome {
   const name = agentName(instance);
-  return { tone: "done", title: `${name} ${verb === "restart" ? "restarted" : "started"}.`, lines: started.warnings, code: null, details: null, offers: [] };
+  const done = (title: string, lines: string[]): Outcome => ({ tone: "done", title, lines: [...lines, ...started.warnings], code: null, details: null, offers: [], ...(started.resume?.waiting === "resume-confirmation" ? { waiting: true as const } : {}) });
+  if (started.resume === null) return done(`${name} ${verb === "restart" ? "restarted" : "started"}.`, []);
+  if (started.resume.resumed) return done(`${name} started.`, [RESUME.back]);
+  const reason = started.resume.reason;
+  const because = reason === null ? undefined : FRESH_BECAUSE[reason];
+  // The title says what happened, first: it did NOT come back in its conversation.
+  return done(`${name} started fresh.`, because !== undefined ? [`${RESUME.fresh}: ${because}`] : [`${RESUME.fresh}.`, ...(reason === null ? [] : oatsSays(reason))]);
 }
 
 /** The kernel's codes for a start that started nothing, each with the Desktop's sentence. */
@@ -578,6 +630,10 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   // A start the kernel refused AND marked unconfirmed: it cannot tell what is left, whatever the code. Never
   // "wasn't started": not confirmed, with OATS's own line, and what a result that is not confirmed offers here (Refresh status).
   if (refusal.unconfirmed === true) return of("unknown", "Result not confirmed", [`OATS could not confirm what the ${act} left. Refresh its status before another try.`, ...oatsSays(refusal.message)]);
+  // A resume the kernel refused: its session is not lost any more (the row changed after the check), or the
+  // launch settings changed since it last ran (the remedy is a plain start, fresh: one more press).
+  if (code === "E_RESUME_NOT_LOST") return of("failed", `${name} wasn't started`, [RESUME.notLost]);
+  if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged, ...oatsSays(refusal.message)], ["fresh"]);
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may still be running: check its row in the sidebar before you start it again."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!, ...(code === "E_SESSION_START_LOCK_STUCK" ? oatsSays(refusal.message) : [])]); // the sentence says OATS's message names what blocks: it stands under it
   if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);

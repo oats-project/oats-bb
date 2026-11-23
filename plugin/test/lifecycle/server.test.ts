@@ -121,6 +121,35 @@ describe("every act", () => {
 });
 
 describe("start and restart", () => {
+  it("a resume starts a TMUX home with --resume and nothing else, waits for no bb thread, and answers what the kernel said of the conversation", async () => {
+    backend = await startBackend();
+    const { rpc, fake } = backend;
+    const started = await rpc("start", { instance: "kernel-fix-developer", resume: true });
+    expect(started).toMatchObject({ threadId: null, instance: "kernel-fix-developer", resume: { resumed: true, reason: null, waiting: null } });
+    const call = (await fake.calls()).find((each) => each.argv[0] === "session");
+    expect(call?.argv).toEqual(["session", "start", "--home", "/abs/deployment/agents/oats-developer/instances/kernel-fix-developer", "--resume", "--json"]);
+    // The row the dialog decides on: the kernel's backend.
+    expect(await rpc("startCheck", { instance: "kernel-fix-developer" })).toMatchObject({ backend: "tmux" });
+    expect(await rpc("startCheck", { instance: "weekly-digest-helper" })).toMatchObject({ backend: "bb", sessionEnd: "stopped" });
+  }, 20_000);
+
+  it("a plain start of a tmux home waits for no bb thread either: it has none", async () => {
+    backend = await startBackend({ verbs: { "session start": { file: "lifecycle/start-resume-fresh.json" } } });
+    const started = await backend.rpc("start", { instance: "kernel-fix-developer" });
+    expect(started).toMatchObject({ threadId: null, instance: "kernel-fix-developer" });
+    expect((await backend.fake.calls()).find((each) => each.argv[0] === "session")?.argv).toEqual(["session", "start", "--home", "/abs/deployment/agents/oats-developer/instances/kernel-fix-developer", "--json"]);
+  }, 20_000);
+
+  it("a resume is refused before any process for a home on bb, and beside a harness or a model: the server never turns it into another start", async () => {
+    backend = await startBackend({ verbs: declares(["claude", "pi"]) });
+    const { rpc, fake } = backend;
+    expect(await refusalOf(rpc("start", { instance: "weekly-digest-helper", resume: true }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("start", { instance: "kernel-fix-developer", resume: true, harness: "pi" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("start", { instance: "kernel-fix-developer", resume: true, model: "opus" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("restart", { instance: "kernel-fix-developer", resume: true }))).toBeTruthy(); // a restart takes no such input
+    expect((await fake.calls()).filter((each) => each.argv[0] === "session")).toEqual([]);
+  }, 20_000);
+
   it("startCheck reads the roster again and answers the agent as the kernel has it now, with the harnesses the provider declares", async () => {
     backend = await startBackend({ verbs: declares(["claude", "pi"]) });
     const { rpc, verbs } = backend;
@@ -138,6 +167,7 @@ describe("start and restart", () => {
       runtimeError: null,
       // How its session ended, as the kernel's own row says it: an operator's stop.
       sessionEnd: "stopped",
+      backend: "bb",
       harnesses: ["claude", "pi"],
     });
     // One more read of the one status everybody shares, and the provider asked once for every dialog.

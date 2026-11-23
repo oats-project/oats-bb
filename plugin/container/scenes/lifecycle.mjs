@@ -594,6 +594,90 @@ export default [
     },
   },
   {
+    stage: "lifecycle",
+    name: "Start, of an agent on tmux whose session was lost: it tries to bring it back in its last conversation; back, started fresh, the harness waiting; the plain start on purpose",
+    run: async ({ page, at, viewport, check }) => {
+      const TMUX = "kernel-fix-developer";
+      const shot = (name) => dialogShot({ page, at, viewport, check }, "start", name);
+      const actStart = `document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-agent-act-start")}`)})`;
+      // The agent has no bb thread: its acts are on its own page.
+      const open = async () => {
+        await page.goto(`/plugins/oats/agent/${TMUX}`);
+        check(Boolean(await page.until(`${actStart} !== null && ${actStart}.disabled === false`, 30)), `${at} the page of a tmux agent that does not run offers Start…`);
+        await page.evaluate(`${actStart}.click()`);
+        await page.until(phaseIs("ready"), 30);
+      };
+      const resumed = (file) => ({ "session start --resume": { file: `lifecycle/${file}`, sleepMs: 1500 } });
+      try {
+        // The pilot's row: on tmux, not running, no word of the runtime's, its session lost.
+        changes = { [TMUX]: { running: false, runtimeState: null, sessionEnd: "lost" } };
+        answers(resumed("start-resume.json"));
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === TMUX && agent.running === false));
+        await open();
+        const before = await dialog(page);
+        const fields = await page.evaluate(`JSON.stringify({ harness: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}) !== null, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}) !== null, fresh: document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)})?.getAttribute("aria-checked") ?? null })`);
+        check(
+          before.title === "Start Kernel fix developer" &&
+            before.body.includes("Start tries to bring it back in its last conversation. If that is gone, it starts fresh on its task.") &&
+            before.body.includes("It comes back with the harness and model it had.") &&
+            !before.body.includes("full mode") &&
+            !before.body.includes("stays readable in bb") &&
+            before.act === "Start" &&
+            before.off === false,
+          `${at} Start of a lost tmux agent says that it tries to bring it back, and that it comes back with what it had; nothing of bb's full mode or thread`,
+          JSON.stringify(before),
+        );
+        check(fields === JSON.stringify({ harness: false, model: false, fresh: "false" }), `${at} no harness and no model are offered; the plain start is a choice that is off`, fields);
+        await shot("resume-before");
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("done"), 30);
+        const back = await dialog(page);
+        check(back.body.includes("Kernel fix developer started.") && back.body.includes("Back in its last conversation.") && (await page.evaluate("location.pathname")).endsWith(`/plugins/oats/agent/${TMUX}`), `${at} the result says what the kernel answered: back in its last conversation; no thread opens`, JSON.stringify(back));
+        await shot("resume-back");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // The kernel started it fresh: its last conversation was not found.
+        answers(resumed("start-resume-fresh.json"));
+        await open();
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("done"), 30);
+        const fresh = await dialog(page);
+        check(fresh.body.includes("Kernel fix developer started fresh.") && fresh.body.includes("Started fresh on its task: its last conversation was not found.") && !fresh.body.includes("Back in its last conversation."), `${at} a resume that started fresh says so first, with the kernel's reason in words`, JSON.stringify(fresh));
+        await shot("resume-fresh");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // It is back, and its harness waits in its terminal before it loads the conversation.
+        answers(resumed("start-resume-waiting.json"));
+        await open();
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}) !== null`, 30);
+        const waiting = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}).innerText.replace(/\\s+/g, " ").trim()`);
+        check(waiting.includes("It is waiting for you in its terminal: the harness asks before it loads the conversation.") && waiting.includes(`oats session attach --home `) && waiting.includes(TMUX), `${at} a harness that waits for its person is said apart, with the command that attaches to it`, waiting);
+        await shot("resume-waiting");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // The plain start, on purpose: the choice says what it loses.
+        answers({ "session start": { file: "lifecycle/start-resume-fresh.json" } });
+        await open();
+        await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)}).click()`);
+        await page.until(`document.querySelector(${JSON.stringify(testId("oats-start-fresh-warning"))}) !== null`, 10);
+        const chosen = await dialog(page);
+        check(chosen.body.includes("This starts a new conversation on its task. Its last conversation is not brought back.") && chosen.body.includes("This starts a new conversation using the saved briefing and state.") && !chosen.body.includes("tries to bring it back"), `${at} the plain start, chosen on purpose, says what it loses and what it does`, JSON.stringify(chosen));
+        await shot("resume-fresh-choice");
+        await page.evaluate(click("oats-confirm-cancel"));
+        await page.until(closed, 10);
+      } finally {
+        // The stage's own roster again, read by the plugin's server.
+        changes = {};
+        answers();
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === TMUX && agent.running === true));
+      }
+    },
+  },
+  {
     stage: "lifecycle-running",
     name: "Restart, from the thread's own menu: a dialog first, with the Desktop's warning, its focus order; restarted; a refusal",
     run: async ({ page, at, viewport, threads, check }) => {

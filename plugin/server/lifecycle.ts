@@ -39,16 +39,21 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     if (!(await harnessesOf(core)).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`);
     return harness;
   }
-  async function begin(verb: "start" | "restart", { instance, harness, model }: { instance: string; harness?: string | undefined; model?: string | undefined }) {
+  async function begin(verb: "start" | "restart", { instance, harness, model, resume }: { instance: string; harness?: string | undefined; model?: string | undefined; resume?: true | undefined }) {
     const agent = await core.agentForAct(instance);
-    const choice = given({ harness: await chosen(harness), model });
+    // A resume is for a home on tmux alone (on bb `--resume` is another act: a notice into the same thread), and
+    // takes no harness and no model. Whether its session is still LOST is the kernel's to say, under its own
+    // claim (E_RESUME_NOT_LOST): this never turns a resume into a plain start, nor the reverse.
+    if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
+    const choice = given({ harness: await chosen(harness), model, resume });
     let started: Value<"start">;
     try {
-      started = await core.call(verb, { home: agent.home, ...choice }, HOST_TIMEOUT.act, core.signal);
+      started = verb === "start" ? await core.call("start", { home: agent.home, ...choice }, HOST_TIMEOUT.act, core.signal) : await core.call("restart", { home: agent.home, ...given({ harness: choice.harness, model: choice.model }) }, HOST_TIMEOUT.act, core.signal);
     } finally {
       core.rereadSoon();
     }
-    return { ...started, threadId: await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") };
+    // A home on bb is in a new thread after the act; any other has no bb thread, and none is waited for.
+    return { ...started, threadId: agent.backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
   }
   return {
     async stopPlan({ instance, recursive }, context) {
@@ -91,6 +96,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         runtimeState: agent.runtimeState,
         runtimeError: agent.runtimeError,
         sessionEnd: read.success ? (read.data.sessionEnd ?? null) : null,
+        backend: agent.backend,
         harnesses: declared,
       };
     },

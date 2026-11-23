@@ -397,32 +397,53 @@ const threads = await healthyThreads();
 // Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
 // rows with `running: true`, and the two threads bb's fixture calls active). An agent on a bb
 // thread works when BB says its thread does, so bb must have a turn running on those two threads
-// for the whole run: each gets a message whose turn the mock model holds open (MOCK-HOLD), and is
-// waited for until bb calls it active. The hold is lifted when the run ends.
+// while a scene reads them: each gets a message whose turn the mock model holds open (MOCK-HOLD)
+// and is waited for until bb calls it active.
+// The hold is taken PER STAGE, and lifted for a stage that tells a thread itself (`tellsAThread:
+// true` on the stage, or its name below): a turn kept open across another stage's own turn was
+// seen to keep that turn from starting. A stage with the hold lifted draws the two as idle.
 const WORKING_THREADS = ["thr_redesign", "thr_mockups"];
+/** Stages that tell a thread a message of their own (their scenes wait for its turn): the hold is lifted for them. */
+const TELLS_A_THREAD = new Set(["home-stopped-asks"]);
+let holdsNow = false;
+const workingNow = () => WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
+/** Waits until bb says `status` of both threads; answers what it saw last. */
+async function untilBoth(status, seconds) {
+  const deadline = Date.now() + seconds * 1000;
+  let seen = workingNow();
+  while (!seen.every((line) => line.endsWith(`: ${status}`)) && Date.now() < deadline) {
+    await sleep(1000);
+    seen = workingNow();
+  }
+  return seen;
+}
+async function holdWorking(stage) {
+  mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
+  writeFileSync(WORK_HOLD_FILE, "");
+  for (const id of WORKING_THREADS) if (statusNow(threads.get(id).id) !== "active") bb("thread", "tell", threads.get(id).id, `carry on MOCK-HOLD:${WORK_HOLD}`);
+  const seen = await untilBoth("active", 90);
+  check(seen.every((line) => line.endsWith(": active")), `bb has a turn running on the threads of the two agents that work, for the stage "${stage}"`, seen.join(" | "));
+  holdsNow = true;
+}
+async function releaseWorking(stage) {
+  rmSync(WORK_HOLD_FILE, { force: true });
+  const seen = await untilBoth("idle", 90);
+  check(seen.every((line) => line.endsWith(": idle")), `the two held turns are answered and bb shows both threads idle, for the stage "${stage}" (it tells a thread itself)`, seen.join(" | "));
+  holdsNow = false;
+}
 let browser;
 let scenes;
 let stages;
 try {
-  // (Inside the `try` whose `finally` lifts the hold: whatever throws from here on, no turn stays held.)
-  mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
-  writeFileSync(WORK_HOLD_FILE, "");
-  for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, `carry on MOCK-HOLD:${WORK_HOLD}`);
-  {
-    const deadline = Date.now() + 90_000;
-    let seen = [];
-    for (;;) {
-      seen = WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
-      if (seen.every((line) => line.endsWith(": active")) || Date.now() > deadline) break;
-      await sleep(1000);
-    }
-    check(seen.every((line) => line.endsWith(": active")), "bb has a turn running on the threads of the two agents that work, for the whole run", seen.join(" | "));
-  }
+  // (Everything that takes the hold is inside the `try` whose `finally` lifts it: whatever throws, no turn stays held.)
   ({ scenes, stages } = await loadScenes());
   browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
+    // The hold for this stage: taken, or lifted where the stage tells a thread itself.
+    const wantsHold = !(stage.tellsAThread === true || TELLS_A_THREAD.has(name));
+    if (wantsHold !== holdsNow) await (wantsHold ? holdWorking : releaseWorking)(name);
     try {
       await stage.enter({ fake, statusWithRealIds, threads, untilSnapshot });
       for (const theme of THEMES) {

@@ -416,69 +416,7 @@ describe("acts", () => {
     expect(await refusalOf(rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
   });
 
-  it("stops with the plan's revision, and shows the kernel's refusal of a stale one unchanged", async () => {
-    const plan = await rpc("stopPlan", { instance: "redesign-ui-lead" });
-    expect(plan.revision).toBe("9c1f2e3d4b5a69788796a5b4");
-    expect(plan.lines[0]).toMatch(/^Stop redesign-ui-lead/);
-    expect(await rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" })).toEqual({ ok: true });
-    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
-    expect(await refusalOf(rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-0000aaaa1111" }))).toEqual({
-      code: "conflict",
-      message: "E_PLAN_STALE: the stop plan changed since it was shown (f9dcbb5542487fc328e88b07 → c30af39bbdfb748db5e0b1b5); review the fresh plan",
-    });
-  });
-
-  it("acts only on an instance of the current snapshot, and takes the home from it", async () => {
-    for (const method of ["stopPlan", "start", "restart", "retirePlan"]) {
-      expect(await refusalOf(rpc(method, { instance: "not-in-the-snapshot" })), method).toMatchObject({ code: "invalid" });
-    }
-    expect(await refusalOf(rpc("stopApply", { instance: "not-in-the-snapshot", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }))).toMatchObject({ code: "invalid" });
-    expect(await refusalOf(rpc("retireApply", { instance: "not-in-the-snapshot", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }))).toMatchObject({ code: "invalid" });
-    await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
-    expect(await verbs()).toEqual(["status"]);
-
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_7nx8uibthg" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_d5zug5fnva" });
-    const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
-    expect(sessions.map((call) => call.argv)).toEqual([
-      ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
-      ["session", "restart", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
-    ]);
-  });
-
-  it("takes the thread from the next snapshot when a start's answer names none", async () => {
-    await rpc("snapshot");
-    await fake.behave({ "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: "weekly-digest-helper", backend: "bb", warnings: [] } }) } });
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_digest" });
-  }, 20_000);
-
-  it("refuses with a code of its own, never a kernel code, when no thread is named anywhere", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
-    for (const group of roster.agents) for (const instance of group.instances) if (instance.instance === "weekly-digest-helper") delete instance.session;
-    await fake.behave({
-      status: { stdout: JSON.stringify(roster) },
-      "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: "weekly-digest-helper", backend: "bb", warnings: [] } }) },
-    });
-    expect(await refusalOf(rpc("start", { instance: "weekly-digest-helper" }))).toEqual({
-      code: "conflict",
-      message: "NO_THREAD_NAMED: Started weekly-digest-helper, but the kernel named no bb thread for it",
-    });
-  }, 20_000);
-
-  it("retires through the plan and its guarded apply", async () => {
-    const plan = await rpc("retirePlan", { instance: "weekly-digest-helper" });
-    expect(plan.revision).toBe("ef5028f1e6cb517560247307");
-    expect(plan.lines[0]).toMatch(/^Removed: the home of weekly-digest-helper/);
-    expect(await rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" })).toEqual({ ok: true });
-    const retire = (await fake.calls()).find((call) => call.verb === "retire")!;
-    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "ef5028f1e6cb517560247307", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
-  });
-
-  it("rereads the snapshot after an act", async () => {
-    await rpc("snapshot");
-    await rpc("stopApply", { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
-    await expect.poll(async () => (await verbs()).filter((verb) => verb === "status").length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
-  }, 20_000);
+  // Stop, start, restart and retire: test/lifecycle/server.test.ts.
 });
 
 describe("the host-call limits", () => {

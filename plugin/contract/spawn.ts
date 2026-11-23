@@ -14,7 +14,17 @@ export const spawnSummary = z.object({
 });
 const spawnInput = z.object({ soul: soulName, name: instanceName, task: z.string().min(1).max(100_000) });
 
+/**
+ * The harnesses a spawn, a start or a restart on bb may name: what the bb session provider
+ * declares, in its order. `hostId` is the bb machine that holds the deployment, where bb's own
+ * list of a harness's models is asked (app/spawn/models.ts); null before it is found.
+ */
+export const harnessList = z.object({ harnesses: z.array(z.string()), hostId: z.string().nullable() });
+export type HarnessList = z.infer<typeof harnessList>;
+
 export const rpc = defineRpcContract({
+  /** One read for the New agent form and the Start and Restart dialogs. */
+  spawnHarnesses: { input: z.null(), output: harnessList },
   spawnPreview: { input: spawnInput.strict(), output: z.object({ summary: spawnSummary }) },
   spawn: {
     input: spawnInput.extend({ key }).strict(),
@@ -25,6 +35,8 @@ export const rpc = defineRpcContract({
 const hostSpawn = z.object({ ...hostBase, ...spawnInput.shape });
 
 export const host = defineRpcContract({
+  /** `oats capabilities show oats.bb --json`. */
+  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()) })) },
   /** `revision` is the kernel's decision revision for this soul, name and task. */
   spawnPreview: {
     experimental_retryable: true,

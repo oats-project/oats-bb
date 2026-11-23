@@ -34,8 +34,8 @@ visible in them:
   provider runs this launch (backend bb), with no OATS pane: claude folder trust is not read for
   it …"), from OATS 0.70.4; at 0.70.0 it was `unknown` with the file it had read. The panel says
   the kernel's word on the item's line, as the Desktop does ("launch · not-applicable · optional"),
-  and names a configuration file only where the kernel does: `readiness-soul.json`, where no
-  session provider is known yet, still holds that item as `unknown` with the file it read.
+  and names a configuration file only where the kernel does: `readiness-soul.json`, a soul's
+  readiness, where there is no home to record a session provider, still holds that item as `unknown` with the file it read.
 
 In the deployment the scenario left (`redesign-ui-lead` of `oats-product-expert`, stopped through
 OATS by the scenario's last stop), one more agent

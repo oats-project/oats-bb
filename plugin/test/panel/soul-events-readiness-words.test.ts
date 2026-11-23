@@ -183,7 +183,7 @@ describe("readiness' words", () => {
     expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb 9b95a56", whole: "package oats.bb 9b95a56f237ff4006a69545963d5130d6eb4ddc5 @ 9b95a56" });
     // the recorded launch item: a session provider runs the launch, so the kernel reads no folder trust for it and names no file
     expect(itemFacts(home.checks[1]!.items[0]!).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code"]);
-    // the soul's recorded readiness, where no session provider is known yet: the kernel did read the harness' folder trust, and the file it read is a fact, after the code
+    // the soul's recorded readiness, where there is no home to record a session provider: the kernel did read the harness' folder trust, and the file it read is a fact, after the code
     const ofSoul = recordedReadiness("soul").checks.find((check) => check.key === "configured")!.items[0]!;
     expect(itemLine(ofSoul)).toBe("launch · unknown · optional");
     expect(itemFacts(ofSoul).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code", "Configuration file"]);

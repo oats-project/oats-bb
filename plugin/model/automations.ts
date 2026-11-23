@@ -1,6 +1,6 @@
 // What the Automations kernel adapter and the app both say of a trigger's event: its source's
 // name, its label and its kind in words. Pure, like everything in model/: no bb, no React.
-import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
+import { DETAIL_WITHHELD, displayLine } from "./text.js";
 
 export const PULL_REQUEST = "github.pull_request";
 

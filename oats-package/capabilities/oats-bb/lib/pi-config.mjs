@@ -41,10 +41,10 @@ function names(entry, name) {
   return spec === name || spec.startsWith(`${name}@`);
 }
 
-/** What `<agentDir>/settings.json` says of the two packages. → { bridge, listener } (each
- *  true when listed), or { unreadable: <why> } for a file that is there and cannot be
- *  read as pi's settings. A directory with no settings.json lists nothing. */
-export function readPiPackages(agentDir) {
+/** `<agentDir>/settings.json` as pi's settings. → { doc } (`doc` null for a directory
+ *  with no settings.json), or { unreadable: <why> } for a file that is there and cannot
+ *  be read as pi's settings. */
+function readPiSettings(agentDir) {
   const file = join(agentDir, "settings.json");
   let fd;
   try {
@@ -59,15 +59,25 @@ export function readPiPackages(agentDir) {
     let doc;
     try { doc = JSON.parse(bytes.subarray(0, read).toString("utf8")); } catch { return { unreadable: "it is not JSON" }; }
     if (!isObject(doc)) return { unreadable: "it is not a JSON object" };
-    if (doc.packages !== undefined && !Array.isArray(doc.packages)) return { unreadable: "its packages is not a list" };
-    const packages = doc.packages ?? [];
-    return { bridge: packages.some((entry) => names(entry, PI_BRIDGE)), listener: packages.some((entry) => names(entry, PI_AWEB_EXTENSION)) };
+    return { doc };
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return { bridge: false, listener: false };
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return { doc: null };
     return { unreadable: `it cannot be read (${error?.code ?? "an error"})` };
   } finally {
     if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ }
   }
+}
+
+/** What `<agentDir>/settings.json` says of the two packages. → { bridge, listener } (each
+ *  true when listed), or { unreadable: <why> } for a file that is there and cannot be
+ *  read as pi's settings. A directory with no settings.json lists nothing. */
+export function readPiPackages(agentDir) {
+  const { doc, unreadable } = readPiSettings(agentDir);
+  if (unreadable !== undefined) return { unreadable };
+  if (doc === null) return { bridge: false, listener: false };
+  if (doc.packages !== undefined && !Array.isArray(doc.packages)) return { unreadable: "its packages is not a list" };
+  const packages = doc.packages ?? [];
+  return { bridge: packages.some((entry) => names(entry, PI_BRIDGE)), listener: packages.some((entry) => names(entry, PI_AWEB_EXTENSION)) };
 }
 
 export const absolutePath = (value) => typeof value === "string" && isAbsolute(value) && !value.includes("\0");

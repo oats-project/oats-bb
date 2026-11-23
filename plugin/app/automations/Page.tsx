@@ -125,7 +125,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const refused = answer !== undefined && !answer.ok ? answer : null;
   // What takes the list's place: an OATS without the lists, or an OATS that cannot be read at all
   // while nothing read before is shown (with a list kept, the notice goes over it and holds its acts).
-  const gate = gateOf(kind, refused, here) ?? (refused !== null && isUnreadable(refused.code) && reads[kind].list === undefined ? { title: `${TITLES[kind]} could not be read`, detail: refused.message, code: refused.code } : null);
+  const gate = gateOf(kind, refused, here);
+  const unreadable = refused !== null && isUnreadable(refused.code) && reads[kind].list === undefined ? refused : null;
 
   // A trigger's recorded state, read when its page opens and again when the lists are. An answer
   // for a row that is no longer the open one changes nothing. A read that fails is said, over the
@@ -216,7 +217,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
       <View
         rowActs={acts}
         held={reads[kind].error === null ? null : HELD}
-        gateNotice={gate !== null && gate.code !== null && isUnreadable(gate.code) ? <Unreadable failure={{ code: gate.code, message: gate.detail ?? "" }} machine={machine} onRetry={refresh} /> : null}
+        gateNotice={unreadable === null ? null : <Unreadable failure={{ code: unreadable.code, message: unreadable.message }} machine={machine} onRetry={refresh} />}
         rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
         schedulerAction={acts.schedulerAction}
         result={acts.result}

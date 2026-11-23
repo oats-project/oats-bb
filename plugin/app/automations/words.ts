@@ -396,7 +396,8 @@ export function lastNext(
   const outcome = outcomeWords(row.lastRun?.outcome ?? null);
   return {
     next: nextText,
-    nextTitle: next !== null && !elsewhere ? next.title : nextText,
+    // The whole time is the title only where the text is that time ("Next …", "Was due …"): never behind "Scheduler off" or "Off here".
+    nextTitle: next !== null && nextText === `${next.word} ${next.label}` ? next.title : nextText,
     last: last !== null ? `Last ${last.label}` : "Not run yet",
     lastOutcome: last === null ? null : (outcome ?? fired),
     lastTone: last === null ? null : outcomeTone(row.lastRun?.outcome ?? null),

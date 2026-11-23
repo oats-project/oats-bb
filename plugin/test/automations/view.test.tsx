@@ -568,6 +568,28 @@ describe("a row's page (D-279)", () => {
     expect(opened).toHaveLength(2);
   });
 
+  it("what fired a trigger last is a source's text of any length: it wraps word by word and is never held on one line; so is a long cron", () => {
+    const all = triggers();
+    const subject = "harvest/2026-11-21-weekly-knowledge-digest-for-the-billing-team and what it found";
+    const long = all.rows.map((row) => (row.id === "oats-real/harvest-review" && row.lastRun !== null ? { ...row, lastRun: { ...row.lastRun, subject } } : row));
+    const view = page({ kind: "trigger", trigger: ready({ ...all, rows: long }) });
+    const last = within(view.row("oats-real/harvest-review")).getByTestId("oats-automation-last");
+    expect(last.textContent).toContain(subject);
+    // Nothing in the cell is held on one line (the table would cut it at its edge), and every word is a token of its own.
+    expect(last.querySelector(".whitespace-nowrap")).toBeNull();
+    expect(Array.from(last.querySelectorAll("[data-token]")).map((token) => token.textContent)).toEqual(expect.arrayContaining(["harvest/2026-11-21-weekly-knowledge-digest-for-the-billing-team", "found"]));
+    const list = schedules();
+    const cron = "0,5,10,15,20,25,30,35,40,45,50,55 9-17 * * 1-5";
+    const minutes = page({ schedule: ready({ ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, cron } : row)) }) });
+    // The page has no words for this cron, so the cron stands in their place: its fields are tokens, and nothing in the cell is held on one line.
+    const when = within(minutes.row("local/daily-review")).getByText("0,5,10,15,20,25,30,35,40,45,50,55");
+    expect([when.hasAttribute("data-token"), when.closest("[role='cell']")!.querySelector(".whitespace-nowrap")]).toEqual([true, null]);
+    // A separator stays with the word before it, so no line starts with one: the time and its "·" are one piece.
+    const pieces = Array.from(within(view.row("oats-real/harvest-review")).getByTestId("oats-automation-last").querySelectorAll("[data-token]")).map((token) => token.textContent);
+    expect(pieces[0]).toMatch(/^Last .+ ago ·$/);
+    expect(pieces).not.toContain("·");
+  });
+
   it("an unreadable row says so in the list and on its page, with the kernel's code and message (D-285)", () => {
     const list = schedules();
     const unreadable = automationRowOf({ id: "broken", scope: "/abs/deployment", unreadable: { code: "E_SCHEDULE_INVALID", message: "the job's record cannot be read" }, history: { status: "corrupt" }, recentRuns: [], origin: { kind: "local" } }, "schedule")!;

@@ -10,10 +10,11 @@ import { Fact, Facts } from "../ui";
  * word moves to the next line as it is, so a line never ends inside one, not even at a hyphen
  * ("oats-product-" / "expert"); only a word longer than the line itself is broken. The text read
  * and copied is the text given, its words a space apart. Each word is marked `data-token`, which
- * is what the live checks look at.
+ * is what the live checks look at. A separator ("·") stays with the word before it, so a line
+ * never starts with one.
  */
 export function Tokens({ text }: { text: string }) {
-  const words = text.split(" ");
+  const words = text.split(" ").reduce<string[]>((kept, word) => (word === "·" && kept.length > 0 ? [...kept.slice(0, -1), `${kept[kept.length - 1]} ·`] : [...kept, word]), []);
   return (
     <>
       {words.map((word, at) => (

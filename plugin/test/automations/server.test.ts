@@ -20,6 +20,8 @@ describe("automations", () => {
     backend = await startBackend();
     const lists = await backend.rpc<Lists>("automations");
     expect(lists.hostId).toBe("host_falcon");
+    // bb's own name for the machine that holds the deployment, as the roster has it: the page names the machine by it.
+    expect((lists as { machine?: string | null }).machine).toBe("falcon");
     expect(automationList.parse(lists.schedule.list).rows).toHaveLength(11);
     expect(automationList.parse(lists.trigger.list).rows).toHaveLength(7);
     expect(await argvs(backend, "schedule list")).toEqual([["schedule", "list", "--json"]]);

@@ -38,7 +38,6 @@ import type { OriginFilter } from "./words";
 const HEADS = ["Automation", "Soul", "When", "Runs on", "Last · next"] as const;
 /** What a row's acts add to it, where the page has them: its switch before its name, its menu after its facts. */
 export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
-// One row is a grid of five cells from bb's wide layout up, and a stack below it.
 // From bb's wide layout up a row is two lines: its name, with its tags and summary, across the whole
 // row (an id can be forty characters, and no column of five holds that whole), then its four facts
 // under their headings. Below it a row is a stack.
@@ -138,14 +137,15 @@ function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; li
         {row.kind === "schedule" ? (
           <>
             <span title={shown([row.cron, row.tz].filter(Boolean).join(" · "))} className={main}>
-              {shown(words ?? row.cron ?? "Not reported")}
+              {/* With no words for it the cron itself stands here: its fields whole, wrapped between them. */}
+              {words !== null ? shown(words) : <Tokens text={shown(row.cron ?? "Not reported")} />}
             </span>
             {/* The cron itself goes under its words; with no words, the line above is already the cron. */}
             <span className={`${SUB} font-mono`}>
-              {/* The cron and the time zone are each one token: a line ends between them, never inside one. */}
-              {words !== null && row.cron !== null ? <span className="whitespace-nowrap">{shown(row.cron)}</span> : null}
+              {/* The cron is one piece and the time zone another: a line ends between them, and inside one only when it is longer than the line (a cron of many minutes), never cut. */}
+              {words !== null && row.cron !== null ? <span data-token="" className="inline-block max-w-full break-words align-bottom">{`${shown(row.cron)}${row.tz !== null ? " ·" : ""}`}</span> : null}
               {words !== null && row.cron !== null && row.tz !== null ? " " : null}
-              {row.tz === null ? null : <span className="whitespace-nowrap">{`${words !== null && row.cron !== null ? "· " : ""}${shown(row.tz)}`}</span>}
+              {row.tz === null ? null : <Tokens text={shown(row.tz)} />}
             </span>
           </>
         ) : (
@@ -184,14 +184,16 @@ function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; li
               {cell.next === notRunHere(here) ? <Tokens text={cell.next} /> : cell.next}
             </span>
             <span data-testid="oats-automation-last" data-tone={cell.lastTone ?? undefined} title={cell.lastTitle ?? undefined} className={SUB}>
-              <span className="whitespace-nowrap">{cell.last}</span>
-              {/* What the last run did, whole on its line; one that did not happen, or whose state nobody knows, is marked. */}
+              {/* When, then what the last run did: each word whole, the separator with the time; one that did not happen, or whose state nobody knows, is marked. What fired a trigger is a source's text of any length: it wraps, and is never cut. */}
+              <span data-token="" className="inline-block max-w-full break-words align-bottom">{`${cell.last}${cell.lastOutcome !== null && cell.lastTone === null ? " ·" : ""}`}</span>
               {cell.lastOutcome === null ? null : " "}
               {cell.lastOutcome === null ? null : cell.lastTone === null ? (
-                <span className="whitespace-nowrap">{`· ${shown(cell.lastOutcome)}`}</span>
+                <Tokens text={shown(cell.lastOutcome)} />
               ) : (
-                <span className="whitespace-nowrap font-semibold text-foreground">
-                  <Toned tone={cell.lastTone}>{shown(cell.lastOutcome)}</Toned>
+                <span className="font-semibold text-foreground">
+                  <Toned tone={cell.lastTone}>
+                    <Tokens text={shown(cell.lastOutcome)} />
+                  </Toned>
                 </span>
               )}
             </span>
@@ -280,6 +282,8 @@ export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, sche
                     {head}
                   </span>
                 ))}
+                {/* The rows' last column holds their ⋯ menu: the headings leave it the same room, so each sits over its column. */}
+                {acts === undefined ? null : <span aria-hidden="true" className={`${TARGET} invisible w-8`} />}
               </div>
               {group.rows.map((row) => (
                 <Row key={row.id} row={row} list={list} now={now} running={running} onOpen={onOpen} acts={acts} />

@@ -223,6 +223,10 @@ const scenes = [
       const invalidSays = await opened(page, testId("oats-automation-problem"), "E_HERDR_REMOVED");
       check(/ Code E_HERDR_REMOVED Field backend/.test(invalidSays), `${at} under Details an invalid definition shows the kernel's code, field and message`, invalidSays);
       await shotOf(page, testId("oats-automation-problem"), `automations-${viewport.name}-schedule-invalid`);
+      // a row that is not trusted here: the kernel's own line (what to add to oats-local.yaml) is on its page, each word whole
+      const trust = await open(page, "/schedules/oats-real/release-check", testId("oats-automation-where"));
+      const cutTrust = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(/oats-local\.yaml/.test(trust) && cutTrust === "[]", `${at} a row not trusted here says what to add to oats-local.yaml on its page, and no id, path or file name there is broken inside a token`, `${cutTrust} / ${trust}`);
       const where = await open(page, "/schedules/oats-real/reconcile", testId("oats-automation-where"));
       const cutWhere = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
       check(cutWhere === "[]", `${at} no account, host or path on a workspace schedule's page is broken inside a token`, cutWhere);

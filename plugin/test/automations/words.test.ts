@@ -321,6 +321,11 @@ describe("last and next", () => {
     expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW - 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Was due 9 h ago" });
     expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Next in 9 h" });
     expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW, false)).toMatchObject({ next: "Scheduler off" });
+    // The whole time is the title only where the text is that time: never behind "Scheduler off" or "Off here".
+    const ahead = { runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() };
+    expect(lastNext(row(ahead), NOW)!.nextTitle).toBe(new Date(NOW + 9 * 3600e3).toLocaleString());
+    expect(lastNext(row(ahead), NOW, false)).toMatchObject({ next: "Scheduler off", nextTitle: "Scheduler off" });
+    expect(lastNext(row({ ...ahead, enabledHere: false, origin: { kind: "local" }, enabled: false }), NOW)).toMatchObject({ next: "Off here", nextTitle: "Off here" });
     // One rule for a due time, wherever it is said: ahead it is next, at or after its time it was due.
     const due = (ms: number) => dueWords(new Date(NOW + ms).toISOString(), NOW);
     expect([due(9 * 3600e3), due(-3 * 60e3), due(0), dueWords(null, NOW)]).toMatchObject([{ word: "Next", label: "in 9 h" }, { word: "Was due", label: "3 min ago" }, { word: "Was due" }, null]);

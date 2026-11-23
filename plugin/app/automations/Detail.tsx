@@ -400,7 +400,7 @@ function History({ row, status, failure, source, check, now }: { row: Automation
           <ul aria-label="Waiting" className="flex flex-col">
             {st.pending.slice(0, 10).map((entry, at) => (
               <HistoryLine key={entry.key ?? at} iso={entry.observedAt} now={now} testId="oats-automation-waiting">
-                {eventText(entry)}
+                <Tokens text={eventText(entry)} />
               </HistoryLine>
             ))}
           </ul>
@@ -413,10 +413,10 @@ function History({ row, status, failure, source, check, now }: { row: Automation
           <ul aria-label="Live now" className="flex flex-col">
             {st.live.map((entry, at) => (
               <li key={at} data-testid="oats-automation-live" className="min-w-0 break-words border-t border-border py-1.5 text-sm text-foreground first:border-t-0">
-                {eventText(entry)}
+                <Tokens text={eventText(entry) !== "" && entry.instance !== null ? `${eventText(entry)} ·` : eventText(entry)} />
                 {entry.instance !== null ? (
                   <>
-                    {eventText(entry) !== "" ? " · " : ""}
+                    {eventText(entry) !== "" ? " " : ""}
                     <span className="font-mono">
                       <Tokens text={entry.instance} />
                     </span>
@@ -432,7 +432,8 @@ function History({ row, status, failure, source, check, now }: { row: Automation
         <ul aria-label={trigger ? "Fired" : "Runs"} className="flex flex-col">
           {items.slice(0, 10).map((item, at) => (
             <HistoryLine key={at} iso={item.at} now={now} testId="oats-automation-run">
-              {shown(item.parts.filter(Boolean).join(" · ")) || "Recorded"}
+              {/* An event, an outcome, an instance's name: each word whole, a separator with the word before it. */}
+              <Tokens text={shown(item.parts.filter(Boolean).join(" · ")) || "Recorded"} />
               {/* Why a run did not happen: the line says it in a person's words; the kernel's own, and its code, are one press away. */}
               {/* A run that did not happen because the definition is not valid repeats what the Invalid card says: it is said once, there. */}
               {item.run !== null && item.run.error !== null && !(row.invalid?.message != null && item.run.error.includes(row.invalid.message)) ? (
@@ -674,7 +675,11 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
             <Toned tone={place.tone}>{row.runsHere ? (running ? `Runs on ${here.on}` : `${hereWhileOff(here)}; the scheduler is off`) : shown(place.label)}</Toned>
           </p>
           {/* Why not here, in the kernel's words; what is wrong with the definition is said once, in its own card. */}
-          {row.reasonDetail !== null && row.reasonDetail !== bad?.message ? <p className={`${NOTE} break-words`}>{shown(row.reasonDetail)}</p> : null}
+          {row.reasonDetail !== null && row.reasonDetail !== bad?.message ? (
+            <p className={`${NOTE} break-words`}>
+              <Tokens text={shown(row.reasonDetail)} />
+            </p>
+          ) : null}
         </Card>
         {/* A path or a file can be fifty characters: this card has the whole width, so that one is whole on its line. */}
         <div className="@3xl:col-span-2">

@@ -50,7 +50,7 @@ export type ViewProps = {
   rowActs?: RowActs;
   /** Why the shown kind's acts are held (its list could not be read again), where the page has acts. */
   held?: string | null;
-  /** In place of the page's own cannot-show notice, where OATS itself cannot be read: the plugin's one notice for that. */
+  /** In the list's place where OATS itself cannot be read and no list is kept: the plugin's one notice for that. */
   gateNotice?: ReactNode;
   /** A re-read is in flight. */
   refreshing?: boolean;
@@ -96,14 +96,17 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
   }, [openId]);
 
   const scheduler = list?.scheduler ?? null;
-  const onRowPage = row !== null && list !== undefined && gate === null;
+  // What stands in the list's place: the page's own gate, or the plugin's one notice for an OATS that cannot be read.
+  const unreadable = gateNotice ?? null;
+  const gated = gate !== null || unreadable !== null;
+  const onRowPage = row !== null && list !== undefined && !gated;
   return (
     <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
       {onRowPage ? null : (
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
           <span className="min-w-0 flex-1" />
-          {scheduler === null || gate !== null ? null : (
+          {scheduler === null || gated ? null : (
             <span data-testid="oats-automations-scheduler" className="min-w-0 text-xs text-muted-foreground">
               <Toned tone={schedulerOn(scheduler) ? "ok" : "bad"}>{schedulerLine(scheduler, now)}</Toned>
             </span>
@@ -117,9 +120,9 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
       )}
       {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
       <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${kind}`} aria-label={onRowPage ? title : undefined} className="flex flex-col gap-4">
-        {gate !== null && gateNotice !== undefined && gateNotice !== null ? (
+        {unreadable !== null ? (
           // OATS itself cannot be read (no `oats`, no deployment, no machine): the one notice every place of the plugin shows for it.
-          <div data-testid="oats-automations-gate">{gateNotice}</div>
+          <div data-testid="oats-automations-gate">{unreadable}</div>
         ) : gate !== null ? (
           <div data-testid="oats-automations-gate">
             <Notice title={gate.title} code={gate.code}>

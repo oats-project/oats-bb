@@ -268,6 +268,20 @@ test("bb holds a question on the thread of an agent that is not loaded, or that 
   expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you", "bb shows its question in this thread"], []]);
 });
 
+test("an agent that is not loaded, on a thread bb says works (a turn runs): the row and the line say \"Working\", with no \"not loaded\" and no Start", async () => {
+  // The kernel's `running: false` beside "unknown" says no harness is loaded; bb says a turn runs on the thread. The state is bb's word.
+  const active = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_harvest" ? { ...thread, status: "active" as const, hasPendingInteraction: false } : thread)) };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown", waiting: null } : agent));
+  const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: active });
+  await waitFor(() => expect(rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_harvest")!)).toBe("Working · knowledge-harvester"));
+  resetApp();
+  const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: active });
+  await unloaded.findByTestId("oats-identity-row");
+  await waitFor(() => expect(words(unloaded)[0]).toBe("Working"));
+  expect(words(unloaded).join(" ")).not.toMatch(/not loaded|carry on/);
+  expect(acts(unloaded)).toEqual([]);
+});
+
 // ---- the agent's own page (the instance panel's header)
 
 async function agentPage(instance: string, options: RenderSlotOptions<Contract>) {

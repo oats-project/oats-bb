@@ -71,8 +71,8 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * A session that ended in a shell, or that the kernel cannot reach, is told first. The one rule
  * for the sidebar's rows, the thread's row, the home and the instance panel.
  *
- * STOPPED, for a row with no "stopped" word: `recordedStopped` (above), or a tmux row that does not
- * run. A row of a session provider always has a word (docs/desktop-cli-api.md at v0.70.5, "A
+ * STOPPED, beyond the word "stopped" itself: a row that is not running with no word at all
+ * (`recordedStopped`, above, which holds for both), or a tmux row that does not run. A row of a session provider always has a word (docs/desktop-cli-api.md at v0.70.5, "A
  * status row of a provider home"): stopped is said of it only when that word is "stopped" (OATS
  * stopped it, or it stopped with the host). `running: false` beside "unknown" is a session that is
  * there with no harness loaded (a reboot on a host without `oats host run`, or bb let the harness

@@ -80,7 +80,9 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
     const held = document.activeElement;
     const lost = !(held instanceof HTMLElement) || !dialog.contains(held) || (held instanceof HTMLButtonElement && held.disabled);
     if (settled) dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-    else if (lost) dialog.focus();
+    // While the act runs: on Close where the dialog can be left (Cancel went and Close came), else on the dialog itself.
+    // (Also when the focus is on the dialog itself: a dialog that opens on a running act puts it there.)
+    else if (lost || held === dialog) (dialog.querySelector<HTMLElement>('[data-testid="oats-confirm-leave"]') ?? dialog).focus();
   }, [phase.kind, settled]);
   const sentences = (title: string, lines: readonly string[]) =>
     lines.length === 0 ? null : (

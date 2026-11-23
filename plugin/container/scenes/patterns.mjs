@@ -275,6 +275,19 @@ export default [
         await page.press("Escape");
         await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       }
+      // An act that runs in a place that tells its result elsewhere: the dialog says it can be left, Close is on and holds the focus, and it closes.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-leaving")}').focus()`);
+      await page.press("Enter");
+      await page.until(visible(testId("oats-confirm-leave")), 10);
+      const leaving = JSON.parse(await page.evaluate(`JSON.stringify({ phase: document.querySelector('${testId("oats-confirm")}').getAttribute("data-phase"), line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, cancel: document.querySelector('${testId("oats-confirm-cancel")}') !== null, act: document.querySelector('${testId("oats-confirm-act")}').disabled, focus: ${FOCUSED} })`));
+      check(
+        leaving.phase === "running" && leaving.line === "You can close this; retiring continues." && leaving.close === "Close" && leaving.cancel === false && leaving.act === true && leaving.focus === "oats-confirm-leave",
+        `${at} an act that runs and can be left: the dialog says so, Close stands in Cancel's place and holds the focus, the act cannot be asked again`,
+        JSON.stringify(leaving),
+      );
+      await page.shot(`patterns-${viewport.name}-confirm-leaving`, { targets: true });
+      await page.press("Escape");
+      check(Boolean(await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10)), `${at} Escape leaves it`);
       // A result that is not confirmed: neither done nor failed, with its code after the words and the next step.
       await page.evaluate(`document.querySelector('${testId("oats-patterns-open-unknown")}').focus()`);
       await page.press("Enter");

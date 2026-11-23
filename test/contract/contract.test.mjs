@@ -367,6 +367,12 @@ test("T2 input to an idle, a mid-tool and an errored thread answers sent and lan
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false, "right after a stop with the host the home read as running");
   assert.equal(await detached(), home, "the detached process outlived the stop");
   assert.ok(!(await carriers(id)).includes("claude"), "the thread's own Claude is gone");
+  // That `false` is said at the bb the provider is pinned to, where bb's runner is known.
+  // Against another pin (as after a bb bump, where bb may have moved its runner) the same
+  // process cannot be told from a harness, and reads null: never true, and never a refusal.
+  const elsewherePinned = await provider("inspect", { home, endpoint }, { ...SETTINGS, version: "0.0.1" });
+  assert.equal(elsewherePinned.ok, true, JSON.stringify(elsewherePinned));
+  assert.equal(elsewherePinned.result.running, null);
   assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = await provider("inspect", { home, endpoint });
   // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
@@ -931,4 +937,33 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:48886 bb thread list --json")), [], "no thread was started on the exposed server");
   // The first server, on loopback, still reads ready.
   assert.equal((await check()).result.status, "ready");
+});
+
+// What becomes of a thread's harness when bb's host daemon ends under it (seen at bb-app
+// 0.50.1, recorded here; test/contract/pi.test.mjs has the same for pi): bb-app starts the
+// daemon again, the harness is gone with the old one (no process is left that carries the
+// thread's id: none reparented, so the provider's "a child of bb's runner" has no orphan
+// to miss), the thread still reads idle, and the provider reads it as not running. A tell
+// starts a harness under the new daemon's runner. Last in the file: it ends bb's daemon.
+test("bb's host daemon ended while a thread's Claude is loaded: the Claude goes with it, the thread reads idle and not running, and a tell starts it again", async () => {
+  const { home, endpoint } = await launched("daemon");
+  await waitStatus(endpoint.threadId, "idle");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
+  // The daemon of the thread's bb alone: the parent of the thread's runner (another bb
+  // an earlier test started in this container has a daemon of its own).
+  const [daemon] = await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "claude" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${endpoint.threadId}'; then runner=$(awk '{print $4}' $p/stat); awk '{print $4}' /proc/$runner/stat; fi; done`).then((out) => out.trim().split("\n"));
+  assert.match(await sh(`tr '\\0' ' ' < /proc/${daemon}/cmdline`), /\/host-daemon\/dist\/daemon-bundle\.mjs $/, "the runner's parent is bb's host daemon");
+  await sh(`kill -KILL ${daemon}`);
+  await waitFor("the thread's Claude to be gone", async () => (await carriers(endpoint.threadId)).length === 0, { timeoutMs: 30_000 });
+  await waitFor("bb to be ready with a new daemon", async () => (await check()).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
+  assert.equal(await threadStatus(endpoint.threadId), "idle", "bb's word did not change");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false);
+  assert.deepEqual((await provider("input", { home, endpoint, text: "DAEMON-AFTER marker" })).result, { submitted: true, verified: true });
+  await waitFor("the turn after the daemon's restart", async () => (await landed("DAEMON-AFTER")) === 1, { timeoutMs: 90_000 });
+  await waitStatus(endpoint.threadId, "idle");
+  // Every Claude of the thread is a child of bb's runner for its provider, under the new
+  // daemon. (Seen once after such a restart: two of them for a moment, each under a runner.)
+  const parents = await harnessParents(endpoint.threadId, "claude");
+  assert.ok(parents.length >= 1 && parents.every((words) => words.some((word) => word.endsWith("/bb-provider-bridge-worker.mjs")) && words.includes("provider-claude-code")), JSON.stringify(parents));
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
 });

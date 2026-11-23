@@ -21,10 +21,12 @@ const HELD = Object.freeze({ present: true, state: "unknown", running: true });
  *  waiting for its next message, and for one `bb thread stop` released: only the process
  *  tells them apart, and the kernel needs it to tell a home stopped with the host from one
  *  that came back (contract r25, A16).
- *  true: the harness bb started for the thread works in the home. false: none does (a
- *  `pi` or a `claude` the agent itself left running there is not it). null: it cannot be
- *  told (no /proc on this host; what started a harness in the home cannot be read), or no
- *  home was given: never a guess. */
+ *  true: the harness bb started for the thread works in the home. false: no harness of
+ *  the thread does. null: it cannot be told (no /proc on this host; what started a harness
+ *  in the home cannot be read), or no home was given: never a guess. And the look's own
+ *  UNRECOGNISED, for a harness in the home that bb's known runner did not start: the
+ *  caller settles it by bb's version (lib/inspect.mjs: false at the provider's pin, where
+ *  it is one the agent itself left running; null at any other version). */
 function harnessRuns(thread, processes, home) {
   if (typeof home !== "string") return null;
   try { return processes.runsIn(thread, home); }

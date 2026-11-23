@@ -374,6 +374,12 @@ test("P6 input is one turn per tell: to an idle thread, and as two steers during
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false, "right after a stop with the host the home read as running");
   assert.equal(await detached(), home, "the detached process outlived the stop");
   assert.ok(!(await carriers(endpoint.threadId)).includes("pi"), "the thread's own pi is gone");
+  // That `false` is said at the bb the provider is pinned to, where bb's runner is known.
+  // Against another pin (as after a bb bump, where bb may have moved its runner) the same
+  // process cannot be told from a harness, and reads null: never true, and never a refusal.
+  const elsewherePinned = await provider("inspect", { home, endpoint }, { version: "0.0.1" });
+  assert.equal(elsewherePinned.ok, true, JSON.stringify(elsewherePinned));
+  assert.equal(elsewherePinned.result.running, null);
   assert.equal((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
   const hostStopped = (await provider("inspect", { home, endpoint })).result;
   // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
@@ -630,6 +636,30 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
   await nothingIn(home, "after the retire");
 });
 
+// A restart of bb itself (bb-app, its server and its daemon end, and bb-app starts again on
+// the same data directory): the nearest stand-in for a reboot of a host that runs no
+// `oats host run`. Seen at bb-app 0.50.1, for pi here and for Claude in a probe: the
+// harness is gone, the thread still reads idle, and the provider reads it there and not
+// running. The kernel reads that as a session that is there, not a lost one, so no sweep
+// resumes it: its next input starts the harness again, on the same conversation.
+test("bb restarted under a loaded pi (the nearest thing to a reboot): the thread reads idle, there and not running, and its next input starts pi again on the same conversation", async () => {
+  const { home, endpoint } = await launched("restart");
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-RESTART-BEFORE" })).result, { submitted: true, verified: true });
+  await waitFor("the turn before the restart", async () => (await landed("MARK-RESTART-BEFORE")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  await box.restartBb();
+  assert.deepEqual(await carriers(endpoint.threadId), [], "no process of the thread outlived bb");
+  assert.equal(await threadStatus(endpoint.threadId), "idle", "bb's word is idle, not error: nothing says the harness is gone but the processes");
+  const after = (await provider("inspect", { home, endpoint })).result;
+  assert.deepEqual([after.present, after.state, after.running], [true, "unknown", false], "there, and not running: not a lost session");
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => [result.present, result.running]), [[true, false]]);
+  assert.deepEqual((await provider("input", { home, endpoint, text: "MARK-RESTART-AFTER" })).result, { submitted: true, verified: true });
+  await waitFor("the turn after the restart", async () => (await landed("MARK-RESTART-AFTER")) === 1, { timeoutMs: 90_000 });
+  await idle(endpoint.threadId);
+  assert.equal(await carried("MARK-RESTART-AFTER", "MARK-RESTART-BEFORE"), true, "the same conversation");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
+});
+
 // What becomes of a thread's harness when bb's host daemon ends under it (seen at bb-app
 // 0.50.1, recorded here): bb-app starts the daemon again, the harness is gone with the old
 // one (no process is left that carries the thread's id: none reparented, so the provider's
@@ -639,9 +669,10 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
 test("bb's host daemon ended while a thread's pi is loaded: the pi goes with it, the thread reads idle and not running, and a tell starts it again", async () => {
   const { home, endpoint } = await launched("daemon");
   assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
-  // The daemon alone, by the end of its command line (this shell's own does not end so).
-  const killed = await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in *"/dist/daemon-bundle.mjs ") kill -KILL \${p#/proc/}; echo killed ;; esac; done`);
-  assert.equal(killed.trim(), "killed");
+  // The daemon of the thread's bb: the parent of the thread's runner.
+  const [daemon] = await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "pi" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${endpoint.threadId}'; then runner=$(awk '{print $4}' $p/stat); awk '{print $4}' /proc/$runner/stat; fi; done`).then((out) => out.trim().split("\n"));
+  assert.match(await sh(`tr '\\0' ' ' < /proc/${daemon}/cmdline`), /\/host-daemon\/dist\/daemon-bundle\.mjs $/, "the runner's parent is bb's host daemon");
+  await sh(`kill -KILL ${daemon}`);
   await waitFor("the thread's pi to be gone", async () => (await carriers(endpoint.threadId)).length === 0, { timeoutMs: 30_000 });
   await waitFor("bb to be ready with a new daemon", async () => (await provider("check", { home: null, soul: null, launch: PLANNED })).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
   assert.equal(await threadStatus(endpoint.threadId), "idle", "bb's word did not change");

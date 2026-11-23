@@ -142,10 +142,12 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     refuses a stop for the key's absence.
   - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
     container does), its shutdown stops each bb home with the host and its sweep resumes
-    them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
-    leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
-    resume` by hand, resumes them by an input, counted against the home's cap. Until then the
-    row reads lost.
+    them, within about a minute of its start. Where it doesn't (a laptop may not), after a
+    reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
+    input, a message or a wake, starts its harness again on the same conversation. (Seen
+    with bb restarted under loaded harnesses, the nearest stand-in for a reboot, for pi and
+    for Claude: bb still says `idle` of the thread, and the provider answers `present: true,
+    running: false`.)
   - The window: a host-stopped home's thread is live and unarchived from the host's
     shutdown until the first resume sweep after the host is back (`oats host run` runs it
     at its start and each minute; the clients when they open): the time the host is off,
@@ -353,24 +355,41 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   started again in bb, whose turn then failed, still runs), `false` where it works
   somewhere else. One look serves an `inspect` or an `inspectMany`, made only when a
   thread needs it.
-  - **Only a harness bb itself started.** A `pi` or a `claude` the agent starts in its
-    home and leaves running detached (`setsid claude …`, `nohup pi …`) inherits the
-    thread's id, is named as the harness, works in the home, and outlives every stop of
-    the thread. Its parent is whatever adopted it (init, a subreaper), and one the agent
-    did not detach is a child of a shell under the harness: neither is bb's runner, and
-    neither is counted. So a home stopped with the host reads `running: false` whatever
-    its agent left behind, and is resumed. Where what started such a process cannot be
-    read (it or its parent ended meanwhile), the answer is `null`: it cannot be told.
+  - **Only a harness bb itself started** (contract r29, A20). A `pi` or a `claude` the
+    agent starts in its home and leaves running detached (`setsid claude …`, `nohup pi
+    …`) inherits the thread's id, is named as the harness, works in the home, and
+    outlives every stop of the thread. Its parent is whatever adopted it (init, a
+    subreaper), and one the agent did not detach is a child of a shell under the harness:
+    neither is bb's runner, and neither is ever counted as running. The answers, for a
+    thread at rest:
+    - no process named as the thread's harness, with its id, in the home: `false`;
+    - one whose parent is bb's runner for the thread's provider: `true`;
+    - one whose parent cannot be read (it or its parent ended meanwhile): `null`;
+    - one whose parent can be read and is not that runner: `false` where bb is at the
+      version the provider is pinned to (`settings.oats.bb.version`), since there the
+      runner's command line is the one the contract tests pin and the process is one the
+      agent left behind; `null` where bb is at another version, its version cannot be read
+      or no version is pinned, since a bb that moved its runner would look the same.
+    bb's version is read as readiness reads it (`bb --version`), once per `inspect` or
+    `inspectMany` at most, and only when such a process is there. It decides that one
+    answer and refuses nothing: an inspect is answered at any bb version. So a home
+    stopped with the host is never read as running for what its agent left behind, and is
+    resumed.
   - **This rests on bb-app's own layout, not on its CLI** (seen at 0.50.1, pinned by
     `test/contract`): bb's host daemon runs one `node …/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs
     <artifact> provider-<id> <data dir>` per thread, with the thread's harness as its
     direct child; neither that process's command line nor its environment names the
-    thread (the harness's environment does). A bb that moves the file or the word reads
-    as "no harness runs": `running: false` for every thread at rest, so a home stopped
-    with the host is resumed by an input all the same, and a harness started again in a
-    stopped home goes unseen. The contract tests fail on such a bb. Where bb's host
-    daemon ends under a loaded harness, the harness ends with it (pinned): none is left
-    reparented.
+    thread (the harness's environment does). A bb that moves the file or the word is
+    another version than the pin (the contract tests fail at such a bump): there a loaded
+    harness reads `running: null`, never `true`, so a home stopped with the host is
+    resumed by an input all the same, and a harness started again in a stopped home goes
+    unseen until the provider knows that bb's runner.
+  - Where bb's host daemon ends under a loaded harness (seen with the daemon killed, for
+    pi and for Claude, pinned by `test/contract`): bb-app starts the daemon again, the
+    harness ends with the old one and no process is left that carries the thread's id
+    (none is reparented, so there is no orphan for the rule to miss), the thread still
+    reads `idle`, and it reads `running: false`. The next tell starts a harness under the
+    new daemon's runner.
   - A stop with the host (`reason: "host"`) answers only once that harness has left the
     home (it leaves a moment after bb shows the thread settled), within the stop's grace:
     an inspect made right after the stop reads `running: false`. Where it has not left by

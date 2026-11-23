@@ -150,8 +150,8 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 |---|---|---|---|
 | starting, active, stopping | true | unknown | true |
 | pending, idle, and the harness bb started for the thread is at work in the home | true | unknown | true |
-| pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too; a harness the agent itself left running is not it) | true | unknown | false |
-| pending, idle, and what started a harness in the home cannot be read | true | unknown | null |
+| pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too; at the pinned bb, a harness the agent itself left running is not it) | true | unknown | false |
+| pending, idle, and it cannot be told: what started a harness in the home cannot be read, or it is not bb's runner and bb is not at the pinned version | true | unknown | null |
 | pending, idle, on a host whose processes cannot be read (macOS: no `/proc`) | true | unknown | null |
 | pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
 | error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | as for a thread at rest: true where bb's own harness works in the home, false where it does not |
@@ -185,7 +185,8 @@ which is one process named `pi` or `claude` that carries the thread's id, has th
 as its working directory and is a child of bb's own runner for that provider, and false
 where there is none. A process that merely carries the thread's id, a harness at work in
 another directory, or a `pi` or a `claude` the agent itself started and left running
-detached never counts. This is how OATS tells a home stopped with the host (its thread
+detached never counts (at the bb version the provider is pinned to it reads false; at
+another bb, where bb's runner may have moved, it reads null: it cannot be told). This is how OATS tells a home stopped with the host (its thread
 left live, its harness gone) from one whose harness came back. Two limits follow. What
 OATS reports as running outside it is a harness bb revived in a stopped home, not every
 process an agent left behind: **an agent's own detached processes outlive a stop of its
@@ -711,10 +712,12 @@ thread, as before.
   it a new thread.
 - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
   container does), its shutdown stops each bb home with the host and its sweep resumes
-  them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
-  leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
-  resume` by hand, resumes them by an input, counted against the home's cap. Until then the
-  row reads lost.
+  them, within about a minute of its start. Where it doesn't (a laptop may not), after a
+  reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
+  input, a message or a wake, starts its harness again on the same conversation. (Seen
+  with bb restarted under loaded harnesses, the nearest stand-in for a reboot, for pi and
+  for Claude: bb still says `idle` of the thread, and the provider answers `present: true,
+  running: false`.)
 - The window that leaves: a home stopped with the host has its thread live and
   unarchived from the host's shutdown until the first resume sweep after the host is
   back (`oats host run` runs one at its start and each minute; the clients when they

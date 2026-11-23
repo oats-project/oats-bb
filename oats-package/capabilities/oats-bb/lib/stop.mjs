@@ -80,7 +80,7 @@ async function harnessLeft(bb, threadId, home, { deadline, grace, now }) {
   if (typeof home !== "string" || !isAbsolute(home)) return null;
   const thread = await bb.thread(threadId);
   if (thread === null || thread.deletedAt) return null;
-  const until = Math.min(now() + grace * 1000, deadline);
+  const from = now(), until = Math.min(from + grace * 1000, deadline);
   for (;;) {
     let runs;
     // A look of its own each time: what it reads is the processes as they are now.
@@ -90,7 +90,7 @@ async function harnessLeft(bb, threadId, home, { deadline, grace, now }) {
       return null;
     }
     if (runs !== true) return null;
-    if (now() + HARNESS_POLL_MS >= until) return `bb thread ${threadId} is stopped, and its agent process still works in ${home} ${grace} s later: until it has left, the home reads as running`;
+    if (now() + HARNESS_POLL_MS >= until) return `bb thread ${threadId} is stopped, and its agent process still works in ${home} ${Math.round((now() - from) / 1000)} s later: until it has left, the home reads as running`;
     await sleep(HARNESS_POLL_MS);
   }
 }

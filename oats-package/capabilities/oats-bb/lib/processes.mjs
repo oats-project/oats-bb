@@ -44,6 +44,14 @@ import { fail } from "./errors.mjs";
 import { BB_PROVIDER } from "./mode.mjs";
 import { samePath } from "./threads.mjs";
 
+/** What `runsIn` answers where a harness is in the home, by its name, the thread's id and
+ *  its working directory, and what started it can be read and is not bb's runner for the
+ *  thread's provider. Which of two things that is depends on bb's version, which this
+ *  module does not read (lib/inspect.mjs does): at the version the provider is pinned to,
+ *  the runner's command line is known (the contract tests pin it), so the process is one
+ *  the agent started; at another version bb may have moved its runner, and it cannot be told. */
+export const UNRECOGNISED = Symbol("a harness in the home that bb's known runner did not start");
+
 const VARIABLE = "BB_THREAD_ID=";
 // The file bb-app's host daemon runs as a thread's runner, and how its command line names
 // the provider it runs.
@@ -144,9 +152,10 @@ export function threadProcesses({ proc = "/proc", read = readFileSync, link = re
  *    home: true where one process is the thread's harness by its name, carries the
  *    thread's id, has the home as its working directory (exactly the home, as bb starts a
  *    harness in the thread's environment), AND is a child of bb's runner for the thread's
- *    provider. false where none is. null where one of them is in the home and what
- *    started it cannot be read: it cannot be told. A harness whose working directory
- *    cannot be read is not counted.
+ *    provider. false where no harness of the thread is in the home at all. null where
+ *    one is and what started it cannot be read: it cannot be told. UNRECOGNISED where one
+ *    is and what started it is not bb's runner for the provider: the caller decides by
+ *    bb's version. A harness whose working directory cannot be read is not counted.
  *  Both throw E_SESSION_UNAVAILABLE where the processes cannot be looked at. */
 export function processLook(options) {
   let threads = null, failure = null;
@@ -162,10 +171,10 @@ export function processLook(options) {
     has: (thread) => harnessesOf(thread).length > 0,
     runsIn(thread, home) {
       const here = harnessesOf(thread).filter((process) => process.cwd !== null && samePath(process.cwd, home));
-      // bb's runner for this thread's provider; for a provider this module does not know, any of bb's runners.
-      const known = Object.hasOwn(HARNESS_PROCESS, thread.providerId);
-      if (here.some((process) => process.runner !== null && (known ? process.runner.includes(thread.providerId) : process.runner.length > 0))) return true;
-      return here.some((process) => process.runner === null) ? null : false;
+      if (here.length === 0) return false;
+      // bb's runner for this thread's provider, and no other's.
+      if (here.some((process) => process.runner !== null && process.runner.includes(thread.providerId))) return true;
+      return here.some((process) => process.runner === null) ? null : UNRECOGNISED;
     },
   };
 }

@@ -28,10 +28,12 @@
     running right after it.
   - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
     container does), its shutdown stops each bb home with the host and its sweep resumes
-    them, within about a minute of its start. Where it doesn't (a laptop may not), a reboot
-    leaves bb homes lost, not host-stopped: a client's sweep when it opens, or `oats session
-    resume` by hand, resumes them by an input, counted against the home's cap. Until then the
-    row reads lost.
+    them, within about a minute of its start. Where it doesn't (a laptop may not), after a
+    reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
+    input, a message or a wake, starts its harness again on the same conversation. (Seen
+    with bb restarted under loaded harnesses, the nearest stand-in for a reboot, for pi and
+    for Claude: bb still says `idle` of the thread, and the provider answers `present: true,
+    running: false`.)
   - **The OATS floor rises to 0.70.5** (`compatibility.oats`), the OATS release that
     sends `reason: "host"`, so that no supported pairing loses a reboot's resume. Update
     OATS to 0.70.5 or later before pinning this release: an older kernel refuses the
@@ -62,7 +64,7 @@
     working directory and is a child of bb's own runner for that provider), `false` where
     it is not, as after `bb thread stop`. A process that only carries the thread's id
     never counts, nor a `pi` or a `claude` the agent itself started and left running
-    detached: an agent's own detached processes outlive a stop of its thread, and
+    detached (false at the pinned bb version, `null` at another, where it cannot be told): an agent's own detached processes outlive a stop of its thread, and
     `oats instance stop` does not end them. The rule reads bb-app's own process layout
     (its bridge worker's file name), pinned by the contract tests at every bb bump. OATS needs it to tell a home stopped with the host from one
     whose harness came back. On a host without `/proc` (macOS) it stays `null`: there a

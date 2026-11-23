@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { inspectAnswer, inspectHome } from "../../oats-package/capabilities/oats-bb/lib/threads.mjs";
-import { processLook, threadProcesses } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
+import { UNRECOGNISED, processLook, threadProcesses } from "../../oats-package/capabilities/oats-bb/lib/processes.mjs";
 import { NOT_FOUND, UNREACHABLE, bbHarness, call, fakeBbIn, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const SERVER = "http://127.0.0.1:38886";
@@ -76,7 +76,7 @@ test("a thread whose last turn failed, with its harness still loaded, is there a
     const { dir, home } = scratch(t);
     const id = liveId(`failed_${providerId.replace("-", "_")}`);
     const open = { label: "Open in bb", url: `${SERVER}/projects/proj_a/threads/${id}` };
-    const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", "error", { providerId })] } });
+    const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", "error", { providerId })] }, "--version": { stdout: "0.50.1\n" } });
     const read = async () => (await call("inspect", { home, endpoint: { ...endpoint, threadId: id } }, { settings, bb })).result;
     // No process of the thread: lost.
     assert.deepEqual(await read(), { present: false, state: "stopped", running: false, open }, providerId);
@@ -97,9 +97,11 @@ test("a thread whose last turn failed, with its harness still loaded, is there a
     await child.end();
     assert.deepEqual(await read(), { present: false, state: "stopped", running: false, open }, providerId);
     // A harness in the home that bb did not start (one the agent left running): the thread
-    // is there, as before (the kernel must not resume beside it), and it does not run.
+    // is there, as before (the kernel must not resume beside it), and at the pinned bb it
+    // does not run.
     await threadProcess(t, id, HARNESS_NAME[providerId], home);
     assert.deepEqual(await read(), { present: true, state: "unknown", running: false, open }, providerId);
+    assert.deepEqual(bb.calls().at(-1).argv, ["--version"], "decided by bb's version, read after the thread list");
   }
 });
 
@@ -114,12 +116,15 @@ test("an idle thread reads running true only with the harness bb started for it 
   for (const providerId of ["pi", "claude-code"]) {
     const { dir, home } = scratch(t);
     const id = liveId(`idle_${providerId.replace("-", "_")}`);
-    const bb = fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", "idle", { providerId })] } });
+    // bb at the version the provider is pinned to (settings.version), unless a step says otherwise.
+    const rows = { "thread list": { stdout: [threadRow(id, "proj_a", "idle", { providerId })] } };
+    const bb = fakeBbIn(dir, { ...rows, "--version": { stdout: "0.50.1\n" } });
     const running = async () => {
       const { result } = await call("inspect", { home, endpoint: { ...endpoint, threadId: id } }, { settings, bb });
       assert.deepEqual([result.present, result.state], [true, "unknown"]);
       return result.running;
     };
+    const versionReads = () => bb.calls().filter((c) => c.argv[0] === "--version").length;
     // Nothing of the thread on this host (a thread `bb thread stop` released reads so): it does not run.
     assert.equal(await running(), false, `${providerId}: no process`);
     // A process that merely carries the thread's id, at work in the home (a command the agent left running): not the harness.
@@ -135,18 +140,30 @@ test("an idle thread reads running true only with the harness bb started for it 
     // The harness's name, in the home, for another thread: not this thread's.
     await threadProcess(t, `${id}_other`, HARNESS_NAME[providerId], home);
     assert.equal(await running(), false, `${providerId}: another thread's harness in the home`);
+    assert.equal(versionReads(), 0, "none of these is a harness of the thread in the home: bb's version decides nothing, and is not read");
     // The harness's own name, the id and the home, started by something that is not bb's
     // runner: what an agent leaves behind when it starts a pi or a claude of its own,
     // detached, in its home. It outlives a stop of the thread, and is not the thread's.
+    // At the pinned bb, whose runner's command line the contract tests pin, that is what
+    // it is, and it does not run. At another bb, or one whose version cannot be read, bb
+    // may have moved its runner: it cannot be told, and the answer is null, never false.
     await threadProcess(t, id, HARNESS_NAME[providerId], home);
-    assert.equal(await running(), false, `${providerId}: a harness in the home that bb did not start`);
+    assert.equal(await running(), false, `${providerId}: a harness in the home that bb did not start, at the pinned bb`);
+    assert.equal(versionReads(), 1, "bb's version is read once for it");
+    bb.setScript({ ...rows, "--version": { stdout: "0.51.0\n" } });
+    assert.equal(await running(), null, `${providerId}: the same process, at another bb than the pin`);
+    bb.setScript({ ...rows, "--version": { exit: 1, stderr: "bb: broken\n" } });
+    assert.equal(await running(), null, `${providerId}: the same process, where bb's version cannot be read`);
+    bb.setScript({ ...rows, "--version": { stdout: "0.50.1\n" } });
     // A child of bb's runner for the other provider, or of bb's runner at work elsewhere: not it either.
     await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: home, provider: providerId === "pi" ? "claude-code" : "pi" });
     await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: dir, provider: providerId });
     assert.equal(await running(), false, `${providerId}: a child of another provider's runner, and one at work elsewhere`);
     // The harness bb started for the thread, in the home: it runs.
     const own = await bbHarness(t, { id, name: HARNESS_NAME[providerId], cwd: home, provider: providerId });
+    const before = versionReads();
     assert.equal(await running(), true, `${providerId}: bb's own harness in the home`);
+    assert.equal(versionReads(), before, "bb's own harness is there: nothing is left to decide, and the version is not read");
     // Decided at every call: once it is gone, the thread does not run (what the agent left is still there).
     await own.end();
     assert.equal(await running(), false, `${providerId}: its harness gone`);
@@ -186,6 +203,31 @@ test("inspectMany looks at the host's processes once for all its homes, and each
   const { results } = (await call("inspectMany", { homes: [at(homes.a, "proj_a", here), at(homes.b, "proj_b", elsewhere), at(homes.c, "proj_c", none)] }, { settings, bb })).result;
   assert.deepEqual(results.map((result) => [result.present, result.running]), [[true, true], [true, false], [true, false]]);
   assert.equal(bb.calls().length, 1, "one thread list for the three homes");
+});
+
+test("bb's version is read once for an inspectMany, whatever the number of homes that need it, and not at all when none does", { skip: NO_PROC }, async (t) => {
+  const { dir, home } = scratch(t);
+  const ids = [liveId("ver_a"), liveId("ver_b"), liveId("ver_c")];
+  const homes = ids.map((id, index) => join(home, `h${index}`));
+  for (const path of homes) mkdirSync(path);
+  const rows = { "thread list": { stdout: ids.map((id, index) => threadRow(id, `proj_${index}`, "idle", { providerId: "pi" })) } };
+  const input = { homes: homes.map((path, index) => ({ home: path, endpoint: { server: SERVER, projectId: `proj_${index}`, threadId: ids[index] } })) };
+  const bb = fakeBbIn(dir, rows);
+  /** One inspectMany against a bb of that version. → [each home's running, the bb commands the call made]. */
+  const many = async (version, pin = settings) => {
+    bb.setScript({ ...rows, "--version": { stdout: `${version}\n` } });
+    const before = bb.calls().length;
+    const running = (await call("inspectMany", input, { settings: pin, bb })).result.results.map((result) => result.running);
+    return [running, bb.calls().slice(before).map((c) => c.argv[0]).sort()];
+  };
+  // No harness of any of the threads in its home: nothing to decide, bb's version is not read.
+  assert.deepEqual(await many("0.50.1"), [[false, false, false], ["thread"]]);
+  // Each home's agent left a pi of its own running there: one read of the version settles all three.
+  for (const [index, id] of ids.entries()) await threadProcess(t, id, "pi", homes[index]);
+  assert.deepEqual(await many("0.50.1"), [[false, false, false], ["--version", "thread"]], "at the pinned bb: processes the agents left running; one thread list, one version read");
+  assert.deepEqual(await many("0.60.0"), [[null, null, null], ["--version", "thread"]], "at another bb: it cannot be told, for any of them, and the call still answers every home");
+  // No pin at all (a kernel that merged no manifest default): nothing to compare with, and no read.
+  assert.deepEqual(await many("0.50.1", { trust: "single-user" }), [[null, null, null], ["thread"]]);
 });
 
 // One scan for all the homes of a call, made only when a thread needs it: every home's
@@ -321,7 +363,7 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   entry("117", "BB_THREAD_ID=thr_pi\0", "pi", "pi\0", home, "1");
   entry("118", "BB_THREAD_ID=thr_orphan_and_own\0", "pi", "pi\0", home, "999");
   entry("119", "BB_THREAD_ID=thr_orphan_and_own\0", "pi", "pi\0", home, "900");
-  // A thread of a bb provider this module does not know the harness of: any of bb's runners.
+  // A thread of a bb provider this module does not know the harness of, under another provider's runner.
   entry("120", "BB_THREAD_ID=thr_codex\0", "claude", "claude\0", home, "901");
   // Which files the look opens: a process that is no harness by its name has its name and
   // command line read, and its environment never (it may hold another program's secret).
@@ -352,14 +394,17 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
   const runsIn = (id, providerId, where) => look.runsIn({ id, providerId }, where);
   assert.equal(runsIn("thr_pi", "pi", home), true, "the thread's pi, a child of bb's runner for pi, at work in the home");
   // Only a harness bb itself started: by its parent, bb's runner for the thread's provider.
-  assert.equal(runsIn("thr_detached", "pi", home), false, "a pi the agent started detached in its home, adopted by init");
-  assert.equal(runsIn("thr_wrong_runner", "pi", home), false, "a child of bb's runner for another provider");
-  assert.equal(runsIn("thr_mention", "pi", home), false, "a parent that only mentions the runner's file and a provider is not bb's runner");
+  // A harness in the home whose parent is readable and is not bb's runner for the provider:
+  // left open by the look (the caller settles it by bb's version, lib/inspect.mjs).
+  assert.equal(runsIn("thr_detached", "pi", home), UNRECOGNISED, "a pi the agent started detached in its home, adopted by init");
+  assert.equal(runsIn("thr_wrong_runner", "pi", home), UNRECOGNISED, "a child of bb's runner for another provider");
+  assert.equal(runsIn("thr_mention", "pi", home), UNRECOGNISED, "a parent that only mentions the runner's file and a provider is not bb's runner");
+  assert.equal(runsIn("thr_detached", "pi", elsewhere), false, "and where no harness of the thread is in the home at all: false, with nothing to settle");
   assert.equal(runsIn("thr_orphan", "pi", home), null, "its parent cannot be read: it cannot be told, never a guess");
   assert.equal(runsIn("thr_nostat", "pi", home), null, "nor where its own parent cannot be read");
   assert.equal(runsIn("thr_orphan", "pi", elsewhere), false, "a harness that is not in the home decides nothing for it");
   assert.equal(runsIn("thr_orphan_and_own", "pi", home), true, "bb's own harness counts, whatever else is there");
-  assert.equal(runsIn("thr_codex", "codex", home), true, "an unknown provider: a child of any of bb's runners");
+  assert.equal(runsIn("thr_codex", "codex", home), UNRECOGNISED, "bb's runner for the thread's own provider, and no other's: a provider this module does not know is no exception");
   assert.equal(has("thr_detached", "pi"), true, "whether a harness lives (a thread in error) is asked of the name and the id alone, as before");
   assert.equal(runsIn("thr_pi", "pi", elsewhere), false, "not in another directory");
   assert.equal(runsIn("thr_pi", "pi", dir), false, "nor in the home's parent");

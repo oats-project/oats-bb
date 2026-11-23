@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_RESUME_NOT_LOST",
+  "message": "lost-tmux-developer did not lose its session (it stopped); --resume brings back only a lost session; nothing was started (an ordinary session start opens a fresh conversation)"
+ }
+}

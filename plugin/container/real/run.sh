@@ -86,9 +86,9 @@ trap cleanup EXIT
 
 BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
-# OATS_PI_INTEGRITY and PI_VERSION (the pi run's, pi/README.md) are passed by name: only when set
+# OATS_PI_INTEGRITY, PI_VERSION and PI_INTEGRITY (the pi run's, pi/README.md) are passed by name: only when set
 # here, so that one left unset keeps pi/setup.sh's default.
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -e "REAL_PI=$REAL_PI" -e OATS_PI_INTEGRITY -e PI_VERSION -w /home/node/plugin "$NAME" "$@"; }
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -e "REAL_PI=$REAL_PI" -e OATS_PI_INTEGRITY -e PI_VERSION -e PI_INTEGRITY -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 [ -n "$KERNEL_NPM" ] || git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel

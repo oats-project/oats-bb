@@ -90,8 +90,9 @@ const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shif
 /**
  * The acts that apply to an agent now, and why they are held when they are (the roster is the last
  * one read). For any agent the roster names, with a bb thread or without one (its thread gone, or
- * an agent on tmux): its state is the model's one rule (`state`). Start and Restart are offered for
- * an agent on bb alone: they end on the agent's new bb thread, and an agent on tmux has none.
+ * an agent on tmux): its state is the model's one rule (`state`). Start and Restart are offered
+ * for an agent on tmux as for one on bb (and for no other session provider's): its dialog starts it (bringing back a session that was
+ * lost: `oats session start --resume`) or restarts it, opens no thread, and says where it runs.
  */
 export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: string | null }[] {
   if (oats.phase !== "ready") return [];
@@ -100,7 +101,9 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
   const node = oats.nodeByInstance.get(instance);
   const now = node?.state ?? state(agent, null);
   const held = oats.stale !== null ? HELD_REASON : null;
-  return ACTS.filter((act) => act.when(now, agent, node?.thread ?? null) && (agent.backend === "bb" || act.verb === "stop" || act.verb === "retire")).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
+  // Start and Restart are this plugin's for an agent on bb and for one on tmux; an agent of another session provider has neither.
+  const starts = agent.backend === "bb" || agent.backend === "tmux";
+  return ACTS.filter((act) => act.when(now, agent, node?.thread ?? null) && (starts || (act.verb !== "start" && act.verb !== "restart"))).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
 }
 
 /**

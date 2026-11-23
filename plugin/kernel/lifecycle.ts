@@ -116,9 +116,23 @@ export type Started = {
   harness: string | null;
   model: string | null;
   warnings: string[];
+  /**
+   * What a start with `--resume` answers of the conversation (the kernel's `resume` object); null
+   * for a start that asked for none. `resumed`: it continues the harness's last conversation; else
+   * it started fresh on the task, and `reason` is the kernel's word for why (`no-conversation`,
+   * `no-receipts`, `resume-unproven`, or one this plugin does not know). `waiting`: the kernel's
+   * word when the start succeeded and the harness waits for its person in its terminal
+   * (`resume-confirmation`).
+   */
+  resume: { resumed: boolean; reason: string | null; waiting: string | null } | null;
 };
-/** What a start may choose: nothing (the recorded launch), or a harness the provider declares and a model id. */
-export type StartChoices = { harness?: string | undefined; model?: string | undefined };
+/**
+ * What a start may choose: nothing (the recorded launch), or a harness the provider declares and
+ * a model id. Or `resume`: the start of a home whose session was LOST, in the harness's own last
+ * conversation (`oats session start --resume`), which takes no other choice: the kernel refuses a
+ * harness or a model beside it.
+ */
+export type StartChoices = { harness?: string | undefined; model?: string | undefined; resume?: boolean | undefined };
 type Apply = { instance: string; revision: string; key: string };
 
 // ---- reading the kernel's documents ----
@@ -236,6 +250,11 @@ function sessionArgv(verb: "start" | "restart", home: string, choices: StartChoi
   const checked = checkHome(home);
   if (!checked.ok) return checked;
   const argv = ["session", verb, "--home", checked.value];
+  if (choices.resume === true) {
+    // A resume is a start alone, with the launch the home recorded: nothing else is passed, and nothing else is taken.
+    if (verb !== "start" || choices.harness !== undefined || choices.model !== undefined) return err(codes.invalidInput, "a resume is a start with no harness and no model: it comes back with the ones it had");
+    return ok([...argv, "--resume", "--json"]);
+  }
   if (choices.harness !== undefined) {
     // One the bb session provider declares (kernel/spawn.ts, the one rule for a spawn, a start and a restart).
     const harness = checkHarness(choices.harness, declared);
@@ -263,6 +282,8 @@ const started = z.looseObject({
   model: text,
   session: z.looseObject({ endpoint: z.looseObject({ threadId: text }).nullish() }).nullish(),
   warnings: z.array(z.unknown()).nullish(),
+  // Only in the answer of a start with `--resume`; what it says is read, never guessed: `resumed` must be there.
+  resume: z.looseObject({ resumed: z.boolean(), reason: text, waiting: text }).nullish(),
 });
 
 export function parseSessionStart(document: unknown, verb: "start" | "restart" = "start"): Result<Started> {
@@ -275,6 +296,7 @@ export function parseSessionStart(document: unknown, verb: "start" | "restart" =
     harness: value.harness ?? null,
     model: value.model ?? null,
     warnings: (value.warnings ?? []).filter((warning): warning is string => typeof warning === "string"),
+    resume: value.resume ? { resumed: value.resume.resumed, reason: value.resume.reason ?? null, waiting: value.resume.waiting ?? null } : null,
   });
 }
 

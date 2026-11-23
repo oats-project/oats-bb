@@ -135,7 +135,10 @@ export default async (run) => {
     }
     await ready();
     said = await dialog(page);
-    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
+    // What the dialog says a start begins (app/lifecycle/words.ts START): for an agent bb lists a thread of, that the
+    // current conversation stays readable, archived; for one whose conversation is archived already (bb lists none), a new one.
+    const begins = run.stopArchives() ? "This starts a new conversation using the saved briefing and state." : "Starts a new conversation. The current one stays readable in bb, archived.";
+    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes(begins) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));

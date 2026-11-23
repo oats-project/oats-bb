@@ -738,7 +738,7 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   // names that one, which the hook archived, and not the killed launch's; and the home's bb
   // environment, which both threads are on, is not deleted: one thread on it is unmarked.
   assert.deepEqual(retired.meta, { archived: [started.result.endpoint.threadId] });
-  assert.match(retired.warning, new RegExp(`^the home's bb environment was not deleted \\(1 thread on bb environment ${await environmentOf(thread.id)} is not in this home's thread record \\(a person's, or one the provider could not note\\): ${thread.id}\\): its threads are archived only`));
+  assert.match(retired.warning, new RegExp(`^the home's bb environment was not deleted \\(1 thread on bb environment ${await environmentOf(thread.id)} is not in this home's thread record \\(a person's, one made before oats.bb kept a record, or one the provider could not note\\): ${thread.id}\\): its threads are archived only`));
   assert.equal(await environmentOf(started.result.endpoint.threadId), await environmentOf(thread.id));
   assert.equal((await bbJson(`environment show ${await environmentOf(thread.id)}`)).status, "ready");
   assert.deepEqual(await live(), []);
@@ -840,7 +840,7 @@ test("A17 with a person's thread on the home's bb environment the retire archive
   const { last, stderr } = await retireHook(home);
   // The receipt names the home's own thread (the record's), not the person's.
   assert.deepEqual(last.meta, { archived: [id] });
-  assert.equal(last.warning, `the home's bb environment was not deleted (1 thread on bb environment ${environment} is not in this home's thread record (a person's, or one the provider could not note): ${person.id}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it`);
+  assert.equal(last.warning, `the home's bb environment was not deleted (1 thread on bb environment ${environment} is not in this home's thread record (a person's, one made before oats.bb kept a record, or one the provider could not note): ${person.id}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it`);
   assert.equal(stderr, "");
   await sleep(8_000);
   const kept = await bbJson(`environment show ${environment}`);

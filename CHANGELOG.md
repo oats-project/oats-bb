@@ -27,7 +27,10 @@
     sandboxed mode denies the directory to the agent's tools.
   - **A home spawned before this release has no record, and is archived only at its
     retire.** That is not a failure: no record is made up afterwards. The warning says
-    so.
+    so. A home started again with this release gets a record of its new threads only;
+    its older threads keep the environment, and the warning names them as threads not
+    in the home's record (a person's, one made before oats.bb kept a record, or one the
+    provider could not note).
   - The retire never waits for bb's teardown, and a delete bb refuses or does not answer
     fails no retire: the threads stay archived only, the warning says so, and bb's own
     words are on the hook's standard error.

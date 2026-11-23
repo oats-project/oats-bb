@@ -793,7 +793,9 @@ warning:
   person's thread there, archived or not, keeps the environment: it is theirs too.
 - **The home has no record.** A home spawned before this release has none, and a
   record is never made up afterwards: such a home is archived only for good. That is
-  not a failure. The same goes for a thread whose launch could not write the record
+  not a failure. Once such a home is started with this release, it has a record of its
+  new threads only: its older threads are not in it and keep the environment, and the
+  warning then names them as threads that are not in the home's record. The same goes for a thread whose launch could not write the record
   (the launch warns on its standard error and goes on), for a launch whose answer was
   lost, and for a record that cannot be read whole.
 - **A thread of the home could not be stopped and archived**, or bb could not be read.

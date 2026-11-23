@@ -143,7 +143,7 @@ export function readRecord(home, { env = process.env, userHome, uid = me() } = {
   let actual;
   try { actual = identityOf(home); }
   catch (error) { return { state: "unreadable", why: `the home's directory could not be read (${error.code ?? error.message})`, file: null }; }
-  const root = stateRoot(env, userHome), dir = join(root, "homes");
+  const root = stateRoot(env, userHome), dir = recordDir(env, userHome);
   for (const path of [root, dir]) {
     let problem;
     try { problem = dirProblem(path, uid); }
@@ -188,7 +188,7 @@ export function noteThread(home, threadId, { env = process.env, userHome, uid = 
   let fd = null, temporary = null;
   try {
     const actual = identityOf(home);
-    const root = stateRoot(env, userHome), dir = join(root, "homes");
+    const root = stateRoot(env, userHome), dir = recordDir(env, userHome);
     mkdirSync(dir, { recursive: true, mode: DIR_MODE });
     for (const path of [root, dir]) {
       const problem = dirProblem(path, uid);

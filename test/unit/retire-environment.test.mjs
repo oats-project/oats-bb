@@ -107,7 +107,7 @@ test("a person's archived thread on the environment blocks the delete: archive o
   assert.deepEqual(deletes(calls), []);
   assert.deepEqual(last.meta, { archived: ["thr_a"] }, "the receipt names the home's own thread, and no environment");
   assert.match(last.warning, WHY);
-  assert.equal(WHY.exec(last.warning)[1], `1 thread on bb environment ${ENV} is not in this home's thread record (a person's, or one the provider could not note): thr_person`);
+  assert.equal(WHY.exec(last.warning)[1], `1 thread on bb environment ${ENV} is not in this home's thread record (a person's, one made before oats.bb kept a record, or one the provider could not note): thr_person`);
   assert.equal(run.stderr, "");
   assert.deepEqual(records(), [], "the hook has decided: the record goes");
 });
@@ -131,7 +131,7 @@ test("an unmarked thread blocks the delete: several are counted, and the first a
   const rows = [onEnv("thr_a"), ...Array.from({ length: 5 }, (_, i) => onEnv(`thr_unmarked_${i}`))];
   const { last, calls } = await retire({ "thread list --archived": { stdout: rows }, "thread list --environment": { stdout: rows } });
   assert.deepEqual(deletes(calls), []);
-  assert.equal(WHY.exec(last.warning)[1], `5 threads on bb environment ${ENV} are not in this home's thread record (a person's, or one the provider could not note): thr_unmarked_0, thr_unmarked_1, thr_unmarked_2 and 2 more`);
+  assert.equal(WHY.exec(last.warning)[1], `5 threads on bb environment ${ENV} are not in this home's thread record (a person's, one made before oats.bb kept a record, or one the provider could not note): thr_unmarked_0, thr_unmarked_1, thr_unmarked_2 and 2 more`);
   assert.ok(last.warning.length <= 480);
 });
 

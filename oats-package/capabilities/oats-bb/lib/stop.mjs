@@ -262,7 +262,7 @@ async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine
     const listedHere = new Set(threads.map((thread) => thread.id));
     if (rows.some((row) => row.environmentId === id && !listedHere.has(row.id))) { why.push(`bb's list of the threads on environment ${id} is not whole (it lacks a thread of this home's bb project that is on it)`); decided = false; continue; }
     const others = threads.filter((thread) => !record.ids.has(thread.id));
-    if (others.length > 0) { why.push(`${others.length} thread${others.length > 1 ? "s" : ""} on bb environment ${id} ${others.length > 1 ? "are" : "is"} not in this home's thread record (a person's, or one the provider could not note): ${someOf(others.map((thread) => thread.id), 3)}`); continue; }
+    if (others.length > 0) { why.push(`${others.length} thread${others.length > 1 ? "s" : ""} on bb environment ${id} ${others.length > 1 ? "are" : "is"} not in this home's thread record (a person's, one made before oats.bb kept a record, or one the provider could not note): ${someOf(others.map((thread) => thread.id), 3)}`); continue; }
     if (threads.some(isLive)) { why.push(`a thread on bb environment ${id} is not archived`); decided = false; continue; }
     const answer = await bb.environmentDelete(id);
     if (answer.ok) { deleted.push(id); continue; }

@@ -600,7 +600,7 @@ test("A17 a retire deletes a pi home's bb environment: the kept home is byte for
   await nothingIn(shared.home, "after the stop");
   const archivedOnly = await hook("retire-hook", shared.home);
   assert.deepEqual(archivedOnly.meta, { archived: [shared.endpoint.threadId], env: 3 });
-  assert.equal(archivedOnly.warning, `the home's bb environment was not deleted (1 thread on bb environment ${sharedEnvironment} is not in this home's thread record (a person's, or one the provider could not note): ${person.id}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it`);
+  assert.equal(archivedOnly.warning, `the home's bb environment was not deleted (1 thread on bb environment ${sharedEnvironment} is not in this home's thread record (a person's, one made before oats.bb kept a record, or one the provider could not note): ${person.id}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it`);
   await sleep(8_000);
   const kept = await bbJson(`environment show ${sharedEnvironment}`);
   assert.deepEqual({ status: kept.status, phase: kept.lifecycle.phase, path: kept.path }, { status: "ready", phase: "active", path: shared.home }, "the environment of a person's thread was deleted");

@@ -3,8 +3,10 @@
 // that is archived and one that was deleted look the same there; this asks bb itself, by id, for
 // the archived ones (`threads.list`, one request for up to 200 ids). One copy per app window,
 // whatever number of places ask.
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
+import type { Agent, Node, ThreadWhere, View } from "../../model/types";
+import { useNow } from "../roster/now";
 import { attempt, onWindowReset } from "../store";
 
 /** bb's answer for an id that was asked: it has the thread archived, or it has no archived thread of that id. */
@@ -72,4 +74,29 @@ export function useArchived(ids: readonly string[], token: string): ReadonlyMap<
     },
     () => answers,
   );
+}
+
+const NO_ONE: readonly Agent[] = [];
+
+/**
+ * What bb says of the thread each agent's row names, for `useOats()`: `joined` is the roster joined
+ * to bb's listed threads (null while there is none), `listed` bb's listed threads by id, `at` the
+ * roster's read. bb is asked again at each roster read and each minute: it tells nobody when an
+ * archived thread is deleted.
+ */
+export function useThreadWhere(joined: { view: View; nodeByInstance: ReadonlyMap<string, Node> } | null, listed: ReadonlyMap<string, unknown>, at: string): (agent: Agent) => ThreadWhere {
+  const minute = Math.floor(useNow(60_000) / 60_000);
+  const detached = joined?.view.detached ?? NO_ONE;
+  const ids = useMemo(() => detached.flatMap((agent) => (agent.threadId === null ? [] : [agent.threadId])), [detached]);
+  const archived = useArchived(ids, `${at} ${minute}`);
+  return (agent) => {
+    if (agent.backend === "tmux") return "none";
+    if (joined?.nodeByInstance.get(agent.instance)?.agent === agent) return "open";
+    if (agent.threadId === null) return "none";
+    const answer = archived.get(agent.threadId);
+    if (answer === undefined) return "unknown";
+    if (answer === "archived") return "archived";
+    // bb has no archived thread of that id: it lists it (hidden, or another row's), or it does not have it.
+    return listed.has(agent.threadId) ? "open" : "missing";
+  };
 }

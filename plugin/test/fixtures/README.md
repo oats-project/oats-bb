@@ -3,7 +3,7 @@ its `verbs.json`: the `oats` verbs the fake answers for that feature, and the fi
 (`container/fake-oats.mjs`). The files named below are in `roster/` (`status.json`,
 `status-recorded.json`, `threads.json`, `version.json`), `workspace/` (`souls.json`, `capabilities.json`,
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
-stop, start, restart and retire answers). `outside/` has a README of its own: its two files are
+stop, start, restart and retire answers). `outside/` has a README of its own: its one file is
 SHAPED from the kernel's own test at v0.70.5, not recorded (no live `outsideOats` can be recorded yet).
 
 Pinned by the spec.

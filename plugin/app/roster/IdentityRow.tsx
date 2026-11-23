@@ -15,7 +15,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
-import { lineActs, OutsideThreadRow, OutsideWarning, useOutside } from "../outside";
+import { lineActs, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
@@ -56,7 +56,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const pluginId = usePluginId();
   const soulsShown = usePageShown("souls");
   const now = useNow();
-  const outside = useOutside(oats);
+  const outside = outsideOf(oats);
   // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.

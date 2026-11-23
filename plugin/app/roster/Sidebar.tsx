@@ -20,7 +20,7 @@ import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
-import { OutsideMark, useOutside } from "../outside";
+import { OutsideMark, outsideOf } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -77,7 +77,7 @@ function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen
 export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
   const now = useNow();
-  const outside = useOutside(oats);
+  const outside = outsideOf(oats);
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
@@ -161,10 +161,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * feature says of it (app/outside): where its thread is, and what happened to it.
    */
   const threadlessRow = (agent: Agent, where: string | null, said: Said | null = null) => {
-    const status = agentStatus(agent, null, now);
-    const isGone = gone.has(agent.instance);
-    const own = rowState(status, isGone);
-    const drawn = isGone || said?.state == null ? own : { state: said.state.mark, word: said.state.word };
+    // Its state by the one function, with what bb says of its thread: a session lost to bb's Archive or Delete is a state of its own.
+    const status = agentStatus(agent, null, now, oats.phase === "ready" ? oats.whereOf(agent) : undefined);
+    const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
     return (
       <li key={agent.instance}>

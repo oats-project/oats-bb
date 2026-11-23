@@ -9,7 +9,6 @@ import * as automations from "./server/automations.js";
 import { createCore } from "./server/core.js";
 import * as home from "./server/home.js";
 import * as lifecycle from "./server/lifecycle.js";
-import * as outside from "./server/outside.js";
 import * as panel from "./server/panel.js";
 import * as roster from "./server/roster.js";
 import * as spawn from "./server/spawn.js";
@@ -28,7 +27,6 @@ export default async function plugin(bb: BbPluginApi) {
     ...lifecycle.handlers(core),
     ...automations.handlers(core),
     ...panel.handlers(core),
-    ...outside.handlers(core),
   });
   core.start();
 }

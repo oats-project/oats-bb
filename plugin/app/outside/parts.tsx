@@ -92,15 +92,15 @@ const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm te
  * an agent's row on the thread it lists; an archived thread is none of them, and without this its
  * header would say nothing. Nothing for any other thread.
  */
-export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalThreadHeaderRowProps, "threadId"> & { /** the caller's own `useOats()` and `useOutside(oats)` */ oats: Oats; outside: Outside }) {
+export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalThreadHeaderRowProps, "threadId"> & { /** the caller's own `useOats()` and `outsideOf(oats)` */ oats: Oats; outside: Outside }) {
   const navigate = useBbNavigate();
   const now = useNow();
   const agent = outside.agentOn(threadId);
-  const status = agent === undefined ? null : agentStatus(agent, null, now);
+  const status = agent === undefined || oats.phase !== "ready" ? null : agentStatus(agent, null, now, oats.whereOf(agent));
   const said = agent === undefined ? null : outside.of(agent);
   // A stopped agent's time is its last recorded stop, as on the roster's own row: one read, for this
-  // agent, and only where the line says "Stopped" (a lost session's line says what happened in its place).
-  const timed = status?.state === "stopped" && said?.state == null;
+  // agent, and only where its state is "stopped" (a lost session's state is what happened to it).
+  const timed = status?.state === "stopped";
   const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
   const held = oats.stale !== null;
@@ -112,8 +112,7 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
         {agentName(agent.instance)}
       </span>
       <StatusLine
-        state={said?.state?.mark ?? status.state}
-        word={said?.state?.word}
+        state={status.state}
         since={since}
         detail={said?.sentence ?? status.detail}
         action={

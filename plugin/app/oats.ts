@@ -5,8 +5,9 @@ import { useMemo } from "react";
 import { experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { isKernelCode } from "../kernel/result";
-import type { Agent, Node, View } from "../model/types";
+import type { Agent, Node, ThreadWhere, View } from "../model/types";
 import { flatten, view } from "../model/view";
+import { useThreadWhere } from "./outside/threads";
 import { useRead } from "./store";
 
 /**
@@ -48,6 +49,12 @@ export type Oats = {
       view: View;
       /** Agents of this roster the kernel has since refused as ones it does not know: "not in OATS any more" until the next roster. */
       gone: ReadonlySet<string>;
+      /**
+       * What bb itself says of the thread an agent's row names: "open" for one the tree draws on its
+       * thread; for one it does not, bb's answer by id (archived, or no such thread), "unknown"
+       * until bb has answered (app/outside/threads.ts).
+       */
+      whereOf(agent: Agent): ThreadWhere;
       /** Every drawn node by its thread id, and by its instance. */
       nodeByThread: ReadonlyMap<string, Node>;
       nodeByInstance: ReadonlyMap<string, Node>;
@@ -77,6 +84,9 @@ export function useOats(): Oats {
     };
   }, [roster, threads]);
 
+  // bb's sidebar lists active threads only: of the agents the tree draws on no thread, bb is asked
+  // by id which threads it has archived (one request; none when every agent is on its thread).
+  const whereOf = useThreadWhere(joined, threadById, roster?.at ?? "");
   const gone = useGone(roster?.at ?? null);
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);
   const soulOf = (agent: Agent) => soulNames.get(agent.soul) ?? agent.soul;
@@ -95,7 +105,7 @@ export function useOats(): Oats {
     return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them.", machine: null };
   }
   if (sidebar.status !== "ready" || joined === null) return { ...base, phase: "loading" };
-  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, gone, ...joined };
+  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, gone, whereOf, ...joined };
 }
 
 /** The first line of a message: what the sidebar's one status line has room for. */

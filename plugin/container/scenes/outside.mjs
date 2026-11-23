@@ -15,7 +15,7 @@
 //   redesign-ui-lead           unreachable
 //
 // `outsideOats` is shaped as the kernel's own test shapes it at v0.70.5, not recorded live
-// (test/fixtures/outside/README.md), and the fake's version lists `provider-outside-oats`.
+// (test/fixtures/outside/README.md), and the fake's status lists `provider-outside-oats` in its features.
 // The deleted thread is an id bb has no thread of (the fixture's own id, never made in bb): bb
 // answers an id it never had as it answers a deleted one (it leaves it out). The agent's bb thread
 // of the other stages is archived meanwhile, so that it is not listed as a thread of nobody's.
@@ -46,12 +46,16 @@ const ARCHIVED = ["thr_digest", "thr_research", "thr_ci"];
 /** The fixture thread whose row keeps the fixture's own id: bb has no thread of it. */
 const DELETED = "thr_ci";
 
-/** A kernel that lists `provider-outside-oats`: the fake's version for the length of the stage. */
-const VERSION = { file: "outside/version-0.70.5.json" };
+/** The stage's status: the fixtures' rows with `rows`, as a kernel that lists `provider-outside-oats` prints it (the feature is in the status document's own `features`, which is where the plugin reads it). */
+const statusOf = (statusWithRealIds, joined, rows) => {
+  const status = JSON.parse(statusWithRealIds(joined, rows));
+  status.features = [...new Set([...(status.features ?? []), "provider-outside-oats"])];
+  return JSON.stringify(status);
+};
 /**
  * A change the kernel records while the stage runs, as live-ui's `record` makes one (the fake's
  * status with `rows`, and a line in the deployment's event log, which the plugin's watch sees),
- * keeping the stage's own version and threads: set by the stage's `enter`. → when it was recorded.
+ * keeping the stage's own features and threads: set by the stage's `enter`. → when it was recorded.
  */
 let recordRows = () => {
   throw new Error("outside: the stage was not entered");
@@ -63,14 +67,13 @@ async function enter({ fake, statusWithRealIds, threads, untilSnapshot }) {
   for (const id of ARCHIVED) bb("thread", "archive", threads.get(id).id);
   const joined = new Map([...threads].filter(([id]) => id !== DELETED));
   recordRows = (rows) => {
-    fake({ status: { stdout: statusWithRealIds(joined, rows) }, version: VERSION });
+    fake({ status: { stdout: statusOf(statusWithRealIds, joined, rows) } });
     const at = Date.now();
     appendFileSync(EVENTS, `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
     return at;
   };
-  fake({ status: { stdout: statusWithRealIds(joined, ROWS) }, version: VERSION });
-  // The snapshot is read again (and with it, by Retry's own path, the kernel's version).
-  await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === OUTSIDE && agent.running === false && agent.runtimeState === "stopped"));
+  fake({ status: { stdout: statusOf(statusWithRealIds, joined, ROWS) } });
+  await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === OUTSIDE && agent.outsideOats?.code === "running-outside-oats"));
 }
 async function leave({ fake, threads }) {
   for (const id of ARCHIVED) bb("thread", "unarchive", threads.get(id).id);
@@ -164,10 +167,13 @@ export default [
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(same(rows.digest, { facts: "Stopped · oats-expert · its conversation is archived in bb", state: "stopped", warn: null }), `${at} stopped, its thread archived in bb: "Stopped", and that its conversation is archived in bb`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Stopped · knowledge-harvester · running outside OATS", state: "stopped", warn: "Running outside OATS" }) && rows.marks === 1, `${at} the kernel's outsideOats: the state OATS recorded, "running outside OATS", and the warning mark, on that row alone`, JSON.stringify([rows.outside, rows.marks]));
-      check(same(rows.ranker, { facts: "Archived in bb · research-expert · OATS lost its session", state: "error", warn: null }), `${at} a session lost, its thread archived in bb: "Archived in bb", and that OATS lost its session`, JSON.stringify(rows.ranker));
-      check(same(rows.flaky, { facts: "Deleted in bb · oats-developer · its conversation is gone", state: "error", warn: null }), `${at} a session lost, its thread deleted in bb: "Deleted in bb", and that its conversation is gone`, JSON.stringify(rows.flaky));
+      check(same(rows.ranker, { facts: "Archived in bb · research-expert · OATS lost its session", state: "archived", warn: null }), `${at} a session lost, its thread archived in bb: "Archived in bb", and that OATS lost its session`, JSON.stringify(rows.ranker));
+      check(same(rows.flaky, { facts: "Deleted in bb · oats-developer · its conversation is gone", state: "deleted", warn: null }), `${at} a session lost, its thread deleted in bb: "Deleted in bb", and that its conversation is gone`, JSON.stringify(rows.flaky));
       check(rows.failed?.facts === "Failed · oats-desktop-developer" && rows.unreachable?.facts === "Unreachable · oats-product-expert" && rows.open?.facts === "Stopped · oats-maintainer", `${at} failed, unreachable and stopped on an open thread: the roster's own words, with nothing after the soul`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
       check(!/its bb thread is gone/.test(rows.tree), `${at} no row says "its bb thread is gone"`, rows.tree);
+      // The one the kernel reports running outside OATS is counted among those that need a person (no other agent of this roster waits).
+      const foot = await page.evaluate(textOf(testId("oats-needs-line")));
+      check(foot === "! 1 need you", `${at} the roster's foot counts the agent that runs outside OATS: "1 need you"`, foot);
       // No row's second line is cut.
       const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
       check(cut.length === 0, `${at} no row's words are cut`, JSON.stringify(cut));
@@ -230,7 +236,7 @@ export default [
       await open("thr_research");
       const LOST = "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS.";
       line = await lineOf(page, /^Archived in bb · /);
-      check(line !== null && line.kind === "lost-archived" && line.state === "error" && line.words === LOST && same(line.acts, ["Stop"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, and Stop (then Start)`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "lost-archived" && line.state === "archived" && line.words === LOST && same(line.acts, ["Stop"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, and Stop (then Start)`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-lost-archived`, { targets: true });
 
       // the kernel's report, on the open thread

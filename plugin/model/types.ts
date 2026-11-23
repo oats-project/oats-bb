@@ -27,7 +27,32 @@ export type Agent = {
   /** The row's startedAt: when the session started. Absent or null where the kernel's row names none. */
   startedAt?: string | null;
   waiting: { reason: string; message: string | null; since: string | null } | null;
+  /**
+   * The row's sessionEnd, where it has one: "stopped" for a home an operator stopped, "lost" for a
+   * session that is gone and that OATS did not stop (its thread archived or deleted in bb, a host
+   * that went down), "exited". Absent or null where the kernel's row names none.
+   */
+  sessionEnd?: string | null;
+  /**
+   * The kernel's report that a harness runs in a home OATS recorded stopped (feature
+   * `provider-outside-oats`, OATS 0.70.5): its one code, the row's backend and a one-line message
+   * that names the remedy. The row's other fields stay what OATS recorded. Absent or null: no
+   * report; on a kernel without the feature its absence says nothing.
+   */
+  outsideOats?: OutsideOats | null;
 };
+
+export type OutsideOats = { code: "running-outside-oats"; backend: string; message: string };
+
+/**
+ * What bb says of the thread a row names:
+ * - `open`: bb lists it and it is not archived (it may be hidden, or drawn by another row);
+ * - `archived`: bb has it, with `archivedAt` set;
+ * - `missing`: bb has no thread of that id (deleted);
+ * - `none`: the row names no thread;
+ * - `unknown`: bb has not answered yet, or could not.
+ */
+export type ThreadWhere = "open" | "archived" | "missing" | "none" | "unknown";
 
 /** The fields of bb's sidebar thread that the model reads. */
 export type BbThread = {
@@ -42,7 +67,12 @@ export type BbThread = {
   hasPendingInteraction: boolean;
 };
 
-export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle";
+/**
+ * `archived` and `deleted`: OATS lost the agent's session because its thread was archived, or
+ * deleted, in bb (a row recorded stopped with `sessionEnd: "lost"`, and bb's own answer for the
+ * thread). Not "stopped": after bb's Archive the agent's process still runs.
+ */
+export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle" | "archived" | "deleted";
 
 export type Node = {
   agent: Agent;
@@ -63,7 +93,7 @@ export type View = {
   elsewhere: Agent[];
   /** The nodes of the tree that wait on a person (agents with a bb thread). */
   needsYou: Node[];
-  /** Every agent that waits on a person, the ones with no bb thread included (on tmux, or whose thread is gone): the one count of who waits. */
+  /** Every agent that needs a person: the ones that wait on one, those with no bb thread included (on tmux, or whose thread is gone), and the ones the kernel reports running outside OATS. The one count of who needs a person. */
   needing: Agent[];
   working: Node[];
   /** state idle and the thread unread */

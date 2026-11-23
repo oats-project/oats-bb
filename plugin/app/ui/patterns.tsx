@@ -18,6 +18,9 @@ export const FILL: Record<Exclude<AgentState, "needs-you">, string> = {
   stopped: "bg-muted-foreground",
   error: "bg-destructive-text",
   unreachable: "bg-destructive-text",
+  // A session OATS lost to an act in bb: something is wrong and a person must act, as for a failure.
+  archived: "bg-destructive-text",
+  deleted: "bg-destructive-text",
 };
 
 /**

@@ -9,6 +9,8 @@ export const STATE_WORD: Record<AgentState, string> = {
   stopped: "stopped",
   error: "error",
   unreachable: "unreachable",
+  archived: "archived in bb",
+  deleted: "deleted in bb",
 };
 
 /** `…/<last two segments>` of a home path; the whole path when it is that short. */

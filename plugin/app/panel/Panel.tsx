@@ -8,7 +8,7 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, Node } from "../../model/types";
+import type { Agent, AgentState, Node, ThreadWhere } from "../../model/types";
 import { claimOf } from "../../model/view";
 import { agentStatus } from "../roster/status";
 import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
@@ -31,7 +31,7 @@ import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionW
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[]; /** what bb says of the thread an agent's row names (`Oats.whereOf`); undefined while there is no roster */ whereOf(agent: Agent): ThreadWhere | undefined };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -103,6 +103,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     soulOf: oats.soulOf,
     threadById: oats.threadById,
     retry: oats.retry,
+    whereOf: oats.phase === "ready" ? oats.whereOf : () => undefined,
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
@@ -161,7 +162,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
   // bb thread has none to give it.
-  const status = agentStatus(agent, node?.thread ?? null, now);
+  const status = agentStatus(agent, node?.thread ?? null, now, oats.whereOf(agent));
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (

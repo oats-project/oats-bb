@@ -1,5 +1,5 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, ThreadWhere, View } from "./types";
 
 /**
  * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
@@ -28,10 +28,21 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * lib/instance-listing.mjs at 95c7b43b3: `{ running: false }`, no `runtimeState`); a bb row comes
  * with "stopped" beside it. A session that ended in a shell, or that the kernel cannot reach, is
  * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
+ *
+ * `where` is what bb itself says of the thread the row names (left out: "open" with a thread, not
+ * known without one). It tells two states of a session OATS LOST (a row the kernel records stopped
+ * with `sessionEnd: "lost"`): "archived" when bb has the thread archived (bb's Archive never ends
+ * the harness: the agent's process still runs, so it is not "stopped"), "deleted" when bb has no
+ * such thread. By bb's answer alone, never by a message's words; with no answer, or a thread that
+ * is open, the row is what the kernel calls it. An operator's stop is "stopped" wherever its thread is.
  */
-export function state(agent: Agent, thread: BbThread | null): AgentState {
+export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere = thread === null ? "unknown" : "open"): AgentState {
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
+  if (agent.backend !== "tmux" && agent.sessionEnd === "lost" && agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null)) {
+    if (where === "archived") return "archived";
+    if (where === "missing") return "deleted";
+  }
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
   if (agent.running === true) return "working";
@@ -46,6 +57,8 @@ const RANK: Record<AgentState, number> = {
   stopped: 2,
   error: 2,
   idle: 2,
+  archived: 2,
+  deleted: 2,
 };
 
 /** needs-you, then working, then the rest; each by the thread's `updatedAt`, newest first. */
@@ -160,10 +173,14 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     detached,
     elsewhere,
     needsYou: pick((node) => node.state === "needs-you"),
-    // Every agent that waits on a person, whether bb has a thread for it or not: the ONE number a
-    // place says of who waits. The sidebar's foot reads it; the home and its badge still count
-    // `needsYou` (the agents with a thread) until their owner moves them to this. In the kernel's order.
+    // Every agent that needs a person, whether bb has a thread for it or not: the ONE number a
+    // place says of who needs one. An agent that waits on a person; and one the kernel reports
+    // running outside OATS (`outsideOats`: OATS recorded it stopped and its harness runs), which
+    // only a person can stop or start again. The sidebar's foot reads it; the home and its badge
+    // still count `needsYou` (the agents with a thread) until their owner moves them to this. In
+    // the kernel's order.
     needing: agents.filter((agent) => {
+      if (agent.backend !== "tmux" && agent.outsideOats != null) return true;
       const node = drawn.get(agent.instance);
       return (node !== undefined && node.agent === agent ? node.state : state(agent, null)) === "needs-you";
     }),

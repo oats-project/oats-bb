@@ -18,6 +18,9 @@ export const STATE: Record<AgentState, { word: string; name: string }> = {
   stopped: { word: "Stopped", name: "stopped" },
   error: { word: "Failed", name: "failed" },
   unreachable: { word: "Unreachable", name: "unreachable" },
+  // OATS lost the session because of what was done to its thread in bb (plugin/WORDS.md, "Outside OATS").
+  archived: { word: "Archived in bb", name: "archived in bb" },
+  deleted: { word: "Deleted in bb", name: "deleted in bb" },
 };
 
 /**

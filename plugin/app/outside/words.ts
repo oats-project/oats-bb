@@ -8,13 +8,11 @@ export const ARCHIVED_NOTE = "its conversation is archived in bb";
 /** The link, on the agent's own page and in a notice, that opens the archived thread to read it. */
 export const READ_ARCHIVED = "Read it in bb";
 
-/** A session OATS lost because its thread was archived in bb: the word in the state's place, and the sentence. */
-export const LOST_ARCHIVED_WORD = "Archived in bb";
+/** A session OATS lost because its thread was archived in bb (the state "archived", whose word is "Archived in bb": app/ui/words.ts): the sentence after it. */
 export const LOST_ARCHIVED = "OATS lost its session, and its process still runs. Stop it, then start it from OATS.";
 export const LOST_ARCHIVED_NOTE = "OATS lost its session";
 
-/** A session OATS lost because its thread was deleted in bb. */
-export const LOST_DELETED_WORD = "Deleted in bb";
+/** A session OATS lost because its thread was deleted in bb (the state "deleted", "Deleted in bb"): the sentence after it. */
 export const LOST_DELETED = "Its conversation is gone. Start it from OATS for a new one.";
 export const LOST_DELETED_NOTE = "its conversation is gone";
 

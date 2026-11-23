@@ -10,7 +10,6 @@ import { z } from "zod";
 import * as automations from "./automations.js";
 import * as home from "./home.js";
 import * as lifecycle from "./lifecycle.js";
-import * as outside from "./outside.js";
 import * as panel from "./panel.js";
 import * as roster from "./roster.js";
 import * as spawn from "./spawn.js";
@@ -32,7 +31,6 @@ export const rpcContract = {
   ...lifecycle.rpc,
   ...automations.rpc,
   ...panel.rpc,
-  ...outside.rpc,
 };
 
 /**
@@ -49,7 +47,6 @@ export const hostContract = {
   ...lifecycle.host,
   ...automations.host,
   ...panel.host,
-  ...outside.host,
 };
 
 /** The closed list of the host's verbs: the methods of `hostContract`. */

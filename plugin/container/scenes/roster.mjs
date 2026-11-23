@@ -336,6 +336,8 @@ export default [
       check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
       // A tmux row leads to its agent's own page, by its instance (never by the name drawn).
       const [instance] = tmux.find(([, , , how]) => how === "waiting");
+      // (The sidebar was drawn again: its row is waited for before it is pressed.)
+      await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`)}) !== null`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`)}).click()`);
       const opened = await page.until(`location.pathname.includes(${JSON.stringify(`/agent/${instance}`)}) ? location.pathname : ""`, 15);
       check(Boolean(opened), `${at} the row of ${instance} opens that agent's own page`, opened ?? (await page.evaluate("location.pathname")));

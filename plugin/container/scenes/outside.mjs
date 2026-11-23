@@ -293,6 +293,37 @@ export default [
     },
   },
   {
+    stage: "outside",
+    name: "the instance panel's header with this feature's block at its largest (no listed thread, and the kernel's report): the tabs and the first part under them stay in view",
+    run: async ({ page, at, viewport, check }) => {
+      // The header does not scroll (who the agent is stays over the tabs), so what stands in it takes
+      // its height from every tab. The largest it gets: an agent whose thread bb has archived (its
+      // acts are here) that the kernel also reports running outside OATS (the notice, with its two acts).
+      const INSTANCE = "weekly-digest-helper";
+      const report = { code: "running-outside-oats", backend: "bb", message: MESSAGE.replaceAll(OUTSIDE, INSTANCE) };
+      recordRows({ ...ROWS, [INSTANCE]: { ...STOPPED, outsideOats: report } });
+      try {
+        await page.goto(`/plugins/oats/agent/${INSTANCE}`);
+        const read = await page.until(
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const first = panel?.querySelector("h2, h3"); if (!block || !panel || !tabs || !first) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), notice: flat(block.querySelector("h3")), header: box(head), tabs: box(tabs), first: { ...box(first), text: flat(first) }, panel: box(panel), window: innerHeight }); })()`,
+          30,
+        );
+        const drawn = read ? JSON.parse(read) : null;
+        // In view: the tabs whole, the first part's heading whole, and room under it for its first lines (two lines of a control's height).
+        const room = viewport.mobile ? 88 : 64;
+        check(
+          drawn !== null && same(drawn.acts, ["Retire", "Stop", "Start"]) && drawn.notice === "Running outside OATS" && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.first.bottom + room <= drawn.window,
+          `${at} with Retire, the kernel's notice and its Stop and Start in the header, the tabs and the first part under them (${drawn?.first.text ?? "none"}) are in view, with ${drawn === null ? "?" : drawn.window - drawn.first.bottom} px under its heading`,
+          read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
+        );
+        await page.shot(`outside-${viewport.name}-agent-archived-outside`, { targets: true });
+      } finally {
+        recordRows(ROWS);
+        await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}) === null`, 15);
+      }
+    },
+  },
+  {
     stage: "outside-question",
     name: "bb has a question open for an agent OATS recorded stopped: its thread says \"Needs you\", and the kernel's report under it",
     run: async ({ page, at, viewport, threads, check }) => {

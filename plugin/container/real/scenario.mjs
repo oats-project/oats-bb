@@ -142,14 +142,13 @@ const brief = (row) =>
  */
 const settled = (row) => bbThread(row.session?.threadId)?.status === "idle";
 /**
- * What the kernel's row says of `running` for an agent that is IDLE. `running` is endpoint
- * activity, not work: null from a provider that cannot tell whether a harness is loaded (the bb
- * provider on main), TRUE from one that scans its harness (oats-bb #40: an idle agent's harness is
- * loaded). Both are accepted, so that the run is green with either provider; it becomes `true`
- * alone once #40 is on main. That the agent is idle is what bb says of its thread (`settled`) and
- * what the SCREEN says ("Idle"), which the checks of the page hold as before.
+ * What the kernel's row says of `running` for an agent that is IDLE: TRUE. `running` is endpoint
+ * activity, not work: the bb session provider scans its harness (oats-bb #40), and an idle agent's
+ * harness is loaded. (A provider before #40 could not tell and answered null: the run no longer
+ * takes that, so a provider that stops telling fails here.) That the agent is idle is what bb says
+ * of its thread (`settled`) and what the SCREEN says ("Idle"), which the checks of the page hold.
  */
-const idleRunning = (row) => row.running === null || row.running === true;
+const idleRunning = (row) => row.running === true;
 const untilRow = (instance, what, matches, seconds = 60) =>
   until(`${instance} to read ${what} in oats status`, () => {
     const row = rowOf(instance);
@@ -1147,7 +1146,7 @@ try {
       }
     }
   };
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, nameOf, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

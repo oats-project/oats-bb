@@ -92,7 +92,7 @@ together.
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
-| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
+| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B in the files' order (`parts/README.md`). `tagged.mjs` is the LAST and must stay last: it pins the provider by a scratch tag (`v0.4.0`, made in the container), which changes what the kernel prints as the provider's version for every read after it |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 | `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
@@ -288,12 +288,12 @@ start, restart, the retire plan and the retire. Last, two servers registered wit
 
 Each is the kernel's or the provider's to decide; the plugin shows what they say.
 
-- **A stop plan cannot say whether an idle bb agent works.** For a bb session whose thread is
-  idle, the kernel's plan says `session: {state: "unknown", present: true}` and
-  `midTask: "unknown"` (bb cannot tell an agent that waits from one that is done); for a thread in
-  a turn, or one whose turn bb holds in line, `midTask: true`. The plugin's confirmation says
-  "its session is open; bb cannot tell whether it is working" for the first and "running, in the
-  middle of a task" for the second.
+- **A stop plan's `midTask` is reported activity, not a turn.** It is `true` for a session that
+  runs (a harness is loaded: from the provider that scans its harness, oats-bb #40, an idle bb
+  agent too; a tmux agent always) or for uncommitted work, and `"unknown"` from a provider that
+  cannot tell (the bb provider before #40, for an idle thread). The plugin's confirmation says
+  nothing from it: it says "<Name> has uncommitted work in its home." from the plan's `work`, and
+  "<Name> is working on a turn now." from bb's own word on the thread.
 - **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the

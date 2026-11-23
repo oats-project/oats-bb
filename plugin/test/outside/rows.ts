@@ -31,6 +31,8 @@ export function outsideDocument(feature = true): Document {
   return feature ? document : { ...document, features: (document.features ?? []).filter((name) => name !== "provider-outside-oats") };
 }
 export const outside = (feature = true): Agent => only(agentsOf(outsideDocument(feature)));
+/** An agent idle with no harness loaded (`running: false` beside `runtimeState: "unknown"`), recorded live by the real run. */
+export const notLoaded = (): Agent => only(agentsOf(read("outside/status-not-loaded.json")));
 
 /** A row of the pinned sample (test/fixtures/roster/status.json), with fields replaced as the live scenes replace them for a state no recording holds. */
 export function sample(instance: string, change: Record<string, unknown> = {}): Agent {

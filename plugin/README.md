@@ -255,7 +255,8 @@ report has its Stop and Start in its notice, each with what it does there. On th
 no act is drawn twice, act by act: one the header has is the header's, and the notice there says
 what it does; one the header lacks keeps its own button in the notice (while no roster is read
 the header has none, and the notice has both: "Stop" and "Start" are never named with nothing to
-press). And this feature adds one act the header never offers: Stop for a session OATS lost,
+press). For an agent whose session provider is not bb the lifecycle has no Start, and the notice
+names none: Stop alone, and its sentence does not say to start it. And this feature adds one act the header never offers: Stop for a session OATS lost,
 which reads stopped.
 
 The words are in `app/outside/words.ts`, with the fact each rests on in `WORDS.md`. Beside the

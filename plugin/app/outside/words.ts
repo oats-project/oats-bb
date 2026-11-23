@@ -61,6 +61,8 @@ export const OUTSIDE_RECORDED = "recorded stopped";
 /** The notice, in a person's words: what is so, what happened, what to do. The kernel's own sentence and its code are behind Details. */
 export const outsideTitle = (instance: string): string => `${agentName(instance)} is running in bb, but OATS recorded it as stopped.`;
 export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
+/** The same, of an agent the lifecycle offers no Start for here (its session provider is not bb): the one remedy this plugin has is Stop. */
+export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";
 /** What each of the notice's two acts does here. */
 export const OUTSIDE_STOP = "stops the harness that runs outside OATS";
 export const OUTSIDE_START = "starts it from OATS, in a new conversation";

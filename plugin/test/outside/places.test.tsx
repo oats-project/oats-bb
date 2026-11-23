@@ -479,7 +479,27 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   // notice draws none; and it draws no Start, which the lifecycle does not offer for it. No act is there twice.
   const other = await drawn(sidebarThreads(), false, "other");
   await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Stop…", "Retire…"]));
+  const named = (slot: typeof other) => Array.from(slot.getByTestId("oats-outside-agent-block").querySelectorAll('[data-testid="oats-outside-act"]')).map((act) => act.textContent);
   expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
+  // What the notice NAMES for it: Stop alone, and a sentence that does not say to start it.
+  expect(named(other)).toEqual(["Stopstops the harness that runs outside OATS"]);
+  const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-notice"] p')!.textContent;
+  expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it."); // (the kernel's own sentence stays under Details)
+  other.unmount();
+  resetApp();
+  // The same agent with the read failed: the header has none, so the notice has its own Stop, held with the reason, and still no Start.
+  const otherFailed = await drawn({ status: "error", threads: [] }, true, "other");
+  const otherBlock = await otherFailed.findByTestId("oats-outside-agent-block");
+  expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
+  expect(buttons(otherBlock)).toEqual([["Stop", true, "Comes back when OATS is read again"]]);
+  expect(named(otherFailed)).toEqual(["Stopstops the harness that runs outside OATS"]);
+  expect(sentenceOf(otherBlock)).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
+  otherFailed.unmount();
+  resetApp();
+  // An agent on bb is named both, in every state (the cases above): Start is the lifecycle's for it.
+  const onBb = await drawn(sidebarThreads(), false);
+  await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
+  expect(named(onBb)).toEqual(["Stopstops the harness that runs outside OATS", "Startstarts it from OATS, in a new conversation"]);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {

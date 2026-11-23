@@ -19,7 +19,7 @@ import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
+import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
 
 const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
 
@@ -123,20 +123,26 @@ const BOTH = ["stop", "start"] as const;
  * two acts that mend it, each with what it does here. The kernel's own sentence and its code are
  * one press away, under Details, through the display filter: no command is on screen where the two
  * buttons do the same. Nothing where the kernel reports nothing.
+ * The lifecycle starts an agent on bb only: for an agent of another session provider the notice
+ * names Stop alone (no Start line, and its sentence does not say to start it), so that nothing is
+ * named that cannot be pressed.
  */
-export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Said | null; instance: string; held: boolean; /** the acts the notice draws a button of its own for (both, by default); for the others it says what the act does, and the place has that act's button over the notice (the panel's header) */ own?: readonly ("stop" | "start")[] }) {
+export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Said | null; instance: string; held: boolean; /** the acts the notice draws a button of its own for (both, by default); for another act it names, it says what the act does, and the place has that act's button over the notice (the panel's header). It names Start only for an agent on bb. */ own?: readonly ("stop" | "start")[] }) {
   if (said === null || said.warning === null) return null;
+  const startable = said.warning.backend === "bb";
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
       <Notice title={outsideTitle(instance)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
-        <p>{OUTSIDE_WHAT}</p>
+        <p>{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {(
             [
               ["stop", OUTSIDE_STOP],
               ["start", OUTSIDE_START],
             ] as const
-          ).map(([act, does]) => (
+          )
+            .filter(([act]) => act === "stop" || startable)
+            .map(([act, does]) => (
             <li key={act} data-testid="oats-outside-act" className="flex min-w-0 flex-wrap items-center gap-2">
               {own.includes(act) ? <OutsideActs instance={instance} acts={[act]} held={held} /> : <span className="font-semibold text-foreground">{LABEL[act]}</span>}
               <span className="min-w-0 break-words text-muted-foreground">{does}</span>
@@ -205,10 +211,11 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
  *   happened in one sentence (its acts are the header's, the lifecycle's own; Stop for a session
  *   OATS lost is here, since the header offers none for an agent that reads stopped);
- * - of any agent: the kernel's report. Stop and Start are the header's, act by act: one the
+ * - of any agent: the kernel's report. The acts it names are the header's, act by act: one the
  *   header has, the notice says what it does; one the header lacks (no roster is read just now,
  *   so the lifecycle offers nothing), the notice keeps its own button for: a person never reads
- *   "Stop" or "Start" with nothing to press, and no act is on the page twice.
+ *   "Stop" or "Start" with nothing to press, and no act is on the page twice. (The notice names
+ *   no Start for an agent that is not on bb: `OutsideWarning`.)
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */

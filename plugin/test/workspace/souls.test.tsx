@@ -6,6 +6,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { asked } from "../../app/lifecycle";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
@@ -179,13 +180,16 @@ test("spawnable: false shows the problem and no form", async () => {
 
 test("an agent whose thread is archived shows as thread missing, with Start and Retire", async () => {
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
-  const slot = await souls("oats-developer", { start: () => ({ threadId: "thr_restarted" }) }, fixtureAgents(), threads);
+  const slot = await souls("oats-developer", {}, fixtureAgents(), threads);
   const missing = await slot.findByTestId("oats-soul-agent-detached");
   expect(missing.textContent).toBe("Flaky ci developerthread missingStartRetire");
   expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-detached-start"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_restarted" }]));
-  expect(rpcOf(slot, "start").map((call) => call.input)).toEqual([{ instance: "flaky-ci-developer" }]);
+  // Start opens the act's own dialog (test/lifecycle/actions.test.tsx holds what it does): nothing is started on one press.
+  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
+  expect(rpcOf(slot, "start")).toEqual([]);
+  fireEvent.click(slot.getByTestId("oats-detached-retire"));
+  expect(asked()).toEqual({ verb: "retire", instance: "flaky-ci-developer" });
 });
 
 test("a soul name in the URL that the deployment does not have says so", async () => {
@@ -348,4 +352,5 @@ test("a soul's page on the last roster read: Start and Retire of an agent whose 
   }
   expect(rpcOf(slot, "start")).toEqual([]);
   expect(rpcOf(slot, "retirePlan")).toEqual([]);
+  expect(asked()).toBeNull(); // and no dialog was asked for either
 });

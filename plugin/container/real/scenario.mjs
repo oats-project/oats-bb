@@ -588,7 +588,7 @@ try {
   step("A7 stop: the plan, then the apply");
   const stale = act("a stop plan, read and kept aside", "stopPlan", { instance: A.instance });
   const plan = act("stop plan", "stopPlan", { instance: A.instance });
-  check(plan?.lines[0]?.startsWith(`Stop ${A.instance} (${A.soul}): `), "the plan names the agent", JSON.stringify(plan));
+  check(plan?.instance === A.instance && plan.targets?.[0]?.instance === A.instance && plan.targets[0].soul === A.soul, "the plan names the agent", JSON.stringify(plan));
   // What the kernel's plan says of an agent whose thread is idle in bb (README, "What the run found").
   const idlePlan = recorded(["instance", "stop", A.instance], ["--plan"]);
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
@@ -612,7 +612,7 @@ try {
 
   step("A9 edge: stop on a stopped agent");
   const again = act("stop plan of a stopped agent", "stopPlan", { instance: A.instance });
-  check(/: not running$/.test(again?.lines[0] ?? ""), "the plan says it is not running", JSON.stringify(again));
+  check(again?.targets?.[0]?.session === "none", "the plan says it is not running", JSON.stringify(again));
   act("stop apply on a stopped agent", "stopApply", { instance: A.instance, revision: again.revision, key: "stop-112233445566" });
   show("the kernel's receipt", JSON.parse(recorded(["instance", "stop"], ["--apply", "stop-112233445566"]).stdout).result.results);
   row = rowOf(A.instance);
@@ -661,7 +661,7 @@ try {
 
   step("A14 retire: the plan, then the apply");
   const retirePlan = act("retire plan", "retirePlan", { instance: A.instance });
-  check(retirePlan?.lines[0]?.startsWith(`Removed: the home of ${A.instance} (${home}).`), "the plan says what is removed", JSON.stringify(retirePlan));
+  check(retirePlan?.instance === A.instance && retirePlan.home === home, "the plan is for the agent, and names the home that is removed", JSON.stringify(retirePlan));
   // The thread archived by hand in A12 is the home's too: the provider's stop ends its Claude, so nothing works in the home.
   act("retire apply", "retireApply", { instance: A.instance, revision: retirePlan.revision, key: "retire-0a1b2c3d4e5f" });
   check(rowOf(A.instance) === undefined && !existsSync(home), "oats status: no row is left, and the home is removed");
@@ -758,7 +758,7 @@ try {
   step("B1c the lead's stop, and a stale plan");
   const leadPlan = act("stop plan of the lead", "stopPlan", { instance: lead });
   evidence.keep("stop-plan.json", recorded(["instance", "stop", lead], ["--plan"]).stdout);
-  check(leadPlan?.lines.length >= 4 && leadPlan.lines[1].startsWith("Stop its child "), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
+  check(leadPlan?.targets?.length === 3 && leadPlan.targets[0].instance === lead && leadPlan.targets.slice(1).every((target) => target.depth === 1), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
   // Another stop in between: one child is stopped by itself, so the lead's plan is no longer the one read.
   const one = act("stop plan of one child", "stopPlan", { instance: "harvest-knowledge-helper" });
   act("stop apply of that child", "stopApply", { instance: "harvest-knowledge-helper", revision: one.revision, key: "stop-5e6f7a8b9c0d" });

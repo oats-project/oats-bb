@@ -84,15 +84,77 @@ bb settings ui set sidebar.threadListProvider oats/agents
 bb settings ui reset sidebar.threadListProvider
 ```
 
-## Stopping an agent
+## Stopping, starting, restarting and retiring an agent
 
-Stop an OATS agent with **Stop agent (OATS)** in the thread's menu: it stops the agent through
-OATS (the kernel's plan, then one confirmation), so a stopped agent stays stopped. bb's own
-composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts on its
-own when one of them is used: an agent whose thread was archived or deleted in bb stays in the
-roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its soul's
-page says "thread missing", with Start and Retire. Nothing is retired because
-a thread was deleted.
+The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
+on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
+**Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
+the suffix), on the thread's status line (**Start** for an agent that does not run, **Restart** for
+one whose session ended), on a soul's page for an agent whose thread bb does not have (**Start**,
+**Retire**), and in bb's command palette, each with a shortcut:
+
+| Command | Default shortcut | Acts on |
+|---|---|---|
+| OATS: Stop agent… | Alt+Shift+X | the agent whose thread is in view |
+| OATS: Restart agent… | Alt+Shift+R | the same |
+| OATS: Start agent… | Alt+Shift+S | the same |
+| OATS: Retire agent… | Alt+Shift+D | the same |
+
+The letters are the OATS Desktop's (after its leader key); the chord is bb's, and every one is
+rebound in bb's Settings, Keyboard. A key that cannot act says why in one line, through bb's
+toaster ("Weekly digest helper is stopped: Start it instead.", "This thread is not an OATS
+agent's."). bb does not run a plugin command's shortcut while its Terminal tab has the focus.
+
+- **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
+  PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
+  each session and of its uncommitted work, and what a person should see first (an agent in the
+  middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
+  reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
+  with a worktree of its own, with what would be lost said under it; without it the worktree is
+  kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
+  agent's thread (as the provider is today, a message sent in it starts the agent again without
+  OATS); Retire says that it cannot be undone and that the agent's conversation stays readable in
+  bb, archived. Where a retire kept the home (its cleanup did not finish), the result says that
+  the thread can be unarchived in bb and a message there starts the agent with no OATS around it.
+- **Start** and **Restart** first read the agent as the kernel has it now ("Checking
+  instance…"), and show its harness, machine and home. **Harness** starts on "Keep the recorded
+  harness" and passes nothing; one the bb session provider declares is passed as `--harness`. With
+  one harness declared there is no choice. **Model for this start** is blank for the recorded or
+  default model, or a model id. Neither act names a mode (the home's recorded choice stands), and
+  both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
+  Restart says that it stops the current harness first. An agent the kernel says is running is
+  not started again: the dialog says so and offers its thread.
+- **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
+  same dialog, in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept
+  at …", "Recovery copy saved at …"); a start opens the agent's new thread behind it. When the
+  person opened another act's dialog meanwhile, the result reaches them through bb's toaster, with
+  **Open <agent>**.
+- **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
+  message under **Details**. What to do next is a button: **Review again** reads a new plan (also
+  when the plan changed under the confirmation: it comes back as it is now, with what changed
+  said first, and cannot be confirmed until it was reviewed again), **Check again** asks
+  for the answer to what was already sent (same revision, same key: an answer that was lost reads
+  "Result not confirmed", never "nothing happened"), **Refresh status** reads the agent again
+  before another start. A plan refused for a name the kernel does not know (`E_SESSION_UNKNOWN`,
+  on a stop or a retire plan and nowhere else) says that the agent is not in OATS any more.
+- **On a roster that is the last one read** (OATS cannot be read) the acts stay where they are,
+  off, with when they come back.
+
+bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
+on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
+the roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its
+soul's page says "thread missing", with Start and Retire. Nothing is retired because a thread was
+deleted. A thread stopped in bb alone is not stopped for OATS: stop an agent with the OATS act, so
+that it stays stopped.
+
+How it is built: `kernel/lifecycle.ts` reads a plan and a receipt into typed facts (nothing is
+worded there), `app/lifecycle/words.ts` makes the sentences from them (the Desktop's, with the
+commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the two dialogs on the
+`Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
+dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
+"Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). No place draws `AgentActs` yet: the
+instance panel and the agent's own page take it in their own change.
 
 ## The home
 
@@ -442,8 +504,9 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 | failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help |
 | nothing to list; a read in flight | `Empty`, `Loading` | the Desktop's sentence and the act that fills it; "Reading …", announced |
 | content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |
-| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog; it shows no plan that is another agent's |
+| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog (done, refused, or not confirmed, with the code after the words); while the kernel is asked, the line of the place that asks ("Checking instance…"); it shows no plan that is another agent's |
 | what happened | `Result` | done, failed or not known, in words, with the code after and the next step |
+| what happened, once the person has moved on | `notify` | a result or a failure through bb's own toaster (`sonner`, which bb shims for plugins: a type-only devDependency at bb's version, no Toaster of the plugin's), with "Open <agent>"; a failure stays until dismissed; `notified()` is what a slot test reads |
 | a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
 | tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
 | the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
@@ -520,8 +583,8 @@ Backend tests: `experimental_createHostEntryHarness` (`experimental_call`,
 `experimental_emitHostSignal`, `experimental_watchRpc`.
 
 App, slots: `experimental_threadList`, `experimental_threadHeaderRow`, `experimental_tab` (a fixed
-thread tab), `experimental_threadAction`, `experimental_appOverlay` (draws the plan dialogs of Stop
-and Retire and the progress and failure of Start and Restart, which a thread action has no place
+thread tab), `experimental_threadAction`, `experimental_appOverlay` (draws the dialogs of Stop,
+Start, Restart and Retire, which a thread action has no place
 to draw), and on `navPanel`:
 `experimental_useBadge`, `experimental_hideFromNavigation`.
 

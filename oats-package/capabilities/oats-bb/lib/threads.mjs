@@ -59,16 +59,35 @@ function harnessRuns(thread, processes, home) {
 export function inspectAnswer(thread, processes, home) {
   const status = thread.status;
   if (TURN_IN_PROGRESS.has(status)) return { present: true, state: "unknown", running: true };
-  // A turn bb holds in line starts by itself, whatever is loaded now.
-  if (isSettled(thread) && hasQueuedWork(thread)) return { ...HELD };
+  if (isSettled(thread)) {
+    // A turn bb holds in line starts by itself, whatever is loaded now.
+    if (willStartByItself(thread)) return { ...HELD };
+    // A word for the thread's queue that this provider does not know: whether something
+    // will start cannot be told, and neither "it runs" nor "it does not" is said.
+    if (hasQueuedWork(thread) && !QUEUE_WORDS.has(thread.queuedWork)) return { present: true, state: "unknown", running: null };
+    // (`failed`: a message bb could not send stays in line and starts nothing. The thread
+    // is at rest, and reads by its harness, below.)
+  }
   if (SETTLED.has(status)) return { present: true, state: "unknown", running: harnessRuns(thread, processes, home) };
   if (status === "error") return processes.has(thread) ? { present: true, state: "unknown", running: harnessRuns(thread, processes, home) } : { ...MISSING };
   throw fail("E_SESSION_UNAVAILABLE", `bb reports thread ${thread.id} as ${JSON.stringify(status)}, a status this provider does not know`);
 }
 
 export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status === "error";
-/** Whether bb's list row says the thread has work held in line (`queuedWork`, "none" when
- *  there is none). `bb thread show` does not carry the field: only a list row is asked. */
+// bb's words for a thread's queue in its list row (bb-app 0.50.1's own enum, `bb guide
+// json`: `queuedWork ("none" | "waiting" | "failed")`): nothing in line; a message that
+// waits to start, which bb starts by itself (its concurrency limit, a busy thread); a
+// queued message that failed to send, which stays in line and starts nothing.
+const QUEUE_WORDS = new Set(["none", "waiting", "failed"]);
+/** Whether bb's list row says a turn of the thread will start by itself: a message waits
+ *  in line (`queuedWork: "waiting"`). Not a message that failed to send, and not a word
+ *  this provider does not know. What `running` is answered from without a look at the
+ *  processes: a false "it runs" here would have the kernel take a home stopped with the
+ *  host, whose thread holds only a failed message, for one that came back. */
+export const willStartByItself = (thread) => thread.queuedWork === "waiting";
+/** Whether bb's list row says the thread has anything in line, a failed message and a
+ *  word this provider does not know included (`queuedWork`, "none" when there is none):
+ *  what a stop must clear and a launch must not start over (lib/halt.mjs, lib/launch.mjs). `bb thread show` does not carry the field: only a list row is asked. */
 export const hasQueuedWork = (thread) => typeof thread.queuedWork === "string" && thread.queuedWork !== "none";
 export const isLive = (thread) => isObject(thread) && !thread.archivedAt && !thread.deletedAt;
 

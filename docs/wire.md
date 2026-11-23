@@ -351,7 +351,14 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   kernel reads a home stopped with the host whose harness runs as one that came back,
   and sends it no resume. So a thread the provider stopped and left live (`reason:
   "host"`) reads `running: false`, and the same thread after bb started its harness again
-  reads `true`. A turn bb holds in line still reads `running: true` without a look. A
+  reads `true`. A turn bb holds in line (`queuedWork: "waiting"` in the thread's list
+  row: bb starts it by itself) still reads `running: true` without a look. A queued
+  message that failed to send (`queuedWork: "failed"`) starts nothing: such a thread is
+  at rest and reads by its harness, like any other, so a home stopped with the host whose
+  thread holds only a failed message is not read as running. A word for the queue that
+  the provider does not know (bb-app 0.50.1 has `none`, `waiting` and `failed`) reads
+  `running: null`: it cannot be told. (A stop still clears whatever is in line, a failed
+  message too, and a launch still refuses to start over one.) A
   thread in `error` whose harness lives (below) is at rest too, and its `running` is read
   the same way: `true` where that harness works in the home (a stopped home a person
   started again in bb, whose turn then failed, still runs), `false` where it works

@@ -426,12 +426,38 @@ test("the process look reads each process's thread id and names, as bb-app 0.50.
 // A turn bb's concurrency limit holds in line starts by itself when a slot frees: a thread
 // that is settled with work in line is busy, not at rest. (bb's list row says so in
 // `queuedWork`: "none" when nothing waits.)
-for (const [status, queuedWork, running] of [["pending", "waiting", true], ["idle", "waiting", true], ["idle", "scheduled", true], ["pending", "none", NO_HARNESS], ["idle", undefined, NO_HARNESS], ["idle", null, NO_HARNESS], ["active", "waiting", true], ["error", "waiting", true]]) {
+for (const [status, queuedWork, running] of [["pending", "waiting", true], ["idle", "waiting", true],
+  // A word for the queue this provider does not know (bb-app 0.50.1 has none, waiting and failed): it cannot be told. It read
+  // `true` while every word but "none" was taken for work that will start: a false "it runs" is the dangerous answer.
+  ["idle", "scheduled", null], ["pending", "scheduled", null], ["error", "scheduled", null],
+  // A queued message that failed to send starts nothing: the thread is at rest, and reads by its harness (none here).
+  ["idle", "failed", NO_HARNESS], ["pending", "failed", NO_HARNESS],
+  ["pending", "none", NO_HARNESS], ["idle", undefined, NO_HARNESS], ["idle", null, NO_HARNESS], ["active", "waiting", true], ["error", "waiting", true]]) {
   test(`a bb thread that is ${status} with queuedWork ${JSON.stringify(queuedWork)} reads running ${running}`, async (t) => {
     const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", status, { queuedWork })]);
     assert.deepEqual(answer.result, { present: true, state: "unknown", running, open: OPEN });
   });
 }
+
+// bb's `queuedWork: "failed"` is a queued message that failed to send: it stays in line and
+// starts nothing by itself. Read as work that will start, a home stopped with the host whose
+// thread holds only such a message, with no harness, would read `running: true`, and the
+// kernel would take it for one that came back.
+test("a thread at rest with only a failed queued message reads by its harness: false with none, true with bb's own in the home; a waiting one reads true with none", { skip: NO_PROC }, async (t) => {
+  const { dir, home } = scratch(t);
+  const id = liveId("failed_queue");
+  const read = async (status, queuedWork) => (await call("inspect", { home, endpoint: { ...endpoint, threadId: id } }, { settings, bb: fakeBbIn(dir, { "thread list": { stdout: [threadRow(id, "proj_a", status, { queuedWork, providerId: "pi" })] } }) })).result;
+  const of = ({ present, state, running }) => [present, state, running];
+  // No harness of the thread on this host.
+  assert.deepEqual(of(await read("idle", "waiting")), [true, "unknown", true], "a message that waits to start: it will run");
+  assert.deepEqual(of(await read("idle", "failed")), [true, "unknown", false], "a message that failed to send: nothing will start, and nothing runs");
+  assert.deepEqual(of(await read("pending", "failed")), [true, "unknown", false]);
+  assert.deepEqual(of(await read("error", "failed")), [false, "stopped", false], "in error with no harness: a lost session, whatever failed in its queue");
+  // bb's own harness for the thread, at work in the home.
+  await bbHarness(t, { id, name: "pi", cwd: home, provider: "pi" });
+  assert.deepEqual(of(await read("idle", "failed")), [true, "unknown", true], "its harness is loaded: it runs");
+  assert.deepEqual(of(await read("error", "failed")), [true, "unknown", true]);
+});
 
 test("a thread whose queuedWork is no word cannot be read: E_SESSION_UNAVAILABLE, never at rest", async (t) => {
   const { answer } = await inspectWith(t, [threadRow("thr_a", "proj_a", "pending", { queuedWork: 3 })]);

@@ -73,7 +73,11 @@
     harness started again from bb in a stopped home goes unseen, and the stop's archive
     is what keeps it from starting. A thread in `error` whose harness is still loaded
     reads the same way (`true` where it works in the home; it was `null`); one whose
-    harness is gone is a lost session, as before.
+    harness is gone is a lost session, as before. A thread whose queue holds only a
+    message that failed to send (`queuedWork: "failed"`) no longer reads `running: true`:
+    nothing will start by itself there, and it reads by its harness; only a message that
+    waits to start (`waiting`) reads `true` without a look, and a queue word the provider
+    does not know reads `null`.
   - The retire hook finds no live thread in a home OATS stopped, so it names none in
     `archived` (for a Claude home with nothing else to remove, its answer is
     `{retired: false, reason: "nothing-to-delete"}`).

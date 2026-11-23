@@ -153,7 +153,8 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | pending, idle, and it is not (a thread `bb thread stop` released reads `idle` too; at the pinned bb, a harness the agent itself left running is not it) | true | unknown | false |
 | pending, idle, and it cannot be told: what started a harness in the home cannot be read, or it is not bb's runner and bb is not at the pinned version | true | unknown | null |
 | pending, idle, on a host whose processes cannot be read (macOS: no `/proc`) | true | unknown | null |
-| pending, idle or error, with a turn bb holds in line (its concurrency limit) | true | unknown | true |
+| pending, idle or error, with a turn bb holds in line (its concurrency limit; `queuedWork: "waiting"`) | true | unknown | true |
+| pending, idle or error, with a word for its queue the provider does not know | true | unknown | null |
 | error, and the thread's harness process (pi, claude) is still loaded on this host | true | unknown | as for a thread at rest: true where bb's own harness works in the home, false where it does not |
 | error, and its harness process is gone (whatever else the agent left running) | false | stopped | false |
 | missing, deleted or archived | false | stopped | false |

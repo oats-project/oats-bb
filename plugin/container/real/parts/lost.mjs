@@ -55,12 +55,12 @@ const KEY = "placeholder-not-a-key";
 
 /** What the plugin says and offers per state: today's, and with each switch on. */
 const EXPECTED = {
-  running: { acts: ACTS ? ["Stop…", "Restart…", "Retire…"] : ["Stop…", "Retire…"], words: ["Working", "Idle"], row: null },
+  running: { acts: ACTS ? ["Stop…", "Restart…", "Retire…"] : ["Stop…", "Retire…"], words: ["Working", "Idle"], row: `Working · ${SOUL} · tmux` },
   // The ruling (the specialist's, 23 Nov): where the row has a sessionEnd, IT decides: "stopped" is
   // "Stopped · <soul> · tmux" whatever runtimeState says; "lost" is "Stopped · session lost ·
   // tmux"; "exited", or "shell" with no sessionEnd, is "Failed".
-  stopped: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: WORDS ? `Stopped · ${SOUL} · tmux` : `Failed · ${SOUL} · runs in tmux` },
-  lost: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: ["Stopped"], row: WORDS ? "Stopped · session lost · tmux" : `Stopped · ${SOUL} · runs in tmux` },
+  stopped: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: WORDS ? `Stopped · ${SOUL} · tmux` : `Failed · ${SOUL} · tmux` },
+  lost: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: ["Stopped"], row: WORDS ? "Stopped · session lost · tmux" : `Stopped · ${SOUL} · tmux` },
 };
 // The dialogs' words for an agent on tmux, as their author gave them (bb-plugin-dialogs-developer,
 // 23 Nov, from app/lifecycle/words.ts RESUME and START and app/panel/words.ts attachWhere): read
@@ -187,8 +187,8 @@ export default async (run) => {
   const pageSays = (words) =>
     `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()) }); })()`;
   const pageNow = `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); return p ? ${clean("p.innerText")}.slice(0, 600) : ${clean("document.body.innerText")}.slice(0, 300); })()`;
-  /** The agent's row in the sidebar, once it says one of `words`. */
-  const rowSays = (words) => `(() => { const r = document.querySelector(${JSON.stringify(ROW)}); if (!r) return ""; const text = ${clean("r.innerText")}; return ${JSON.stringify(words)}.some((word) => text.includes(word)) ? text : ""; })()`;
+  /** The agent's row in the sidebar, once its state is one of `words` → its facts, whole (the row's own title: state · soul or reason · where). */
+  const rowSays = (words) => `(() => { const facts = document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? ""; return ${JSON.stringify(words)}.some((word) => facts.startsWith(word)) ? facts : ""; })()`;
   /**
    * In one view: the row in the sidebar and the agent's own page, for the state the kernel's row is
    * in, with their images; the words and the acts are the ones of EXPECTED.
@@ -200,9 +200,7 @@ export default async (run) => {
     await page.goto("/");
     await showSidebar(page, viewport);
     const inRow = await page.until(rowSays(words), 60);
-    // (Without the agent's own name, which holds the word "lost".)
-    const says = (inRow ?? "").replace(CALLED, "").trim();
-    check(Boolean(inRow) && (rowWords === null || says === rowWords), `${at} the ${state} tmux agent's row in the sidebar, among the agents with no bb thread${rowWords === null ? ", says its state in a word" : `: "${rowWords}"`}`, inRow ?? (await page.evaluate(`${clean(`document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
+    check(inRow === rowWords, `${at} the ${state} tmux agent's row in the sidebar, among the agents with no bb thread: "${rowWords}"`, inRow ?? (await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.innerText ?? document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
     await shot(`${state}-row`);
     await page.goto(`/plugins/oats/agent/${NAME}`);
     const said = await page.until(pageSays(words), 60);

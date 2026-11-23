@@ -26,9 +26,9 @@ describe("stopped (an operator's stop: sessionEnd \"stopped\")", () => {
   it("on its open thread: the interim warning, that a message there starts it again without OATS; the roster's own Start", () => {
     expect(said(agent, "open", true)).toEqual({ kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", note: null, warning: null, acts: null, archived: false });
   });
-  it("the warning is for a stop OATS made or cannot tell from one (a kernel that names no sessionEnd), never for a session it lost: a message then starts an agent OATS sees running", () => {
-    expect(said({ ...agent, sessionEnd: undefined }, "open", true)?.kind).toBe("stopped-open");
-    expect(said(recorded("threadDeleted"), "open", true)).toBeNull();
+  it("the warning is for an operator's stop and only that (sessionEnd \"stopped\"): never for a session OATS lost, where a message starts an agent OATS sees running", () => {
+    expect(said({ ...agent, sessionEnd: undefined }, "open", true)).toBeNull(); // a row that names no end of its session (never launched): the roster's own line
+    expect(said(recorded("threadDeleted"), "open", true)?.kind).toBe("stopped-host");
     // A thread that is listed and that the tree does not draw the agent on (hidden, or another row's) has no line of its own.
     expect(said(agent, "open", false)).toEqual({ kind: "threadless", sentence: null, note: "its bb thread is not shown", warning: null, acts: null, archived: false });
   });
@@ -104,13 +104,45 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   });
   it("on a thread that is open, with no thread named, or before bb has answered: \"stopped\", as the kernel calls it, and nothing of this feature's on an open thread", () => {
     for (const where of ["open", "none", "unknown"] as const) expect(state(agent, null, where)).toBe("stopped");
-    expect(said(agent, "open", true)).toBeNull();
     expect(said(agent, "unknown", false)).toBeNull();
   });
   it("only a row OATS did not stop is one: an operator's stop, a row that runs and a tmux row are never \"archived\" or \"deleted\"", () => {
     for (const other of [recorded("stoppedByOats"), recorded("working"), recorded("idle"), { ...agent, backend: "tmux" }, { ...agent, running: null, runtimeState: "unknown" }]) {
       for (const where of WHERES) expect(["archived", "deleted"]).not.toContain(state(other, null, where));
     }
+  });
+});
+
+describe("stopped with the host (sessionEnd \"lost\", its thread open)", () => {
+  // The recorded row of a session OATS did not stop; on a thread that is open it is the host's stop (or the machine went down).
+  const agent = recorded("threadDeleted");
+  it("says so, and that OATS starts it again by itself; no warning, and never the operator's sentence", () => {
+    expect(state(agent, null, "open")).toBe("stopped");
+    expect(said(agent, "open", true)).toEqual({ kind: "stopped-host", sentence: "with the machine. OATS starts it again when the machine is back.", note: null, warning: null, acts: null, archived: false });
+  });
+});
+
+describe("idle, no harness loaded (running false beside runtimeState \"unknown\", no sessionEnd)", () => {
+  // Shaped as the kernel's contract says (docs/desktop-cli-api.md at v0.70.5, "A status row of a provider
+  // home"), not recorded: `running: false` for an idle bb thread exists only from the provider's next
+  // release; until then such a thread reads `running: null`. The sample's idle row with that one field.
+  const agent = sample("harvest-knowledge-helper", { running: false });
+  it("is the contract's row: not running, the word \"unknown\", no sessionEnd", () => {
+    expect([agent.running, agent.runtimeState, agent.sessionEnd]).toEqual([false, "unknown", undefined]);
+  });
+  it("is \"idle\", never \"stopped\": Stopped is said of a provider row only when its word is \"stopped\"", () => {
+    for (const where of WHERES) expect(state(agent, null, where)).toBe("idle");
+    expect(agentStatus(agent, null, NOW, "open").word).toBe("Idle");
+  });
+  it("on its open thread: that a message there carries the conversation on and Start begins a new one; Start, and no warning", () => {
+    expect(said(agent, "open", true)).toEqual({ kind: "idle-unloaded", sentence: "not loaded. To carry on, send it a message here. Start begins a new conversation.", note: null, warning: null, acts: ["start"], archived: false });
+  });
+  it("an idle agent the kernel says nothing of (running null: today's idle bb thread) says none of it", () => {
+    expect(said(recorded("idle"), "open", true)).toBeNull();
+  });
+  it("a tmux row that does not run is stopped whatever its word, as before", () => {
+    expect(state({ ...agent, backend: "tmux" }, null, "none")).toBe("stopped");
+    expect(state({ ...agent, runtimeState: null }, null, "open")).toBe("stopped");
   });
 });
 

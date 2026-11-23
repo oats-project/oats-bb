@@ -25,8 +25,12 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * the kernel says nothing of (`running` null) is "idle", an unknown `runtimeState` word included.
  * One the kernel calls not running (`running === false`) with no other word is "stopped": what it
  * prints for a tmux row whose window is gone or whose harness does not run (awebai/oats
- * lib/instance-listing.mjs at 95c7b43b3: `{ running: false }`, no `runtimeState`); a bb row comes
- * with "stopped" beside it. A session that ended in a shell, or that the kernel cannot reach, is
+ * lib/instance-listing.mjs at 95c7b43b3: `{ running: false }`, no `runtimeState`). A row of a
+ * session provider always has a word (docs/desktop-cli-api.md at v0.70.5, "A status row of a
+ * provider home"): STOPPED IS SAID OF IT ONLY WHEN THAT WORD IS "stopped" (OATS stopped it, or it
+ * stopped with the host). `running: false` beside "unknown" is a session that is there with no
+ * harness loaded (a reboot on a host without `oats host run`, or bb let the harness exit): "idle".
+ * Calling it stopped would advise Start, which begins a new thread and leaves its conversation behind. A session that ended in a shell, or that the kernel cannot reach, is
  * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
  *
  * `where` is what bb itself says of the thread the row names (`Oats.whereOf(agent)`: "open" for
@@ -48,7 +52,11 @@ export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere)
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
   if (agent.running === true) return "working";
-  if (agent.running === false) return "stopped";
+  // Not running, and no word of the kernel's beside it (a tmux row whose window is gone): stopped.
+  // With a word that is not "stopped" (a provider row reads `runtimeState: "unknown"`: its session
+  // is there and no harness is loaded) the agent is not stopped: it is idle, and a message in its
+  // thread carries its conversation on.
+  if (agent.running === false && (agent.runtimeState === null || agent.backend === "tmux")) return "stopped";
   return "idle";
 }
 

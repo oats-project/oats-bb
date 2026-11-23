@@ -1,8 +1,9 @@
 // The outside feature's live scenes: what the sidebar's row and the thread's line
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
-// scene is). Two stages of its own on one roster, every row of the feature's table at once:
-// `outside`, and `outside-question`, the same while bb holds a question on the thread of the agent
-// OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
+// scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
+// or an act in bb, at once on one roster; `outside-host`, the two rows that are neither (stopped
+// with the machine, idle with no harness loaded); and `outside-question`, the first roster while bb
+// holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
 //
@@ -60,12 +61,30 @@ const statusOf = (statusWithRealIds, joined, rows) => {
 let recordRows = () => {
   throw new Error("outside: the stage was not entered");
 };
+/** live-ui's `untilSnapshot` (asks the server to read OATS again until its snapshot matches), for a scene that changes the roster and is not about how soon: set by the stage's `enter`. */
+let untilRoster = async () => {
+  throw new Error("outside: the stage was not entered");
+};
 const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl");
+
+/**
+ * The rows of the stage `outside-host`: two rows that are NOT a stop of OATS's, on threads that are
+ * open, with nothing archived in bb. Shaped as the kernel's contract says (docs/desktop-cli-api.md
+ * at v0.70.5, "A status row of a provider home"), not recorded: `running: false` for an idle bb
+ * thread exists only from the provider's next release.
+ *   release-070-maintainer     stopped with the host (sessionEnd "lost"), its thread open
+ *   desktop-mockups-developer  idle, no harness loaded (running false, runtimeState "unknown", no sessionEnd)
+ */
+const HOST_ROWS = {
+  "release-070-maintainer": LOST,
+  "desktop-mockups-developer": { running: false, runtimeState: "unknown", waitingOnYou: null },
+};
 
 /** The stage's roster: the threads said archived are archived in bb, and the fake answers ROWS on a kernel that lists the feature. */
 async function enter({ fake, statusWithRealIds, threads, untilSnapshot }) {
   for (const id of ARCHIVED) bb("thread", "archive", threads.get(id).id);
   const joined = new Map([...threads].filter(([id]) => id !== DELETED));
+  untilRoster = untilSnapshot;
   recordRows = (rows) => {
     fake({ status: { stdout: statusOf(statusWithRealIds, joined, rows) } });
     const at = Date.now();
@@ -100,6 +119,14 @@ let question;
 
 export const stages = {
   outside: { label: "OUT", enter, leave },
+  "outside-host": {
+    label: "OUTH",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({ status: { stdout: statusOf(statusWithRealIds, threads, HOST_ROWS) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "release-070-maintainer" && agent.sessionEnd === "lost"));
+    },
+    leave: async ({ fake }) => fake(),
+  },
   "outside-question": {
     label: "OUTQ",
     enter: async (stage) => {
@@ -301,11 +328,15 @@ export default [
       // acts are here) that the kernel also reports running outside OATS (the notice, with its two acts).
       const INSTANCE = "weekly-digest-helper";
       const report = { code: "running-outside-oats", backend: "bb", message: MESSAGE.replaceAll(OUTSIDE, INSTANCE) };
+      const reported = (snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === INSTANCE && agent.outsideOats != null);
       recordRows({ ...ROWS, [INSTANCE]: { ...STOPPED, outsideOats: report } });
       try {
+        // The scene is about the header's height, not about how soon the report arrives (the scene
+        // before times that): the server's roster is waited for before the page is opened.
+        await untilRoster(reported);
         await page.goto(`/plugins/oats/agent/${INSTANCE}`);
         const read = await page.until(
-          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const first = panel?.querySelector("h2, h3"); if (!block || !panel || !tabs || !first) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), notice: flat(block.querySelector("h3")), header: box(head), tabs: box(tabs), first: { ...box(first), text: flat(first) }, panel: box(panel), window: innerHeight }); })()`,
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const first = panel?.querySelector("h2, h3"); if (!block || !panel || !tabs || !first || flat(first) !== "SESSION") return ""; /* the tab's own first part, once the instance's facts are read */ const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), notice: flat(block.querySelector("h3")), header: box(head), tabs: box(tabs), first: { ...box(first), text: flat(first) }, panel: box(panel), window: innerHeight }); })()`,
           30,
         );
         const drawn = read ? JSON.parse(read) : null;
@@ -313,14 +344,39 @@ export default [
         const room = viewport.mobile ? 88 : 64;
         check(
           drawn !== null && same(drawn.acts, ["Retire", "Stop", "Start"]) && drawn.notice === "Running outside OATS" && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.first.bottom + room <= drawn.window,
-          `${at} with Retire, the kernel's notice and its Stop and Start in the header, the tabs and the first part under them (${drawn?.first.text ?? "none"}) are in view, with ${drawn === null ? "?" : drawn.window - drawn.first.bottom} px under its heading`,
+          `${at} with Retire, the kernel's notice and its Stop and Start in the header, the tabs and the first part under them (Session) are in view, with ${drawn === null ? "?" : drawn.window - drawn.first.bottom} px under its heading`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );
         await page.shot(`outside-${viewport.name}-agent-archived-outside`, { targets: true });
       } finally {
         recordRows(ROWS);
+        await untilRoster((snapshot) => snapshot.ok === true && !reported(snapshot));
         await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}) === null`, 15);
       }
+    },
+  },
+  {
+    stage: "outside-host",
+    name: "not a stop of OATS's: stopped with the machine, and idle with no harness loaded; neither warns, and neither advises what loses the conversation",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const shown = () => page.evaluate(textOf(testId("oats-identity-row")));
+      const host = threads.get("thr_release");
+      await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
+      const HOST = new RegExp(`^Stopped${SINCE} · with the machine\\. OATS starts it again when the machine is back\\.$`);
+      let line = await lineOf(page, HOST);
+      check(line !== null && line.state === "stopped" && HOST.test(line.words) && same(line.acts, ["Start"]) && line.warning === null && !/without OATS/.test(line.words), `${at} stopped with the host: "Stopped · with the machine", that OATS starts it again; no warning, and not the operator's sentence`, line === null ? await shown() : JSON.stringify(line));
+      await page.shot(`outside-${viewport.name}-thread-stopped-host`, { targets: true });
+
+      const idle = threads.get("thr_mockups");
+      await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
+      line = await lineOf(page, /^Idle · /);
+      check(line !== null && line.state === "idle" && line.words === "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." && same(line.acts, ["Start"]) && line.warning === null, `${at} no harness loaded: "Idle", never "Stopped"; that a message here carries on and Start begins a new conversation; no warning`, line === null ? await shown() : JSON.stringify(line));
+      await page.shot(`outside-${viewport.name}-thread-idle-not-loaded`, { targets: true });
+
+      // In the sidebar the two rows say their state and nothing more, with no mark.
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const rows = JSON.parse(await page.evaluate(`JSON.stringify({ host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, marks: document.querySelectorAll(${JSON.stringify(testId("oats-outside-mark"))}).length })`));
+      check(rows.host?.facts === "Stopped · oats-maintainer" && rows.idle?.facts === "Idle · oats-desktop-developer" && rows.idle.state === "idle" && rows.marks === 0, `${at} their rows say "Stopped" and "Idle", with no mark`, JSON.stringify(rows));
     },
   },
   {

@@ -21,7 +21,9 @@ import {
   NO_THREAD_NOTE,
   NOT_SHOWN_NOTE,
   OUTSIDE_NOTE,
+  NOT_LOADED,
   STOPPED_DELETED,
+  STOPPED_HOST,
   STOPPED_OPEN,
 } from "./words";
 
@@ -32,6 +34,10 @@ export type Kind =
   | "outside"
   /** Stopped by an operator, on a thread that is open: a message there starts it again without OATS. */
   | "stopped-open"
+  /** Stopped with the host, on a thread that is open: OATS starts it again by itself. */
+  | "stopped-host"
+  /** Idle with no harness loaded, on a thread that is open: a message there carries the conversation on. */
+  | "idle-unloaded"
   /** Stopped, and bb has its thread archived: what a stop leaves once the provider archives at stop. */
   | "stopped-archived"
   /** Stopped, and its thread was deleted in bb. */
@@ -96,8 +102,13 @@ function whereNote(where: ThreadWhere): string | null {
  * 3. the state "deleted" (a session lost, no such thread in bb): Start.
  * 4. the state "error" (its session ended in a shell) on an open thread: that a message there starts it again. Restart.
  * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted, Start;
- *    on an open thread, for a stop OATS made (not a session it lost: a message then starts an
- *    agent OATS sees running), the interim warning that a message there starts it without OATS.
+ *    on an open thread, by how the kernel says the session ended: an OPERATOR's stop
+ *    (`sessionEnd: "stopped"`, and only that) takes the interim warning that a message there
+ *    starts it without OATS; one stopped WITH THE HOST (`sessionEnd: "lost"`) says that OATS starts
+ *    it again by itself.
+ * 6. the state "idle" of a row the kernel calls not running (`running: false` beside
+ *    `runtimeState: "unknown"`: no harness is loaded), on an open thread: that a message there
+ *    carries the conversation on, and that Start begins a new one. Start.
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said | null {
   if (agent.backend === "tmux") return null;
@@ -122,7 +133,12 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       // the warning is said of every stopped agent on an open thread. With it, the same sentence
       // stays for exactly this case (a home stopped before the provider archived, or a thread a
       // person unarchived): the gate then changes no word here, only what the stop's dialog says.
-      if (where === "open" && attached && agent.sessionEnd !== "lost") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN };
+      if (where === "open" && attached && agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN };
+      if (where === "open" && attached && agent.sessionEnd === "lost") return { ...base, kind: "stopped-host", sentence: STOPPED_HOST };
+      return threadless;
+    case "idle":
+      // The kernel's own word that no harness runs: `running: false` (an idle agent whose harness may be loaded reads `null`).
+      if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, acts: ["start"] };
       return threadless;
     default:
       return threadless;

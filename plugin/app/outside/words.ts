@@ -10,6 +10,17 @@ export const ARCHIVED_FACT = "Its conversation is archived in bb";
  * the provider archived at stop, and for a thread a person unarchived.
  */
 export const STOPPED_OPEN = "A message sent here in bb starts it again without OATS. Use Start.";
+/**
+ * Stopped WITH THE HOST (the machine went down, or `oats host run` stopped it as the machine
+ * stopped): OATS resumes it by itself when the machine is back. No warning: nothing is wrong.
+ */
+export const STOPPED_HOST = "with the machine. OATS starts it again when the machine is back.";
+/**
+ * Its session is there and no harness is loaded (a reboot on a host without `oats host run`, or bb
+ * let the harness exit): an idle agent. A message in its thread carries the conversation on, and
+ * OATS reads it running at its next read; Start would begin a NEW thread. No warning.
+ */
+export const NOT_LOADED = "not loaded. To carry on, send it a message here. Start begins a new conversation.";
 /** The same, as the few words a sidebar's row has room for. */
 export const ARCHIVED_NOTE = "its conversation is archived in bb";
 /** The link, on the agent's own page and in a notice, that opens the archived thread to read it. */

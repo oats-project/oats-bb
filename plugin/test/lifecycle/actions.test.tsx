@@ -92,10 +92,10 @@ test("each action shows only in the states it applies to", async () => {
   const with_ = (change: Partial<Agent>) => fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, ...change } : agent));
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
-  // A row the kernel calls not running with a word that is none of the known ones (a provider
-  // outside the kernel's table could print it): it reads Stopped, and is started, as its thread's
-  // own row offers. (The state's rule: test/model/view.test.ts.)
-  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["start", "retire"]);
+  // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
+  // is loaded) is IDLE, not stopped: the menu is an idle agent's, and the thread's own row says
+  // what a message and Start each do, with Start (app/outside; the state's rule: test/model/view.test.ts).
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "restart", "retire"]);
   expect(await by("thr_harvest", with_({ running: false, runtimeState: null }))).toEqual(["start", "retire"]);
   // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
   // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.

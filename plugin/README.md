@@ -104,8 +104,10 @@ word comes first.
 
 | What OATS says | What bb says of its thread | The row and the thread's line say | Acts |
 |---|---|---|---|
+| stopped with the machine (`sessionEnd: "lost"`) | open | "Stopped · with the machine. OATS starts it again when the machine is back." No warning: OATS resumes it by itself. | Start |
+| idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped": a message in its thread carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. No warning. | Start |
 | stopped | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | Start |
-| stopped | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start." The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. Not said of a session OATS lost: a message then starts an agent OATS sees running. | Start |
+| stopped by an operator (`sessionEnd: "stopped"`, and only that) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start." The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. Not said of a session OATS lost: a message then starts an agent OATS sees running. | Start |
 | stopped | deleted | "Stopped · Its conversation was deleted in bb. Start it from OATS for a new one." | Start |
 | recorded stopped, with the kernel's `outsideOats` | any | under the state OATS recorded, a notice in the warning tone: "Running outside OATS", the kernel's own message, its code. On the sidebar's row: "running outside OATS" and a warning mark. | Stop, Start |
 | its session lost | archived | "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS." | Stop (then Start) |
@@ -123,6 +125,18 @@ thread and a deleted one look the same there: the plugin asks bb by id for the a
 thread; asked again at each roster read and each minute), and a thread bb has neither active nor
 archived is deleted. Archived is told from deleted by bb's answer, never by the kernel's message.
 Until bb has answered, a row claims nothing of its thread.
+
+**Stopped is said of a provider's row only when the kernel's word is "stopped".** A row the
+kernel calls not running beside `runtimeState: "unknown"` has its session there and no harness
+loaded (a reboot on a host that does not run `oats host run`, or bb let the harness exit): the
+state function calls it idle. (A tmux row that does not run, which has no such word, is stopped
+as before.) Three rows read "not running", and what a person should do differs in each: an
+operator's stop (Start, and never a message), a stop with the machine (nothing: OATS resumes it),
+and no harness loaded (a message; Start loses the conversation). They are told apart by the
+kernel's own fields (`runtimeState`, `running`, `sessionEnd`), never by a message's words. The row
+with `running: false` beside "unknown" is shaped from the kernel's contract, not recorded: the bb
+session provider prints it only from its next release, and until then an idle bb thread reads
+`running: null` and says "Idle" with nothing after it.
 
 **The state is the one state function's.** "Archived in bb" and "Deleted in bb" are two states of
 `state(agent, thread, where)` (`model/view.ts`), beside the six: a row the kernel records stopped

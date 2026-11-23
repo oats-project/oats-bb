@@ -171,7 +171,10 @@ describe("A2 state(): first match wins", () => {
     expect(state(agent("a", { runtimeState: "shell", running: true }), t, "open")).toBe("error");
     expect(state(agent("a", { running: true }), t, "open")).toBe("working");
     expect(state(agent("a", { running: null }), t, "open")).toBe("idle");
-    expect(state(agent("a", { running: false }), t, "open")).toBe("stopped"); // "idle" until A2 was amended on 2026-11-22 (the test below says why)
+    // A provider row the kernel calls not running beside the word "unknown": its session is there and no
+    // harness is loaded. Not stopped (the spec's author, 2026-11-23): Stopped is said of a provider row
+    // only when its word is "stopped" (test/outside/say.test.ts holds what the row then says).
+    expect(state(agent("a", { running: false }), t, "open")).toBe("idle");
   });
   test("an unknown runtimeState word is idle", () => {
     expect(state(agent("a", { runtimeState: "hibernating" }), t, "open")).toBe("idle");

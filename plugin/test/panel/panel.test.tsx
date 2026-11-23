@@ -731,6 +731,16 @@ test("Lineage names the agents it started, as the thread's row counts them, each
   expect(children.map((child) => child.getAttribute("title"))).toEqual(["harvest-knowledge-helper", "desktop-mockups-developer", CHILD]);
   // each has a thread in bb: each is a link
   expect(children.map((child) => child.tagName)).toEqual(["A", "A", "A"]);
+  slot.unmount();
+  resetApp();
+  // A lead with one child says "Child" (the recorded lead has three: the roster here keeps one of them).
+  const lead = panelAgents().find((agent) => agent.instance === "redesign-ui-lead")!;
+  const agents = panelAgents().filter((agent) => agent.parent !== lead.instance || agent.instance === CHILD);
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const one = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: lead.threadId! }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
+  const single = await one.findByTestId("oats-panel-lineage");
+  expect(within(single).getAllByTestId("oats-fact").map((fact) => text(fact))).toContain("ChildPanel worktree helper");
+  expect(within(single).getByTestId("oats-panel-child").getAttribute("title")).toBe(CHILD);
 });
 
 test("the panel draws within the part of bb's side panel that is in the window, and whole when all of it is", async () => {

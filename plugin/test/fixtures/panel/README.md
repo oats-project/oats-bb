@@ -27,7 +27,7 @@ visible in them:
 
 - The roster holds every agent the run's scenario leaves (`harvest-knowledge-helper`,
   `desktop-mockups-developer`, `digest-links-helper`, and the agent the scenario's schedule started,
-  named for the run's minute: `oats-developer-real-run-digest-202611231754`), beside
+  named for the minute its schedule fired: `oats-developer-real-run-digest-202611231754`), beside
   `redesign-ui-lead` and `panel-worktree-helper`: the run retires nobody. The hand recording had
   retired three of them first, so its three status files held their souls with no instance and a
   `key` of null; a soul with an instance has its key, as here. `redesign-ui-lead` therefore has

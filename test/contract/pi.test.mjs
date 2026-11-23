@@ -175,6 +175,94 @@ test("P1 bb itself runs pi in full mode only, and the provider refuses the same 
   assert.deepEqual((await bbJson("thread list --include-hidden")).filter((thread) => thread.projectId === project.id), [], "no thread was started");
 });
 
+// The pi model check (lib/pi-model.mjs). The image's pi serves, beside mock/echo: the bare
+// id a soul names, from one provider (mock/claude-fable-5.1); one id from two providers
+// (mock/twin, mock-b/twin); and one whose id ends in a date (mock-b/dated-20250101), which
+// bb holds back from its list (test/contract/pi/models.json).
+/** The check of a planned pi launch that names its model, as a kernel that hands the check the model makes it. */
+const checkModel = async (model) => (await provider("check", { home: null, soul: null, launch: { ...PLANNED, model } })).result;
+/** What bb holds: its projects, and its threads, hidden and archived ones included. */
+const bbHolds = async () => {
+  const projects = await bbJson("project list");
+  const archived = (await Promise.all(projects.map((project) => bbJson(`thread list --project ${project.id} --archived --include-hidden`)))).flat();
+  return { projects: projects.map((project) => project.id).sort(), threads: [...await bbJson("thread list --include-hidden"), ...archived].map((thread) => thread.id).sort() };
+};
+/** bb's own spawn of a pi thread on `model` in a fresh home, with no provider between. → the status the thread settles in. */
+async function bbSpawn(name, model) {
+  const home = await makeHome(name);
+  const project = await bbJson(`project create --name ${name} --root ${home}`);
+  const thread = await bbJson(`thread spawn --project ${project.id} --provider pi --model ${model} --environment ${home} --prompt-file ${home}/TASK.md --permission-mode full`);
+  started.push(thread.id);
+  return waitFor(`${thread.id} to settle`, async () => { const status = await threadStatus(thread.id); return status === "idle" || status === "error" ? status : null; }, { timeoutMs: 120_000 });
+}
+
+test("bb's list of pi's models, as the model check reads it: every id is its provider, a slash and the model's own id", async () => {
+  const models = await bbJson("provider models pi");
+  // (pi's own Anthropic models are listed too: bb's server carries a key for the Claude threads.)
+  for (const model of models) {
+    assert.equal(model.model, model.id);
+    assert.ok(typeof model.routeProviderId === "string" && model.id.startsWith(`${model.routeProviderId}/`) && model.id.length > model.routeProviderId.length + 1, JSON.stringify(model));
+  }
+  assert.deepEqual(models.filter((model) => model.routeProviderId.startsWith("mock")).map((model) => model.id).sort(),
+    ["mock-b/twin", "mock/claude-fable-5.1", "mock/echo", "mock/twin"], "the image's models, the dated one held back");
+  // Named exactly, the dated one is listed too: what every read of the check does. Named by its bare id, it is not.
+  assert.ok((await bbJson("provider models pi --selected-model mock-b/dated-20250101")).some((model) => model.id === "mock-b/dated-20250101"));
+  assert.ok(!(await bbJson("provider models pi --selected-model dated-20250101")).some((model) => model.id === "mock-b/dated-20250101"));
+});
+
+test("a model pi does not have is refused at the check of the planned launch and at the launch, and nothing is created in bb; bb itself would answer a thread that ends in error", async () => {
+  const home = await makeHome("model-unknown");
+  const before = await bbHolds();
+  for (const model of ["claude-fable-9", "mock/claude-fable-9", "nobody/echo"]) {
+    const sentence = `pi has no model ${JSON.stringify(model)}`;
+    const planned = await checkModel(model);
+    assert.equal(planned.status, "needs-configuration");
+    assert.deepEqual(planned.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
+    const answer = await provider("launch", launchInput(home, "model-unknown", { model }));
+    assert.deepEqual(answer.error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
+  }
+  assert.deepEqual(await bbHolds(), before, "no project, no thread");
+  // What the refusal spares: bb takes the id, answers a thread, and the thread fails as it starts.
+  assert.equal(await bbSpawn("model-unknown-bb", "claude-fable-9"), "error");
+});
+
+test("a bare model id one pi provider serves passes, as a soul declares it (claude-fable-5.1): the check is ready and the thread runs its first turn", async () => {
+  const planned = await checkModel("claude-fable-5.1");
+  assert.equal(planned.status, "ready");
+  assert.deepEqual(planned.problems, []);
+  assert.deepEqual(planned.warnings, []);
+  const { endpoint, since } = await launched("model-bare", { model: "claude-fable-5.1" });
+  assert.match((await turns())[since].lastText, /TASK-model-bare say hi\./, "its first turn reached the model");
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+  // And by its full id.
+  assert.equal((await checkModel("mock/claude-fable-5.1")).status, "ready");
+});
+
+test("a bare model id two pi providers serve is refused, naming both and the full ids; each full id launches; bb itself would answer a thread that ends in error", async () => {
+  const home = await makeHome("model-twin");
+  const before = await bbHolds();
+  const sentence = 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin';
+  assert.deepEqual((await checkModel("twin")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
+  assert.deepEqual((await provider("launch", launchInput(home, "model-twin", { model: "twin" }))).error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
+  assert.deepEqual(await bbHolds(), before, "no project, no thread");
+  assert.equal(await bbSpawn("model-twin-bb", "twin"), "error");
+  for (const model of ["mock/twin", "mock-b/twin"]) assert.deepEqual((await checkModel(model)).problems, [], model);
+  const { endpoint } = await launched("model-twin-b", { model: "mock-b/twin" });
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+});
+
+test("a model bb holds back from its list is not refused: named by its bare id it only warns, and its thread runs; named exactly it is listed, and nothing is said", async () => {
+  const planned = await checkModel("dated-20250101");
+  assert.equal(planned.status, "ready");
+  assert.deepEqual(planned.warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked"), [{ code: "session-provider-pi-model-unchecked", message: 'could not check the model "dated-20250101" against pi\'s model list: a model whose id ends in a date is not always listed' }]);
+  // bb resolves it: a refusal here would be stricter than bb.
+  const { endpoint } = await launched("model-dated", { model: "dated-20250101" });
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+  const exact = await checkModel("mock-b/dated-20250101");
+  assert.equal(exact.status, "ready");
+  assert.deepEqual(exact.warnings, []);
+});
+
 test("P2 the kernel's two variables and the PATH reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
   const { home, endpoint, since } = await launched("p2", {
     // As the kernel hands a launch of a home with messaging: oats.aweb's entries beside its own.

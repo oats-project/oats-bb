@@ -485,8 +485,8 @@ never a failed start.
 
 A soul whose harness is pi runs on bb as a thread of bb's own pi provider
 (`bb thread spawn --provider pi --model <the launch's model>`; a model is
-`<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
+`<pi provider>/<id>`, which bb splits itself, or the bare `<id>` where one pi provider
+serves it: "The model", below). Everything above holds for it, except what follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
@@ -537,6 +537,48 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive
   a launch, of either harness. bb shows no value of its env back, and no record of it
   is kept in the home.
+
+**The model must be one bb's pi resolves.** bb takes any model id when a thread is spawned and resolves it only when the thread
+starts. An id its pi cannot resolve used to leave a spawn that looked launched (a thread
+id, `launched: true`) over a thread that had failed as it started: `oats status` then
+read not running, session lost. So a pi launch that names a model reads the models bb
+lists for its pi (`bb provider models pi`, one call) and is **refused before anything is
+started**, with `E_BACKEND_LAUNCH_ARG`:
+
+| the launch's model | the refusal |
+|---|---|
+| a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>"` |
+| a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id>` |
+
+The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
+or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no
+pattern, no other case). So a soul may name a bare id, `claude-fable-5.1`, as long as
+one of pi's providers serves it; where a second one comes to serve it, name the one you
+want.
+
+**Where the list cannot settle it, nothing is refused**: the launch goes on as it did
+before this check, and says once `could not check the model "<id>" against pi's model
+list: <why>`. That is the case when bb's list cannot be read (bb does not answer in
+time, answers an error, an empty list or one the provider cannot read), and in two
+cases where bb lists fewer models than its pi resolves (seen at bb-app 0.50.1, pi
+1.5.2):
+
+- a model whose id ends in a date (`-YYYYMMDD`) is held back from the list. Named as
+  `<provider>/<id>` it is found all the same; named by its bare id it is not checked;
+- where the pi configuration bb's server runs with sets `enabledModels`
+  (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
+  a thread still starts on any other model pi has. A model that is not listed is then
+  not checked. Two listed models with the id are still refused.
+
+Then an id bb's pi cannot resolve ends as before: a thread that fails as it starts.
+
+The check of a planned launch (the spawn's preview, and the check before every launch)
+says the same, as a problem or as the warning `session-provider-pi-model-unchecked`,
+where the kernel hands it the launch's model (`launch.model`); a kernel that does not
+is refused at the launch itself, with nothing created in bb. The launch's own warning
+goes to the provider command's standard error (a launch result has no place for it).
+Nothing is asked of bb for a Claude launch, a pi launch with no model (bb then starts pi
+on its own default), or a launch that is refused for something else.
 
 **The home's skills load through @awebai/oats-pi**, the OATS bridge for pi, and only
 when `OATS_INSTANCE_HOME` names the home: that is what the project env is for (never
@@ -629,6 +671,7 @@ launch checks first:
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
+| for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
 facts are problems (a pi launch is not held up because bb's Claude is signed out, nor a

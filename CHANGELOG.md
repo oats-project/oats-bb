@@ -4,6 +4,27 @@
 
 ### The session provider
 
+- **A pi launch whose model bb's pi would not resolve is refused.** bb takes any model
+  id when a thread is spawned and resolves it when the thread starts, so `oats spawn
+  <soul> --backend bb --harness pi --model <id>` with an id pi does not have, or a bare
+  id two of pi's providers serve, answered `launched: true` with a thread id over a
+  thread that had failed as it started (`oats status`: not running, session lost). The
+  launch now reads the models bb lists for its pi, once, and refuses before anything is
+  started (`E_BACKEND_LAUNCH_ARG`): `pi has no model "<id>"`, or `pi model "<id>" is
+  served by A and B: use A/<id> or B/<id>`.
+  - The rule is bb's own, no stricter: an exact `<provider>/<id>`, or a bare id that
+    exactly one pi provider serves, passes. A soul that names a bare id
+    (`claude-fable-5.1`) keeps working while one provider serves it.
+  - Where bb's list cannot settle it, nothing is refused and the launch goes on as
+    before, with one warning (`could not check the model "<id>" against pi's model list:
+    <why>`): a list that cannot be read, a model whose id ends in a date named by its
+    bare id (bb holds such models back from its list), and any model that is not listed
+    where bb's pi configuration sets `enabledModels` (bb then lists only those).
+  - The check of a planned launch says the same, at a spawn's preview too, where the
+    kernel hands it the launch's model (`launch.model`); with a kernel that does not,
+    the refusal comes at the launch, with nothing created in bb.
+  - One more bb call for a pi launch that names a model (`bb provider models pi`); none
+    for Claude or for a launch with no model. README, "pi".
 - **A stop archives the thread: an agent OATS stopped stays stopped.** bb starts a
   stopped thread's agent again at the next message to it, in the same conversation, so a
   message typed in bb's composer restarted an agent OATS had stopped, behind OATS's back.

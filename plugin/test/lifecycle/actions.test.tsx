@@ -842,7 +842,7 @@ test("the model field suggests bb's own models for the harness that will run, an
   expect(asked).toEqual([{ hostId: "host_falcon", providerId: "claude-code", preferCached: true }, { hostId: "host_falcon", providerId: "pi", preferCached: true }]);
 });
 
-test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; Stop and Retire alone for one on tmux; held, with the reason, on a roster that is the last one read", async () => {
+test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; the acts of its state for one on tmux, as for one on bb; held, with the reason, on a roster that is the last one read", async () => {
   const { AgentActs } = await import("../../app/lifecycle");
   const acts = async (instance: string, over: Partial<Handlers> = {}, threads = fixtureThreads()) => {
     const slot = renderSlot<object, Contract>({ component: () => <AgentActs instance={instance} /> }, {}, { rpc: handlers(over), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
@@ -856,7 +856,7 @@ test("AgentActs offers the acts of an agent with no bb thread too: Start and Ret
   // Its bb thread is gone (deleted in bb): the agent stays in OATS, stopped.
   expect(await acts("weekly-digest-helper", {}, fixtureThreads().filter((thread) => thread.id !== "thr_digest"))).toEqual({ labels: ["Start…", "Retire…"], reason: null });
   const tmux = fixtureAgents().find((agent) => agent.backend === "tmux")!;
-  expect(await acts(tmux.instance)).toEqual({ labels: ["Stop…", "Retire…"], reason: null });
+  expect(await acts(tmux.instance)).toEqual({ labels: ["Stop…", "Restart…", "Retire…"], reason: null });
   expect(await acts("no-such-agent")).toEqual({ labels: [], reason: null });
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   expect(await acts("redesign-ui-lead", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) })).toEqual({
@@ -1815,27 +1815,34 @@ test("Start of a tmux agent whose session was lost says that it tries to bring i
   await phase(slot, "done");
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }]);
   const result = slot.getByTestId("oats-result");
-  expect(result.querySelector("h3")!.textContent).toBe("Kernel fix developer started.");
-  expect(result.textContent).toContain("Back in its last conversation.");
+  expect(result.querySelector("h3")!.textContent).toBe("Kernel fix developer is back in its last conversation.");
+  expect(result.getAttribute("data-tone")).toBe("done");
   expect(slot.queryByTestId("oats-start-waiting")).toBeNull();
+  // No thread to open: where it runs, in the panel's own words, and the command that attaches.
   expect(slot.inspection.navigateCalls).toEqual([]);
+  const where = slot.getByTestId("oats-start-where").textContent!;
+  expect(where).toContain("Runs in tmux on falcon. Attach from a terminal:");
+  expect(where).toContain(`oats session attach --home /abs/deployment/agents/oats-expert/instances/${TMUX}`);
 });
 
-test("a resume that started fresh says so first, with the kernel's reason in words; one whose harness waits says where, with the command to attach", async () => {
+test("a resume that started fresh leads with that, in the warning tone, then the kernel's reason; one whose harness waits says so apart, and both say where it runs", async () => {
   const fresh = await tmuxStart({ startCheck: () => lostCheck(), start: () => resumedAs({ resumed: false, reason: "no-conversation", waiting: null }) });
   fireEvent.click(button(fresh, "oats-confirm-act"));
-  await phase(fresh, "done");
-  expect(fresh.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer started fresh.");
-  expect(fresh.getByTestId("oats-result").textContent).toContain("Started fresh on its task: its last conversation was not found.");
-  expect(fresh.getByTestId("oats-result").textContent).not.toContain("Back in its last conversation.");
+  await waitFor(() => expect(fresh.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown")); // the pattern's warning tone
+  expect(fresh.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer started fresh: its last conversation was not brought back.");
+  expect(fresh.getByTestId("oats-result").textContent).toContain("Its last conversation was not found.");
+  expect(fresh.getByTestId("oats-result").textContent).not.toContain("is back in its last conversation");
+  expect(fresh.getByTestId("oats-start-where").textContent).toContain("oats session attach --home");
   resetApp();
   const waiting = await tmuxStart({ startCheck: () => lostCheck(), start: () => resumedAs({ resumed: true, reason: null, waiting: "resume-confirmation" }) });
   fireEvent.click(button(waiting, "oats-confirm-act"));
   await phase(waiting, "done");
   const notice = within(waiting.getByTestId("oats-start-waiting")).getByTestId("oats-notice");
   expect(notice.getAttribute("data-tone")).toBe("warning");
-  expect(notice.querySelector("h3")!.textContent).toBe("It is waiting for you in its terminal: the harness asks before it loads the conversation.");
-  expect(notice.textContent).toContain(`oats session attach --home /abs/deployment/agents/oats-expert/instances/${TMUX}`);
+  expect(notice.querySelector("h3")!.textContent).toBe("It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.");
+  // The way into that terminal follows, once.
+  expect(waiting.getByTestId("oats-start-where").textContent).toContain(`oats session attach --home /abs/deployment/agents/oats-expert/instances/${TMUX}`);
+  expect(waiting.getByTestId("oats-start-waiting").compareDocumentPosition(waiting.getByTestId("oats-start-where")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("the plain start of a lost tmux agent stays, on purpose: the choice says what it loses, and sends no resume", async () => {
@@ -1875,7 +1882,7 @@ test("a resume the kernel refuses because the session is not lost any more goes 
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }, { instance: TMUX }]);
 });
 
-test("a resume refused because the launch settings changed says so, with OATS's line, and Start fresh sets the plain start for one more press", async () => {
+test("a resume refused because the launch settings changed names the tick that is its remedy, with OATS's line; back at the dialog the tick starts it fresh", async () => {
   const slot = await tmuxStart({
     startCheck: () => lostCheck(),
     start: ({ resume }) => {
@@ -1886,18 +1893,17 @@ test("a resume refused because the launch settings changed says so, with OATS's 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   const refused = slot.getByTestId("oats-result").textContent!;
-  expect(refused).toContain("Its launch settings changed since it last ran, so OATS will not bring the old conversation back. Start it fresh instead.");
+  expect(refused).toContain("Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.");
   expect(refused).toContain("OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL");
-  expect(button(slot, "oats-start-fresh").textContent).toBe("Start fresh");
-  // One more press: the dialog is back, set to the plain start, and says what that is. Nothing was started yet.
-  fireEvent.click(button(slot, "oats-start-fresh"));
+  // Refresh status brings the dialog back, where the tick is; nothing is started until it is pressed again.
+  fireEvent.click(button(slot, "oats-start-refresh"));
   await ready(slot);
   expect(calls(slot, "start")).toHaveLength(1);
-  expect(within(slot.getByTestId("oats-start-fresh-choice")).getByRole("switch").getAttribute("aria-checked")).toBe("true");
-  expect(slot.getByTestId("oats-confirm").textContent).toContain("This starts a new conversation using the saved briefing and state.");
+  fireEvent.click(within(slot.getByTestId("oats-start-fresh-choice")).getByRole("switch"));
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }, { instance: TMUX }]);
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer started.");
 });
 
 test("a resume is for tmux alone: a lost agent on bb keeps its dialog (a new thread, the carry-on line), and a tmux agent an operator stopped starts plainly", async () => {
@@ -1919,10 +1925,39 @@ test("a resume is for tmux alone: a lost agent on bb keeps its dialog (a new thr
   expect(calls(stopped, "start").map((call) => call.input)).toEqual([{ instance: TMUX }]);
 });
 
-test("AgentActs offers Start for a tmux agent that does not run (its dialog resumes or starts fresh), and never Restart", async () => {
+test("AgentActs offers Start for a tmux agent that does not run, and Stop, Restart and Retire for one that runs: as for an agent on bb", async () => {
   const { AgentActs } = await import("../../app/lifecycle");
-  const slot = renderSlot<object, Contract>({ component: () => <AgentActs instance={TMUX} /> }, {}, { rpc: handlers({}, lostRoster()), sidebarThreads: sidebarThreads(), sdk: modelsSdk() });
-  await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
-  await waitFor(() => expect(slot.queryByTestId("oats-agent-acts")).not.toBeNull());
-  expect(Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).map((each) => each.textContent)).toEqual(["Start…", "Retire…"]);
+  const offered = async (agents: Agent[]) => {
+    const slot = renderSlot<object, Contract>({ component: () => <AgentActs instance={TMUX} /> }, {}, { rpc: handlers({}, agents), sidebarThreads: sidebarThreads(), sdk: modelsSdk() });
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+    await waitFor(() => expect(slot.queryByTestId("oats-agent-acts")).not.toBeNull());
+    const labels = Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).map((each) => each.textContent);
+    resetApp();
+    return labels;
+  };
+  expect(await offered(lostRoster())).toEqual(["Start…", "Retire…"]);
+  expect(await offered(fixtureAgents())).toEqual(["Stop…", "Restart…", "Retire…"]);
+});
+
+test("Restart of an agent on tmux is the plain restart: no harness or model, no thread; the result says that it restarted and where it runs", async () => {
+  const { slot } = await menu("thr_plain", {
+    startCheck: () => startCheckOf(TMUX, { backend: "tmux", running: true, runtimeState: "running", sessionEnd: null }),
+    restart: () => ({ threadId: null, instance: TMUX, harness: "claude", model: null, warnings: [], resume: null }),
+  });
+  const { openAct } = await import("../../app/lifecycle");
+  openAct("restart", TMUX);
+  await ready(slot);
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual([
+    "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
+    "This starts a new conversation using the saved briefing and state.",
+  ]);
+  expect(slot.queryByTestId("oats-start-harness")).toBeNull();
+  expect(slot.queryByTestId("oats-start-model")).toBeNull();
+  expect(slot.queryByTestId("oats-start-fresh-choice")).toBeNull();
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "restart").map((call) => call.input)).toEqual([{ instance: TMUX }]);
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer restarted.");
+  expect(slot.getByTestId("oats-start-where").textContent).toContain("Runs in tmux on falcon. Attach from a terminal:");
+  expect(slot.inspection.navigateCalls).toEqual([]);
 });

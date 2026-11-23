@@ -579,27 +579,29 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(resumable({ backend: null, sessionEnd: "lost" })).toBe(false);
   });
   it("says after the press what the kernel answered: back in its last conversation", () => {
-    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer started.", lines: ["Back in its last conversation."], code: null, details: null, offers: [] });
+    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], code: null, details: null, offers: [] });
   });
-  it("says that it started FRESH, first, with the kernel's reason in words; a reason it does not know is OATS's own word", () => {
+  it("says that it started FRESH, first and as a warning, then the kernel's reason in words; a reason it does not know is OATS's own word", () => {
     const fresh = answered("start-resume-fresh.json");
-    expect(startOutcome("start", "kernel-fix-developer", fresh)).toMatchObject({ tone: "done", title: "Kernel fix developer started fresh.", lines: ["Started fresh on its task: its last conversation was not found."] });
+    expect(startOutcome("start", "kernel-fix-developer", fresh)).toMatchObject({ tone: "done", attention: true, title: "Kernel fix developer started fresh: its last conversation was not brought back.", lines: ["Its last conversation was not found."] });
     const because = (reason: string | null) => startOutcome("start", "kernel-fix-developer", { ...fresh, resume: { resumed: false, reason, waiting: null } }).lines;
-    expect(because("no-receipts")).toEqual(["Started fresh on its task: OATS has no record of where its harness kept it."]);
-    expect(because("resume-unproven")).toEqual(["Started fresh on its task: OATS cannot yet bring a Codex conversation back."]);
-    expect(because("a-later-reason")).toEqual(["Started fresh on its task.", "OATS says: a-later-reason"]);
-    expect(because(null)).toEqual(["Started fresh on its task."]);
+    expect(because("no-receipts")).toEqual(["OATS has no record of where its harness kept it."]);
+    expect(because("resume-unproven")).toEqual(["OATS cannot yet bring a Codex conversation back."]);
+    expect(because("a-later-reason")).toEqual(["OATS says: a-later-reason"]);
+    expect(because(null)).toEqual([]);
+    // Never told by the toaster as a plain success: it is opened again.
+    expect(toasted("start", startOutcome("start", "kernel-fix-developer", fresh)).plain).toBe(false);
   });
   it("marks a start whose harness waits for its person in its terminal, which a toast cannot tell whole", () => {
     const waiting = startOutcome("start", "kernel-fix-developer", answered("start-resume-waiting.json"));
-    expect(waiting).toMatchObject({ tone: "done", title: "Kernel fix developer started.", lines: ["Back in its last conversation."], waiting: true });
-    expect(toasted("start", waiting)).toEqual({ plain: false, tone: "done", title: "Kernel fix developer started.", lines: [] });
+    expect(waiting).toMatchObject({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], waiting: true });
+    expect(toasted("start", waiting)).toEqual({ plain: false, tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [] });
     expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json")).waiting).toBeUndefined();
   });
   it("a start that asked for no resume says nothing of a conversation", () => {
     expect(startOutcome("start", "weekly-digest-helper", value(parseSessionStart(fixture("start.json")))).lines).toEqual([]);
   });
-  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, with the way to start it fresh", () => {
+  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, with the tick that is the remedy named", () => {
     expect(startRefused("start", "kernel-fix-developer", { code: "E_RESUME_NOT_LOST", message: "kernel-fix-developer did not lose its session (stopped)" })).toMatchObject({
       tone: "failed",
       title: "Kernel fix developer wasn't started",
@@ -609,8 +611,8 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(startRefused("start", "kernel-fix-developer", { code: "E_LAUNCH_ENV_CHANGED", message: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key" })).toMatchObject({
       tone: "failed",
       title: "Kernel fix developer wasn't started",
-      lines: ["Its launch settings changed since it last ran, so OATS will not bring the old conversation back. Start it fresh instead.", "OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key"],
-      offers: ["fresh"],
+      lines: ["Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.", "OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key"],
+      offers: ["refresh"],
     });
   });
 });

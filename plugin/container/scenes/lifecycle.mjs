@@ -632,7 +632,9 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("done"), 30);
         const back = await dialog(page);
-        check(back.body.includes("Kernel fix developer started.") && back.body.includes("Back in its last conversation.") && (await page.evaluate("location.pathname")).endsWith(`/plugins/oats/agent/${TMUX}`), `${at} the result says what the kernel answered: back in its last conversation; no thread opens`, JSON.stringify(back));
+        const where = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
+        check(back.body.includes("Kernel fix developer is back in its last conversation.") && (await page.evaluate("location.pathname")).endsWith(`/plugins/oats/agent/${TMUX}`), `${at} the result says what the kernel answered: it is back in its last conversation; no thread opens`, JSON.stringify(back));
+        check(where.includes("Runs in tmux on") && where.includes("Attach from a terminal:") && where.includes("oats session attach --home ") && where.includes(TMUX), `${at} and where it runs, with the command that attaches (the panel's own words)`, where);
         await shot("resume-back");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -643,7 +645,8 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("done"), 30);
         const fresh = await dialog(page);
-        check(fresh.body.includes("Kernel fix developer started fresh.") && fresh.body.includes("Started fresh on its task: its last conversation was not found.") && !fresh.body.includes("Back in its last conversation."), `${at} a resume that started fresh says so first, with the kernel's reason in words`, JSON.stringify(fresh));
+        const tone = await page.evaluate(`document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone")`);
+        check(fresh.body.includes("Kernel fix developer started fresh: its last conversation was not brought back.") && fresh.body.includes("Its last conversation was not found.") && !fresh.body.includes("is back in its last conversation") && tone === "unknown", `${at} a resume that started fresh leads with that, in the warning tone, then the kernel's reason in words`, JSON.stringify({ fresh, tone }));
         await shot("resume-fresh");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -654,7 +657,8 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}) !== null`, 30);
         const waiting = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}).innerText.replace(/\\s+/g, " ").trim()`);
-        check(waiting.includes("It is waiting for you in its terminal: the harness asks before it loads the conversation.") && waiting.includes(`oats session attach --home `) && waiting.includes(TMUX), `${at} a harness that waits for its person is said apart, with the command that attaches to it`, waiting);
+        const reach = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
+        check(waiting.includes("It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.") && reach.includes("oats session attach --home ") && reach.includes(TMUX), `${at} a harness that waits for its person is said apart, in the attention tone, and the command that attaches follows`, `${waiting} | ${reach}`);
         await shot("resume-waiting");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);

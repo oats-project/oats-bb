@@ -681,7 +681,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
-- **A lost session on tmux comes back.** Start of an agent on tmux whose session was LOST (the
+- **An agent on tmux starts, restarts and comes back from bb.** Start and Restart are offered for
+  an agent on tmux as for one on bb (its page, the panel): a stopped one starts plainly, a
+  running one restarts, and neither opens a thread: the result says where the agent runs, with
+  the command that attaches (the instance panel's words). Start of an agent on tmux whose session was LOST (the
   kernel's row at the dialog's check: backend `tmux`, `sessionEnd: "lost"`) is `oats session start
   --resume`: the harness's own last conversation, where a plain start begins fresh on its task.
   The dialog says what it tries and offers no harness or model (the kernel takes none beside
@@ -691,8 +694,8 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   waited for and none opens. The app sends `resume: true` only from that dialog; the server
   refuses it for a home that is not on tmux and never turns a resume into another start; whether
   the session is still lost is the kernel's to say (`E_RESUME_NOT_LOST`: the dialog goes back to
-  its check). A lost agent on bb is unchanged (a new thread; the carry-on line). Restart is
-  offered for an agent on bb alone.
+  its check). A lost agent on bb is unchanged (a new thread; the carry-on line). No harness or
+  model is offered for an agent on tmux: the list the dialog has is the bb session provider's.
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs

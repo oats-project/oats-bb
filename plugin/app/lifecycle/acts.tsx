@@ -12,7 +12,7 @@ import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { newKey } from "../keys";
 import { isUnconfirmed } from "../../contract/shared";
 import { CommandText } from "../panel/parts";
-import { attachCommand } from "../panel/words";
+import { attachCommand, attachWhere } from "../panel/words";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
@@ -250,7 +250,8 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
     </>
   );
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
-  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.tone, title: outcome.title, lines: outcome.lines, code: outcome.code, actions: next };
+  // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
+  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, code: outcome.code, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), code: outcome.code, actions: next };
 }
 
@@ -708,12 +709,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       },
     );
   };
-  /** After a resume the kernel refused for its launch settings: back to the dialog, set to the plain start, for one more press. */
-  const startFresh = () => {
-    if (state.phase !== "settled" || state.check === null) return;
-    setFresh(true);
-    setState({ phase: "ready", check: state.check });
-  };
   const close = () => {
     ticket.current++;
     if (current === request) set(null);
@@ -741,22 +736,21 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                       {START.refresh}
                     </Button>
                   ) : null}
-                  {state.outcome.waiting === true && state.check !== null ? (
-                    // The start succeeded and the harness waits for its person in its terminal: said apart, with the way there.
-                    <div data-testid="oats-start-waiting" className="flex w-full flex-col gap-2">
-                      <Notice title={RESUME.waiting} tone="warning">
-                        <p>{RESUME.attach}</p>
-                        <span className="flex min-w-0 flex-wrap items-center gap-2">
-                          <CommandText command={attachCommand(state.check.home)} />
-                          <CopyButton text={attachCommand(state.check.home)} name="Copy the command" />
-                        </span>
-                      </Notice>
+                  {state.outcome.waiting === true ? (
+                    // The start succeeded and the harness waits for its person in its terminal: said apart, in the attention tone.
+                    <div data-testid="oats-start-waiting" className="w-full">
+                      <Notice title={RESUME.waiting} tone="warning" />
                     </div>
                   ) : null}
-                  {state.outcome.offers.includes("fresh") && state.check !== null ? (
-                    <Button data-testid="oats-start-fresh" onClick={startFresh}>
-                      {RESUME.startFresh}
-                    </Button>
+                  {state.outcome.tone === "done" && state.check !== null && state.check.backend !== "bb" ? (
+                    // An agent that is not on bb has no thread to open: where it runs, and the way into it (the panel's own words and command).
+                    <div data-testid="oats-start-where" className="flex w-full min-w-0 flex-col gap-1 text-sm">
+                      <p>{shown(attachWhere(state.check.machine === "" ? null : state.check.machine))}</p>
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <CommandText command={attachCommand(state.check.home)} />
+                        <CopyButton text={attachCommand(state.check.home)} name="Copy the command" />
+                      </span>
+                    </div>
                   ) : null}
                 </>,
               );
@@ -778,7 +772,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
       // On tmux there is no full mode of bb's to speak of; a resume says what it tries, and what it comes back with.
-      happens={known === null || state.phase === "settled" ? [] : !onBb ? (resumes ? [RESUME.tries, RESUME.same] : [START.fresh]) : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      happens={known === null || state.phase === "settled" ? [] : !onBb ? (resumes ? [RESUME.tries, RESUME.same] : verb === "restart" ? [START.restartWarning, START.fresh] : [START.fresh]) : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
       kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}

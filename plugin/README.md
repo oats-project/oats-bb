@@ -258,11 +258,97 @@ panel (`app/panel/Panel.tsx`) call it. Whether the provider archives a stopped h
 (`stopArchivesThread`, the lifecycle dialogs') changes no word here (an open thread under a
 stopped agent gets the same sentence before and after): `say.ts` marks the place and says why.
 
-Not there yet: the home's card of an agent that runs outside OATS (one line in the rebuilt home's
-card, `<OutsideWarning said={outside.of(agent)} … />`, agreed with its owner: it lands with
-whichever of the two changes is second); the line of a thread that belonged to a RETIRED agent;
+Not there yet: the home's card of an agent that runs outside OATS. The home counts it in its
+summary line, first ("1 running outside OATS"), and lists no card for it: the card, and the one
+predicate the home's card, the Start dialog and this feature's lines share for "a message here is
+the designed resume", are the change after this one. The line of a thread that belonged to a RETIRED agent;
 the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
 come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
+
+## The home
+
+The OATS home (the Bot entry in bb's navigation, with a count when agents need you, the page
+`/plugins/oats/home`; on desktop the same view is the OATS tab of a thread that is no agent's) is
+the OATS Desktop's Home: what needs you first, then what you have.
+
+| Part | What it shows |
+|---|---|
+| **Needs you** | one card per agent that waits on you: those you can answer here (they have a thread in bb) first, then those answered elsewhere; within each, the newest claim first. Eight, then **Show all N**. A card says who (the instance's name as words, its soul and the machine), its state on the shared status line with since when it waits, what it asks in the agent's own words, and offers the answer its request takes (below). **Open thread** and the name lead to the agent's thread. With none: "Nothing needs you." |
+| the summary | one line, "8 agents · 3 working · 3 need you · 1 idle · 1 stopped": every agent OATS has counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's. Working and need you are always said; another state only when it has agents |
+| the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the mark its row in the sidebar carries (Automations, while a run failed), read only while the home is seen |
+| **Working** | the agents at work, five, then **Show all N working** / **Show fewer**; each row opens its agent |
+| **Finished, not looked at** | idle agents whose thread holds something you have not read; not drawn with none |
+| **Home › Agents** | `/plugins/oats/home/agents` (in the tab, a view of the tab): **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its soul and machine, its state in words and who started it ("started by Ana": the person OATS attributes it to, else its parent), and **Back to Home** (Esc does the same) |
+| **New agent** | in the heading's row of every home (the page's "Home", Home › Agents, and the tab), where New agent has somewhere to open; off, with the reason beside it, behind the CLI card and while the roster shown is the last one read |
+| an empty workspace | what OATS does in two lines; **New agent**, in the heading's row, is drawn as the one thing to press |
+
+**The installed `oats`.** The home says where the installed `oats` stands against what the plugin
+is built for (`kernel/compat.ts`: the oldest OATS it works with, the newest minor it was tested
+with, the version of the kernel's JSON answers it reads), and only the home says it:
+
+| The installed `oats` | The home shows |
+|---|---|
+| from the floor up to the tested minor | nothing |
+| older than the floor, or its version cannot be read | a card, **Compatible oats CLI required**: what was detected, what is required, and the command to copy (`npm install -g @awebai/oats@<tested minor>`); the home's New agent is off behind it, with why |
+| its JSON answers are of a later version than the plugin reads (`desktopApi`) | a card, **This plugin is older than the installed oats CLI**, with no npm command: the plugin is what to update |
+| of a later minor than the plugin was tested with | one line, "This plugin was tested with oats CLIs up to 0.70; the installed CLI is 0.71.2."; no act is turned off |
+| it runs (the roster reads) and its version could not be read, also at the home's one more try | one muted line, "The installed oats could not be checked.", with **Check again**; New agent stays on (the kernel refuses a spawn it cannot make) |
+
+Each of these notices (the two cards and the two lines) has **Check again**: it asks the server to read `oats version` anew (the server
+keeps one answer for every feature), so after an install the notice goes, and New agent comes back,
+with no reload. A check whose answer is the same leaves the notice as it is and can be pressed
+again; one that fails says so on the notice ("The installed oats could not be checked again: …")
+and keeps what was read before (on the line "The installed oats could not be checked." a check
+that fails leaves that one line, which stays true). The version is read by a call of the home's own (`app/home/cli.ts`),
+not by a kept query, so that the home knows when a check ends.
+
+It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the
+`oats version --json` the server reads once for every feature: no process of its own. An `oats`
+that cannot be run at all is the roster's notice, not this one.
+
+**The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
+shows (the plugin's setting `pages`; the default is `home` alone, and then the tiles are **Agents**
+only), and reads a page's count only then. New agent is offered where it has somewhere to open
+(the New agent form's page, once that feature names it; else the Souls page when it is shown).
+
+**What a card offers.** An agent is answered by the answer its request takes, and the card offers
+that one, not a free-text box beside it as an equal:
+
+| The agent | The card offers |
+|---|---|
+| bb lists choices for its request (a confirmation, a selection, an approval, a question with options) | the choices, as buttons: pressing one answers it in place (`threads.interactions.respond` / `resolve`). The card then says "Answered: Allow. Waiting for the agent to go on." until the agent goes on and its card leaves, or it asks again (by a request of bb's, or by a new claim of its own) |
+| bb shows its request in a form the card cannot draw (a plugin's form, free text) | "bb shows its request in its thread: open the thread to answer it.", and **Open thread** |
+| the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.", and **Open thread**. The card cannot grant what bb does not list, and does not pretend to |
+| it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
+| the kernel says it does not run (it is stopped, or its session ended), and it needs you all the same (bb still holds a request on its thread, or it still carries its claim) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
+| it has no thread in bb: it runs in tmux | "It runs in tmux on <machine>, where bb cannot write to it. Answer it in its terminal there:", the kernel's own command to copy (`oats session attach --home <its home>`), and **Open its page**, with "Open its page shows who it is and how it runs." |
+| it has no thread in bb: its thread was archived or deleted | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+
+Beside choices, or a request answered in the thread, a message is still possible, behind **Write a
+message instead**, which first says what a message does not do: "A message does not answer its
+request: it grants nothing, and the request stays open."
+
+While OATS cannot be read the home keeps the roster as last read, under the one notice every place
+shows for it (what happened, how old what is shown is, Retry), and every card's choices and reply
+are **held**, with the reason beside them: what is shown may have changed, and a message or an
+answer would go on a question that may no longer be the one asked. Open still opens.
+
+The home has no read of the roster of its own: it draws the roster every place shares (`useOats`, called once per
+view and passed down), groups it with one pure function (`app/home/board.ts`: every agent in the
+sidebar's order, who needs you, who works, what is finished, and the counts) and says it with
+`app/home/home-words.ts`. The tiles' counts are the four pages' own reads, made only while the
+home is visible. Answering is the person's act through bb's SDK (`threads.interactions.respond` /
+`resolve` for a choice bb offers, `threads.send` for a reply, as the person at the screen): the
+home never calls OATS to act, and never types into a session. These are the only calls in the
+whole plugin that send anything to a thread (the instance panel sends nothing). **A press asks
+first:** what a card offers follows the roster it was drawn from, and that roster can be seconds
+old, so a pressed choice and a sent reply first read the roster the plugin's server holds at that
+moment (`snapshot`, no process) and go to bb only if it reads and says the agent runs; else the
+card says "OATS has stopped this agent since: nothing was sent. Start it to answer." (or that OATS
+no longer lists the agent, or that OATS cannot be read now), and what was written is kept. What is left is the age of the server's own
+roster (its watch and its poll). Its one way to an act of OATS is
+the card of an agent that does not run: **Start…** opens the lifecycle's own dialog there, which
+asks the kernel and acts on its own button.
 
 ## The instance panel
 
@@ -273,8 +359,8 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"; for an unreachable agent what OATS itself says is one press away, under Details), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
-| **Soul** | the soul's mark, key and description, and under them **Open soul page** (off, with the reason beside it, for a soul OATS does not list); the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel says runs (it works, or it waits on a person), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
 that says whether it is ready, then, behind "Checks and policy", the four checks (Installed,

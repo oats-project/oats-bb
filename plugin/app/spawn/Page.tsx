@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
+import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { useOats } from "../oats";
@@ -330,7 +330,15 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
   // harness the person chose, and it must be one bb serves exactly once where bb lists its models by provider.
   // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
-  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, picked: model !== "" ? model : null, resolved: kernelResolved, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  // The soul's own harness: what the kernel resolved the last time this soul was previewed with none chosen.
+  const [own, setOwn] = useState<{ soul: string; harness: string | null } | null>(null);
+  useEffect(() => {
+    if (kernelResolved !== null && harness === "" && soul !== "") setOwn({ soul, harness: kernelResolved.harness });
+  }, [kernelResolved, harness, soul]);
+  const soulHarness = own !== null && own.soul === soul ? own.harness : null;
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: kernelResolved, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
+  const modelsReading = suggestions.status === "loading";
   // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
   const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
@@ -433,7 +441,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ? nameRefusal !== null
                 ? W.OFF.name
                 : W.OFF.refused
-              : preview === null
+              : preview === null || modelsReading
                 ? W.READING
                 : modelHeld.held; // the Model field's own words: it is marked with them too
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
@@ -484,7 +492,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       </Notice>
     );
   else if (off !== null || nameRefusal !== null) column = <p className="text-sm text-muted-foreground">{W.COLUMN_FIX_FIRST}</p>;
-  else if (preview !== null) column = <Created facts={preview.facts} machine={machine} />;
+  // A model is required of the person: the column promises no default for the harness.
+  else if (preview !== null) column = <Created facts={modelHeld.held === MODEL_HELD.required && kernelResolved?.harness != null ? { ...preview.facts, facts: withoutDefault(preview.facts.facts, kernelResolved.harness) } : preview.facts} machine={machine} />;
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
   else if (settled !== null) column = <Created facts={settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
@@ -593,7 +602,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 placeholder={MODEL_DEFAULT}
                 filterLabel={W.FILTER_MODELS}
                 options={[
-                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
+                  // (Required of the person: the first entry promises nothing, "Default" alone.)
+                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
                   // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
                   ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.

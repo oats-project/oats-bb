@@ -137,8 +137,7 @@ export type SpawnPreview = {
   problem: { code: string; message: string } | null;
 };
 
-/** `harnessChosen`: the call named a harness (`--harness`): the person chose it, it is not the soul's own. */
-export function parseSpawnPreview(document: unknown, name: string | null = null, harnessChosen = false): Result<SpawnPreview> {
+export function parseSpawnPreview(document: unknown, name: string | null = null): Result<SpawnPreview> {
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
@@ -177,7 +176,7 @@ export function parseSpawnPreview(document: unknown, name: string | null = null,
       warnings: value.warnings ?? [],
       problems,
     },
-    facts: formFacts(document, { name, harnessChosen }),
+    facts: formFacts(document, { name }),
     problem,
   });
 }
@@ -250,7 +249,7 @@ export const verbs = (oats: Runner) => ({
   ): Promise<Result<SpawnPreview>> {
     const checked = checkSpawn(input, context.knownSouls);
     if (!checked.ok) return checked;
-    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name, checked.value.harness !== null), oats.timeouts.preview, signal);
+    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name), oats.timeouts.preview, signal);
     return hasTask(input.task) ? withTaskFile(context.tempDir, input.task, run) : run(null);
   },
 

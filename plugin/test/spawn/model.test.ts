@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { formFacts, harnessLabel, homeText, launchFromText, modelCheck, moduleSourceText, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
+import { formFacts, harnessLabel, homeText, launchFromText, modelCheck, moduleSourceText, withoutDefault, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
 
 const recorded = (name: string): Record<string, unknown> => (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn", name), "utf8")) as { result: Record<string, unknown> }).result;
 const preview = recorded("spawn-preview.json");
@@ -298,29 +298,31 @@ describe("the Model field's one rule: may a spawn go with the model it would sen
   type Row = [what: string, input: Parameters<typeof modelCheck>[0], answer: ReturnType<typeof modelCheck>];
   const TABLE: Row[] = [
     // ---- the soul's own harness (none chosen in the form)
-    ["the soul's harness and its own model, served once (bare)", { chosenHarness: null, picked: null, resolved: soul("claude-fable-5.2"), listed: PI }, ARMED],
-    ["the soul's harness and its own model, listed as it is", { chosenHarness: null, picked: null, resolved: soul("openai/sol-5"), listed: PI }, ARMED],
-    ["the soul's harness, no model declared: the soul's decision, bb's default", { chosenHarness: null, picked: null, resolved: soul(null), listed: PI }, ARMED],
-    ["the soul's model, which bb serves under two providers", { chosenHarness: null, picked: null, resolved: soul("claude-fable-5.1"), listed: PI }, { held: "Pick provider", offers: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"] }],
-    ["the soul's model, which bb does not serve", { chosenHarness: null, picked: null, resolved: soul("claude-fable-9"), listed: PI }, { held: "Not found", offers: [] }],
+    ["the soul's harness and its own model, served once (bare)", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul("claude-fable-5.2"), listed: PI }, ARMED],
+    ["the soul's harness and its own model, listed as it is", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul("openai/sol-5"), listed: PI }, ARMED],
+    ["the soul's harness, no model declared: the soul's decision, bb's default", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul(null), listed: PI }, ARMED],
+    ["the soul's model, which bb serves under two providers", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul("claude-fable-5.1"), listed: PI }, { held: "Pick provider", offers: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"] }],
+    ["the soul's model, which bb does not serve", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul("claude-fable-9"), listed: PI }, { held: "Not found", offers: [] }],
     // ---- a harness chosen in the form
-    ["a chosen harness the kernel resolves no model for, none picked", { chosenHarness: "pi", picked: null, resolved: soul(null), listed: PI }, { held: "Required", offers: [] }],
-    ["the same, whatever bb lists, or does not", { chosenHarness: "pi", picked: null, resolved: soul(null), listed: null }, { held: "Required", offers: [] }],
-    ["a chosen harness whose model the kernel resolves (the soul declares its launch for it)", { chosenHarness: "pi", picked: null, resolved: soul("openai/sol-5"), listed: PI }, ARMED],
-    ["a chosen harness, a model picked from bb's list", { chosenHarness: "pi", picked: "github-copilot/claude-fable-5.2", resolved: soul(null), listed: PI }, ARMED],
+    ["a chosen harness the kernel resolves no model for, none picked", { chosenHarness: "pi", soulHarness: "claude", picked: null, resolved: soul(null), listed: PI }, { held: "Required", offers: [] }],
+    ["the same, whatever bb lists, or does not", { chosenHarness: "pi", soulHarness: "claude", picked: null, resolved: soul(null), listed: null }, { held: "Required", offers: [] }],
+    ["the soul's OWN harness, picked in the form, with no model declared: the soul's decision still, not held", { chosenHarness: "pi", soulHarness: "pi", picked: null, resolved: soul(null), listed: PI }, ARMED],
+    ["a chosen harness while the soul's own is not known yet (no preview with none chosen): not known to be the soul's, held", { chosenHarness: "pi", soulHarness: null, picked: null, resolved: soul(null), listed: PI }, { held: "Required", offers: [] }],
+    ["a chosen harness whose model the kernel resolves (the soul declares its launch for it)", { chosenHarness: "pi", soulHarness: "claude", picked: null, resolved: soul("openai/sol-5"), listed: PI }, ARMED],
+    ["a chosen harness, a model picked from bb's list", { chosenHarness: "pi", soulHarness: "claude", picked: "github-copilot/claude-fable-5.2", resolved: soul(null), listed: PI }, ARMED],
     // ---- a model picked or typed
-    ["typed: a bare id one provider serves", { chosenHarness: null, picked: "sol-5", resolved: soul("openai/sol-5"), listed: PI }, ARMED],
-    ["typed: a bare id that holds a slash, served once", { chosenHarness: null, picked: "anthropic/claude-sonnet-5", resolved: soul(null), listed: PI }, ARMED],
-    ["typed: a bare id two providers serve", { chosenHarness: "pi", picked: "claude-fable-5.1", resolved: soul(null), listed: PI }, { held: "Pick provider", offers: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"] }],
-    ["typed: an id nobody serves", { chosenHarness: "pi", picked: "mistral/large", resolved: soul(null), listed: PI }, { held: "Not found", offers: [] }],
-    ["the picked model is what is sent: the soul's own is not judged", { chosenHarness: null, picked: "openai/sol-5", resolved: soul("claude-fable-9"), listed: PI }, ARMED],
+    ["typed: a bare id one provider serves", { chosenHarness: null, soulHarness: "pi", picked: "sol-5", resolved: soul("openai/sol-5"), listed: PI }, ARMED],
+    ["typed: a bare id that holds a slash, served once", { chosenHarness: null, soulHarness: "pi", picked: "anthropic/claude-sonnet-5", resolved: soul(null), listed: PI }, ARMED],
+    ["typed: a bare id two providers serve", { chosenHarness: "pi", soulHarness: "claude", picked: "claude-fable-5.1", resolved: soul(null), listed: PI }, { held: "Pick provider", offers: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"] }],
+    ["typed: an id nobody serves", { chosenHarness: "pi", soulHarness: "claude", picked: "mistral/large", resolved: soul(null), listed: PI }, { held: "Not found", offers: [] }],
+    ["the picked model is what is sent: the soul's own is not judged", { chosenHarness: null, soulHarness: "pi", picked: "openai/sol-5", resolved: soul("claude-fable-9"), listed: PI }, ARMED],
     // ---- where bb's list does not decide
-    ["bb's list was not read, or cannot be: the kernel's answer stands", { chosenHarness: null, picked: "anything/at-all", resolved: soul("x"), listed: null }, ARMED],
-    ["a list that names no provider (Claude Code's): the rule does not apply", { chosenHarness: "claude", picked: "claude-opus-9", resolved: soul(null, "claude"), listed: CLAUDE }, ARMED],
-    ["the same for the soul's own model there", { chosenHarness: null, picked: null, resolved: soul("claude-opus-9", "claude"), listed: CLAUDE }, ARMED],
-    ["an empty list decides nothing", { chosenHarness: null, picked: "x", resolved: soul("y"), listed: [] }, ARMED],
+    ["bb's list was not read, or cannot be: the kernel's answer stands", { chosenHarness: null, soulHarness: "pi", picked: "anything/at-all", resolved: soul("x"), listed: null }, ARMED],
+    ["a list that names no provider (Claude Code's): the rule does not apply", { chosenHarness: "claude", soulHarness: "pi", picked: "claude-opus-9", resolved: soul(null, "claude"), listed: CLAUDE }, ARMED],
+    ["the same for the soul's own model there", { chosenHarness: null, soulHarness: "pi", picked: null, resolved: soul("claude-opus-9", "claude"), listed: CLAUDE }, ARMED],
+    ["an empty list decides nothing", { chosenHarness: null, soulHarness: "pi", picked: "x", resolved: soul("y"), listed: [] }, ARMED],
     // ---- before the kernel answered
-    ["no preview yet: nothing is held for the model (Spawn is off for its own reason)", { chosenHarness: "pi", picked: null, resolved: null, listed: PI }, ARMED],
+    ["no preview yet: nothing is held for the model (Spawn is off for its own reason)", { chosenHarness: "pi", soulHarness: "claude", picked: null, resolved: null, listed: PI }, ARMED],
   ];
   it.each(TABLE)("%s", (_what, input, answer) => {
     expect(modelCheck(input)).toEqual(answer);
@@ -342,19 +344,20 @@ describe("a soul that declares its own launch: its harness and model are the sou
   });
 
   it("Spawn is armed with it: one provider of bb's serves that model, and none need be picked", () => {
-    expect(modelCheck({ chosenHarness: null, picked: null, resolved: formFacts(declared).resolved, listed: ["github-copilot/claude-fable-5.1", "openai/sol-5"] })).toEqual({ held: null });
-    expect(modelCheck({ chosenHarness: null, picked: null, resolved: formFacts(declared).resolved, listed: null })).toEqual({ held: null });
+    expect(modelCheck({ chosenHarness: null, soulHarness: "pi", picked: null, resolved: formFacts(declared).resolved, listed: ["github-copilot/claude-fable-5.1", "openai/sol-5"] })).toEqual({ held: null });
+    expect(modelCheck({ chosenHarness: null, soulHarness: "pi", picked: null, resolved: formFacts(declared).resolved, listed: null })).toEqual({ held: null });
   });
 });
 
 describe("the column of a harness with no model resolved, on bb", () => {
   const preview = JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")).result;
   const unset = { ...preview, harness: "pi", model: null, modelSource: null };
-  it("the soul's own harness: bb's default for it; a harness the person chose: the harness alone, no default promised", () => {
-    expect(formFacts(unset).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · bb’s default for pi" });
-    expect(formFacts(unset, { harnessChosen: true }).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi" });
-    // With a model resolved the row is the same either way.
-    expect(formFacts(preview, { harnessChosen: true }).facts.find((fact) => fact.label === "Harness")).toEqual(formFacts(preview).facts.find((fact) => fact.label === "Harness"));
+  const harnessRow = (rows: { label: string; parts: { text: string }[] }[]) => rows.find((fact) => fact.label === "Harness")!.parts[0];
+  it("says bb's default for it; where a model is required of the person, the form draws the row with the harness alone, no default promised", () => {
+    expect(harnessRow(formFacts(unset).facts)).toEqual({ text: "pi · bb’s default for pi" });
+    expect(harnessRow(withoutDefault(formFacts(unset).facts, "pi"))).toEqual({ text: "pi" });
+    // Only that promise is taken away: a row with a model resolved, and every other row, stay as they are.
+    expect(withoutDefault(formFacts(preview).facts, "pi")).toEqual(formFacts(preview).facts);
+    expect(withoutDefault(formFacts(unset).facts, "pi").filter((fact) => fact.label !== "Harness")).toEqual(formFacts(unset).facts.filter((fact) => fact.label !== "Harness"));
   });
 });
-

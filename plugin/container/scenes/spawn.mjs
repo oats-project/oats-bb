@@ -368,22 +368,22 @@ export default [
   },
   {
     stage: "spawn-model-required",
-    name: "the New agent form: a harness the person chose, for which the kernel resolves no model: the Model field is marked Required, Spawn is held with that word, and no default is promised",
+    name: "the New agent form: a harness the person chose that is not the soul's own, for which the kernel resolves no model: the Model field is marked Required, Spawn is held with that word, and no default is promised",
     run: async ({ page, at, viewport, check }) => {
       const since = Date.now();
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       await page.until(READ, 30);
-      const MODEL = `(() => { const field = document.querySelector(${q("oats-spawn-model")}); const error = field?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]'); const harness = [...document.querySelectorAll(${q("oats-spawn-preview")} + ' [data-testid="oats-fact"]')].find((fact) => fact.querySelector("dt")?.innerText.trim() === "Harness")?.querySelector("dd")?.innerText.replace(/\\s+/g, " ").trim() ?? null; return JSON.stringify({ harness, mark: error ? error.innerText.trim() : null, invalid: field?.getAttribute("aria-invalid") === "true", foot: JSON.parse(${FOOT}) }); })()`;
-      // The soul's own harness, with no model of its own: the soul's decision, on bb's default. Not held.
-      // (The Harness row's value, then where it came from: the row is read by how it starts.)
-      const is = (read, harness, rest) => read !== null && harness(read.harness ?? "") && JSON.stringify({ mark: read.mark, invalid: read.invalid, foot: read.foot }) === JSON.stringify(rest);
+      // The Harness row (its value, then where it came from), the Model field (what it shows, its mark) and the button.
+      const MODEL = `(() => { const field = document.querySelector(${q("oats-spawn-model")}); const error = field?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]'); const harness = [...document.querySelectorAll(${q("oats-spawn-preview")} + ' [data-testid="oats-fact"]')].find((fact) => fact.querySelector("dt")?.innerText.trim() === "Harness")?.querySelector("dd")?.innerText.replace(/\\s+/g, " ").trim() ?? null; return JSON.stringify({ harness, field: field?.innerText.replace(/\\s+/g, " ").trim() ?? null, mark: error ? error.innerText.trim() : null, invalid: field?.getAttribute("aria-invalid") === "true", foot: JSON.parse(${FOOT}) }); })()`;
+      const is = (read, harness, field, rest) => read !== null && harness(read.harness ?? "") && field.test(read.field ?? "") && JSON.stringify({ mark: read.mark, invalid: read.invalid, foot: read.foot }) === JSON.stringify(rest);
+      // The soul's own harness, as the kernel resolves it with none chosen: its own model, and nothing held.
       const own = await page.until(`${READ} && ${MODEL}`, 30);
-      check(is(own ? JSON.parse(own) : null, (row) => row.startsWith("pi · bb’s default for pi"), { mark: null, invalid: false, foot: { button: "Spawn", off: false, reason: "", fields: false } }), `${at} the soul's own harness with no model declared: bb's default for it, and Spawn is not held`, own ?? (await page.evaluate(MODEL)));
-      // The same harness CHOSEN by the person: a model is required.
+      check(is(own ? JSON.parse(own) : null, (row) => row.startsWith("Claude Code · claude-opus-5-5"), /^Default · claude-opus-5-5 ?▾$/, { mark: null, invalid: false, foot: { button: "Spawn", off: false, reason: "", fields: false } }), `${at} with no harness chosen: the soul's own harness and model, and Spawn is not held`, own ?? (await page.evaluate(MODEL)));
+      // Another harness, CHOSEN by the person: the kernel resolves no model for it (the soul's is Claude Code's), and one is required.
       check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} pi is chosen in the harness's list`, await whole(page));
       const held = await page.until(`(() => { const read = JSON.parse(${MODEL}); return read.mark === "Required" && read.foot.reason === "Required" ? JSON.stringify(read) : ""; })()`, 30);
-      check(is(held ? JSON.parse(held) : null, (row) => /^pi(?! ·)/.test(row), { mark: "Required", invalid: true, foot: { button: "Spawn", off: true, reason: "Required", fields: false } }), `${at} chosen by the person: the column names the harness alone, the Model field is marked "Required", and Spawn is held with that word: no sentence, and no default promised`, held ?? (await page.evaluate(MODEL)));
-      check(!(await whole(page)).includes("bb’s default"), `${at} nothing on the form says bb's default`, await whole(page));
+      check(is(held ? JSON.parse(held) : null, (row) => /^pi(?! ·)/.test(row) && row.includes("chosen for this spawn"), /^Default ?▾$/, { mark: "Required", invalid: true, foot: { button: "Spawn", off: true, reason: "Required", fields: false } }), `${at} chosen by the person: the column names the harness alone, the Model field says "Default" and is marked "Required", and Spawn is held with that word: no sentence, and no default promised`, held ?? (await page.evaluate(MODEL)));
+      check(!/bb’s default|harness’s own|harness's own/.test(await whole(page)), `${at} nothing on the form promises a default`, await whole(page));
       // A press, by the button or by the key, starts nothing: read after the time a spawn takes to reach the fake's log.
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
@@ -512,20 +512,22 @@ const rollbackIncomplete = () => {
   return JSON.stringify(answer);
 };
 /**
- * The preview of a harness for which the kernel resolves no model. SHAPED, not recorded: the real
- * run's bb has no pi to preview (the kernel refuses that preview from 0.70.1: spawn-preview-pi-refused.json),
- * and a soul of the real run declares a model for its own harness. It is the recorded preview of the
- * form filled (spawn-preview-named.json) with the harness "pi" and no model, in each place the kernel
- * says them (`harness`, `model`, `modelSource`, `launch`, `decision.effective`): what the kernel
- * answers where the soul's model is another harness's (OATS 0.70.0's answer to `--harness pi` on a
- * soul that declares claude, as the first form's real run met it).
+ * The preview of a harness the person chose, for which the kernel resolves no model. SHAPED, not
+ * recorded: the real run's bb has no pi to preview (the kernel refuses that preview from 0.70.1:
+ * spawn-preview-pi-refused.json). It is the recorded preview of the form filled
+ * (spawn-preview-named.json: the soul's own launch, Claude Code and its model) with the harness
+ * "pi" and no model in each place the kernel says them (`harness`, `model`, `modelSource`,
+ * `launch.effective`, `decision.effective`), and `launch.from: "flag"`, the kernel's word for a
+ * harness named on the call ("chosen for this spawn"): what OATS 0.70.0 answered `--harness pi` on
+ * a soul that declares claude, as the first form's real run met it. The stage answers it only to
+ * a preview that names a harness; one that names none gets the recorded answer.
  */
 const noModel = () => {
   const answer = JSON.parse(read(join(FIXTURES, "spawn-preview-named.json"), "utf8"));
   const result = answer.result;
   if (result.harness !== "claude" || typeof result.model !== "string") throw new Error("spawn-preview-named.json no longer resolves claude with a model of the soul's");
   Object.assign(result, { harness: "pi", model: null, modelSource: null });
-  result.launch = { ...result.launch, effective: { ...result.launch.effective, harness: "pi", model: null } };
+  result.launch = { ...result.launch, effective: { ...result.launch.effective, harness: "pi", model: null }, from: "flag" };
   result.decision.effective = { ...result.decision.effective, harness: "pi", model: null };
   return JSON.stringify(answer);
 };
@@ -548,6 +550,6 @@ export const stages = {
   "spawn-refused": stage("SP6", () => ({ spawn: { file: "spawn/spawn-decision-stale.json" } })),
   // The preview answers; the apply is refused, and the kernel marks that it could not undo all of it.
   "spawn-unconfirmed": stage("SP8", () => ({ spawn: { stdout: rollbackIncomplete(), exit: 1 } })),
-  // The preview resolves a harness and no model for it, whatever is chosen.
-  "spawn-model-required": stage("SP9", () => ({ "spawn --preview": { stdout: noModel() } })),
+  // A preview that names a harness (the fake tells a verb by its flags) resolves that harness and no model; one that names none, the soul's own.
+  "spawn-model-required": stage("SP9", () => ({ "spawn --preview --harness": { stdout: noModel() } })),
 };

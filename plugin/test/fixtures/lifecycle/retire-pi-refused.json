@@ -1,0 +1,17 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_RUNTIME_QUIESCE_FAILED",
+  "message": "the bb session of pi-form-developer stopped, and a process works in its home (pid 4186 pi); stop it, then retire again. A shell named here may be your own: one whose working directory is in the home counts, and leaving the home's directory clears it",
+  "details": {
+   "reached": {
+    "phase": "before-hooks",
+    "sessionStopAttempted": true,
+    "hooksStarted": false,
+    "home": "kept",
+    "recovery": null
+   }
+  }
+ }
+}

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -42,9 +42,9 @@ describe("a stop plan", () => {
       kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
       attention: ["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."],
       state: [
-        { label: "Redesign ui lead", value: "Running" },
-        { label: "Desktop mockups developer", value: "Running" },
-        { label: "Harvest knowledge helper", value: "Running" },
+        { label: "Redesign ui lead", value: "Session running" },
+        { label: "Desktop mockups developer", value: "Session running" },
+        { label: "Harvest knowledge helper", value: "Session running" },
       ],
       notes: [],
       choice: { label: "Include child instances", checked: true, warning: null },
@@ -69,7 +69,7 @@ describe("a stop plan", () => {
     const plan = stopPlan();
     const view = stopPlanView({ ...plan, targets: [{ ...plan.targets[0]!, session: "unknown", midTask: "unknown" }], ambiguous: ["lost-child"] });
     expect(view.choice).toBeNull();
-    expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Unknown (couldn't be checked)" }]);
+    expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Session unknown (couldn't be checked)" }]);
     expect(view.attention).toEqual([]);
     expect(view.notes).toEqual(["Not included: Lost child (another instance has the same parent name, so OATS can't tell whose child it is)."]);
   });
@@ -158,11 +158,26 @@ describe("a stop and the agent's thread", () => {
     expect(stopThreadSentence(true)).toBe("Its thread is archived. To talk to it again, start it.");
   });
 
-  it("the fact is read from the provider's version against the release that archives at stop; no release does yet, so no version does", () => {
-    for (const version of ["0.3.0", "1.0.0", "99.0.0", null]) expect(stopArchivesThread(version)).toBe(false);
-    // With the release named, that one and every later archive; an earlier one, and a version that cannot be read, do not.
-    expect(["0.4.0", "0.4.1", "0.10.0", "1.0.0", "0.4.0-rc.1"].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([true, true, true, true, true]);
-    expect(["0.3.9", "0.3.10", "", "next", "0.4", null].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([false, false, false, false, false, false]);
+  it("the fact is read from the provider's version against the release that archives at stop, oats-bb 0.4.0", () => {
+    // The provider archives the thread at stop from oats-bb v0.4.0 on (the release lane's number).
+    expect(ARCHIVES_AT_STOP_FROM).toBe("0.4.0");
+    expect(stopArchivesThread("0.3.0")).toBe(false);
+    expect(stopArchivesThread("0.4.0")).toBe(true);
+    expect(stopArchivesThread("0.4.1")).toBe(true);
+    // Numeric, part by part: 0.10.0 is after 0.4.0 (a compare of strings would put it before), and 0.3.10 before.
+    expect(stopArchivesThread("0.10.0")).toBe(true);
+    expect(stopArchivesThread("0.3.10")).toBe(false);
+    expect(stopArchivesThread("1.0.0")).toBe(true);
+    // A pre-release of 0.4.0 comes BEFORE it (semver), and nothing says a candidate archives: not known, so false,
+    // and the dialog keeps the sentence that warns. A pre-release of a later version is later.
+    expect(stopArchivesThread("0.4.0-rc.1")).toBe(false);
+    expect(stopArchivesThread("0.4.1-rc.1")).toBe(true);
+    expect(stopArchivesThread("0.4.0+build.7")).toBe(true); // build metadata is not a pre-release
+    // A version that cannot be read as a release: none, a commit (a provider taken from a repository), a partial or a foreign one.
+    for (const version of [null, "9b95a56f237ff4006a69545963d5130d6eb4ddc5", "", "next", "0.4", "v0.4.0", "0.4.0.1", "4abc.0.0", " 0.4.0"]) expect(stopArchivesThread(version), String(version)).toBe(false);
+    // Another threshold, and none: the function is of the fact, the constant is the release lane's.
+    expect(["0.4.0", "0.5.0", "0.5.1"].map((version) => stopArchivesThread(version, "0.5.0"))).toEqual([false, true, true]);
+    expect(stopArchivesThread("99.0.0", null)).toBe(false);
     expect(stopPlanView(stopPlan(), true).happens).toContain("Its thread is archived. To talk to it again, start it.");
   });
 
@@ -215,6 +230,13 @@ describe("a plan that changed under the confirmation", () => {
     expect(drawn(after)).not.toBe(drawn(before));
     expect(planChanges(before, after)).toEqual(CHANGED);
   });
+  it("draws each plan with its own answer on whether a stop archives the thread: a sentence that changed is a change", () => {
+    const stop = stopPlan();
+    // The earlier plan was drawn with "a message starts it again", the plan as it is now says "its thread is archived".
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, true, false)).toEqual(CHANGED);
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, true, true)).toEqual([]);
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, false)).toEqual([]);
+  });
   it("says nothing differs only when the dialog draws the two plans alike", () => {
     const before = retirePlan();
     expect(planChanges(before, { ...before, revision: "another-revision" })).toEqual([]);
@@ -261,8 +283,10 @@ describe("a result", () => {
       lines: [
         "1 child instance stopped and kept.",
         "Home folder deleted.",
-        "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
-        "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+        "Worktree kept, at:",
+        "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
+        "Recovery copy saved at:",
+        "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
         "Its conversation stays readable in bb, archived.",
       ],
       code: null,
@@ -277,7 +301,8 @@ describe("a result", () => {
   it("a retire whose cleanup did not finish: what ran, that the home is kept, the kernel's lines under Details", () => {
     const outcome = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
     expect(outcome).toMatchObject({ tone: "failed", title: "Retirement didn't finish", code: "RETIRE_INCOMPLETE", offers: ["review"] });
-    expect(outcome.lines).toContain("Home folder kept at /abs/deployment/agents/oats-expert/instances/weekly-digest-helper.");
+    // A path stands on its own line: no full stop glued to it.
+    expect(outcome.lines.slice(outcome.lines.indexOf("Home folder kept, at:"), outcome.lines.indexOf("Home folder kept, at:") + 2)).toEqual(["Home folder kept, at:", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
     expect(outcome.lines).toContain("Cleanup didn't finish.");
     expect(outcome.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
     // The home was kept: on bb the agent can come back with no OATS around it. That is a warning of its own,
@@ -415,5 +440,92 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn(lost, null)).toBe(false);
     expect(carriesOn(lost, { status: "error" })).toBe(false);
     expect(carriesOn(lost, { status: "active" })).toBe(true);
+  });
+});
+
+describe("a retire's warnings", () => {
+  const warnings = ["the bb thread of weekly-digest-helper could only be archived: its harness did not stop\nsecond line of the same warning", "retire hook oats.aweb: the alias is held"];
+  it("stand in the result of a retire that finished, each under OATS's name, with all of it under Details", () => {
+    const outcome = retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), warnings }, retirePlan());
+    expect(outcome.tone).toBe("done");
+    expect(outcome.lines).toContain("OATS says: the bb thread of weekly-digest-helper could only be archived: its harness did not stop");
+    expect(outcome.lines).toContain("OATS says: retire hook oats.aweb: the alias is held");
+    expect(outcome.details).toBe(warnings.join("\n"));
+  });
+  it("stand in the result of a retire that did not finish, after its steps, and under Details after what the cleanup left", () => {
+    const incomplete = value(parseRetireApply(fixture("retire-incomplete.json")));
+    const outcome = retireOutcome({ ...incomplete, warnings: [warnings[1]!] }, retirePlan());
+    expect(outcome.tone).toBe("failed");
+    expect(outcome.lines.indexOf("OATS says: retire hook oats.aweb: the alias is held")).toBeGreaterThan(outcome.lines.indexOf("Cleanup didn't finish."));
+    expect(outcome.details).toBe([...incomplete.incomplete, warnings[1]].join("\n"));
+  });
+  it("a receipt with none says nothing of them, and a finished retire has no Details", () => {
+    const outcome = retireOutcome(value(parseRetireApply(fixture("retire-apply.json"))), retirePlan());
+    expect(outcome.lines.some((line) => line.startsWith("OATS says:"))).toBe(false);
+    expect(outcome.details).toBeNull();
+  });
+});
+
+describe("a retire refused because a process still works in the home", () => {
+  // RECORDED by the pi run (OATS 0.70.5): what the kernel printed for a retire asked within a minute of opening
+  // the agent's pi thread, with exit 1 (test/fixtures/lifecycle/README.md).
+  const refusal: { code: string; message: string } = (fixture("retire-pi-refused.json") as { error: { code: string; message: string } }).error;
+  const WAIT = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+  it("for an agent that runs pi on bb says, after OATS's own line, that bb may still be listing models and to try again in a minute", () => {
+    const outcome = applyRefused("retire", "dev-1", refusal, piOnBb({ backend: "bb", harness: "pi" }));
+    expect(outcome).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired", code: "E_RUNTIME_QUIESCE_FAILED", offers: ["review"] });
+    expect(refusal.code).toBe("E_RUNTIME_QUIESCE_FAILED");
+    expect(refusal.message).toMatch(/^the bb session of pi-form-developer stopped, and a process works in its home \(pid \d+ pi\); stop it, then retire again\./);
+    expect(outcome.lines).toEqual(["OATS tried to end a session or a process and couldn't confirm that it ended.", `OATS says: ${refusal.message}`, WAIT]);
+  });
+  it("is decided from read facts alone: the code, the plan's backend, the row's harness; never from what the message names", () => {
+    expect(piOnBb({ backend: "bb", harness: "pi" })).toBe(true);
+    expect(piOnBb({ backend: "bb", harness: "claude" })).toBe(false);
+    expect(piOnBb({ backend: "tmux", harness: "pi" })).toBe(false);
+    expect(piOnBb({ backend: "bb", harness: null })).toBe(false);
+    expect(piOnBb({ backend: null, harness: "pi" })).toBe(false);
+    // The same message for an agent on another harness: the Desktop's sentence alone, as before.
+    expect(applyRefused("retire", "dev-1", refusal, false).lines).toEqual(["OATS tried to end a session or a process and couldn't confirm that it ended."]);
+    // A message that names no pi, for an agent that runs pi on bb: the line still stands (the message is not read).
+    expect(applyRefused("retire", "dev-1", { code: "E_RUNTIME_QUIESCE_FAILED", message: "could not establish that the bb session of dev-1 stopped" }, true).lines).toContain(WAIT);
+  });
+  it("only for that code, and only for a retire", () => {
+    expect(applyRefused("retire", "dev-1", { code: "E_CHILDREN_RUNNING", message: "m" }, true).lines).not.toContain(WAIT);
+    expect(applyRefused("stop", "dev-1", refusal, true).lines).not.toContain(WAIT);
+    // Asked again with the same key: the kernel's own answer settles it, with the same line.
+    expect(checkAgainRefused("retire", "dev-1", refusal, true).lines).toContain(WAIT);
+  });
+});
+
+describe("an outcome as the toaster tells it, when its dialog is gone", () => {
+  it("a stop, a start or a restart that is done is told whole, and may leave by itself", () => {
+    const done = stopOutcome(value(parseStopApply(fixture("stop-apply.json").result)), "redesign-ui-lead");
+    expect(toasted("stop", done)).toEqual({ plain: true, tone: "done", title: done.title, lines: done.lines });
+    const started = startOutcome("start", "dev-1", value(parseSessionStart(fixture("start.json"))));
+    expect(toasted("start", started).plain).toBe(true);
+  });
+  it("anything else is told by its title alone, for the dialog to be opened again on: a toast names no button and holds no path", () => {
+    const outcomes: [Parameters<typeof toasted>[0], ReturnType<typeof applyRefused>][] = [
+      ["retire", applyRefused("retire", "dev-1", { code: "E_UNIDENTIFIED_INSTANCE_HOME", message: "what is left, and how to finish" })], // "Details says …"
+      ["stop", applyRefused("stop", "dev-1", { code: null, message: "m" })], // "Details says why."
+      ["stop", applyRefused("stop", "dev-1", { code: "E_SESSION_UNKNOWN", message: "m" })], // "Review again …"
+      ["stop", applyRefused("stop", "dev-1", { code: "E_PLAN_STALE", message: "m" })],
+      ["stop", applyRefused("stop", "dev-1", { code: "OATS_TIMEOUT", message: "m" })], // "Check again …"
+      ["retire", checkAgainRefused("retire", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "m" })],
+      ["start", startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m" })], // "Refresh status, …"
+      ["restart", startRefused("restart", "dev-1", { code: "E_SOMETHING_ELSE", message: "m" })],
+      // A retire that finished: its lines hold where the worktree and the recovery copy are, and its warnings.
+      ["retire", retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), warnings: ["the bb thread could only be archived"] }, retirePlan())],
+    ];
+    for (const [verb, outcome] of outcomes) {
+      const toast = toasted(verb, outcome);
+      expect(toast, outcome.title).toEqual({ plain: false, tone: outcome.tone, title: outcome.title, lines: [] });
+      expect(JSON.stringify(toast)).not.toMatch(/Details|Check again|Review again|Refresh status|\/abs\//);
+    }
+  });
+  it("says first what the dialog sets apart: a home that was kept", () => {
+    const kept = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
+    expect(kept.warning).toBeDefined();
+    expect(toasted("retire", kept)).toEqual({ plain: false, tone: "failed", title: kept.title, lines: [kept.warning!.title] });
   });
 });

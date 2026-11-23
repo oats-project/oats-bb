@@ -49,6 +49,7 @@ export const retireReceipt = z.object({
   children: z.array(stoppedRow),
   incomplete: z.array(z.string()),
   compensation: z.object({ branch: z.string(), deleted: z.boolean(), reason: z.string().nullable() }).nullable(),
+  warnings: z.array(z.string()),
 }) satisfies z.ZodType<RetireReceipt>;
 const started = z.object({
   threadId: z.string().nullable(),
@@ -90,13 +91,28 @@ const startCheck = z.object({
 /** The thread the agent is in after the act, and what the kernel said of the start. */
 const startedIn = started.extend({ threadId: z.string() });
 
+/**
+ * The retire plan as the dialog reads it: the kernel's plan, and the harness the kernel's own
+ * status row records for the agent (the plan does not say it), read beside it; null when the row
+ * records none.
+ */
+export const retirePlanRead = retirePlan.extend({ harness: z.string().nullable() });
+
+/**
+ * The stop plan as the dialog reads it: the kernel's plan, and the bb session provider's version
+ * (from the one read of the harness list, `server/spawn.ts`), by which the dialog knows whether a
+ * stop archives the agent's thread (`stopArchivesThread`); null when the kernel prints none or the
+ * read failed.
+ */
+export const stopPlanRead = stopPlan.extend({ providerVersion: z.string().nullable() });
+
 export const rpc = defineRpcContract({
-  stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlan },
+  stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlanRead },
   stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceipt },
   startCheck: { input: instance, output: startCheck },
   start: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
   restart: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
-  retirePlan: { input: instance, output: retirePlan },
+  retirePlan: { input: instance, output: retirePlanRead },
   retireApply: { input: z.object({ ...apply, discardWorktree: z.boolean().optional() }).strict(), output: retireReceipt },
 });
 

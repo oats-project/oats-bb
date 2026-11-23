@@ -73,6 +73,9 @@ export const dialog = async (page) =>
       `JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-about") ?? null, phase: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-phase") ?? null, body: ${textOf(testId("oats-modal"))}, act: ${textOf(testId("oats-confirm-act"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-act"))})?.disabled ?? null, focus: ${FOCUSED} })`,
     ),
   );
+/** A toast of ours (found by what it says) has come in whole: it is opaque, and where it was at the last look. An image taken before shows it half way. */
+const toastSettled = (text) =>
+  `(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes(${JSON.stringify(text)})); if (!toast || Number(getComputedStyle(toast).opacity) < 1) return false; const top = Math.round(toast.getBoundingClientRect().top); const was = window.__oatsToastTop; window.__oatsToastTop = top; return was === top; })()`;
 const menuItems = `[...document.querySelectorAll('[role="menuitem"]')]`;
 /**
  * bb's menu has come in whole (a menu fades in at 1280; a sheet slides up at 390): nothing that holds
@@ -117,8 +120,8 @@ const whole = (key) => `(() => {
   const onScreen = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; };
   // What matters now: what the scene names; else, while the act runs, the line that says so; once it has an answer, the result; before, the notice or the first sentence of the plan.
   const phase = document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase");
-  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(`${testId("oats-confirm")} > ${testId("oats-loading")}`)} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
-  const buttons = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-cancel")}, ${testId("oats-confirm-act")}, ${testId("oats-confirm-close")}`)})];
+  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-leave-line"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
+  const buttons = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-cancel")}, ${testId("oats-confirm-leave")}, ${testId("oats-confirm-act")}, ${testId("oats-confirm-close")}`)})];
   const says = [${JSON.stringify(testId("oats-modal-above"))}, ${JSON.stringify(testId("oats-modal-below"))}].map((id) => document.querySelector(id)?.innerText ?? null);
   const above = body.scrollTop > 1;
   const below = body.scrollHeight - body.clientHeight - body.scrollTop > 1;
@@ -159,6 +162,11 @@ export default [
         check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
         const items = await menuTexts(page);
         check(["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)"].every((label) => items.includes(label)) && !items.includes("Start agent (OATS)"), `${at} the row's menu of a working agent holds Stop, Restart and Retire, each "(OATS)" beside bb's own, and no Start`, JSON.stringify(items));
+        const named = items.indexOf("Redesign ui lead · Working");
+        check(named >= 0 && items[named + 1] === "Stop agent (OATS)" && items.indexOf("Archive") > items.indexOf("Retire agent (OATS)"), `${at} the OATS entries start with a row that names the agent and its state, and stand before bb's own Archive and Delete`, JSON.stringify(items));
+        // A separator is a gap in the list: more room between Retire and Archive than between two entries of one group.
+        const apart = await page.evaluate(`(() => { const rows = [...document.querySelectorAll('[role="menuitem"]')]; const row = (text) => rows.find((each) => each.innerText.trim() === text)?.getBoundingClientRect(); const [stop, restart, retire, archive] = ["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)", "Archive"].map(row); if (!stop || !restart || !retire || !archive) return false; return archive.top - retire.bottom > restart.top - stop.bottom + 4; })()`);
+        check(apart, `${at} bb sets the OATS entries apart from its own Archive and Delete`);
         await page.shot(`lifecycle-${viewport.name}-row-menu`);
         check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
         await page.until(phaseIs("ready"), 30);
@@ -178,9 +186,9 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.phase === "running" && running.body.includes("Stopping Redesign ui lead. This can take up to a minute.") && running.off === true, `${at} while it runs the dialog says so, and its buttons are off`, JSON.stringify(running));
-        await page.press("Escape");
-        check((await dialog(page)).phase === "running", `${at} Escape does not dismiss the dialog while the act runs`);
+        check(running.phase === "running" && running.body.includes("Stopping Redesign ui lead. This can take up to a minute.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
+        const leave = JSON.parse(await page.evaluate(`JSON.stringify({ line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-leave"))})?.disabled ?? null })`));
+        check(leave.line === "You can close this; stopping continues." && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog says that it can be closed and that stopping continues, with Close on`, JSON.stringify(leave));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
@@ -234,6 +242,110 @@ export default [
   },
   {
     stage: "lifecycle",
+    name: "Stop, the states between the menu and the result: the plan being read, a plan that cannot be read, a result that is not confirmed and is asked again, a dialog that is left while the act runs",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const lead = threads.get(LEAD);
+      const shot = (name) => dialogShot({ page, at, viewport, check }, "stop", name);
+      const open = async () => {
+        await page.goto("/");
+        check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
+        check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
+      };
+      await page.clock(STOP_AT);
+      try {
+        // The plan being read: the kernel takes a while to answer it.
+        answers({ "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 5000 } });
+        await open();
+        await page.until(phaseIs("reading"), 10);
+        const reading = await dialog(page);
+        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking what stopping Redesign ui lead will do…") && reading.off === true, `${at} while the plan is read the dialog says what it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
+        await shot("reading");
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-cancel"));
+        await page.until(closed, 10);
+
+        // A plan that cannot be read: oats ends with no answer at all.
+        answers({ "instance stop --plan": { stdout: "", stderr: "oats: internal error", exit: 1 } });
+        await open();
+        await page.until(phaseIs("failed"), 30);
+        const unread = await dialog(page);
+        check(
+          unread.body.includes("Couldn't check what stopping Redesign ui lead will do") && unread.body.includes("Nothing was changed.") && unread.body.includes("Review again") && !/what will happen/i.test(unread.body),
+          `${at} a plan that cannot be read says so in a person's words, that nothing was changed, and offers to read it again; no plan is drawn`,
+          JSON.stringify(unread),
+        );
+        await shot("unreadable");
+        // Read again, and the kernel answers: the plan is there.
+        answers();
+        await page.evaluate(click("oats-act-review"));
+        check(Boolean(await page.until(phaseIs("ready"), 30)), `${at} Review again reads the plan, and it can be confirmed`);
+
+        // A result that is not confirmed: the apply's answer is lost (oats prints nothing the plugin can read).
+        answers({ "instance stop --apply": { stdout: "", exit: 0 } });
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
+        const lost = await dialog(page);
+        check(
+          lost.body.includes("Result not confirmed") && lost.body.includes("OATS didn't confirm the result. Check again before assuming nothing happened.") && lost.body.includes("Check again") && !lost.body.includes("wasn't stopped"),
+          `${at} an apply whose answer is lost is told as not confirmed, never as stopped and never as not stopped, with Check again`,
+          JSON.stringify(lost),
+        );
+        await shot("not-confirmed");
+        // Check again asks for the answer to the same apply: the kernel has it.
+        answers({ "instance stop --apply": { file: "lifecycle/stop-apply.json" } });
+        await page.evaluate(click("oats-act-check"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "done"`, 30);
+        check((await dialog(page)).body.includes("3 sessions stopped."), `${at} Check again reads the result of that apply: stopped`);
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // A dialog that is left while the act runs: the result comes through bb's toaster.
+        answers({ "instance stop --apply": { file: "lifecycle/stop-apply.json", sleepMs: 4000 } });
+        await open();
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("running"), 10);
+        await page.evaluate(click("oats-confirm-leave"));
+        check(Boolean(await page.until(closed, 10)), `${at} Close leaves the dialog while the stop runs`);
+        const told = await page.until(`(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped.")); return toast ? toast.innerText.replace(/\\s+/g, " ").trim() : null; })()`, 30);
+        check(Boolean(told), `${at} the result of a stop whose dialog was left is told through bb's toaster`, String(told));
+        await page.until(toastSettled("3 sessions stopped."), 10);
+        await page.shot(`lifecycle-${viewport.name}-stop-left-toast`);
+        await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped."))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+
+        // A refusal that arrives after the dialog was left: a toast cannot hold it (no Details, no Review again).
+        // It stays, names no button of the dialog, and "Show result" opens the dialog again on the refusal.
+        answers({ "instance stop --apply": { ...gone("stopApply"), sleepMs: 4000 } });
+        await open();
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("running"), 10);
+        await page.evaluate(click("oats-confirm-leave"));
+        await page.until(closed, 10);
+        const refusedToast = `[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("Redesign ui lead wasn't stopped"))`;
+        const said = await page.until(`(() => { const toast = ${refusedToast}; return toast ? JSON.stringify({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }) : null; })()`, 30);
+        const toast = said ? JSON.parse(said) : { text: "", buttons: [] };
+        check(toast.buttons.includes("Show result") && !/Review again|Details|Check again/.test(toast.text), `${at} a refusal that arrives after the dialog was left is told by its title, with Show result, and names no button of the dialog`, JSON.stringify(toast));
+        await page.until(toastSettled("Redesign ui lead wasn't stopped"), 10);
+        await page.shot(`lifecycle-${viewport.name}-stop-left-refused-toast`);
+        await page.evaluate(`[...${refusedToast}.querySelectorAll("button")].find((button) => button.innerText.trim() === "Show result").click()`);
+        await page.until(phaseIs("failed"), 10);
+        const shown = await dialog(page);
+        check(shown.body.includes("Redesign ui lead wasn't stopped") && shown.body.includes("Review again") && shown.body.includes("Details"), `${at} Show result opens the dialog again on that refusal, with Review again and Details`, JSON.stringify(shown));
+        // bb takes the toast away once its button was pressed: the result is shown once, in the dialog.
+        check(Boolean(await page.until(`${refusedToast} === undefined`, 10)), `${at} the toast leaves once its result is shown`);
+        // No image of it: the dialog opened again IS the refusal's dialog as it was (the run's own check found the
+        // two images the same, pixel for pixel, once the toast had left); `stop-refused` is its image.
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+      } finally {
+        answers();
+        await page.clock(null);
+      }
+    },
+  },
+  {
+    stage: "lifecycle",
     name: "Retire, from the thread's own menu: what goes and what stays, the worktree's choice, in progress, done; an agent that is gone; a cleanup that did not finish",
     run: async ({ page, at, viewport, threads, check }) => {
       const helper = threads.get(HELPER);
@@ -277,11 +389,11 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.body.includes("Retiring Weekly digest helper. This can take up to a minute while sessions stop.") && running.off === true, `${at} while it runs the dialog says so, and its buttons are off`, JSON.stringify(running));
+        check(running.body.includes("Retiring Weekly digest helper. This can take up to a minute while sessions stop.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
-        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && done.body.includes("Home folder deleted.") && done.body.includes("Worktree kept at") && done.body.includes("Recovery copy saved at") && done.body.includes("Its conversation stays readable in bb, archived.") && done.focus === "oats-confirm-close", `${at} the result is the Desktop's lines: the children, the home, the worktree, the recovery copy; and the thread`, JSON.stringify(done));
+        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && done.body.includes("Home folder deleted.") && done.body.includes("Worktree kept, at:") && done.body.includes("Recovery copy saved at") && done.body.includes("Its conversation stays readable in bb, archived.") && done.focus === "oats-confirm-close", `${at} the result is the Desktop's lines: the children, the home, the worktree, the recovery copy; and the thread`, JSON.stringify(done));
         // Behind the result the retired agent is gone from the roster, and its thread offers no Start (the real run shows the same).
         const behind = await page.until(`document.querySelector(${JSON.stringify(testId("oats-status-act"))}) === null && document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${helper.id}"]') === null`, 20);
         check(Boolean(behind), `${at} behind the result the agent is in no row, and its thread offers no Start`);
@@ -307,7 +419,7 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const partial = await dialog(page);
-        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept at") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
+        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept, at:") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
         const warned = JSON.parse(await page.evaluate(`(() => { const warning = document.querySelector(${JSON.stringify(`${testId("oats-act-warning")} ${testId("oats-notice")}`)}); const result = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)}); return JSON.stringify({ tone: warning?.getAttribute("data-tone") ?? null, first: Boolean(warning && result && (warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING)), details: warning?.querySelector("details")?.open ?? null }); })()`));
         check(warned.tone === "warning" && warned.first && warned.details === false, `${at} that the home was kept is a warning of its own, before the steps, with the rest one press away`, JSON.stringify(warned));
         await shot("incomplete", `${testId("oats-act-warning")} h3`); // the warning is what this image is of
@@ -351,7 +463,7 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.body.includes("Starting…") && running.off === true, `${at} while it starts the dialog says so, and its buttons are off`, JSON.stringify(running));
+        check(running.body.includes("Starting…") && running.off === true, `${at} while it starts the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
@@ -420,6 +532,64 @@ export default [
         changes = {};
         answers();
         await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.running === false));
+      }
+    },
+  },
+  {
+    stage: "lifecycle",
+    name: "A retire that was accepted and finishes in the background; a start whose thread is not ready yet",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const helper = threads.get(HELPER);
+      try {
+        // The kernel accepts a retire it will finish in the background (`deferred`): the answer as its source
+        // shapes it (lib/core.mjs; no run of ours has met one to record).
+        answers({ retire: { stdout: JSON.stringify({ retired: "weekly-digest-helper", deferred: true, planRevision: "ef5028f1e6cb517560247307", idempotencyKey: "retire-2b9d4e6f8a1c", replayed: false }) } });
+        await page.clock(RETIRE_AT);
+        await page.goto(threadPath(helper));
+        check(await openThreadMenu(page), `${at} the thread's own menu opens on Weekly digest helper's thread`);
+        check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed in the thread's menu`);
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
+        const accepted = await dialog(page);
+        check(
+          accepted.body.includes("Retirement accepted") && accepted.body.includes("Retirement was accepted and will finish in the background.") && accepted.body.includes("Its row in the sidebar shows the result.") && !accepted.body.includes("retired."),
+          `${at} a retire the kernel accepted and finishes later is told as accepted, never as done`,
+          JSON.stringify(accepted),
+        );
+        await dialogShot({ page, at, viewport, check }, "retire", "accepted");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+        await page.clock(null);
+
+        // A start the kernel answered, naming no thread, of an agent whose row names none either:
+        // it started, and there is no thread to open yet.
+        answers();
+        await page.goto("/");
+        check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
+        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        await page.until(phaseIs("ready"), 30);
+        const started = recorded("start.json");
+        delete started.result.session.endpoint.threadId;
+        changes = { "weekly-digest-helper": { running: true, runtimeState: "unknown", sessionEnd: null, session: null } };
+        answers({ "session start": { stdout: JSON.stringify(started) } });
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 60);
+        const unready = await dialog(page);
+        check(
+          unready.body.includes("Weekly digest helper was started, but its thread isn't ready yet") && unready.body.includes("Open it from its row when it is.") && !unready.body.includes("wasn't started"),
+          `${at} a start that named no thread is told as started with its thread not ready, never as a failure`,
+          JSON.stringify(unready),
+        );
+        await dialogShot({ page, at, viewport, check }, "start", "thread-not-ready");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+      } finally {
+        // The stage's own roster again, read by the plugin's server.
+        changes = {};
+        answers();
+        await page.clock(null);
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.running === false && agent.threadId === helper.id));
       }
     },
   },

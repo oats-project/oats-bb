@@ -39,3 +39,33 @@ from a contract:
   and not on main); the provider on main answers `running: null` for that thread, so no kernel
   prints this row yet. Such a thread takes a message: bb starts the harness and runs the turn on
   the same conversation. To be recorded when that release is pinned.
+
+## A retire receipt's `warnings`
+
+No recorded receipt carries the key: the kernel prints it only with something to say. The tests
+that read warnings (`test/lifecycle/kernel.test.ts`, `words.test.ts`) add strings to the recorded
+`retire-apply.json`, SHAPED from the kernel's source (`lib/core.mjs` of awebai/oats: `warnings` of
+the retire's result is an array of strings). To be recorded when a run produces one.
+
+## The retire refused while a process works in the home (`E_RUNTIME_QUIESCE_FAILED`)
+
+`retire-pi-refused.json`: RECORDED by the pi run (`container/real/pi`, OATS 0.70.5), the kernel's
+stdout for `oats retire pi-form-developer --plan-revision <rev> --idempotency-key <key> --json`
+asked through the plugin within a minute of opening the agent's pi thread in bb, printed with
+exit 1 and an empty stderr. The plan before it went through; nothing was removed; 50 s later
+the same retire, from a new plan, went through. Copied as printed: it holds no path, so nothing
+is substituted. The line the dialog adds does not depend on its message: it is decided from the
+code, the plan's backend and the row's harness.
+
+## Two answers the live scenes shape (`container/scenes/lifecycle.mjs`)
+
+Neither is a file, and neither was met by a run of ours to record:
+
+- **A retire accepted for the background**: `{ retired, deferred: true, planRevision,
+  idempotencyKey, replayed: false }`, SHAPED from the kernel's source (`lib/core.mjs` of
+  awebai/oats: the two places that answer `deferred`). The unit test of it
+  (`test/lifecycle/kernel.test.ts`) shapes the same.
+- **A start that names no thread**: the recorded `start.json` with
+  `result.session.endpoint.threadId` taken out, answered over a roster row changed to
+  `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
+  `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).

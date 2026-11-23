@@ -3,8 +3,6 @@
 // feature places (`AgentActs`), and the overlay that draws their dialogs. Every way in opens the
 // act's dialog: nothing runs on one press.
 import { useEffect, useState } from "react";
-import {
-} from "@get-bb/plugin-sdk/app";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, Node } from "../../model/types";
 import { state } from "../../model/view";
@@ -166,8 +164,9 @@ export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => 
 
 /**
  * The OATS entries are a group of their own in bb's thread menus, which bb sets apart with a
- * separator: it sorts after bb's settings and before bb's own lifecycle group (Stop, Archive,
- * Delete), so that "Retire agent (OATS)" never stands directly over bb's Delete. That is all the
+ * separator: by the SDK's string order of groups it stands after bb's organize group and before
+ * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire agent (OATS)" never
+ * stands directly over bb's Delete. That is all the
  * SDK allows: bb's own entries cannot be taken out of an agent's menu, nor asked to confirm.
  */
 export const OATS_GROUP = "3_oats";

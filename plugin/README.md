@@ -124,11 +124,14 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
   Restart says that it stops the current harness first. An agent the kernel says is running is
   not started again: the dialog says so and offers its thread.
-- **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
-  same dialog, in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept
-  at …", "Recovery copy saved at …"); a start opens the agent's new thread behind it. When the
-  person opened another act's dialog meanwhile, the result reaches them through bb's toaster, with
-  **Open <agent>**.
+- **While the act runs** the dialog says so, and that it can be closed ("You can close this;
+  stopping continues."), with Close in Cancel's place. **Its result** is said in the same dialog,
+  in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept, at:" and
+  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  gone by then (the person closed it, or opened another act's), the result reaches them through
+  bb's toaster, with **Open <agent>**: what the dialog would set first (a home that was kept)
+  first, and a result that is not confirmed pointing at the agent's row, since a toast has no
+  "Check again".
 - **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
   message under **Details**. What to do next is a button: **Review again** reads a new plan (also
   when the plan changed under the confirmation: it comes back as it is now, with what changed

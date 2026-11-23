@@ -27,6 +27,7 @@ import {
   carriesOn,
   LEAVE,
   piOnBb,
+  toasted,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -322,7 +323,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (another act's dialog took this one's place): the result reaches them where they are.
       // What is not confirmed is told as that, never as a failure.
-      else notify({ tone: outcome.tone, title: outcome.title, lines: outcome.lines, ...(threadId === null || verb === "retire" ? {} : { open: { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) } }) });
+      else notify({ ...toasted(outcome), ...(threadId === null || verb === "retire" ? {} : { open: { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) } }) });
     };
     const answered =
       plan.action === "stop"
@@ -616,7 +617,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         const outcome = startRefused(verb, checked.instance, refusal);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
         // The agent's thread, as the roster on screen has it, is where a person looks next.
-        else notify({ tone: outcome.tone, title: outcome.title, lines: outcome.lines, ...(rowThread === null ? {} : { open: { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(rowThread) } }) });
+        else notify({ ...toasted(outcome), ...(rowThread === null ? {} : { open: { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(rowThread) } }) });
       },
     );
   };

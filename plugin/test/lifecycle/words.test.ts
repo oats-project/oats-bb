@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -472,5 +472,28 @@ describe("a retire refused because a process still works in the home", () => {
     expect(applyRefused("stop", "dev-1", refusal, true).lines).not.toContain(WAIT);
     // Asked again with the same key: the kernel's own answer settles it, with the same line.
     expect(checkAgainRefused("retire", "dev-1", refusal, true).lines).toContain(WAIT);
+  });
+});
+
+describe("an outcome as the toaster tells it, when its dialog is gone", () => {
+  it("keeps the title, the tone and the lines of a result or a refusal", () => {
+    const done = stopOutcome(value(parseStopApply(fixture("stop-apply.json").result)), "redesign-ui-lead");
+    expect(toasted(done)).toEqual({ tone: done.tone, title: done.title, lines: done.lines });
+    const refused = applyRefused("retire", "dev-1", { code: "E_CHILDREN_RUNNING", message: "m" });
+    expect(toasted(refused)).toEqual({ tone: "failed", title: refused.title, lines: refused.lines });
+  });
+  it("says first what the dialog sets apart: a home that was kept", () => {
+    const kept = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
+    expect(kept.warning).toBeDefined();
+    expect(toasted(kept).lines).toEqual([kept.warning!.title, ...kept.lines]);
+  });
+  it("a result that is not confirmed points at the agent's row: Check again is the dialog's, and went with it", () => {
+    for (const lost of [applyRefused("stop", "dev-1", { code: "OATS_TIMEOUT", message: "m" }), checkAgainRefused("retire", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "m" })]) {
+      expect(lost.offers).toEqual(["check"]);
+      expect(toasted(lost)).toEqual({ tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Its row in the sidebar shows what it came to."] });
+    }
+    // A retire accepted in the background already points at the row: its lines stay.
+    const accepted = retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), deferred: true }, retirePlan());
+    expect(toasted(accepted).lines).toEqual(accepted.lines);
   });
 });

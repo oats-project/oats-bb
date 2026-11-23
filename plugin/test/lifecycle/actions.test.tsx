@@ -1438,3 +1438,43 @@ test("the OATS entries start with a row that names the agent and its state, off;
   resetApp();
   expect((await menu("thr_plain")).item("agent")).toBeNull();
 });
+
+// ---- what the toaster tells of an act whose dialog is gone
+
+test("a retire that is left while it runs and keeps the home of an agent on bb: the toast says first that its thread can bring it back with no OATS around it", async () => {
+  let answer!: (receipt: ReturnType<typeof retireReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof retireReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  answer({ ...retireReceiptOf(), removedDir: false, retainedHome: "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", recoveryPath: null, incomplete: ["retire hook oats.aweb: the team certificate could not be removed (exit 1)"] });
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "failed", title: "Retirement didn't finish" });
+  // What the dialog sets apart, first and in the warning tone, is the toast's first line: a toast has no place apart.
+  expect(toast.lines![0]).toBe("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.");
+  expect(toast.lines).toContain("Home folder kept, at:");
+});
+
+test("a stop that is left while it runs and whose answer is lost: the toast says the result is not confirmed and where to see what it came to, never to press a button it has not", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  refuse(new Error("OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Its row in the sidebar shows what it came to."] });
+  expect(JSON.stringify(toast)).not.toContain("Check again");
+});

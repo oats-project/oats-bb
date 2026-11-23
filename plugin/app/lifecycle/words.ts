@@ -423,7 +423,6 @@ export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, 
   return { tone: "failed", title: `Couldn't check what ${verb === "retire" ? "retiring" : "stopping"} ${name} will do`, lines: [sentence, ...(sentence === UNDESCRIBED ? oatsSays(refusal.message) : []), "Nothing was changed."], code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
-/** An apply that was refused, or whose answer was lost. */
 /**
  * After the kernel's line, when a RETIRE is refused because a process still works in the home
  * (E_RUNTIME_QUIESCE_FAILED) and the agent runs pi on bb: opening a pi thread makes bb list its
@@ -433,8 +432,9 @@ export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, 
  * is the remedy. Decided from read facts only: the code, the plan's backend, the row's harness.
  */
 export const PI_LISTING = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
-export const piOnBb = (plan: { backend: string | null; harness?: string | null }): boolean => plan.backend === "bb" && plan.harness === "pi";
+export const piOnBb = (plan: { backend: string | null; harness: string | null }): boolean => plan.backend === "bb" && plan.harness === "pi";
 
+/** An apply that was refused, or whose answer was lost. */
 export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal, piListing = false): Outcome {
   const name = agentName(instance);
   if (refusal.code !== null && LOST.has(refusal.code)) {
@@ -459,6 +459,21 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
   if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal, piListing);
   const still = `The ${verb === "retire" ? "removal" : "stop"} of ${agentName(instance)} is still running. Check again to read its result.`;
   return { tone: "unknown", title: "Result not confirmed", lines: [kernels ? still : "OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
+}
+
+/**
+ * An outcome as bb's toaster tells it, when the dialog it belonged to is gone (the person left it
+ * while the act ran, or opened another): the same title and lines, with what the dialog set apart
+ * or offered said in the lines, since a toast has neither.
+ * - What must be read first (a home that was kept) stands first.
+ * - "Check again" is the dialog's button, and the plan and its key went with the dialog: a result
+ *   that is not confirmed says where a person finds what it came to.
+ */
+export const NOT_CONFIRMED_GONE = "OATS didn't confirm the result. Its row in the sidebar shows what it came to.";
+export function toasted(outcome: Outcome): Pick<Outcome, "tone" | "title" | "lines"> {
+  const unconfirmed = outcome.tone === "unknown" && outcome.offers.includes("check") && outcome.title === "Result not confirmed";
+  const lines = unconfirmed ? [NOT_CONFIRMED_GONE] : outcome.lines;
+  return { tone: outcome.tone, title: outcome.title, lines: outcome.warning === undefined ? lines : [outcome.warning.title, ...lines] };
 }
 
 // ---- Start and Restart ----

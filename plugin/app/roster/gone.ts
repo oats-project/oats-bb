@@ -1,7 +1,7 @@
 // Agents the kernel no longer has, though the roster on screen still lists them: the kernel
 // refused an act on one as an instance it does not know. The row says so until the next roster is
 // read, which either drops the row or shows that the agent is there after all.
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { onWindowReset } from "../store";
 
 /** What a row says in its state's place once the kernel has refused its agent as one it does not know; its mark is then the one of an agent that does not run. */
@@ -26,36 +26,40 @@ export const UNKNOWN_INSTANCE = "E_SESSION_UNKNOWN";
 export const planSaysGone = (code: string | null): boolean => code === UNKNOWN_INSTANCE;
 
 const NONE: ReadonlySet<string> = new Set();
-let gone: ReadonlySet<string> = NONE;
-/** The roster the marks belong to: the time it was read. */
-let roster: string | null = null;
+/**
+ * The marks, keyed by the roster they belong to (the time it was read): a roster read at another
+ * time has none. The key is in the store, so a reader takes the marks of ITS roster and nothing is
+ * reset while rendering.
+ */
+let marks: { at: string | null; names: ReadonlySet<string> } = { at: null, names: NONE };
+/** The roster on screen: the one a mark made now belongs to. */
+let shownAt: string | null = null;
 const listeners = new Set<() => void>();
-const publish = (next: ReadonlySet<string>) => {
-  gone = next;
-  for (const listener of listeners) listener();
-};
 
 /** The kernel refused `instance` as one it does not know. */
 export function markGone(instance: string): void {
-  if (!gone.has(instance)) publish(new Set([...gone, instance]));
+  const names = marks.at === shownAt ? marks.names : NONE;
+  if (names.has(instance)) return;
+  marks = { at: shownAt, names: new Set([...names, instance]) };
+  for (const listener of listeners) listener();
 }
 
 /** The marks for the roster read at `at`: a roster read at another time starts with none. */
 export function useGone(at: string | null): ReadonlySet<string> {
-  if (at !== roster) {
-    roster = at;
-    gone = NONE; // read during render: the new roster's rows are drawn without the old marks
-  }
-  return useSyncExternalStore(
+  useEffect(() => {
+    shownAt = at;
+  }, [at]);
+  const all = useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    () => gone,
+    () => marks,
   );
+  return all.at === at ? all.names : NONE;
 }
 
 onWindowReset(() => {
-  roster = null;
-  gone = NONE;
+  marks = { at: null, names: NONE };
+  shownAt = null;
 });

@@ -1,5 +1,5 @@
 // bb.app: the OATS plugin's web UI. This file only calls each feature's `register(app)`
-// (app/<feature>/index): the slots a feature registers and what they draw are in its directory;
+// (app/<feature>/index; a feature with no slot of its own, app/outside, has none): the slots a feature registers and what they draw are in its directory;
 // what they draw from is in model/ (pure), app/oats.ts and app/store.ts (the plugin's reads), and
 // what they are drawn with is in app/ui.tsx and app/ui/.
 // A new feature adds its directory and one line below; a slot is registered in the feature's own

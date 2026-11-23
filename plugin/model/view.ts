@@ -2,21 +2,29 @@
 import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
- * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
- * waiting-on-you.mjs `waitingClaim`, read at 95c7b43b3), so that the tree, the thread's row and
- * the instance panel say one thing.
- * - A row on a session provider (bb): the claim the kernel's row carries, unless the kernel calls
- *   the row stopped (`running === false`, its session not one that failed or that it cannot
- *   reach): a home OATS stopped shows none, whatever it still carries.
- * - A tmux row: only while the kernel says it runs (`running === true`, and no `runtimeState`
- *   other than "running").
+ * Whether the kernel's row says the agent is STOPPED: not running, beside the word "stopped" or no
+ * word at all (what it prints for a tmux home whose window is gone). The one predicate of the
+ * claim's gate and of the state, for every backend: a row that is not running beside another word
+ * ("unknown": its session is there and no harness is loaded; "shell"; "unreachable") is not
+ * stopped, keeps its claim, and is told by its own state.
+ */
+export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
+  return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);
+}
+
+/**
+ * The claim an agent shows: what it waits on a person for, as the kernel's row carries it, or
+ * null. ONE gate (the Desktop's `waitingClaim` for a provider's agent; for a tmux agent it shows
+ * more than the Desktop, which asks that the kernel says it runs: WORDS.md), so that the tree, the thread's row, the home and
+ * the instance panel say one thing, and one rule for every backend (the spec's A2, as its author
+ * amended it on 2026-11-23): a claim is hidden only for an agent the kernel calls stopped
+ * (`recordedStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an
+ * agent that runs, one the kernel says nothing of, one whose harness ended in a shell, one that
+ * cannot be reached, on bb and on tmux alike.
  * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
  */
 export function claimOf(agent: Agent): Agent["waiting"] {
-  if (agent.waiting === null) return null;
-  if (agent.backend === "tmux") return agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") ? agent.waiting : null;
-  const stopped = agent.running === false && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
-  return stopped ? null : agent.waiting;
+  return agent.waiting === null || recordedStopped(agent) ? null : agent.waiting;
 }
 
 /** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */
@@ -50,21 +58,41 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * WORKING and IDLE, for an agent on a bb thread, are bb's own status of that thread, never the
  * kernel's `running`: `running` is endpoint activity (true: a harness is loaded; false: it is
  * gone; null: the provider cannot tell), and a provider answers true for an idle agent whose
- * harness is loaded. The kernel's `running` is read for two things only: false, which is
- * "stopped" (what the kernel prints for a tmux row whose window is gone or whose harness does not
- * run: `{ running: false }`, no `runtimeState`; a bb row comes with "stopped" beside it); and a
+ * harness is loaded. The kernel's `running` is read for two things only: false with no word
+ * beside it, or on a tmux row, which is "stopped" (what the kernel prints for a tmux row whose
+ * window is gone or whose harness does not run: `{ running: false }`, no `runtimeState`; a bb row
+ * OATS stopped comes with "stopped" beside it; the next paragraph says the rest); and a
  * TMUX row's activity, where it is the kernel's own word for whether the agent works.
  * A provider's agent whose thread bb does not list (archived, deleted, hidden) is "idle": its
  * thread's status cannot be seen, and a loaded harness does not say that it works.
  * A session that ended in a shell, or that the kernel cannot reach, is told first. The one rule
  * for the sidebar's rows, the thread's row, the home and the instance panel.
+ *
+ * STOPPED, beyond the word "stopped" itself: a row that is not running with no word at all
+ * (`recordedStopped`, above, which holds for both), or a tmux row that does not run. A row of a session provider always has a word (docs/desktop-cli-api.md at v0.70.5, "A
+ * status row of a provider home"): stopped is said of it only when that word is "stopped" (OATS
+ * stopped it, or it stopped with the host). `running: false` beside "unknown" is a session that is
+ * there with no harness loaded (a reboot on a host without `oats host run`, or bb let the harness
+ * exit): it is not stopped, and reads as bb says of its thread. Calling it stopped would advise
+ * Start, which begins a new thread and leaves its conversation behind.
+ *
+ * "outside" comes before everything else: the kernel reports that a harness runs in a home OATS
+ * recorded stopped (`outsideOats` on the row, feature `provider-outside-oats`: a message sent in
+ * the provider's own product started it again). The row's other fields stay what OATS recorded
+ * (stopped, not running), and they would say "Stopped" of an agent that runs: ONE statement about
+ * it, "Running outside OATS", in every place.
  */
 export function state(agent: Agent, thread: BbThread | null): AgentState {
+  if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
-  if (agent.running === false) return "stopped";
+  // Not running, and no word of the kernel's beside it (a tmux row whose window is gone): stopped.
+  // With a word that is not "stopped" (a provider row reads `runtimeState: "unknown"`: its session
+  // is there and no harness is loaded) the agent is not stopped, and a message in its thread
+  // carries its conversation on: it reads as bb says of its thread, below.
+  if (recordedStopped(agent) || (agent.running === false && agent.backend === "tmux")) return "stopped";
   if (agent.backend === "tmux") return agent.running === true ? "working" : "idle";
   if (thread === null) return "idle";
   return threadWorks(thread) ? "working" : "idle";
@@ -77,6 +105,9 @@ const RANK: Record<AgentState, number> = {
   stopped: 2,
   error: 2,
   idle: 2,
+  // An agent that runs outside OATS is listed with the ones a person must look at: after those
+  // that wait, before the rest.
+  outside: 1,
 };
 
 /** needs-you, then working, then the rest; each by the thread's `updatedAt`, newest first. */
@@ -190,12 +221,14 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     detached,
     elsewhere,
     needsYou: pick((node) => node.state === "needs-you"),
-    // Every agent that waits on a person, whether bb has a thread for it or not: the ONE number a
-    // place says of who waits. The sidebar's foot reads it; the home and its badge still count
-    // `needsYou` (the agents with a thread) until their owner moves them to this. In the kernel's order.
+    // Every agent that needs a person, whether bb has a thread for it or not: the ONE number a
+    // place says of who needs one. An agent that waits on a person; and one that runs outside OATS
+    // (the state "outside"), which only a person can stop or start again. The sidebar's foot, the
+    // home's badge and the home's list (app/home/board.ts) count the same agents. In the kernel's order.
     needing: agents.filter((agent) => {
       const node = drawn.get(agent.instance);
-      return (node !== undefined && node.agent === agent ? node.state : state(agent, null)) === "needs-you";
+      const now = node !== undefined && node.agent === agent ? node.state : state(agent, null);
+      return now === "needs-you" || now === "outside";
     }),
     working: pick((node) => node.state === "working"),
     finished: pick((node) => node.state === "idle" && node.thread.isUnread),

@@ -19,6 +19,9 @@ export function claimOf(agent: Agent): Agent["waiting"] {
   return stopped ? null : agent.waiting;
 }
 
+/** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */
+export const isListed = (thread: Pick<BbThread, "isArchived" | "isHidden">): boolean => !thread.isArchived && !thread.isHidden;
+
 /**
  * Whether bb says the agent on a thread WORKS, read as the bb session provider itself reads a
  * thread (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`, `isSettled`,
@@ -35,8 +38,6 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * - a status this plugin does not know: idle, as bb's SDK says to treat one (the provider refuses
  *   such a thread; the plugin has to draw the row).
  */
-/** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */
-export const isListed = (thread: Pick<BbThread, "isArchived" | "isHidden">): boolean => !thread.isArchived && !thread.isHidden;
 const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
 const AT_REST: ReadonlySet<string> = new Set(["pending", "idle", "error"]);
 export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): boolean =>

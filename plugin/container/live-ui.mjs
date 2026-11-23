@@ -388,16 +388,16 @@ function record(threads, changes = {}) {
 // person does by walking through it. (A setting of bb's own; nothing of the plugin depends on it.)
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
-// Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
+const WORK_HOLD_FILE = join(homedir(), "mock", "hold", "live-ui-working");
 // A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
-rmSync(join(homedir(), "mock", "hold", "live-ui-working"), { force: true });
+rmSync(WORK_HOLD_FILE, { force: true });
+// At this point every thread is a healthy one: its turn was answered and bb shows it idle. (Two are then given a turn that is held, below.)
 const threads = await healthyThreads();
 // Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
 // rows with `running: true`, and the two threads bb's fixture calls active). An agent on a bb
 // thread works when BB says its thread does, so bb must have a turn running on those two threads
 // for the whole run: each gets a message whose turn the mock model holds open (MOCK-HOLD), and is
 // waited for until bb calls it active. The hold is lifted when the run ends.
-const WORK_HOLD_FILE = join(homedir(), "mock", "hold", "live-ui-working");
 const WORKING_THREADS = ["thr_redesign", "thr_mockups"];
 let browser;
 let scenes;

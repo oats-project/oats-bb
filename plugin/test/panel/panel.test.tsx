@@ -625,6 +625,20 @@ test("a panel that opens while the roster cannot be read says Working for an age
   await waitFor(() => expect(stateOf(slot)).toContain("Working"));
 });
 
+// In a READY roster an agent with no node has no thread to read: the panel says what its row in the
+// sidebar says. (Two rows naming one thread: the second is drawn on none, and must not borrow the first's.)
+test("in a ready roster an agent drawn on no thread says Idle in its panel, as its row does, whatever bb says of a thread another agent is drawn on", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const child = { ...panelAgents().find((agent) => agent.instance === CHILD)!, waiting: null, running: true };
+  const twin = { ...child, instance: "twin-helper" }; // names the same thread; the tree draws the first on it
+  const agents = [...panelAgents().filter((agent) => agent.instance !== CHILD), child, twin];
+  const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: "twin-helper" }, {
+    rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance === "twin-helper" ? CHILD : instance) }),
+    sidebarThreads: panelThreads(agents), // the shared thread has a turn running
+  });
+  await waitFor(() => expect(stateOf(slot)).toMatch(/^Idle/));
+});
+
 test("a panel that opens while the roster cannot be read shows the agent its caller last read, and why nothing more", async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const known = panelAgents().find((agent) => agent.instance === CHILD)!;

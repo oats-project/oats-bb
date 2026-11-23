@@ -819,6 +819,13 @@ test("a command on an agent that runs outside OATS: Stop and Start open their di
   expect(slot.queryByRole("dialog")).toBeNull();
   await press("agent-stop");
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+  resetApp();
+  // Whatever else its row says (no kernel prints a report beside a session that ended by itself): never "is stopped" of an agent that runs outside OATS.
+  const ended = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, running: false, runtimeState: "shell", outsideOats: report } : agent));
+  await menu("thr_digest", {}, ended);
+  const before = notified().length;
+  await (await import("../../app/lifecycle")).commands.find((each) => each.id === "agent-restart")!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  expect(notified().slice(before).map((said) => said.title)).toEqual(["Weekly digest helper can't be restarted now."]);
 });
 
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {

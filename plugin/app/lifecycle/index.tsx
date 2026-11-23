@@ -167,7 +167,7 @@ function runCommand(verb: Verb, threadId: string | null): void {
   const { state, agent } = node;
   // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
   // And never "is already running" of a row that says no harness is loaded.
-  const why = cannotAct(verb, agent.instance, { running: (state === "working" || state === "idle" || state === "needs-you" || state === "outside") && !atRest(agent), known: state !== "unreachable" });
+  const why = cannotAct(verb, agent.instance, { running: state === "outside" || ((state === "working" || state === "idle" || state === "needs-you") && !atRest(agent)), known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);

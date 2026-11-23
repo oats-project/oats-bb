@@ -108,6 +108,8 @@ describe("the word \"stopped\" with no word that the row does not run, on a row 
     for (const running of [null, true]) for (const sessionEnd of [undefined, "stopped", "lost", "exited"]) {
       const asks: Agent = { ...operator, running, sessionEnd, waiting: { reason: "question", message: "ok?", since: null } };
       expect([word(asks), said(asks, "open", true)?.kind, said(asks, "open", true)?.tone], `${running} ${sessionEnd}`).toEqual(["Needs you", "stopped-open", "warning"]);
+      // And where bb has its thread archived, or has none of that id: what a stop says there.
+      expect([said(asks, "archived", false)?.kind, said(asks, "missing", false)?.kind], `${running} ${sessionEnd}`).toEqual(["stopped-archived", "deleted"]);
     }
   });
 });

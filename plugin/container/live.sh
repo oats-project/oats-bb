@@ -137,6 +137,12 @@ sleep 1
 fake
 sleep 5.5 # well past the pause between two reads (1 s after a quick or a failed one)
 rpc refresh > /dev/null
+# A read asked for while that one was in flight (the poll's tick, with a client connected again)
+# starts AT ONCE when it ends (server/core.ts FOLLOW_UP_WITHIN_MS): it must not be the read that
+# meets the slow oats below, or L3's own read would wait behind its 20 s. So: no oats alive first.
+none_yet() { [ -z "$(oats_processes)" ]; }
+sleep 0.5
+wait_until 10 none_yet || { fail "L3 precondition: an oats is still running before the slow one"; oats_processes; }
 
 # ---- L3: a status slower than the kernel's 20 s limit. bb sends a retryable host call again at half
 # its transport timeout: the limit must be reached before that, in one process.
@@ -155,7 +161,6 @@ fi
 fake
 sleep 5.5
 rpc refresh > /dev/null
-none_yet() { [ -z "$(oats_processes)" ]; }
 wait_until 10 none_yet || { fail "L3 a slow oats is still running"; oats_processes; }
 
 # ---- A14, the backend's part: no oats.

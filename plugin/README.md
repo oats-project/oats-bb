@@ -705,10 +705,17 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client
   watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
   the last one took to answer, whichever is longer (after a read that failed, 1 s), 20 s limit. A status that hangs is ended at its limit before the
-  next starts: under any burst of events one `oats status` is alive at a time. So a change the watch reports is on screen
-  within 3 s on a kernel that answers well under a second (a change that lands just after a read
-  started waits that read, the pause and the next read), and a slow kernel spends at most half its
-  time on status (the first spec's "never within 5 s of the last" gave way to this). Each
+  next starts: under any burst of events one `oats status` is alive at a time. ONE read is at once: a
+  read asked for while another is in flight (a change that read may not have seen) starts with no
+  pause when that one ends, if it answered within 2 s (`FOLLOW_UP_WITHIN_MS`, `server/core.ts`), and
+  only once: a change during that second read waits the pause again. So a change that lands in the
+  middle of a read is on screen after about two reads: within 3 s where one `oats status` takes up
+  to 1.5 s (the pilot's host took 1.05 to 1.52 s under load, 2026-11-23; with the pause it was 3.3
+  to 4.3 s). The cost is in a sustained burst: a kernel that answers in t spends 2t of every
+  2t + max(1 s, t) on status (63 % at 0.85 s, 67 % from 1 s to 2 s); a kernel slower than 2 s keeps
+  the pause after every read and spends at most half its time on status (the first spec's "never
+  within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
+  each read asked for mid-read took. Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read

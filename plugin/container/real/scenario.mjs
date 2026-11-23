@@ -438,6 +438,57 @@ async function missingShots(scene, { instance, soul }) {
 const fixtures = new Fixtures({ out: join(OUT, "fixtures"), substitutions: [[DEPLOY, "/abs/deployment"], [REAL, "/abs/real"], [homedir(), "/abs/home"], [hostname(), "machine"]] });
 /** Answers kept as evidence beside the fixtures: verbs whose fixture is not replaced by this run. */
 const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
+/**
+ * The server's pacing (server/core.ts, FOLLOW_UP_WITHIN_MS): a read asked for while another is in
+ * flight starts AT ONCE when that one ends, if it answered within 2 s, and only once. Shown with the
+ * plugin's own `oats status` calls, as the wrapper recorded them (when each started and how long it
+ * took): the agent sets a claim (its event starts a read) and clears it while that read is in
+ * flight (each status is held 700 ms for that), and the read that follows must start sooner after
+ * the first ended than the pause allows any other read (1 s at least, counted by the server from a
+ * moment after the kernel's exit: so a gap under 1 s between two calls is a read at once, and
+ * nothing else makes one). Never two such gaps in a row. Whether the second change lands in the
+ * first read is a matter of timing, so the pair is tried up to four times, and every try is said.
+ * No limit on elapsed time is asserted: only which rule the reads took.
+ */
+const statusReads = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status" && record.exit === 0);
+async function followedAtOnce(asInstance) {
+  const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
+  const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
+  const tries = [];
+  let pair = null;
+  let twice = null;
+  for (let attempt = 1; attempt <= 4 && pair === null; attempt += 1) {
+    wrapper({ delays: { status: 700 } });
+    // Quiet first: no `oats status` of the plugin's ended in the last 3 s (the last read and its
+    // pause are over), so the claim's event starts a read with no wait.
+    await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - (Date.parse(read.at) + read.ms) > 3000), 60);
+    const before = records().length;
+    const set = asInstance("instance", "attention", "--message", `Pacing check ${attempt}`);
+    const cleared = asInstance("instance", "attention", "--clear"); // lands while the read the claim started is in flight
+    // The reads the two changes ask for, waited for: two at least, and then none for 3 s.
+    await until("the reads the two changes ask for have ended", () => {
+      const since = statusReads(before);
+      return since.length >= 2 && since.every((read) => Date.now() - (Date.parse(read.at) + read.ms) > 3000);
+    }, 60);
+    wrapper({});
+    const reads = statusReads(before);
+    const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - (Date.parse(reads[index].at) + reads[index].ms) }));
+    const said = gaps.map(({ first, second, gap }) => `a read of ${first.ms} ms, then ${gap} ms, then a read of ${second.ms} ms`).join("; ");
+    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
+    pair = gaps.find(({ first, gap }) => gap < PAUSE_MS && first.ms <= LIMIT_MS) ?? null;
+    const at = gaps.findIndex(({ gap }, index) => index > 0 && gap < PAUSE_MS && gaps[index - 1].gap < PAUSE_MS);
+    if (at !== -1) twice = said;
+  }
+  check(
+    pair !== null,
+    pair === null
+      ? "pacing: a change that landed while a read was in flight was read at once"
+      : `pacing: a change that landed while a read was in flight was read at once: the first read took ${pair.first.ms} ms (the 700 ms it is held here among them), the next started ${pair.gap} ms after it ended (under the ${PAUSE_MS} ms no other read goes below) and took ${pair.second.ms} ms`,
+    tries.join(" | "),
+  );
+  check(twice === null, "pacing: never two reads at once in a row (the read after the pair waited the pause)", twice ?? "");
+  for (const line of tries) show("pacing", line);
+}
 const wrapper = (settings) => writeFileSync(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
 
 say(`== the real run: bb ${bb("--version").trim()}, oats ${JSON.parse(oats("version", "--json").stdout).version}, ${existsSync(join(REAL, "refs.json")) ? readFileSync(join(REAL, "refs.json"), "utf8").trim() : "refs not recorded"}`);
@@ -527,6 +578,10 @@ try {
   check(asInstance("instance", "attention", "--clear").status === 0, "the claim is cleared");
   await fresh("the claim cleared", { instance: A.instance, home, kind: "waiting", since: clearedAt }, (agent) => agent.waiting === null);
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
+
+  step("A5b2 a change that lands while the plugin reads OATS is read at once when that read ends: one read at once, never two");
+  await followedAtOnce(asInstance);
+  await untilRow(A.instance, "no claim after the pacing check", (r) => r.waitingOnYou == null);
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
   // Not the agent's own claim: the hooks oats.core wrote into the home's Claude settings set it when

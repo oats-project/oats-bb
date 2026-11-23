@@ -99,7 +99,14 @@ The run also measures freshness (the UX standard, section 6): how long after the
 claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
 the kernel's own record: the time of the event the change wrote, read from `oats instance events
 --json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and
+said beside it, with the delay from before the command; a NOTE reports either delay over 3 s). It
+shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
+plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
+while the read the claim started is in flight (each status is held 700 ms for that), and the next
+read must start under 1 s after the first ended, which no other read does; never two such in a
+row. It asserts which rule the reads took, not how long anything took, tries the pair up to four
+times (whether the second change lands in the first read is timing), and prints every try's reads
+and their times. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
 

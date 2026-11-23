@@ -13,7 +13,7 @@ import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import { isUnconfirmed } from "../contract/shared.js";
-import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
+import plugin, { FOLLOW_UP_WITHIN_MS, followsAtOnce, HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
 import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
 let fake: FakeOats;
@@ -107,6 +107,61 @@ describe("snapshot", () => {
     expect(Date.parse(quick.at) - after).toBeLessThan(MIN_INTERVAL_MS + 800);
     expect(await verbs()).toEqual(["status", "status", "status"]);
   }, 20_000);
+
+  // The rule alone, with no clock: which read asked for mid-flight starts at once.
+  it("a read asked for while another is in flight starts at once only after one that answered within the limit, and that was not itself started at once", () => {
+    expect(followsAtOnce({ answeredInMs: 850, startedAtOnce: false })).toBe(true);
+    expect(followsAtOnce({ answeredInMs: 1_520, startedAtOnce: false })).toBe(true); // the pilot's host under load
+    expect(followsAtOnce({ answeredInMs: FOLLOW_UP_WITHIN_MS, startedAtOnce: false })).toBe(true);
+    expect(followsAtOnce({ answeredInMs: FOLLOW_UP_WITHIN_MS + 1, startedAtOnce: false })).toBe(false); // a slow kernel keeps the pause
+    expect(followsAtOnce({ answeredInMs: null, startedAtOnce: false })).toBe(false); // a read that failed: its retry waits the floor
+    expect(followsAtOnce({ answeredInMs: 850, startedAtOnce: true })).toBe(false); // once: never a third read with no pause
+    expect(FOLLOW_UP_WITHIN_MS).toBeGreaterThan(MIN_INTERVAL_MS);
+  });
+
+  // The server's own account of each read after a read in flight (its debug log): no bound on
+  // elapsed time is asserted, so a loaded host cannot fail it. What is asserted is the order and
+  // the rule each read says it took, against the time the server itself measured.
+  it("a change during a read is read at once when that read ends, and a change during THAT read waits the pause: one read at once, never two", async () => {
+    const said = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("oats status is read again")).map((entry) => entry.message);
+    const statuses = async () => (await verbs()).filter((verb) => verb === "status").length;
+    await rpc("snapshot"); // read 1, ended: nothing in flight
+    expect(said()).toEqual([]);
+    await fake.behave({ status: { sleepMs: 1_000 } }); // long enough in flight for a change to land in it
+    const second = rpc("refresh"); // read 2: after the pause, then a second in flight
+    await expect.poll(statuses, { timeout: 15_000 }).toBe(2);
+    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // a change, mid-read
+    await second;
+    await expect.poll(statuses, { timeout: 15_000 }).toBe(3); // read 3 started
+    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // a change during read 3
+    await expect.poll(statuses, { timeout: 20_000 }).toBe(4);
+    const [third, fourth, ...more] = said();
+    expect(more).toEqual([]);
+    // Read 3: at once, by the time the server measured for read 2 (on a host so loaded that read 2
+    // took over the limit, it says the pause and why: the rule, either way).
+    const answered = Number(/answered in (\d+) ms/.exec(third ?? "")?.[1]);
+    expect(Number.isFinite(answered)).toBe(true);
+    expect(third).toBe(
+      answered <= FOLLOW_UP_WITHIN_MS
+        ? `oats status is read again at once: asked for while a read was in flight, which answered in ${answered} ms`
+        : `oats status is read again after the pause: asked for while a read was in flight, which answered in ${answered} ms, over ${FOLLOW_UP_WITHIN_MS} ms`,
+    );
+    // Read 4: after the pause when read 3 was the one read at once; (else read 3 was an ordinary read, and read 4 may follow it at once).
+    if (answered <= FOLLOW_UP_WITHIN_MS) expect(fourth).toBe("oats status is read again after the pause: asked for while a read was in flight, which was itself read at once");
+    else expect(fourth).toMatch(/^oats status is read again (at once|after the pause): asked for while a read was in flight, which answered in \d+ ms/);
+    expect(await verbs()).toEqual(["status", "status", "status", "status"]);
+  }, 60_000);
+
+  it("a read that failed is not followed at once: the read asked for during it waits the floor", async () => {
+    const said = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("oats status is read again")).map((entry) => entry.message);
+    await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 400 } });
+    const first = rpc<{ ok: boolean }>("snapshot"); // in flight, and it fails
+    await expect.poll(async () => (await verbs()).length, { timeout: 15_000 }).toBe(1);
+    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" });
+    expect((await first).ok).toBe(false);
+    await expect.poll(async () => (await verbs()).length, { timeout: 15_000 }).toBe(2);
+    expect(said()).toEqual(["oats status is read again after the pause: asked for while a read was in flight, which did not answer"]);
+  }, 40_000);
 
   it("after a read that failed the pause is the floor: Retry is not held back by a timeout's own length", async () => {
     await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 2_500 } });

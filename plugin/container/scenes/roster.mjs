@@ -89,11 +89,6 @@ export default [
       );
       check(outside.scrolls === false && outside.out.length === 0, `${at} nothing of the row is cut or out of sight`, JSON.stringify(outside));
       await page.shot(`a13-${viewport.name}-thread`, { targets: true });
-
-      // the thread of an agent that needs you: its row is the open one, with the "!" and "Needs you"
-      const release = threads.get("thr_release");
-      await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
-      // The thread itself says it first (S1), before anything of the sidebar is opened over it: the
       // A confirmation opened from a real row: Stop on the line reads the plan and asks, and stops nothing by itself.
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return t.startsWith("Stop ") ? t : ""; })()`, 20);
@@ -101,6 +96,11 @@ export default [
       await page.shot(`a13-${viewport.name}-thread-stop-asked`, { targets: true });
       await page.press("Escape");
       await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10);
+
+      // the thread of an agent that needs you: its row is the open one, with the "!" and "Needs you"
+      const release = threads.get("thr_release");
+      await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
+      // The thread itself says it first (S1), before anything of the sidebar is opened over it: the
       // state's word, since when the agent has waited, and what it asked.
       const needs = await statusOf(page, "needs-you");
       check(

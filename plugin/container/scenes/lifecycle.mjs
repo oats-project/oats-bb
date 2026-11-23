@@ -498,6 +498,64 @@ export default [
     },
   },
   {
+    stage: "lifecycle",
+    name: "A retire that was accepted and finishes in the background; a start whose thread is not ready yet",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const helper = threads.get(HELPER);
+      try {
+        // The kernel accepts a retire it will finish in the background (`deferred`): the answer as its source
+        // shapes it (lib/core.mjs; no run of ours has met one to record).
+        answers({ retire: { stdout: JSON.stringify({ retired: "weekly-digest-helper", deferred: true, planRevision: "ef5028f1e6cb517560247307", idempotencyKey: "retire-2b9d4e6f8a1c", replayed: false }) } });
+        await page.clock(RETIRE_AT);
+        await page.goto(threadPath(helper));
+        check(await openThreadMenu(page), `${at} the thread's own menu opens on Weekly digest helper's thread`);
+        check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed in the thread's menu`);
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
+        const accepted = await dialog(page);
+        check(
+          accepted.body.includes("Retirement accepted") && accepted.body.includes("Retirement was accepted and will finish in the background.") && accepted.body.includes("Its row in the sidebar shows the result.") && !accepted.body.includes("retired."),
+          `${at} a retire the kernel accepted and finishes later is told as accepted, never as done`,
+          JSON.stringify(accepted),
+        );
+        await dialogShot({ page, at, viewport, check }, "retire", "accepted");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+        await page.clock(null);
+
+        // A start the kernel answered, naming no thread, of an agent whose row names none either:
+        // it started, and there is no thread to open yet.
+        answers();
+        await page.goto("/");
+        check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
+        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        await page.until(phaseIs("ready"), 30);
+        const started = recorded("start.json");
+        delete started.result.session.endpoint.threadId;
+        changes = { "weekly-digest-helper": { running: true, runtimeState: "unknown", sessionEnd: null, session: null } };
+        answers({ "session start": { stdout: JSON.stringify(started) } });
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 60);
+        const unready = await dialog(page);
+        check(
+          unready.body.includes("Weekly digest helper was started, but its thread isn't ready yet") && unready.body.includes("Open it from its row when it is.") && !unready.body.includes("wasn't started"),
+          `${at} a start that named no thread is told as started with its thread not ready, never as a failure`,
+          JSON.stringify(unready),
+        );
+        await dialogShot({ page, at, viewport, check }, "start", "thread-not-ready");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+      } finally {
+        // The stage's own roster again, read by the plugin's server.
+        changes = {};
+        answers();
+        await page.clock(null);
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.running === false && agent.threadId === helper.id));
+      }
+    },
+  },
+  {
     stage: "lifecycle-running",
     name: "Restart, from the thread's own menu: a dialog first, with the Desktop's warning, its focus order; restarted; a refusal",
     run: async ({ page, at, viewport, threads, check }) => {

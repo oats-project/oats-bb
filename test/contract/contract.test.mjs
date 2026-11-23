@@ -8,6 +8,7 @@
 // mounted, read-only.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { after, afterEach, before, test } from "node:test";
@@ -67,6 +68,17 @@ async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } = {}) {
   }
 }
 const threadStatus = async (id) => (await bbJson(`thread show ${id}`)).thread.status;
+/** The bb environment a thread is on: one per home, shared by every thread that runs there. */
+const environmentOf = async (id) => (await bbJson(`thread show ${id}`)).thread.environmentId;
+/** The retire hook, as the kernel runs it for a home. → { last: its final JSON line, stderr }. */
+async function retireHook(home) {
+  const stdout = await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook 2> retire-hook.err`);
+  return { last: JSON.parse(stdout.trim().split("\n").pop()), stderr: await sh("cat retire-hook.err") };
+}
+/** Where the provider keeps its record of the threads it made for a home (contract r32, A17). */
+const recordOf = (home) => `/home/node/.local/state/oats-bb/homes/${createHash("sha256").update(home).digest("hex")}`;
+/** Every file of a home with its type, mode, size, times and content hash: what "byte for byte untouched" is read from. */
+const treeOf = (home) => sh(`cd ${home} && find . -printf '%p %y %m %s %T@ %C@\\n' | sort && find . -type f -exec sha256sum {} + | sort`);
 const waitStatus = (id, ...statuses) => waitFor(`thread ${id} to be ${statuses.join(" or ")}`, async () => { const s = await threadStatus(id); return statuses.includes(s) ? s : null; });
 
 /** The mock's log: the model requests of threads' turns (bb's title requests, which offer
@@ -543,6 +555,7 @@ test("T5 stop, then inspect and input: the stop archives the thread, so the prov
   assert.ok((await claudesIn(home)) >= 1);
   await sh(`bb thread unarchive ${endpoint.threadId} --json`);
 
+  const environment = await environmentOf(endpoint.threadId);
   const stopped = await provider("stop", { home, endpoint, graceSeconds: 10 });
   assert.deepEqual(stopped.result, { stopped: true });
   // After the stop no process works in the home: bb released the thread's Claude and the
@@ -565,7 +578,8 @@ test("T5 stop, then inspect and input: the stop archives the thread, so the prov
   // kernel's stop, then the hook).
   assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
+  // (And the home's bb environment, which the hook asked bb to delete: contract r32, A17, below.)
+  assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId], environments: [environment] } });
   // A home bb has no thread of at all (it never ran on bb) is the one that answers "nothing-to-delete".
   const never = JSON.parse((await sh(`OATS_INSTANCE_HOME=/home/node/homes/t5-never-on-bb OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
   assert.deepEqual(never, { meta: { retired: false, reason: "nothing-to-delete" } });
@@ -719,10 +733,125 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   assert.equal(started.ok, true, JSON.stringify(started));
   await waitStatus(started.result.endpoint.threadId, "idle");
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  // The receipt names every thread of the home archived in bb now: the one the hook
-  // archived first, then the one found archived already (the killed launch's).
-  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId, thread.id] } });
+  // The killed launch never answered, so its thread is in no record of the provider's: the
+  // home's record holds the second launch's thread alone (contract r32, A17). The receipt
+  // names that one, which the hook archived, and not the killed launch's; and the home's bb
+  // environment, which both threads are on, is not deleted: one thread on it is unmarked.
+  assert.deepEqual(retired.meta, { archived: [started.result.endpoint.threadId] });
+  assert.match(retired.warning, new RegExp(`^the home's bb environment was not deleted \\(1 thread on bb environment ${await environmentOf(thread.id)} is not in this home's thread record \\(a person's, or one the provider could not note\\): ${thread.id}\\): its threads are archived only`));
+  assert.equal(await environmentOf(started.result.endpoint.threadId), await environmentOf(thread.id));
+  assert.equal((await bbJson(`environment show ${await environmentOf(thread.id)}`)).status, "ready");
   assert.deepEqual(await live(), []);
+});
+
+// Contract r32, A17. The retire hook archives a retired agent's thread, and a person can
+// unarchive it in bb with one press: where the home was kept (`oats retire --keep-dir`, or
+// a retire that ended quarantined), a message then started the harness in the home, with
+// no OATS around it. So the hook also deletes the home's bb environment. Seen at bb-app
+// 0.50.1: bb marks it destroyed and answers at once, tears it down within seconds, leaves
+// the directory alone, and refuses every message to a thread whose environment is gone.
+test("A17 a retire deletes the home's bb environment: the kept home is byte for byte untouched, the conversation stays readable, and an Unarchive plus a message starts nothing", async () => {
+  const { home, endpoint } = await launched("a17-kept");
+  const id = endpoint.threadId;
+  await waitStatus(id, "idle");
+  assert.equal((await provider("input", { home, endpoint, text: "A17-BEFORE a word before the retire" })).ok, true);
+  await waitFor("the turn to reach the model", async () => (await landed("A17-BEFORE")) === 1);
+  await waitStatus(id, "idle");
+  const environment = await environmentOf(id);
+  const shown = await bbJson(`environment show ${environment}`);
+  assert.deepEqual({ path: shown.path, status: shown.status, environmentProviderId: shown.environmentProviderId, managed: shown.managed }, { path: home, status: "ready", environmentProviderId: "project-checkout", managed: false }, "the one kind of environment the hook deletes, as bb names it");
+  // The launch noted its thread in the provider's record of this home: the identity line, then the thread.
+  assert.match(await sh(`cat ${recordOf(home)}`), new RegExp(`^oats-bb-home 1 dev=\\d+ ino=\\d+ birth=(\\d+|-)\\n${id}\\n$`));
+  assert.equal((await sh(`stat -c %a /home/node/.local/state/oats-bb /home/node/.local/state/oats-bb/homes ${recordOf(home)} | tr '\\n' ' '`)).trim(), "700 700 600");
+
+  // `oats retire --keep-dir` of a running agent: the kernel's stop, then the hook; the home stays.
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  const before = await treeOf(home);
+  const asked = Date.now();
+  const { last, stderr } = await retireHook(home);
+  const took = Date.now() - asked;
+  assert.deepEqual(last, { meta: { retired: true, archived: [id], environments: [environment] } });
+  assert.equal(stderr, "");
+  // The hook does not wait for bb's teardown: bb answers the delete at once and finishes afterwards.
+  const destroyed = await waitFor("bb to have destroyed the environment", async () => { const now = await bbJson(`environment show ${environment}`); return now.status === "destroyed" ? now : null; }, { timeoutMs: 60_000, everyMs: 500 });
+  assert.equal(destroyed.lifecycle.phase, "destroyed");
+  assert.ok(took < 30_000, `the hook took ${took} ms`);
+  // The home is byte for byte what it was: bb's delete of a local directory it does not manage touches nothing.
+  assert.equal(await treeOf(home), before);
+  assert.equal((await sh(`test -e ${recordOf(home)} && echo there || echo gone`)).trim(), "gone", "the record has answered its one question");
+  // The conversation stays in bb, readable.
+  assert.match(await sh(`bb thread log ${id} --json`), /A17-BEFORE/);
+
+  // A person unarchives the thread and sends it a message: bb refuses it, and nothing starts.
+  const requestsBefore = (await modelRequests()).length;
+  await sh(`bb thread unarchive ${id} --json`); // no question asked
+  assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt, null);
+  const told = JSON.parse(await sh(`bb thread tell ${id} 'A17-AFTER a word after the retire' --json`, { ok: false }));
+  assert.equal(told.ok, false, JSON.stringify(told));
+  assert.equal(told.error.code, "thread_environment_unavailable", JSON.stringify(told));
+  // The provider's own input, as a mail to the retired agent would be sent, is refused the same way.
+  const input = await provider("input", { home, endpoint, text: "A17-AFTER by the provider" });
+  assert.equal(input.ok, false, JSON.stringify(input));
+  await sleep(6_000);
+  assert.equal(await landed("A17-AFTER"), 0, "a retired agent took a message");
+  assert.equal((await modelRequests()).length, requestsBefore);
+  assert.equal(await processesIn(home), 0, "a harness started in the kept home");
+  assert.equal((await carriers(id)).length, 0);
+  assert.equal(await treeOf(home), before);
+
+  // The hook run again (a retire tried twice) is quiet: nothing left to delete, no warning.
+  await sh(`bb thread archive ${id} --json`);
+  assert.deepEqual((await retireHook(home)), { last: { meta: { retired: true, archived: [id] } }, stderr: "" });
+
+  // What A17 does not close (A17(2); the docs say so): bb's own Restore gives the thread
+  // an environment at the kept home again, and a message then starts its agent, outside OATS.
+  await sh(`bb thread unarchive ${id} --json`);
+  started.push(id);
+  await sh(`bb thread restore-environment ${id} --json`);
+  await waitFor("the restored thread to take a message", async () => {
+    const answer = JSON.parse(await sh(`bb thread tell ${id} 'A17-RESTORED a word after a restore' --json`, { ok: false }));
+    return answer.ok === true;
+  }, { timeoutMs: 60_000, everyMs: 2_000 });
+  await waitFor("the restored thread's turn to reach the model", async () => (await landed("A17-RESTORED")) >= 1, { timeoutMs: 60_000 });
+  const restored = await bbJson(`thread show ${id}`);
+  assert.equal(restored.environment.path, home, "bb's Restore: an environment at the kept home again");
+  assert.notEqual(restored.environment.id, environment, "a new one, made from the destroyed one's recorded path");
+});
+
+test("A17 with a person's thread on the home's bb environment the retire archives only: the environment stays, the warning says why, and the person's thread still runs", async () => {
+  const { home, endpoint } = await launched("a17-shared");
+  const id = endpoint.threadId;
+  await waitStatus(id, "idle");
+  const environment = await environmentOf(id);
+  // A person opens a thread of their own in the home's bb project, in the home: bb puts it on the home's one environment.
+  // (A first turn's prompt is not the last message of its model request: it is counted, not searched for.)
+  const since = (await modelRequests()).length;
+  const person = await bbJson(`thread spawn --project ${endpoint.projectId} --provider claude-code --model ${MODEL} --environment ${home} --prompt 'A17-PERSON a thread of my own' --permission-mode full`);
+  started.push(person.id);
+  assert.equal(person.environmentId, environment, "bb keeps one environment per home, shared by every thread there");
+  await waitFor("the person's thread's first turn", async () => (await modelRequests()).length > since, { timeoutMs: 120_000 });
+  await waitStatus(person.id, "idle");
+  // They archive it themselves, so the retire has nothing of theirs to stop or archive.
+  await sh(`bb thread stop ${person.id} --json && bb thread archive ${person.id} --json`);
+
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  const { last, stderr } = await retireHook(home);
+  // The receipt names the home's own thread (the record's), not the person's.
+  assert.deepEqual(last.meta, { archived: [id] });
+  assert.equal(last.warning, `the home's bb environment was not deleted (1 thread on bb environment ${environment} is not in this home's thread record (a person's, or one the provider could not note): ${person.id}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it`);
+  assert.equal(stderr, "");
+  await sleep(8_000);
+  const kept = await bbJson(`environment show ${environment}`);
+  assert.deepEqual({ status: kept.status, phase: kept.lifecycle.phase, path: kept.path }, { status: "ready", phase: "active", path: home }, "the environment of a person's thread was deleted");
+  assert.equal((await sh(`test -e ${recordOf(home)} && echo there || echo gone`)).trim(), "gone", "the hook has decided: the record goes");
+  // The person's thread still runs, on its environment: unarchived, a message starts a turn.
+  await sh(`bb thread unarchive ${person.id} --json`);
+  const told = JSON.parse(await sh(`bb thread tell ${person.id} 'A17-PERSON-AFTER still here' --json`, { ok: false }));
+  assert.equal(told.ok, true, JSON.stringify(told));
+  await waitFor("the person's turn after the retire to reach the model", async () => (await landed("A17-PERSON-AFTER")) === 1);
+  assert.equal(await environmentOf(person.id), environment);
 });
 
 // Owner of this half: the kernel's suite (spec K1, its T4: after an OATS stop the kernel
@@ -769,6 +898,9 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
     const retiring = await launched("queue-retired");
     const retiringRow = async () => (await bbJson("thread list --include-hidden --include-archived")).find((thread) => thread.id === retiring.endpoint.threadId);
     await waitFor("bb to hold the third home's turn in line", async () => (await retiringRow()).queuedWork === "waiting");
+    // (bb gives a thread its environment when its first turn starts: this one has none yet,
+    // so the hook has no environment to delete, contract r32, A17, and says nothing of it.)
+    assert.equal(await environmentOf(retiring.endpoint.threadId), null, "bb gave a held thread an environment before its turn started: the retire could then delete it");
     const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${retiring.home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
     assert.deepEqual(retired, { meta: { retired: true, archived: [retiring.endpoint.threadId] } });
     assert.deepEqual(await bbJson(`thread queue list ${retiring.endpoint.threadId}`), [], "the held turn was withdrawn before the archive");
@@ -828,9 +960,12 @@ test("a thread archived in bb keeps its Claude: a start, a stop and a retire eac
   await waitStatus(fourth.result.endpoint.threadId, "idle");
   await sh(`bb thread archive ${fourth.result.endpoint.threadId} --json`);
   await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
+  const environment = await environmentOf(fourth.result.endpoint.threadId);
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  // Nothing live to archive; the receipt names the home's four threads, all archived in bb.
-  assert.deepEqual({ ...retired.meta, archived: [...retired.meta.archived].sort() }, { retired: true, archived: [first.endpoint.threadId, second.result.endpoint.threadId, third.result.endpoint.threadId, fourth.result.endpoint.threadId].sort() });
+  // Nothing live to archive; the receipt names the home's four threads, all archived in bb,
+  // and the one bb environment the four were on, which the hook asked bb to delete (every
+  // thread on it is one a launch of this home made: contract r32, A17).
+  assert.deepEqual({ ...retired.meta, archived: [...retired.meta.archived].sort() }, { retired: true, archived: [first.endpoint.threadId, second.result.endpoint.threadId, third.result.endpoint.threadId, fourth.result.endpoint.threadId].sort(), environments: [environment] });
   await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
 });
 

@@ -4,6 +4,45 @@
 
 ### The session provider
 
+- **A retire deletes the home's bb environment: a retired agent's thread, unarchived in
+  bb, takes no message.** The retire hook archives a retired agent's thread, and bb
+  unarchives a thread at one press. Where the home was kept (`oats retire --keep-dir`,
+  or a retire that ended quarantined), a message to it then started the agent in the
+  retired home, with no OATS around it. The hook now also asks bb to delete the home's
+  environment (`bb environment delete`), after the stop and the archive. bb marks it
+  destroyed, refuses every message to the thread, and starts nothing.
+  - The home directory is not touched, and the conversation stays readable in bb.
+  - bb keeps one environment per home, shared by a person's threads there. So the hook
+    deletes only an environment of the local-path kind (`project-checkout`), and only
+    where bb's list of the threads on it was read whole and every one of them is a
+    thread a launch of this home made. Otherwise it archives only, as before, and the
+    retire's warning says why.
+  - **The record.** To know its own threads, each launch notes the thread it made in
+    the provider's own record of the home: one file per home in
+    `$XDG_STATE_HOME/oats-bb/homes/` (by default `~/.local/state/oats-bb/homes/`, on
+    macOS too), directories `0700`, files `0600`, holding the home directory's identity
+    and thread ids only. A record that cannot be written never fails a launch: the
+    launch warns on its standard error, and that thread is unmarked. The retire hook
+    removes the record once it has decided. No other command reads it. A launch in a
+    sandboxed mode denies the directory to the agent's tools.
+  - **A home spawned before this release has no record, and is archived only at its
+    retire.** That is not a failure: no record is made up afterwards. The warning says
+    so.
+  - The retire never waits for bb's teardown, and a delete bb refuses or does not answer
+    fails no retire: the threads stay archived only, noted on the hook's standard error.
+  - The receipt (`capabilityMeta` of oats.bb) gains `environments`, the environments bb
+    was asked to delete. Where the home's record is there, `archived` names only the
+    home's own threads (and those the hook itself archived): a home made at a path an
+    earlier home had no longer reports that home's threads.
+  - **WARNING: this is a step in the way, not a lock.** With the home kept, a person can
+    still start a retired agent from bb by three acts: Unarchive, Restore its
+    environment (`bb thread restore-environment`), and a message; where the retire
+    archived only, by two. Such a session runs with NO OATS around it (no status row, no
+    hooks, no stop by OATS), and where its aweb identity was not released it can send
+    mail as the retired agent. Retire bb agents the ordinary way, which removes the home.
+  - The retire's warning reaches CLI users only: the Desktop's Retire dialog shows no
+    plan warnings and no hook output (oats#2102).
+
 - **A stop archives the thread: an agent OATS stopped stays stopped.** bb starts a
   stopped thread's agent again at the next message to it, in the same conversation, so a
   message typed in bb's composer restarted an agent OATS had stopped, behind OATS's back.

@@ -1001,7 +1001,7 @@ try {
       }
     }
   };
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, bbThread, nameOf, idleRunning, atRest, stopArchives, stoppedThread, stoppedAs, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

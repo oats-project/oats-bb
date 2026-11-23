@@ -310,12 +310,12 @@ of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the t
 those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
 it with the thread as the column gives it. That test holds the plugin's side alone: the
 provider's `inspectAnswer` is named here, not checked: no test of the plugin calls it (the
-provider's own tests hold its side). A dash is a field the row does not carry.
+provider's own tests hold its side). A dash is a field the row does not carry, or carries as null.
 
 | Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
 |---|---|---|---|---|---|---|---|
 | in a turn | true | unknown | - | - | in a turn | Working | `roster/status-recorded.json#working` |
-| a turn bb holds in line (a message waits to start: `queuedWork: "waiting"`) | true | unknown | - | - | at rest, a turn in line | Working | (no recording here: the real run's B1b makes it and checks the kernel's row) |
+| a turn bb holds in line (a message waits to start: `queuedWork: "waiting"`) | true | unknown | - | - | at rest, a turn in line | Working | (no recording here: the real run's B1b makes it and shows the kernel's row) |
 | at rest, its harness loaded | true | unknown | - | - | at rest | Idle | `outside/status-at-rest.json` |
 | at rest, with a word for its queue the provider does not know | - | unknown | - | - | at rest | Idle | (no recording: bb 0.50.1 has no such word) |
 | at rest, no harness loaded (its process ended; a reboot without `oats host run`) | false | unknown | - | - | at rest | Idle | `outside/status-not-loaded.json` |

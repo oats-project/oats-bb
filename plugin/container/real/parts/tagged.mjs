@@ -28,11 +28,6 @@ import { click, closed, dialog, openRowMenu, phaseIs, pick } from "../../scenes/
 const TAG = "v0.4.0";
 const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
 const WARNS = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
-/** An instance name as the plugin's words (app/ui/words.ts `agentName`). */
-const words = (instance) => {
-  const text = instance.replace(/-+/g, " ").trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
 
 export default async (run) => {
   const { step, check, show, note, until, oats, rowOf, rpc, recorded, evidence, views, DEPLOY, OUT } = run;
@@ -86,7 +81,7 @@ export default async (run) => {
   await views("real-tagged", async ({ page, at, viewport, shot }) => {
     view += 1;
     const name = `tagged-${view}-helper`;
-    const called = words(name);
+    const called = run.nameOf(name); // the instance name as the plugin draws it (scenario.mjs)
     step(`C tagged ${view}: ${name}, at ${at}: stopped through the dialog, under a provider the kernel calls ${after}`);
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, "Wait for instructions.\n");

@@ -29,14 +29,13 @@ import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 
 const NAME = "flaky-ci-2-developer";
 const SOUL = "oats-developer";
-const CALLED = "Flaky ci 2 developer"; // the instance name as the plugin's words (app/ui/words.ts `agentName`)
 // The plugin's words (app/outside/words.ts, app/ui/words.ts), restated: a run cannot read the app's code; they move together.
 const SAYS = {
   notLoaded: "not loaded. To carry on, send it a message here. Start begins a new conversation.",
   notLoadedRow: "Idle · not loaded",
   outsideState: "Running outside OATS",
   outsideRecorded: "recorded stopped",
-  outsideTitle: `${CALLED} is running in bb, but OATS recorded it as stopped.`,
+  outsideTitle: (called) => `${called} is running in bb, but OATS recorded it as stopped.`,
   outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
   archivedWhileRunning: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.",
   archivedRow: "archived in bb",
@@ -45,6 +44,8 @@ const SAYS = {
 export default async (run) => {
   const { step, check, show, note, until, oats, bb, rowOf, rpc, act, fixtures, views, DEPLOY, OUT } = run;
   const home = join(DEPLOY, "agents", SOUL, "instances", NAME);
+  const CALLED = run.nameOf(NAME); // the instance name as the plugin draws it (scenario.mjs)
+  const TITLE = SAYS.outsideTitle(CALLED);
 
   // ---- the kernel's row, and bb's thread
   const row = () => rowOf(NAME);
@@ -177,8 +178,8 @@ export default async (run) => {
     check(facts.startsWith(SAYS.outsideState), `${at} the sidebar's row says "${SAYS.outsideState}"`, facts);
     await shot("outside-row");
     await page.goto(threadPath);
-    let line = await lineOf(page, [SAYS.outsideState, SAYS.outsideRecorded, SAYS.outsideTitle]);
-    check(line !== null && line.words.startsWith(`${SAYS.outsideState} · ${SAYS.outsideRecorded}`) && line.notice?.title === SAYS.outsideTitle && line.notice.text.includes(SAYS.outsideWhat) && !/running-outside-oats|oats instance stop/.test(line.notice.title), `${at} its thread says "${SAYS.outsideState} · ${SAYS.outsideRecorded}", and under it the notice in a person's words: "${SAYS.outsideTitle}" "${SAYS.outsideWhat}"`, JSON.stringify(line));
+    let line = await lineOf(page, [SAYS.outsideState, SAYS.outsideRecorded, TITLE]);
+    check(line !== null && line.words.startsWith(`${SAYS.outsideState} · ${SAYS.outsideRecorded}`) && line.notice?.title === TITLE && line.notice.text.includes(SAYS.outsideWhat) && !/running-outside-oats|oats instance stop/.test(line.notice.title), `${at} its thread says "${SAYS.outsideState} · ${SAYS.outsideRecorded}", and under it the notice in a person's words: "${TITLE}" "${SAYS.outsideWhat}"`, JSON.stringify(line));
     check(Array.isArray(line?.notice?.acts) && line.notice.acts.some((label) => label.startsWith("Stop")) && line.notice.acts.some((label) => label.startsWith("Start")), `${at} the notice offers Stop and Start`, JSON.stringify(line?.notice?.acts));
     await shot("outside-thread");
     // The notice's Stop: the harness that runs outside OATS is stopped, as OATS recorded it.

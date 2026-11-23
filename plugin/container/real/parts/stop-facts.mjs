@@ -18,11 +18,6 @@ import { dirname, join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
 import { click, closed, dialog, openRowMenu, phaseIs, pick } from "../../scenes/lifecycle.mjs";
 
-/** An instance name as the plugin's words (app/ui/words.ts `agentName`). */
-const words = (instance) => {
-  const text = instance.replace(/-+/g, " ").trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
 
 export default async (run) => {
   const { step, check, show, until, oats, bb, rowOf, rpc, recorded, evidence, views, DEPLOY, OUT } = run;
@@ -32,7 +27,7 @@ export default async (run) => {
   await views("real-stop-facts", async ({ page, at, viewport, shot }) => {
     view += 1;
     const name = `stop-facts-${view}-helper`;
-    const called = words(name);
+    const called = run.nameOf(name); // the instance name as the plugin draws it (scenario.mjs)
     const WORK = `${called} has uncommitted work in its home.`;
     const TURN = `${called} is working on a turn now.`;
     step(`C stop-facts ${view}: ${name}, at ${at}: what the Stop dialog says before the confirmation, from facts`);

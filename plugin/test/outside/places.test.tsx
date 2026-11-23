@@ -403,6 +403,13 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   expect(verbs(runs)).toContain("Stop");
   expect(header(runs)).toMatchObject({ acts: [], tone: "warning", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS." });
   resetApp();
+  // A row that says only where its thread is (failed, its thread archived): no block of this feature's; the acts are the header's.
+  const failed = await agentPage(HARVEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: false, runtimeState: "shell", waiting: null } : agent))), sidebarThreads: threads, sdk: bb(["thr_harvest"]).sdk });
+  await waitFor(() => expect(header(failed).state).toBe("Failed"));
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a block to be drawn, if one were)
+  expect(header(failed)).toMatchObject({ kind: null, acts: [] });
+  once(verbs(failed));
+  resetApp();
   // It runs outside OATS: the header's Stop, Start and Retire; the notice says what Stop and Start do.
   const outside = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(outside).kind).toBe("outside"));

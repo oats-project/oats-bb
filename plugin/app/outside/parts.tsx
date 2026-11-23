@@ -99,8 +99,8 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
 }
 
 /**
- * The acts of an agent the roster draws on no thread (its thread archived or deleted in bb), for
- * the place that shows that agent (its archived thread's row, its own page): the lifecycle's own
+ * The acts of an agent the roster draws on no thread (its thread archived in bb), for the place
+ * that shows that agent and has no acts of its own (its archived thread's row): the lifecycle's own
  * buttons for its state (`AgentActs`: Start and Retire for a stopped agent). Where a process runs,
  * or may, with no thread a person can see, the acts are this feature's: a session lost to bb's
  * Archive and an agent archived while its row still says it runs (Stop, then Retire; Start comes
@@ -209,7 +209,9 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const where = roster.whereOf(agent);
   const said = sayOf(agent, where, attached);
-  if (said === null || (attached && said.warning === null)) return null;
+  // Nothing to draw: an agent on its thread with no report; and one with no sentence and no report
+  // (a row that says only where its thread is: that is the sidebar's, and the acts are the header's).
+  if (said === null || (attached && said.warning === null) || (said.sentence === null && said.warning === null)) return null;
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
       {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}

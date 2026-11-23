@@ -18,8 +18,15 @@ export type ConfirmProps = {
    */
   about: string;
   shownFor: string | null;
-  /** "What will happen", as sentences about the named agent; and what is kept. Text from OATS is filtered here. */
-  happens: readonly string[];
+  /**
+   * What the act does, in view, under no heading: the ONE consequence line and at most one more
+   * (the lifecycle dialogs: the text audit of 23 Nov 2026). `saysDestructive`: the index of a line drawn in
+   * the destructive tone (what a tick deletes). Text from OATS is filtered here.
+   */
+  says?: readonly string[];
+  saysDestructive?: number | null;
+  /** "What will happen", as sentences about the named agent, under that heading; and what is kept. For a dialog that is not cut to one line. */
+  happens?: readonly string[];
   kept?: readonly string[];
   /**
    * What a person must read BEFORE the plan, above it: that the plan changed under their
@@ -33,6 +40,8 @@ export type ConfirmProps = {
   destructive?: boolean;
   /** Why the primary button is off, in words, beside it; null when it can be pressed. */
   blocked?: string | null;
+  /** The primary button is off and the dialog already says why, in view (a notice with its own act): no words beside the button. */
+  held?: boolean;
   phase:
     /** The kernel is being asked: `text` says for what, where the place has the Desktop's own line ("Checking instance…"). */
     | { kind: "reading"; text?: string }
@@ -42,7 +51,7 @@ export type ConfirmProps = {
      * dismissed into a lost result: with no `leave` it stays until the act answers. `leave` is for
      * a place that tells the result elsewhere when the dialog is gone (the toaster): the line that
      * says so ("You can close this; stopping continues."), with Close on, and `onClose` is then
-     * called while the act runs.
+     * called while the act runs. An empty `leave` is Close with no line: the button says it.
      */
     | { kind: "running"; doing: string; leave?: string }
     /**
@@ -59,13 +68,13 @@ export type ConfirmProps = {
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, happens, kept = [], notice, children, confirmLabel, destructive = false, blocked = null, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, says = [], saysDestructive = null, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
   // A plan that names no agent proves nothing about whose it is: it cannot be confirmed either.
   const unnamed = phase.kind === "ready" && shownFor === null;
-  const off = phase.kind !== "ready" || mismatch || unnamed || blocked !== null;
+  const off = phase.kind !== "ready" || mismatch || unnamed || blocked !== null || held;
   const why = unnamed ? "OATS did not say which agent this plan is for." : blocked;
   const leave = phase.kind === "running" ? (phase.leave ?? null) : null;
   const close = () => {
@@ -135,13 +144,22 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
       <div ref={body} data-testid="oats-confirm" data-about={about} data-phase={phase.kind} className="flex flex-col gap-3">
         {mismatch ? (
           <Result title="This is not the plan for this agent." tone="failed">
-            <p>{`OATS answered for ${shown(shownFor)}, not for ${shown(about)}. Nothing was done. Close this and ask again.`}</p>
+            <p>{`OATS answered for ${shown(shownFor)}. Nothing was done.`}</p>
           </Result>
         ) : phase.kind === "reading" ? (
           <Loading>{phase.text ?? "Reading the plan from OATS…"}</Loading>
         ) : phase.kind === "done" ? null : (
           <>
             {phase.kind === "ready" ? notice : null}
+            {says.length === 0 ? null : (
+              <ul data-testid="oats-confirm-says" className="flex flex-col gap-1">
+                {says.map((line, index) => (
+                  <li key={index} {...(index === saysDestructive ? { role: "status", "data-testid": "oats-plan-warning", className: "break-words text-destructive-text" } : { className: "break-words" })}>
+                    {shown(line)}
+                  </li>
+                ))}
+              </ul>
+            )}
             {sentences("What will happen", happens)}
             {sentences("What is kept", kept)}
             {children}
@@ -151,7 +169,7 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
           // One block: a place that brings the running line on screen brings the way out with it.
           <div data-testid="oats-confirm-running" className="flex flex-col gap-1">
             <Loading>{phase.doing}</Loading>
-            {leave === null ? null : (
+            {leave === null || leave === "" ? null : (
               <p data-testid="oats-confirm-leave-line" className="text-xs text-muted-foreground">
                 {leave}
               </p>

@@ -1,6 +1,7 @@
 // What the plugin does to an agent: Stop, Start, Restart and Retire, each through the plugin's
 // server and so through OATS, each in a dialog first: nothing runs on one press. Stop and Retire
-// show the kernel's plan as what will happen and what is kept, and ask once; Start and Restart
+// say the kernel's plan as ONE consequence line (and at most one more), the facts that are a reason
+// not to confirm, and the rest under the dialog's one "Details", and ask once; Start and Restart
 // check the agent as the kernel has it now and, for an agent on bb, offer the harness and the model
 // of the start (an agent on tmux starts with the launch its home recorded; one whose session was
 // lost is brought back in its last conversation). The
@@ -15,48 +16,44 @@ import { threadWorks } from "../../model/view";
 import { newKey } from "../keys";
 import { isUnconfirmed } from "../../contract/shared";
 import { CommandText } from "../panel/parts";
-import { attachCommand, attachWhere } from "../panel/words";
+import { ATTACH, attachCommand } from "../panel/words";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
-import { Button, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
+import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
-import { agentName, readAge } from "../ui/words";
+import { agentName } from "../ui/words";
 import { notify } from "../ui";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
   applying,
   carriesOn,
-  LEAVE,
   piOnBb,
   RESUME,
   resumable,
   SHOW_RESULT,
   toasted,
   checkAgainRefused,
-  checking,
-  CHECKING_AGAIN,
-  FULL_MODE,
-  modelHelp,
+  CHECKING,
+  HOME_KEPT_DETAILS,
   NOTHING_SHOWN_CHANGED,
   planChanges,
   planRefused,
-  REVIEW_FIRST,
   retireOutcome,
   retirePlanView,
   START,
   startOutcome,
+  startDetails,
   startSays,
   startRefused,
   stopArchivesThread,
   stopOutcome,
   stopPlanView,
   titleOf,
-  UPDATING,
 } from "./words";
 import type { Outcome, PlanVerb, Refusal, RunVerb, Verb } from "./words";
 
@@ -238,14 +235,21 @@ function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "k
   }, [what]);
 }
 
-/** A settled outcome in the dialog's phase: a person's words, the code after them, the kernel's own text under Details, and what to do next. */
+/**
+ * A settled outcome in the dialog's phase: a person's words and what to do next; under the result's
+ * ONE "Details", the code and the kernel's own text (and, of a home that was kept, the longer words).
+ */
 function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase"] {
+  const more = [outcome.warning?.details ?? null, outcome.details].filter((part): part is string => part !== null);
   const details =
-    outcome.details === null ? null : (
+    more.length === 0 && outcome.code === null ? null : (
       <Disclosure summary="Details" testId="oats-act-details">
-        <p className="text-xs text-muted-foreground">
-          <Lines text={outcome.details} />
-        </p>
+        {more.map((text, index) => (
+          <p key={index} className="text-xs text-muted-foreground">
+            <Lines text={text} />
+          </p>
+        ))}
+        {outcome.code === null ? null : <Code>{outcome.code}</Code>}
       </Disclosure>
     );
   const next = (
@@ -256,8 +260,8 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
   );
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
   // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
-  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, code: outcome.code, actions: next };
-  return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), code: outcome.code, actions: next };
+  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, actions: next };
+  return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), actions: next };
 }
 
 /** OATS itself cannot be read: the one notice every place shows, in the dialog, with Retry. */
@@ -326,20 +330,17 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const returnFocus = useRowFocus(threadId);
   // Opened again on a result (the toaster's "Show result"): that result, and nothing is read.
   const resumed = request.resume !== undefined && "plan" in request.resume ? request.resume : null;
-  const [state, setState] = useState<PlanState>(resumed?.plan ?? { phase: "reading", kept: null, why: checking(verb, instance) });
+  const [state, setState] = useState<PlanState>(resumed?.plan ?? { phase: "reading", kept: null, why: CHECKING });
   /** The plan's one tick: a stop's children (on, the kernel's default), a retire's worktree (off). */
   const [recursive, setRecursive] = useState(resumed?.recursive ?? true);
   const [discard, setDiscard] = useState(resumed?.discard ?? false);
-  const [now, setNow] = useState(() => Date.now());
   const live = useRef(true);
   /** The read whose answer is still wanted: a newer read, or a close, drops an older one's. */
   const ticket = useRef(0);
   useEffect(() => {
     live.current = true;
-    const tick = setInterval(() => setNow(Date.now()), 30_000);
     return () => {
       live.current = false;
-      clearInterval(tick);
     };
   }, []);
 
@@ -366,7 +367,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     [rpc, verb, instance],
   );
   useEffect(() => {
-    if (resumed === null) read(checking(verb, instance), true);
+    if (resumed === null) read(CHECKING, true);
     // (`resumed` is the request's, and a dialog has one request for its whole life.)
   }, [read, verb, instance, resumed]);
 
@@ -396,7 +397,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
         // The plan changed under the confirmation: back to review with the plan as it is now.
         const pi = plan.action === "retire" && piOnBb(plan); // (a retire's plan alone says the backend and the harness)
         if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
-        else if (refusal.code === "E_PLAN_STALE" && live.current && current === request) read(checking(verb, instance), recursive, plan);
+        else if (refusal.code === "E_PLAN_STALE" && live.current && current === request) read(CHECKING, recursive, plan);
         else settle(applyRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
       },
     );
@@ -415,17 +416,17 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     if (verb === "stop") {
       setRecursive(checked);
       // Whom a stop includes is the kernel's to say: the plan is read again for the choice.
-      read(UPDATING, checked);
+      read(CHECKING, checked);
     } else setDiscard(checked);
   };
-  const again = () => read(CHECKING_AGAIN, recursive);
+  const again = () => read(CHECKING, recursive);
   useFocusWhenReady(state.phase === "ready");
   // A plan that changed under the confirmation is not armed: it comes back for review with the
   // focus on Cancel, and is confirmed only after "Review again" has read it once more.
   // A result with a warning of its own (a home that was kept) is read from that warning.
   useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? (state.outcome.warning === undefined ? "result" : "kept") : "top");
-  // What a choice would lose is said under it the moment it is turned on: it is brought on screen with it.
-  useReveal(state.phase === "ready" && view?.choice?.warning ? "warning" : null);
+  // What a choice would lose is said the moment it is turned on, as the dialog's second line: it is brought on screen with it.
+  useReveal(state.phase === "ready" && view?.deletes === true ? "warning" : null);
   const changed = state.phase === "ready" ? state.changed : null;
   useEffect(() => {
     if (changed !== null) document.querySelector<HTMLElement>('[data-testid="oats-confirm-cancel"]')?.focus();
@@ -440,12 +441,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "applying"
-          ? { kind: "running", doing: applying(verb, plan?.instance ?? instance), leave: LEAVE[verb] }
+          ? { kind: "running", doing: applying(verb), leave: "" }
           : settledPhase(
               state.outcome,
               <>
                 {state.outcome.offers.includes("review") ? (
-                  <Button data-testid="oats-act-review" onClick={() => read(checking(verb, instance), recursive)}>
+                  <Button data-testid="oats-act-review" onClick={() => read(CHECKING, recursive)}>
                     Review again
                   </Button>
                 ) : null}
@@ -467,14 +468,16 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       title={titleOf(verb, shownFor, plan !== null, state.phase === "settled" && state.sent !== null)}
       about={instance}
       shownFor={shownFor}
-      // Once the act has an answer the plan gives way to it, a refusal as a result: "What will happen" over
-      // "wasn't stopped" would say in the future what did not happen. Review again brings the plan back.
-      happens={state.phase === "settled" ? [] : (view?.happens ?? [])}
-      kept={state.phase === "settled" ? [] : (view?.kept ?? [])}
+      // Once the act has an answer the plan gives way to it, a refusal as a result: what it would do, over
+      // "wasn't stopped", would say in the future what did not happen. Review again brings the plan back.
+      says={state.phase === "settled" ? [] : (view?.says ?? [])}
+      saysDestructive={view?.deletes === true ? 1 : null}
       confirmLabel={view?.confirm ?? (verb === "stop" ? "Stop" : "Retire")}
       // Both acts end something a person may want running: the focus starts on Cancel for each.
       destructive
-      blocked={updating ?? (changed !== null ? REVIEW_FIRST : null) ?? view?.blocked ?? null}
+      blocked={updating ?? (changed !== null ? null : (view?.blocked ?? null))}
+      // A plan that changed is not confirmed before it was read again: the notice over it says so, with Review again.
+      held={changed !== null}
       notice={
         changed === null ? null : (
           <Notice title="Something changed since you opened this" tone="warning" actions={<Button data-testid="oats-plan-review" onClick={again}>Review again</Button>}>
@@ -494,59 +497,53 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       returnFocus={returnFocus}
     >
       {state.phase === "settled" && state.outcome.warning !== undefined ? (
-        // What a person must read first, in the warning tone, with the rest one press away (a retire that kept the home).
+        // What a person must read first, in the warning tone; the rest is under the result's one Details (a retire that kept the home).
         <div data-testid="oats-act-warning">
-          <Notice title={state.outcome.warning.title} tone="warning" details={state.outcome.warning.details} />
+          <Notice title={state.outcome.warning.title} tone="warning" />
         </div>
       ) : null}
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
-            // What a person should see before confirming (uncommitted work, a turn in progress, no way back): set apart
-            // in the attention tone, under a heading of its own, never as more of "What is kept".
-            <section data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Before you confirm</h3>
+            // The facts that are a reason not to confirm (uncommitted work, a turn in progress, a work tree elsewhere):
+            // set apart in the attention tone, under no heading, and only when true.
+            <ul data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
+              {view.attention.map((line, index) => (
+                <li key={index} className="break-words font-semibold">
+                  <Lines text={line} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* The dialog's ONE fold: what the plan keeps and deletes beside its one line, who is left out, and the current state. */}
+          <Disclosure summary="Details" testId="oats-plan-details">
+            <div className="flex min-w-0 flex-col gap-2">
               <ul className="flex flex-col gap-1">
-                {view.attention.map((line, index) => (
-                  <li key={index} className="break-words font-semibold">
+                {view.details.map((line, index) => (
+                  <li key={index} className="break-words">
                     <Lines text={line} />
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
-          <section className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current state</h3>
-            <Facts>
-              {view.state.map((row) => (
-                // A label here can be an agent's name, a value a branch an agent chose: both are filtered where they are drawn (`Fact` filters nothing).
-                <Fact key={row.label} label={shown(row.label)}>
-                  {shown(row.value)}
-                </Fact>
-              ))}
-            </Facts>
-            {view.notes.map((note, index) => (
-              <p key={index} className="break-words text-xs text-muted-foreground">
-                <Lines text={note} />
-              </p>
-            ))}
-          </section>
-          {view.choice === null ? null : (
-            <div className="flex flex-col gap-1">
-              {/* The plan's tick, drawn with the plugin's one pattern for a choice that is on or off: it says which it is in a word. */}
-              <span data-testid="oats-plan-choice" className="flex">
-                <Switch label={view.choice.label} checked={view.choice.checked} disabled={state.phase === "applying"} onChange={choose} />
-              </span>
-              {view.choice.warning === null ? null : (
-                <p role="status" data-testid="oats-plan-warning" className="break-words text-destructive-text">
-                  <Lines text={view.choice.warning} />
-                </p>
-              )}
+              <Facts>
+                {view.state.map((row) => (
+                  // A label here can be an agent's name, a value a branch an agent chose: both are filtered where they are drawn (`Fact` filters nothing).
+                  <Fact key={row.label} label={shown(row.label)}>
+                    {shown(row.value)}
+                  </Fact>
+                ))}
+              </Facts>
             </div>
+          </Disclosure>
+          {view.choice === null ? null : (
+            // The plan's tick, drawn with the plugin's one pattern for a choice that is on or off: it says which it is in a word.
+            // (What it deletes, while it is on, is the dialog's second line.)
+            <span data-testid="oats-plan-choice" className="flex">
+              <Switch label={view.choice.label} checked={view.choice.checked} disabled={state.phase === "applying"} onChange={choose} />
+            </span>
           )}
           {state.phase === "ready" ? (
-            <p data-testid="oats-plan-observed" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{plan?.at ? `Observed ${readAge(plan.at, now) ?? "earlier"}` : "Observed earlier"}</span>
+            <p data-testid="oats-plan-observed" className="flex">
               <Button variant="ghost" data-testid="oats-plan-check" onClick={again}>
                 Check again
               </Button>
@@ -565,7 +562,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
  * bb's threads as they were when the check answered. The launch archives the thread the agent
  * had, so the same question asked while it runs would answer something else.
  */
-type Check = Answer<"startCheck"> & { begins: string; carryOn: string | null };
+type Check = Answer<"startCheck"> & { carryOn: string | null };
 type StartState =
   | { phase: "checking" }
   | { phase: "ready"; check: Check }
@@ -602,13 +599,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
    */
   const thread = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const threadNow = useRef<{ id: string; status: string } | null>(null);
-  /** The bb thread the kernel's row RECORDS for the agent, listed by bb or not (archived, deleted): asked of bb when bb lists none. */
-  const recordedThread = oats.phase === "ready" ? (oats.agents.find((agent) => agent.instance === instance)?.threadId ?? null) : null;
-  const recordedNow = useRef<string | null>(null);
-  useEffect(() => {
-    recordedNow.current = recordedThread;
-  }, [recordedThread]);
-  const sdk = useSdk();
   useEffect(() => {
     threadNow.current = thread;
   }, [thread]);
@@ -636,21 +626,14 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const mine = ++ticket.current;
     setState({ phase: "checking" });
     rpc.call("startCheck", { instance }).then(
-      async (answer) => {
+      (answer) => {
         if (!live.current || mine !== ticket.current) return;
         // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
         const threadThen = threadNow.current;
-        // A start archives the thread the agent HAS in bb, and one a stop archived stays where it is: either way
-        // its conversation is in bb, archived, after the start. bb lists no archived thread, so where it lists
-        // none the recorded one is asked of bb itself; one bb no longer has (deleted) is no conversation to speak of.
-        const inBb = threadThen !== null || (recordedNow.current !== null && (await threadInBb(sdk, recordedNow.current)) !== null);
-        if (!live.current || mine !== ticket.current) return;
         setState({
           phase: "ready",
           check: {
             ...answer,
-            // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
-            begins: inBb ? START.newThread : START.fresh,
             // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
             // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
             carryOn: threadThen !== null && carriesOn(answer, threadThen) ? threadThen.id : null, // (the first check narrows it for its id)
@@ -662,7 +645,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         if (live.current && mine === ticket.current) setState({ phase: "settled", check: null, outcome: startRefused(verb, instance, refusal), refusal, threadId: null });
       },
     );
-  }, [rpc, sdk, verb, instance]);
+  }, [rpc, verb, instance]);
   useEffect(() => {
     // Opened again on a result: nothing is asked until the person asks (Refresh status).
     if (resumed === null) check();
@@ -743,7 +726,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "running"
-          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting, leave: LEAVE[verb] }
+          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting, leave: "" }
           : unreadable !== null
             ? { kind: "failed", title: `Couldn't check ${agentName(instance)}`, refusal: "", actions: <CannotRead refusal={unreadable} onRetry={check} /> }
             : settledPhase(
@@ -761,10 +744,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                     </div>
                   ) : null}
                   {(state.outcome.tone === "done" || state.outcome.tone === "unknown") && state.check !== null && state.check.backend === "tmux" ? (
-                    // An agent on tmux has no thread to open: where it runs, and the way into it (the panel's own words and
-                    // command). Under a start that is done, and under one whose end is not known: its session is or may be there.
+                    // An agent on tmux has no thread to open: the way into it (the panel's own word and command). Under a start that is done, and under one whose end is not known: its session is or may be there.
                     <div data-testid="oats-start-where" className="flex w-full min-w-0 flex-col gap-1 text-sm">
-                      <p>{shown(attachWhere(state.check.machine === "" ? null : state.check.machine))}</p>
+                      <p>{ATTACH}</p>
                       <span className="flex min-w-0 flex-wrap items-center gap-2">
                         <CommandText command={attachCommand(state.check.home)} />
                         <CopyButton text={attachCommand(state.check.home)} name="Copy the command" />
@@ -779,7 +761,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : state.phase === "ready" && state.check.carryOn !== null ? "first" : "top");
   useKeepFocus();
   const recorded = known?.harness ?? null;
-  const begins = known?.begins ?? START.fresh;
   const carryOn = state.phase === "ready" ? state.check.carryOn : null;
 
   return (
@@ -789,9 +770,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
-      // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
-      happens={known === null || state.phase === "settled" ? [] : startSays(verb, { onBb, resumes, harness: known.harness, begins })}
-      kept={known === null || state.phase === "settled" ? [] : [START.continues]}
+      // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
+      says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
       notice={
@@ -818,13 +798,25 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     >
       {known === null || state.phase === "settled" ? null : (
         <div data-testid="oats-start" className="flex min-w-0 flex-col gap-3">
-          <Facts>
-            {/* With a choice of harness, the field's first entry says which one is recorded: it is not said twice. */}
-            {onBb && known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
-            {/* The kernel's row is a record the agent can write: its harness, model and home are drawn through the display filter. */}
-            <Fact label="Machine">{shown(known.machine)}</Fact>
-            <Fact label="Home">{shown(known.home)}</Fact>
-          </Facts>
+          {/* The dialog's ONE fold: the access it runs with, and the facts of the agent a person does not decide on. */}
+          <Disclosure summary="Details" testId="oats-start-details">
+            <div className="flex min-w-0 flex-col gap-2">
+              {startDetails(verb, { onBb }).map((line, index) => (
+                <p key={index} className="break-words">
+                  {line}
+                </p>
+              ))}
+              <Facts>
+                {/* With a choice of harness, the field's first entry says which one is recorded: it is not said twice. */}
+                {onBb && known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
+                {/* The kernel's row is a record the agent can write: its harness, model and home are drawn through the display filter. */}
+                <Fact label="Machine">{shown(known.machine)}</Fact>
+                <Fact label="Home">{shown(known.home)}</Fact>
+              </Facts>
+              {/* Why its state is not known, in OATS's own words: beside the line that says Start is off, one press away. */}
+              {held !== null && !held.running && known.runtimeError !== null ? <p className="break-words text-xs text-muted-foreground">{shown(`OATS says: ${known.runtimeError}`)}</p> : null}
+            </div>
+          </Disclosure>
           {lost ? (
             // A tmux agent whose session was lost: Start brings it back; the plain start stays, on purpose, and says what it loses.
             // (A choice made before the press: this block is not drawn beside a result; Refresh status brings the dialog back.)
@@ -856,7 +848,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           <Field
             label={START.model}
             optional
-            hint={shown(`${modelHelp(running !== null && running === recorded ? known.model : null)}${suggestions.note === null ? "" : ` ${suggestions.note}`}`)}
+            hint={START.modelSaved}
             error={badModel ? START.badModel : null}
           >
             <input
@@ -880,11 +872,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             ))}
           </datalist>
           )}
-          {state.phase === "ready" ? (
+          {/* Only where Start is off: why (beside the button too), and the way to read its status again. A start that can run says nothing here. */}
+          {state.phase === "ready" && held !== null ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{held === null ? START.ready : held.reason}</span>
-              {held !== null && !held.running && known.runtimeError !== null ? <span>{shown(`OATS says: ${known.runtimeError}`)}</span> : null}
-              {held?.running === true && rowThread !== null ? (
+              <span>{held.reason}</span>
+              {held.running && rowThread !== null ? (
                 <Button data-testid="oats-start-open" onClick={() => openThread(rowThread)}>
                   {`Open ${agentName(name)}`}
                 </Button>

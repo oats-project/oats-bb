@@ -674,7 +674,7 @@ describe("a confirmation", () => {
     expect(screen.getByTestId("oats-confirm-blocked").textContent).toBe("Tick the box to discard its work.");
     rerender(<Confirm {...base} onConfirm={confirm} shownFor="flaky-ci-developer" />);
     expect(act().disabled).toBe(true);
-    expect(screen.getByRole("alert").textContent).toBe("This is not the plan for this agent.OATS answered for flaky-ci-developer, not for weekly-digest-helper. Nothing was done. Close this and ask again.");
+    expect(screen.getByRole("alert").textContent).toBe("This is not the plan for this agent.OATS answered for flaky-ci-developer. Nothing was done.");
     expect(screen.queryAllByRole("listitem")).toEqual([]); // the other agent's plan is not shown
     fireEvent.click(act());
     expect(confirm).not.toHaveBeenCalled();

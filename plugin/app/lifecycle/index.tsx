@@ -42,7 +42,7 @@ export const ACTS: readonly {
   destructive: boolean;
   when: (state: AgentState, agent: Agent) => boolean;
 }[] = [
-  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
+  { verb: "stop", button: "Stop…", menu: "Stop (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
     // An agent that runs is stopped. So is one that runs outside OATS (the state "outside": OATS
     // recorded it stopped and the kernel reports its harness running): Stop asks the provider to
     // stop it again. README, "Outside OATS".
@@ -51,7 +51,7 @@ export const ACTS: readonly {
   {
     verb: "start",
     button: "Start…",
-    menu: "Start agent (OATS)",
+    menu: "Start (OATS)",
     command: "OATS: Start agent…",
     key: "s",
     icon: ICON.start,
@@ -64,8 +64,8 @@ export const ACTS: readonly {
     // run, so Start opens, and the dialog says that it begins a new conversation.
     when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped" || unloaded(state, agent),
   },
-  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
-  { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
+  { verb: "restart", button: "Restart…", menu: "Restart (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
+  { verb: "retire", button: "Retire…", menu: "Retire (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
 
@@ -180,7 +180,7 @@ export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => 
 /**
  * The OATS entries are a group of their own in bb's thread menus, which bb sets apart with a
  * separator: by the SDK's string order of groups it stands after bb's organize group and before
- * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire agent (OATS)" never
+ * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire (OATS)" never
  * stands directly over bb's Delete. The SDK allows no more: bb's own entries cannot be taken out
  * of an agent's menu, nor asked to confirm.
  */
@@ -221,9 +221,9 @@ export function register(app: PluginAppBuilder): void {
         if (node === undefined || !act.when(node.state, node.agent)) return null;
         const variant = act.destructive ? "destructive" : "default";
         // On the last roster read, while OATS cannot be read, the acts are HELD (the Desktop's rule):
-        // the entry stays where it was, off, with the reason, so that a person sees that the act
-        // exists and when it comes back, and does not reach for bb's own Stop. The notice has Retry.
-        if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, detail: HELD_REASON, run: () => undefined };
+        // the entry stays where it was, off, so that a person sees that the act exists and does not
+        // reach for bb's own Stop. A menu has no place for a reason: the roster's notice says "Acts are off.", with Retry.
+        if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
         return { label: act.menu, icon: act.icon, variant, run: () => openAct(act.verb, node.agent.instance) };
       },
     });

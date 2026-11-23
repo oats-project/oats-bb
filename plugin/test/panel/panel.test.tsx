@@ -294,15 +294,31 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
   expect(within(attach).getByRole("button", { name: "Copy the attach command" })).toBeTruthy();
 });
 
-test("the attach command is for an agent on tmux that runs: none for a stopped one, none for an agent on a session provider", async () => {
-  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: false, runtimeState: "stopped", waiting: null } : agent));
-  const stopped = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
-    rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, backend: "tmux", threadId: null, tmuxSession: "oats-agents" })) }),
-    sidebarThreads: panelThreads(agents),
-  });
-  await stopped.findByTestId("oats-panel-session-line");
-  expect(stopped.queryByTestId("oats-panel-attach")).toBeNull();
-  stopped.unmount();
+test("the attach command is for an agent on tmux the kernel says runs: none for a stopped, an unreachable or an idle one, none for an agent on a session provider; one for a tmux agent that waits on a person", async () => {
+  const onTmux = (change: Partial<Agent>) => {
+    const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, waiting: null, ...change } : agent));
+    return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
+      rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, backend: "tmux", threadId: null, tmuxSession: "oats-agents" })) }),
+      sidebarThreads: panelThreads(agents),
+    });
+  };
+  for (const [what, change] of [
+    ["stopped", { running: false as const, runtimeState: "stopped" }],
+    ["unreachable", { running: null, runtimeState: "unreachable" }],
+    ["idle: the kernel does not say it runs", { running: null, runtimeState: "unknown" }],
+    ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
+  ] as const) {
+    const slot = onTmux(change);
+    await slot.findByTestId("oats-panel-session-line");
+    expect(slot.queryByTestId("oats-panel-attach"), what).toBeNull();
+    slot.unmount();
+  }
+  // it runs and waits on a person: the command is how to answer it
+  const waits = onTmux({ running: true, runtimeState: "running", waiting: { reason: "attention", message: "Which branch?", since: "2026-11-21T18:20:00.000Z" } });
+  await waits.findByTestId("oats-panel-session-line");
+  expect(stateOf(waits)).toContain("Needs you");
+  expect(waits.getByTestId("oats-panel-attach")).toBeTruthy();
+  waits.unmount();
   const onBb = panel();
   await onBb.findByTestId("oats-panel-session-line");
   expect(onBb.queryByTestId("oats-panel-attach")).toBeNull();

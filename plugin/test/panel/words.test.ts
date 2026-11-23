@@ -1,11 +1,18 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
+import { ageText, attachWhere, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
+
+describe("an agent on tmux", () => {
+  it("where it runs, with the machine when one is known", () => {
+    expect(attachWhere("falcon")).toBe("Runs in tmux on falcon. Attach from a terminal:");
+    expect(attachWhere(null)).toBe("Runs in tmux. Attach from a terminal:");
+  });
+});
 
 describe("ages", () => {
   it("ages: compact for the header, in words for the session", () => {

@@ -414,8 +414,8 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
                 </Fact>
               )}
             </Facts>
-            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while it runs: a stopped one has no session. */}
-            {where?.where === "tmux session" && runs ? (
+            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel says it runs (it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses. */}
+            {where?.where === "tmux session" && (state === "working" || state === "needs-you") ? (
               <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
                 <p className="m-0">{attachWhere(oats.machine === null ? null : shown(oats.machine))}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">

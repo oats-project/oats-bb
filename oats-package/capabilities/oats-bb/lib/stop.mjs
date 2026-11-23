@@ -199,14 +199,22 @@ function recordGap(record) {
  *  - bb's list of the threads on it was read whole, and EVERY thread on it is archived and
  *    is in the home's record: one this provider made for this home.
  *  Anything else leaves the threads archived only, and `why` says so (the hook's warning).
+ *  The rule of the warning: it is given whenever a thread of the home is left without a
+ *  deleted environment, since with the home kept that thread can be started from bb. So
+ *  also for a thread that has no environment yet (bb makes one when a thread's first turn
+ *  starts: a home retired before that has nothing to delete), and for a delete bb did
+ *  not do. `mine(id)`: whether a thread of the home's bb project is this home's own.
  *
  *  It never waits for bb's teardown (bb answers the delete at once and finishes within
  *  seconds), and never throws for bb's sake: a delete that bb refuses, that does not
- *  answer, or that meets a bb that is down is said on stderr (`note`), and the retire goes on.
+ *  answer, or that meets a bb that is down is said on stderr (`note`), with bb's own
+ *  words and the command to run, and the retire goes on.
  *  → { deleted: [environment ids], why: [text] }. */
-async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, note }) {
+async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine, note }) {
   const deleted = [], why = [];
   if (rows === null) return { deleted, why: ["the home's archived bb threads could not be listed"] };
+  const bare = rows.filter((row) => mine(row.id) && !isBbId(row.environmentId)).map((row) => row.id);
+  if (bare.length > 0) why.push(`${bare.length} thread${bare.length > 1 ? "s" : ""} of this home ${bare.length > 1 ? "have" : "has"} no bb environment to delete yet (bb makes one when a thread's first turn starts): ${someOf(bare, 3)}`);
   // The environments the home's threads are on. (A thread row names its environment.)
   const ids = [...new Set(rows.map((row) => row.environmentId).filter((id) => isBbId(id)))];
   for (const id of ids) {
@@ -234,10 +242,11 @@ async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, note
     if (others.length > 0) { why.push(`${others.length} thread${others.length > 1 ? "s" : ""} on bb environment ${id} ${others.length > 1 ? "are" : "is"} not in this home's thread record (a person's, or one the provider could not note): ${someOf(others.map((thread) => thread.id), 3)}`); continue; }
     if (threads.some(isLive)) { why.push(`a thread on bb environment ${id} is not archived`); continue; }
     const answer = await bb.environmentDelete(id);
-    if (answer.ok) deleted.push(id);
-    // Not the warning's: the threads are archived, which is what the docs say a kept home is left with.
-    // (The remedy before bb's own words, which may be long: a cut must fall in them.)
-    else note(`bb did not delete environment ${id} of this home: ${ARCHIVED_ONLY}. Delete it in bb (bb environment delete ${id}). bb said: ${String(answer.message).replace(/\s+/g, " ").trim()}`);
+    if (answer.ok) { deleted.push(id); continue; }
+    // bb's own words go to stderr, with the remedy before them (they may be long: a cut
+    // must fall in them); the warning says only that it was not done, and what to run.
+    why.push(`bb was asked to delete bb environment ${id} and did not: delete it in bb (bb environment delete ${id})`);
+    note(`bb did not delete environment ${id} of this home: ${ARCHIVED_ONLY}. Delete it in bb (bb environment delete ${id}). bb said: ${String(answer.message).replace(/\s+/g, " ").trim()}`);
   }
   return { deleted, why: [...new Set(why)] };
 }
@@ -319,7 +328,11 @@ export async function retire(home, readSettings, { deadline, env = process.env, 
     // it is in the provider's record of this home's threads, and only then. The record has
     // then answered its one question, and goes, whatever the answer was.
     const record = readRecord(home, { env });
-    const environments = await deleteHomeEnvironments(bb, home, { rows: listed, record, allStopped: left.length === 0 && unswept === null, note });
+    // Which threads of the home's bb project are this home's: those in its record, where
+    // it has one that vouches for them, and those this hook archived; with no such record,
+    // every one. (A home made at a path an earlier home had shares that home's bb project.)
+    const ofThisHome = record.state === "ok" ? (id) => record.ids.has(id) || archived.includes(id) : () => true;
+    const environments = await deleteHomeEnvironments(bb, home, { rows: listed, record, allStopped: left.length === 0 && unswept === null, mine: ofThisHome, note });
     try { removeRecord(record); }
     catch (error) {
       if (!(error instanceof RecordError)) throw error;
@@ -329,9 +342,7 @@ export async function retire(home, readSettings, { deadline, env = process.env, 
     const gone = environments.deleted.length > 0 ? { environments: environments.deleted } : {};
     // Every thread of the home that is archived in bb now: this hook's own first, then
     // the ones it found archived already. (Where the listing could not be read, its own.)
-    // Where the home's record vouches for its threads, only those: a home made at a path
-    // an earlier home had shares its bb project, and that home's threads are not this one's.
-    const ofThisHome = record.state === "ok" ? (id) => record.ids.has(id) : () => true;
+    // Where the home's record vouches for its threads, only those (ofThisHome, above).
     const inBb = [...archived, ...(listed ?? []).map((thread) => thread.id).filter((id) => !archived.includes(id) && !left.includes(id) && ofThisHome(id))];
     if (warnings.length > 0) return { meta: { archived: inBb, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}), ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}), ...gone }, warning: bounded(warnings.join(". ")) };
     // bb has no thread of this home at all, live or archived, and held no env for it.

@@ -29,7 +29,13 @@
     retire.** That is not a failure: no record is made up afterwards. The warning says
     so.
   - The retire never waits for bb's teardown, and a delete bb refuses or does not answer
-    fails no retire: the threads stay archived only, noted on the hook's standard error.
+    fails no retire: the threads stay archived only, the warning says so, and bb's own
+    words are on the hook's standard error.
+  - The retire warns whenever a thread of the home is left without a deleted
+    environment. That includes a home retired before its first turn started: bb makes a
+    thread's environment at its first turn, so there is none to delete.
+  - A record can outlive a home whose retire never reached bb (the hook then decided
+    nothing and keeps it). It is harmless, and the README says how to remove leftovers.
   - The receipt (`capabilityMeta` of oats.bb) gains `environments`, the environments bb
     was asked to delete. Where the home's record is there, `archived` names only the
     home's own threads (and those the hook itself archived): a home made at a path an

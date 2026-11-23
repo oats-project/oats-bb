@@ -314,7 +314,9 @@ for (const [name, answer, said] of [
     const { records, retire } = setup(t);
     const { run, last, calls } = await retire({ "environment delete": answer });
     assert.equal(deletes(calls).length, 1);
-    assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } }, "no environment in the receipt, and the retire is not failed");
+    assert.deepEqual(last.meta, { archived: ["thr_a"] }, "no environment in the receipt, and the retire is not failed");
+    // The warning says it was not done and what to run; bb's own words are on stderr.
+    assert.equal(WHY.exec(last.warning)[1], "bb was asked to delete bb environment env_home and did not: delete it in bb (bb environment delete env_home)");
     assert.match(run.stderr, /^oats bb: warning: /);
     assert.match(run.stderr, said);
     assert.match(run.stderr, /^oats bb: warning: bb did not delete environment env_home of this home: its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it\. Delete it in bb \(bb environment delete env_home\)\. bb said: /);
@@ -328,8 +330,35 @@ test("a delete bb does not answer does not hold the retire: the hook ends within
   const started = Date.now();
   const { run, last } = await retire({ "environment delete": { delayMs: 120_000, stdout: { ok: true } } });
   assert.ok(Date.now() - started < 40_000, `the hook took ${Date.now() - started} ms`);
-  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
+  assert.deepEqual(last.meta, { archived: ["thr_a"] });
+  assert.match(last.warning, WHY);
   assert.match(run.stderr, /bb did not delete environment env_home of this home: .*bb said: bb environment delete did not answer within 10 s\n$/);
+});
+
+// The rule of the warning: whenever a thread of the home is left without a deleted
+// environment. bb gives a thread its environment when its first turn starts, so a home
+// retired before that has none to delete, and with the home kept the door is as open.
+test("a thread of the home that has no environment yet (its first turn never started) leaves nothing to delete, and the retire warns as for archive only", async (t) => {
+  const bare = onEnv("thr_a", { environmentId: null, status: "pending" });
+  const { last, calls, run } = await setup(t).retire({ "thread list --archived": { stdout: [bare] } });
+  assert.deepEqual(last.meta, { archived: ["thr_a"] });
+  assert.equal(WHY.exec(last.warning)[1], "1 thread of this home has no bb environment to delete yet (bb makes one when a thread's first turn starts): thr_a");
+  assert.equal(verbs(calls).includes("environment show"), false);
+  assert.equal(run.stderr, "");
+  // With no record every thread of the home's project is taken for the home's.
+  const unrecorded = await setup(t, { noted: null }).retire({ "thread list --archived": { stdout: [bare, onEnv("thr_b", { environmentId: undefined })] } });
+  assert.equal(WHY.exec(unrecorded.last.warning)[1], "2 threads of this home have no bb environment to delete yet (bb makes one when a thread's first turn starts): thr_a, thr_b");
+  // One of an earlier home at this path, which this home's record does not hold, is not this home's to warn of; one this hook archived is.
+  const earlier = await setup(t).retire({ "thread list --archived": { stdout: [onEnv("thr_a"), onEnv("thr_earlier", { environmentId: null })] } });
+  assert.deepEqual(earlier.last, { meta: { retired: true, archived: ["thr_a"], environments: [ENV] } });
+  const own = await setup(t).retire({
+    "thread list": { stdout: [threadRow("thr_held", "proj_a", "pending", { environmentId: null })] },
+    "thread show": { stdout: { thread: threadRow("thr_held", "proj_a", "pending", { environmentId: null }), environment: null, pendingTodos: null } },
+    "thread archive": { stdout: { ok: true, threadId: "thr_held" } },
+    "thread list --archived": { stdout: [onEnv("thr_held", { environmentId: null }), onEnv("thr_a")] },
+  });
+  assert.deepEqual(own.last.meta, { archived: ["thr_held", "thr_a"], environments: [ENV] });
+  assert.match(WHY.exec(own.last.warning)[1], /^1 thread of this home has no bb environment to delete yet .*: thr_held$/);
 });
 
 test("run twice, the hook is quiet the second time: the environment is destroyed, and the record is gone", async (t) => {

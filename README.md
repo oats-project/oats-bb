@@ -768,8 +768,9 @@ starts nothing.
 - The conversation stays in bb, readable, as an archived thread.
 - The retire never waits for bb: bb answers the delete at once and finishes within
   seconds. A delete bb refuses, does not answer, or that meets a bb that is down fails
-  no retire: the threads stay archived only, and the hook says so in one line on its
-  standard error, with the command to run in bb (`bb environment delete <id>`).
+  no retire: the threads stay archived only. The retire's warning says so, and the hook
+  writes one line on its standard error with bb's own words and the command to run in
+  bb (`bb environment delete <id>`).
 - The receipt (`environments`) names each environment bb was asked to delete.
 
 **When the retire archives only.** bb keeps ONE environment per home, shared by every
@@ -794,8 +795,13 @@ warning:
   lost, and for a record that cannot be read whole.
 - **A thread of the home could not be stopped and archived**, or bb could not be read.
 
-A thread whose first turn never started (bb held it in line) has no environment yet:
-there is nothing to delete, and the hook says nothing of it.
+- **A thread has no environment yet.** bb makes a thread's environment when its first
+  turn starts. A home retired before that (bb held the turn in line) has nothing to
+  delete, and its thread, unarchived, would still start.
+- **bb did not do the delete** (above).
+
+The rule: the retire warns whenever a thread of the home is left without a deleted
+environment, because with the home kept that thread can be started from bb.
 
 > **The warning reaches CLI users only.** `oats retire` prints the hook's warning. The
 > Desktop's Retire dialog shows no plan warnings and no hook output (oats#2102): a
@@ -819,7 +825,13 @@ Directories are `0700`, files `0600`.
   question, and removes it once it has decided. No other command reads it: which
   threads are a home's stays by project, environment and the recorded endpoint.
 - Where bb could not be asked at all, the hook has decided nothing and the record
-  stays, so a retire run again can still delete.
+  stays, so a retire run again can still delete. So a record can outlive a home whose
+  retire never reached bb. That is harmless: it holds thread ids only, and a later home
+  at that path is another directory, which it does not match (that home's first launch
+  replaces it). To remove leftovers by hand, delete the files in
+  `$XDG_STATE_HOME/oats-bb/homes/` (`~/.local/state/oats-bb/homes/`) while no bb home
+  of this user is running: a file removed under a live home only makes that home's
+  retire archive only.
 - It is outside the home, and in bb's full mode the agent runs as the same user: it is
   not out of the agent's reach. A launch in a sandboxed mode denies the directory.
 

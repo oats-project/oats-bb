@@ -898,11 +898,13 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
     const retiring = await launched("queue-retired");
     const retiringRow = async () => (await bbJson("thread list --include-hidden --include-archived")).find((thread) => thread.id === retiring.endpoint.threadId);
     await waitFor("bb to hold the third home's turn in line", async () => (await retiringRow()).queuedWork === "waiting");
-    // (bb gives a thread its environment when its first turn starts: this one has none yet,
-    // so the hook has no environment to delete, contract r32, A17, and says nothing of it.)
+    // bb gives a thread its environment when its first turn starts: this one has none yet,
+    // so the hook has no environment to delete (contract r32, A17). With the home kept,
+    // the thread could still be unarchived and started from bb: the hook warns, as it
+    // does whenever a thread of the home is left without a deleted environment.
     assert.equal(await environmentOf(retiring.endpoint.threadId), null, "bb gave a held thread an environment before its turn started: the retire could then delete it");
     const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${retiring.home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-    assert.deepEqual(retired, { meta: { retired: true, archived: [retiring.endpoint.threadId] } });
+    assert.deepEqual(retired, { meta: { archived: [retiring.endpoint.threadId] }, warning: `the home's bb environment was not deleted (1 thread of this home has no bb environment to delete yet (bb makes one when a thread's first turn starts): ${retiring.endpoint.threadId}): its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it` });
     assert.deepEqual(await bbJson(`thread queue list ${retiring.endpoint.threadId}`), [], "the held turn was withdrawn before the archive");
     assert.notEqual((await retiringRow()).archivedAt, null);
 

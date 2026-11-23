@@ -581,8 +581,14 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
     archived and is in the home's record.
   The delete answers at once and bb tears the environment down afterwards; the hook
   waits for neither more than one bb call. A delete that bb refuses, that does not
-  answer, or that meets a bb that is down is one line on the hook's stderr, with the
-  command to run in bb; it is no warning and fails nothing.
+  answer, or that meets a bb that is down fails nothing: one line on the hook's stderr
+  with bb's own words and the command to run in bb, and the warning says it was not
+  done. The warning's rule: it is given whenever a thread of the home is left without a
+  deleted environment. So also for a thread with no environment yet (a row whose
+  `environmentId` is null: bb makes the environment when the thread's first turn
+  starts), which leaves nothing to delete. Which threads are the home's, for that and
+  for `archived`: those in its record and those the hook archived; with no record that
+  is this home's, every thread of the home's bb project.
   **The record.** `$XDG_STATE_HOME/oats-bb/homes/<sha256 of the home's real path>`
   (`~/.local/state/oats-bb/homes/` where the variable is unset or not absolute, on every
   platform), directories `0700`, the file `0600`. Line 1: `oats-bb-home 1 dev=<n>
@@ -596,8 +602,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   not regular, has a second name, another owner or another mode, or whose directories
   are not this user's `0700` directories (unreadable); anything but that first line and
   whole lines of one id (malformed). The hook removes the record once it has decided
-  (deleted, or archived only); where bb could not be asked at all it stays. No other verb
-  or hook reads or writes it.
+  (deleted, or archived only); where bb could not be asked at all it stays, so one can
+  outlive a home whose retire never reached bb: harmless (ids only; a later home at the
+  path does not match it and replaces it), and an operator may delete the files of
+  `homes/` while no bb home of that user runs. No other verb or hook reads or writes it.
   **WARNING: a retired agent whose home was kept (`oats retire --keep-dir`, or a retire
   that ended quarantined) can still be started again from bb.** The delete is a
   deliberate step in the way, not a lock: bb's own Restore (`bb thread

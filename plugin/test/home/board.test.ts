@@ -92,8 +92,8 @@ describe("the home's words", () => {
     expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0, outside: 0 })).toBe("8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed");
     expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2, outside: 0 })).toBe("5 agents · 0 working · 3 need you · 2 unreachable");
     expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 })).toBe("1 agent · 1 working · 0 need you");
-    // An agent that runs outside OATS is counted once, first, in its state's own words.
-    expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("4 agents · 1 running outside OATS · 1 working · 0 need you · 2 stopped");
+    // An agent that runs outside OATS is one of those that need you (the sidebar's foot counts it so): counted once, there.
+    expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("5 agents · 1 working · 2 need you · 2 stopped");
   });
   it("a tile's count, and who started an agent", () => {
     expect([tileCount(4), tileCount("loading"), tileCount("failed")]).toEqual(["4", "Counting…", "Couldn't count"]);

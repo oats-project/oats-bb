@@ -258,10 +258,15 @@ panel (`app/panel/Panel.tsx`) call it. Whether the provider archives a stopped h
 (`stopArchivesThread`, the lifecycle dialogs') changes no word here (an open thread under a
 stopped agent gets the same sentence before and after): `say.ts` marks the place and says why.
 
-Not there yet: the home's card of an agent that runs outside OATS. The home counts it in its
-summary line, first ("1 running outside OATS"), and lists no card for it: the card, and the one
-predicate the home's card, the Start dialog and this feature's lines share for "a message here is
-the designed resume", are the change after this one. The line of a thread that belonged to a RETIRED agent;
+On the home, an agent that runs outside OATS is one of those that need you: its card
+(`OutsideCard`, `app/home/Home.tsx`) holds this feature's notice with its Stop and Start, and no
+choice and no reply, and the badge, the heading and the summary's "N need you" count it as the
+sidebar's foot does (`view.needing`).
+
+Not there yet: the one predicate the home's card, the Start dialog and this feature's lines share
+for "a message here is the designed resume" (the change after this one: until then the home's
+card of an agent that does not run refuses an answer for every such agent, and offers Start);
+the line of a thread that belonged to a RETIRED agent;
 the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
 come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
 

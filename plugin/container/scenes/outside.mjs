@@ -288,6 +288,22 @@ export default [
       );
       await page.shot(`outside-${viewport.name}-thread-outside`, { targets: true });
 
+      // The home counts it as the roster's foot does, and its card holds the same notice: no choice, no reply.
+      await page.goto("/plugins/oats/home");
+      const cardSel = `${testId("oats-needs-card")}[data-instance="harvest-knowledge-helper"]`;
+      const homeSays = await page.until(
+        `(() => { const card = document.querySelector(${JSON.stringify(cardSel)}); const notice = card?.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); if (!card || !notice) return ""; const flat = (node) => (node?.innerText ?? "").replace(/\\s+/g, " ").trim(); return JSON.stringify({ offer: card.dataset.offer, state: flat(card.querySelector(${JSON.stringify(testId("oats-state"))})), title: flat(notice.querySelector("h3")), acts: [...notice.querySelectorAll("button")].map((button) => button.innerText.trim()), answers: card.querySelectorAll(${JSON.stringify(`${testId("oats-needs-choice")}, ${testId("oats-reply-send")}, ${testId("oats-needs-stopped")}`)}).length, heading: flat(document.querySelector(${JSON.stringify(`${testId("oats-home-needs")} h2`)})), summary: flat(document.querySelector(${JSON.stringify(testId("oats-home-summary"))})) }); })()`,
+        30,
+      );
+      const home = homeSays ? JSON.parse(homeSays) : null;
+      check(
+        home !== null && home.offer === "outside" && home.state === "Running outside OATS" && home.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(home.acts, ["Stop", "Start"]) && home.answers === 0,
+        `${at} the home's card of the agent that runs outside OATS: the same state and notice, with Stop and Start, and no choice and no reply`,
+        JSON.stringify(home),
+      );
+      check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary.includes(" · 1 need you") && !/outside/i.test(home.summary), `${at} the home counts it as the roster's foot does: "Needs you 1", "1 need you" in the summary, and no count of its own`, JSON.stringify(home));
+      await page.shot(`outside-${viewport.name}-home-card`, { targets: true });
+
       // failed, on its open thread
       await open("thr_mockups");
       line = await lineOf(page, /^Failed · /);

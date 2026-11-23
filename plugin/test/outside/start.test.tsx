@@ -16,6 +16,7 @@ import { carriesOn } from "../../app/lifecycle/words";
 import { said } from "../../app/outside/say";
 import { ERRORED, STARTED, startFailureOf } from "../../app/outside/threads";
 import { agentStatus } from "../../app/roster/status";
+import { notified } from "../../app/ui";
 import { messageResumes, rest } from "../../model/rest";
 import type { Agent, BbThread } from "../../model/types";
 import { state } from "../../model/view";
@@ -129,6 +130,11 @@ test("the thread's line: \"Failed\" alone, bb's reason under Details, and Start;
   expect([...new Set(asked.map((args) => JSON.stringify(args.types)))].sort()).toEqual([JSON.stringify([ERRORED]), JSON.stringify([STARTED])]);
   expect([STARTED, ERRORED]).toEqual(["turn/started", "system/error"]);
   expect(asked.every((args) => args.limit === "1")).toBe(true);
+  // The Restart key on it: nothing runs, so it says to start it, and opens no dialog.
+  const { commands } = await import("../../app/lifecycle");
+  await commands.find((each) => each.id === "agent-restart")!.run({ threadId: "thr_harvest", projectId: null, experimental_panel: {} as never });
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Harvest knowledge helper is stopped: Start it instead." });
+  expect(slot.queryByRole("dialog")).toBeNull();
 });
 
 test("a thread in \"error\" that started a turn (the recorded events of a thread whose later turn failed, and of one that ran a turn) reads as before: \"Stopped · session lost\", carried on by a message", async () => {

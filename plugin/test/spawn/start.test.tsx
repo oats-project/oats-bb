@@ -25,11 +25,14 @@ type Event = { type: string; seq: number; data: Record<string, unknown> };
 const events = (name: "never-started" | "later-turn-failed"): Event[] => JSON.parse(readFileSync(join(process.cwd(), `test/fixtures/outside/events-${name}.json`), "utf8"));
 const REASON = 'Failed to resolve Pi model "nosuchmodel"';
 
-/** The form, ready to spawn; bb answers the new thread's status from `statuses` (its last one from then on) and its events from `log`. */
+/** The form, ready to spawn; bb answers the new thread's status from `statuses` (its last one from then on; with none, bb never answers) and its events from `log`. */
 async function ready(statuses: (string | Error)[], log: Event[] = []) {
   const asked = { get: 0, events: [] as { types?: readonly string[] }[] };
   const get = async () => {
-    const next = statuses[Math.min(asked.get++, statuses.length - 1)]!;
+    asked.get++;
+    // With no status to give, bb never answers.
+    if (statuses.length === 0) return new Promise<never>(() => undefined);
+    const next = statuses[Math.min(asked.get - 1, statuses.length - 1)]!;
     if (next instanceof Error) throw next;
     return { id: "thr_new", status: next };
   };
@@ -119,6 +122,16 @@ test("a thread still starting after 10 s, and one bb cannot answer for, are crea
   expect(waiting.slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Created Ranker v4 probe");
   expect(waiting.asked.get).toBeLessThanOrEqual(START_WAIT_MS / 500 + 1);
   expect(waiting.asked.events).toEqual([]);
+  vi.useRealTimers();
+  resetApp();
+  // bb never answers at all (its connection gone while it spawns): the wait ends by the clock, and the form is not held for good.
+  const silent = await ready([]);
+  await press(silent.slot);
+  await pass(START_WAIT_MS - 1);
+  expect([submit(silent.slot).textContent, silent.slot.queryByTestId("oats-result")]).toEqual(["Spawning…", null]);
+  await pass(1);
+  expect(silent.slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Created Ranker v4 probe");
+  expect(titles()).toEqual([["done", "Created Ranker v4 probe.", "Open Ranker v4 probe"]]);
   vi.useRealTimers();
   resetApp();
   const away = await ready([new Error("bb is away")]);

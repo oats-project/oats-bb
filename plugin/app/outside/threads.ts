@@ -117,22 +117,38 @@ const START_ASK_MS = 500;
  * rest, or it failed later), bb could not say, or it had not left its start in that time: the
  * place then says what it says without this.
  */
-export async function startOutcome(sdk: Sdk, threadId: string): Promise<StartFailure | null> {
-  try {
-    for (const deadline = Date.now() + START_WAIT_MS; ; ) {
-      const { status } = await attempt(() => sdk.threads.get({ threadId }));
-      if (status !== "starting" && status !== "pending") {
-        if (status !== "error") return null;
-        const [turns, errors] = await readStart(sdk, threadId);
-        return startFailureOf(turns, errors);
+export function startOutcome(sdk: Sdk, threadId: string): Promise<StartFailure | null> {
+  let over = false;
+  const asking = async (): Promise<StartFailure | null> => {
+    try {
+      while (!over) {
+        const { status } = await attempt(() => sdk.threads.get({ threadId }));
+        if (status !== "starting" && status !== "pending") {
+          if (status !== "error") return null;
+          const [turns, errors] = await readStart(sdk, threadId);
+          return startFailureOf(turns, errors);
+        }
+        await new Promise((resolve) => setTimeout(resolve, START_ASK_MS));
       }
-      if (Date.now() + START_ASK_MS > deadline) return null;
-      await new Promise((resolve) => setTimeout(resolve, START_ASK_MS));
+      return null;
+    } catch {
+      // bb could not say: nothing is claimed of the thread.
+      return null;
     }
-  } catch {
-    // bb could not say: nothing is claimed of the thread.
-    return null;
-  }
+  };
+  // The wait ends BY THE CLOCK, whatever bb does: an answer that never comes (bb's connection gone)
+  // must not hold the place that waits. After `START_WAIT_MS`: null, and no more is asked.
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      over = true;
+      resolve(null);
+    }, START_WAIT_MS);
+    void asking().then((answer) => {
+      over = true;
+      clearTimeout(timer);
+      resolve(answer);
+    });
+  });
 }
 
 /** An id with a failure: it failed at its start; with null: bb answered, and it did not; with no entry: not answered. */

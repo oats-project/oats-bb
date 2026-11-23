@@ -97,9 +97,8 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * and the kernel does not say that it runs (`running` is not false beside a word that is not
  * "stopped": an agent started again since). The one test, for the state and for how it is at rest (model/rest.ts).
  */
-export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null }, thread: object | null | undefined): boolean {
-  // (Any row of the thread: only one that carries bb's word of its start says so.)
-  if (agent.backend === "tmux" || (thread as { startFailure?: unknown } | null | undefined)?.startFailure == null) return false;
+export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null }, thread: Pick<BbThread, "startFailure"> | null | undefined): boolean {
+  if (agent.backend === "tmux" || thread?.startFailure == null) return false;
   return agent.running === false || agent.runtimeState === "stopped";
 }
 

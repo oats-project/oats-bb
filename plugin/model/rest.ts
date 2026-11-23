@@ -2,7 +2,7 @@
 // designed way to carry it on: ONE reading of the kernel's row for every place that asks (the
 // home's card, the Start and Restart dialogs, what the plugin says of an agent outside OATS).
 // Pure: the row's own fields and bb's own row of the thread; nothing is derived from words.
-import type { Agent } from "./types";
+import type { Agent, BbThread } from "./types";
 import { failedAtStart, recordedStopped } from "./view";
 
 type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; sessionEnd?: string | null };
@@ -25,14 +25,17 @@ type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; 
  */
 export type Rest = "runs" | "stopped" | "lost" | "ended" | "unloaded" | "unreachable" | "never-started";
 
+/** Any row of the thread (bb's sidebar's, or a place's own): only one that carries bb's word of its start (`BbThread.startFailure`) says that it failed there. */
 type Thread = object | null;
+const START: keyof BbThread = "startFailure";
+const startOf = (thread: Thread): Pick<BbThread, "startFailure"> | null => (thread !== null && START in thread ? (thread as Pick<BbThread, "startFailure">) : null);
 
 export function rest(agent: Row, thread: Thread = null): Rest {
   // Nobody can tell of a session the kernel cannot reach, whatever else the row says (the kernel
   // prints it `running: null` beside "unreachable"): its own answer, before every other.
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.running !== false && agent.runtimeState !== "stopped") return "runs";
-  if (failedAtStart(agent, thread)) return "never-started";
+  if (failedAtStart(agent, startOf(thread))) return "never-started";
   // The word "stopped" with no word that it does not run (`running` null or true): a stop, whatever
   // else the row says of how its session ended. The kernel prints "stopped" beside `running: false`.
   if (agent.running !== false) return "stopped";

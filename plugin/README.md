@@ -114,8 +114,11 @@ while its Terminal tab has the focus.
 
 - **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
   PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
-  each session and of its uncommitted work, and what a person should see first (an agent in the
-  middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
+  each session and of its uncommitted work, and what a person should see first. For a stop that is
+  said from facts, never from the plan's `midTask` (reported activity: true for every session that
+  runs, an idle one too): "<Name> has uncommitted work in its home." (the plan's own observation of
+  its work tree) and, for an agent on bb, "<Name> is working on a turn now." (bb's word on its
+  thread); an agent whose session runs with neither gets no line. Stop has the switch **Include child instances** (on: the kernel's default; off
   reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
   with a worktree of its own, with what would be lost said under it; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
@@ -224,9 +227,10 @@ of who needs a person):
   not running beside `runtimeState: "unknown"` has its session there and no harness loaded (a
   reboot on a host that does not run `oats host run`, or bb let the harness exit): it is idle, and
   keeps a question it asked. A session the kernel cannot reach is never called stopped. That
-  not-loaded row is shaped from the kernel's contract, not recorded: the bb session
-  provider prints it only from its next release, and until then an idle bb thread reads `running:
-  null` and says "Idle" with nothing after it.
+  not-loaded row is recorded live (`test/fixtures/outside/status-not-loaded.json`: the real run
+  ends the thread's harness process and reads the row), on the provider that scans its harness
+  (oats-bb #40); with a provider before it an idle bb thread reads `running: null` and says "Idle"
+  with nothing after it.
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
 never a message), a session that was lost (nobody stopped it: a message carries it on), and no
@@ -297,9 +301,46 @@ On the home, an agent that runs outside OATS is one of those that need you: its 
 choice and no reply, and the badge, the heading and the summary's "N need you" count it as the
 sidebar's foot does (`view.needing`).
 
-Not there yet: the line of a thread that belonged to a RETIRED agent;
-the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
-come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
+Not there yet: the line of a thread that belonged to a RETIRED agent.
+The rows are recorded live and proven against the real run's kernel (0.70.5, the provider at
+oats-bb #40): `container/real/parts/outside.mjs` makes each state, keeps the kernel's row
+(`test/fixtures/outside/README.md`) and checks what the plugin says and that its Stop mends it.
+
+### A provider home's row, case by case
+
+One table for the two sides that must agree on it: the bb session provider, which answers
+`running` and the state of a home's thread (`inspectAnswer`,
+`oats-package/capabilities/oats-bb/lib/threads.mjs`, from bb's status of the thread and from the
+harness process it finds in the home), and the plugin, which says the state from the kernel's row
+and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
+endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
+agent works. Each row below that names a recording is the kernel's row as printed: the five
+of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the two of
+`roster/status-recorded.json` on the earlier recording (OATS 0.70.0, the provider before #40:
+those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
+it with the thread as the column gives it. That test holds the plugin's side alone: the
+provider's `inspectAnswer` is named here, not checked: no test of the plugin calls it (the
+provider's own tests hold its side). A dash is a field the row does not carry, or carries as null.
+
+| Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
+|---|---|---|---|---|---|---|---|
+| in a turn | true | unknown | - | - | in a turn | Working | `roster/status-recorded.json#working` |
+| a turn bb holds in line (a message waits to start: `queuedWork: "waiting"`) | true | unknown | - | - | at rest, a turn in line | Working | (no recording here: the real run's B1b makes it and shows the kernel's row) |
+| at rest, its harness loaded | true | unknown | - | - | at rest | Idle | `outside/status-at-rest.json` |
+| at rest, with a word for its queue the provider does not know | - | unknown | - | - | at rest | Idle | (no recording: bb 0.50.1 has no such word) |
+| at rest, no harness loaded (its process ended; a reboot without `oats host run`) | false | unknown | - | - | at rest | Idle | `outside/status-not-loaded.json` |
+| stopped with OATS; the provider archived its thread | false | stopped | stopped | - | archived | Stopped | `outside/status-stopped-archived.json` |
+| stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
+| its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
+| its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
+| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
+| the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
+
+What comes after the state's word (the reason, the tone, the acts) is the table at the head of
+this section; this one holds only what the two functions must agree on. An agent on tmux is not
+in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
+for whether it works.
 
 ## The home
 

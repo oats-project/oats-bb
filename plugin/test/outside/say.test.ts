@@ -8,7 +8,7 @@ import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
 import type { Agent, ThreadWhere } from "../../model/types";
 import { state } from "../../model/view";
-import { outside, recorded, sample, tmuxRow } from "./rows";
+import { notLoaded, outside, recorded, sample, tmuxRow } from "./rows";
 
 const WHERES: ThreadWhere[] = ["open", "archived", "missing", "none", "unknown"];
 const NOW = Date.parse("2026-11-21T16:00:00.000Z");
@@ -19,8 +19,8 @@ const word = (agent: Agent) => agentStatus(agent, null, NOW).word;
 const operator = recorded("stoppedByOats"); // sessionEnd "stopped"
 const lost = recorded("threadDeleted"); // sessionEnd "lost"
 const reported = outside();
+const unloaded = notLoaded(); // recorded: its harness process ended, its session there
 // No recording holds these two states: the sample's row with the fields the kernel's contract gives such a row.
-const unloaded = sample("harvest-knowledge-helper", { running: false });
 const failed = sample("harvest-knowledge-helper", { running: false, runtimeState: "shell" });
 const unreachable = sample("desktop-mockups-developer", { running: null, runtimeState: "unreachable", sessionEnd: "lost" });
 
@@ -165,9 +165,8 @@ describe("the kernel's outsideOats", () => {
 });
 
 describe("idle, no harness loaded (running false beside runtimeState \"unknown\", no sessionEnd)", () => {
-  // Shaped as the kernel's contract says (docs/desktop-cli-api.md at v0.70.5, "A status row of a provider
-  // home"), not recorded: `running: false` for an idle bb thread exists only from the provider's next
-  // release; until then such a thread reads `running: null`. The sample's idle row with that one field.
+  // RECORDED (test/fixtures/outside/status-not-loaded.json): the row the kernel printed, on the provider that
+  // scans its harness (oats-bb #40), for an agent whose thread's harness process had ended.
   it("is the contract's row, and is \"Idle\", never \"Stopped\"", () => {
     expect([unloaded.running, unloaded.runtimeState, unloaded.sessionEnd, state(unloaded, null), word(unloaded)]).toEqual([false, "unknown", undefined, "idle", "Idle"]);
   });

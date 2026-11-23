@@ -4,6 +4,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { host as spawnHost } from "../../contract/spawn.js";
 import { startBackend, type Backend } from "../support/backend.js";
 
 /** What a refused call was refused with: bb's refusal code and the plugin's message. */
@@ -90,3 +91,12 @@ describe("the choices of the New agent form, at the server", () => {
     expect(agentsRootOf({ home: "/oats-developer/instances/flaky-ci-developer", soul: "oats-developer", instance: "flaky-ci-developer" })).toBeNull();
   });
 });
+
+describe("spawn's host verbs bb may retry", () => {
+  it("the reads (the provider's list, a preview) are retryable; the spawn itself is not: bb never sends an act twice", () => {
+    const retryable = Object.entries(spawnHost).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
+    expect(retryable.sort()).toEqual(["spawnHarnesses", "spawnPreview"]);
+    expect(Object.keys(spawnHost).sort()).toEqual(["spawn", "spawnHarnesses", "spawnPreview"]);
+  });
+});
+

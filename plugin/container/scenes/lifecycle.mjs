@@ -334,7 +334,8 @@ export default [
         check(shown.body.includes("Redesign ui lead wasn't stopped") && shown.body.includes("Review again") && shown.body.includes("Details"), `${at} Show result opens the dialog again on that refusal, with Review again and Details`, JSON.stringify(shown));
         // bb takes the toast away once its button was pressed: the result is shown once, in the dialog.
         check(Boolean(await page.until(`${refusedToast} === undefined`, 10)), `${at} the toast leaves once its result is shown`);
-        await shot("left-refused-shown");
+        // No image of it: the dialog opened again IS the refusal's dialog as it was (the run's own check found the
+        // two images the same, pixel for pixel, once the toast had left); `stop-refused` is its image.
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
       } finally {

@@ -1,7 +1,7 @@
 // The home's board and its words: grouped from the roster the sidebar shows, counted by the one
 // function for a state.
 import { describe, expect, it } from "vitest";
-import { board } from "../../app/home/board";
+import { board, mayAnswer, notRunning } from "../../app/home/board";
 import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
 import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
@@ -65,6 +65,25 @@ describe("the order of what needs the person", () => {
     const made = board(view(asks, [thread("thr_stopped-asks", { hasPendingInteraction: true }), thread("thr_claims")]), NOW);
     // by the dead claim's instant the stopped one would be first; with none it follows the one that has one
     expect(made.needsYou.map((entry) => entry.agent.instance)).toEqual(["claims", "stopped-asks"]);
+  });
+});
+
+describe("what the home may send to an agent's thread", () => {
+  // What a card offers follows it, and its handlers ask it again of the roster the server holds at the press.
+  it("never to an agent the kernel says does not run, and never while the roster is the last one read", () => {
+    const runs = { running: true as const, runtimeState: "unknown" };
+    expect([notRunning(runs), mayAnswer(runs, false), mayAnswer(runs, true)]).toEqual([false, true, false]);
+    // on bb the kernel says neither yes nor no of an agent that waits between turns: it may be answered
+    expect(mayAnswer({ running: null, runtimeState: "unknown" }, false)).toBe(true);
+    for (const stopped of [
+      { running: false as const, runtimeState: "stopped" },
+      { running: false as const, runtimeState: "shell" },
+      { running: null, runtimeState: "stopped" },
+      { running: false as const, runtimeState: null },
+    ]) {
+      expect(notRunning(stopped), JSON.stringify(stopped)).toBe(true);
+      expect(mayAnswer(stopped, false), JSON.stringify(stopped)).toBe(false);
+    }
   });
 });
 

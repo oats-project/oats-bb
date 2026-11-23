@@ -9,10 +9,12 @@
 // shown is not a current one, those acts are held and the card says why.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { experimental_useTabVisible as useTabVisible, useBbNavigate, useSdk } from "@get-bb/plugin-sdk/app";
+import { experimental_useTabVisible as useTabVisible, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, ExperimentalBadge, ExperimentalThreadTabProps, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { needsYouLabel } from "../format";
+import type { rpcContract } from "../../contract";
 import { claimOf } from "../../model/view";
+import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
@@ -27,13 +29,13 @@ import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
-import { board } from "./board";
+import { board, mayAnswer, notRunning } from "./board";
 import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, THREAD_GONE, WORKING, WORKING_SHOWN,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
 import { question } from "./interactions";
@@ -89,8 +91,11 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
 /** Where an agent with no bb thread is, in words. */
 const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "Runs in tmux" : "Its bb thread is gone");
 
+/** The lifecycle's own word for the act that starts an agent ("Start…": it opens that act's dialog). */
+const START = ACTS.find((each) => each.verb === "start")!.button;
+
 /** How a card is answered: what the agent asks decides what the card offers (`offer`, below). */
-type Offer = "choices" | "in-thread" | "reply" | "elsewhere";
+type Offer = "stopped" | "choices" | "in-thread" | "reply" | "elsewhere";
 
 /** The reply to one agent: one line that grows with its text, Send beside it, on that agent's card. */
 function Reply({ name, text, onText, busy, held, said, onSend }: { name: string; text: string; onText: (text: string) => void; busy: boolean; held: boolean; said: string | null; onSend: () => void }) {
@@ -162,12 +167,16 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
  *   the kernel says it waits for a tool approval and bb lists none to answer): the answer is in
  *   its thread, and the card says so and opens it;
  * - it asks in its own words (a question, its attention): the reply, on its card, named for it;
- * - it has no thread in bb: where to answer it, to copy.
+ * - it has no thread in bb: where to answer it, to copy;
+ * - the kernel says it does not run (and it needs the person by bb's request, or by a claim it still
+ *   carries): no answer and no message (either would start it outside OATS): that it is not
+ *   running, and Start.
  * Beside choices or a request answered in the thread, a message is not offered as an equal: it is
  * behind "Write a message instead", with what a message does not do.
  */
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const sdk = useSdk();
+  const rpc = useRpc<typeof rpcContract>();
   const open = useOpen(oats)(entry);
   const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
   const name = agentName(entry.agent.instance);
@@ -212,12 +221,26 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     return () => controller.abort();
   }, [sdk, threadId, pending, updatedAt]);
 
+  /**
+   * Answers a request, or sends a message, to the agent's thread: only to an agent that runs. What
+   * is drawn holds that for the roster this card was drawn from (a card of an agent that does not
+   * run mounts no choice and no reply); the press asks once more, of the roster the plugin's server
+   * holds at that moment, so that an agent OATS stopped since the card was drawn is not started by
+   * the press. Nothing goes to bb unless that roster reads and says the agent runs.
+   */
   const act = (kind: "answer" | "send", run: () => Promise<unknown>, done: () => void) => {
-    if (busy !== null || held) return;
+    if (busy !== null || !mayAnswer(entry.agent, held)) return;
     setBusy(kind);
     setFailure(null);
     setSaid(null);
-    attempt(run).then(
+    attempt(async () => {
+      const now = await rpc.call("snapshot", null);
+      if (!now.ok) throw new Error(NOT_NOW_UNREAD);
+      const agent = now.agents.find((each) => each.instance === entry.agent.instance);
+      if (agent === undefined) throw new Error(NOT_NOW_GONE);
+      if (notRunning(agent)) throw new Error(NOT_NOW_STOPPED);
+      return run();
+    }).then(
       () => {
         setBusy(null);
         done();
@@ -250,8 +273,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== message ? asked.title : null;
+  // The kernel says the agent does not run (it is stopped, or its session ended), and it needs the
+  // person all the same (bb still holds a request on its thread, or it still carries its claim): an
+  // answer or a message to its thread would start its harness again behind OATS's back (a stopped
+  // agent stays stopped). The card then offers neither: it says so, and offers Start, the
+  // lifecycle's own act, which starts it through OATS.
+  const stopped = notRunning(entry.agent);
   const offer: Offer =
-    thread === undefined ? "elsewhere" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+    thread === undefined ? "elsewhere" : stopped ? "stopped" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -262,7 +291,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   );
   const where = entry.thread === null ? elsewhere(entry) : null;
   return (
-    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={answered === null ? offer : "answered"}>
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -285,7 +314,17 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {shown(detail)}
           </p>
         )}
-        {answered !== null ? (
+        {offer === "stopped" ? (
+          <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
+            <p className="m-0 text-xs text-muted-foreground">{STOPPED_WAITS}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button data-testid="oats-needs-start" disabled={held} onClick={() => openAct("start", entry.agent.instance)}>
+                {START}
+              </Button>
+              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
+            </div>
+          </div>
+        ) : answered !== null ? (
           // A choice was pressed and bb took it: said here until the agent goes on (its card then leaves) or asks again.
           <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
             {answeredWith(shown(answered.label))}

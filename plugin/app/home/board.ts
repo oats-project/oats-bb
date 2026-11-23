@@ -53,3 +53,14 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
     counts,
   };
 }
+
+/**
+ * Whether the kernel says the agent does not run: it is stopped (`runtimeState: "stopped"`), or its
+ * word on whether it runs is no (`running: false`: stopped, or its session ended). An answer or a
+ * message in bb to the thread of such an agent starts its harness again behind OATS's back (a
+ * stopped agent stays stopped), so the home offers and makes neither. (When the plugin has one
+ * shared predicate for "the kernel calls it stopped", this is that one.)
+ */
+export const notRunning = (agent: Pick<Agent, "running" | "runtimeState">): boolean => agent.running === false || agent.runtimeState === "stopped";
+/** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent the kernel says does not run. The card's handlers ask this, whatever drew the control that was pressed. */
+export const mayAnswer = (agent: Pick<Agent, "running" | "runtimeState">, held: boolean): boolean => !held && !notRunning(agent);

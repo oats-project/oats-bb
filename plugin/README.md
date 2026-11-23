@@ -211,6 +211,7 @@ that one, not a free-text box beside it as an equal:
 | bb shows its request in a form the card cannot draw (a plugin's form, free text) | "bb shows its request in its thread: open the thread to answer it.", and **Open thread** |
 | the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.", and **Open thread**. The card cannot grant what bb does not list, and does not pretend to |
 | it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
+| the kernel says it does not run (it is stopped, or its session ended), and it needs you all the same (bb still holds a request on its thread, or it still carries its claim) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
 | it has no thread in bb: it runs in tmux | "It runs in tmux on <machine>, where bb cannot write to it. Answer it in its terminal there:", the kernel's own command to copy (`oats session attach --home <its home>`), and **Open its page**, with "Open its page shows who it is and how it runs." |
 | it has no thread in bb: its thread was archived or deleted | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
 
@@ -229,7 +230,16 @@ sidebar's order, who needs you, who works, what is finished, and the counts) and
 `app/home/home-words.ts`. The tiles' counts are the four pages' own reads, made only while the
 home is visible. Answering is the person's act through bb's SDK (`threads.interactions.respond` /
 `resolve` for a choice bb offers, `threads.send` for a reply, as the person at the screen): the
-home never calls OATS to act, and never types into a session.
+home never calls OATS to act, and never types into a session. These are the only calls in the
+whole plugin that send anything to a thread (the instance panel sends nothing). **A press asks
+first:** what a card offers follows the roster it was drawn from, and that roster can be seconds
+old, so a pressed choice and a sent reply first read the roster the plugin's server holds at that
+moment (`snapshot`, no process) and go to bb only if it reads and says the agent runs; else the
+card says "OATS has stopped this agent since: nothing was sent. Start it to answer." (or that OATS
+no longer lists the agent, or that OATS cannot be read now), and what was written is kept. What is left is the age of the server's own
+roster (its watch and its poll). Its one way to an act of OATS is
+the card of an agent that does not run: **Start…** opens the lifecycle's own dialog there, which
+asks the kernel and acts on its own button.
 
 ## The instance panel
 

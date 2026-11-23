@@ -68,6 +68,14 @@ export const answeredWith = (label: string): string => `Answered: ${label}. Wait
 export const IN_THREAD = "bb shows its request in its thread: open the thread to answer it.";
 /** The kernel says it waits for a tool approval, and bb lists no request to answer (the claim is older than bb's request, or already answered there). */
 export const PERMISSION_IN_THREAD = "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.";
+/** An agent that needs the person and that the kernel says does not run: an answer or a message to its thread would start it outside OATS. */
+export const STOPPED_WAITS = "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.";
+/** A press on an agent that OATS stopped since its card was drawn: nothing went to bb. */
+export const NOT_NOW_STOPPED = "OATS has stopped this agent since: nothing was sent. Start it to answer.";
+/** A press on an agent the roster no longer names (it was retired, or the deployment changed): nothing went to bb. */
+export const NOT_NOW_GONE = "OATS no longer lists this agent: nothing was sent.";
+/** A press while the plugin's server holds no roster that reads: nothing went to bb. */
+export const NOT_NOW_UNREAD = "OATS cannot be read now, so nothing was sent: whether this agent still runs is not known.";
 export const MESSAGE_INSTEAD = "Write a message instead";
 /** What a message does not do, beside a request that has an answer of its own. */
 export const MESSAGE_NOT_ANSWER = "A message does not answer its request: it grants nothing, and the request stays open.";

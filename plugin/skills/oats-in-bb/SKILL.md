@@ -55,6 +55,8 @@ agents, their homes, identities and mail are OATS's and aweb's.
   asks in its own words; "open its thread" where the answer is in the thread; for an agent on
   tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
   A message never grants an approval: beside choices it is behind "Write a message instead".
+  The card of an agent that is not running offers neither an answer nor a message (either would
+  start it outside OATS): it offers Start….
   **New agent** is in the heading's row of every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
   with no bb thread among them, with its state and who started it. While OATS cannot be read the
   cards' choices and replies are held until it is read again. The home also says when the

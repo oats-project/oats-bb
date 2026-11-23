@@ -28,6 +28,8 @@ import { fileURLToPath } from "node:url";
 import { fill, testId, textOf, texts } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
+/** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
+const FLOOR = /OATS_FLOOR = "([^"]+)"/.exec(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "kernel", "compat.ts"), "utf8"))[1];
 /** The recorded `oats version --json`, for a scene that changes what is installed. */
 const VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "version.json"), "utf8"));
 const STATUS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "status.json");
@@ -360,7 +362,7 @@ export default [
         installed({ version: "0.69.4" });
         check(await open(page, within("oats-home-cli")), `${at} an oats older than the plugin works with draws the card`, await page.evaluate(textOf(PAGE)));
         const older = await page.evaluate(cardText);
-        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes("Required 0.70.0 or newer, with desktop API 1") && older.includes("npm install -g @awebai/oats@0.70") && /Copy Check again$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
+        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes(`Required ${FLOOR} or newer, with desktop API 1`) && older.includes("npm install -g @awebai/oats@0.70") && /Copy Check again$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);

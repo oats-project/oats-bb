@@ -7,6 +7,7 @@ import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ComponentType } from "react";
 import type { ExperimentalBadge, ExperimentalThreadTabProps } from "@get-bb/plugin-sdk/app";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
+import { DESKTOP_API, OATS_FLOOR } from "../../kernel/compat";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { setAgentTab } from "../../app/home/agent-tab";
@@ -710,7 +711,7 @@ test("a first version read that fails: the home tries once more by itself once t
       ...handlers(),
       homeCli: () => {
         if (failing) throw new Error("OATS_TIMEOUT: oats did not answer");
-        return { version: "0.70.0", desktopApi: 1, state: "tested" as const };
+        return { version: "0.70.5", desktopApi: 1, state: "tested" as const };
       },
     } as Handlers,
   });
@@ -756,7 +757,7 @@ test("an oats older than the plugin works with: the card says what was detected,
   const card = await slot.findByTestId("oats-home-cli");
   expect(card.querySelector("h3")!.textContent).toBe("Compatible oats CLI required");
   expect(card.textContent).toContain("Everything the plugin shows and does runs through the installed oats CLI.");
-  expect(within(card).getAllByTestId("oats-fact").map((fact) => fact.textContent)).toEqual(["Detected0.69.4", "Required0.70.0 or newer, with desktop API 1"]);
+  expect(within(card).getAllByTestId("oats-fact").map((fact) => fact.textContent)).toEqual(["Detected0.69.4", `Required${OATS_FLOOR} or newer, with desktop API ${DESKTOP_API}`]);
   expect(card.querySelector("code")!.textContent).toBe("npm install -g @awebai/oats@0.70");
   expect(within(card).getByRole("button", { name: "Copy install command" })).toBeTruthy();
   // the card comes before what needs the person, and the roster is still drawn

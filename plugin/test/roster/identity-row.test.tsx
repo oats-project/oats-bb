@@ -94,7 +94,8 @@ test("an agent that needs you: since when and its question, on its own thread", 
   const slot = await render("thr_release", agents);
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?AnswerInstance panel$/);
+  // (The time is the clock alone, or with its date when the claim is from yesterday: in the first 12 minutes after midnight.)
+  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since (\w{3} \d{1,2}, )?\d\d:\d\d\)· Green light at 9f2e1c\?AnswerInstance panel$/);
   // "Answer" is the way to reply (what is asked is on the line): it opens the instance panel, and
   // where the panel is drawn it moves the focus to "Needs input".
   const needs = document.createElement("section");

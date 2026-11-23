@@ -124,8 +124,9 @@ open, a confirmation before its act, in progress, done, refused and with another
   failed, unreachable. OUTH: the three rows that read "not running" side by side (an operator's
   stop, stopped with the machine, idle with no harness loaded), asserting the state word and the
   tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
-  Start dialog, which says first that a message in the thread carries the conversation on. OUTQ: the first roster while bb holds a question on the thread of the agent that
-  runs outside OATS. What bb says of a thread is true in bb: the stage archives the threads it says
+  Start dialog, which says first that a message in the thread carries the conversation on. OUTQ:
+  the first roster while bb holds a question on the thread of the agent that runs outside OATS.
+  What bb says of a thread is true in bb: the stage archives the threads it says
   are archived (and unarchives them when it ends), and the deleted one is an id bb has no thread
   of. bb's question is a real one (the mock model asks it, once, when OUTQ is entered), answered
   when that stage ends. The scenes also assert: every row's state word is one of the set; a row

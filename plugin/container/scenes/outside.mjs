@@ -427,7 +427,9 @@ export default [
       );
       await page.shot(`outside-${viewport.name}-three-3-start-dialog`, { targets: true });
       await page.press("Escape");
-      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} (3) Escape closes the Start dialog, and nothing was started`);
+      const shut = Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10));
+      const after = await lineOf(page, /^Idle · /);
+      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
 
       // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
       const lines = [one, two, three];

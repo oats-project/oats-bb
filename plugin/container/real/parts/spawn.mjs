@@ -172,6 +172,9 @@ export default async (run) => {
         const held = await page.until(`document.querySelector(${q("oats-spawn-submit")})?.innerText.trim() === "Spawning…" && document.querySelector(${q("oats-spawn-submit")}).disabled && document.querySelector(${q("oats-spawn-form")} + " fieldset").disabled`, 10);
         check(Boolean(held), `${at} on the press Spawn reads "Spawning…" and is held, with the fields`, await page.evaluate(textOf(testId("oats-spawn-foot"))).catch(() => "the page had already moved on"));
         opened = (await page.until(`/\\/threads\\/thr_/.test(location.pathname) ? location.pathname : ""`, 180)) ?? "";
+        // What was made is still said after the thread opened: bb's own toaster, with the agent by its name as words.
+        const told = await page.until(`document.body.innerText.includes("Created Form spawned developer.")`, 10);
+        check(Boolean(told), `${at} and the notice "Created Form spawned developer." is on screen over the thread`, await page.evaluate(`document.body.innerText.slice(-300)`));
         const row = rowOf(NAME);
         check(opened !== "" && row?.backend === "bb" && typeof row?.session?.threadId === "string" && opened.endsWith(row.session.threadId) && row.parentInstance === ANCHOR, `${at} Ctrl+Enter spawned ${NAME} on bb, as a child of ${ANCHOR}, and opened its thread`, JSON.stringify({ opened, row: row && { backend: row.backend, thread: row.session?.threadId, parent: row.parentInstance } }));
       } else {

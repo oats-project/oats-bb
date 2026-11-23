@@ -1,10 +1,11 @@
 // What the New agent form says of a spawn: the facts of the kernel's preview ("What will be
 // created") and a refusal in a person's words with the act that follows. Both are the Desktop's,
-// shared by its clients (awebai/oats at a4a43220: packages/client/spawn-preview-facts.mjs
+// shared by its clients (awebai/oats at 3d834aa3c: packages/client/spawn-preview-facts.mjs
 // `previewFacts`, packages/client/spawn-messages.mjs `spawnProblem`, and the Desktop's own words
 // for the act that follows in packages/desktop/renderer/spawn-words.mjs), ported as they are; where
-// a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React.
-import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
+// a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React,
+// and nothing of app/: what it answers is the kernel's text as it came, and whoever draws it
+// puts it through the display filter (app/ui/text.ts), as for every text of the kernel's.
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -132,7 +133,7 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
   // The capabilities whose `worktree` hook sets up ./work, in the order they run.
   const hooks = list(data.worktreeHooks)
     .filter(record)
-    .map((hook) => `${displayLine(hook.capability) ?? ""}${hook.required === true ? " (required)" : ""}`);
+    .map((hook) => `${text(hook.capability) ?? ""}${hook.required === true ? " (required)" : ""}`);
   if (hooks.length > 0) facts.push({ label: "Setup", parts: [{ text: hooks.join(", ") }, { text: "Runs after the worktree is made. Can take several minutes.", sub: true }] });
   let prompts: PreviewFacts["prompts"] = null;
   if (record(data.launchPromptAnswers)) {
@@ -241,15 +242,17 @@ const SPAWN_FACTS: Record<string, Said> = {
   E_DECISION_STALE: said("Something changed before the spawn went through. Nothing was created.", "review-again"),
   E_IDEMPOTENCY_CONFLICT: said("Something changed before the spawn went through. Nothing was created.", "review-again"),
   E_PLACEMENT_TAKEN: said("Another spawn just took this name. Nothing was created.", "review-again"),
-  E_INTENT_EXPIRED: said("This spawn request expired. Check the instance list before spawning again."),
+  E_INTENT_EXPIRED: said("This spawn request expired.", "check-result"),
   E_PREFLIGHT_INCOMPLETE: said("OATS couldn’t finish checking this spawn. Try again."),
   E_BACKEND_UNAVAILABLE: said("That session backend isn’t installed on this machine.", "change-options"),
   // The bb session provider's own refusal at the launch: bb cannot run this agent yet, and the kernel rolls the spawn back
   // (test/fixtures/spawn/spawn-pi-refused.json, the real kernel's). The plugin's words (WORDS.md).
   E_BACKEND_NOT_READY: said("bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."),
-  E_INSTANCE_GONE: said("The instance that was created isn’t there anymore. Check the instance list."),
+  E_INSTANCE_GONE: said("The instance that was created isn’t there anymore. Check the agents in the sidebar."),
   E_OUTCOME_UNKNOWN: said("We couldn’t confirm whether the instance was created.", "check-result"),
-  E_SPAWN_INCOMPLETE: said("The instance was created but didn’t finish starting. Open it from the instance list instead of spawning again."),
+  E_SPAWN_INCOMPLETE: said("The instance was created but didn’t finish starting.", "open-from-list"),
+  // The plugin's own: the spawn went through, and the kernel named no bb thread to open.
+  NO_THREAD_NAMED: said("The instance was created, but OATS named no bb thread for it.", "open-from-list"),
   E_INPUT_PREPARATION: said("The opening instruction couldn’t be prepared, so nothing was started. Try again."),
   OATS_TIMEOUT: said("OATS took too long to answer. The instance may already exist.", "check-result"),
   // A spawn whose `oats` ended with no answer the plugin can read, or whose machine stopped answering: whether it created the instance is not known.
@@ -271,7 +274,7 @@ const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
   details: "Try again, or see Details.",
-  "open-from-list": "Open it from the sidebar.",
+  "open-from-list": "Open it from the sidebar instead of spawning again.",
 };
 // The form has no Developer settings yet (they come in a later change), so no sentence sends a
 // person there: where the Desktop says "… in Developer settings", these name what the form has.
@@ -310,26 +313,75 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
 };
 
 /** A refusal as the form says it: the sentence (what happened, then what to do), its code, and the kernel's own message for Details. */
-export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; detail: string | null };
+/**
+ * What is KNOWN after a spawn did not answer "created", which is what the form holds itself to:
+ *   - `refused`: nothing was created. Only where something says so: the kernel's refusals the
+ *     tables name, and the plugin's own for a call that never reached the kernel;
+ *   - `created`: an instance exists (the kernel says so, or the spawn went through and only its
+ *     thread is not known): the form stays held, and says where to open it;
+ *   - `unknown`: anything else: a code nobody classed, an `oats` that ended with no answer or one
+ *     the plugin cannot read, a time limit. Rollback is never inferred from an arbitrary failure
+ *     (the Desktop's rule: packages/client/spawn-apply.mjs `interpret`). The form stays held and
+ *     offers Check result, which asks again under the same key.
+ * A preview starts nothing: its outcome is always `refused`.
+ */
+export type SpawnOutcome = "refused" | "created" | "unknown";
+export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; detail: string | null; outcome: SpawnOutcome };
+const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
+/** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
+const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
+const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
 /**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
- * installed is said as the kernel words it, through the display filter (the table's sentence when
- * the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
+ * installed is said as the kernel words it, through the drawer's display filter (`line`; the
+ * table's sentence when the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
  * Harness field (the provider declares several): a sentence sends a person there only when it does.
  */
-export function spawnProblem(reason: { code: string | null; message: string | null }, stage: "preview" | "spawn" = "preview", { harnessField = true }: { harnessField?: boolean } = {}): SpawnProblem {
+export function spawnProblem(
+  reason: { code: string | null; message: string | null },
+  stage: "preview" | "spawn" = "preview",
+  {
+    harnessField = true,
+    replay = false,
+    line,
+  }: {
+    harnessField?: boolean;
+    /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */
+    replay?: boolean;
+    /**
+     * The drawer's display filter for one line of the kernel's text: the line as it may be shown,
+     * or null where none of it may (nothing left, or withheld). The one sentence that is the
+     * kernel's own words (a harness that is not installed) is said only through it; without it,
+     * the table's sentence stands.
+     */
+    line?: (text: string) => string | null;
+  } = {},
+): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
-  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" && line !== undefined && message !== "" ? line(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" ? said(kernelLine, "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
-  const words = reason.code === null ? general : (kernelWords ?? facts[code] ?? COMMON_FACTS[code] ?? general);
+  const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
+  // After the press, what is known: created, refused (a refusal the tables name, or a call that
+  // never ran; but a Check result that the plugin refused before asking learned nothing), else unknown.
+  const outcome: SpawnOutcome =
+    stage === "preview"
+      ? "refused"
+      : reason.code !== null && CREATED.has(code)
+        ? "created"
+        : named !== undefined && named.next === "check-result"
+          ? "unknown"
+          : named !== undefined || (reason.code !== null && NEVER_RAN.has(code) && !replay)
+            ? "refused"
+            : "unknown";
+  const words = outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
-  return { sentence, next: words.next, code, detail: message === "" ? null : message };
+  return { sentence, next: words.next, code, detail: message === "" ? null : message, outcome };
 }

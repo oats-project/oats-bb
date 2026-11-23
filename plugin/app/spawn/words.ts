@@ -18,7 +18,6 @@ export const FILTER_INSTANCES = "Filter instances";
 export const FILTER_MODELS = "Filter models";
 /** The harness list could not be read: nothing can be chosen, the soul's default still spawns, and Retry reads it again. */
 export const harnessesFailed = (code: string | null): string => `The harnesses bb can run could not be read${code === null ? "" : ` (${code})`}. A spawn uses the soul’s default until they are.`;
-export const SOUL_DEFAULT_ONLY = "The soul's default";
 export const RETRY_HARNESSES = "Read the harnesses again";
 /** Under the harness's first entry (the Desktop's detail). */
 export const HARNESS_DEFAULT_DETAIL = "What this soul launches with unless you choose";
@@ -97,6 +96,10 @@ export const CANCEL = "Cancel";
 export const CREATED = "Created";
 export const createdTitle = (name: string): string => `Created ${name}`;
 export const OPENING = "Opening its thread…";
+/** The same, as a notification that stays when the thread opens. */
+export const createdNotice = (name: string): string => `Created ${name}.`;
+/** In the notification of an unknown outcome, for a person who left the form: there is no Check result where they are. */
+export const UNKNOWN_AWAY = "OATS didn’t say whether the instance was created. Check the agents in the sidebar before spawning again.";
 export const openAgent = (name: string): string => `Open ${name}`;
 /** Cancel's word once the agent is made: there is nothing left to cancel. */
 export const CLOSE = "Close";
@@ -105,6 +108,9 @@ export const READ_AGAIN = "“What will be created” was read again: it shows t
 export const inProgress = (soul: string): string => `A spawn of ${soul} is in progress.`;
 export const SPAWN_FAILED_TITLE = "The agent was not spawned";
 export const SPAWN_UNKNOWN_TITLE = "It is not known whether the agent was spawned";
+export const SPAWN_INCOMPLETE_TITLE = "The agent was created, and its start is not complete";
+/** The button once an instance exists whose start did not finish (the Desktop's). */
+export const INCOMPLETE = "Spawn incomplete";
 
 /** Why Spawn is off, beside it (the standard: a disabled button says why). */
 export const OFF = {

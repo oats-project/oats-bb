@@ -53,8 +53,9 @@ is missing in a person's words, what to do, the code, the plugin's or the kernel
 under Details, Retry, and Open settings where a setting mends it. Where OATS was read before, the
 roster stays as last read under that notice, which says its age once ("Showing what was read
 <age>."), and the OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start,
-Restart and Retire stay in their place, off, each with the reason, the notice says so in one
-sentence with Retry first, and the plugin's server takes no act meanwhile. What a place still
+Restart, Retire and New agent stay in their place, off, each with the reason, the notice says so
+in one sentence with Retry first, and the plugin's server takes no act meanwhile. Beside a page
+that shows that notice the sidebar says one line, "Last observation — <age>", with Retry. What a place still
 shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 

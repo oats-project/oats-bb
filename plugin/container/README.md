@@ -104,6 +104,16 @@ open, a confirmation before its act, in progress, done, refused and with another
   shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
   and their preview (Preview and Spawn enabled).
+- **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
+  `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over six souls, five of them
+  waiting, four stopped, some with a parent. The real run holds no tmux-backed agent, so the
+  nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
+  (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
+  and parent changed, the claim the kernel printed for another agent on the waiting ones, and
+  `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
+  holds: every one is a row that says its state, its soul and "runs in tmux"; the foot counts
+  every agent that waits; no phrase of a row's second line is broken or cut; the last row and the
+  foot can be scrolled into view; a row opens its agent's own page.
 - **A14** with `oats` removed after it was read: the roster stays as last read under the notice
   ("OATS is not installed on …", "Showing what was read <age>.", that the acts are held, Retry,
   Open settings); a thread opens from it and its own row says the same on one line, with its act

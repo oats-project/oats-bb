@@ -7,6 +7,8 @@
 //   fixtures     the recorded roster: three agents need the person (each card with its own reply),
 //                the summary, the tiles, who works, what is finished; Home › Agents; a tile whose
 //                count cannot be read; how soon a change the kernel records is on the home
+//   home-stopped-asks  an agent OATS has stopped while bb holds a request on its thread: no answer,
+//                no message, Start
 //   home-many    eleven agents need the person, one of them on tmux: eight cards, then all
 //   home-empty   a workspace with no agent
 //   home-stale   OATS cannot be read after it was: the roster as last read, its acts held
@@ -26,6 +28,8 @@ import { fileURLToPath } from "node:url";
 import { fill, testId, textOf, texts } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
+/** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
+const FLOOR = /OATS_FLOOR = "([^"]+)"/.exec(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "kernel", "compat.ts"), "utf8"))[1];
 /** The recorded `oats version --json`, for a scene that changes what is installed. */
 const VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "version.json"), "utf8"));
 const STATUS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "roster", "status.json");
@@ -59,7 +63,68 @@ function asking(status, instance, minute, message) {
 }
 const MANY = 8;
 
+// ---- bb holds a request on the thread of an agent OATS has stopped
+// The live run's bb threads run Claude Code on the mock model, which asks what a message names
+// (real/mock-anthropic.mjs, MOCK-ASK): a message to the thread opens a question that bb then holds
+// as a pending interaction. Asked once, when the stage is entered; answered when it is left, with
+// bb's own CLI, as a person would in the thread.
+const bbCli = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const bbJsonCli = (...args) => JSON.parse(bbCli(...args, "--json"));
+const STOPPED_ASKS = { instance: "flaky-ci-developer", thread: "thr_ci" };
+const STOPPED_QUESTION = "Rerun the failed shard, or leave it?";
+const STOPPED_ASK = { questions: [{ question: STOPPED_QUESTION, header: "Shard", multiSelect: false, options: [{ label: "Rerun", description: "Run it again." }, { label: "Leave it", description: "Do nothing." }] }] };
+const pendingOn = (threadId) => bbJsonCli("thread", "interactions", "list", threadId).filter((interaction) => interaction.status === "pending");
+/** bb's pending interaction on the thread, or undefined when none opened in `seconds`. */
+async function untilPending(threadId, seconds) {
+  for (const deadline = Date.now() + seconds * 1000; Date.now() < deadline; await new Promise((resolve) => setTimeout(resolve, 1000))) {
+    const found = pendingOn(threadId)[0];
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+/** The question bb holds while the stage `home-stopped-asks` runs; undefined when none opened (its scene then fails, and says so). */
+let heldQuestion;
+
 export const stages = {
+  "home-stopped-asks": {
+    label: "H5",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({ status: { stdout: statusWithRealIds(threads, { [STOPPED_ASKS.instance]: { running: false, runtimeState: "stopped", waitingOnYou: null } }) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === STOPPED_ASKS.instance && agent.running === false));
+      const thread = threads.get(STOPPED_ASKS.thread);
+      heldQuestion = undefined;
+      // The mock asks only when the message is the last one Claude Code sends it, which it is not every time: a message that opened no question is sent once more.
+      for (let attempt = 1; attempt <= 3 && heldQuestion === undefined; attempt += 1) {
+        bbCli("thread", "tell", thread.id, `One more thing.\nMOCK-ASK:${JSON.stringify(STOPPED_ASK)}\n`);
+        heldQuestion = await untilPending(thread.id, 45);
+        if (heldQuestion === undefined) console.log(`NOTE home: the message to "${thread.title}" opened no question in 45 s (attempt ${attempt} of 3)`);
+      }
+    },
+    leave: async ({ fake, threads }) => {
+      const thread = threads.get(STOPPED_ASKS.thread);
+      try {
+        // Every request bb holds on the thread is answered, as a person would in it (a first message's
+        // question can open after the second message was sent): bb is left as the stage found it.
+        const deadline = Date.now() + 90_000;
+        let left = pendingOn(thread.id);
+        let status = bbJsonCli("thread", "show", thread.id).thread?.status;
+        while (Date.now() < deadline && (left.length > 0 || status !== "idle")) {
+          for (const interaction of left) {
+            const asked = interaction.payload?.questions?.[0];
+            if (asked !== undefined) bbCli("thread", "interactions", "answer", interaction.id, thread.id, "--choice", `${asked.id}=${asked.options[0].value}`);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          left = pendingOn(thread.id);
+          status = bbJsonCli("thread", "show", thread.id).thread?.status;
+        }
+        // Said when it is not so: a later stage would then start on a thread that still asks, or still runs.
+        if (left.length > 0 || status !== "idle") console.log(`NOTE home: after the stage home-stopped-asks the thread "${thread.title}" is not as it was found: ${left.length} pending request(s), status ${status}`);
+      } finally {
+        heldQuestion = undefined;
+        fake();
+      }
+    },
+  },
   "home-many": {
     label: "H2",
     enter: async ({ fake, threads, untilSnapshot }) => {
@@ -297,7 +362,7 @@ export default [
         installed({ version: "0.69.4" });
         check(await open(page, within("oats-home-cli")), `${at} an oats older than the plugin works with draws the card`, await page.evaluate(textOf(PAGE)));
         const older = await page.evaluate(cardText);
-        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes("Required 0.70.0 or newer, with desktop API 1") && older.includes("npm install -g @awebai/oats@0.70") && /Copy Check again$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
+        check(older.startsWith("older | Compatible oats CLI required") && older.includes("Detected 0.69.4") && older.includes(`Required ${FLOOR} or newer, with desktop API 1`) && older.includes("npm install -g @awebai/oats@0.70") && /Copy Check again$/.test(older), `${at} the card says what was detected, what is required, and the command, with Copy`, older);
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);
@@ -451,6 +516,34 @@ export default [
       await shown(page, check, at, ninth, "the first card the press revealed");
       await sound(page, viewport, check, at, "the cards the press revealed");
       await page.shot(`home-${viewport.name}-needs-all`);
+    },
+  },
+  {
+    stage: "home-stopped-asks",
+    name: "an agent OATS has stopped while bb holds a request on its thread: its card offers no answer and no message, says so, and offers Start",
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      const check = printing(plain);
+      check(heldQuestion !== undefined, `${at} bb holds a question on the stopped agent's thread (the stage opened it)`, heldQuestion === undefined ? "the mock model opened no question in three messages" : heldQuestion.id);
+      const mine = card(STOPPED_ASKS.instance);
+      await page.goto(HOME);
+      // bb's pending request is what makes the card (the agent OATS stopped carries no claim): wait for the card in its stopped form, with bb's question read.
+      const read = await page.until(`(() => { const card = document.querySelector(${JSON.stringify(mine)}); if (!card || card.dataset.offer !== "stopped") return ""; const question = card.querySelector('[data-testid="oats-needs-question"]')?.innerText.trim() ?? ""; return question === "" ? "" : JSON.stringify({ offer: card.dataset.offer, question, says: (card.querySelector('[data-testid="oats-needs-stopped"] p')?.innerText ?? "").replace(/\\s+/g, " ").trim(), choices: card.querySelectorAll('[data-testid="oats-needs-choice"]').length, reply: card.querySelector('[data-testid="oats-reply"]') !== null, fold: card.querySelector('[data-testid="oats-needs-message"]') !== null, buttons: [...card.querySelectorAll("button")].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")) }); })()`, 60);
+      check(
+        read === JSON.stringify({ offer: "stopped", question: STOPPED_QUESTION, says: "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", choices: 0, reply: false, fold: false, buttons: ["Open thread", "Start…"] }),
+        `${at} the card says what bb's request asks and that the agent is not running; it has no choice, no reply and no "Write a message instead"; its two buttons are Open thread and Start…`,
+        read ?? (await page.evaluate(`(document.querySelector(${JSON.stringify(mine)})?.outerHTML ?? ${textOf(PAGE)}).slice(0, 900)`)),
+      );
+      await shown(page, check, at, mine, "the stopped agent's card");
+      await sound(page, viewport, check, at, "the card of a stopped agent bb holds a request for");
+      await page.shot(`home-${viewport.name}-card-stopped`);
+      // Start… opens the lifecycle's own dialog, about this agent; nothing is started on the press, and nothing went to bb.
+      await page.evaluate(click(`${mine} ${testId("oats-needs-start")}`));
+      const dialog = await page.until(`(() => { const body = document.querySelector(${JSON.stringify(testId("oats-confirm"))}); return body ? body.getAttribute("data-about") : ""; })()`, 20);
+      check(dialog === STOPPED_ASKS.instance, `${at} Start… opens the lifecycle's dialog, about this agent`, dialog);
+      await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-confirm-cancel"))}) ?? document.querySelector(${JSON.stringify(testId("oats-confirm-close"))}))?.click()`);
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-confirm"))}) === null`, 10)), `${at} and its Cancel closes it`, await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase") ?? "gone"`));
+      const still = heldQuestion === undefined ? [] : pendingOn(threads.get(STOPPED_ASKS.thread).id).map((interaction) => interaction.id);
+      check(heldQuestion !== undefined && still.includes(heldQuestion.id), `${at} and bb's request is still pending: nothing of the home answered it`, JSON.stringify(still));
     },
   },
   {

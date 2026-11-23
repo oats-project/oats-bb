@@ -287,6 +287,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       if (!now.ok) throw new Error(NOT_NOW_UNREAD);
       const agent = now.agents.find((each) => each.instance === entry.agent.instance);
       if (agent === undefined) throw new Error(NOT_NOW_GONE);
+      // The AGENT is the server's roster's, read now; the THREAD is the card's own (bb's row as it
+      // was drawn): the guard is fresh on what OATS says, not on what bb says of the thread.
       if (refuses(agent, entry.thread)) throw new Error(NOT_NOW_STOPPED);
       return run();
     }).then(

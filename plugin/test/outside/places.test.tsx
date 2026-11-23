@@ -316,12 +316,12 @@ test("a lost session says \"session lost\" on bb and on tmux, side by side; an a
   await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation."]));
   expect(acts(bbLine)).toEqual(["Start"]);
   resetApp();
-  // The tmux agent's page: what is so, and when it last started; no "Start" named, since the lifecycle offers none for an agent on tmux.
+  // The tmux agent's page: what is so, and when it last started; what Start does is said because the lifecycle offers Start for an agent on tmux (its header's own button), and no Restart: nothing runs.
   const page = await agentPage(TMUX, { rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(page).kind).toBe("lost-tmux"));
-  expect(header(page)).toMatchObject({ state: "Stopped", sentence: "Its session ended without OATS stopping it. Nobody stopped it.", tone: null, acts: [] });
+  expect(header(page)).toMatchObject({ state: "Stopped", sentence: "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.", tone: null, acts: [] });
   expect(page.getByTestId("oats-outside-last-started").textContent).toMatch(/^Last started (\w+ \d+, )?\d\d:\d\d$/);
-  expect(header(page).headed).not.toContain("Start…");
+  expect(header(page).headed).toEqual(["Start…", "Retire…"]);
   resetApp();
   // Stopped with OATS, on tmux: "Stopped" and its soul, and nothing of this feature's.
   const stopped = await sidebar({ rpc: handlers({}, rows({ running: false, runtimeState: "shell", sessionEnd: "stopped" })), sidebarThreads: sidebarThreads() });

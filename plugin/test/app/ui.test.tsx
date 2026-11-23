@@ -34,19 +34,20 @@ describe("the words", () => {
     for (const nothing of [undefined, null, 7, "", "---", " - "]) expect(instanceDisplayName(nothing)).toBe("");
   });
 
-  test("a claim's reason in words, never the raw reason; its detail is the message, else the reason, else nothing", () => {
+  test("a claim's reason in a word where it says what is needed, never the raw reason; its detail is the message, else that word, else nothing", () => {
     const claim = (reason: string | null, message: string | null = null) => ({ reason, message, since: null });
-    expect(waitingLabel(claim("permission"))).toBe("Waiting for a tool approval");
-    expect(waitingLabel(claim("question"))).toBe("Asked you a question");
-    expect(waitingLabel(claim("attention"))).toBe("Asked for your attention");
-    for (const unknown of [claim("toString"), claim("whatever"), claim(null), null]) expect(waitingLabel(unknown)).toBe("Needs input");
+    // One reason says more than "Needs you" does: a tool approval. The others have no word.
+    expect(waitingLabel(claim("permission"))).toBe("approval");
+    for (const silent of [claim("question"), claim("attention"), claim("toString"), claim("whatever"), claim(null), null]) expect(waitingLabel(silent)).toBeNull();
     expect(waitingDetail(claim("question", "Which branch?"))).toBe("Which branch?");
-    expect(waitingDetail(claim("question"))).toBe("Asked you a question");
+    expect(waitingDetail(claim("permission", "Run the migration?"))).toBe("Run the migration?"); // the agent's own words first
+    expect(waitingDetail(claim("permission"))).toBe("approval");
+    expect(waitingDetail(claim("question"))).toBeNull();
     expect(waitingDetail(claim("whatever"))).toBeNull();
     expect(waitingDetail(null)).toBeNull();
   });
 
-  test("how long it has waited, and since when, next to now", () => {
+  test("how long it has waited, and a clock time, next to now", () => {
     const now = new Date(2026, 10, 21, 14, 30).getTime();
     const ago = (ms: number) => new Date(now - ms).toISOString();
     expect([waitedText(ago(20_000), now), waitedText(ago(12 * 60_000), now), waitedText(ago(3 * 3_600_000), now), waitedText(ago(50 * 3_600_000), now)]).toEqual(["under a minute", "12 min", "3 h", "2 d"]);
@@ -56,7 +57,8 @@ describe("the words", () => {
     expect(waitingClock(new Date(2026, 9, 2, 9, 5).toISOString(), now)).toBe("Oct 2, 09:05");
     expect(waitingClock(new Date(2025, 9, 2, 14, 3).toISOString(), now)).toBe("2025-10-02 14:03");
     expect(waitingClock("not a date", now)).toBe("");
-    expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("waiting 27 min (since 14:03)");
+    expect(waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), now)).toBe("27 min"); // how long alone: no "waiting", no clock time
+    expect(waitingSince(new Date(2026, 10, 17, 14, 3).toISOString(), now)).toBe("4 d");
     expect(waitingSince(null, now)).toBeNull();
     expect(waitingSince("not a date", now)).toBeNull();
     // The age of a read: always relative and in one form, never a bare clock time and never "just
@@ -149,22 +151,32 @@ describe("facts, notices and the states of a list", () => {
       </Notice>,
     );
     const notice = screen.getByRole("alert");
-    expect(notice.textContent).toBe("OATS could not be readThe machine did not answer in time.Showing what was read 2 min ago.OATS_TIMEOUTRetry");
+    expect(notice.textContent).toBe("OATS could not be readThe machine did not answer in time.Read 2 min ago.OATS_TIMEOUTRetry");
     expect(within(notice).getByRole("heading").textContent).toBe("OATS could not be read");
     fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
     cleanup();
-    // An age that is not known is said as the Desktop says it; an age that is left out is not said.
+    // An age that is not known is said without one; an age that is left out is not said.
     render(
       <Notice title="OATS could not be read" tone="error" age={null}>
         The machine did not answer in time.
       </Notice>,
     );
-    expect(screen.getByRole("alert").textContent).toBe("OATS could not be readThe machine did not answer in time.Showing what was last read.");
+    expect(screen.getByRole("alert").textContent).toBe("OATS could not be readThe machine did not answer in time.Last read.");
     cleanup();
     // A notice that is no failure is announced politely, and shows no code and no age it was not given.
     render(<Notice title="No deployment is set">Choose the directory in the settings.</Notice>);
     expect(screen.getByRole("status").textContent).toBe("No deployment is setChoose the directory in the settings.");
+    cleanup();
+    // Several texts under the one fold, in order, each through the filter by itself: a sentence of
+    // what to do, then the code leading the kernel's message; a text that is null is left out.
+    render(<Notice title="OATS did not answer" tone="error" details={["It took more than 20 s.", null, "OATS_TIMEOUT: `oats` did not answer\nand was stopped", "E_X: token=abc123"]} />);
+    const fold = screen.getByTestId("oats-notice-details") as HTMLDetailsElement;
+    expect(fold.open).toBe(false);
+    expect(Array.from(fold.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["It took more than 20 s.", "OATS_TIMEOUT: `oats` did not answer", "and was stopped", "E_X: [withheld]"]);
+    cleanup();
+    render(<Notice title="Nothing more" details={[null, ""]} />);
+    expect(screen.queryByTestId("oats-notice-details")).toBeNull();
   });
 
   test("empty, loading and stale each say what they are; loading and stale are announced", () => {
@@ -180,9 +192,9 @@ describe("facts, notices and the states of a list", () => {
     expect(screen.getByTestId("oats-empty").textContent).toBe("No agents yet.New agent");
     expect(screen.getAllByRole("status").map((said) => said.textContent)).toEqual([
       "Reading your agents…",
-      "Showing what was read 2 min ago.Acts are held until OATS is read again.",
-      "Refreshing… showing what was read just now.",
-      "Showing what was last read.", // an age that is not known
+      "Read 2 min ago.Acts are held until OATS is read again.",
+      "Refreshing… read just now.",
+      "Last read.", // an age that is not known
     ]);
   });
 

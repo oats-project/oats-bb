@@ -39,16 +39,17 @@ export function instanceDisplayName(name: unknown): string {
 
 export type Claim = { reason: string | null; message: string | null; since: string | null };
 
-const LABELS: Readonly<Record<string, string>> = Object.freeze({
-  permission: "Waiting for a tool approval",
-  question: "Asked you a question",
-  attention: "Asked for your attention",
-});
+/**
+ * The reason after "Needs you", in a word, for the one reason that says what is needed: a tool
+ * approval. A question and a call for attention say nothing "Needs you" does not, and have none;
+ * the raw reason is never drawn (plugin/WORDS.md, "Not kept": the Desktop's three sentences).
+ */
+const LABELS: Readonly<Record<string, string>> = Object.freeze({ permission: "approval" });
 const labelOf = (claim: Claim | null): string | null => (claim !== null && claim.reason !== null && Object.hasOwn(LABELS, claim.reason) ? LABELS[claim.reason]! : null);
 
-/** The reason in words. The raw reason is never drawn: an unknown one reads "Needs input". */
-export const waitingLabel = (claim: Claim | null): string => labelOf(claim) ?? "Needs input";
-/** What a place that already says "Needs input" adds after it: the message, else the reason in words, else null. */
+/** The reason in a word ("approval"), or null where the state's own word says it all. */
+export const waitingLabel = (claim: Claim | null): string | null => labelOf(claim);
+/** What a place that says "Needs you" adds after it: the agent's message, else the reason in a word, else null. */
 export const waitingDetail = (claim: Claim | null): string | null => claim?.message ?? labelOf(claim);
 
 /** How long it has waited (floor): "under a minute", "N min", "N h", "N d". A future instant (clock skew) reads "under a minute". */
@@ -79,20 +80,22 @@ export function waitingClock(since: string, now: number = Date.now()): string {
   return at.getMonth() === today.getMonth() && at.getDate() === today.getDate() ? time : `${MONTHS[at.getMonth()]} ${at.getDate()}, ${time}`;
 }
 
-/** "waiting 12 min (since 14:03)"; null when the kernel names no instant that can be read. */
+/**
+ * How long an agent has waited, after "Needs you": "12 min", "4 d"; null when the kernel names no
+ * instant that can be read. The clock time is not on the line: the instance panel says it.
+ */
 export function waitingSince(since: string | null, now: number = Date.now()): string | null {
   if (since === null) return null;
-  const clock = waitingClock(since, now);
-  return clock === "" ? null : `waiting ${waitedText(since, now)} (since ${clock})`;
+  return waitingClock(since, now) === "" ? null : waitedText(since, now);
 }
 
 /**
- * How old a read is, for a place that shows what it read earlier ("Showing what was read <age>."):
+ * How old a read is, for a place that shows what it read earlier ("Read <age>."):
  * always relative, in ONE form everywhere: "less than a minute ago", "12 min ago", "3 h ago",
  * "2 d ago" (minutes to the nearest one, hours and days whole). Never a bare clock time, and never "just now": what is
  * shown is from a read that could not be made again, and must not read as fresh (the lead's ruling
  * on the stale state; the Desktop's `observedAgeText` says "just now" and "at 14:05"). null for an
- * instant that cannot be read, and the place then says "Showing what was last read.".
+ * instant that cannot be read, and the place then says "Last read.".
  */
 export function readAge(at: string | number, now: number = Date.now()): string | null {
   const then = typeof at === "number" ? at : Date.parse(at);
@@ -106,10 +109,10 @@ export function readAge(at: string | number, now: number = Date.now()): string |
 }
 
 /**
- * The Desktop's sentence for content read earlier, the ONE form the age of a kept roster is said
- * in: with its age (`readAge`), or without one when the age is not known.
+ * The ONE form the age of content read earlier is said in: with its age (`readAge`), or without
+ * one when the age is not known (the Desktop's "Showing what was read <age>.", cut to its fact).
  */
-export const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
+export const showingRead = (age: string | null): string => (age === null ? "Last read." : `Read ${age}.`);
 
 /**
  * Said wherever an agent is launched from bb (the New agent form, the Start and Restart dialogs): the

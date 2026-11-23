@@ -143,13 +143,14 @@ export function Facts({ children }: { children: ReactNode }) {
 export const LINK = "underline underline-offset-2 hover:opacity-80";
 
 /**
- * Something a person opens to read more ("Details", "Paths"): closed until pressed, its summary as
- * high as a control, with a mark that turns when it is open. Uncontrolled, or controlled with `open` and `onToggle`.
+ * Something a person opens to read more ("Details", "Paths", a row of a list that opens): closed
+ * until pressed, its summary as high as a control, with a mark that turns when it is open. Closed,
+ * it is one word, or a row behind its mark. Uncontrolled, or controlled with `open` and `onToggle`.
  */
-export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
+export function Disclosure({ summary, children, open, onToggle, row = false, testId = "oats-disclosure" }: { summary: ReactNode; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; /** the summary is a row of a list that opens (its own words, in its own look, behind the mark), not a word that names a fold */ row?: boolean; testId?: string }) {
   return (
     <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
-      <summary className={`${TARGET} inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground hover:text-foreground`}>
+      <summary className={`${TARGET} cursor-pointer list-none items-center ${row ? "flex min-w-0 gap-2 text-foreground" : "inline-flex gap-1 text-xs text-muted-foreground hover:text-foreground"}`}>
         {/* The mark that says it opens, turned when THIS fold is open (the summary's own triangle is
             lost with its flex layout). By its own details alone: a fold inside an open fold is closed
             until it is opened, and a rule on any open ancestor would turn its mark too. */}
@@ -194,8 +195,10 @@ const TONE = {
  * A notice in a person's words: a title, one or two sentences, the acts that help (Retry, Open
  * settings, Details), and for a read that failed the age of what is still shown. For the failed,
  * stale, not-configured and cannot-show states of every page. `code` is the kernel's or the
- * plugin's code, drawn after the words in the muted style, never before them; `details` is the
- * kernel's own message (a refusal as the server words it), one press away under "Details".
+ * plugin's code, drawn after the words in the muted style, never before them; `details` is what is
+ * one press away under "Details": the kernel's own message (a refusal as the server words it), or
+ * several texts in order (a sentence of what to do, then the code and the kernel's message), each
+ * through the filter by itself.
  */
 export function Notice({
   title,
@@ -210,21 +213,22 @@ export function Notice({
   children?: ReactNode;
   tone?: keyof typeof TONE;
   code?: string | null;
-  details?: string | null;
-  /** `readAge()` of what is still shown: a string, or null when the instant cannot be read ("Showing what was last read."); left out, the notice says nothing of it. */
+  details?: string | null | readonly (string | null)[];
+  /** `readAge()` of what is still shown: a string, or null when the instant cannot be read ("Last read."); left out, the notice says nothing of it. */
   age?: string | null;
   actions?: ReactNode;
 }) {
   const look = TONE[tone];
+  const detailLines = (Array.isArray(details) ? details : [details]).flatMap((text) => refusalLines(text));
   return (
     <section role={look.role} data-testid="oats-notice" data-tone={tone} className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${look.frame}`}>
       <h3 className={`font-semibold ${look.title}`}>{title}</h3>
       {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
       {age === undefined ? null : <p className="text-xs text-muted-foreground">{showingRead(age)}</p>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
-      {details === undefined || details === null || refusalLines(details).length === 0 ? null : (
+      {detailLines.length === 0 ? null : (
         <Disclosure summary="Details" testId="oats-notice-details">
-          {refusalLines(details).map((line, index) => (
+          {detailLines.map((line, index) => (
             <p key={index} className="text-xs text-muted-foreground">
               {line}
             </p>
@@ -240,11 +244,11 @@ export function Notice({
  * An empty list or page: the Desktop's words for it (a title where the Desktop has two lines, and
  * its sentence), and the act that fills it. In the place the content will be.
  */
-export function Empty({ title, children, action }: { title?: string; children: ReactNode; action?: ReactNode }) {
+export function Empty({ title, children, action }: { title?: string; /** the sentence; left out where the title says it all */ children?: ReactNode; action?: ReactNode }) {
   return (
     <div data-testid="oats-empty" className="flex flex-col items-start gap-2 py-2 text-sm text-muted-foreground">
       {title === undefined ? null : <p className="font-semibold text-foreground">{title}</p>}
-      <p>{children}</p>
+      {children === undefined || children === null ? null : <p>{children}</p>}
       {action === undefined || action === null ? null : <div className="flex flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
@@ -267,7 +271,7 @@ export function Loading({ children = "Reading OATS…" }: { children?: ReactNode
 export function Stale({ age, held, refreshing = false, action }: { age: string | null; held?: string | null; refreshing?: boolean; action?: ReactNode }) {
   return (
     <div role="status" data-testid="oats-stale" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground">
-      <span>{refreshing ? `Refreshing… ${showingRead(age).replace(/^S/, "s")}` : showingRead(age)}</span>
+      <span>{refreshing ? `Refreshing… ${showingRead(age).replace(/^[A-Z]/, (first) => first.toLowerCase())}` : showingRead(age)}</span>
       {held === undefined || held === null ? null : <span className="text-muted-foreground">{held}</span>}
       {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2">{action}</span>}
     </div>

@@ -95,7 +95,7 @@ describe("the lists", () => {
     expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(11);
     fireEvent.click(slot.getByTestId("oats-automations-refresh"));
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingHeld until the list can be read again: what each row is now is not known\.Showing what was read .+\.Retry$/);
+    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingHeld until the list can be read again: what each row is now is not known\.Read .+\.Retry$/);
     expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(11);
     // What a row is now is not known: its acts are held (the switch, the menu's acts), and Open and Open file are not.
     const row = slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/daily-review")!;
@@ -219,7 +219,7 @@ describe("a row's page", () => {
     // OATS changed: the lists are read again, and with them the state.
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
     const notice = await slot.findByTestId("oats-automation-status-failed");
-    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readShowing what was read less than a minute ago.E_TRIGGER_FAILEDRetry");
+    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readRead less than a minute ago.E_TRIGGER_FAILEDRetry");
     expect(slot.getByTestId("oats-automation-history-note").textContent).toContain("2 of 2 live now");
   });
 

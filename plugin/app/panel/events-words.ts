@@ -8,17 +8,15 @@ import type { PanelEvent, PanelEvents } from "../../kernel/panel-events";
 import { shown } from "../ui/text";
 import { whenText } from "./words";
 
-export const ACTIVITY = "Reported lifecycle activity";
-export const LOAD = "Load activity";
-export const REFRESH = "Refresh activity";
-export const READING = "Reading the recorded activity…";
+export const ACTIVITY = "Activity";
+export const LOAD = "Load";
+export const REFRESH = "Refresh";
+export const READING = "Reading…";
 /** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
 export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first. It is history, not what the agent does now.";
 export const PROVENANCE_PLAIN = "Reading this starts nothing and allows nothing.";
-export const LOADED = "Reported observation loaded. Runtime state is shown separately.";
-export const LAST_OBSERVATION = "Last observation retained; refresh required.";
-export const RECENT = "Recent lifecycle events";
-export const NO_EVENTS = "No recorded lifecycle events in this observed window.";
+export const RECENT = "Events";
+export const NO_EVENTS = "No events";
 
 const TITLES: Record<string, string> = {
   spawned: "Spawned", launched: "Launched", restarted: "Restarted", stopped: "Stopped", "stop-refused": "Stop refused", "retire-planned": "Retirement planned", retired: "Retired",
@@ -77,7 +75,7 @@ export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => e
 export function summaryLine(events: PanelEvents, now: number): string {
   const last = events.events[events.events.length - 1];
   // What it is, in words: the newest row of the record, not what the agent does now. Which incarnation it is of is the row's to say.
-  return last === undefined ? NO_EVENTS : `Last recorded: ${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
+  return last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
 }
 
 // ---- what a blocked launch's screen differed in

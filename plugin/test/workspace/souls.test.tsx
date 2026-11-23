@@ -306,7 +306,7 @@ test("a soul's page while OATS cannot be read: the notice with the age above its
   const stale = await souls("oats-developer", { snapshot: failed(last) });
   const notice = await stale.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
@@ -322,7 +322,7 @@ test("the Souls list while OATS cannot be read: the page's one notice, with the 
   const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
   const stale = await souls("", { snapshot: failed(last) });
   const notice = await stale.findByRole("alert");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
   await waitFor(() => expect(stale.getByTestId("oats-souls-page").textContent).toMatch(/oats-developer\s*2 agents/));
   stale.unmount();

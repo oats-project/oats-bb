@@ -11,13 +11,12 @@ export type AgentStatus = {
   state: AgentState;
   /** The state's word, the standard's ("Needs you", "Working", "Failed", …). */
   word: string;
-  /** For an agent that waits on a person: "waiting 12 min (since 14:03)"; null otherwise, or when the kernel names no instant. */
+  /** For an agent that waits on a person, how long: "12 min", "4 d"; null otherwise, or when the kernel names no instant. */
   since: string | null;
   /**
    * What the state is about, in a person's words, for the states that have something to say: the
-   * agent's question or the reason (needs you), that its session ended (failed), that OATS cannot
-   * reach its session (unreachable). The question is an agent's text: `StatusLine` draws it
-   * through the filter.
+   * agent's question or the reason in a word (needs you), that its session ended (failed). The
+   * question is an agent's text: `StatusLine` draws it through the filter.
    */
   detail: string | null;
   /**
@@ -28,8 +27,8 @@ export type AgentStatus = {
   kernel: string | null;
 };
 
-/** The reason an unreachable agent's line says, in a person's words (the kernel's own text goes under Details). */
-export const UNREACHABLE = "OATS cannot reach its session";
+/** The reason after "Failed": the Desktop's "Its session ended", as a reason. */
+export const SESSION_ENDED = "session ended";
 
 /** `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now` is the clock in epoch milliseconds. */
 export function agentStatus(agent: Agent, thread: BbThread | null, now: number): AgentStatus {
@@ -39,18 +38,18 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
     case "needs-you": {
       // The kernel's claim, through the one gate; with none, the question is bb's own.
       const claim = claimOf(agent);
-      if (claim === null) return { ...base, since: null, detail: "bb shows its question in this thread" };
+      // (bb's own question is in the thread under the line: the line says nothing of it.)
+      if (claim === null) return { ...base, since: null, detail: null };
       return { ...base, since: waitingSince(claim.since, now), detail: waitingDetail(claim) };
     }
     case "error":
-      return { ...base, since: null, detail: "Its session ended" };
+      return { ...base, since: null, detail: SESSION_ENDED };
     case "unreachable":
-      return { ...base, since: null, detail: UNREACHABLE, kernel: agent.runtimeError };
-    case "working":
-      // The one time the kernel records for an agent that works: the last time OATS started it, said as
-      // what it is (not "since": the turn it works on may be newer).
-      return { ...base, since: sessionStarted(agent.startedAt ?? null, now), detail: null };
+      // "Unreachable" says it; the kernel's own text is one press away.
+      return { ...base, since: null, detail: null, kernel: agent.runtimeError };
     default:
+      // (When a working agent was last started, and when a stopped one stopped, are facts of the
+      // instance panel's Session, not of a line.)
       return { ...base, since: null, detail: null };
   }
 }
@@ -64,26 +63,19 @@ export function rowState(status: AgentStatus, gone: boolean): { state: AgentStat
   return gone ? { state: GONE_MARK, word: GONE_WORD } : { state: status.state, word: status.word };
 }
 
-/** "started 14:03": the last time OATS started it (a spawn, a session start or restart: the row's `startedAt`; a session bb resumed since keeps this time) (or with its date, as the waiting clock says one); null when the kernel's row names no start that can be read. */
-export function sessionStarted(startedAt: string | null, now: number): string | null {
-  if (startedAt === null) return null;
-  const clock = waitingClock(startedAt, now);
-  return clock === "" ? null : `started ${clock}`;
-}
-
 /**
- * "since 14:03" for an agent OATS stopped: the time of its last "stopped" event, from the
- * instance's recorded events (`oats instance events`: read for the one agent whose thread or panel
- * is open, never for the roster). null when the events hold none, or none that can be read; and
+ * When an agent OATS stopped was stopped ("14:03", "Nov 21, 18:23"): the time of its last "stopped"
+ * event, from the instance's recorded events (`oats instance events`: read for the one agent whose
+ * panel is open, never for the roster). null when the events hold none, or none that can be read; and
  * when the last one is older than the session's start the roster names (`startedAt`): the events
  * held were read before this stop, and an earlier stop's time is not this one's.
  */
-export function stoppedSince(events: readonly { kind: string; at: string; incarnation?: string }[] | undefined, startedAt: string | null, now: number): string | null {
+export function stoppedAt(events: readonly { kind: string; at: string; incarnation?: string }[] | undefined, startedAt: string | null, now: number): string | null {
   // The events are the address's history: a stop of an EARLIER instance of the same name (retired, then spawned again) is not this one's.
   const last = (events ?? []).filter((event) => event.kind === "stopped" && event.incarnation !== "earlier").at(-1);
   if (last === undefined) return null;
   const [stoppedAt, started] = [Date.parse(last.at), startedAt === null ? NaN : Date.parse(startedAt)];
   if (!Number.isNaN(started) && !Number.isNaN(stoppedAt) && stoppedAt < started) return null;
   const clock = waitingClock(last.at, now);
-  return clock === "" ? null : `since ${clock}`;
+  return clock === "" ? null : clock;
 }

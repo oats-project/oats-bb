@@ -50,12 +50,12 @@ const markOf = (row: HTMLElement) => [row.querySelector("[data-mark]")!.getAttri
 
 // ---- the sidebar's row
 
-test("stopped, its thread archived in bb: the row says \"Stopped\" and the soul, in the plain tone, never \"its bb thread is gone\", and opens the archived conversation", async () => {
+test("stopped, its thread archived in bb: the row says \"Stopped\" alone, in the plain tone, never \"its bb thread is gone\", and opens the archived conversation", async () => {
   const { asked, sdk } = bb(["thr_digest"]);
   const { slot, navigated } = await sidebar({ rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk });
-  // Nothing is wrong with it (a provider that archives at stop leaves every stopped agent so): the soul, and no warning.
+  // Nothing is wrong with it (a provider that archives at stop leaves every stopped agent so): the state's word, no reason and no warning.
   await waitFor(() => expect(threadless(slot).getAttribute("data-opens")).toBe("thread")); // bb has answered
-  expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert");
+  expect(rowFacts(threadless(slot))).toBe("Stopped");
   expect(markOf(threadless(slot))).toEqual(["stopped", null]);
   // bb is asked once, by id, for the archived threads alone, hidden ones included.
   expect(asked).toEqual([{ threadIds: ["thr_digest"], archived: true, includeHidden: true }]);
@@ -90,7 +90,7 @@ test("while bb has not said, or cannot say, where the thread is, the row claims 
   const sdk = { threads: { list: async () => Promise.reject(new Error("bb is away")) } } as never as RenderSlotOptions<Contract>["sdk"];
   const { slot } = await sidebar({ rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk });
   await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a claim to be drawn, if one were made)
-  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert"));
+  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped"));
 });
 
 test("the kernel's report on a row: its state IS \"Running outside OATS\", in the warning tone, alone on the row's line; and it is counted among those that need a person", async () => {
@@ -108,7 +108,7 @@ test("with nothing reported, the rows are the roster's own: no note, no mark, an
   const { slot } = await sidebar({ rpc: handlers(), sidebarThreads: sidebarThreads(), sdk });
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(slot.container.querySelector('[data-mark][data-state="outside"], [data-mark][data-tone="warning"]')).toBeNull();
-  await waitFor(() => expect(slot.getAllByTestId("oats-row-facts").map((line) => line.textContent)).toContain("Stopped · oats-expert"));
+  await waitFor(() => expect(slot.getAllByTestId("oats-row-facts").map((line) => line.textContent)).toContain("Stopped"));
   expect(asked).toEqual([]);
 });
 
@@ -149,8 +149,8 @@ const noEvents: Partial<Handlers> = { panelEvents: () => ({ events: [] }) as nev
 test("the kernel's report on the open thread: one statement, \"Running outside OATS\"; the notice in a person's words, the kernel's sentence behind Details, and what each act does", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   const warning = await slot.findByTestId("oats-outside-warning");
-  // The state, then what OATS recorded and since when, as a fact: never "Stopped" as the state of an agent that runs.
-  await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", expect.stringMatching(/^recorded stopped since /)]));
+  // The state, then what OATS recorded, as a fact with no time: never "Stopped" as the state of an agent that runs.
+  await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", "recorded stopped"]));
   const status = within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line");
   expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone")]).toEqual(["outside", "warning"]);
   const notice = within(warning).getByTestId("oats-notice");
@@ -192,7 +192,7 @@ test("failed, on its open thread: \"Failed\", that a message here starts it agai
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "shell" } : agent));
   const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
   await slot.findByTestId("oats-identity-row");
-  expect(words(slot)).toEqual(["Failed", "Its session ended. Restart it, or send a message here."]);
+  expect(words(slot)).toEqual(["Failed", "session ended"]);
   expect(acts(slot)).toEqual(["Restart"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
@@ -202,14 +202,14 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("stopped-archived");
   expect(within(row).getByTestId("oats-outside-agent").textContent).toBe("Weekly digest helper");
-  expect(words(slot)).toEqual(["Stopped", "Its conversation is archived in bb. Start begins a new one."]);
+  expect(words(slot)).toEqual(["Stopped", "archived in bb"]);
   // Its acts are on this row: bb's menu of an archived thread has none of the roster's.
   expect(acts(slot)).toEqual(["Start…", "Retire…"]);
   fireEvent.click(within(row).getByRole("button", { name: "Start…" }));
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
-test("three agents whose thread bb has archived, side by side: an operator's stop keeps its soul, plain; a lost session and one that still runs say \"archived in bb\" with the warning mark", async () => {
+test("three agents whose thread bb has archived, side by side: an operator's stop says its state alone, plain; a lost session and one that still runs say \"archived in bb\" with the warning mark", async () => {
   const HARVEST = "harvest-knowledge-helper";
   const RANKER = "ranker-v3-probe";
   const gone = new Set(["thr_digest", "thr_harvest", "thr_research"]);
@@ -219,7 +219,7 @@ test("three agents whose thread bb has archived, side by side: an operator's sto
   const rowOf = (instance: string) => slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === instance)!;
   await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
   expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([
-    ["Stopped · oats-expert", "stopped", null],
+    ["Stopped", "stopped", null],
     ["Stopped · archived in bb", "stopped", "warning"],
     ["Idle · archived in bb", "idle", "warning"],
   ]);
@@ -231,7 +231,7 @@ test("the archived thread of an agent that still runs: its state's word in the w
   const slot = await line("thr_harvest", { rpc: handlers(noEvents, agents), sidebarThreads: threads, sdk: bb(["thr_harvest"]).sdk });
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("running-archived");
-  expect(words(slot)).toEqual(["Idle", "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS."]);
+  expect(words(slot)).toEqual(["Idle", "Archived in bb while running: it may still run."]);
   expect(within(within(row).getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBe("warning");
   expect(acts(slot)).toEqual(["Stop", "Retire"]);
   fireEvent.click(within(row).getByRole("button", { name: "Stop" }));
@@ -242,7 +242,7 @@ test("the archived thread of an agent whose session OATS lost: \"Stopped\" in th
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }, noEvents), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("lost-archived");
-  expect(words(slot)).toEqual(["Stopped", "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS."]);
+  expect(words(slot)).toEqual(["Stopped", "Archived in bb while running: it may still run."]);
   const status = within(row).getByTestId("oats-status-line");
   expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))]).toEqual(["stopped", "warning", ["warning"]]);
   // OATS reads it not running; its process may run: Stop is offered, and no Start until it is stopped.
@@ -257,12 +257,14 @@ test("Retire on the archived thread's row opens the lifecycle's Retire dialog fo
   expect(asked()).toEqual({ verb: "retire", instance: DIGEST });
 });
 
-test("a stopped agent on its open thread: since when, then that a message here starts it again without OATS, and Start", async () => {
+test("a stopped agent on its open thread: that a message here starts it outside OATS, with no time before it, and Start", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
-  await waitFor(() => expect(words(slot)).toHaveLength(3)); // the time is read from the agent's events, after the state
-  expect(words(slot)).toEqual(["Stopped", expect.stringMatching(/^since /), "A message sent here in bb starts it again without OATS. Use Start."]);
-  // The line warns: the state's mark and the sentence are in the warning tone; the time beside them is not.
-  expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null, "warning"]);
+  await slot.findByTestId("oats-identity-row");
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a time to be drawn, if one were read)
+  expect(words(slot)).toEqual(["Stopped", "A message here starts it outside OATS."]);
+  expect(calls(slot, "panelEvents")).toEqual([]); // when it stopped is the instance panel's fact: the line reads no events
+  // The line warns: the state's mark and the sentence are in the warning tone.
+  expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual(["warning"]);
   expect(within(slot.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBe("warning");
   expect(acts(slot)).toEqual(["Start"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
@@ -273,29 +275,30 @@ test("bb holds a question on the thread of an agent OATS stopped: \"Needs you\",
   const asking = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, hasPendingInteraction: true } : thread)) };
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: asking });
   await slot.findByTestId("oats-identity-row");
-  expect(words(slot)).toEqual(["!Needs you", "OATS recorded it stopped. A message sent here in bb starts it again without OATS. Use Start."]);
+  expect(words(slot)).toEqual(["!Needs you", "Stopped. An answer here starts it outside OATS."]);
   expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual(["warning"]);
   expect(acts(slot)).toEqual(["Start"]);
   resetApp();
-  // Stopped with the machine: OATS resumes it, and its question is what the line says, as the roster has it.
+  // Stopped with the machine: OATS resumes it, and the line is the roster's own: the state alone
+  // (bb's question is in the thread under it), with no warning.
   const host = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: asking });
   await host.findByTestId("oats-identity-row");
-  expect(words(host)).toEqual(["!Needs you", "bb shows its question in this thread"]);
-  expect(within(host.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null]);
+  expect(words(host)).toEqual(["!Needs you"]);
+  expect(within(host.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBeNull();
 });
 
 test("bb holds a question on the thread of an agent that is not loaded, or that stopped with the machine: the row and the line say \"Needs you\" and the roster's own words, with no reason made for another state and no act of this feature's", async () => {
   const asking = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_digest" || thread.id === "thr_harvest" ? { ...thread, hasPendingInteraction: true } : thread)) };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
-  // The rows: the soul after "Needs you", never "Needs you · with the machine" or "Needs you · not loaded".
+  // The rows: "Needs you" alone, never "Needs you · with the machine" or "Needs you · not loaded".
   const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: asking });
   const factsOf = (thread: string) => rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === thread)!);
-  expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Needs you · oats-expert", "Needs you · knowledge-harvester"]);
+  expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Needs you", "Needs you"]);
   resetApp();
   // The line of the one that is not loaded: bb's question, and no Start (the sentence that says what Start does is not on this line).
   const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: asking });
   await unloaded.findByTestId("oats-identity-row");
-  expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you", "bb shows its question in this thread"], []]);
+  expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you"], []]);
 });
 
 test("an agent that is not loaded, on a thread bb says works (a turn runs): the row and the line say \"Working\", with no \"not loaded\" and no Start", async () => {
@@ -303,7 +306,7 @@ test("an agent that is not loaded, on a thread bb says works (a turn runs): the 
   const active = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_harvest" ? { ...thread, status: "active" as const, hasPendingInteraction: false } : thread)) };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown", waiting: null } : agent));
   const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: active });
-  await waitFor(() => expect(rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_harvest")!)).toBe("Working · knowledge-harvester"));
+  await waitFor(() => expect(rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_harvest")!)).toBe("Working"));
   resetApp();
   const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: active });
   await unloaded.findByTestId("oats-identity-row");
@@ -357,7 +360,7 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
 test("an agent whose thread was deleted in bb: its own page says \"Stopped\", what happened, and has the lifecycle's Start and Retire in its header, once", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("deleted"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: [], headed: ["Start…", "Retire…"] }); // the acts are the header's, once
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "deleted in bb", tone: "warning", acts: [], headed: ["Start…", "Retire…"] }); // the acts are the header's, once
   fireEvent.click(within(header(slot).head).getByRole("button", { name: "Start…" }));
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
@@ -365,7 +368,7 @@ test("an agent whose thread was deleted in bb: its own page says \"Stopped\", wh
 test("an agent whose session OATS lost and whose thread bb archived: its own page has Stop under what happened (the header offers none for an agent that reads stopped), and Retire in the header", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("lost-archived"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", tone: "warning", acts: ["Stop"], headed: ["Start…", "Retire…"] });
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Archived in bb while running: it may still run.", tone: "warning", acts: ["Stop"], headed: ["Start…", "Retire…"] });
   fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Stop" }));
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
 });
@@ -373,11 +376,11 @@ test("an agent whose session OATS lost and whose thread bb archived: its own pag
 test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire in its header", async () => {
   const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
-  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb. Start begins a new one.", tone: null, acts: [], headed: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "archived in bb", tone: null, acts: [], headed: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
   resetApp();
   const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(deleted).kind).toBe("deleted"));
-  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: [], headed: ["Start…", "Retire…"] });
+  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "deleted in bb", acts: [], headed: ["Start…", "Retire…"] });
 });
 
 test("no act is drawn twice on the agent's page: the three agents whose thread bb has archived, and the one that runs outside OATS", async () => {
@@ -402,7 +405,7 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   await waitFor(() => expect(header(runs).kind).toBe("running-archived"));
   once(verbs(runs));
   expect(verbs(runs)).toContain("Stop");
-  expect(header(runs)).toMatchObject({ acts: [], tone: "warning", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS." });
+  expect(header(runs)).toMatchObject({ acts: [], tone: "warning", sentence: "Archived in bb while running: it may still run." });
   resetApp();
   // A row that says only where its thread is (failed, its thread archived): no block of this feature's; the acts are the header's.
   const answer = bb(["thr_harvest"]);
@@ -580,7 +583,7 @@ async function everywhere(rows: Parameters<typeof facts>[0], threads: RenderSlot
 test("bb is asked once for the threads it does not list, whatever number of places are drawn", async () => {
   const { asked, sdk } = bb(["thr_digest"]);
   const { slot } = await everywhere({ [DIGEST]: { sessionEnd: "lost" } }, withoutDigest(), sdk);
-  await waitFor(() => expect(within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line").textContent).toContain("archived in bb while it ran"));
+  await waitFor(() => expect(within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line").textContent).toContain("Archived in bb while running: it may still run."));
   await new Promise((resolve) => setTimeout(resolve, 20));
   // The sidebar, the thread's row and the agent's page each read the roster: one request, with one token.
   expect(asked).toEqual([{ threadIds: ["thr_digest"], archived: true, includeHidden: true }]);
@@ -588,7 +591,7 @@ test("bb is asked once for the threads it does not list, whatever number of plac
 
 test("a session OATS lost whose thread bb has archived says the same state word in every place: \"Stopped\", in the sidebar's row, the archived thread's row and the instance panel's header on the agent's own page", async () => {
   const { slot, places } = await everywhere({ [DIGEST]: { sessionEnd: "lost" } }, withoutDigest(), bb(["thr_digest"]).sdk);
-  await waitFor(() => expect(within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line").textContent).toContain("archived in bb while it ran"));
+  await waitFor(() => expect(within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line").textContent).toContain("Archived in bb while running: it may still run."));
   expect(places()).toEqual({ sidebar: "Stopped", thread: "Stopped", panel: "Stopped" });
 });
 

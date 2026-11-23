@@ -327,7 +327,7 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
   it("a read that failed says so in a person's words, then the kernel's message and its code, with Retry, over what was read before and how old that is", () => {
     const view = page({ schedule: { list: schedules(), loading: false, error: { code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" }, readAt: new Date(NOW - 3 * 60e3).toISOString() } });
     const alert = view.getByRole("alert");
-    expect(alert.textContent).toBe("Schedules could not be readoats-schedules.json cannot be readShowing what was read 3 min ago.E_SCHEDULE_INVALIDRetry");
+    expect(alert.textContent).toBe("Schedules could not be readoats-schedules.json cannot be readRead 3 min ago.E_SCHEDULE_INVALIDRetry");
     fireEvent.click(within(alert).getByText("Retry"));
     expect(view.log).toEqual(["refresh"]);
     expect(view.rows()).toHaveLength(11);
@@ -342,13 +342,13 @@ describe("the host scheduler and the list's notices (D-270, D-285)", () => {
 
   it("a list read a while ago says how old it is; one being read again says so, without blanking", () => {
     const old = page({ schedule: { ...ready(schedules()), readAt: new Date(NOW - 2 * 60e3).toISOString() } });
-    expect(old.getByTestId("oats-stale").textContent).toBe("Showing what was read 2 min ago.");
+    expect(old.getByTestId("oats-stale").textContent).toBe("Read 2 min ago.");
     cleanup();
     const fresh = page({ schedule: { ...ready(schedules()), readAt: new Date(NOW - 5e3).toISOString() } });
     expect(fresh.queryByTestId("oats-stale")).toBeNull();
     cleanup();
     const again = page({ refreshing: true, schedule: { ...ready(schedules()), readAt: new Date(NOW - 5e3).toISOString() } });
-    expect(again.getByTestId("oats-stale").textContent).toBe("Refreshing… showing what was read less than a minute ago.");
+    expect(again.getByTestId("oats-stale").textContent).toBe("Refreshing… read less than a minute ago.");
     expect(again.rows()).toHaveLength(11);
     expect((again.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
   });

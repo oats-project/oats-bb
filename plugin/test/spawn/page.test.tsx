@@ -781,7 +781,7 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
   const slot = await form("oats-developer", previews({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last }) }));
   const notice = await slot.findByTestId("oats-unreadable");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(slot.getAllByTestId("oats-held")).toHaveLength(1);
   expect(fieldset(slot).disabled).toBe(true);
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Comes back when OATS is read again"]);

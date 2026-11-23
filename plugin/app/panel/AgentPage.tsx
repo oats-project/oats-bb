@@ -7,7 +7,6 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useOats } from "../oats";
 import { Button, Empty, Loading } from "../ui";
-import { shown } from "../ui/text";
 import { InstancePanel } from "./Panel";
 
 /** The page's route under the plugin. */
@@ -50,11 +49,11 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-2">
         {threadId === null ? (
           <Button data-testid="oats-agent-back" onClick={() => navigate.toPluginPanel("home")}>
-            Back to Home
+            ‹ Home
           </Button>
         ) : (
           <Button data-testid="oats-agent-back" onClick={() => navigate.toThread(threadId)}>
-            Back to the thread
+            ‹ Thread
           </Button>
         )}
       </div>
@@ -70,10 +69,8 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
             // The notice every place shows when OATS cannot be read: what is missing in a person's words, on which machine, the code, Retry.
             <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
           ) : (
-            // The page says what it is, why it is empty, and the one way on.
-            <Empty title={instance === null ? "No agent to show" : "This agent is not in OATS"}>
-              {instance === null ? "This page shows one agent, and its address names none. Open an agent from the sidebar or the home." : `OATS lists no agent named ${shown(instance)} in this deployment: it may have been retired.`}
-            </Empty>
+            // The page says why it is empty, in its title; the way on is the button over it.
+            <Empty title={instance === null ? "No agent to show" : "This agent is not in OATS"} />
           )}
         </div>
       )}

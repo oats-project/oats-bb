@@ -9,9 +9,8 @@ import { AgentActs, actsFor, openAct } from "../lifecycle";
 import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
-import { agentStatus, stoppedSince } from "../roster/status";
+import { agentStatus } from "../roster/status";
 import { HELD_REASON, Unreadable } from "../roster/unreadable";
-import { usePanelEvents } from "../panel/read";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
@@ -78,11 +77,10 @@ export function rowParts(said: Said | null, state: AgentState): { note: string |
 
 /**
  * What a status line says after the state's word, where this feature has a reason for it: the
- * fact or the sentence, since when, and whether the line warns. `status` is the roster's own
- * (`agentStatus`, with the time of a stopped agent's last stop where the place read it).
- * - the kernel's report: "recorded stopped since 14:03" (the time is of what OATS recorded, so it
- *   is part of that fact and not of the state "Running outside OATS");
- * - any other reason, on a line whose state is the one the reason follows: the time first, then the sentence;
+ * reason, or the sentence that keeps a person from harm, and whether the line warns. `status` is
+ * the roster's own (`agentStatus`). When OATS recorded a stop is a fact of the instance panel.
+ * - the kernel's report: "recorded stopped";
+ * - any other reason, on a line whose state is the one the reason follows: the reason;
  * - a line whose state is another (bb holds a question on the thread, so it says "Needs you"): the
  *   roster's own words, which say what the agent asks. But for a stop that warns, where an answer
  *   typed in the thread is the message that starts the agent without OATS: the warning, saying
@@ -95,7 +93,6 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
   const tone = said.tone === "warning" ? "warning" : undefined;
   if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
   if (!follows(said, status.state)) return own;
-  if (said.kind === "outside") return { since: null, detail: status.since === null ? said.sentence : `${said.sentence} ${status.since}`, tone };
   return { since: status.since, detail: said.sentence, tone };
 }
 
@@ -168,16 +165,12 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const agent = outside.agentOn(threadId);
   const status = agent === undefined || oats.phase !== "ready" ? null : agentStatus(agent, null, now);
   const said = agent === undefined ? null : outside.of(agent);
-  // A stopped agent's time is its last recorded stop, as on the roster's own row: one read, for this
-  // agent, where OATS recorded a stop (the kernel's report rests on one too).
-  const timed = status?.state === "stopped" || status?.state === "outside";
-  const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
   const held = oats.stale !== null;
   // The thread's menu is bb's, and the lifecycle's entries in it are for a thread the roster draws
   // an agent on: this thread is none, so the agent's acts are here, Retire among them.
   const acts = <DetachedActs said={said} instance={agent.instance} held={held} />;
-  const parts = lineParts(said, { state: status.state, since: timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null, detail: status.detail });
+  const parts = lineParts(said, { state: status.state, since: status.since, detail: status.detail });
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
       <span data-testid="oats-outside-agent" className="min-w-0 break-words font-semibold">

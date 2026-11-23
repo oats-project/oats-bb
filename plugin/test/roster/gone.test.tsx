@@ -74,15 +74,15 @@ const kernelSays = (act: keyof typeof GONE) => `${GONE[act].error.code}: ${GONE[
 
 test("a stop plan the kernel refuses for an agent it does not know: the notice, and both rows say so, with no act left on the thread's row", async () => {
   const { slot, ask, facts, mark, line } = await places({ stopPlan: refuse(kernelSays("stopPlan")) });
-  expect(facts()).toBe("Stopped · oats-expert");
-  expect(line()).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+  expect(facts()).toBe("Stopped");
+  expect(line()).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
   act(() => ask().plan("stop"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");
   expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
-  await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
+  await waitFor(() => expect(facts()).toBe("Not in OATS any more"));
   expect(mark()).toBe("stopped");
-  expect(line()).toBe("Not in OATS any more· OATS has no agent of this name nowInstance panel"); // the words, with the separator the line draws
+  expect(line()).toBe("Not in OATS any moreInstance panel"); // the words in the state's place say it all: no sentence repeats them, and no act is left
   expect(slot.queryByTestId("oats-status-act")).toBeNull();
 });
 
@@ -91,7 +91,7 @@ test("a retire plan refused the same way says the same", async () => {
   act(() => ask().plan("retire"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");
-  await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
+  await waitFor(() => expect(facts()).toBe("Not in OATS any more"));
 });
 
 test("it is the plan's code that says it, never the words: any E_SESSION_UNKNOWN on a plan, and no other code", () => {
@@ -121,7 +121,7 @@ for (const [name, verb, key] of [
     expect(result.textContent).toContain("E_WORK_INSPECTION_FAILED");
     expect(result.textContent).not.toContain("not in OATS any more");
     expect(within(dialog).getByTestId("oats-start-refresh")).toBeTruthy();
-    expect(facts()).toBe("Stopped · oats-expert");
+    expect(facts()).toBe("Stopped");
   });
 }
 
@@ -135,7 +135,7 @@ test("a session whose state cannot be established (the same code as a name the k
   expect(within(dialog).getByTestId("oats-act-details").textContent).toContain("cannot establish whether weekly-digest-helper is running");
   expect(result.textContent).not.toContain("not in OATS any more");
   expect(within(dialog).getByTestId("oats-start-refresh")).toBeTruthy();
-  expect(facts()).toBe("Stopped · oats-expert");
+  expect(facts()).toBe("Stopped");
 });
 
 test("an apply the kernel refuses because the agent went after its plan was read: the refusal stays in the confirmation, and the rows are not marked", async () => {
@@ -152,7 +152,7 @@ test("an apply the kernel refuses because the agent went after its plan was read
   expect(result.textContent).toContain("E_SESSION_UNKNOWN");
   expect(result.textContent).not.toContain("not in OATS any more");
   expect(within(dialog).getByTestId("oats-act-review")).toBeTruthy(); // reading the plan again is what then says the agent is gone
-  expect(facts()).toBe("Stopped · oats-expert");
+  expect(facts()).toBe("Stopped");
 });
 
 test("an act asked while OATS itself cannot be read: the confirmation opens on the same notice every place shows, in a person's words, with Retry", async () => {
@@ -177,8 +177,8 @@ test("the marks last until the next roster is read", async () => {
   let at = "2026-11-19T12:30:00.000Z";
   const { slot, ask, facts } = await places({ snapshot: () => ({ ...fixtureSnapshot(), at }), stopPlan: refuse(kernelSays("stopPlan")) });
   act(() => ask().plan("stop"));
-  await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
+  await waitFor(() => expect(facts()).toBe("Not in OATS any more"));
   at = "2026-11-19T12:31:00.000Z";
   await slot.behavior.emitRealtime("oats/changed", { at });
-  await waitFor(() => expect(facts()).toBe("Stopped · oats-expert"));
+  await waitFor(() => expect(facts()).toBe("Stopped"));
 });

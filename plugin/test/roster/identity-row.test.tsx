@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 // A9: the IdentityRow (experimental_threadHeaderRow).
-import { recordedEvents } from "../panel/handlers";
-import { waitingClock } from "../../app/ui/words";
 import { afterEach, expect, test, vi } from "vitest";
 import { fireEvent, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -54,49 +52,44 @@ test("nothing for a thread bb does not list", async () => {
   expect(slot.container.innerHTML).toBe("");
 });
 
-const fact = (slot: Awaited<ReturnType<typeof row>>, id: string) => slot.getByTestId(id).textContent;
+/** The facts that left the thread's row for the instance panel (its header, Lineage and Messaging ID: test/panel/panel.test.tsx): none is drawn on the row. */
+const FACTS = ["oats-identity-facts", "oats-fact-soul", "oats-fact-parent", "oats-fact-children", "oats-fact-identity"];
+const noFacts = (slot: Awaited<ReturnType<typeof row>>) => {
+  for (const id of FACTS) expect(slot.queryByTestId(id)).toBeNull();
+  expect(slot.getByTestId("oats-identity-row").querySelector("a")).toBeNull();
+};
 const render = async (threadId: string, agents: ReturnType<typeof fixtureAgents>, over: Parameters<typeof handlers>[0] = {}) => {
   const app = await loadApp();
   setAgentPage(agentPage);
   return renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId, projectId: "p", environment: null }, { rpc: handlers(over, agents), sidebarThreads: sidebarThreads() });
 };
 
-test("the status line comes first and says where the agent is in words: a working child, with its labelled facts", async () => {
+test("the status line is the whole row and says where the agent is in words: a working child, with the way to its instance panel and no facts", async () => {
   const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingStopInstance panel"); // the state, then the one row of buttons: the act that applies, and the panel
+  expect(block.children).toHaveLength(1);
+  expect(block.textContent).toBe("WorkingStopInstance panel"); // the state, then the one row of buttons: the act that applies, and the panel
   const stop = slot.getByTestId("oats-status-act") as HTMLButtonElement;
   expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop", false, "Stop this agent through OATS"]);
-  // Each fact has its label; the instance is not repeated (the thread's title is it), and there is no "✓".
-  expect(fact(slot, "oats-fact-soul")).toBe("instance ofoats-desktop-developer");
-  expect(fact(slot, "oats-fact-parent")).toBe("ParentRedesign ui lead");
-  expect(fact(slot, "oats-fact-identity")).toBe("Messaging IDdesktop-mockups-developer") // the Desktop's label; no team id in it;
-  expect(block.textContent).not.toContain("✓");
-  // The parent is a link to its thread; the soul opens the soul's page.
-  const parent = slot.getByTestId("oats-fact-parent").querySelector("a")!;
-  expect(parent.getAttribute("href")).toBe("/projects/proj_redesign/threads/thr_redesign");
-  fireEvent.click(parent);
-  const soulLink = slot.getByTestId("oats-fact-soul").querySelector("a")!;
-  expect(soulLink.getAttribute("href")).toBe("/plugins/test-plugin/souls/oats-desktop-developer");
-  fireEvent.click(soulLink);
-  expect(slot.inspection.navigateCalls).toEqual([
-    { method: "toThread", threadId: "thr_redesign" },
-    { method: "toPluginPanel", path: "souls", options: { subPath: "oats-desktop-developer" } },
-  ]);
-  // OATS opens the thread's fixed tab.
+  // Its soul, its parent and its messaging ID are not on the row, as words or as links: the
+  // instance panel holds them, one press away.
+  noFacts(slot);
+  expect(block.textContent).not.toMatch(/instance of|oats-desktop-developer|Parent|Redesign ui lead|Messaging ID/);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  // "Instance panel" opens the thread's fixed tab.
   fireEvent.click(slot.getByTestId("oats-open-panel"));
   expect(slot.inspection.experimental_panelCalls).toEqual([{ method: "openTab", options: { tab: { id: "home", context: { kind: "thread" }, availability: "fixed" } } }]);
 });
 
-test("an agent that needs you: since when and its question, on its own thread", async () => {
+test("an agent that needs you: how long it has waited and its question, on its own thread; no clock time", async () => {
   const since = new Date(Date.now() - 12 * 60_000 - 5_000).toISOString();
   const agents = fixtureAgents().map((agent) => (agent.instance === "release-070-maintainer" ? { ...agent, waiting: { reason: "question", message: "Green light at 9f2e1c?", since } } : agent));
   const slot = await render("thr_release", agents);
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  // (The time is the clock alone, or with its date when the claim is from yesterday: in the first 12 minutes after midnight.)
-  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since (\w{3} \d{1,2}, )?\d\d:\d\d\)· Green light at 9f2e1c\?AnswerInstance panel$/);
+  // How long, in two words; when it began (a clock time) is not on the line.
+  expect(line.textContent).toBe("!Needs you· 12 min· Green light at 9f2e1c?AnswerInstance panel");
   // "Answer" is the way to reply (what is asked is on the line): it opens the instance panel, and
   // where the panel is drawn it moves the focus to "Needs input".
   const needs = document.createElement("section");
@@ -112,10 +105,11 @@ test("an agent that needs you: since when and its question, on its own thread", 
   }
 });
 
-test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
-  // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
-  const stopped = await render("thr_digest", fixtureAgents(), { panelEvents: () => ({ ...recordedEvents(), events: [] }) });
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says Unreachable, with what OATS says under Details, and Retry", async () => {
+  const stopped = await render("thr_digest", fixtureAgents());
+  // The warning of a stopped agent's live composer, in the warning tone, with Start beside it.
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(stopped.getByTestId("oats-status-part").getAttribute("data-tone")).toBe("warning");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
   expect(asked()).toEqual({ verb: "start", instance: "weekly-digest-helper" });
@@ -129,25 +123,28 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session ended. Restart it, or send a message here.RestartInstance panel"); // the sentence of a failed agent on an open thread is the outside feature's (app/outside)
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedRestartInstance panel"); // the reason after the state; Restart is the button beside it
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
-  // A person's words on the line; what the kernel said is one press away, under Details, never the line's words.
-  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("Unreachable· OATS cannot reach its sessionRetryInstance panel");
+  // The state's word says it, with no sentence that repeats it; what the kernel said is one press away, under Details, never the line's words.
+  expect((await unreachable.findByTestId("oats-status-line")).textContent).toBe("UnreachableRetryInstance panel");
+  expect(unreachable.getByTestId("oats-identity-row").textContent).not.toContain("OATS cannot reach its session");
   const kernel = unreachable.getByTestId("oats-status-kernel") as HTMLDetailsElement;
   expect(kernel.open).toBe(false);
   expect(kernel.querySelector("p")!.textContent).toBe("OATS says: bb did not answer");
 });
 
-test("for a root agent with children: who started it, not a link, and the number of children", async () => {
+// Who started an agent, its children, its messaging ID and its parent were facts of this row: they
+// are the instance panel's now (Lineage, Messaging ID: test/panel/panel.test.tsx holds what each
+// says, and which is a link). The row draws none of them, for any shape of agent.
+test("a root agent with children: the row says neither who started it nor how many children it has", async () => {
   const slot = await row("thr_redesign");
-  const parent = await slot.findByTestId("oats-fact-parent");
-  expect(parent.textContent).toBe("Owning humanjoan");
-  expect(parent.querySelector("a")).toBeNull();
-  expect(slot.getByTestId("oats-fact-children").textContent).toBe("Children2");
+  const block = await slot.findByTestId("oats-identity-row");
+  noFacts(slot);
+  expect(block.textContent).not.toMatch(/Owning human|joan|Children/);
 });
 
-test("the address is shown instead of the alias when the row carries one; no identity fact without either", async () => {
+test("an agent with an address, and one with no messaging identity: the row says no messaging ID of either", async () => {
   const agents = fixtureAgents().map((agent) =>
     agent.instance === "redesign-ui-lead"
       ? { ...agent, address: "oats.aweb.ai/redesign-ui-lead" }
@@ -156,19 +153,21 @@ test("the address is shown instead of the alias when the row carries one; no ide
         : agent,
   );
   const withAddress = await render("thr_redesign", agents);
-  expect((await withAddress.findByTestId("oats-fact-identity")).textContent).toBe("Messaging IDoats.aweb.ai/redesign-ui-lead");
+  await withAddress.findByTestId("oats-identity-row");
+  noFacts(withAddress);
+  expect(withAddress.getByTestId("oats-identity-row").textContent).not.toMatch(/Messaging ID|oats\.aweb\.ai/);
   withAddress.unmount();
   const without = await render("thr_ci", agents);
-  await without.findByTestId("oats-fact-soul");
-  expect(without.queryByTestId("oats-fact-identity")).toBeNull();
+  await without.findByTestId("oats-identity-row");
+  noFacts(without);
 });
 
-test("a parent that is not in bb is named, without a link", async () => {
+test("a parent that is not in bb is not named on the row either", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "ranker-v3-probe" ? { ...agent, parent: "kernel-fix-developer" } : agent));
   const slot = await render("thr_research", agents);
-  const parent = await slot.findByTestId("oats-fact-parent");
-  expect(parent.textContent).toBe("ParentKernel fix developer");
-  expect(parent.querySelector("a")).toBeNull();
+  const block = await slot.findByTestId("oats-identity-row");
+  noFacts(slot);
+  expect(block.textContent).not.toMatch(/Parent|Kernel fix developer/);
 });
 
 test("where bb declines the tab, OATS opens the home page", async () => {
@@ -199,15 +198,14 @@ test("on a compact viewport, where a feature gives agents a page of their own, O
 test("the block wraps and nothing in it scrolls out of sight or is cut", async () => {
   const slot = await row("thr_mockups");
   const block = await slot.findByTestId("oats-identity-row");
-  for (const part of [block, slot.getByTestId("oats-identity-facts"), slot.getByTestId("oats-status-line")]) {
+  for (const part of [block, slot.getByTestId("oats-status-line")]) {
     expect(part.className).not.toMatch(/overflow-x-auto|whitespace-nowrap|truncate/);
   }
-  expect(slot.getByTestId("oats-identity-facts").className).toContain("flex-wrap");
   // The status line wraps inside its frame (the frame clips only the strip a separator at a line's start falls in).
   expect(slot.getByTestId("oats-status-line").firstElementChild!.className).toContain("flex-wrap");
 });
 
-test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {
+test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are off, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStopInstance panel");
@@ -216,7 +214,7 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, "Comes back when OATS is read again"]);
   const stale = slot.getByTestId("oats-unreadable");
   expect(stale.getAttribute("data-compact")).toBe("");
-  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.Retry");
+  expect(stale.textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
   slot.unmount();
@@ -234,75 +232,74 @@ test("with no roster ever read the row says that OATS cannot be read, with Retry
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
 });
 
-// The plugin's setting `pages`: where the Souls page is not shown in this release the soul is said
-// by its name alone: no link leads to a page that is not there.
-test("the soul is a link to its page where that page is shown, and its name alone where it is not", async () => {
+// The soul was a fact of this row, a link where the Souls page is shown: it is the instance
+// panel's header's now. Whatever pages the release shows, the row names no soul and links nowhere.
+test("the soul is not on the row, whether the Souls page is shown or not", async () => {
   const shownSlot = await row("thr_mockups", { settings: { pages: "home, souls" } });
-  expect((await shownSlot.findByTestId("oats-fact-soul")).querySelector("a")).not.toBeNull();
+  await shownSlot.findByTestId("oats-identity-row");
+  noFacts(shownSlot);
   shownSlot.unmount();
   resetApp();
   const hidden = await row("thr_mockups", { settings: { pages: "home" } });
-  const fact = await hidden.findByTestId("oats-fact-soul");
-  expect(fact.textContent).toBe("instance ofoats-desktop-developer");
-  expect(fact.querySelector("a")).toBeNull();
+  await hidden.findByTestId("oats-identity-row");
+  noFacts(hidden);
+  expect(hidden.getByTestId("oats-identity-row").textContent).not.toMatch(/instance of|oats-desktop-developer/);
 });
 
-test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
-  const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
-  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
-  expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
+// When an agent stopped was a time on this line, read from the instance's events. It is a fact of
+// the instance panel's Session now (test/panel/panel.test.tsx): the line says the state and its
+// warning, and the thread's row asks the kernel for no events, of a stopped agent or of any other.
+test("a stopped agent's line says no time, and the thread's row reads no events: of a stopped agent or of one that works", async () => {
+  const slot = await render("thr_digest", fixtureAgents()); // the recorded events hold a stop at 2026-11-21T18:23:24.196Z
+  await slot.findByTestId("oats-status-line");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.getByTestId("oats-identity-row").textContent).not.toMatch(/since|\d\d:\d\d/);
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
   slot.unmount();
   resetApp();
-  // An agent that is not stopped asks for no events.
   const working = await render("thr_mockups", fixtureAgents());
   await working.findByTestId("oats-status-line");
   expect(working.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });
 
-// The events read runs once and bb keeps its answer: an agent stopped, started and stopped again
-// in one window must say the time of THIS stop, never the earlier one's (round 1 of the second pass).
-test("a stopped agent that was started and stopped again says the time of this stop: the events are read again each time it turns stopped", async () => {
-  const [first, started, second] = ["2026-11-21T10:00:00.000Z", "2026-11-21T12:00:00.000Z", "2026-11-21T16:00:00.000Z"];
+// An agent stopped, started and stopped again in one window: the line follows the roster at each
+// turn, with the same words for both stops and no time of either, and still reads no events.
+test("a stopped agent that was started and stopped again: the line says Stopped and its warning both times, with no time, and no events are read", async () => {
+  const [started, second] = ["2026-11-21T12:00:00.000Z", "2026-11-21T16:00:00.000Z"];
   const digest = (over: Partial<ReturnType<typeof fixtureAgents>[number]>) => fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, ...over } : agent));
-  const stop = recordedEvents().events.find((event) => event.kind === "stopped")!;
   let agents = digest({ startedAt: "2026-11-21T09:00:00.000Z" });
-  let events = [{ ...stop, at: first }];
-  const slot = await render("thr_digest", fixtureAgents(), {
-    snapshot: (input) => handlers({}, agents).snapshot(input),
-    panelEvents: () => ({ ...recordedEvents(), events }),
-  });
+  const slot = await render("thr_digest", fixtureAgents(), { snapshot: (input) => handlers({}, agents).snapshot(input) });
   const line = () => slot.getByTestId("oats-status-line").textContent;
-  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").length;
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
-  expect(asked()).toBe(1);
-  // Started: the line is no longer the stopped one, and nothing more is asked.
+  const STOPPED = "Stopped· A message here starts it outside OATS.StartInstance panel";
+  await vi.waitFor(() => expect(line()).toBe(STOPPED));
+  // Started: the line is no longer the stopped one.
   agents = digest({ running: true, runtimeState: "running", startedAt: started });
   await slot.behavior.emitRealtime("oats/changed", { at: started });
   await vi.waitFor(() => expect(line()).not.toContain("Stopped"));
-  expect(asked()).toBe(1);
-  // Stopped again: the kernel has recorded a second "stopped". The events held are from before it.
+  // Stopped again.
   agents = digest({ startedAt: started });
-  events = [{ ...stop, at: first }, { ...stop, at: second }];
   await slot.behavior.emitRealtime("oats/changed", { at: second });
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
-  expect(asked()).toBe(2);
+  await vi.waitFor(() => expect(line()).toBe(STOPPED));
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });
 
-test("events read before the session's start hold no time for this stop: the line says none, never an earlier stop's", async () => {
+test("a session started after the last recorded stop: the line says Stopped and its warning, and no earlier stop's time", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-22T08:00:00.000Z" } : agent));
   const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
-  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
+  await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });
 
 // The settings can mend what Retry cannot (which machine holds the agents): the notice then has no
-// Retry, and its sentence names what it does have.
-test("on the last roster read with no Retry to offer, the one-line notice names the settings and links to them", async () => {
+// Retry, and its one act is the link to them.
+test("on the last roster read with no Retry to offer, the one-line notice says the acts are off and links to the settings", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "CHOOSE_HOST", message: "This bb server has 2 machines", last }) });
   const stale = await slot.findByTestId("oats-unreadable");
-  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart, Retire and New agent return when OATS is read again.Open settings");
+  expect(stale.textContent).toBe("Choose the machine that holds your agentsRead 2 min ago. Acts are off.Open settings");
   expect(within(stale).queryByRole("button", { name: "Retry" })).toBeNull();
   expect(within(stale).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/settings/plugins/test-plugin");
 });
@@ -343,22 +340,23 @@ test("a question bb itself shows has no act on the line: it is answered in the t
   const slot = await withThread("thr_mockups", { hasPendingInteraction: true });
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  expect(line.textContent).toBe("!Needs you· bb shows its question in this threadInstance panel");
+  // (The question is in the thread under the line: the line says the state alone.)
+  expect(line.textContent).toBe("!Needs youInstance panel");
   expect(slot.queryByTestId("oats-status-act")).toBeNull();
 });
 
-// The time of a stop is an extra: when the read of the events fails, the line stays the state alone,
-// with no time and no error of its own (the spec's author's condition).
-test("a stopped agent whose events cannot be read says Stopped, with no time and no error on its line", async () => {
+// The thread's row reads no events: a kernel whose events cannot be read leaves the line as it is,
+// with no time and no error of its own.
+test("a stopped agent whose events cannot be read says Stopped and its warning, with no error on its line: the row never asks for them", async () => {
   const slot = await render("thr_digest", fixtureAgents(), {
     panelEvents: () => {
       throw new Error("E_EVENTS_UNREADABLE: the instance's events could not be read");
     },
   });
-  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
+  await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 30));
-  // (The sentence is the outside feature's, for a stopped agent whose thread is open in bb: no time before it, and no error.)
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
   expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
   expect(slot.queryByRole("alert")).toBeNull();
 });

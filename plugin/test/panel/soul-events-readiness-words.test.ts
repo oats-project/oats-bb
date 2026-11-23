@@ -11,7 +11,8 @@ const refusalSentence = (read: "readiness" | "activity" | "soul", code: string |
 /** The clock the lines with an instant are said at. */
 const NOW = Date.parse("2026-11-21T18:29:30.000Z");
 import { checkLabel, checkState, declaredIn, itemFacts, itemLine, itemProblems, observedLine, policyLine, providerSays, summaryLine, warningLine } from "../../app/panel/readiness-words";
-import { coreNote, emptySlot, layerLabel, MODULES_AS_SPAWNED, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "../../app/panel/soul-words";
+import * as soulWords from "../../app/panel/soul-words";
+import { coreNote, emptySlot, layerLabel, NO_CAPABILITIES, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "../../app/panel/soul-words";
 import type { PanelCapability } from "../../kernel/panel-soul";
 import type { PanelReadinessItem } from "../../kernel/panel-readiness";
 import { recordedEvents, recordedReadiness } from "./handlers";
@@ -35,14 +36,16 @@ describe("the Soul tab's words", () => {
     expect(whyTag(capability({ why: "workspace" }))).toEqual({ label: "workspace", title: "A workspace default" });
     expect(whyTag(capability({ why: "soul" }))).toEqual({ label: "soul", title: "Declared by this soul" });
     expect(whyTag(capability({ why: "team", team: "eng" }))).toEqual({ label: "team · eng", title: "A default of the eng team" });
-    expect(whyTag(capability({ why: "off", reason: "off", overrides: "workspace" }))).toEqual({ label: "turned off by soul", title: "This soul turns off the workspace default" });
-    expect(whyTag(capability({ why: "off", reason: "slot-none", overrides: "team:eng" }))).toEqual({ label: "turned off by soul", title: "This soul empties a core slot, which the eng team's default filled with oats.jira" });
+    expect(whyTag(capability({ why: "off", reason: "off", overrides: "workspace" }))).toEqual({ label: "off", title: "This soul turns off the workspace default" });
+    expect(whyTag(capability({ why: "off", reason: "slot-none", overrides: "team:eng" }))).toEqual({ label: "off", title: "This soul empties a core slot, which the eng team's default filled with oats.jira" });
     expect(whyTag(capability({ why: "off", reason: "off", overrides: null })).title).toBe("This soul turns off a default");
   });
-  it("where it was spawned from, its modules and its line of repository and teams", () => {
+  it("where it was spawned from; one word for no capabilities; and no line on the model or count of modules", () => {
     expect(spawnedFrom({ name: "oats-expert", commit: "0ab9f62d3d27913d0fda74c372860b1a90cce147" })).toBe("Spawned from oats-expert @ 0ab9f62");
     expect(spawnedFrom({ name: "oats-expert", commit: null })).toBe("Spawned from oats-expert");
-    expect(MODULES_AS_SPAWNED).toBe("Modules as spawned");
+    expect(NO_CAPABILITIES).toBe("None");
+    // Not kept (Joan's direction of 23 Nov 2026): the sentence that explains "as spawned", the count of modules, the second sentence for "only the core ones".
+    for (const gone of ["AS_SPAWNED", "MODULES_AS_SPAWNED", "NO_OTHER_CAPABILITIES"]) expect(Object.keys(soulWords)).not.toContain(gone);
     // a commit id as a version is drawn short, and is whole for the line's title
     const pinned = { kind: "package" as const, name: "oats.bb", version: "a3cca8511461e92c25d86f693365ec250b7c4684" };
     expect([sourceText(pinned), sourceWhole(pinned)]).toEqual(["oats.bb a3cca85", "oats.bb a3cca8511461e92c25d86f693365ec250b7c4684"]);
@@ -79,8 +82,8 @@ describe("the recorded activity's words", () => {
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
     // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
-    expect(activitySummary(events, NOW)).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
-    expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No recorded lifecycle events in this observed window.");
+    expect(activitySummary(events, NOW)).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+    expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No events");
   });
   it("says when the evidence is not whole", () => {
     expect(incomplete(events)).toBe(false);
@@ -112,12 +115,12 @@ describe("a refused read, in the Desktop's own sentence", () => {
   it("by the kernel's code, per read", () => {
     // In a person's words where the Desktop's sentence is an instruction nobody can follow from here, or the kernel's terms.
     expect(refusalSentence("readiness", "E_HOME_MISMATCH", "")).toBe("This agent's folder is no longer the one OATS recorded for it.");
-    expect(refusalSentence("readiness", "E_UNSUPPORTED_MODE", "")).toBe("OATS has no readiness check for this kind of agent.");
-    expect(refusalSentence("readiness", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name here, so it cannot say which one this is.");
+    expect(refusalSentence("readiness", "E_UNSUPPORTED_MODE", "")).toBeNull(); // no fault, and nothing to show: no sentence (the part is not drawn)
+    expect(refusalSentence("readiness", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name.");
     expect(refusalSentence("readiness", "E_SOUL_UNKNOWN", "")).toBe("OATS does not list this soul in this deployment.");
-    expect(refusalSentence("activity", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name here, so it cannot say which one this is.");
+    expect(refusalSentence("activity", "E_AMBIGUOUS_INSTANCE", "")).toBe("OATS knows more than one agent by this name.");
     expect(refusalSentence("activity", "E_HOME_MISMATCH", "")).toBe("This agent's folder is no longer the one OATS recorded for it.");
-    expect(refusalSentence("activity", "E_UNSUPPORTED_MODE", "")).toBe("OATS keeps no activity for this kind of agent.");
+    expect(refusalSentence("activity", "E_UNSUPPORTED_MODE", "")).toBeNull();
   });
   it("by the plugin's own code, for what the Desktop calls a slow, failed or unreadable CLI answer", () => {
     expect(refusalSentence("readiness", "OATS_TIMEOUT", "")).toBe("The readiness read timed out.");
@@ -133,7 +136,7 @@ describe("a refused read, in the Desktop's own sentence", () => {
     expect(refusalSentence("readiness", null, gone)).toBe("OATS no longer lists this agent.");
     expect(refusalSentence("activity", null, gone)).toBe("OATS no longer lists this agent.");
     expect(refusalSentence("soul", null, gone)).toBe("OATS no longer lists this agent.");
-    expect(refusalSentence("soul", "E_UNSUPPORTED_MODE", "")).toBe("OATS keeps no record of what this kind of agent was spawned from.");
+    expect(refusalSentence("soul", "E_UNSUPPORTED_MODE", "")).toBeNull(); // nothing to show: no sentence
     // a refusal of the kernel's with no sentence of its own still says, in words, that OATS refused
     expect(refusalSentence("soul", "E_SOMETHING_NEW", "")).toBe("OATS refused to read what this agent was spawned from.");
     expect(refusalSentence("activity", "E_SOMETHING_NEW", "")).toBe("OATS refused to read the activity.");
@@ -148,8 +151,8 @@ describe("a refused read, in the Desktop's own sentence", () => {
     });
     expect(refusalWords("activity", "E_AMBIGUOUS_INSTANCE", "")).toMatchObject({ next: "Retire or rename one of them with OATS, on the machine that holds them.", retry: false });
     expect(refusalWords("readiness", "E_SOUL_UNKNOWN", "")).toMatchObject({ next: "It may have been removed from the workspace: `oats souls` lists the ones there are.", retry: false });
-    // OATS has none of it for this kind of agent: no fault, nothing to do, nothing to read again.
-    expect(refusalWords("soul", "E_UNSUPPORTED_MODE", "")).toEqual({ sentence: "OATS keeps no record of what this kind of agent was spawned from.", next: null, retry: false, fault: false });
+    // OATS has none of it for this kind of agent: no fault, nothing to do, nothing to read again, and nothing said (the part is not drawn).
+    for (const read of ["soul", "readiness", "activity"] as const) expect(refusalWords(read, "E_UNSUPPORTED_MODE", "")).toEqual({ sentence: null, next: null, retry: false, fault: false });
     expect(refusalWords("readiness", "E_USAGE", "")).toEqual({ sentence: "The OATS installed here is too old for this. Update OATS.", next: null, retry: false, fault: true });
     // the server's words while OATS itself cannot be read: the roster is the last one
     expect(refusalWords("soul", null, '"gone-helper" is not an agent of this OATS deployment\'s last snapshot').retry).toBe(false);
@@ -167,7 +170,7 @@ describe("readiness' words", () => {
   const home = recordedReadiness("instance");
   const item = (over: Partial<PanelReadinessItem>): PanelReadinessItem => ({ subject: "oats.okf", status: "fail", required: true, producer: null, reason: null, code: null, at: null, file: null, evidence: [], remedy: null, provider: null, problems: [], ...over });
   it("the summary: ready, not established, or how many fail", () => {
-    expect(summaryLine(home.summary)).toBe("Ready — every required check passes or is not applicable.");
+    expect(summaryLine(home.summary)).toBe("Ready");
     expect(summaryLine({ ready: false, required: 0, fail: 0, unknown: 0 })).toBe("Readiness not established — no required checks reported.");
     expect(summaryLine({ ready: false, required: 5, fail: 2, unknown: 1 })).toBe("2 failing · 1 unknown · 5 required checks");
     expect(observedLine("2026-11-21T18:25:22.386Z", "instance", NOW)).toBe(`Observed: ${whenText("2026-11-21T18:25:22.386Z", NOW)}. Target: instance. This is not an atomic snapshot or a permission lease.`);

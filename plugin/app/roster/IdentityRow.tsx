@@ -1,28 +1,22 @@
 // Where this agent is and who it is (experimental_threadHeaderRow): one block under the thread's
-// header. First the status line: the state in words, since when, the question or the reason, and
-// the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
-// cut or scrolls out of sight, at any width.
+// header: the status line (the state in words, how long it has waited, the question or the
+// reason, the act that applies) and the way to the instance panel, which holds who the agent is
+// (its soul, its parent and children, its messaging ID). The block wraps: nothing in it is cut or
+// scrolls out of sight, at any width.
 import { showPanelTab } from "../panel/Panel";
-import { usePanelEvents } from "../panel/read";
-import { agentName } from "../ui/words";
 import {
   experimental_useAppPanel as useAppPanel,
-  experimental_usePluginId as usePluginId,
   useBbNavigate,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { useEffect, useRef } from "react";
-import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
 import { claimOf } from "../../model/view";
 import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, LINK, plainClick } from "../ui";
-import { shown } from "../ui/text";
-import { openSoul, usePageShown } from "../workspace/pages";
+import { Button } from "../ui";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { agentStatus } from "./status";
@@ -57,46 +51,13 @@ export function focusNeedsInput(tries = 10): void {
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
 
-/** One fact of the row: its label, muted, then its value. */
-function RowFact({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
-  return (
-    <span data-testid={testId} className="inline-flex min-w-0 items-baseline gap-1">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words">{children}</span>
-    </span>
-  );
-}
-
 export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const oats = useOats();
   const navigate = useBbNavigate();
   const panel = useAppPanel();
   const rpc = useRpc<Contract>();
-  const pluginId = usePluginId();
-  const soulsShown = usePageShown("souls");
   const now = useNow();
   const outside = outsideOf(oats);
-  // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
-  // the instance panel reads too. Asked for this thread's agent alone, and only while it is
-  // stopped; a hook, so it is called at every render, before any early return.
-  const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  // (An agent that runs outside OATS was recorded stopped too: the same event says since when.)
-  const recorded = mine === undefined ? null : agentStatus(mine.agent, mine.thread, now).state;
-  const stopped = recorded === "stopped" || recorded === "outside";
-  const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
-  // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
-  // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
-  // stopped (and when its row is come back to), events already held are read again.
-  const eventsNow = useRef(events);
-  // Kept in an effect, never written while rendering; declared BEFORE the effect that reads it, so
-  // that in one commit it holds this render's read when that effect runs (effects run in order).
-  useEffect(() => {
-    eventsNow.current = events;
-  });
-  const stoppedInstance = stopped ? mine?.agent.instance : undefined;
-  useEffect(() => {
-    if (stoppedInstance !== undefined && eventsNow.current.data !== undefined) eventsNow.current.retry();
-  }, [stoppedInstance]);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -112,13 +73,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
-  // (The state, for the act that applies; the line itself, with a stopped agent's time, is AgentStatusLine's.)
+  // (The state, for the act that applies; the line itself is AgentStatusLine's.)
   const status = agentStatus(agent, node.thread, now);
-  const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
-  const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
-  const children = oats.agents.filter((other) => other.parent === agent.instance).length;
-  const identity = agent.address ?? agent.alias;
-  const soul = oats.soulOf(agent);
 
   const openPanel = () => {
     // On desktop it is the thread's fixed tab. On a phone bb has no side panel: the agent's own
@@ -191,7 +147,6 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         agent={agent}
         thread={node.thread}
         now={now}
-        events={events.data?.events}
         gone={gone}
         parts={(own) => lineParts(said, own)}
         action={
@@ -208,59 +163,6 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
-      <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <RowFact label="instance of" testId="oats-fact-soul">
-          {/* A link to the soul's page where that page is shown in this release; else its name alone: no link leads nowhere. */}
-          {soulsShown ? (
-            <a
-              href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
-              className={LINK}
-              onClick={(event) => {
-                if (!plainClick(event)) return;
-                event.preventDefault();
-                openSoul(navigate, soul);
-              }}
-            >
-              {shown(soul)}
-            </a>
-          ) : (
-            shown(soul)
-          )}
-        </RowFact>
-        {agent.parent !== null ? (
-          <RowFact label="Parent" testId="oats-fact-parent">
-            {parentThread === undefined ? (
-              agentName(agent.parent)
-            ) : (
-              <a
-                href={parentThread.href}
-                className={LINK}
-                onClick={(event) => {
-                  if (!plainClick(event)) return;
-                  event.preventDefault();
-                  navigate.toThread(parentThread.id);
-                }}
-              >
-                {agentName(agent.parent)}
-              </a>
-            )}
-          </RowFact>
-        ) : agent.human !== null ? (
-          <RowFact label="Owning human" testId="oats-fact-parent">
-            {shown(agent.human)}
-          </RowFact>
-        ) : null}
-        {children > 0 ? (
-          <RowFact label="Children" testId="oats-fact-children">
-            {String(children)}
-          </RowFact>
-        ) : null}
-        {identity === null ? null : (
-          <RowFact label="Messaging ID" testId="oats-fact-identity">
-            {shown(identity)}
-          </RowFact>
-        )}
-      </div>
     </div>
   );
 }

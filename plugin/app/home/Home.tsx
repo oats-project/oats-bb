@@ -6,7 +6,7 @@
 //
 // Answering is the person's act through bb's SDK: a choice bb offers, or a message sent as the
 // person at the screen (bb's own send). The plugin never types into a session. While the roster
-// shown is not a current one, those acts are held and the card says why.
+// shown is not a current one, those acts are held (drawn off), and the notice over the page says why.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { experimental_useTabVisible as useTabVisible, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
@@ -17,16 +17,14 @@ import { claimOf } from "../../model/view";
 import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
-import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
+import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineParts, outsideOf, OutsideWarning } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { Button, Card, Code, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
-import { refusalCode, shown } from "../ui/text";
+import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { CommandText } from "../panel/parts";
-import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
@@ -35,9 +33,9 @@ import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
-  answeredWith, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
+  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEWER_API_WHY,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, ON_TMUX, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE_NOTE, TMUX_ANSWER, WORKING, WORKING_SHOWN,
+  answeredWith, detected, installCommand, replyLabel, replyPlaceholder, required, showAll, summaryLine, tileCount,
 } from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
@@ -89,8 +87,8 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
   );
 }
 
-/** Where an agent with no bb thread is, in words. */
-const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "Runs in tmux" : "Its bb thread is gone");
+/** The reason on the second line of an agent with no bb thread: where it is, in a word or a few. */
+const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? ON_TMUX : THREAD_GONE_NOTE);
 
 /** The lifecycle's own word for the act that starts an agent ("Start…": it opens that act's dialog). */
 const START = ACTS.find((each) => each.verb === "start")!.button;
@@ -148,7 +146,6 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
           {busy ? SENDING : SEND}
         </Button>
       </div>
-      {held ? <DisabledReason>{HELD}</DisabledReason> : null}
       {said === null ? null : (
         <span role="status" data-testid="oats-reply-sent" className="text-xs text-muted-foreground">
           {said}
@@ -192,10 +189,9 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
           </div>
           <Button data-testid="oats-needs-open" aria-label={`${paged ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
-            {paged ? OPEN_PAGE : OPEN_THREAD}
+            {OPEN}
           </Button>
         </div>
         <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} />
@@ -296,7 +292,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     if (body === "" || threadId === undefined) return;
     act("send", () => sdk.threads.send({ threadId, mode: "auto", input: [{ type: "text", text: body, mentions: [] }] }), () => {
       setText("");
-      setSaid(sentTo(name));
+      setSaid(SENT);
     });
   };
 
@@ -321,17 +317,24 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     </Disclosure>
   );
   const where = entry.thread === null ? elsewhere(entry) : null;
+  // Why nothing was sent, in one line on the card: the first line of what the press was answered (the rest, if any, under Details).
+  const why = failure === null ? [] : refusalLines(failure.message);
   return (
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <span className="break-words text-xs text-muted-foreground">{[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), where === null ? null : where.toLowerCase()].filter((part) => part !== null).join(" · ")}</span>
+            {/* The reason alone, where there is one: its soul and its machine are on its page. */}
+            {where === null ? null : (
+              <span data-testid="oats-needs-where" className="break-words text-xs text-muted-foreground">
+                {where}
+              </span>
+            )}
           </div>
-          {/* The button says where it leads: the agent's thread, or, for an agent with none, its own page. */}
+          {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page. */}
           <Button data-testid="oats-needs-open" aria-label={`${thread === undefined ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
-            {thread === undefined ? OPEN_PAGE : OPEN_THREAD}
+            {OPEN}
           </Button>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
@@ -352,7 +355,6 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               <Button data-testid="oats-needs-start" disabled={held} onClick={() => openAct("start", entry.agent.instance)}>
                 {START}
               </Button>
-              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
             </div>
           </div>
         ) : answered !== null ? (
@@ -368,37 +370,30 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
                   {shown(choice.label)}
                 </Button>
               ))}
-              {held ? <DisabledReason>{HELD}</DisabledReason> : null}
             </div>
             {instead}
           </>
         ) : offer === "in-thread" ? (
           <>
             <p data-testid="oats-needs-in-thread" className="m-0 text-xs text-muted-foreground">
-              {pending ? IN_THREAD : PERMISSION_IN_THREAD}
+              {IN_THREAD}
             </p>
             {instead}
           </>
         ) : offer === "reply" ? (
           reply
-        ) : (
-          // Nothing can be sent from bb to an agent that has no thread in it: where to answer it, to copy.
-          <div data-testid="oats-needs-elsewhere" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
-            {entry.agent.backend === "tmux" ? (
-              <>
-                <p className="m-0">{tmuxWhere(shown(oats.deployment.machine))}</p>
-                <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
-                  <CommandText command={attachCommand(entry.agent.home)} />
-                  <CopyButton text={attachCommand(entry.agent.home)} name="Copy the command" />
-                </p>
-              </>
-            ) : (
-              <p className="m-0">{THREAD_GONE}</p>
-            )}
-            <p className="m-0">{PAGE_LEADS}</p>
-          </div>
+        ) : entry.agent.backend === "tmux" ? (
+          // Nothing can be sent from bb to an agent on tmux: where to answer it. The command that
+          // reaches its terminal is on its page, where Open leads.
+          <p data-testid="oats-needs-elsewhere" className="m-0 text-xs text-muted-foreground">
+            {TMUX_ANSWER}
+          </p>
+        ) : null /* its bb thread is gone: the card's second line says so, and Open leads to its page */}
+        {failure === null ? null : (
+          <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" details={why.length > 1 ? why.slice(1).join("\n") : null}>
+            {why.length === 0 ? null : <p data-testid="oats-needs-why" className="m-0">{why[0]}</p>}
+          </Notice>
         )}
-        {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}
       </Card>
     </li>
   );
@@ -422,20 +417,27 @@ function Cropped<Item>({ items, shown: most, more, testId, children }: { items: 
   );
 }
 
-/** One agent as a row: its name, its soul and machine, its state in words, and who started it. */
-function AgentRow({ entry, oats, testId, startedByToo = false }: { entry: Entry; oats: Ready; testId: string; startedByToo?: boolean }) {
-  const started = startedByToo ? startedBy(entry.agent) : null;
+/**
+ * One agent as a row: its name, where it is where it has no bb thread (the reason alone), and, in
+ * the list of every agent, its state in words. A list under a heading that says the state ("Working")
+ * does not repeat it on every row.
+ */
+function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border py-1 first:border-t-0">
       <span className="flex min-w-0 flex-1 flex-col">
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        <span className="break-words text-xs text-muted-foreground">
-          {[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), entry.thread === null ? elsewhere(entry).toLowerCase() : null, started].filter((part) => part !== null).join(" · ")}
+        {entry.thread !== null ? null : (
+          <span data-testid="oats-home-agent-where" className="break-words text-xs text-muted-foreground">
+            {elsewhere(entry)}
+          </span>
+        )}
+      </span>
+      {stateToo ? (
+        <span className="shrink-0 text-sm">
+          <State state={entry.status.state} />
         </span>
-      </span>
-      <span className="shrink-0 text-sm">
-        <State state={entry.status.state} />
-      </span>
+      ) : null}
     </li>
   );
 }
@@ -517,10 +519,12 @@ function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: 
           {`‹ ${BACK_TO_HOME}`}
         </Button>
       </div>
-      <p className="m-0 text-muted-foreground">{summaryLine(made.counts)}</p>
+      <p data-testid="oats-home-summary" className="m-0 text-muted-foreground">
+        {summaryLine(made.counts)}
+      </p>
       <ul className="m-0 flex list-none flex-col p-0">
         {made.all.map((entry) => (
-          <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-home-agent-row" startedByToo />
+          <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-home-agent-row" stateToo />
         ))}
       </ul>
     </Section>
@@ -532,26 +536,14 @@ function EveryAgent({ made, oats, onBack }: { made: Board; oats: Ready; onBack: 
  * Where the installed `oats` stands against what the plugin is built for (D-004, D-007, D-008), on
  * the home only: a card while it is older than the plugin works with or its version cannot be
  * read (what was detected, what is required, the command to copy), a card with no command while it
- * speaks a later version of its answers than the plugin reads, one line while it is of a later
- * minor than the plugin was tested with. Nothing for a tested one, and nothing while the read is
- * out. A version that could not be read at all (the read failed, and the home's one more try with
- * it): one muted line that says so, with Check again. OATS that cannot be run at all is the
- * roster's notice.
+ * speaks a later version of its answers than the plugin reads. Nothing for a tested one, nothing
+ * while the read is out, and nothing where no act is turned off: a CLI of a later minor than the
+ * plugin was tested with, and a version that could not be read at all while the roster reads (the
+ * roster proves `oats` runs, and the kernel refuses a spawn it cannot make). OATS that cannot be
+ * run at all is the roster's notice.
  */
-function CliNotice({ cli, checking, failure, unchecked, onCheck }: { cli: Cli | undefined; checking: boolean; failure: string | null; unchecked: boolean; onCheck: () => void }) {
-  // No version was ever read, twice over, while the roster reads: said in one line, with the way to
-  // ask again. New agent stays on: the kernel refuses a spawn it cannot make.
-  if (cli === undefined && unchecked) {
-    return (
-      <div data-testid="oats-home-cli-unchecked" className="flex flex-wrap items-center gap-2 text-muted-foreground">
-        <span>{CLI_UNCHECKED}</span>
-        <Button data-testid="oats-home-cli-retry" disabled={checking} onClick={onCheck}>
-          {checking ? CHECKING : CHECK_AGAIN}
-        </Button>
-      </div>
-    );
-  }
-  if (cli === undefined || cli.state === "tested") return null;
+function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; checking: boolean; failure: string | null; onCheck: () => void }) {
+  if (cli === undefined || cli.state === "tested" || cli.state === "newer") return null;
   // A check that failed leaves the notice as it was, and says so: a press is never silent.
   const failed =
     failure === null || checking ? null : (
@@ -565,26 +557,17 @@ function CliNotice({ cli, checking, failure, unchecked, onCheck }: { cli: Cli | 
       {checking ? CHECKING : CHECK_AGAIN}
     </Button>
   );
-  if (cli.state === "newer") {
-    return (
-      <div data-testid="oats-home-cli-line" className="flex flex-wrap items-center gap-2 text-muted-foreground">
-        <span>{testedWhy(OATS_TESTED_MINOR, shown(cli.version ?? ""))}</span>
-        {again}
-        {failed}
-      </div>
-    );
-  }
   const facts = (
     <Facts>
       <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>
-      <Fact label={REQUIRED}>{required(OATS_FLOOR, DESKTOP_API)}</Fact>
+      <Fact label={REQUIRED}>{required(OATS_FLOOR)}</Fact>
     </Facts>
   );
   if (cli.state === "newer-api") {
     return (
       <div data-testid="oats-home-cli" data-state={cli.state}>
         <Notice title={CLI_NEWER_API} tone="warning" actions={again}>
-          <p className="m-0">{newerApiWhy(cli.version === null ? null : shown(cli.version), cli.desktopApi, DESKTOP_API)}</p>
+          <p className="m-0">{NEWER_API_WHY}</p>
           {facts}
           {failed}
         </Notice>
@@ -604,7 +587,6 @@ function CliNotice({ cli, checking, failure, unchecked, onCheck }: { cli: Cli | 
           </>
         }
       >
-        <p className="m-0">{CLI_REQUIRED_WHY}</p>
         {facts}
         <p className="m-0">
           <Code>{command}</Code>
@@ -615,47 +597,33 @@ function CliNotice({ cli, checking, failure, unchecked, onCheck }: { cli: Cli | 
   );
 }
 
-function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; /** the page's own heading (the tab has bb's) */ title: boolean; onAgents: () => void; onBack: () => void }) {
+function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onAgents: () => void; onBack: () => void }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
-  const { cli, checking, failure: checkFailure, unchecked, check } = useCli(visible, oats.phase === "ready");
-  const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} unchecked={unchecked} onCheck={check} />;
+  const { cli, checking, failure: checkFailure, check } = useCli(visible, oats.phase === "ready");
+  const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
-  // (the roster kept as last read) how old what is shown is.
-  const heading = title ? (
-    <h1 data-testid="oats-home-title" className="m-0 text-lg font-semibold text-foreground">
-      {HOME}
-    </h1>
-  ) : null;
-  if (oats.phase === "loading" || oats.phase === "failed") {
-    return (
-      <>
-        {heading}
-        {oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />}
-      </>
-    );
-  }
+  // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
+  // bb's bar over it names it.
+  if (oats.phase === "loading" || oats.phase === "failed") return oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
-  // New agent is on every home, in the heading's row (the Desktop's Home has none: its act is the
+  // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
-  // open (the sidebar's rule); off, with why beside it, behind the CLI card and while the roster
-  // shown is the last one read. On the home of a workspace with no agent it is the one act.
-  const offWhy = incompatible ? NEW_AGENT_HELD : held ? HELD : null;
+  // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
+  // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's
+  // notice), never beside the button. On the home of a workspace with no agent it is the one act.
+  const off = incompatible || held;
   const head = (
-    <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-      {heading ?? <span />}
+    <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {hasNewAgent(pages.has("souls")) ? (
-        <span className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          {offWhy === null ? null : <DisabledReason>{offWhy}</DisabledReason>}
-          <Button variant={made.all.length === 0 ? "primary" : "default"} data-testid="oats-home-new-agent" disabled={offWhy !== null} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
-            New agent
-          </Button>
-        </span>
+        <Button variant={made.all.length === 0 ? "primary" : "default"} data-testid="oats-home-new-agent" disabled={off} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
+          New agent
+        </Button>
       ) : null}
     </div>
   );
@@ -666,6 +634,8 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
       <>
         {head}
         {stale}
+        {/* New agent is off behind the CLI card: the card is on this screen too, so the button is never off with nothing saying why. */}
+        {incompatible ? notice : null}
         <EveryAgent made={made} oats={oats} onBack={onBack} />
       </>
     );
@@ -676,7 +646,7 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
         {head}
         {stale}
         {notice}
-        <Empty title={FIRST_RUN[0]}>{FIRST_RUN[1]}</Empty>
+        <Empty>{FIRST_RUN}</Empty>
         <Tiles made={made} visible={visible} onAgents={onAgents} />
       </>
     );
@@ -697,13 +667,10 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
           </Cropped>
         )}
       </Section>
-      <p data-testid="oats-home-summary" className="m-0 text-muted-foreground">
-        {summaryLine(made.counts)}
-      </p>
       <Tiles made={made} visible={visible} onAgents={onAgents} />
       {made.working.length === 0 ? null : (
         <Section title={WORKING} n={made.working.length} testId="oats-home-working">
-          <Cropped items={made.working} shown={WORKING_SHOWN} more={showAllWorking} testId="oats-home-working-all">
+          <Cropped items={made.working} shown={WORKING_SHOWN} more={showAll} testId="oats-home-working-all">
             {(entry) => <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-working-row" />}
           </Cropped>
         </Section>
@@ -731,7 +698,7 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
   const agents = subPath.split("/").find((segment) => segment !== "") === AGENTS;
   return (
     <Page testId="oats-home-page">
-      <Sections oats={oats} visible title agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
+      <Sections oats={oats} visible agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
     </Page>
   );
 }
@@ -767,7 +734,7 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   }
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
-      <Sections oats={oats} visible={visible} title={false} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
+      <Sections oats={oats} visible={visible} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
     </div>
   );
 }

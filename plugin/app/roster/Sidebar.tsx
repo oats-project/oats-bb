@@ -1,5 +1,5 @@
-// The sidebar's thread list (experimental_threadList): the workspace line, the roster (every agent
-// OATS has, as a tree), at its foot who waits and New agent, the plugin's pages under "Workspace",
+// The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
+// OATS has, as a tree), at its foot who waits (when someone does) and New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
 import { Fragment } from "react";
 import type { MouseEvent, ReactNode } from "react";
@@ -19,18 +19,18 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
-import { count, needsYouLabel } from "../format";
+import { needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
-import { Button, DisabledReason, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
+import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
 import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
-import { HELD_REASON, LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
+import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
@@ -126,22 +126,19 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * A row's two blocks, at most three lines in all (the lead's ruling on the long names):
    * - the NAME wraps to at most two lines and is cut with "…" only after the second; the whole
    *   name (`full`: the instance as the kernel names it) is the name's title on every row;
-   * - the second block is ONE line, never wrapped: the state's word, the soul, and for an agent
-   *   on tmux where it is (`where`: "tmux"). The state's word and `where` are never cut. Where the
-   *   line does not fit, the SOUL gives way, down to room for its "…".
-   *   What happened to an agent outside OATS (`reason`, app/outside `rowParts`: "archived in bb",
-   *   "with the machine") stands in the soul's place and does not give way to anything: it is the
-   *   fact a person needs, and the longest of them fits the line beside the state's word. (Should
-   *   one ever not fit, it is cut with "…" and whole in the title: never drawn past the row.)
-   *   Nothing is drawn past the row (the block clips), and the whole line is its title.
+   * - the second block is ONE line, never wrapped: the state's word, and where there is one a
+   *   reason: what happened to the agent outside OATS (`reason`, app/outside `rowParts`:
+   *   "archived in bb", "with the machine"), and for an agent on tmux where it is (`where`:
+   *   "tmux"). The state's word and `where` are never cut; a reason fits the line beside the
+   *   state's word (should one ever not fit, it is cut with "…" and whole in the title: never
+   *   drawn past the row). The soul is not on the row: the name tells agents apart, and the
+   *   instance panel says the soul. Nothing is drawn past the row (the block clips), and the
+   *   whole line is its title.
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string }, full: string) => {
-    const all: { kind: "state" | "soul" | "reason" | "where"; text: string; className: string }[] = [
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; reason?: string | null; where?: string }, full: string) => {
+    const all: { kind: "state" | "reason" | "where"; text: string; className: string }[] = [
       { kind: "state", text: phrases.state, className: "shrink-0" },
-      phrases.reason != null
-        ? { kind: "reason", text: phrases.reason, className: "min-w-0 truncate" }
-        : // The soul gives way (shrink-[1000]) and keeps room for its "…".
-          { kind: "soul", text: phrases.soul, className: "min-w-[1.5em] shrink-[1000] truncate" },
+      ...(phrases.reason == null ? [] : [{ kind: "reason" as const, text: phrases.reason, className: "min-w-0 truncate" }]),
       ...(phrases.where === undefined ? [] : [{ kind: "where" as const, text: phrases.where, className: "shrink-0" }]),
     ];
     // (A reason that is no words, "": the state says it all, "Running outside OATS", alone on the line.)
@@ -173,10 +170,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
-      // What happened to it outside OATS (app/outside): the reason takes the soul's place on the
+      // What happened to it outside OATS (app/outside): the reason follows the state's word on the
       // row (a row is never three lines), and a stopped agent that needs a remedy has its mark in the warning tone.
       const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
-      // The reason only after the state it follows (bb's own question on the thread makes the row "Needs you": the soul then).
+      // The reason only after the state it follows (bb's own question on the thread makes the row "Needs you": no reason then).
       const reason = rowParts(said, status.state);
       return [
         threadRow(
@@ -186,7 +183,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, reason: reason.note }, shown(node.agent.instance))}
           </>,
         ),
         ...agentRows(node.children),
@@ -225,7 +222,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, where }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: drawn.word, reason: reason.note, where }, shown(agent.instance))}
         </button>
       </li>
     );
@@ -263,12 +260,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       <div data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">
         {oats.phase === "loading" ? (
           <div className="px-2">
-            <Loading>Reading your agents…</Loading>
+            <Loading>Reading…</Loading>
           </div>
         ) : (
           <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
         )}
-        <h2 className={HEADING}>Threads</h2>
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>
       </div>
     );
@@ -277,7 +273,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const { view, deployment } = oats;
   // Every agent that waits, the ones with no bb thread included (`view.needing`: the home's badge and list count the same).
   const needs = view.needing.length;
-  // Every agent OATS has is a row: the count in the workspace line is the count of rows.
+  // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (
     <div data-testid="oats-sidebar" className="flex flex-col p-1">
@@ -289,61 +285,52 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <Unreadable inSidebar failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
+        {/* The workspace's name heads the roster; where it runs and how many agents it has are the rows' and the pages'. */}
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
-        {` · ${shown(deployment.machine)} · ${count(shownAgents, "agent")}`}
       </p>
-      <h2 className={HEADING}>Agents</h2>
       {shownAgents === 0 ? (
         <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
           {agentRows(view.roots)}
-          {/* Where its thread is, by bb's own answer, in the soul's place; the soul until bb has answered. */}
+          {/* Where its thread is, by bb's own answer, after the state's word; nothing until bb has answered. */}
           {view.detached.map((agent) => threadlessRow(agent, undefined, outside.of(agent)))}
           {view.elsewhere.map((agent) => threadlessRow(agent, "tmux"))}
         </ul>
       )}
-      {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}
-      {homeShown ? (
+      {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. With
+          nobody waiting there is no line: no count is the same news (the home says "Nothing needs you."). */}
+      {needs === 0 ? null : homeShown ? (
         <button
           type="button"
           data-testid="oats-needs-line"
           title={`${needsYouLabel(needs)}: open the OATS home`}
-          className={`${ROW} w-full pl-2 text-left ${needs > 0 ? "font-semibold" : "text-muted-foreground"}`}
+          className={`${ROW} w-full pl-2 text-left font-semibold`}
           onClick={() => openPage("home")}
         >
-          {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
-          {needs > 0 ? `${needs} need you` : "Nothing needs you."}
+          <StateMark state="needs-you" hidden />
+          {`${needs} need you`}
         </button>
       ) : (
         // The home is not shown in this release: the count is said, and opens nothing.
-        <p data-testid="oats-needs-line" className={`flex items-center gap-2 px-2 py-1.5 text-sm ${needs > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-          {needs > 0 ? <StateMark state="needs-you" hidden /> : null}
-          {needs > 0 ? `${needs} need you` : "Nothing needs you."}
+        <p data-testid="oats-needs-line" className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold text-foreground">
+          <StateMark state="needs-you" hidden />
+          {`${needs} need you`}
         </p>
       )}
       {newAgentShown ? (
         <div className="px-2 py-1">
-          {/* On the last roster read "New agent" is held with the OATS acts: in its place, off, with the reason. */}
+          {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is
+              said by the notice over the roster (or the page's, beside it), never beside the button. */}
           <Button
             data-testid="oats-new-agent"
             disabled={oats.stale !== null}
-            title={oats.stale !== null && !pageShowsNotice ? HELD_REASON : undefined}
-            aria-describedby={oats.stale !== null && pageShowsNotice ? "oats-new-agent-held" : undefined}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}
           >
             New agent
           </Button>
-          {/* The reason in words, not only as a title: a phone has no hover (the lead's ruling). Said
-              ONCE in the sidebar: its full notice names New agent already; beside a page's notice the
-              sidebar has one line only, and then the reason stands under the button, tied to it. */}
-          {oats.stale !== null && pageShowsNotice ? (
-            <p id="oats-new-agent-held" data-testid="oats-new-agent-held" className="pt-1">
-              <DisabledReason>{HELD_REASON}</DisabledReason>
-            </p>
-          ) : null}
         </div>
       ) : null}
 

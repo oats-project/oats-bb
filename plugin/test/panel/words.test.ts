@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, attachOffered, attachWhere, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
+import { ATTACH, ageText, attachOffered, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -8,9 +8,8 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 describe("an agent on tmux", () => {
-  it("where it runs, with the machine when one is known", () => {
-    expect(attachWhere("falcon")).toBe("Runs in tmux on falcon. Attach from a terminal:");
-    expect(attachWhere(null)).toBe("Runs in tmux. Attach from a terminal:");
+  it("one word over the command that reaches its session: \"Runs in\" beside it already says tmux", () => {
+    expect(ATTACH).toBe("Attach:");
   });
   it("the attach line: only while the kernel's own word is that it runs, whatever its state says", () => {
     expect(attachOffered(true, true, "working")).toBe(true);
@@ -68,14 +67,15 @@ describe("the older build chip", () => {
 
 describe("the Work card", () => {
   const facts = { repo: "oats", branch: "agents/dev-a", parent: "lead-a" };
-  it("one sentence per work mode, with the row's own facts", () => {
-    expect(workSentence({ work: "worktree", ...facts })).toEqual(["Works in its own worktree of ", { code: "oats" }, ", on branch ", { code: "agents/dev-a" }, "."]);
-    expect(workSentence({ work: "worktree", repo: null, branch: null, parent: null })).toEqual(["Works in its own worktree of ", "its soul's repository", "."]);
-    expect(workSentence({ work: "checkout", ...facts })).toEqual(["Works in the shared checkout of ", { code: "oats" }, ", alongside the other instances that use it."]);
-    expect(workSentence({ work: "attached", ...facts })).toEqual(["Works in ", { code: "lead-a" }, "'s tree", ", sharing its branch and changes."]);
-    expect(workSentence({ work: "attached", repo: null, branch: null, parent: null })).toEqual(["Works in ", "its parent's tree", ", sharing its branch and changes."]);
-    expect(workSentence({ work: "directory", ...facts })).toEqual(["Has its own folder, not tied to one repository: free to work across repos as its task needs."]);
-    expect(workSentence({ work: "workspace", ...facts })).toEqual(["Sees the whole workspace: reads across every member repository."]);
+  it("one fact per work mode, not a sentence: the mode in a word or two, then the row's own fact that tells it apart", () => {
+    expect(workSentence({ work: "worktree", ...facts })).toEqual(["worktree", " · ", { code: "agents/dev-a" }]);
+    expect(workSentence({ work: "worktree", repo: null, branch: null, parent: null })).toEqual(["worktree"]);
+    expect(workSentence({ work: "checkout", ...facts })).toEqual(["shared checkout", " · ", { code: "oats" }]);
+    expect(workSentence({ work: "checkout", repo: null, branch: null, parent: null })).toEqual(["shared checkout"]);
+    expect(workSentence({ work: "attached", ...facts })).toEqual([{ code: "lead-a" }, "'s tree"]);
+    expect(workSentence({ work: "attached", repo: null, branch: null, parent: null })).toEqual(["its parent's tree"]);
+    expect(workSentence({ work: "directory", ...facts })).toEqual(["own folder"]);
+    expect(workSentence({ work: "workspace", ...facts })).toEqual(["workspace"]);
   });
   it("no sentence for a mode that is unreported or unknown", () => {
     expect(workSentence({ work: null, ...facts })).toBeNull();

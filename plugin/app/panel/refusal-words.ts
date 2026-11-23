@@ -24,10 +24,9 @@ const cli = (failed: string, timeout: string, tooLarge: string, protocol: string
 // holds each pair. The others are the Desktop's.
 const READINESS: Sentences = {
   E_SESSION_UNKNOWN: "OATS no longer lists this agent.",
-  E_AMBIGUOUS_INSTANCE: "OATS knows more than one agent by this name here, so it cannot say which one this is.",
+  E_AMBIGUOUS_INSTANCE: "OATS knows more than one agent by this name.",
   E_SOUL_UNKNOWN: "OATS does not list this soul in this deployment.",
   E_HOME_MISMATCH: "This agent's folder is no longer the one OATS recorded for it.",
-  E_UNSUPPORTED_MODE: "OATS has no readiness check for this kind of agent.",
   E_USAGE: "The OATS installed here is too old for this. Update OATS.",
   ...cli(
     "The installed CLI could not complete the readiness read.",
@@ -39,10 +38,9 @@ const READINESS: Sentences = {
 
 const ACTIVITY: Sentences = {
   E_SESSION_UNKNOWN: "OATS no longer lists this agent.",
-  E_AMBIGUOUS_INSTANCE: "OATS knows more than one agent by this name here, so it cannot say which one this is.",
+  E_AMBIGUOUS_INSTANCE: "OATS knows more than one agent by this name.",
   E_HOME_MISMATCH: "This agent's folder is no longer the one OATS recorded for it.",
   E_NOT_IN_SCOPE: "This agent is not one of this deployment's.",
-  E_UNSUPPORTED_MODE: "OATS keeps no activity for this kind of agent.",
   ...cli("The installed CLI could not complete the activity read.", "The activity read timed out.", "The activity response exceeded its output limit.", "The CLI returned invalid or mismatched activity data."),
 };
 
@@ -52,7 +50,6 @@ const UNREADABLE_INSPECTION = "The installed OATS CLI returned an inspection thi
 const SOUL: Sentences = {
   E_SESSION_UNKNOWN: "OATS no longer lists this agent.",
   E_HOME_MISMATCH: "This agent's folder is no longer the one OATS recorded for it.",
-  E_UNSUPPORTED_MODE: "OATS keeps no record of what this kind of agent was spawned from.",
   [codes.badAnswer]: UNREADABLE_INSPECTION,
   [codes.notJson]: UNREADABLE_INSPECTION,
   [codes.timeout]: "OATS took too long to answer.",
@@ -77,13 +74,13 @@ const NEXT: Sentences = {
 };
 /** The refusals that reading again cannot change: the notice offers no Retry for them. */
 const FINAL: ReadonlySet<string> = new Set([...Object.keys(NEXT), "E_USAGE", "E_UNSUPPORTED_MODE"]);
-/** The refusals that are no fault: OATS has no such thing for this kind of agent. Said as a fact, not drawn as a failure, with nothing to do. */
+/** The refusals that are no fault: OATS has no such thing for this kind of agent. There is nothing to show and nothing to do, so the part draws nothing and no sentence says so (plugin/WORDS.md, "Not kept"). */
 const NO_FAULT: ReadonlySet<string> = new Set(["E_UNSUPPORTED_MODE"]);
 
 export type RefusalWords = {
-  /** what happened, in a person's words; null for a failure with no code at all */
+  /** what happened, in a person's words; null for a failure with no code at all, and for a refusal that is no fault (nothing is drawn for it) */
   sentence: string | null;
-  /** what to do next, where there is something to say */
+  /** what to do next, where there is something to say: one press away, under the notice's Details */
   next: string | null;
   /** whether reading again can help: the notice offers Retry only then */
   retry: boolean;
@@ -98,6 +95,7 @@ export type RefusalWords = {
 export function refusalWords(read: keyof typeof TABLES, code: string | null, error: string): RefusalWords {
   const gone = code === null && NOT_IN_ROSTER.test(error);
   const known = gone ? "E_SESSION_UNKNOWN" : code;
-  const sentence = gone ? GONE[read] : code !== null && Object.hasOwn(TABLES[read], code) ? (TABLES[read][code] ?? null) : code !== null && code.startsWith("E_") ? REFUSED[read] : null;
+  const said = gone ? GONE[read] : code !== null && Object.hasOwn(TABLES[read], code) ? (TABLES[read][code] ?? null) : code !== null && code.startsWith("E_") ? REFUSED[read] : null;
+  const sentence = known !== null && NO_FAULT.has(known) ? null : said;
   return { sentence, next: known !== null && Object.hasOwn(NEXT, known) ? (NEXT[known] ?? null) : null, retry: known === null || !FINAL.has(known), fault: known === null || !NO_FAULT.has(known) };
 }

@@ -91,7 +91,7 @@ together.
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
-| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
+| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B in the files' order (`parts/README.md`). `tagged.mjs` is the LAST and must stay last: it pins the provider by a scratch tag (`v0.4.0`, made in the container), which changes what the kernel prints as the provider's version for every read after it |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).

@@ -2,6 +2,7 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { showPanelTab } from "../panel/Panel";
 import { usePanelEvents } from "../panel/read";
 import { agentName } from "../ui/words";
 import {
@@ -14,14 +15,17 @@ import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
-import { run } from "../lifecycle/acts";
+import { askPlan, run } from "../lifecycle/acts";
+import { claimOf } from "../../model/view";
+import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
+import { Button, LINK, plainClick } from "../ui";
 import { shown } from "../ui/text";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { useNow } from "./now";
-import { agentStatus, rowState, stoppedSince } from "./status";
+import { AgentStatusLine } from "./AgentStatusLine";
+import { agentStatus } from "./status";
 import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
@@ -33,6 +37,22 @@ export function isCompactViewport(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia(COMPACT_VIEWPORT_QUERY).matches
     : false;
+}
+
+/**
+ * Moves the focus to the instance panel's "Needs input" (its reply where it has one, else the
+ * section itself), once it is drawn: the panel may be opening. Tried for about a second, then left.
+ */
+export function focusNeedsInput(tries = 10): void {
+  const section = document.querySelector<HTMLElement>('[data-testid="oats-panel-waiting"]');
+  if (section !== null) {
+    const target = section.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? section;
+    if (target === section && !section.hasAttribute("tabindex")) section.setAttribute("tabindex", "-1");
+    section.scrollIntoView?.({ block: "nearest" });
+    target.focus();
+    return;
+  }
+  if (tries > 0) window.setTimeout(() => focusNeedsInput(tries - 1), 100);
 }
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
@@ -55,17 +75,24 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const pluginId = usePluginId();
   const soulsShown = usePageShown("souls");
   const now = useNow();
+  const outside = outsideOf(oats);
   // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.
   const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
+  // (An agent that runs outside OATS was recorded stopped too: the same event says since when.)
+  const recorded = mine === undefined ? null : agentStatus(mine.agent, mine.thread, now).state;
+  const stopped = recorded === "stopped" || recorded === "outside";
   const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
   // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
   // stopped (and when its row is come back to), events already held are read again.
   const eventsNow = useRef(events);
-  eventsNow.current = events;
+  // Kept in an effect, never written while rendering; declared BEFORE the effect that reads it, so
+  // that in one commit it holds this render's read when that effect runs (effects run in order).
+  useEffect(() => {
+    eventsNow.current = events;
+  });
   const stoppedInstance = stopped ? mine?.agent.instance : undefined;
   useEffect(() => {
     if (stoppedInstance !== undefined && eventsNow.current.data !== undefined) eventsNow.current.retry();
@@ -81,11 +108,12 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     );
   }
   const node = oats.nodeByThread.get(threadId);
-  if (node === undefined) return null; // not an OATS agent: take no space
+  // Not an agent the roster draws on this thread: nothing, unless it is the archived thread of one (the outside feature's row).
+  if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
-  const read = agentStatus(agent, node.thread, now);
-  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
+  // (The state, for the act that applies; the line itself, with a stopped agent's time, is AgentStatusLine's.)
+  const status = agentStatus(agent, node.thread, now);
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;
@@ -111,6 +139,29 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
         {verb[1]}
       </Button>
+    ) : status.state === "needs-you" && claimOf(agent) !== null ? (
+      // The agent asked through OATS: what it asks is on the line; "Answer" is the way to reply. It
+      // opens the instance panel at "Needs input", and with the panel already open it moves the focus
+      // there (never a dead press). A question bb itself shows is answered in the thread: no act.
+      <Button
+        data-testid="oats-status-act"
+        title="Answer in the instance panel"
+        onClick={() => {
+          // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
+          // on: turn it there first, whether the panel is open or opens now.
+          showPanelTab("instance");
+          openPanel();
+          focusNeedsInput();
+        }}
+      >
+        Answer
+      </Button>
+    ) : status.state === "working" || status.state === "idle" ? (
+      // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
+      // with it), then the confirmation. bb's own stop of a turn is not this.
+      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
+        Stop
+      </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>
         Retry
@@ -119,6 +170,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // The kernel has since refused this agent as one it does not know: the row says that, with no act,
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
+  // What happened to it outside OATS, if anything (app/outside): its sentence and its acts take the line's, and the kernel's report stands under it.
+  const said = gone ? null : outside.of(agent);
+  const saidActs = lineActs(said, agent.instance, held, status.state);
 
   // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
   // the act that applies (B2): the line's height does not change with the state.
@@ -130,23 +184,28 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
-      {gone ? (
-        <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={panelButton} />
-      ) : (
-        <StatusLine
-          state={status.state}
-          since={status.since}
-          detail={status.detail}
-          action={
+      {/* The one status line of an agent (the panel's header is to draw the same). The age of a roster kept as
+          last read is said by the one-line notice under it, so the line itself says no "as of". What happened to
+          the agent outside OATS (app/outside) takes the line's words where it has a reason for them. */}
+      <AgentStatusLine
+        agent={agent}
+        thread={node.thread}
+        now={now}
+        events={events.data?.events}
+        gone={gone}
+        parts={(own) => lineParts(said, own)}
+        action={
+          gone ? (
+            panelButton
+          ) : (
             <>
-              {act}
+              {saidActs === undefined ? act : saidActs}
               {panelButton}
             </>
-          }
-        />
-      )}
-      {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
-      {gone ? null : <KernelSays text={status.kernel} />}
+          )
+        }
+      />
+      <OutsideWarning said={said} instance={agent.instance} held={held} />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">

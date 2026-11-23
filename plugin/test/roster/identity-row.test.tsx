@@ -65,8 +65,9 @@ test("the status line comes first and says where the agent is in words: a workin
   const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingInstance panel"); // the state, then the one row of buttons
-  expect(slot.queryByTestId("oats-status-act")).toBeNull();
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingStopInstance panel"); // the state, then the one row of buttons: the act that applies, and the panel
+  const stop = slot.getByTestId("oats-status-act") as HTMLButtonElement;
+  expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop", false, "Stop this agent through OATS"]);
   // Each fact has its label; the instance is not repeated (the thread's title is it), and there is no "✓".
   expect(fact(slot, "oats-fact-soul")).toBe("instance ofoats-desktop-developer");
   expect(fact(slot, "oats-fact-parent")).toBe("ParentRedesign ui lead");
@@ -94,14 +95,27 @@ test("an agent that needs you: since when and its question, on its own thread", 
   const slot = await render("thr_release", agents);
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("needs-you");
-  // (The claim is 12 minutes before the real clock: in the first minutes after midnight it is yesterday's, and the line then says its date with the time.)
-  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since (\w{3} \d{1,2}, )?\d\d:\d\d\)· Green light at 9f2e1c\?Instance panel$/);
+  // (The time is the clock alone, or with its date when the claim is from yesterday: in the first 12 minutes after midnight.)
+  expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since (\w{3} \d{1,2}, )?\d\d:\d\d\)· Green light at 9f2e1c\?AnswerInstance panel$/);
+  // "Answer" is the way to reply (what is asked is on the line): it opens the instance panel, and
+  // where the panel is drawn it moves the focus to "Needs input".
+  const needs = document.createElement("section");
+  needs.setAttribute("data-testid", "oats-panel-waiting");
+  needs.append(document.createElement("textarea"));
+  document.body.append(needs);
+  try {
+    fireEvent.click(slot.getByTestId("oats-status-act"));
+    expect(slot.inspection.experimental_panelCalls.map((call) => call.method)).toEqual(["openTab"]);
+    expect(document.activeElement).toBe(needs.querySelector("textarea"));
+  } finally {
+    needs.remove();
+  }
 });
 
 test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
   // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
   const stopped = await render("thr_digest", fixtureAgents(), { panelEvents: () => ({ ...recordedEvents(), events: [] }) });
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
   expect(asked()).toEqual({ verb: "start", instance: "weekly-digest-helper" });
@@ -115,7 +129,7 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestartInstance panel");
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session ended. Restart it, or send a message here.RestartInstance panel"); // the sentence of a failed agent on an open thread is the outside feature's (app/outside)
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // A person's words on the line; what the kernel said is one press away, under Details, never the line's words.
@@ -196,10 +210,13 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
-  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingInstance panel");
+  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStopInstance panel");
+  // The act that applies is held: in its place, off, with the reason.
+  const held = slot.getByTestId("oats-status-act") as HTMLButtonElement;
+  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, "Comes back when OATS is read again"]);
   const stale = slot.getByTestId("oats-unreadable");
   expect(stale.getAttribute("data-compact")).toBe("");
-  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.Retry");
+  expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.Retry");
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
   slot.unmount();
@@ -232,7 +249,7 @@ test("the soul is a link to its page where that page is shown, and its name alon
 
 test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
   const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
-  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}StartInstance panel`));
+  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
   slot.unmount();
   resetApp();
@@ -256,7 +273,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   });
   const line = () => slot.getByTestId("oats-status-line").textContent;
   const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").length;
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(1);
   // Started: the line is no longer the stopped one, and nothing more is asked.
   agents = digest({ running: true, runtimeState: "running", startedAt: started });
@@ -267,7 +284,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   agents = digest({ startedAt: started });
   events = [{ ...stop, at: first }, { ...stop, at: second }];
   await slot.behavior.emitRealtime("oats/changed", { at: second });
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(2);
 });
 
@@ -276,7 +293,7 @@ test("events read before the session's start hold no time for this stop: the lin
   const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
 });
 
 // The settings can mend what Retry cannot (which machine holds the agents): the notice then has no
@@ -285,7 +302,82 @@ test("on the last roster read with no Retry to offer, the one-line notice names 
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "CHOOSE_HOST", message: "This bb server has 2 machines", last }) });
   const stale = await slot.findByTestId("oats-unreadable");
-  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart and Retire come back when OATS is read again.Open settings");
+  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart, Retire and New agent return when OATS is read again.Open settings");
   expect(within(stale).queryByRole("button", { name: "Retry" })).toBeNull();
   expect(within(stale).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/settings/plugins/test-plugin");
+});
+
+// B3: an agent that runs is stopped from its own thread, through OATS: the plan is read first, and
+// nothing stops on one press.
+test("Stop on a working agent's line asks for the stop dialog of that agent, and stops nothing by itself", async () => {
+  const slot = await render("thr_mockups", fixtureAgents());
+  fireEvent.click(await slot.findByTestId("oats-status-act"));
+  // The act's own dialog is asked for (test/lifecycle holds what it does): nothing runs on one press.
+  expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);
+});
+
+// The line of one thread of the fixtures, with bb's row of it changed.
+const withThread = async (threadId: string, change: Partial<ReturnType<typeof sidebarThreads>["threads"][number]>) => {
+  const app = await loadApp();
+  setAgentPage(agentPage);
+  const threads = sidebarThreads();
+  return renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    app.threadHeaderRows[0]!,
+    { threadId, projectId: "p", environment: null },
+    { rpc: handlers({}, fixtureAgents()), sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === threadId ? { ...thread, ...change } : thread)) } },
+  );
+};
+
+test("Stop on an idle agent's line too: an agent at rest on its thread runs, and is stopped through its dialog", async () => {
+  const slot = await withThread("thr_mockups", { status: "idle", queuedWork: "none", hasPendingInteraction: false });
+  const line = await slot.findByTestId("oats-status-line");
+  expect(line.getAttribute("data-state")).toBe("idle");
+  expect(line.textContent).toBe("IdleStopInstance panel");
+  fireEvent.click(slot.getByTestId("oats-status-act"));
+  expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);
+});
+
+test("a question bb itself shows has no act on the line: it is answered in the thread, and Answer would be a dead press", async () => {
+  const slot = await withThread("thr_mockups", { hasPendingInteraction: true });
+  const line = await slot.findByTestId("oats-status-line");
+  expect(line.getAttribute("data-state")).toBe("needs-you");
+  expect(line.textContent).toBe("!Needs you· bb shows its question in this threadInstance panel");
+  expect(slot.queryByTestId("oats-status-act")).toBeNull();
+});
+
+// The time of a stop is an extra: when the read of the events fails, the line stays the state alone,
+// with no time and no error of its own (the spec's author's condition).
+test("a stopped agent whose events cannot be read says Stopped, with no time and no error on its line", async () => {
+  const slot = await render("thr_digest", fixtureAgents(), {
+    panelEvents: () => {
+      throw new Error("E_EVENTS_UNREADABLE: the instance's events could not be read");
+    },
+  });
+  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  // (The sentence is the outside feature's, for a stopped agent whose thread is open in bb: no time before it, and no error.)
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+  expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
+  expect(slot.queryByRole("alert")).toBeNull();
+});
+
+// "Needs input" is on the panel's Instance tab, and the panel keeps the tab it was left on: Answer
+// turns it there, so the press is never dead (round 1 of part B's review).
+test("Answer turns the instance panel to its Instance tab, where Needs input is, when it was left on another, and moves the focus there", async () => {
+  const app = await loadApp();
+  const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
+  const Row = app.threadHeaderRows[0]!.component;
+  const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    { component: (props: ExperimentalThreadHeaderRowProps) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
+    { threadId: "thr_release", projectId: "p", environment: null },
+    { rpc: handlers(), sidebarThreads: sidebarThreads() },
+  );
+  await slot.findByTestId("oats-panel-waiting"); // the panel is open on its Instance tab
+  showPanelTab("soul"); // and is left on the Soul tab
+  await vi.waitFor(() => expect(slot.queryByTestId("oats-panel-waiting")).toBeNull());
+  fireEvent.click(await slot.findByTestId("oats-status-act"));
+  const needs = await slot.findByTestId("oats-panel-waiting");
+  await vi.waitFor(() => expect(needs.contains(document.activeElement)).toBe(true));
 });

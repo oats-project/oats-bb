@@ -332,48 +332,75 @@ function snapshotRow(instance) {
  * when the command has returned, and the event taken is the first of its kind since the command, so
  * the delay is never less than the truth. With no such event in
  * the kernel's answer the delay runs from `since` instead, and the check's line says so. The line
- * says both delays, from the kernel's record and from before the command, and a NOTE reports
- * either one over 3 s even where the check passes.
+ * says both delays, from the kernel's record and from before the command.
  *
- * 3 s at most on a kernel whose `oats status` answers in under a second; the status's own time is
- * measured and said beside the delay. A kernel slower than that is given twice its status time and
- * 2 s: a change that lands in a read is shown after that read and one more (the read at once,
- * server/core.ts FOLLOW_UP_WITHIN_MS), and one that lands in a read at once after that read, the
- * pause (the time a read took) and the next: the limit covers both while a status takes up to
- * 2 s, so a slow kernel is told apart from a slow plugin.
+ * WHAT IS ASSERTED is the order of reads, not milliseconds (a bound on elapsed time failed pull
+ * requests at random on a slow runner: 3145 ms where 3000 were allowed, with nothing of the plugin
+ * slow). A snapshot's `at` is the start of the read it is the answer of, and the kernel's event
+ * says when it recorded the change: so EVERY snapshot of a read that started at or after the
+ * kernel's record must have the change. The check polls the snapshot until it has the change, and
+ * fails if any snapshot it saw on the way was of such a read and did not have it (the plugin showed
+ * an answer older than the read it made), or if the change never came. It does not fail on what
+ * its own polling may have missed: where the change is first seen in the snapshot of a LATER read
+ * than the first one started after the record, a NOTE says how many of the plugin's `oats status`
+ * calls (the wrapper's records) started between, since the poll cannot tell a snapshot it missed
+ * from one that was never shown.
+ * The delays are still measured and PRINTED, with the kernel's own `oats status` time beside
+ * them, and a NOTE reports either one over 3 s (the UX standard's bar): a slow runner is then
+ * seen, and fails nothing. What the order cannot hold: HOW SOON the first read after the record
+ * started (the watch's signal, the pause after a read in flight: server/core.ts) is time; and a
+ * watch that is dead brings the change with the poll's read: live.sh's L2 holds the watch. With no
+ * event of the kernel's to count from, the order cannot be told, and the check holds only that the
+ * snapshot came to have the change; its line says so.
  */
 async function fresh(what, { instance, home, kind, since }, matches) {
   let seenAt = null;
+  let shownBy = null; // the `at` of the snapshot that first had the change: its read's start
+  const without = []; // the `at` of every snapshot polled that did not have it
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const snapshot = rpc("snapshot");
-    const agent = snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((candidate) => candidate.instance === instance) : undefined;
-    if (agent !== undefined && matches(agent)) {
-      seenAt = Date.now();
-      break;
+    if (snapshot.ok && snapshot.value.ok) {
+      const agent = snapshot.value.agents.find((candidate) => candidate.instance === instance);
+      if (agent !== undefined && matches(agent)) {
+        seenAt = Date.now();
+        shownBy = Date.parse(snapshot.value.at);
+        break;
+      }
+      without.push(Date.parse(snapshot.value.at));
     }
     await sleep(100);
   }
   const { at: recorded, why } = recordedAt(instance, home, kind, since);
-  // Both delays are said: from the kernel's record (the one the 3 s is on), and from before the
-  // command (what the check counted until now: it holds the command's own run too).
+  // Both delays are said: from the kernel's record, and from before the command (which holds the command's own run too).
   const fromRecord = seenAt === null || recorded === null ? null : seenAt - recorded;
   const fromCommand = seenAt === null ? null : seenAt - since;
-  const seen = fromRecord ?? fromCommand; // with no event of the kernel's to count from: from before the command
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
-  const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
   const ms = (delay) => (delay === null ? "never" : `${delay} ms`);
   const counted =
     recorded === null
-      ? `${ms(fromCommand)} after the moment before the command, which the limit is on here: ${why}`
+      ? `${ms(fromCommand)} after the moment before the command`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
-  // The snapshot cannot have a change before the kernel recorded it: a delay under 0 means the event
-  // taken is not this change's, and the check fails on it, with both times in its line.
-  check(seen !== null && seen >= 0 && seen <= limit, `freshness: the plugin's snapshot has ${what} ${counted} (${limit} ms at most, on the first; the kernel's own oats status took ${statusMs} ms)${seen !== null && seen < 0 ? `; the snapshot had it at ${new Date(seenAt).toISOString()}, before that event: not this change's event` : ""}`);
-  // A delay over 3 s is said even where the check passes: from before the command (a slow command, or
-  // a slow runner), or under the wider limit of a kernel whose status takes over a second.
+  const timed = `${counted}; the kernel's own oats status took ${statusMs} ms`;
+  if (seenAt === null) {
+    fail(`freshness: the plugin's snapshot never had ${what} in 60 s`, timed);
+  } else if (recorded === null) {
+    pass(`freshness: the plugin's snapshot came to have ${what} (${timed}); the ORDER of reads is not told here: ${why}`);
+  } else {
+    // A snapshot of a read that started at or after the kernel's record, seen without the change: an answer older than its read.
+    const stale = [...new Set(without.filter((at) => at > recorded))]; // (strictly after: the two clocks say milliseconds)
+    check(
+      stale.length === 0,
+      `freshness: the plugin's snapshot has ${what}, and no snapshot of a read started after the kernel recorded it was without it (${timed})`,
+      `${stale.length} snapshot(s) of a read started at or after the kernel's record (${new Date(recorded).toISOString()}) did not have the change: read(s) started ${stale.map((at) => new Date(at).toISOString()).join(", ")}`,
+    );
+    // The plugin's own calls that started after the record and before the read whose snapshot first showed the change.
+    const between = records().filter((record) => record.argv[0] === "status" && Date.parse(record.at) >= recorded && Date.parse(record.at) < shownBy);
+    if (between.length > 0) note(`freshness: ${what} was first SEEN in the snapshot of a later read: ${between.length} oats status call(s) of the plugin started after the kernel's record and before that read (${between.map((record) => `${record.at} for ${record.ms} ms, exit ${record.exit}`).join("; ")}); the check's own polling may have missed the snapshot of the first`);
+  }
+  // A delay over 3 s is said, and fails nothing: a slow command, a slow runner, or a change that waited a pause.
   const over = [["after the kernel recorded it", fromRecord], ["after the moment before the command", fromCommand]].filter(([, delay]) => delay !== null && delay > 3000);
   if (over.length > 0) note(`freshness: ${what} was over 3 s: ${over.map(([from, delay]) => `${delay} ms ${from}`).join(", ")} (the kernel's own oats status took ${statusMs} ms)`);
 }

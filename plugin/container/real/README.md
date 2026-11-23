@@ -96,10 +96,14 @@ together.
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
-claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
-the kernel's own record: the time of the event the change wrote, read from `oats instance events
---json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s). It
+claim set, a claim cleared and a stop the plugin's own snapshot has it, counted from the kernel's
+own record (the time of the event the change wrote, read from `oats instance events --json`, so the
+`oats` command's own start-up is not in it); the kernel's own `oats status` time is said beside it,
+with the delay from before the command, and a NOTE reports either delay over 3 s. The delays are
+printed and fail nothing: what the check ASSERTS is the order of reads (a bound on elapsed time
+failed pull requests at random on a slow runner): the change comes, and no snapshot it polled on
+the way was the answer of a read that started after the kernel's record and yet without the change
+(a snapshot's `at` is its read's start). It
 shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
 plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
 while the read the claim started is in flight (each status is held 400 ms for that), and the next

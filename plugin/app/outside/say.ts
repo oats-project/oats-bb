@@ -45,6 +45,8 @@ export type Kind =
   | "stopped-archived"
   /** OATS lost the session and bb has the thread archived: its process may still run. */
   | "lost-archived"
+  /** The row still says it runs (it is not stopped, and the kernel does not say its harness is gone) and bb has the thread archived: a person archived the conversation of an agent whose process goes on. */
+  | "running-archived"
   /** bb has no thread of its id: deleted in bb, whether OATS stopped it or lost its session. */
   | "deleted"
   /** Idle with no harness loaded, on a thread that is open: a message there carries the conversation on. */
@@ -125,7 +127,15 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   const note = attached ? null : whereNote(where);
   const archived = where === "archived";
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
-  switch (state(agent, null)) {
+  const is = state(agent, null);
+  // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
+  // thread a person can see. The row keeps its state's word, in the warning tone, and where it
+  // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable,
+  // and the kernel does not say that no harness is loaded (`running: false`).
+  if (archived && !attached && (is === "working" || is === "idle" || is === "needs-you") && agent.running !== false) {
+    return { ...base, kind: "running-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
+  }
+  switch (is) {
     case "outside":
       // Its row says the state alone: the words fill the row's one line, and say what is wrong.
       // `outsideOats` is set (the state function's own test).

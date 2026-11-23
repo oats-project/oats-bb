@@ -209,6 +209,35 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
+test("three agents whose thread bb has archived, side by side: an operator's stop keeps its soul, plain; a lost session and one that still runs say \"archived in bb\" with the warning mark", async () => {
+  const HARVEST = "harvest-knowledge-helper";
+  const RANKER = "ranker-v3-probe";
+  const gone = new Set(["thr_digest", "thr_harvest", "thr_research"]);
+  const threads = { status: "ready" as const, threads: fixtureThreads().filter((thread) => !gone.has(thread.id)) };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "stopped" } : agent.instance === RANKER ? { ...agent, running: false, runtimeState: "stopped", sessionEnd: "lost", waiting: null } : agent.instance === HARVEST ? { ...agent, running: true, runtimeState: "unknown", waiting: null } : agent));
+  const { slot } = await sidebar({ rpc: handlers({}, agents), sidebarThreads: threads, sdk: bb([...gone]).sdk });
+  const rowOf = (instance: string) => slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === instance)!;
+  await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
+  expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([
+    ["Stopped · oats-expert", "stopped", null],
+    ["Stopped · archived in bb", "stopped", "warning"],
+    ["Idle · archived in bb", "idle", "warning"],
+  ]);
+});
+
+test("the archived thread of an agent that still runs: its state's word in the warning tone, that its process may still run, and Stop, then Retire", async () => {
+  const threads = { status: "ready" as const, threads: fixtureThreads().filter((thread) => thread.id !== "thr_harvest") };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: true, runtimeState: "unknown", waiting: null } : agent));
+  const slot = await line("thr_harvest", { rpc: handlers(noEvents, agents), sidebarThreads: threads, sdk: bb(["thr_harvest"]).sdk });
+  const row = await slot.findByTestId("oats-identity-row");
+  expect(row.getAttribute("data-outside")).toBe("running-archived");
+  expect(words(slot)).toEqual(["Idle", "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS."]);
+  expect(within(within(row).getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBe("warning");
+  expect(acts(slot)).toEqual(["Stop", "Retire"]);
+  fireEvent.click(within(row).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: "harvest-knowledge-helper" });
+});
+
 test("the archived thread of an agent whose session OATS lost: \"Stopped\" in the warning tone, that its process may still run, and Stop, then Retire", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }, noEvents), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   const row = await slot.findByTestId("oats-identity-row");

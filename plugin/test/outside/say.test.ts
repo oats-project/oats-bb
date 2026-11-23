@@ -96,6 +96,30 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   });
 });
 
+describe("a row that still says it runs, and bb has its thread archived", () => {
+  // A person archived the conversation of an agent whose process goes on: bb's Archive never touches the harness.
+  const SENTENCE = "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.";
+  const WARNS = { ...PLAIN, kind: "running-archived", sentence: SENTENCE, tone: "warning", note: "archived in bb", rowTone: "warning", acts: ["stop"], archived: true };
+  it("the warning, the reason after its state's word, and Stop: for a harness the kernel says is loaded, and for one it cannot tell", () => {
+    for (const running of [true, null]) {
+      const runs = sample("harvest-knowledge-helper", { running });
+      expect(said(runs, "archived", false), `running ${running}`).toEqual(WARNS);
+      expect(word(runs)).toBe("Idle"); // its state's word stays: bb lists no thread to read a turn from
+    }
+    // An agent that asked a person something keeps "Needs you", and warns the same.
+    const asks: Agent = { ...sample("harvest-knowledge-helper", { running: true }), waiting: { reason: "question", message: "ok?", since: null } };
+    expect([word(asks), said(asks, "archived", false)]).toEqual(["Needs you", WARNS]);
+  });
+  it("never for a row the kernel says has no harness loaded, a failed or an unreachable one, a stopped one, or a thread that is not archived", () => {
+    expect(said(unloaded, "archived", false)).toEqual({ ...PLAIN, kind: "threadless", sentence: null, note: "archived in bb", archived: true });
+    expect(said(failed, "archived", false)?.kind).toBe("threadless");
+    expect(said(unreachable, "archived", false)?.kind).toBe("threadless");
+    expect(said(operator, "archived", false)?.kind).toBe("stopped-archived");
+    const runs = sample("harvest-knowledge-helper", { running: true });
+    expect([said(runs, "open", true), said(runs, "missing", false)?.kind, said(runs, "unknown", false)]).toEqual([null, "threadless", null]);
+  });
+});
+
 describe("the kernel's outsideOats", () => {
   const REPORT = {
     code: "running-outside-oats", backend: "bb",

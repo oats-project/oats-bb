@@ -92,7 +92,8 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
   const own = { since: status.since, detail: status.detail, tone: undefined };
   if (said === null || said.sentence === null) return own;
   const tone = said.tone === "warning" ? "warning" : undefined;
-  if (AFTER[said.kind] !== status.state) return said.kind === "stopped-open" ? { since: null, detail: STOPPED_OPEN_ASKING, tone } : own;
+  if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
+  if (!follows(said, status.state)) return own;
   if (said.kind === "outside") return { since: null, detail: status.since === null ? said.sentence : `${said.sentence} ${status.since}`, tone };
   return { since: status.since, detail: said.sentence, tone };
 }
@@ -100,14 +101,15 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
 /**
  * The acts of an agent the roster draws on no thread (its thread archived or deleted in bb), for
  * the place that shows that agent (its archived thread's row, its own page): the lifecycle's own
- * buttons for its state (`AgentActs`: Start and Retire for a stopped agent). Two rows read
- * "stopped" to OATS while a process runs, and their acts are this feature's: a session lost to
- * bb's Archive (Stop, then Retire; Start comes once it is stopped), and the kernel's report, whose
- * Stop and Start are in its notice (Retire alone is here).
+ * buttons for its state (`AgentActs`: Start and Retire for a stopped agent). Where a process runs,
+ * or may, with no thread a person can see, the acts are this feature's: a session lost to bb's
+ * Archive and an agent archived while its row still says it runs (Stop, then Retire; Start comes
+ * once it is stopped), and the kernel's report, whose Stop and Start are in its notice (Retire
+ * alone is here).
  */
 export function DetachedActs({ said, instance, held }: { said: Said | null; instance: string; held: boolean }) {
   if (said !== null && said.warning !== null) return <OutsideActs instance={instance} acts={["retire"]} held={held} />;
-  if (said !== null && said.kind === "lost-archived") return <OutsideActs instance={instance} acts={["stop", "retire"]} held={held} />;
+  if (said !== null && (said.kind === "lost-archived" || said.kind === "running-archived")) return <OutsideActs instance={instance} acts={["stop", "retire"]} held={held} />;
   return <AgentActs instance={instance} />;
 }
 

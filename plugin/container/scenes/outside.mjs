@@ -2,7 +2,7 @@
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
 // or an act in bb, at once on one roster; `outside-host`, the two rows that are neither (stopped
-// with the machine, idle with no harness loaded); and `outside-question`, the first roster while bb
+// with the machine, idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
 // holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
@@ -121,7 +121,33 @@ async function untilPending(threadId, seconds) {
 /** The question bb holds while the stage `outside-question` runs; undefined when none opened (its scenes then fail, and say so). */
 let question;
 
+/**
+ * The three agents whose thread bb has archived, side by side (the stage `outside-archived`): an
+ * operator's stop (on a provider that archives at stop, every stopped agent: nothing is wrong), a
+ * session OATS lost, and an agent whose row still says it runs. Their three threads are archived
+ * in bb for the length of the stage.
+ */
+const RUNS = "release-070-maintainer";
+const ARCHIVED_ROWS = {
+  "weekly-digest-helper": STOPPED,
+  "ranker-v3-probe": LOST,
+  [RUNS]: { running: true, runtimeState: "running", sessionEnd: null, open: null, waitingOnYou: null },
+};
+const ARCHIVED_THREE = ["thr_digest", "thr_research", "thr_release"];
+
 export const stages = {
+  "outside-archived": {
+    label: "OUTA",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      for (const id of ARCHIVED_THREE) bb("thread", "archive", threads.get(id).id);
+      fake({ status: { stdout: statusOf(statusWithRealIds, threads, ARCHIVED_ROWS) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === RUNS && agent.running === true) && snapshot.agents.some((agent) => agent.instance === "ranker-v3-probe" && agent.sessionEnd === "lost"));
+    },
+    leave: async ({ fake, threads }) => {
+      for (const id of ARCHIVED_THREE) bb("thread", "unarchive", threads.get(id).id);
+      fake();
+    },
+  },
   outside: { label: "OUT", enter, leave },
   "outside-host": {
     label: "OUTH",
@@ -478,4 +504,41 @@ export default [
       await page.shot(`outside-${viewport.name}-thread-outside-question`, { targets: true });
     },
   },
+  {
+    stage: "outside-archived",
+    name: "three agents whose thread bb has archived, side by side: an operator's stop is plain and keeps its soul; a session lost and an agent that still runs warn; each row opens its archived thread, whose own row says what to do",
+    run: async ({ page, at, viewport, threads, check }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const instances = ["weekly-digest-helper", "ranker-v3-probe", RUNS];
+      // bb's answer arrives after the roster: each row says where it leads once bb has answered.
+      const answered = await page.until(`${JSON.stringify(instances.map(threadless))}.every((selector) => document.querySelector(selector)?.getAttribute("data-opens") === "thread")`, 30);
+      const rows = JSON.parse(await page.evaluate(`JSON.stringify([${instances.map((instance) => rowOf(threadless(instance))).join(", ")}])`));
+      check(
+        Boolean(answered) &&
+          same(rows, [
+            { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
+            { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · archived in bb", state: "idle", tone: "warning", lines: 1 },
+          ]),
+        `${at} the three rows: "Stopped" and the soul, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
+        JSON.stringify(rows),
+      );
+      await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });
+
+      // The one that still runs: its row opens the archived thread, whose own row says the remedy, with Stop.
+      const release = threads.get("thr_release");
+      await page.evaluate(`document.querySelector(${JSON.stringify(threadless(RUNS))})?.click()`);
+      check(Boolean(await page.until(`location.pathname.endsWith("/threads/${release.id}")`, 15)), `${at} the row of an agent that still runs, its conversation archived, opens that thread in bb`, await page.evaluate("location.pathname"));
+      const RAN = /^Idle · Its conversation was archived in bb while it ran, and its process may still run\. Stop it, then start it from OATS\.$/;
+      const line = await lineOf(page, RAN);
+      check(
+        line !== null && line.kind === "running-archived" && line.state === "idle" && line.stateTone === "warning" && same(line.tones, ["warning"]) && RAN.test(line.words) && same(line.acts, ["Stop", "Retire"]) && line.warning === null,
+        `${at} it still runs, archived: its archived thread's own row says its state in the warning tone, that its process may still run, with Stop and Retire`,
+        line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line),
+      );
+      await page.shot(`outside-${viewport.name}-thread-running-archived`, { targets: true });
+    },
+  },
+
 ];

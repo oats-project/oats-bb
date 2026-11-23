@@ -124,7 +124,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
   roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
-- **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
+- **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the
   kernel's `outsideOats`, a session lost with its thread archived and with its thread deleted,
@@ -132,7 +132,10 @@ open, a confirmation before its act, in progress, done, refused and with another
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
   stop, stopped with the machine, idle with no harness loaded), asserting the state word and the
   tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
-  Start dialog, which says first that a message in the thread carries the conversation on. OUTQ:
+  Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
+  the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its
+  soul; a session lost, and an agent that still runs: the warning mark and "archived in bb"), and
+  the archived thread's own row of the one that still runs. OUTQ:
   the first roster while bb holds a question on the thread of the agent that runs outside OATS.
   What bb says of a thread is true in bb: the stage archives the threads it says
   are archived (and unarchives them when it ends), and the deleted one is an id bb has no thread

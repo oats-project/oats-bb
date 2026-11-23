@@ -89,9 +89,8 @@ bb settings ui reset sidebar.threadListProvider
 ## Stopping, starting, restarting and retiring an agent
 
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
-on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
-**Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
-the suffix), on the thread's status line, the OATS line under the thread's header (**Stop** for an
+on one press. They are in an agent's thread menu (**Stop (OATS)**, **Start (OATS)**, **Restart (OATS)**, **Retire (OATS)**, under a row that
+names the agent: the menu holds bb's own Stop beside them, hence the suffix), on the thread's status line, the OATS line under the thread's header (**Stop** for an
 agent that works or is idle, **Start** for one that does not run, **Restart** for one whose session
 ended; and **Answer**, which is no act of OATS's: it opens the instance panel at what the agent
 waits for), on a soul's page for an agent whose thread bb does not have (**Start**,
@@ -113,31 +112,40 @@ session that is there), whose key and menu entry open Start and never say "is al
 its dialog says that it begins a new conversation. bb does not run a plugin command's shortcut
 while its Terminal tab has the focus.
 
-- **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
-  PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
-  each session and of its uncommitted work, and what a person should see first. For a stop that is
-  said from facts, never from the plan's `midTask` (reported activity: true for every session that
-  runs, an idle one too): "<Name> has uncommitted work in its home." (the plan's own observation of
-  its work tree) and, for an agent on bb, "<Name> is working on a turn now." (bb's word on its
-  thread); an agent whose session runs with neither gets no line. Stop has the switch **Include child instances** (on: the kernel's default; off
-  reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
-  with a worktree of its own, with what would be lost said under it; without it the worktree is
-  kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
-  agent's thread (as the provider is today, a message sent in it starts the agent again without
-  OATS); Retire says that it cannot be undone and that the agent's conversation stays readable in
-  bb, archived. Where a retire kept the home (its cleanup did not finish), the result says that
-  the thread can be unarchived in bb and a message there starts the agent with no OATS around it.
-- **Start** and **Restart** first read the agent as the kernel has it now ("Checking
-  instance…"), and show its harness, machine and home. **Harness** starts on "Keep the recorded
-  harness" and passes nothing; one the bb session provider declares is passed as `--harness`. With
-  one harness declared there is no choice. **Model for this start** is blank for the recorded or
-  default model, or a model id. Neither act names a mode (the home's recorded choice stands), and
-  both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
-  Restart says that it stops the current harness first. An agent the kernel says is running is
-  not started again: the dialog says so and offers its thread.
-- **While the act runs** the dialog says so, and that it can be closed ("You can close this;
-  stopping continues."), with Close in Cancel's place. **Its result** is said in the same dialog,
-  in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept, at:" and
+- **Every dialog** says ONE consequence line before the act, under no heading, and holds ONE
+  **Details** (Joan's direction of 23 Nov 2026, by the text audit ruled on it): Stop "Archives its
+  thread."; Retire "This cannot be undone."; Start "Starts a new conversation." (an agent on tmux
+  whose session was lost: "Tries to continue its last conversation; else starts fresh."); Restart
+  "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
+  second and last line.
+- **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
+  was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set
+  apart, only when true. For a stop those are said from facts, never from the plan's `midTask`
+  (reported activity: true for every session that runs, an idle one too): "<Name> has uncommitted
+  work." (the plan's own observation of its work tree) and, for an agent on bb, "<Name> is
+  mid-turn." (bb's word on its thread); an agent whose session runs with neither gets no line.
+  Under Details: what is kept and deleted ("Nothing is deleted."; "Deletes its home.", "Keeps its
+  worktree, moved aside, on branch <b>."), who is left out, and the state of each session and of
+  its uncommitted work. Stop has the switch **Include child instances** (on: the kernel's default;
+  off reads the plan again for the agent alone). Retire has **Also delete the worktree** for an
+  agent with a worktree of its own: while it is on, what would be lost is the dialog's second line
+  ("Deletes 2 uncommitted changes too (a copy is saved)."), said once; without it the worktree is
+  kept, moved aside. Both dialogs open with the focus on Cancel. Stop's line is what the stop
+  means for the agent's thread: on a provider below oats-bb 0.4.0, which leaves the thread open,
+  it is the warning "A message in its thread starts it outside OATS.". Where a retire kept the
+  home (its cleanup did not finish), the result says first that a message in its thread would
+  start it outside OATS.
+- **Start** and **Restart** first read the agent as the kernel has it now ("Checking…"). Its
+  harness, machine and home are under Details, with what mode it runs in on bb: "Runs in bb's full
+  mode: no sandbox." (neither act names a mode: the home's recorded choice stands). **Harness**
+  starts on "Keep the recorded harness" and passes nothing; one the bb session provider declares
+  is passed as `--harness`. With one harness declared there is no choice. **Model** is blank for
+  the recorded or default model, or a model id ("Saved for later starts too."). A start that can
+  run says nothing more; an agent the kernel says is running is not started again: Start is off,
+  the dialog says why and offers its thread and **Refresh status**.
+- **While the act runs** the dialog says so in a word ("Stopping…"), with Close in Cancel's
+  place. **Its result** is said in the same dialog: its title ("3 sessions stopped."), the facts a
+  person needs later ("Worktree kept, at:" and
   the path on its own line); a start opens the agent's new thread behind it. When the dialog is
   gone by then (the person closed it, or opened another act's), the result reaches them through
   bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
@@ -146,8 +154,8 @@ while its Terminal tab has the focus.
   what the dialog sets first (a home that was kept); that toast stays until dismissed and has
   **Show result**, which opens the dialog again on that result, with its Details, its paths and
   its next step ("Check again" asks for the same apply: the plan and its key are kept).
-- **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
-  message under **Details**. What to do next is a button: **Review again** reads a new plan (also
+- **A refusal** is a person's words; the kernel's own message and its code are under the
+  result's **Details**. What to do next is a button: **Review again** reads a new plan (also
   when the plan changed under the confirmation: it comes back as it is now, with what changed
   said first, and cannot be confirmed until it was reviewed again), **Check again** asks
   for the answer to what was already sent (same revision, same key: an answer that was lost reads
@@ -815,7 +823,7 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 | failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help; under its one fold (Details) the kernel's message, or several texts in order (what to do, the code and the message) |
 | nothing to list; a read in flight | `Empty`, `Loading` | a sentence (or a title alone) and the act that fills it; "Reading…", announced |
 | content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |
-| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog (done, refused, or not confirmed, with the code after the words); while the kernel is asked, the line of the place that asks ("Checking instance…"); it shows no plan that is another agent's |
+| an act on an agent | `Confirm` | the act and the agent in the title, what the act does (the lifecycle dialogs: one consequence line under no heading, and their own one Details; a dialog that is not cut to one line: what will happen, what is kept), the button named for the act, the act in progress and its result in the same dialog (done, refused, or not confirmed); while the kernel is asked, the line of the place that asks ("Checking instance…"); it shows no plan that is another agent's |
 | what happened | `Result` | done, failed or not known, in words, with the code after and the next step |
 | what happened, once the person has moved on | `notify` | a result or a failure through bb's own toaster (`sonner`, which bb shims for plugins: a type-only devDependency at bb's version, no Toaster of the plugin's), with "Open <agent>"; a failure stays until dismissed; `notified()` is what a slot test reads |
 | a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
@@ -881,19 +889,17 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   sentences of a resume are this plugin's own (the Desktop resumes without a screen; WORDS.md).
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
-  `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
-  say so before the act ("Starts a new conversation. The current one stays readable in bb,
-  archived."), and the result opens the new thread. The sentence follows the thread the kernel's
-  row RECORDS for the agent, as bb has it: listed, or archived already (a provider that archives
-  at stop; bb lists no archived thread, so bb is asked for that one). An agent whose thread bb
-  no longer has keeps the Desktop's sentence. For an agent that was cut off the Start
+  `oats-package/capabilities/oats-bb/lib/launch.mjs`). The Start
+  dialog says so before the act, in its one line ("Starts a new conversation."; Restart says it
+  under Details), and the result opens the new thread. Where the last conversation stays is no
+  line of the dialog, so bb is not asked for it. For an agent that was cut off the Start
   and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
   harness: `running: false`, `sessionEnd: "lost"`; or a thread at rest with no harness loaded:
   `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
-  gets the line. The sentence under "What will happen" is decided once, when the check answers:
-  the launch archives the old thread while it runs.
+  gets the line. Whether it is drawn is decided once, when the check answers: the launch archives
+  the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
   (`--expect-decision`), so Spawn applies exactly the decision a preview answered, with the key:
   the one the form showed (its revision comes with the call), else the one the server reads right

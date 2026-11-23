@@ -11,7 +11,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Rules
 
-- **Stop an OATS agent with "Stop agent (OATS)"** in the thread's menu, or with **Stop** on the
+- **Stop an OATS agent with "Stop (OATS)"** in the thread's menu, or with **Stop** on the
   OATS status line under the thread's header (both open the same dialog), never with bb's own Stop
   (the composer's, which ends a turn), Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
   buttons leave OATS thinking the agent should run.
@@ -20,7 +20,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
   Answer on an agent that waits for you (it opens the instance panel at what it asks).
   The palette has "OATS: Stop agent…" (Alt+Shift+X), Restart (R), Start (S) and Retire (D), each
   rebound in bb's Keyboard settings. Each opens a dialog first and acts only on its own button.
-  Stop and Retire show the kernel's plan as what will happen and what is kept. A stopped agent's
+  Each dialog says one line on what the act does ("Archives its thread.", "This cannot be
+  undone.", "Starts a new conversation.", "Stops what it is doing now."), with the rest under its
+  Details. A stopped agent's
   thread stays open in bb: a message sent in it starts the agent again without OATS. Retire
   removes the agent's home and archives its thread, and cannot be undone; its worktree is kept,
   moved aside, unless "Also delete the worktree" is turned on; its branch stays. Start and Restart

@@ -92,6 +92,12 @@ export type RetireReceipt = {
   incomplete: string[];
   /** The branch an interrupted spawn left, which this retire deleted or kept. */
   compensation: { branch: string; deleted: boolean; reason: string | null } | null;
+  /**
+   * What the kernel and the capabilities' retire hooks warn of, in their own words (the receipt's
+   * `warnings`): a session the provider could only archive, a work tree that was not the agent's
+   * own, a stop the backend could not confirm. Empty when it has none to give.
+   */
+  warnings: string[];
 };
 /**
  * What a start answered. A start on a bb home engages no launch prompt (the real run's start
@@ -329,6 +335,7 @@ const retireReceipt = z.looseObject({
   childrenStopped: z.array(stoppedRow).nullish(),
   spawnCompensation: z.looseObject({ branch: text, branchDeleted: z.boolean().nullish(), reason: text }).nullish(),
   capabilityMeta: z.looseObject({ "oats.bb": z.looseObject({ archived: z.array(z.unknown()).nullish() }).nullish() }).nullish(),
+  warnings: z.array(z.unknown()).nullish(),
 });
 
 /** A retire receipt that says its cleanup is incomplete: the one document `oats retire` prints with exit 1. */
@@ -367,6 +374,7 @@ export function parseRetireApply(document: unknown): Result<RetireReceipt> {
     children: stoppedRows(receipt.childrenStopped),
     incomplete: receipt.rollbackIncomplete ?? [],
     compensation: compensation?.branch ? { branch: compensation.branch, deleted: compensation.branchDeleted === true, reason: compensation.reason ?? null } : null,
+    warnings: (receipt.warnings ?? []).filter((warning): warning is string => typeof warning === "string" && warning.trim() !== ""),
   });
 }
 

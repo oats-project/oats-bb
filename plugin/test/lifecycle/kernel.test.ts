@@ -279,6 +279,7 @@ describe("retire", () => {
     children: [{ instance: "digest-links-helper", ok: true, alreadyIdle: true, code: null, stillRunning: null, detail: null }],
     incomplete: [],
     compensation: null,
+    warnings: [], // the recorded receipt has none
   };
   it("applies the plan and reads the receipt: the first answer is the receipt itself, a replay is an envelope", async () => {
     const apply = { instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" };
@@ -322,6 +323,18 @@ describe("retire", () => {
     expect(replayed.ok && applied.ok && replayed.value).toEqual(applied.ok && { ...applied.value, replayed: true });
   });
 
+  it("reads the receipt's warnings, the kernel's and its hooks' own lines; a receipt with none has none", async () => {
+    // The recorded receipts carry no `warnings` (the kernel prints the key only with something to say).
+    const printed = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-apply.json"), "utf8"));
+    expect("warnings" in printed).toBe(false);
+    expect(receipt.warnings).toEqual([]);
+    // Shaped from the kernel's source (lib/core.mjs: `warnings` of the retire's result): strings, in its order.
+    const warnings = ["the bb thread of weekly-digest-helper could only be archived: its harness did not stop", "retire hook oats.aweb: the alias is held"];
+    await fake.behave({ retire: { stdout: JSON.stringify({ ...printed, warnings: [...warnings, "", 7, null] }) } });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
+    expect(applied.ok && applied.value.warnings).toEqual(warnings);
+  });
+
   it("does not read a home as kept from a receipt that does not say: a retire that ran answers `removedDir`, or the answer cannot be read", async () => {
     await fake.behave({ retire: { stdout: JSON.stringify({ retired: "weekly-digest-helper", retention: { worktree: "retained", movedTo: "/abs/aside" } }) } });
     const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
@@ -339,6 +352,13 @@ describe("retire", () => {
     await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply.json", exit: 1 } });
     const applied = await oats.stopApply({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
     expect(applied.ok === false && applied.error.code).toBe(codes.failed);
+  });
+
+  it("answers the refusal of a retire asked while a process works in the home, as the pi run recorded it (exit 1), unchanged", async () => {
+    const printed = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-pi-refused.json"), "utf8"));
+    await fake.behave({ retire: { file: "lifecycle/retire-pi-refused.json", exit: 1 } });
+    const applied = await oats.retireApply({ instance: "pi-form-developer", revision: "c87783b6406fc307bf5353b9", key: "retire-1f2e3d4c5b6a" });
+    expect(applied).toEqual({ ok: false, error: { code: "E_RUNTIME_QUIESCE_FAILED", message: printed.error.message } });
   });
 
   it("answers the kernel's refusal unchanged", async () => {

@@ -20,8 +20,10 @@ export type Notification = {
   title: string;
   /** More of it, each a line under the title. */
   lines?: readonly string[];
-  /** The next step, as a button: "Open <agent>". */
+  /** The next step, as a button: "Open <agent>", "Show result". */
   open?: { label: string; run: () => void };
+  /** Stays until dismissed whatever its tone: it is the only way to something a person cannot read elsewhere (a result with paths in it). */
+  stays?: boolean;
 };
 
 /** What was notified in this app window, in order, as it was drawn (through the display filter): for a slot test. */
@@ -32,19 +34,20 @@ onWindowReset(() => {
 export const notified = (): readonly Notification[] => sent;
 
 /** Tell a result or a failure through bb's toaster. Text of OATS or an agent goes through the display filter here. */
-export function notify({ tone, title, lines = [], open }: Notification): void {
+export function notify({ tone, title, lines = [], open, stays = false }: Notification): void {
   const drawn: Notification = {
     tone,
     title: shown(title),
     lines: lines.map((line) => shown(line)).filter((line) => line !== ""),
     ...(open === undefined ? {} : { open: { label: shown(open.label), run: open.run } }),
+    ...(stays ? { stays } : {}),
   };
   sent.push(drawn);
   const options = {
     ...(drawn.lines!.length === 0 ? {} : { description: drawn.lines!.join("\n") }),
     ...(drawn.open === undefined ? {} : { action: { label: drawn.open.label, onClick: () => drawn.open!.run() } }),
     // A failure, and a result that is not confirmed, stay until dismissed (the standard): neither is lost to a timer.
-    ...(tone === "done" || tone === "hint" ? {} : { duration: Number.POSITIVE_INFINITY }),
+    ...((tone === "done" || tone === "hint") && !stays ? {} : { duration: Number.POSITIVE_INFINITY }),
   };
   if (tone === "failed") toast.error(drawn.title, options);
   else if (tone === "unknown") toast.warning(drawn.title, options);

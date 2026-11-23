@@ -26,6 +26,7 @@ const PHASES: Record<string, Phase> = {
   },
   ready: { kind: "ready" },
   running: { kind: "running", doing: "Retiring…" },
+  leaving: { kind: "running", doing: "Retiring…", leave: "You can close this; retiring continues." },
   done: { kind: "done", title: `${NAME} was retired.`, lines: ["Its work tree is kept, moved out of the home."] },
   failed: {
     kind: "failed",
@@ -211,6 +212,9 @@ export function PatternBook() {
           </Button>
           <Button data-testid="oats-patterns-open-checking" onClick={() => setDialog({ destructive: false, phase: "checking" })}>
             Reading, in the place's own words
+          </Button>
+          <Button data-testid="oats-patterns-open-leaving" onClick={() => setDialog({ destructive: true, phase: "leaving" })}>
+            Running, and can be left
           </Button>
           <Button data-testid="oats-patterns-open-unknown" onClick={() => setDialog({ destructive: true, phase: "unknown" })}>
             A result that is not confirmed

@@ -13,6 +13,10 @@
 #   REQUIRE_REAL_FLOOR=0       let the run lower the provider's floor for the kernel under test,
 #                              inside the container (a trial); by default such a run fails
 #   UPDATE_FIXTURES=1          copy the recorded answers over plugin/test/fixtures/ afterwards
+#   REAL_PI=1                  the pi run instead (pi/README.md; `ci.sh pi`): the same container and
+#                              setup and the same kernel, with pi, its OATS bridge and a mock model
+#                              for it, and pi/scenario.mjs in place of scenario.mjs. Its artefacts
+#                              go to real/pi/out/; it records no fixture.
 #   KEEP=1, NAME, IMAGE, DOCKER_RUN_ARGS   as container/ci.sh
 #
 # The provider is this checkout's own (oats-package/, as committed at HEAD). This checkout (and the
@@ -24,6 +28,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
 REPOSITORY=$(dirname "$PLUGIN")
 # Unset: the release the run pins (the plugin's floor). Set and empty: a tree from KERNEL_REPO.
+# The pi run (REAL_PI=1) is on the same kernel: one pin for both.
+REAL_PI=${REAL_PI:-0}
+[ "$REAL_PI" != 1 ] || [ "${UPDATE_FIXTURES:-0}" != 1 ] || { echo "real: the pi run records no fixture: UPDATE_FIXTURES is the main run's" >&2; exit 2; }
 KERNEL_NPM=${KERNEL_NPM-0.70.5}
 if [ "$KERNEL_NPM" = 0.70.5 ]; then
   KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==}
@@ -33,6 +40,7 @@ REQUIRE_REAL_FLOOR=${REQUIRE_REAL_FLOOR:-1}
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 NAME=${NAME:-bb-plugin-oats-real-$$}
 OUT=$HERE/out
+[ "$REAL_PI" != 1 ] || OUT=$HERE/pi/out
 # Whose artefacts a directory holds. The first to run in a checkout owns `out/`; a run by another
 # (a reviewer attached to an author's tree: another OATS instance, or ARTEFACTS_OWNER) leaves it as
 # it is and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them.
@@ -78,14 +86,21 @@ trap cleanup EXIT
 
 BB_VERSION=
 [ ! -f "$PLUGIN/../bb-version" ] || BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -w /home/node/plugin "$NAME" "$@"; }
+# OATS_PI_INTEGRITY and PI_VERSION (the pi run's, pi/README.md) are passed by name: only when set
+# here, so that one left unset keeps pi/setup.sh's default.
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e "KERNEL_NPM=$KERNEL_NPM" -e "KERNEL_INTEGRITY=$KERNEL_INTEGRITY" -e "REQUIRE_REAL_FLOOR=$REQUIRE_REAL_FLOOR" -e "REAL_PI=$REAL_PI" -e OATS_PI_INTEGRITY -e PI_VERSION -w /home/node/plugin "$NAME" "$@"; }
 run mkdir -p /home/node/real/kernel /home/node/real/provider /home/node/out/real
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 [ -n "$KERNEL_NPM" ] || git -C "$KERNEL_REPO" archive "$KERNEL_OID" | docker exec -i -u node "$NAME" tar -x -C /home/node/real/kernel
 git -C "$REPOSITORY" archive HEAD oats-package | docker exec -i -u node "$NAME" tar -x -C /home/node/real/provider
 printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docker exec -i -u node "$NAME" sh -c 'cat > /home/node/real/refs.json'
 
 run bash container/real/setup.sh
+# The pi run records no fixture: its own scenario, and nothing more.
+if [ "$REAL_PI" = 1 ]; then
+  run node container/real/pi/scenario.mjs
+  exit
+fi
 run node container/real/scenario.mjs
 if [ "${UPDATE_FIXTURES:-0}" = 1 ]; then
   docker cp "$NAME:/home/node/out/real/fixtures/." "$PLUGIN/test/fixtures/" > /dev/null

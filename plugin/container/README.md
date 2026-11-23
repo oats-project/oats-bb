@@ -124,8 +124,30 @@ open, a confirmation before its act, in progress, done, refused and with another
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
   ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "Its session
-  ended", Restart); and the agent whose bb thread is gone, which stays in the roster and says so.
+  ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
+  roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
+- **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
+  "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
+  own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the
+  kernel's `outsideOats`, a session lost with its thread archived and with its thread deleted,
+  failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
+  roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
+  stop, stopped with the machine, idle with no harness loaded), asserting the state word and the
+  tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
+  Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
+  the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its
+  soul; a session lost, and an agent that still runs: the warning mark and "archived in bb"), and
+  the archived thread's own row of the one that still runs. OUTQ:
+  the first roster while bb holds a question on the thread of the agent that runs outside OATS.
+  What bb says of a thread is true in bb: the stage archives the threads it says
+  are archived (and unarchives them when it ends), and the deleted one is an id bb has no thread
+  of. bb's question is a real one (the mock model asks it, once, when OUTQ is entered), answered
+  when that stage ends. The scenes also assert: every row's state word is one of the set; a row
+  with a reason is two lines, never three; how soon the kernel's report is on the thread's line
+  (3 s at most); what bb 0.50.1 itself shows of an archived thread opened from its row (the
+  conversation, no composer, "Thread is archived" and its own Unarchive); and that the agent's
+  page keeps its header small, with this feature's block first under the tabs.
 
 **The theme** is bb's own appearance choice, not the browser's colour scheme. bb 0.50.1 keeps it in
 the browser's storage under the key `bb.theme` (`light`, `dark` or `system`: what its Settings,
@@ -143,7 +165,7 @@ colours). It covers every rendered element with text of its own inside the plugi
 cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
-placeholder of an empty one), and the marks (a state's in each of its six states, a toned dot, a row's mark). A failing scene
+placeholder of an empty one), and the marks (a state's in each of its seven states, a toned dot, a row's mark). A failing scene
 prints every distinct row that fails. What it checks is
 what is in the page when the screenshot is taken, on screen or not: at 390 wide bb keeps its
 closed drawer mounted in some loads and not in others, so the sidebar's texts and dots are counted

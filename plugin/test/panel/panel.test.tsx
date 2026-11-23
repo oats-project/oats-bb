@@ -608,6 +608,23 @@ test("the fixed tab keeps the agent's panel when the roster cannot be read again
   expect(slot.queryByTestId("oats-home-tab")).toBeNull();
 });
 
+// Whether an agent works is what bb says of its thread: a panel that opens from the agent its caller
+// remembered, while the roster cannot be read, still has bb's row of the thread to read it from.
+test("a panel that opens while the roster cannot be read says Working for an agent whose bb thread has a turn running", async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const known = { ...panelAgents().find((agent) => agent.instance === CHILD)!, waiting: null, running: true };
+  const slot = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, {
+    rpc: handlers({
+      snapshot: () => ({ ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
+      panelInstance: () => {
+        throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+      },
+    }),
+    sidebarThreads: panelThreads([known]), // bb lists the thread, with a turn running on it
+  });
+  await waitFor(() => expect(stateOf(slot)).toContain("Working"));
+});
+
 test("a panel that opens while the roster cannot be read shows the agent its caller last read, and why nothing more", async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const known = panelAgents().find((agent) => agent.instance === CHILD)!;

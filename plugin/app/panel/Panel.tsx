@@ -160,8 +160,11 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   const state = <ReadState read={read} now={now} failure={failure} />;
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
-  // bb thread has none to give it.
-  const status = agentStatus(agent, node?.thread ?? null, now);
+  // bb thread has none to give it. Where the roster is not ready and the panel shows the agent its
+  // caller remembered, there is no node: bb's own row of the thread is given (bb lists its threads
+  // whatever OATS answers), since whether the agent works is what bb says of that thread.
+  const listed = agent.threadId === null ? undefined : oats.threadById.get(agent.threadId);
+  const status = agentStatus(agent, node?.thread ?? (listed !== undefined && !listed.isArchived && !listed.isHidden ? listed : null), now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (

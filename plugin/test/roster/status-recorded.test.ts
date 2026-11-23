@@ -113,10 +113,18 @@ describe("a real kernel's status, read by the parser", () => {
 });
 
 describe("a real kernel's status, joined to bb's threads by the model", () => {
-  /** The roster of a recorded state, with bb's threads: the ones the kernel's row calls running had a turn running in bb. */
+  /**
+   * The roster of a recorded state, with bb's threads. Which threads bb had a turn running on is
+   * part of the state that was recorded, named here by state and instance, never read from the
+   * row's `running` (a provider answers true for an idle agent whose harness is loaded).
+   */
+  const ACTIVE: Partial<Record<keyof Recorded, readonly string[]>> = {
+    working: ["flaky-ci-2-developer"],
+    parentWithTwoChildren: ["redesign-ui-lead", "desktop-mockups-developer"],
+  };
   const drawn = (state: keyof Recorded) => {
     const agents = agentsOf(state);
-    return view(agents, agents.map((agent) => threadOf(agent, agent.running === true ? "active" : "idle")));
+    return view(agents, agents.map((agent) => threadOf(agent, ACTIVE[state]?.includes(agent.instance) ? "active" : "idle")));
   };
 
   it.each([

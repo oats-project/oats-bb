@@ -186,11 +186,11 @@ describe("A2 state(): first match wins", () => {
       for (const status of ["active", "starting", "stopping"]) expect(on(status, running), `${status}, running ${running}`).toBe("working");
       // At rest: idle, or accepted and not started ("pending"), with nothing in line; bb's failed turn; a status of a later bb.
       for (const status of ["idle", "pending", "error", "hibernating", ""]) expect(on(status, running), `${status}, running ${running}`).toBe("idle");
-      // At rest with a turn bb holds in line: bb starts it by itself, so the agent works.
-      for (const status of ["idle", "pending"]) expect(on(status, running, "waiting"), `${status} with a turn in line, running ${running}`).toBe("working");
-      // A turn in line that failed is not one bb will start; and it does not make a failed turn's thread work.
-      expect(on("idle", running, "failed")).toBe("idle");
-      expect(on("error", running, "waiting")).toBe("idle");
+      // At rest with work bb holds in line: bb starts it by itself, so the agent works. The provider's own
+      // cells (lib/threads.mjs): idle, pending and error are at rest; "waiting" and "failed" are both "in line".
+      for (const status of ["idle", "pending", "error"]) for (const queuedWork of ["waiting", "failed"]) expect(on(status, running, queuedWork), `${status} with ${queuedWork} in line, running ${running}`).toBe("working");
+      // A status the plugin does not know is idle, work in line or not.
+      expect(on("hibernating", running, "waiting")).toBe("idle");
     }
     // The kernel's "not running" is stopped, whatever bb's status says of the thread.
     expect(on("active", false)).toBe("stopped");

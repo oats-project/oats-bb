@@ -20,21 +20,22 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 }
 
 /**
- * Whether bb says the agent on a thread WORKS, as the bb session provider itself reads it
- * (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`: TURN_IN_PROGRESS, SETTLED),
- * so that the plugin and the provider agree. bb's statuses (@get-bb/plugin-sdk `threadStatusSchema`,
- * 0.6.157: active, error, idle, pending, starting, stopping):
+ * Whether bb says the agent on a thread WORKS, read as the bb session provider itself reads a
+ * thread (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`, `isSettled`,
+ * `hasQueuedWork`), cell for cell, so that the plugin and the provider agree. bb's statuses
+ * (@get-bb/plugin-sdk `threadStatusSchema`, 0.6.157: active, error, idle, pending, starting,
+ * stopping) and its `queuedWork` (none, waiting, failed):
  * - a turn runs, is starting or is stopping ("active", "starting", "stopping"): it works;
- * - "pending" or "idle" with a turn bb holds in line (`queuedWork: "waiting"`: bb starts it by
- *   itself): it works; with nothing in line: idle;
- * - "error" (bb's last turn failed; the session is there, at rest): idle. bb shows the failure in
- *   the thread; where the harness is gone too, the kernel's row says so and the stopped rule takes it;
- * - a status this plugin does not know: idle, as bb's SDK says to treat one.
+ * - at rest ("pending", "idle", and "error": bb's last turn failed, the session is there) with
+ *   work bb holds in line (`queuedWork` other than "none": the provider counts "failed" too): it
+ *   works, the turn starts by itself; with nothing in line: idle;
+ * - a status this plugin does not know: idle, as bb's SDK says to treat one (the provider refuses
+ *   such a thread; the plugin has to draw the row).
  */
 const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
-const SETTLED: ReadonlySet<string> = new Set(["pending", "idle"]);
+const AT_REST: ReadonlySet<string> = new Set(["pending", "idle", "error"]);
 export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): boolean =>
-  TURN_IN_PROGRESS.has(thread.status) || (SETTLED.has(thread.status) && thread.queuedWork === "waiting");
+  TURN_IN_PROGRESS.has(thread.status) || (AT_REST.has(thread.status) && typeof thread.queuedWork === "string" && thread.queuedWork !== "none");
 
 /**
  * The state of one agent on its thread. First match wins.

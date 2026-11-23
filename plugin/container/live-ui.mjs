@@ -397,22 +397,26 @@ const threads = await healthyThreads();
 // waited for until bb calls it active. The hold is lifted when the run ends.
 const WORK_HOLD_FILE = join(homedir(), "mock", "hold", "live-ui-working");
 const WORKING_THREADS = ["thr_redesign", "thr_mockups"];
-mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
-writeFileSync(WORK_HOLD_FILE, "");
-for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, "carry on MOCK-HOLD:live-ui-working");
-{
-  const deadline = Date.now() + 90_000;
-  let seen = [];
-  for (;;) {
-    seen = WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
-    if (seen.every((line) => line.endsWith(": active")) || Date.now() > deadline) break;
-    await sleep(1000);
-  }
-  check(seen.every((line) => line.endsWith(": active")), "bb has a turn running on the threads of the two agents that work, for the whole run", seen.join(" | "));
-}
-const { scenes, stages } = await loadScenes();
-const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
+let browser;
+let scenes;
+let stages;
 try {
+  // (Inside the `try` whose `finally` lifts the hold: whatever throws from here on, no turn stays held.)
+  mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
+  writeFileSync(WORK_HOLD_FILE, "");
+  for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, "carry on MOCK-HOLD:live-ui-working");
+  {
+    const deadline = Date.now() + 90_000;
+    let seen = [];
+    for (;;) {
+      seen = WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
+      if (seen.every((line) => line.endsWith(": active")) || Date.now() > deadline) break;
+      await sleep(1000);
+    }
+    check(seen.every((line) => line.endsWith(": active")), "bb has a turn running on the threads of the two agents that work, for the whole run", seen.join(" | "));
+  }
+  ({ scenes, stages } = await loadScenes());
+  browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
@@ -440,8 +444,8 @@ try {
   const same = sameImages(OUT);
   check(same.length === 0, "no two images of this run are the same image", same.map((names) => names.join(" = ")).join(" | "));
 } finally {
-  await browser.close();
-  rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now
+  rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now, whatever was thrown
+  await browser?.close();
   fake(); // the fixtures as they are, for the checks that follow in live.sh
   try {
     rpc("refresh");

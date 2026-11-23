@@ -567,8 +567,10 @@ export const modelHelp = (recorded: string | null): string =>
  * give: before the press they are conditional; after it they say what the kernel answered.
  */
 export const RESUME = {
-  tries: "Start tries to bring it back in its last conversation. If that is gone, it starts fresh on its task.",
-  same: "It comes back with the harness and model it had.",
+  /** Final: the kernel has no preview of a resume for one agent, so nothing more is promised; the result says which happened. */
+  tries: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
+  /** Beside it for an agent whose recorded harness is claude: its resume-cost question, which nothing answers for the person. */
+  claudeAsks: "Claude may first ask, in its terminal, how to load a long conversation.",
   /** The dialog's one choice for such an agent, off by default: the plain start, on purpose. */
   freshChoice: "Start fresh on its task instead",
   /** Under the choice while it is on. */

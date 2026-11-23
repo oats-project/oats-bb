@@ -595,7 +595,7 @@ export default [
   },
   {
     stage: "lifecycle",
-    name: "Start, of an agent on tmux whose session was lost: it tries to bring it back in its last conversation; back, started fresh, the harness waiting; the plain start on purpose",
+    name: "Start, of an agent on tmux whose session was lost: it tries to continue its last conversation; back, started fresh, the harness waiting; the plain start on purpose",
     run: async ({ page, at, viewport, check }) => {
       const TMUX = "kernel-fix-developer";
       const shot = (name) => dialogShot({ page, at, viewport, check }, "start", name);
@@ -618,13 +618,12 @@ export default [
         const fields = await page.evaluate(`JSON.stringify({ harness: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}) !== null, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}) !== null, fresh: document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)})?.getAttribute("aria-checked") ?? null })`);
         check(
           before.title === "Start Kernel fix developer" &&
-            before.body.includes("Start tries to bring it back in its last conversation. If that is gone, it starts fresh on its task.") &&
-            before.body.includes("It comes back with the harness and model it had.") &&
+            before.body.includes("Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.") &&
             !before.body.includes("full mode") &&
             !before.body.includes("stays readable in bb") &&
             before.act === "Start" &&
             before.off === false,
-          `${at} Start of a lost tmux agent says that it tries to bring it back, and that it comes back with what it had; nothing of bb's full mode or thread`,
+          `${at} Start of a lost tmux agent says that it tries to continue its last conversation, and that it says so if it starts fresh; nothing of bb's full mode or thread`,
           JSON.stringify(before),
         );
         check(fields === JSON.stringify({ harness: false, model: false, fresh: "false" }), `${at} no harness and no model are offered; the plain start is a choice that is off`, fields);
@@ -669,7 +668,7 @@ export default [
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)}).click()`);
         await page.until(`document.querySelector(${JSON.stringify(testId("oats-start-fresh-warning"))}) !== null`, 10);
         const chosen = await dialog(page);
-        check(chosen.body.includes("This starts a new conversation on its task. Its last conversation is not brought back.") && chosen.body.includes("This starts a new conversation using the saved briefing and state.") && !chosen.body.includes("tries to bring it back"), `${at} the plain start, chosen on purpose, says what it loses and what it does`, JSON.stringify(chosen));
+        check(chosen.body.includes("This starts a new conversation on its task. Its last conversation is not brought back.") && chosen.body.includes("This starts a new conversation using the saved briefing and state.") && !chosen.body.includes("tries to continue its last conversation"), `${at} the plain start, chosen on purpose, says what it loses and what it does`, JSON.stringify(chosen));
         await shot("resume-fresh-choice");
         await page.evaluate(click("oats-confirm-cancel"));
         await page.until(closed, 10);

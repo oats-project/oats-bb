@@ -771,8 +771,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
-      // On tmux there is no full mode of bb's to speak of; a resume says what it tries, and what it comes back with.
-      happens={known === null || state.phase === "settled" ? [] : !onBb ? (resumes ? [RESUME.tries, RESUME.same] : verb === "restart" ? [START.restartWarning, START.fresh] : [START.fresh]) : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      // On tmux there is no full mode of bb's to speak of; a resume says what it tries, and no more: the result says which happened.
+      happens={known === null || state.phase === "settled" ? [] : !onBb ? (resumes ? [RESUME.tries, ...(known.harness === "claude" ? [RESUME.claudeAsks] : [])] : verb === "restart" ? [START.restartWarning, START.fresh] : [START.fresh]) : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
       kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}

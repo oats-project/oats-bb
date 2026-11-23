@@ -1796,13 +1796,13 @@ async function tmuxStart(over: Partial<Handlers>) {
   return slot;
 }
 
-test("Start of a tmux agent whose session was lost says that it tries to bring it back, offers no harness and no model, and sends a resume; the result says what the kernel answered and opens no thread", async () => {
+test("Start of a tmux agent whose session was lost says that it tries to continue its last conversation, offers no harness and no model, and sends a resume; the result says what the kernel answered and opens no thread", async () => {
   const slot = await tmuxStart({ startCheck: () => lostCheck(), start: () => resumedAs({ resumed: true, reason: null, waiting: null }) });
   const dialog = slot.getByRole("dialog");
   expect(dialog.querySelector("h2")!.textContent).toBe("Start Kernel fix developer");
   expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual([
-    "Start tries to bring it back in its last conversation. If that is gone, it starts fresh on its task.",
-    "It comes back with the harness and model it had.",
+    "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
+    "Claude may first ask, in its terminal, how to load a long conversation.", // its recorded harness is claude
   ]);
   // Nothing of bb's: no full mode, no new thread, no harness or model to choose.
   expect(dialog.textContent).not.toContain("full mode");
@@ -1919,7 +1919,7 @@ test("a resume is for tmux alone: a lost agent on bb keeps its dialog (a new thr
   resetApp();
   const stopped = await tmuxStart({ startCheck: () => lostCheck({ sessionEnd: "stopped", runtimeState: "stopped" }), start: () => ({ threadId: null, instance: TMUX, harness: "claude", model: null, warnings: [], resume: null }) });
   expect(stopped.queryByTestId("oats-start-fresh-choice")).toBeNull();
-  expect(stopped.getByTestId("oats-confirm").textContent).not.toContain("bring it back");
+  expect(stopped.getByTestId("oats-confirm").textContent).not.toContain("continue its last conversation");
   fireEvent.click(button(stopped, "oats-confirm-act"));
   await phase(stopped, "done");
   expect(calls(stopped, "start").map((call) => call.input)).toEqual([{ instance: TMUX }]);
@@ -1960,4 +1960,14 @@ test("Restart of an agent on tmux is the plain restart: no harness or model, no 
   expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer restarted.");
   expect(slot.getByTestId("oats-start-where").textContent).toContain("Runs in tmux on falcon. Attach from a terminal:");
   expect(slot.inspection.navigateCalls).toEqual([]);
+});
+
+test("the line on Claude's question before a resume is for an agent whose recorded harness is claude alone", async () => {
+  const CLAUDE = "Claude may first ask, in its terminal, how to load a long conversation.";
+  for (const [harness, says] of [["claude", true], ["pi", false], ["codex", false], [null, false]] as const) {
+    const slot = await tmuxStart({ startCheck: () => lostCheck({ harness }) });
+    expect(slot.getByTestId("oats-confirm").textContent!.includes(CLAUDE), String(harness)).toBe(says);
+    expect(slot.getByTestId("oats-confirm").textContent).toContain("Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.");
+    resetApp();
+  }
 });

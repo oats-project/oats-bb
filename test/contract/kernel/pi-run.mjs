@@ -12,6 +12,9 @@
 //   input` to it is the kernel's resume: counted once against the home's resume cap, and
 //   then the provider's tell, on which bb starts the harness again in the same thread for
 //   one turn. For pi and for Claude.
+// - that a pi spawn whose model bb's pi would not resolve is refused by the kernel's spawn
+//   and undone whole (no home, no instance, no bb project, no thread), and that a bare model
+//   id one pi provider serves launches (the pi model check).
 //
 // Not part of `npm test` or `npm run test:contract`: it needs the network (the
 // oats.framework package the workspace pins).
@@ -75,6 +78,36 @@ before(async () => {
   await sh("echo 'PI-KERNEL-RUN say hi.' > task.md");
 }, { timeout: 1_500_000 });
 after(() => box.stop());
+
+// The pi model check under the kernel (lib/pi-model.mjs). The kernel of this image hands
+// the provider's check no model, so the refusal is the launch's: the kernel takes a
+// launch refused with an E_BACKEND_ code for a spawn that started nothing, and undoes it.
+test("a pi spawn whose model bb's pi does not have is refused by the kernel's own spawn, and leaves nothing: no home, no instance, no bb project, no thread", async () => {
+  const holds = async () => ({ projects: (await bbJson("project list")).map((project) => project.id).sort(), threads: (await bbJson("thread list --include-hidden")).map((thread) => thread.id).sort() });
+  const before = await holds();
+  for (const [instance, model, sentence] of [
+    ["pi-model-none", "claude-fable-9", 'pi has no model "claude-fable-9"'],
+    ["pi-model-twin", "twin", 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin'],
+  ]) {
+    const refused = JSON.parse(await oats(`spawn piworker --name ${instance} --backend bb --model ${model} --task-file ~/task.md --json`, { ok: false }));
+    assert.equal(refused.ok, false, JSON.stringify(refused));
+    assert.equal(refused.error.code, "E_BACKEND_LAUNCH_ARG", JSON.stringify(refused));
+    assert.ok(refused.error.message.includes(sentence), refused.error.message);
+    assert.equal((await sh(`ls -d ${homeOf("piworker", instance)} 2>/dev/null || true`)).trim(), "", "the home is gone");
+    assert.ok(!(await oats("status --json")).includes(instance), "the kernel lists no such instance");
+  }
+  assert.deepEqual(await holds(), before, "bb holds no new project and no new thread");
+});
+
+test("a pi spawn on a bare model id that one pi provider serves, as a soul declares it (claude-fable-5.1), launches and runs its first turn", async () => {
+  const since = (await HARNESS.pi.turns()).length;
+  const spawned = await oats("spawn piworker --name pi-model-bare --backend bb --model claude-fable-5.1 --task-file ~/task.md 2>&1");
+  assert.match(spawned, /Spawned pi-model-bare .* bb session/, spawned);
+  const { threadId } = (await json(oats(`session inspect --home ${homeOf("piworker", "pi-model-bare")} --json`))).result.session.endpoint;
+  await waitFor("the first turn", async () => (await HARNESS.pi.turns()).length > since, { timeoutMs: 120_000 });
+  await idle(threadId);
+  await oats("retire pi-model-bare --force 2>&1");
+});
 
 for (const harness of ["pi", "claude"]) {
   const { soul, providerId, failFile, turns, opened, sawSkill } = HARNESS[harness];

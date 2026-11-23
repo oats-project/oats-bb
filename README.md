@@ -570,6 +570,11 @@ cases where bb lists fewer models than its pi resolves (seen at bb-app 0.50.1, p
   a thread still starts on any other model pi has. A model that is not listed is then
   not checked. Two listed models with the id are still refused.
 
+One edge is left as it was: a bare id that bb lists once and that a second, held-back
+model also has (a dated one, or one outside `enabledModels`) passes here, and bb refuses
+it when the thread starts ("Ambiguous Pi model"). Name the one you want,
+`<provider>/<id>`.
+
 Then an id bb's pi cannot resolve ends as before: a thread that fails as it starts.
 
 The check of a planned launch (the spawn's preview, and the check before every launch)

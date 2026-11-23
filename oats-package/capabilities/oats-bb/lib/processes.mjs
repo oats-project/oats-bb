@@ -37,7 +37,9 @@
 // and did not detach is a child of a shell under the harness. The worker's own command
 // line and environment do not name the thread: the thread is named by the harness's
 // environment, and the worker by its file name and its provider. Those are names of
-// bb-app's own layout, not of its CLI: a bb that moves them reads as "no harness".
+// bb-app's own layout, not of its CLI. A bb that moves them is another version than the
+// provider's pin: there a loaded harness is one "bb's known runner did not start", which
+// reads null (it cannot be told), never true (UNRECOGNISED, below; lib/inspect.mjs).
 import { readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fail } from "./errors.mjs";

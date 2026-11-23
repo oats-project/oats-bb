@@ -144,10 +144,12 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     container does), its shutdown stops each bb home with the host and its sweep resumes
     them, within about a minute of its start. Where it doesn't (a laptop may not), after a
     reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
-    input, a message or a wake, starts its harness again on the same conversation. (Seen
-    with bb restarted under loaded harnesses, the nearest stand-in for a reboot, for pi and
-    for Claude: bb still says `idle` of the thread, and the provider answers `present: true,
-    running: false`.)
+    input, a message or a wake, starts its harness again on the same conversation. On a
+    host without `oats host run`, an agent cut off mid-turn by a reboot does not carry on by
+    itself: it waits for its next message or wake, so send it one. (Seen with a bb-app
+    restart standing in for a reboot, bb-app 0.50.1; not yet with a real reboot.) To carry
+    on, send it a message. Don't press Start unless you want a fresh conversation: a Start is
+    a new thread and leaves the cut conversation behind.
   - The window: a host-stopped home's thread is live and unarchived from the host's
     shutdown until the first resume sweep after the host is back (`oats host run` runs it
     at its start and each minute; the clients when they open): the time the host is off,
@@ -373,14 +375,17 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     bb's version is read as readiness reads it (`bb --version`), once per `inspect` or
     `inspectMany` at most, and only when such a process is there. It decides that one
     answer and refuses nothing: an inspect is answered at any bb version. So a home
-    stopped with the host is never read as running for what its agent left behind, and is
-    resumed.
+    stopped with the host is never read as running for what its agent left behind (false
+    at the pinned bb, null at another), and is resumed: the kernel takes such a home for
+    one that came back on `running: true` alone.
   - **This rests on bb-app's own layout, not on its CLI** (seen at 0.50.1, pinned by
     `test/contract`): bb's host daemon runs one `node …/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs
     <artifact> provider-<id> <data dir>` per thread, with the thread's harness as its
     direct child; neither that process's command line nor its environment names the
     thread (the harness's environment does). A bb that moves the file or the word is
-    another version than the pin (the contract tests fail at such a bump): there a loaded
+    another version than the pin (the contract tests fail at such a bump; a pin moved
+    along with bb, before the provider knows that bb, makes its harnesses read `false`,
+    the safe direction too): there a loaded
     harness reads `running: null`, never `true`, so a home stopped with the host is
     resumed by an input all the same, and a harness started again in a stopped home goes
     unseen until the provider knows that bb's runner.

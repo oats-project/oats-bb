@@ -714,10 +714,12 @@ thread, as before.
   container does), its shutdown stops each bb home with the host and its sweep resumes
   them, within about a minute of its start. Where it doesn't (a laptop may not), after a
   reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
-  input, a message or a wake, starts its harness again on the same conversation. (Seen
-  with bb restarted under loaded harnesses, the nearest stand-in for a reboot, for pi and
-  for Claude: bb still says `idle` of the thread, and the provider answers `present: true,
-  running: false`.)
+  input, a message or a wake, starts its harness again on the same conversation. On a
+  host without `oats host run`, an agent cut off mid-turn by a reboot does not carry on by
+  itself: it waits for its next message or wake, so send it one. (Seen with a bb-app
+  restart standing in for a reboot, bb-app 0.50.1; not yet with a real reboot.) To carry
+  on, send it a message. Don't press Start unless you want a fresh conversation: a Start is
+  a new thread and leaves the cut conversation behind.
 - The window that leaves: a home stopped with the host has its thread live and
   unarchived from the host's shutdown until the first resume sweep after the host is
   back (`oats host run` runs one at its start and each minute; the clients when they

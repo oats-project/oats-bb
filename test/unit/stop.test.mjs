@@ -178,6 +178,26 @@ test("a stop with the host waits until the thread's harness has left the home, a
   assert.match(stuck.stderr, new RegExp(`^oats bb: warning: bb thread ${id} is stopped, and its agent process still works in ${home} 1 s later: until it has left, the home reads as running\n$`));
 });
 
+test("where the command's own time cuts the host stop's wait short, the warning says how long it waited, not the grace", { skip: existsSync("/proc/self/environ") ? false : "no /proc on this host" }, async (t) => {
+  const { dir, home } = scratch(t);
+  const id = `thr_hoststop_cut_${process.pid}`;
+  const row = { stdout: { thread: threadRow(id, "proj_a", "idle", { providerId: "pi" }), environment: null, pendingTodos: null } };
+  const bb = fakeBbIn(dir, { "thread stop": { stdout: { ok: true, threadId: id } }, "thread show": row });
+  await bbHarness(t, { id, name: "pi", cwd: home, provider: "pi" });
+  // In process: the command's deadline is the caller's to set. A grace of 20 s, and 3 s of the command's time left.
+  const { stop } = await import("../../oats-package/capabilities/oats-bb/lib/stop.mjs");
+  const { readSettings } = await import("../../oats-package/capabilities/oats-bb/lib/settings.mjs");
+  const warnings = [];
+  const started = Date.now();
+  const answer = await stop({ home, endpoint: { ...endpoint, threadId: id }, graceSeconds: 20, reason: "host" }, readSettings({ cli: bb.cli }), { env: { ...process.env, ...bb.env }, deadline: started + 3_000, warn: (message) => warnings.push(message) });
+  assert.deepEqual(answer, { stopped: true });
+  assert.ok(Date.now() - started < 10_000, "the wait ended with the command's time, not with the grace");
+  assert.equal(warnings.length, 1);
+  const said = /^bb thread \S+ is stopped, and its agent process still works in \S+ (\d+) s later: until it has left, the home reads as running$/.exec(warnings[0]);
+  assert.ok(said !== null, warnings[0]);
+  assert.ok(Number(said[1]) <= 3, `it waited at most the 3 s the command had, and says so: ${warnings[0]}`);
+});
+
 test("a stop without the host's word does not wait on the processes: it archives, and bb refuses the thread every message", { skip: existsSync("/proc/self/environ") ? false : "no /proc on this host" }, async (t) => {
   const { dir, home } = scratch(t);
   const id = `thr_plainstop_${process.pid}`;

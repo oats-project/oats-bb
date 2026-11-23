@@ -486,6 +486,23 @@ function record(threads, changes = {}) {
   return at;
 }
 
+/**
+ * A change of ONE instance, as the kernel records it, for the event path (server/core.ts): the
+ * line is appended to THAT instance's own file of the event log (`<agent>--<instance>.jsonl`),
+ * which the watch names; the fake answers `oats instance events … --since` for it with `said`
+ * (the fields of the kernel's answer the plugin reads: shaped here in step with `changes`, not
+ * recorded), and its status answers the fixtures with `changes`, HELD `statusHeldMs` first: so a
+ * scene can see what the events alone put on the screen before any status read can have answered.
+ * → the instant the change was recorded.
+ */
+function recordFor(threads, { agent, instance }, { changes = {}, said = {}, statusHeldMs = 0 } = {}) {
+  const answer = { schemaVersion: 1, ok: true, result: { eventsApi: 2, instance, incarnation: null, count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...said } };
+  fake({ status: { stdout: statusWithRealIds(threads, changes), ...(statusHeldMs > 0 ? { sleepMs: statusHeldMs } : {}) }, "instance events --since": { stdout: JSON.stringify(answer) } });
+  const at = Date.now();
+  appendFileSync(join(homedir(), "deployment", ".agents", "events", `${agent}--${instance}.jsonl`), `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+  return at;
+}
+
 // ---- the run
 
 // A bb that was never opened shows its first-run guide in place of the app: mark it as done, as a
@@ -557,7 +574,7 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes) });
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes), recordFor: (who, what) => recordFor(threads, who, what), snapshot: () => rpc("snapshot") });
           } finally {
             await page.close();
           }

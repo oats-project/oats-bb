@@ -125,6 +125,10 @@ export const stages = {
   outside: { label: "OUT", enter, leave },
   "outside-host": {
     label: "OUTH",
+    // The live run's hold of the two working threads is lifted for this stage (the flag's one
+    // effect): the agent it draws as not loaded is on one of them (thr_mockups), and an agent on a
+    // thread bb calls active says "Working". With the hold lifted the thread is at rest: "Idle".
+    tellsAThread: true,
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
       fake({ status: { stdout: statusOf(statusWithRealIds, threads, HOST_ROWS) } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "release-070-maintainer" && agent.sessionEnd === "lost"));
@@ -133,6 +137,9 @@ export const stages = {
   },
   "outside-question": {
     label: "OUTQ",
+    // It tells a thread a message of its own (the question below): the live run lifts its hold of
+    // the two working threads for it, since a turn held open was seen to keep another from starting.
+    tellsAThread: true,
     enter: async (stage) => {
       await enter(stage);
       const thread = stage.threads.get("thr_harvest");

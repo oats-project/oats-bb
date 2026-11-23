@@ -5,7 +5,7 @@ standard, section 2). This file holds each place where bb's nature, or the plugi
 what the Desktop says, what the plugin says, and why. Nothing else is reworded.
 
 The tables the plugin copies from the Desktop whole are named in the header of the file that holds
-them: `app/ui/text.ts` (the display filter), `app/ui/words.ts` (the needs-input words and times, an
+them: `app/ui/text.ts` (the display filter; its functions are in `model/text.ts`), `app/ui/words.ts` (the needs-input words and times, an
 instance's name as words).
 
 | Thing | The Desktop says | The plugin says | Why |

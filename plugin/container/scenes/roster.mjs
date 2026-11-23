@@ -74,8 +74,8 @@ export default [
       const line = await statusOf(page, "working");
       const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === null && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
-        `${at} the row: the state in words and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
+        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        `${at} the row: the state in words, the act that applies (Stop) and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
         JSON.stringify({ line, facts }),
       );
       // Nothing of the row is cut or scrolls out of sight: it is as wide as its place, and every piece
@@ -93,11 +93,18 @@ export default [
       const release = threads.get("thr_release");
       await page.goto(`/projects/${release.projectId}/threads/${release.id}`);
       // The thread itself says it first (S1), before anything of the sidebar is opened over it: the
+      // A confirmation opened from a real row: Stop on the line reads the plan and asks, and stops nothing by itself.
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
+      const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return t.startsWith("Stop ") ? t : ""; })()`, 20);
+      check(asked === "Stop Desktop mockups developer?", `${at} Stop on the thread's line opens the stop confirmation of that agent, by its one name`, asked ?? (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))})?.innerText.slice(0, 300) ?? "no dialog"`)));
+      await page.shot(`a13-${viewport.name}-thread-stop-asked`, { targets: true });
+      await page.press("Escape");
+      await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10);
       // state's word, since when the agent has waited, and what it asked.
       const needs = await statusOf(page, "needs-you");
       check(
-        needs !== null && /^! Needs you · waiting .+ \(since [^)]+\) · Green light at 9f2e1c\? Second reader done\.$/.test(needs.line) && needs.act === null,
-        `${at} the thread of an agent that waits says so in its own row: "Needs you", since when, and its question`,
+        needs !== null && /^! Needs you · waiting .+ \(since [^)]+\) · Green light at 9f2e1c\? Second reader done\.$/.test(needs.line) && needs.act === "Answer",
+        `${at} the thread of an agent that waits says so in its own row: "Needs you", since when, its question, and Answer as the way to reply`,
         needs === null ? await rowText(page) : JSON.stringify(needs),
       );
       // No line of it starts with a separator (B4): the "·" of a part that begins a line is outside what

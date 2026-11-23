@@ -88,6 +88,13 @@ const brief = (row) =>
   row === undefined
     ? "no row"
     : `backend ${row.backend}, harness ${row.harness}, model ${row.model}, thread ${row.session?.threadId}, running ${row.running}, runtimeState ${row.runtimeState}${row.waitingOnYou ? `, waitingOnYou ${JSON.stringify(row.waitingOnYou)}` : ""}`;
+/**
+ * What the kernel's row says of `running` for an agent that is IDLE (as ../scenario.mjs has it):
+ * `running` is endpoint activity, not work: null from a provider that cannot tell whether a
+ * harness is loaded, true from one that scans its harness (an idle agent's pi is loaded). Both are
+ * accepted. That the agent is idle is what bb says of its thread, and what the screen says.
+ */
+const idleRunning = (row) => row.running === null || row.running === true;
 const untilRow = (instance, what, matches, seconds = 60) =>
   until(`${instance} to read ${what} in oats status`, () => {
     const row = rowOf(instance);
@@ -317,12 +324,14 @@ try {
   check(thread?.providerId === "pi", "bb: the thread is one of its pi provider", JSON.stringify(thread && { id: thread.id, providerId: thread.providerId, status: thread.status, title: thread.title }));
   // The turn: pi asked the mock model with the opening instruction, got its line, and the thread is at rest.
   const turn = await until("pi's first turn to reach the model", () => piTurns().find((request) => request.event === "answered" && request.lastRole === "user" && request.lastText.includes(TASK)), 120);
-  row = await untilRow(NAME, "idle, its first turn over", (r) => r.running === null && bbThread(threadId)?.status === "idle", 120);
+  row = await untilRow(NAME, "idle, its first turn over", (r) => idleRunning(r) && bbThread(threadId)?.status === "idle", 120);
   check(turn !== undefined && row !== undefined, `the pi agent answered one turn: the model was asked with the opening instruction on ${turn?.model}, and the thread is idle`, JSON.stringify({ turn, row: brief(rowOf(NAME)) }));
   show("the turn", turn);
   show("oats status", brief(row));
   const mine = snapshotAgent(NAME);
-  check(mine?.threadId === threadId && mine.running === null, "the plugin's snapshot has the agent as the kernel does", JSON.stringify(mine));
+  // Read again after bb said the turn was over: the row the wait matched may be from before it ended.
+  row = rowOf(NAME) ?? row;
+  check(mine?.threadId === threadId && mine.running === (row?.running ?? null), "the plugin's snapshot has the agent as the kernel does: its thread, and the kernel's word for whether a harness is loaded", JSON.stringify({ plugin: mine && { threadId: mine.threadId, running: mine.running }, kernel: brief(row) }));
   await views("real-pi-idle", async ({ page, at, shot }) => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "idle" && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
@@ -349,7 +358,7 @@ try {
   check(claim?.message === CLAIM && claim.reason === row?.waitingOnYou?.reason, "the plugin's snapshot has the claim, with the kernel's reason and the agent's message", JSON.stringify(claim));
   await needsYou("real-pi-needs-you", { instance: NAME, soul: SOUL, threadId, projectId, text: CLAIM, choices: [] });
   tell(`Thank you, go on.\n${callOf("bash", { command: "oats instance attention --clear" })}`);
-  row = await untilRow(NAME, "no claim, idle", (r) => r.waitingOnYou == null && r.running === null && bbThread(threadId)?.status === "idle", 90);
+  row = await untilRow(NAME, "no claim, idle", (r) => r.waitingOnYou == null && idleRunning(r) && bbThread(threadId)?.status === "idle", 90);
   check(row !== undefined, "the claim is cleared by the agent, and it is idle", brief(rowOf(NAME)));
 
   step("P4 a pi extension's dialog asks a question: the bridge's claim, answered on the home's card");
@@ -376,7 +385,7 @@ try {
     check(Boolean(answered), `${at}: "Yes" on the card answers the dialog`, card || JSON.stringify(pendingIn(threadId)));
   });
   if (pendingIn(threadId).length > 0) fail("the dialog is still open: the home's card offered no way to answer it", JSON.stringify(pendingIn(threadId)));
-  row = await untilRow(NAME, "no claim, its turn over", (r) => r.waitingOnYou == null && r.running === null && bbThread(threadId)?.status === "idle", 90);
+  row = await untilRow(NAME, "no claim, its turn over", (r) => r.waitingOnYou == null && idleRunning(r) && bbThread(threadId)?.status === "idle", 90);
   check(row !== undefined, "oats status: the claim is cleared once the dialog is answered, and the agent is idle", brief(rowOf(NAME)));
   const answer = piRequests().slice(before).find((request) => request.lastRole !== "user" && request.event === "answered");
   check(/the person answered: true/.test(answer?.lastText ?? ""), "the answer reached pi: the model was asked again with the tool's result, the person's Yes", JSON.stringify(answer));

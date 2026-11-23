@@ -22,7 +22,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # `ci.sh all` was cancelled by a limit of 45 minutes on main (the merge of #39) while passing
+    # runs took up to about 40: the limit is above what a slow runner needs, not a target.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

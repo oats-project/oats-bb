@@ -19,7 +19,7 @@ import type {
   AutomationSoul,
   TriggerStatus,
 } from "../contract/automations.js";
-import { displayLine } from "../app/ui/text.js";
+import { displayLine } from "../model/text.js";
 import { eventLabel, eventWords, PULL_REQUEST } from "../model/automations.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";

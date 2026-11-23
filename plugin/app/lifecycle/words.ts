@@ -29,7 +29,7 @@ export type PlanView = {
   happens: string[];
   /** What it leaves as it is. */
   kept: string[];
-  /** What a person should see before confirming: an agent in the middle of a task, a work tree on another branch. */
+  /** What a person should see before confirming: an agent with uncommitted work or in a turn, a work tree on another branch. */
   attention: string[];
   /** Current state: plain values by label. */
   state: { label: string; value: string }[];
@@ -86,8 +86,20 @@ export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
 export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
-/** `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`). */
-export function stopPlanView(plan: StopPlan, archives = false): PlanView {
+/** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
+const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
+/** What the Stop dialog says first of an agent with uncommitted work in its home (the plan's own observation of its work tree). */
+export const hasWork = (instance: string): string => `${agentName(instance)} has uncommitted work in its home.`;
+/** And of an agent on bb whose thread runs a turn now (bb's own word on the thread: the model's `threadWorks`). */
+export const inATurn = (instance: string): string => `${agentName(instance)} is working on a turn now.`;
+/**
+ * `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`).
+ * `working`: the plan's agents whose bb thread runs a turn now. What a person should see before
+ * confirming is said from those FACTS, never from the plan's `midTask` (reported activity: true
+ * for every session that runs, an idle one too): an agent whose session runs and has neither gets
+ * no line, and the state below says "Session running" of it already.
+ */
+export function stopPlanView(plan: StopPlan, archives = false, working: ReadonlySet<string> = new Set()): PlanView {
   const targets = plan.targets;
   const happens = [
     plan.recursive && targets.length > 1 ? `Stops ${targets.length} sessions, children first: ${names(targets.map((target) => target.instance))}.` : `Stops the session of ${plan.instance === null ? "this agent" : agentName(plan.instance)}.`,
@@ -101,7 +113,7 @@ export function stopPlanView(plan: StopPlan, archives = false): PlanView {
   return {
     happens,
     kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
-    attention: targets.filter((target) => target.midTask === true).map((target) => `${agentName(target.instance)} reports it is in the middle of a task.`),
+    attention: targets.flatMap((target) => [...(uncommitted(target.work) ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
@@ -241,7 +253,7 @@ export const LEAVE = {
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
- * in it, whether each session runs, who is in the middle of a task; for a retire also its work and
+ * in it, whether each session runs; for a retire also its work and
  * its children. Whether anything differs is decided from what the dialog DRAWS (the two views),
  * never from this list of facts: where the views differ and no sentence here says how, one line
  * says that what this would do has changed. Empty only when the two views are equal (the kernel's
@@ -258,8 +270,8 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
       if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
       else {
         if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
-        if (old.midTask !== true && target.midTask === true) lines.push(`${agentName(instance)} now reports it is in the middle of a task.`);
-        if (old.midTask === true && target.midTask !== true) lines.push(`${agentName(instance)} no longer reports it is in the middle of a task.`);
+        // (Uncommitted work that came or went has no sentence of its own: the box below says what is so now, and
+        // where nothing else differs the one line for "what this would do has changed" stands, below.)
       }
     }
     for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);

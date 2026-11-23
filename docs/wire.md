@@ -529,7 +529,8 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   retire, by a person, by an earlier start; only its own where the archived threads could
   not be listed); `retired: true` where bb has a thread of the home and none is left live;
   `{retired: false, reason: "nothing-to-delete"}` only where bb has no thread of the home
-  at all and no env was removed. It archives the home's live bb threads, after the kernel's stop, removes the env of
+  at all and no env was removed.
+  The hook archives the home's live bb threads, after the kernel's stop, removes the env of
   the home's bb project, and deletes those two old names too (best effort). The hook is not
   told the home's backend, and nothing in the home proves it has no thread (its agent can
   write there, and the provider keeps nothing of its own there), so bb is asked for every

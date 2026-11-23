@@ -182,8 +182,10 @@ const RETIRE_GRACE_SECONDS = 5;
  *  - `retired: true`: bb has at least one thread of the home, live or archived, and none
  *    is left live (or the env of its project was removed).
  *  - `{retired: false, reason: "nothing-to-delete"}`: bb has no thread of the home at all
- *    (a home that never ran on bb), and no env was removed. It is safe to run twice and after a spawn that never launched
- *  (nothing to archive is a complete cleanup). A thread is archived only once its stop is
+ *    (a home that never ran on bb), and no env was removed.
+ *
+ *  It is safe to run twice and after a spawn that never launched (nothing to archive is
+ *  a complete cleanup). A thread is archived only once its stop is
  *  confirmed. A bb that does not answer does not hold the retire: what is left is said in
  *  a warning, and readiness reports it (`session-provider-orphaned`) once the home is gone. */
 export async function retire(home, readSettings, { deadline, env = process.env } = {}) {
@@ -238,7 +240,8 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     const inBb = [...archived, ...(listed ?? []).map((thread) => thread.id).filter((id) => !archived.includes(id) && !left.includes(id))];
     if (warnings.length > 0) return { meta: { archived: inBb, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}), ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) }, warning: bounded(warnings.join(". ")) };
     // bb has no thread of this home at all, live or archived, and held no env for it.
-    if (live.length === 0 && inBb.length === 0 && projectEnv.removed.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
+    // (With no warning every live thread was archived, and is in the list: none in it, none live.)
+    if (inBb.length === 0 && projectEnv.removed.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
     return { meta: { retired: true, archived: inBb, ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) } };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;

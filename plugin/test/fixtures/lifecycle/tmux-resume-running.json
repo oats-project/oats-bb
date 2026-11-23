@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_SESSION_RUNNING",
+  "message": "lost-tmux-developer is running (unknown); nothing was started"
+ }
+}

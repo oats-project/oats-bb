@@ -1000,6 +1000,17 @@ test.each([
   expect(slot.inspection.sdkCalls.filter((call) => call.method !== "threads.interactions.list")).toEqual([]);
 });
 
+test("an agent whose session was LOST while bb holds a request on its thread is answered from its card: bb's choices, no Start", async () => {
+  // Nobody stopped it, and a message in its thread is how it comes back (the Start dialog says the same first).
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
+  expect(card.dataset.offer).toBe("choices");
+  expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
+  expect(within(card).queryByTestId("oats-needs-start")).toBeNull();
+});
+
 test("the same agent, running: its card offers bb's choices; and Start on a stopped one's card is held while the roster is the last one read", async () => {
   const running = await homePage({ sdk: BB_ASKS });
   const card = await cardOf(running, "flaky-ci-developer");
@@ -1165,7 +1176,7 @@ test("an agent nobody stopped (its session ended in a shell, was lost, or no har
   // agent the kernel cannot reach.
   for (const [what, change] of [
     ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
-    ["its session ended in a shell, on a row that says it was lost", { running: false as const, runtimeState: "shell", sessionEnd: "lost" }],
+    ["its harness ended by itself", { running: false as const, runtimeState: "stopped", sessionEnd: "exited" }],
     ["no harness is loaded", { running: false as const, runtimeState: "unknown" }],
   ] as const) {
     const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));

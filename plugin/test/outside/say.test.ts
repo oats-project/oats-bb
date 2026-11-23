@@ -50,7 +50,6 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
   // at v0.70.5, `row-session-end`), on a row the kernel calls stopped whose thread is open.
   for (const [sessionEnd, why] of [
     ["stopped", "an operator's stop"],
-    ["exited", "a harness that ended by itself"],
     [undefined, "a row that names none (a retire pending, a rollback incomplete, a spawn in progress)"],
     [null, "a row whose sessionEnd is null"],
     ["something-new", "a word this plugin does not know"],
@@ -59,6 +58,11 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
       expect(said({ ...operator, sessionEnd }, "open", true)).toEqual({ ...PLAIN, kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", tone: "warning", note: null, acts: ["start"] });
     });
   }
+  it("sessionEnd \"exited\" (its harness ended by itself) is no stop: the agent FAILED, and a message carries it on; no warning", () => {
+    const exited = { ...operator, sessionEnd: "exited" };
+    expect(word(exited)).toBe("Failed");
+    expect(said(exited, "open", true)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "Its session ended. Restart it, or send a message here.", note: null });
+  });
   it("sessionEnd \"lost\" (stopped with the machine: OATS resumes it) is the one stop that is spared the warning", () => {
     expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "stopped-host", tone: "plain", acts: null });
   });

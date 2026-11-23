@@ -431,7 +431,8 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: null }, thread)).toBe(false);
     // A row with no word of the runtime's state is stopped (the one predicate): the thread's line warns there, and the dialog says nothing else.
     expect(carriesOn({ running: false, runtimeState: null, sessionEnd: null }, thread)).toBe(false);
-    expect(carriesOn({ running: false, runtimeState: null, sessionEnd: "exited" }, thread)).toBe(false);
+    // A harness that ended by itself is no stop (the agent failed): a message carries it on, as its line says.
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "exited" }, thread)).toBe(true);
   });
   it("never of an agent that runs, or whose state is not known", () => {
     expect(carriesOn({ running: true, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);

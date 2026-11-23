@@ -10,22 +10,22 @@ type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; 
 /**
  * - "runs": the kernel does not say the agent does not run (`running` is not false, and its word
  *   is not "stopped");
- * - "stopped": the kernel calls it stopped (`recordedStopped`, or the word "stopped" alone, or a
- *   row that still says an operator stopped it) and its session was not lost: an operator's stop,
- *   a harness that ended by itself, or a row that does not say how its session ended. A message
- *   in its thread would start a harness OATS does not expect;
- * - "lost": the kernel calls it stopped and says its session was LOST (`sessionEnd: "lost"`): it
- *   ended without OATS stopping it. Nobody stopped it;
- * - "unloaded": not running beside a word that is not "stopped": a provider's "unknown" (its
- *   session is there and no harness is loaded), or a session that ended in a shell or cannot be
- *   reached (each told by its own state). Nobody stopped it either.
+ * - "stopped": an operator's stop, or a stop that does not say how its session ended (the word
+ *   "stopped", or no word at all). A message in its thread would start a harness OATS does not expect;
+ * - "lost": its session was LOST (`sessionEnd: "lost"`): it ended without OATS stopping it;
+ * - "ended": its session ended by itself (`sessionEnd: "exited"`, or a shell with no word how);
+ * - "unloaded": not running beside another word (a provider's "unknown": its session is there
+ *   and no harness is loaded; a session the kernel cannot reach).
+ * Where the row says how its session ended, that decides, as in the state (`recordedStopped`).
  */
-export type Rest = "runs" | "stopped" | "lost" | "unloaded";
+export type Rest = "runs" | "stopped" | "lost" | "ended" | "unloaded";
 
 export function rest(agent: Row): Rest {
   if (agent.running !== false && agent.runtimeState !== "stopped") return "runs";
-  if (recordedStopped(agent) || agent.runtimeState === "stopped" || agent.sessionEnd === "stopped") return agent.sessionEnd === "lost" ? "lost" : "stopped";
-  return "unloaded";
+  if (agent.sessionEnd === "lost" && agent.runtimeState !== "unreachable") return "lost";
+  if (agent.sessionEnd === "exited") return "ended";
+  if (recordedStopped(agent) || agent.runtimeState === "stopped" || agent.sessionEnd === "stopped") return "stopped";
+  return agent.runtimeState === "shell" ? "ended" : "unloaded";
 }
 
 /**
@@ -45,5 +45,5 @@ export function rest(agent: Row): Rest {
 export function messageResumes(agent: Row, thread: { status: string } | null): boolean {
   const how = rest(agent);
   if (agent.running !== false || agent.runtimeState === "unreachable" || agent.backend === "tmux") return false;
-  return (how === "lost" || how === "unloaded") && thread !== null && thread.status !== "error";
+  return (how === "lost" || how === "ended" || how === "unloaded") && thread !== null && thread.status !== "error";
 }

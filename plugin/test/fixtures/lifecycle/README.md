@@ -69,3 +69,16 @@ Neither is a file, and neither was met by a run of ours to record:
   `result.session.endpoint.threadId` taken out, answered over a roster row changed to
   `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
   `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).
+
+## An agent on tmux: three recorded rows
+
+Recorded on OATS 0.70.5 by the real run's tmux part (they travel with it; these three came here
+first, for the plugin's one reading of a row that does not run: `test/model/rest.test.ts`):
+
+- `tmux-row-running.json`, `tmux-row-stopped.json`, `tmux-row-lost.json`: the agent's ROW of `oats
+  status --json` (one member of `agents[].instances[]`, not the whole document) while it runs
+  (`running: true`, no `runtimeState`, no `sessionEnd`); after the plugin's own Stop
+  (`running: false`, `runtimeState: "shell"`, `sessionEnd: "stopped"`: an OATS stop leaves the
+  agent's tmux window at a shell); and LOST, its tmux window killed as a crash ends it
+  (`running: false`, `sessionEnd: "lost"`, no `runtimeState`; the row carries no time of the loss
+  and no cause).

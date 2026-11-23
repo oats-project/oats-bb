@@ -21,19 +21,24 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 }
 
 /**
- * Whether the kernel's row says the agent is STOPPED: not running, beside the word "stopped" or no
- * word at all. The one predicate of the claim's gate and of the state: a row that is not running
- * beside another word ("unknown": its session is there and no harness is loaded; "shell";
- * "unreachable") is not stopped, keeps its claim, and is told by its own state.
- * One more row is stopped: not running beside "unknown" (or a word of a later kernel) while the
- * row still says an operator stopped it (`sessionEnd: "stopped"`). The stop wins: a row that says
- * both is read as the stop, so that no place calls it "not loaded" and sends a message to it (the
- * spec's author's ruling of 23 Nov 2026; no kernel prints the row today).
+ * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
+ * the state, for every backend. The row does not run (`running: false`), and:
+ * - where it says how its session ended (`sessionEnd`), THAT decides: "stopped" (an operator's
+ *   stop) and "lost" (it ended without OATS stopping it) are stopped, whatever word stands beside
+ *   them (a tmux agent stopped with OATS reads "shell": the stop leaves its window at a shell; a
+ *   row that still says "stopped" beside "unknown" is a stop too); "exited" (its harness ended by
+ *   itself) is not: that agent failed;
+ * - where it does not say: the word "stopped", or no word at all (a tmux row whose window is
+ *   gone). A row beside another word ("unknown": its session is there and no harness is loaded;
+ *   "shell": its session ended) is not stopped, keeps its claim, and is told by its own state.
+ * A session the kernel cannot reach is never called stopped: nobody can tell.
+ * (The spec's author's rulings of 23 Nov 2026; the tmux rows are recorded: test/fixtures/lifecycle/tmux-row-*.json.)
  */
 export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState"> & { sessionEnd?: string | null }): boolean {
-  if (agent.running !== false) return false;
-  if (agent.runtimeState === "stopped" || agent.runtimeState === null) return true;
-  return agent.sessionEnd === "stopped" && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
+  if (agent.running !== false || agent.runtimeState === "unreachable") return false;
+  if (agent.sessionEnd === "stopped" || agent.sessionEnd === "lost") return true;
+  if (agent.sessionEnd === "exited") return false;
+  return agent.runtimeState === "stopped" || agent.runtimeState === null;
 }
 
 /** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */
@@ -95,13 +100,17 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
+  // A row that does not run and says how its session ended: that decides (`recordedStopped`): an
+  // operator's stop and a lost session are stopped beside any word; a harness that ended by itself failed.
+  if (recordedStopped(agent)) return "stopped";
+  if (agent.running === false && agent.sessionEnd === "exited") return "error";
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
   // Not running, and no word of the kernel's beside it (a tmux row whose window is gone): stopped.
   // With a word that is not "stopped" (a provider row reads `runtimeState: "unknown"`: its session
   // is there and no harness is loaded) the agent is not stopped, and a message in its thread
   // carries its conversation on: it reads as bb says of its thread, below.
-  if (recordedStopped(agent) || (agent.running === false && agent.backend === "tmux")) return "stopped";
+  if (agent.running === false && agent.backend === "tmux") return "stopped";
   if (agent.backend === "tmux") return agent.running === true ? "working" : "idle";
   if (thread === null) return "idle";
   return threadWorks(thread) ? "working" : "idle";

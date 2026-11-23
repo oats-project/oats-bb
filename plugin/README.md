@@ -261,8 +261,8 @@ stopped agent gets the same sentence before and after): `say.ts` marks the place
 Not there yet: the home's card of an agent that runs outside OATS (one line in the rebuilt home's
 card, `<OutsideWarning said={outside.of(agent)} … />`, agreed with its owner: it lands with
 whichever of the two changes is second); the line of a thread that belonged to a RETIRED agent;
-the row of `outsideOats` recorded live, and the proof against a real kernel at 0.70.5 (they come
-with the kernel floor: `test/fixtures/outside/README.md` says what is shaped meanwhile).
+the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
+come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
 
 ## The instance panel
 

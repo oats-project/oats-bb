@@ -2,10 +2,10 @@ The outside feature's fixture (`../../../README.md`, "Outside OATS"). The featur
 verb: it is read from the rows and the `features` of the one `oats status --json` (the roster's
 verb), so there is no `verbs.json` here; a test names this file for that verb.
 
-**Shaped, not recorded.** No live `oats status` with `outsideOats` can be recorded yet: it needs a
-bb session provider whose stop leaves a thread a message can restart AND a kernel at 0.70.5 in the
-real run, and the real run's kernel is pinned at 0.70.0 until the floor moves (the second change of
-this feature re-records every fixture at 0.70.5 and records this row live). Until then,
+**Shaped, not recorded.** The real run's kernel is at 0.70.5 (the floor moved there after this
+fixture was made), where the kernel prints `outsideOats`; the row recorded live, from a harness
+that a message in bb started again in a home OATS stopped, comes with the second change of this
+feature (the rows recorded live, and the real run's proofs). Until then,
 `status-outside.json` is the recorded status of a home OATS stopped
   (`../roster/status-recorded.json`, key `stoppedByOats`: OATS 0.70.0, bb-app 0.50.1), whole, with
   two additions and nothing else changed: on its one row, `outsideOats` exactly as the kernel's own

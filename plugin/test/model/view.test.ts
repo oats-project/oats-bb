@@ -193,8 +193,10 @@ describe("A2 state(): first match wins", () => {
   });
   // The spec's author amended A2 again on 2026-11-23: ONE claim rule for both backends. A claim is
   // hidden only for an agent the kernel calls stopped (its word "stopped", or not running with no
-  // word); shown in every other case. The rows are shaped as the kernel prints them (awebai/oats
-  // lib/instance-listing.mjs at 95c7b43b3, and docs/desktop-cli-api.md for a provider's row), not recorded.
+  // word); shown in every other case. The pairs are every pair the TYPE allows that matters, shaped by
+  // hand, not recorded: today's kernel prints a claim only on a row it says runs (tmux) or does not
+  // call not-running (a provider), so for the rows it prints now the rule changes nothing; it is
+  // the rule for a row a later kernel prints (awebai/oats lib/instance-listing.mjs at 95c7b43b3).
   test("one claim rule for bb and tmux: hidden only for a row the kernel calls stopped, shown for every other pair of (running, runtimeState)", () => {
     for (const backend of ["bb", "tmux"]) {
       const shows = (over: Partial<Agent>) => claimOf(agent("a", { backend, waiting: claim, ...over })) !== null;
@@ -202,7 +204,7 @@ describe("A2 state(): first match wins", () => {
       expect(shows({ running: false, runtimeState: "stopped" }), `${backend} stopped`).toBe(false);
       expect(shows({ running: false, runtimeState: null }), `${backend} not running, no word`).toBe(false);
       // Shown: it runs, the kernel says nothing of it, its harness ended in a shell, it cannot be reached, no harness is loaded.
-      for (const [running, runtimeState] of [[true, null], [true, "running"], [true, "unknown"], [null, null], [null, "unknown"], [true, "shell"], [false, "shell"], [null, "unreachable"], [false, "unreachable"], [false, "unknown"]] as const) {
+      for (const [running, runtimeState] of [[true, null], [true, "running"], [true, "unknown"], [null, null], [null, "unknown"], [true, "shell"], [false, "shell"], [null, "unreachable"], [false, "unreachable"], [false, "unknown"], [null, "unsupported"]] as const) {
         expect(shows({ running, runtimeState }), `${backend} (${running}, ${runtimeState})`).toBe(true);
       }
     }

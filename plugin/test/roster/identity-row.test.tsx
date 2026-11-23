@@ -331,3 +331,22 @@ test("a stopped agent whose events cannot be read says Stopped, with no time and
   expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
   expect(slot.queryByRole("alert")).toBeNull();
 });
+
+// "Needs input" is on the panel's Instance tab, and the panel keeps the tab it was left on: Answer
+// turns it there, so the press is never dead (round 1 of part B's review).
+test("Answer turns the instance panel to its Instance tab, where Needs input is, when it was left on another, and moves the focus there", async () => {
+  const app = await loadApp();
+  const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
+  const Row = app.threadHeaderRows[0]!.component;
+  const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    { component: (props: ExperimentalThreadHeaderRowProps) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
+    { threadId: "thr_release", projectId: "p", environment: null },
+    { rpc: handlers(), sidebarThreads: sidebarThreads() },
+  );
+  await slot.findByTestId("oats-panel-waiting"); // the panel is open on its Instance tab
+  showPanelTab("soul"); // and is left on the Soul tab
+  await vi.waitFor(() => expect(slot.queryByTestId("oats-panel-waiting")).toBeNull());
+  fireEvent.click(await slot.findByTestId("oats-status-act"));
+  const needs = await slot.findByTestId("oats-panel-waiting");
+  await vi.waitFor(() => expect(needs.contains(document.activeElement)).toBe(true));
+});

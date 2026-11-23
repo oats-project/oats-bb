@@ -26,11 +26,13 @@ const statusOf = async (page, state, want = null) => {
 /**
  * Every roster row of the sidebar measured: a row is at most three lines (the name on one or two,
  * cut only after the second; the second block on ONE line, where only the soul may be cut). Counts
- * only, never a name: `{ rows, over, wrapped, nameCut, soulCut, edgeCut }`.
+ * only, never a name: `{ rows, over, wrapped, nameCut, soulCut, soulGone, whereCut, edgeCut, untitled }`
+ * (`soulGone`: a soul squeezed to nothing; `whereCut`: the last phrase cut; `edgeCut`: something past the
+ * row's edge, or the state's word cut; `untitled`: a name with no title holding it whole).
  */
 const rowLines = (page) =>
   page.evaluate(
-    `(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const rows = [...s.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})].filter((r) => r.getClientRects().length > 0); const linesOf = (e) => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); let over = 0, wrapped = 0, nameCut = 0, soulCut = 0, edgeCut = 0; for (const row of rows) { const name = row.querySelector(${JSON.stringify(testId("oats-row-name"))}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const n = linesOf(name), f = linesOf(facts); if (n + f > 3 || n > 2) over += 1; if (f !== 1) wrapped += 1; if (name.scrollHeight > name.clientHeight + 1) nameCut += 1; const soul = facts.querySelector('[data-phrase="soul"]'); if (soul && soul.scrollWidth > soul.clientWidth + 1) soulCut += 1; const right = facts.getBoundingClientRect().right; if ([...facts.querySelectorAll('[data-phrase=""], [data-sep]')].some((p) => p.getBoundingClientRect().right > right + 1)) edgeCut += 1; } return JSON.stringify({ rows: rows.length, over, wrapped, nameCut, soulCut, edgeCut }); })()`,
+    `(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const rows = [...s.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})].filter((r) => r.getClientRects().length > 0); const linesOf = (e) => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); const cutOf = (e) => e.scrollWidth > e.clientWidth + 1; let over = 0, wrapped = 0, nameCut = 0, soulCut = 0, soulGone = 0, whereCut = 0, edgeCut = 0, untitled = 0; for (const row of rows) { const name = row.querySelector(${JSON.stringify(testId("oats-row-name"))}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const n = linesOf(name), f = linesOf(facts); if (n + f > 3 || n > 2) over += 1; if (f !== 1) wrapped += 1; if (name.scrollHeight > name.clientHeight + 1) nameCut += 1; if (!name.getAttribute("title")) untitled += 1; const soul = facts.querySelector('[data-phrase="soul"]'); if (soul && cutOf(soul)) soulCut += 1; if (soul && soul.getBoundingClientRect().width < 8) soulGone += 1; if ([...facts.querySelectorAll('[data-phrase="where"]')].some(cutOf)) whereCut += 1; const right = facts.getBoundingClientRect().right; if ([...facts.querySelectorAll("[data-phrase], [data-sep]")].some((p) => p.getBoundingClientRect().right > right + 1) || cutOf(facts.querySelector('[data-phrase="state"]'))) edgeCut += 1; } return JSON.stringify({ rows: rows.length, over, wrapped, nameCut, soulCut, soulGone, whereCut, edgeCut, untitled }); })()`,
   );
 const rowText = (page) => page.evaluate(textOf(testId("oats-identity-row")));
 
@@ -214,6 +216,11 @@ export default [
       const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
       check(gone === "Stopped · oats-expert · its bb thread is gone", `${at} the agent whose bb thread is gone stays in the roster, and says so`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
       // At 1280 the image of the failed thread already shows the sidebar's rows; at 390 they are in bb's drawer.
+      // The detached row is the one with a long last phrase ("its bb thread is gone"): it obeys the row's rule too:
+      // one line, the soul still there with its "…", nothing past the row's edge, the state's word whole.
+      const detachedRows = await rowLines(page);
+      const d = JSON.parse(detachedRows);
+      check(d.over === 0 && d.wrapped === 0 && d.edgeCut === 0 && d.soulGone === 0 && d.untitled === 0, `${at} the rows of this roster, the one whose thread is gone included, keep to three lines: no second block on two, no soul squeezed to nothing, nothing past the row's edge`, detachedRows);
       if (viewport.mobile) await page.shot(`a16-${viewport.name}-states`);
     },
   },
@@ -319,18 +326,18 @@ export default [
       const measured = await rowLines(page);
       const rowsRead = JSON.parse(measured);
       check(rowsRead.rows >= tmux.length + TMUX_ROSTER.bb.length && rowsRead.over === 0 && rowsRead.wrapped === 0, `${at} no row is over three lines, and no row's second block is on two`, measured);
-      check(rowsRead.edgeCut === 0, `${at} the state's word and where it runs are never cut: only a soul gives way (${rowsRead.soulCut} cut)`, measured);
+      check(rowsRead.edgeCut === 0 && rowsRead.whereCut === 0 && rowsRead.soulGone === 0 && rowsRead.untitled === 0, `${at} the state's word and "tmux" are never cut, a soul that gives way keeps its "…" (${rowsRead.soulCut} cut), and every name has the whole name as its title`, measured);
       await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
       // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
-      const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: r.height > 0, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
+      const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const lastIn = r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight; const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: lastIn, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
       check(reach === JSON.stringify({ last: true, foot: true }), `${at} with ${tmux.length + TMUX_ROSTER.bb.length} agents the last row and the count of who waits can be scrolled into view`, reach);
       await page.shot(`tmux-roster-${viewport.name}-sidebar-end`);
       // A SELECTED row whose name takes two lines: the bb-thread agent with the long name, on its own thread.
       const long = threads.get("thr_mockups");
       await page.goto(`/projects/${long.projectId}/threads/${long.id}`);
       check(await showSidebar(page, viewport), `${at} the sidebar is shown on the agent's thread`);
-      const selected = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${long.id}"]`)}); const name = row?.querySelector(${JSON.stringify(testId("oats-row-name"))}); if (!name) return ""; const lines = Math.round(name.getBoundingClientRect().height / parseFloat(getComputedStyle(name).lineHeight)); return lines === 2 ? JSON.stringify({ lines, text: name.innerText.replace(/\\s+/g, " ").trim(), cut: name.scrollHeight > name.clientHeight + 1 }) : ""; })()`, 20);
-      check(selected !== null && JSON.parse(selected).text === "Desktop mockups developer for the overnight redesign sweep", `${at} the open thread's row holds its long name on two lines, whole`, selected ?? (await rowLines(page)));
+      const selected = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${long.id}"]`)}); const name = row?.querySelector(${JSON.stringify(testId("oats-row-name"))}); if (!name) return ""; const lines = Math.round(name.getBoundingClientRect().height / parseFloat(getComputedStyle(name).lineHeight)); return lines === 2 ? JSON.stringify({ lines, cut: name.scrollHeight > name.clientHeight + 1, title: name.getAttribute("title") }) : ""; })()`, 20);
+      check(selected === JSON.stringify({ lines: 2, cut: true, title: TMUX_ROSTER.renamed["desktop-mockups-developer"] }), `${at} the open thread's row holds its long name on two lines, cut only after the second, and whole in its title`, selected ?? (await rowLines(page)));
       await page.shot(`tmux-roster-${viewport.name}-selected-two-line-name`, { targets: true });
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);

@@ -4,7 +4,9 @@ import type { Agent, AgentState, BbThread, Node, View } from "./types";
 /**
  * Whether the kernel records an agent STOPPED: it says the agent does not run, and its word is
  * "stopped" or it gives none (what it prints for a tmux home whose window is gone). One rule, for
- * every backend, read by the claim gate below (and the state's "stopped").
+ * every backend, read by the claim gate below. (`state()` still calls every row that does not run
+ * "stopped", a word beside it or not: the change that tells a row with no harness loaded apart
+ * makes it read this too.)
  */
 export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
   return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);

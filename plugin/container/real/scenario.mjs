@@ -383,7 +383,7 @@ async function shots(scene, { instance, soul, threadId, state }) {
       const lineNow = `JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`;
       await page.until(`(() => { const line = JSON.parse(${lineNow}); return line.state === ${JSON.stringify(state)} && new RegExp(${JSON.stringify(WHOLE[state])}).test(line.status); })()`, 30);
       const line = JSON.parse(await page.evaluate(lineNow));
-      check(line.state === state && new RegExp(WHOLE[state]).test(line.status) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}"${state === "stopped" ? ", since when (its last recorded stop)" : state === "working" ? ", when its session started" : ""}, the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
+      check(line.state === state && new RegExp(WHOLE[state]).test(line.status) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}"${state === "stopped" ? ", since when (its last recorded stop)" : state === "working" ? ", when OATS last started it" : ""}, the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {

@@ -550,3 +550,14 @@ test("on the last roster read, beside a page that shows the full notice the side
   await waitFor(() => expect(within(slot.container).getByTestId("oats-held")).toBeTruthy());
   expect(within(slot.container).queryByTestId("oats-last-observation")).toBeNull();
 });
+
+// The whole name is one hover away on every row: a name cut after its second line is still there.
+test("every roster row's name carries the whole instance name as its title, a bb-thread agent's too", async () => {
+  const { slot } = await sidebar();
+  const rows = await slot.findAllByTestId("oats-agent-row");
+  const titles = rows.map((row) => within(row).getByTestId("oats-row-name").getAttribute("title"));
+  expect(titles).toContain("release-070-maintainer");
+  expect(titles.every((title) => typeof title === "string" && title.length > 0)).toBe(true);
+  const threadless = slot.getByTestId("oats-agent-row-threadless");
+  expect(within(threadless).getByTestId("oats-row-name").getAttribute("title")).toBe("kernel-fix-developer");
+});

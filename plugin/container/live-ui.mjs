@@ -264,7 +264,7 @@ function tmuxRoster(threads) {
     // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
     // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
     // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
-    // the kernel it was recorded with; a claim is shown only for a row the kernel says runs.)
+    // the kernel it was recorded with.)
     delete row.runtimeState;
     row.running = how !== "stopped";
     status.agents.find((group) => group.name === soul).instances.push(row);
@@ -315,7 +315,7 @@ async function themedPage(browser, viewport, theme, at) {
     // Every distinct failing row, whole: one run names all there is to fix in the scene.
     if (!ok) {
       console.log(`     theme ${drawn}; in ${roots.join(", ") || "nothing of the plugin"}`);
-      for (const line of new Set(bad.map((row) => `${row.kind} ${row.what} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))) console.log(`     ${line}`);
+      for (const line of new Set(bad.map((row) => `${row.kind} ${LOCAL_STATUS === "" ? row.what : "(text not printed: a real deployment's roster)"} ${shown(row.ratio)}:1 (needs ${row.need}; ${row.paint} on ${row.behind})${row.unsure === null ? "" : `, ${row.unsure}`}`))) console.log(`     ${line}`);
     }
     await shot(theme === "light" ? name : `${name}-${theme}`);
   };
@@ -397,15 +397,41 @@ const BUILT_IN = {
   },
   "local-roster": {
     label: "LR",
-    // With the release's default pages: what a person of that deployment sees first.
-    enter: async () => {
+    // With the release's default pages: what a person of that deployment sees first. Nothing of the
+    // file is printed, on any path: a file that is no JSON names its path alone, and a roster that
+    // does not arrive is told by its counts. The run's own bb threads (the fixtures') are archived
+    // first, so that what stands under the roster is what that deployment's bb would show, not the
+    // test container's threads.
+    enter: async ({ threads }) => {
+      let agents;
       const status = readFileSync(LOCAL_STATUS, "utf8");
-      const agents = JSON.parse(status).agents.flatMap((group) => group.instances).length;
+      try {
+        agents = JSON.parse(status).agents.flatMap((group) => group.instances).length;
+      } catch {
+        throw new Error(`the status file at ${LOCAL_STATUS} is not an oats status --json answer`);
+      }
+      for (const thread of threads.values()) bb("thread", "archive", thread.id);
       fake({ status: { stdout: status } });
       pages("home");
-      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === agents);
+      const deadline = Date.now() + 60_000;
+      let seen = "no answer";
+      for (;;) {
+        try {
+          rpc("refresh");
+          const snapshot = rpc("snapshot");
+          seen = `ok ${snapshot.ok}, ${snapshot.ok ? snapshot.agents.length : 0} agents`;
+          if (snapshot.ok === true && snapshot.agents.length === agents) break;
+        } catch {
+          seen = "the snapshot could not be read";
+        }
+        if (Date.now() > deadline) throw new Error(`the roster of the status file did not arrive: ${seen}, of ${agents} in the file`);
+        await sleep(1500);
+      }
     },
-    leave: async () => pages(ALL_PAGES),
+    leave: async ({ threads }) => {
+      pages(ALL_PAGES);
+      for (const thread of threads.values()) bb("thread", "unarchive", thread.id);
+    },
   },
   "pages-default": {
     label: "PG",

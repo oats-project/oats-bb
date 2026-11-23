@@ -2,6 +2,7 @@
 // header. First the status line: the state in words, since when, the question or the reason, and
 // the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
 // cut or scrolls out of sight, at any width.
+import { showPanelTab } from "../panel/Panel";
 import { usePanelEvents } from "../panel/read";
 import { agentName } from "../ui/words";
 import {
@@ -140,6 +141,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         data-testid="oats-status-act"
         title="Answer in the instance panel"
         onClick={() => {
+          // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
+          // on: turn it there first, whether the panel is open or opens now.
+          showPanelTab("instance");
           openPanel();
           focusNeedsInput();
         }}

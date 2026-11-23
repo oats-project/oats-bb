@@ -26,11 +26,6 @@ export type AgentStatusLineProps = {
   action?: ReactNode;
 };
 
-/** The state this component draws for an agent: for a place that picks the act from it. */
-export function agentLineState(agent: Agent, thread: BbThread | null, now: number) {
-  return agentStatus(agent, thread, now).state;
-}
-
 export function AgentStatusLine({ agent, thread, now, events, staleAt = null, detail, gone = false, action }: AgentStatusLineProps) {
   const read = agentStatus(agent, thread, now);
   const status = read.state === "stopped" ? { ...read, since: stoppedSince(events, agent.startedAt ?? null, now) } : read;

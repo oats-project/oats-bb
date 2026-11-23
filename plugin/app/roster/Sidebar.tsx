@@ -119,18 +119,18 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     </li>
   );
 
-  /** A row's two lines (D-063): the name, then where the agent is in a word, and its soul. */
   /**
    * A row's two blocks, at most three lines in all (the lead's ruling on the long names):
-   * - the NAME wraps to at most two lines and is cut with "…" only after the second (the whole name
-   *   is the row's title);
-   * - the second block (the state, the soul, where it runs) is ONE line, never wrapped: where it does
-   *   not fit, the SOUL is cut with "…", never the state's word and never where it runs. The whole
-   *   line is its title.
+   * - the NAME wraps to at most two lines and is cut with "…" only after the second; the whole
+   *   name (`full`: the instance as the kernel names it) is the name's title on every row;
+   * - the second block (the state, the soul, where it runs) is ONE line, never wrapped. Where it
+   *   does not fit, the SOUL gives way first, down to room for its "…"; only then does the last
+   *   phrase ("its bb thread is gone") give way too. The state's word is never cut. The whole line
+   *   is its title.
    */
-  const lines = (name: ReactNode, strong: boolean, word: string, rest: string) => (
+  const lines = (name: ReactNode, strong: boolean, word: string, rest: string, full?: string) => (
     <span className="flex min-w-0 flex-1 flex-col">
-      <span data-testid="oats-row-name" className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
+      <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
       <span data-testid="oats-row-facts" title={`${word} · ${rest}`} className="flex min-w-0 whitespace-nowrap text-xs text-muted-foreground">
         {`${word} · ${rest}`.split(" · ").map((phrase, index) => (
           <Fragment key={index}>
@@ -139,8 +139,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
                 {" · "}
               </span>
             )}
-            {/* The second phrase is the soul: the one that gives way. */}
-            <span data-phrase={index === 1 ? "soul" : ""} className={index === 1 ? "min-w-0 truncate" : "shrink-0"}>
+            {/* The second phrase is the soul: it gives way first (shrink-[1000]) and keeps room for its "…". */}
+            <span data-phrase={index === 1 ? "soul" : index === 0 ? "state" : "where"} className={index === 0 ? "shrink-0" : index === 1 ? "min-w-[1.5em] shrink-[1000] truncate" : "min-w-0 truncate"}>
               {phrase}
             </span>
           </Fragment>
@@ -163,7 +163,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)), shown(node.agent.instance))}
           </>,
         ),
         ...agentRows(node.children),
@@ -194,7 +194,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden />
-          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`)}
+          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`, shown(agent.instance))}
         </button>
       </li>
     );

@@ -20,23 +20,39 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 }
 
 /**
- * The state of one agent on its thread. First match wins. Activity is the kernel's word
- * (`running`), never inferred: bb cannot tell a live idle agent from a settled one, so an agent
- * the kernel says nothing of (`running` null) is "idle", an unknown `runtimeState` word included.
- * One the kernel calls not running (`running === false`) with no other word is "stopped": what it
- * prints for a tmux row whose window is gone or whose harness does not run (awebai/oats
- * lib/instance-listing.mjs at 95c7b43b3: `{ running: false }`, no `runtimeState`); a bb row comes
- * with "stopped" beside it. A session that ended in a shell, or that the kernel cannot reach, is
- * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
+ * bb's thread statuses that mean the agent on the thread WORKS (@get-bb/plugin-sdk
+ * `threadStatusSchema`, 0.6.157: active, error, idle, pending, starting, stopping): a turn runs
+ * ("active"), is starting or stopping, or is accepted and waits for its turn ("pending": it will
+ * run). "idle" is idle; "error" (bb's last turn failed: bb shows that in the thread, and the
+ * session is still there) is idle too; a status this plugin does not know is idle, as bb's SDK
+ * says to treat one.
+ */
+const WORKING: ReadonlySet<string> = new Set(["active", "starting", "stopping", "pending"]);
+
+/**
+ * The state of one agent on its thread. First match wins.
+ *
+ * WORKING and IDLE, for an agent on a bb thread, are bb's own status of that thread, never the
+ * kernel's `running`: `running` is endpoint activity (true: a harness is loaded; false: it is
+ * gone; null: the provider cannot tell), and a provider answers true for an idle agent whose
+ * harness is loaded. The kernel's `running` is read for two things only: false, which is
+ * "stopped" (what the kernel prints for a tmux row whose window is gone or whose harness does not
+ * run: `{ running: false }`, no `runtimeState`; a bb row comes with "stopped" beside it); and a
+ * TMUX row's activity, where it is the kernel's own word for whether the agent works.
+ * A provider's agent whose thread bb does not list (archived, deleted, hidden) is "idle": its
+ * thread's status cannot be seen, and a loaded harness does not say that it works.
+ * A session that ended in a shell, or that the kernel cannot reach, is told first. The one rule
+ * for the sidebar's rows, the thread's row, the home and the instance panel.
  */
 export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
-  if (agent.running === true) return "working";
   if (agent.running === false) return "stopped";
-  return "idle";
+  if (agent.backend === "tmux") return agent.running === true ? "working" : "idle";
+  if (thread === null) return "idle";
+  return WORKING.has(thread.status) ? "working" : "idle";
 }
 
 const RANK: Record<AgentState, number> = {

@@ -20,8 +20,12 @@ function agentsOf(state: keyof Recorded): Agent[] {
   if (!status.ok) throw new Error(`${state}: ${status.error.code}: ${status.error.message}`);
   return status.value.agents;
 }
-/** bb's thread of an agent, as the sidebar gives it: live, read, with nothing pending. */
-const threadOf = (agent: Agent): BbThread => ({
+/**
+ * bb's thread of an agent, as the sidebar gives it: live, read, with nothing pending. `status` is
+ * bb's own (not part of the kernel's recording): "active" while a turn runs, which is when the
+ * kernel's row of that state was recorded with `running: true`.
+ */
+const threadOf = (agent: Agent, status = "idle"): BbThread => ({
   id: agent.threadId!,
   projectId: null,
   displayTitle: agent.instance,
@@ -30,6 +34,7 @@ const threadOf = (agent: Agent): BbThread => ({
   isArchived: false,
   isHidden: false,
   hasPendingInteraction: false,
+  status,
 });
 
 const home = "/abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer";
@@ -107,9 +112,10 @@ describe("a real kernel's status, read by the parser", () => {
 });
 
 describe("a real kernel's status, joined to bb's threads by the model", () => {
+  /** The roster of a recorded state, with bb's threads: the ones the kernel's row calls running had a turn running in bb. */
   const drawn = (state: keyof Recorded) => {
     const agents = agentsOf(state);
-    return view(agents, agents.map(threadOf));
+    return view(agents, agents.map((agent) => threadOf(agent, agent.running === true ? "active" : "idle")));
   };
 
   it.each([

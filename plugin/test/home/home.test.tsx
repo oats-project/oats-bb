@@ -18,7 +18,7 @@ const quiet = (): Agent[] =>
   fixtureAgents().map((agent) => ({ ...agent, waiting: null, running: agent.running === true ? null : agent.running }));
 const calm = () => {
   const threads = sidebarThreads();
-  return { ...threads, threads: threads.threads.map((thread) => ({ ...thread, hasPendingInteraction: false, isUnread: false })) };
+  return { ...threads, threads: threads.threads.map((thread) => ({ ...thread, hasPendingInteraction: false, isUnread: false, status: "idle" as const })) };
 };
 
 /** bb lists nothing pending: the cards show the kernel's claims. */

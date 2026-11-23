@@ -40,6 +40,12 @@ export type BbThread = {
   isArchived: boolean;
   isHidden: boolean;
   hasPendingInteraction: boolean;
+  /**
+   * bb's own execution status of the thread, as bb gives it ("active", "starting", "stopping",
+   * "pending", "idle", "error"; a later bb may add one): what says whether an agent on this thread
+   * works (model/view.ts `state`).
+   */
+  status: string;
 };
 
 export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle";

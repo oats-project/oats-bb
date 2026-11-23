@@ -419,14 +419,17 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
 });
 
 test("while no roster is read the lifecycle offers no act: the notice of an agent that runs outside OATS keeps its own Stop and Start, so that neither is named with nothing to press", async () => {
-  // The panel holds the agent it showed while the roster is not read (bb cannot list its threads: `Oats` is "failed"),
-  // and its header's `AgentActs` then draws nothing. The block is drawn as the panel draws it, with what the panel holds then.
-  await loadApp();
+  // The panel holds the agent it showed while the roster is not read, and its header's `AgentActs` then draws
+  // nothing. The block is drawn with what the panel gives it then (`held`: true once the read has FAILED, false
+  // while it is still being read), beside the header's own acts.
   const { OutsideAgent } = await import("../../app/outside");
   const { AgentActs } = await import("../../app/lifecycle");
-  const agent: Agent = { ...fixtureAgents().find((each) => each.instance === DIGEST)!, sessionEnd: "stopped", outsideOats: REPORT };
-  const drawn = (threads: RenderSlotOptions<Contract>["sidebarThreads"]) =>
-    renderSlot<object, Contract>(
+  const report = (backend: string) => ({ ...REPORT, backend });
+  const drawn = async (threads: RenderSlotOptions<Contract>["sidebarThreads"], held: boolean, backend = "bb") => {
+    await loadApp();
+    const agent: Agent = { ...fixtureAgents().find((each) => each.instance === DIGEST)!, backend, sessionEnd: "stopped", outsideOats: report(backend) };
+    const agents = fixtureAgents().map((each): Agent => (each.instance === DIGEST ? agent : each));
+    return renderSlot<object, Contract>(
       {
         component: function Held() {
           return (
@@ -434,27 +437,49 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
               <div data-testid="header-acts">
                 <AgentActs instance={DIGEST} />
               </div>
-              <OutsideAgent agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} held={false} />
+              <OutsideAgent agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} held={held} />
             </>
           );
         },
       },
       {},
-      { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: threads },
+      { rpc: handlers({}, agents), sidebarThreads: threads },
     );
-  const unread = drawn({ status: "error", threads: [] });
-  const block = await unread.findByTestId("oats-outside-agent-block");
-  expect(actsIn(unread.getByTestId("header-acts"))).toEqual([]);
-  expect(actsIn(block)).toEqual(["Stop", "Start"]);
-  fireEvent.click(within(block).getByRole("button", { name: "Stop" }));
-  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
-  unread.unmount();
+  };
+  const buttons = (place: HTMLElement) => Array.from(place.querySelectorAll<HTMLButtonElement>(ACT)).map((button) => [button.textContent, button.disabled, button.title]);
+  // The read failed (bb cannot list its threads): both are the notice's own, held with the reason, as every act is then.
+  const failed = await drawn({ status: "error", threads: [] }, true);
+  const block = await failed.findByTestId("oats-outside-agent-block");
+  expect(actsIn(failed.getByTestId("header-acts"))).toEqual([]);
+  expect(buttons(block)).toEqual([
+    ["Stop", true, "Comes back when OATS is read again"],
+    ["Start", true, "Comes back when OATS is read again"],
+  ]);
+  failed.unmount();
   resetApp();
-  // With the roster read, the header has them, and the notice draws none.
-  await loadApp();
-  const read = drawn(sidebarThreads());
+  // Still being read: both are the notice's own, and can be pressed (the dialog asks the kernel itself).
+  const loading = await drawn({ status: "loading", threads: [] } as never, false);
+  const waiting = await loading.findByTestId("oats-outside-agent-block");
+  expect(actsIn(loading.getByTestId("header-acts"))).toEqual([]);
+  expect(buttons(waiting)).toEqual([
+    ["Stop", false, ""],
+    ["Start", false, ""],
+  ]);
+  fireEvent.click(within(waiting).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
+  loading.unmount();
+  resetApp();
+  // The roster read: the header has them, and the notice draws none.
+  const read = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(read.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
   expect(actsIn(read.getByTestId("oats-outside-agent-block"))).toEqual([]);
+  read.unmount();
+  resetApp();
+  // Act by act: an agent on another session provider has no Start of the lifecycle's. The header has Stop, so the
+  // notice draws none; and it draws no Start, which the lifecycle does not offer for it. No act is there twice.
+  const other = await drawn(sidebarThreads(), false, "other");
+  await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Stop…", "Retire…"]));
+  expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {

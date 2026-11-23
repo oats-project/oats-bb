@@ -114,6 +114,9 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
   return <AgentActs instance={instance} />;
 }
 
+/** The two acts the kernel's report names. */
+const BOTH = ["stop", "start"] as const;
+
 /**
  * The kernel's report that a harness runs in a home OATS recorded stopped, as a notice in the
  * warning tone, in a person's words: what is so (its title), what happened and what to do, and the
@@ -121,7 +124,7 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
  * one press away, under Details, through the display filter: no command is on screen where the two
  * buttons do the same. Nothing where the kernel reports nothing.
  */
-export function OutsideWarning({ said, instance, held, acts = "own" }: { said: Said | null; instance: string; held: boolean; /** "above": the place has the lifecycle's Stop and Start for this agent over the notice (the panel's header): the notice says what each does and draws no second button */ acts?: "own" | "above" }) {
+export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Said | null; instance: string; held: boolean; /** the acts the notice draws a button of its own for (both, by default); for the others it says what the act does, and the place has that act's button over the notice (the panel's header) */ own?: readonly ("stop" | "start")[] }) {
   if (said === null || said.warning === null) return null;
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
@@ -135,7 +138,7 @@ export function OutsideWarning({ said, instance, held, acts = "own" }: { said: S
             ] as const
           ).map(([act, does]) => (
             <li key={act} data-testid="oats-outside-act" className="flex min-w-0 flex-wrap items-center gap-2">
-              {acts === "own" ? <OutsideActs instance={instance} acts={[act]} held={held} /> : <span className="font-semibold text-foreground">{LABEL[act]}</span>}
+              {own.includes(act) ? <OutsideActs instance={instance} acts={[act]} held={held} /> : <span className="font-semibold text-foreground">{LABEL[act]}</span>}
               <span className="min-w-0 break-words text-muted-foreground">{does}</span>
             </li>
           ))}
@@ -202,10 +205,10 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
  *   happened in one sentence (its acts are the header's, the lifecycle's own; Stop for a session
  *   OATS lost is here, since the header offers none for an agent that reads stopped);
- * - of any agent: the kernel's report. Its Stop and Start are the header's where the header has
- *   them, and the notice then says what each does; where the header has none (no roster is read
- *   just now, so the lifecycle offers nothing), the notice keeps its own two buttons: a person
- *   never reads "Stop" and "Start" with nothing to press.
+ * - of any agent: the kernel's report. Stop and Start are the header's, act by act: one the
+ *   header has, the notice says what it does; one the header lacks (no roster is read just now,
+ *   so the lifecycle offers nothing), the notice keeps its own button for: a person never reads
+ *   "Stop" or "Start" with nothing to press, and no act is on the page twice.
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */
@@ -233,8 +236,9 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
           <OutsideActs instance={agent.instance} acts={["stop"]} held={held} />
         </div>
       )}
-      {/* (Its Stop and Start are the header's, over this block, where the header has both: the notice says what each does.) */}
-      <OutsideWarning said={said} instance={agent.instance} held={held} acts={headed.includes("stop") && headed.includes("start") ? "above" : "own"} />
+      {/* Act by act: one the header has is the header's (the notice says what it does); one it lacks is the notice's own
+          button. Start is the lifecycle's for an agent on bb only, so the notice draws none for another provider's. */}
+      <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act) && (act === "stop" || agent.backend === "bb"))} />
     </div>
   );
 }

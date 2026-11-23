@@ -249,7 +249,8 @@ describe("after the press, what is known decides what the form may offer", () =>
     // prints the marker with them: lib/errors.mjs `spawnRefusalDetails` (54-90) drops an error's
     // details only for seven codes of its table (E_CHILD_SPAWNS_DISABLED, E_BRANCH_EXISTS,
     // E_BASE_UNKNOWN, E_DECISION_STALE, E_IDEMPOTENCY_CONFLICT, E_PLACEMENT_TAKEN,
-    // E_INSTANCE_NAME_TAKEN), each raised before any rollback (core.mjs, up to line 4603). So a
+    // E_INSTANCE_NAME_TAKEN), each raised before any rollback that writes the words (core.mjs: the
+    // last at 4603, the first such rollback at 4630). So a
     // message with the words and no marker is no answer of a kernel the plugin runs on.
     const words = "x was not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present";
     expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: words }, "spawn").outcome).toBe("refused");

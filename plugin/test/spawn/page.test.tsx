@@ -486,6 +486,22 @@ test("a refusal whose rollback the kernel could not finish is never 'nothing was
   expect(calls(slot, "spawn")).toHaveLength(1);
 });
 
+test("the marker holds the form whatever the refusal's text leads with: a marked refusal with no code the plugin knows is not 'unknown' with Check result", async () => {
+  // The server words a refusal `<code>: <message>`; one whose text leads with no known code (a kernel code of another shape) still carries the marker as its issue.
+  const left = "oats-developer-2 was not launched — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/oats-developer-2: still present";
+  const slot = await ready(
+    previews({
+      spawn: () => {
+        throw Object.assign(new Error(left), { code: "conflict", issues: [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }] });
+      },
+    }),
+  );
+  fireEvent.click(submit(slot));
+  const result = await slot.findByTestId("oats-result");
+  expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent]).toEqual(["failed", "The spawn was refused, and could not be undone completely"]);
+  expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, "Spawn incomplete", true, "Close"]);
+});
+
 test("the same refusal without the kernel's marker is what its code says, whatever its words: refused, the values free again", async () => {
   // The words alone decide nothing (test/spawn/model.test.ts says why): only the marker holds the form.
   const left = "oats-developer-2 was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/oats-developer-2: still present";

@@ -471,8 +471,9 @@ const stage = (label, verbs) => ({
 const rollbackIncomplete = () => {
   const answer = JSON.parse(read(join(FIXTURES, "spawn-pi-refused.json"), "utf8"));
   if (!answer.error.message.endsWith(" — spawn rolled back")) throw new Error("spawn-pi-refused.json no longer ends with the kernel's ' — spawn rolled back'");
+  if (!answer.error.message.startsWith("form-pi-developer ")) throw new Error("spawn-pi-refused.json no longer leads with the instance it was recorded for");
   // (The recording is of another instance's spawn: the message names this scene's, as the kernel would.)
-  answer.error.message = `${answer.error.message.replace(/^form-pi-developer /, `${NAME} `).slice(0, -" — spawn rolled back".length)} — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/${NAME}: still present`;
+  answer.error.message = `${NAME} ${answer.error.message.slice("form-pi-developer ".length, -" — spawn rolled back".length)} — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/${NAME}: still present`;
   answer.error.details = { ...answer.error.details, unconfirmed: true };
   return JSON.stringify(answer);
 };

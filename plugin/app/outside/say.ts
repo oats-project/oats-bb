@@ -130,9 +130,11 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   const is = state(agent, null);
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
-  // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable,
+  // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable
+  // (by its own word: a claim makes such a row "Needs you", and it is still not one that runs),
   // and the kernel does not say that no harness is loaded (`running: false`).
-  if (archived && !attached && (is === "working" || is === "idle" || is === "needs-you") && agent.running !== false) {
+  const cannotRun = agent.runtimeState === "shell" || agent.runtimeState === "unreachable" || agent.running === false;
+  if (archived && !attached && (is === "idle" || is === "needs-you") && !cannotRun) {
     return { ...base, kind: "running-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
   }
   switch (is) {

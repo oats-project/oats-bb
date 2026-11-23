@@ -199,7 +199,8 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * For the place that shows ONE agent and is not its thread (the instance panel: first on its
  * Instance tab's page, under the header that says its state):
  * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
- *   happened in one sentence, and its acts, since it has no thread's line to carry them;
+ *   happened in one sentence (its acts are the header's, the lifecycle's own; Stop for a session
+ *   OATS lost is here, since the header offers none for an agent that reads stopped);
  * - of any agent: the kernel's report, with its acts.
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
@@ -217,9 +218,11 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
           {said.sentence}
         </p>
       )}
-      {attached ? null : (
+      {/* The panel's header has the lifecycle's acts for the agent's state (`AgentActs`). One act is not among
+          them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here, under its sentence. */}
+      {attached || said.kind !== "lost-archived" ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <DetachedActs said={said} instance={agent.instance} held={held} />
+          <OutsideActs instance={agent.instance} acts={["stop"]} held={held} />
         </div>
       )}
       <OutsideWarning said={said} instance={agent.instance} held={held} />

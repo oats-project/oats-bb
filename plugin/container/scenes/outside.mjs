@@ -369,12 +369,12 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
-        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(`[role="tabpanel"] > ${testId("oats-outside-agent-block")}:first-child`)}); if (!head || !block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), tone: block.querySelector(":scope > p")?.getAttribute("data-tone") ?? null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat) }); })()`,
+        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(`[role="tabpanel"] > ${testId("oats-outside-agent-block")}:first-child`)}); if (!head || !block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), tone: block.querySelector(":scope > p")?.getAttribute("data-tone") ?? null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat) }); })()`,
         30,
       );
       check(
-        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: ["Start…", "Retire…"] }),
-        `${at} its page says "Stopped", that its conversation was deleted in bb (in the warning tone), and has the lifecycle's Start… and Retire…`,
+        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: [], headed: ["Start…", "Retire…"] }),
+        `${at} its page says "Stopped", that its conversation was deleted in bb (in the warning tone), and has the lifecycle's Start… and Retire… in its header, once`,
         read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
       );
       await page.shot(`outside-${viewport.name}-agent-deleted`, { targets: true });
@@ -403,8 +403,8 @@ export default [
         );
         const drawn = read ? JSON.parse(read) : null;
         check(
-          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, ["Retire", "Stop", "Start"]) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
-          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with Retire, the notice's title in view, and its Stop and Start`,
+          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, ["Stop", "Start"]) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
+          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with the notice's title in view, and its Stop and Start (Retire is the header's)`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );
         await page.shot(`outside-${viewport.name}-agent-archived-outside`, { targets: true });

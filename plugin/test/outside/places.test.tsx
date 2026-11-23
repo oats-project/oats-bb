@@ -346,32 +346,37 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
     sentence: block?.querySelector(":scope > p")?.textContent ?? null,
     tone: block?.querySelector(":scope > p")?.getAttribute("data-tone") ?? null,
     acts: block === null ? [] : actsIn(block),
+    /** The lifecycle's own acts for the agent's state, in the panel's header (`AgentActs`, the panel's). */
+    headed: actsIn(within(head).getByTestId("oats-agent-acts")),
+    head,
     block,
   };
 };
 
-test("an agent whose thread was deleted in bb: its own page says \"Stopped\", what happened, and has Start and Retire", async () => {
+test("an agent whose thread was deleted in bb: its own page says \"Stopped\", what happened, and has the lifecycle's Start and Retire in its header, once", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("deleted"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: ["Start…", "Retire…"] });
-  fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Start…" }));
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: [], headed: ["Start…", "Retire…"] }); // the acts are the header's, once
+  fireEvent.click(within(header(slot).head).getByRole("button", { name: "Start…" }));
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
-test("an agent whose session OATS lost and whose thread bb archived: its own page has Stop and Retire under what happened", async () => {
+test("an agent whose session OATS lost and whose thread bb archived: its own page has Stop under what happened (the header offers none for an agent that reads stopped), and Retire in the header", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("lost-archived"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", tone: "warning", acts: ["Stop", "Retire"] });
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", tone: "warning", acts: ["Stop"], headed: ["Start…", "Retire…"] });
+  fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
 });
 
-test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire", async () => {
+test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire in its header", async () => {
   const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
-  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb. Start begins a new one.", tone: null, acts: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb. Start begins a new one.", tone: null, acts: [], headed: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
   resetApp();
   const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(deleted).kind).toBe("deleted"));
-  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] });
+  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: [], headed: ["Start…", "Retire…"] });
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {

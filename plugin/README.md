@@ -153,10 +153,10 @@ commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the tw
 `Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
 dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
 "Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
-`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). The outside feature draws `AgentActs`
-for an agent the roster draws on no thread (on its archived thread's row and under the instance
-panel's state: [Outside OATS](#outside-oats)); the instance panel and the agent's own page take it
-for every agent in their own change.
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). The instance panel places it in its
+header, under the agent's state: on the thread's OATS tab and on the agent's own page
+(`app/panel/Panel.tsx`). The outside feature draws it on the archived thread's own row of an agent
+the roster draws on no thread ([Outside OATS](#outside-oats)).
 
 ## Outside OATS
 
@@ -239,12 +239,15 @@ opens that act's dialog (`openAct`, `app/lifecycle`), which asks the kernel firs
 one press. The thread's menu offers Stop for an agent that runs outside OATS too. An agent the
 roster draws on no thread has none of the menu's entries, so its row leads to its acts: to the
 ARCHIVED thread, whose own row (`OutsideThreadRow`) has them; or, for a thread that is deleted, to
-the agent's own page, where they stand first on the Instance tab, under what happened
-(`OutsideAgent`; the header over the tabs says the state and does not scroll, so the block is on
-the page). They are the lifecycle's buttons for the agent's state (`AgentActs`: Start… and
-Retire… for a stopped agent), but for the two rows OATS reads as stopped while a process runs: a
-session lost to bb's Archive has Stop and Retire (Start comes once it is stopped), and the
-kernel's report has its Stop and Start in its notice, each with what it does there.
+the agent's own page, whose header has them (the panel's `AgentActs`), over what happened, which
+stands first on the Instance tab (`OutsideAgent`; the header over the tabs says the state and does
+not scroll, so the block is on the page). They are the lifecycle's buttons for the agent's state
+(`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no
+thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
+Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
+report has its Stop and Start in its notice, each with what it does there. On the agent's page
+this feature adds one act to the header's: Stop for a session OATS lost, which reads stopped and
+is offered none there.
 
 The words are in `app/outside/words.ts`, with the fact each rests on in `WORDS.md`. Beside the
 state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent, bb's answer and
@@ -365,7 +368,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel says runs (it works, or it waits on a person), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off, with the reason beside them, while the roster is the last one read; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop… and Retire… for one on tmux), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line

@@ -114,6 +114,9 @@ describe("a row that still says it runs, and bb has its thread archived", () => 
     expect(said(unloaded, "archived", false)).toEqual({ ...PLAIN, kind: "threadless", sentence: null, note: "archived in bb", archived: true });
     expect(said(failed, "archived", false)?.kind).toBe("threadless");
     expect(said(unreachable, "archived", false)?.kind).toBe("threadless");
+    // A claim makes a failed or an unreachable row "Needs you": still not a row that runs.
+    const claim = { reason: "question", message: "ok?", since: null };
+    for (const runtimeState of ["shell", "unreachable"]) expect(said({ ...sample("harvest-knowledge-helper", { running: null, runtimeState }), waiting: claim }, "archived", false)?.kind, runtimeState).toBe("threadless");
     expect(said(operator, "archived", false)?.kind).toBe("stopped-archived");
     const runs = sample("harvest-knowledge-helper", { running: true });
     expect([said(runs, "open", true), said(runs, "missing", false)?.kind, said(runs, "unknown", false)]).toEqual([null, "threadless", null]);

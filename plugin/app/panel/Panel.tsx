@@ -32,7 +32,7 @@ import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionW
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[]; /** what bb says of the thread an agent's row names (`Oats.whereOf`); undefined while there is no roster */ whereOf(agent: Agent): ThreadWhere | undefined };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[]; /** what bb says of the thread an agent's row names (`Oats.whereOf`); "unknown" while there is no roster */ whereOf(agent: Agent): ThreadWhere };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -104,7 +104,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     soulOf: oats.soulOf,
     threadById: oats.threadById,
     retry: oats.retry,
-    whereOf: oats.phase === "ready" ? oats.whereOf : () => undefined,
+    whereOf: oats.phase === "ready" ? oats.whereOf : () => "unknown",
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };

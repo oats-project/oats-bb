@@ -97,7 +97,7 @@ function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginS
     );
   };
 
-  const { since } = agentStatus(node.agent, node.thread, now);
+  const { since } = agentStatus(node.agent, node.thread, now, "open"); // a card is of an agent drawn on its thread: bb lists it
   const text = node.agent.waiting?.message ?? asked?.title ?? "needs your input";
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== text ? asked.title : null;

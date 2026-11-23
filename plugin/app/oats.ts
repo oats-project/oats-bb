@@ -50,9 +50,9 @@ export type Oats = {
       /** Agents of this roster the kernel has since refused as ones it does not know: "not in OATS any more" until the next roster. */
       gone: ReadonlySet<string>;
       /**
-       * What bb itself says of the thread an agent's row names: "open" for one the tree draws on its
-       * thread; for one it does not, bb's answer by id (archived, or no such thread), "unknown"
-       * until bb has answered (app/outside/threads.ts).
+       * What bb itself says of the thread an agent's row names: "open" for a thread bb lists; for
+       * one it does not, bb's answer by id (archived, or no such thread), "unknown" until bb has
+       * answered (app/outside/threads.ts). The one state function and `view()` read it.
        */
       whereOf(agent: Agent): ThreadWhere;
       /** Every drawn node by its thread id, and by its instance. */
@@ -73,20 +73,20 @@ export function useOats(): Oats {
   const roster = snapshot === undefined ? undefined : snapshot.ok ? snapshot : (snapshot.last ?? undefined);
 
   const threadById = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
+  // bb's sidebar lists active threads only: of the agents whose thread it does not list, bb is asked
+  // by id which it has archived (one request; none when it lists every agent's thread).
+  const whereOf = useThreadWhere(roster?.agents, threadById, roster?.at ?? "");
   const joined = useMemo(() => {
     if (roster === undefined) return null;
-    const v = view(roster.agents, threads);
+    const v = view(roster.agents, threads, whereOf);
     const nodes = flatten(v.roots);
     return {
       view: v,
       nodeByThread: new Map(nodes.map((node) => [node.thread.id, node])),
       nodeByInstance: new Map(nodes.map((node) => [node.agent.instance, node])),
     };
-  }, [roster, threads]);
+  }, [roster, threads, whereOf]);
 
-  // bb's sidebar lists active threads only: of the agents the tree draws on no thread, bb is asked
-  // by id which threads it has archived (one request; none when every agent is on its thread).
-  const whereOf = useThreadWhere(joined, threadById, roster?.at ?? "");
   const gone = useGone(roster?.at ?? null);
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);
   const soulOf = (agent: Agent) => soulNames.get(agent.soul) ?? agent.soul;

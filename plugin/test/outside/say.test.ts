@@ -59,6 +59,14 @@ describe("any state, with the kernel's outsideOats", () => {
       }
     }
   });
+  it("view() takes what bb says of the threads it does not list, and counts by the same state function", () => {
+    const lost = recorded("threadDeleted");
+    const asked: string[] = [];
+    const v = view([lost], [], (each) => (asked.push(each.instance), "archived"));
+    expect(v.detached).toEqual([lost]);
+    expect(asked).toEqual([lost.instance]); // the state of an agent on no thread is read with bb's answer
+    expect(v.needing).toEqual([]); // "archived" is no "needs-you"
+  });
   it("is counted among the agents that need a person, whether bb has its thread or not", () => {
     const thread = { id: agent.threadId!, projectId: null, displayTitle: "t", updatedAt: 1, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false } satisfies BbThread;
     expect(view([agent], [thread]).needing).toEqual([agent]);
@@ -96,7 +104,6 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   });
   it("on a thread that is open, with no thread named, or before bb has answered: \"stopped\", as the kernel calls it, and nothing of this feature's on an open thread", () => {
     for (const where of ["open", "none", "unknown"] as const) expect(state(agent, null, where)).toBe("stopped");
-    expect(state(agent, null)).toBe("stopped"); // `where` left out, as every caller before this feature
     expect(said(agent, "open", true)).toBeNull();
     expect(said(agent, "unknown", false)).toBeNull();
   });

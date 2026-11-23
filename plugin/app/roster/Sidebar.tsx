@@ -16,7 +16,7 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { Agent, Node } from "../../model/types";
+import type { Agent, Node, ThreadWhere } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
@@ -78,6 +78,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
   const now = useNow();
   const outside = outsideOf(oats);
+  // What bb says of the thread a row names: the state function reads it for every row.
+  const whereOf = (agent: Agent): ThreadWhere => (oats.phase === "ready" ? oats.whereOf(agent) : "unknown");
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
@@ -133,7 +135,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     nodes.flatMap((node) => {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
-      const status = agentStatus(node.agent, node.thread, now);
+      const status = agentStatus(node.agent, node.thread, now, whereOf(node.agent));
       const drawn = rowState(status, gone.has(node.agent.instance));
       // What happened to it outside OATS (app/outside): a few words after its soul, and the mark of the kernel's report.
       const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
@@ -162,7 +164,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    */
   const threadlessRow = (agent: Agent, where: string | null, said: Said | null = null) => {
     // Its state by the one function, with what bb says of its thread: a session lost to bb's Archive or Delete is a state of its own.
-    const status = agentStatus(agent, null, now, oats.phase === "ready" ? oats.whereOf(agent) : undefined);
+    const status = agentStatus(agent, null, now, whereOf(agent));
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
     return (

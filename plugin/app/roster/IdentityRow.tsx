@@ -61,7 +61,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.
   const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
+  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now, "open").state === "stopped"; // drawn on its thread: bb lists it
   const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
   // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
@@ -87,7 +87,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
-  const read = agentStatus(agent, node.thread, now);
+  const read = agentStatus(agent, node.thread, now, oats.whereOf(agent));
   const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);

@@ -5,7 +5,7 @@
 // whatever number of places ask.
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
-import type { Agent, Node, ThreadWhere, View } from "../../model/types";
+import type { Agent, ThreadWhere } from "../../model/types";
 import { useNow } from "../roster/now";
 import { attempt, onWindowReset } from "../store";
 
@@ -79,24 +79,27 @@ export function useArchived(ids: readonly string[], token: string): ReadonlyMap<
 const NO_ONE: readonly Agent[] = [];
 
 /**
- * What bb says of the thread each agent's row names, for `useOats()`: `joined` is the roster joined
- * to bb's listed threads (null while there is none), `listed` bb's listed threads by id, `at` the
- * roster's read. bb is asked again at each roster read and each minute: it tells nobody when an
- * archived thread is deleted.
+ * What bb says of the thread each agent's row names, for `useOats()`, which gives it to the one
+ * state function and to `view()`: a function of the roster's `agents`, bb's `listed` threads by id
+ * and bb's answer for the ids it does not list. bb is asked again at each roster read (`at`) and
+ * each minute: it tells nobody when an archived thread is deleted.
+ * - an agent on tmux, or a row that names no thread: "none";
+ * - a thread bb lists: "open" ("archived" where the list itself says so);
+ * - one it does not list: "archived" or "missing" by bb's answer, "unknown" until it has answered.
  */
-export function useThreadWhere(joined: { view: View; nodeByInstance: ReadonlyMap<string, Node> } | null, listed: ReadonlyMap<string, unknown>, at: string): (agent: Agent) => ThreadWhere {
+export function useThreadWhere(agents: readonly Agent[] | undefined, listed: ReadonlyMap<string, { isArchived: boolean }>, at: string): (agent: Agent) => ThreadWhere {
   const minute = Math.floor(useNow(60_000) / 60_000);
-  const detached = joined?.view.detached ?? NO_ONE;
-  const ids = useMemo(() => detached.flatMap((agent) => (agent.threadId === null ? [] : [agent.threadId])), [detached]);
+  const roster = agents ?? NO_ONE;
+  const ids = useMemo(() => roster.flatMap((agent) => (agent.backend === "tmux" || agent.threadId === null || listed.has(agent.threadId) ? [] : [agent.threadId])), [roster, listed]);
   const archived = useArchived(ids, `${at} ${minute}`);
-  return (agent) => {
-    if (agent.backend === "tmux") return "none";
-    if (joined?.nodeByInstance.get(agent.instance)?.agent === agent) return "open";
-    if (agent.threadId === null) return "none";
-    const answer = archived.get(agent.threadId);
-    if (answer === undefined) return "unknown";
-    if (answer === "archived") return "archived";
-    // bb has no archived thread of that id: it lists it (hidden, or another row's), or it does not have it.
-    return listed.has(agent.threadId) ? "open" : "missing";
-  };
+  return useMemo(
+    () => (agent: Agent) => {
+      if (agent.backend === "tmux" || agent.threadId === null) return "none";
+      const thread = listed.get(agent.threadId);
+      if (thread !== undefined) return thread.isArchived ? "archived" : "open";
+      const answer = archived.get(agent.threadId);
+      return answer === undefined ? "unknown" : answer === "archived" ? "archived" : "missing";
+    },
+    [listed, archived],
+  );
 }

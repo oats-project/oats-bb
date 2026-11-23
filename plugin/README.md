@@ -126,9 +126,11 @@ Until bb has answered, a row claims nothing of its thread.
 
 **The state is the one state function's.** "Archived in bb" and "Deleted in bb" are two states of
 `state(agent, thread, where)` (`model/view.ts`), beside the six: a row the kernel records stopped
-with `sessionEnd: "lost"`, by what bb says of its thread. Every place reads them through
-`agentStatus` (the sidebar's row, the thread's line, the instance panel's header), with their word
-and accessible name in `app/ui/words.ts` and the mark of a failure. They are not "Stopped": after
+with `sessionEnd: "lost"`, by what bb says of its thread. `where` is REQUIRED there and in
+`agentStatus`, so that no place can say "Stopped" of an agent the tree calls "Archived in bb": the
+roster resolves it once (`Oats.whereOf(agent)`, which `view()` is given too) and every place
+passes it (the sidebar's row, the thread's line, the instance panel's header). Their word and
+accessible name are in `app/ui/words.ts`, with the mark of a failure. They are not "Stopped": after
 bb's Archive the agent's process still runs. A session lost on a thread that is open (the host
 went down) stays what the kernel calls it. An agent with `outsideOats` keeps the state OATS
 recorded, and is counted among the agents that need a person (`view().needing`: the sidebar's "N

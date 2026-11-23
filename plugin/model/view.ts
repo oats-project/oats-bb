@@ -29,14 +29,16 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * with "stopped" beside it. A session that ended in a shell, or that the kernel cannot reach, is
  * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
  *
- * `where` is what bb itself says of the thread the row names (left out: "open" with a thread, not
- * known without one). It tells two states of a session OATS LOST (a row the kernel records stopped
+ * `where` is what bb itself says of the thread the row names (`Oats.whereOf(agent)`: "open" for
+ * a thread bb lists, "unknown" until bb has answered for one it does not). It is REQUIRED, so
+ * that no place can say "Stopped" of an agent the tree calls "Archived in bb": a caller that has
+ * no answer of bb's says so ("unknown"). It tells two states of a session OATS LOST (a row the kernel records stopped
  * with `sessionEnd: "lost"`): "archived" when bb has the thread archived (bb's Archive never ends
  * the harness: the agent's process still runs, so it is not "stopped"), "deleted" when bb has no
  * such thread. By bb's answer alone, never by a message's words; with no answer, or a thread that
  * is open, the row is what the kernel calls it. An operator's stop is "stopped" wherever its thread is.
  */
-export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere = thread === null ? "unknown" : "open"): AgentState {
+export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere): AgentState {
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.backend !== "tmux" && agent.sessionEnd === "lost" && agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null)) {
@@ -103,11 +105,16 @@ export function flatten(roots: readonly Node[]): Node[] {
   return out;
 }
 
+/** `view()` with no answer of bb's for the threads it does not list: nothing is known of them. */
+const NOT_ASKED = (): ThreadWhere => "unknown";
+
 /**
  * Joins the kernel's agents to bb's threads, by `agent.threadId === thread.id` only (the ids are
  * the same strings in every bb API; never bb's environment id, which threads on one path share).
+ * `where(agent)` is what bb says of the thread of an agent the tree draws on no thread (archived,
+ * missing: `ThreadWhere`), so that the state of such an agent here is the state its row says.
  */
-export function view(agents: readonly Agent[], threads: readonly BbThread[]): View {
+export function view(agents: readonly Agent[], threads: readonly BbThread[], where: (agent: Agent) => ThreadWhere = NOT_ASKED): View {
   const threadById = new Map<string, BbThread>();
   for (const thread of threads) if (!threadById.has(thread.id)) threadById.set(thread.id, thread);
 
@@ -133,7 +140,8 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
       continue;
     }
     taken.add(thread.id);
-    drawn.set(agent.instance, { agent, thread, state: state(agent, thread), depth: 0, children: [] });
+    // An agent drawn on its thread: bb lists that thread, open.
+    drawn.set(agent.instance, { agent, thread, state: state(agent, thread, "open"), depth: 0, children: [] });
   }
 
   // The tree, by `parent`. A parent that is not drawn makes its child a root.
@@ -182,7 +190,7 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     needing: agents.filter((agent) => {
       if (agent.backend !== "tmux" && agent.outsideOats != null) return true;
       const node = drawn.get(agent.instance);
-      return (node !== undefined && node.agent === agent ? node.state : state(agent, null)) === "needs-you";
+      return (node !== undefined && node.agent === agent ? node.state : state(agent, null, where(agent))) === "needs-you";
     }),
     working: pick((node) => node.state === "working"),
     finished: pick((node) => node.state === "idle" && node.thread.isUnread),

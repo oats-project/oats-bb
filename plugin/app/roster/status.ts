@@ -34,10 +34,10 @@ export const UNREACHABLE = "OATS cannot reach its session";
 /**
  * `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now`
  * is the clock in epoch milliseconds; `where` is what bb says of the thread the row names
- * (`Oats.whereOf(agent)`), for an agent the roster draws on no thread: the state function tells a
- * session lost to bb's Archive or Delete by it (model/view.ts `state`).
+ * (`Oats.whereOf(agent)`), required of every caller: the state function tells a session lost to
+ * bb's Archive or Delete by it (model/view.ts `state`), and every place must say the same state.
  */
-export function agentStatus(agent: Agent, thread: BbThread | null, now: number, where?: ThreadWhere): AgentStatus {
+export function agentStatus(agent: Agent, thread: BbThread | null, now: number, where: ThreadWhere): AgentStatus {
   const drawn = state(agent, thread, where);
   const base = { state: drawn, word: STATE[drawn].word, kernel: null };
   switch (drawn) {

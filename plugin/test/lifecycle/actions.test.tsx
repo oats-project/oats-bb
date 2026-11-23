@@ -2,7 +2,7 @@
 // A12: Stop, Start, Restart and Retire in the thread menu (experimental_threadAction), and the
 // dialog of each that the plugin's overlay draws: the kernel's plan as what will happen and what
 // is kept, the act in progress, its result and its refusal (parity D-158 to D-173).
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@get-bb/plugin-sdk/app";
@@ -902,7 +902,7 @@ test("the Start dialog draws the kernel's row (a record the agent can write) thr
   }
 });
 
-test("a start that fails after the person moved on is told through the toaster with Open; one that is not confirmed is told as that, not as a failure", async () => {
+test("a start that fails after the person moved on is told through the toaster with Show result; one that is not confirmed is told as that, not as a failure", async () => {
   for (const [refusal, tone] of [
     ["E_SESSION_START_BUSY: a start is already in progress", "failed"],
     ["E_SPAWN_INCOMPLETE: launch requires inspection", "unknown"],
@@ -1546,4 +1546,64 @@ test("a start that is refused after its dialog was left: the toast names no butt
   expect(slot.getByTestId("oats-act-details")).toBeTruthy();
   expect(calls(slot, "startCheck")).toHaveLength(checks); // nothing is asked until the person asks
   expect(slot.getByTestId("oats-start-refresh")).toBeTruthy();
+});
+
+// ---- a dialog opened again on a result keeps what the person had chosen
+
+test("Show result keeps a stop's choice of its children: Review again reads the plan the person had asked for", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: ({ recursive }) => ({ ...stopPlanOf(), recursive: recursive !== false }), stopApply: () => held });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(within(slot.getByTestId("oats-plan-choice")).getByRole("switch")); // without its children
+  await waitFor(() => expect(calls(slot, "stopPlan")).toHaveLength(2));
+  await ready(slot);
+  const before = await leave(slot);
+  refuse(new Error("E_SESSION_STOP_FAILED: its harness was signalled and still runs"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  act(() => notified().at(-1)!.open!.run());
+  await phase(slot, "failed");
+  fireEvent.click(button(slot, "oats-act-review"));
+  await waitFor(() => expect(calls(slot, "stopPlan")).toHaveLength(3));
+  expect(calls(slot, "stopPlan").map((call) => (call.input as { recursive?: boolean }).recursive)).toEqual([true, false, false]);
+});
+
+test("Show result keeps the harness and the model of a start that was refused: the field the refusal points at holds what was typed", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  fireEvent.change(slot.getByTestId("oats-start-model"), { target: { value: "no-such-model" } });
+  const before = await leave(slot);
+  refuse(new Error("E_MODEL_UNKNOWN: pi has no model no-such-model"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  act(() => notified().at(-1)!.open!.run());
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").textContent).toContain("Change it under “Model for this start”, or leave the field blank.");
+  fireEvent.click(button(slot, "oats-start-refresh"));
+  await ready(slot);
+  expect((slot.getByTestId("oats-start-harness") as HTMLSelectElement).value).toBe("pi");
+  expect((slot.getByTestId("oats-start-model") as HTMLInputElement).value).toBe("no-such-model");
+});
+
+test("a stop's result does not wait on bb's word of the thread beyond a moment: a read that never answers leaves the confirmation's sentence", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const sdk = { ...modelsSdk(), threads: { get: () => new Promise(() => undefined) } };
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => stopReceiptOf() }, undefined, sdk);
+    await pick("stop");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "running");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100);
+    });
+    await phase(slot, "done");
+    expect(slot.getByTestId("oats-result").textContent).toContain("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+  } finally {
+    vi.useRealTimers();
+  }
 });

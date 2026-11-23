@@ -58,7 +58,9 @@ export type { PlanVerb, RunVerb, Verb };
  * (the toaster's "Show result"): the settled state as the dialog held it, with what "Check again"
  * needs (the plan and its key) and the plan's tick.
  */
-type Resume = { plan: Extract<PlanState, { phase: "settled" }>; discard: boolean } | { start: Extract<StartState, { phase: "settled" }> };
+type Resume =
+  | { plan: Extract<PlanState, { phase: "settled" }>; recursive: boolean; discard: boolean }
+  | { start: Extract<StartState, { phase: "settled" }>; harness: string; model: string };
 type Request = { verb: Verb; instance: string; id: number; resume?: Resume };
 
 let current: Request | null = null;
@@ -269,15 +271,25 @@ type PlanState =
  * is told is what happened, not what a version number promises.
  */
 async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string): Promise<boolean | null> {
+  // The stop is done and the kernel has answered: its result never waits long on this read.
+  const limit = new AbortController();
+  const timer = setTimeout(() => limit.abort(), THREAD_READ_MS);
   try {
-    const thread: unknown = await sdk.threads.get({ threadId });
+    const thread: unknown = await Promise.race([
+      sdk.threads.get({ threadId, signal: limit.signal }),
+      new Promise<null>((resolve) => limit.signal.addEventListener("abort", () => resolve(null), { once: true })),
+    ]);
     if (typeof thread !== "object" || thread === null || !("archivedAt" in thread)) return null;
     return thread.archivedAt !== null && thread.archivedAt !== undefined;
   } catch {
     // bb could not be asked (or this bb has no such read): not known, and the result says what the confirmation said.
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
+/** How long a stop's result waits for bb's word on the thread before it says what the confirmation said. */
+const THREAD_READ_MS = 5_000;
 
 function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const rpc = useRpc<Contract>();
@@ -291,7 +303,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const resumed = request.resume !== undefined && "plan" in request.resume ? request.resume : null;
   const [state, setState] = useState<PlanState>(resumed?.plan ?? { phase: "reading", kept: null, why: checking(verb, instance) });
   /** The plan's one tick: a stop's children (on, the kernel's default), a retire's worktree (off). */
-  const [recursive, setRecursive] = useState(true);
+  const [recursive, setRecursive] = useState(resumed?.recursive ?? true);
   const [discard, setDiscard] = useState(resumed?.discard ?? false);
   const [now, setNow] = useState(() => Date.now());
   const live = useRef(true);
@@ -346,7 +358,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
-      else tell(verb, instance, outcome, { plan: { phase: "settled", outcome, refusal, sent }, discard }, threadId === null || verb === "retire" ? null : { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) });
+      else tell(verb, instance, outcome, { plan: { phase: "settled", outcome, refusal, sent }, recursive, discard }, threadId === null || verb === "retire" ? null : { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) });
     };
     const answered =
       plan.action === "stop"
@@ -574,8 +586,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const resumed = request.resume !== undefined && "start" in request.resume ? request.resume.start : null;
   const [state, setState] = useState<StartState>(resumed ?? { phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
-  const [harness, setHarness] = useState("");
-  const [model, setModel] = useState("");
+  const [harness, setHarness] = useState(request.resume !== undefined && "start" in request.resume ? request.resume.harness : "");
+  const [model, setModel] = useState(request.resume !== undefined && "start" in request.resume ? request.resume.model : "");
   const live = useRef(true);
   const ticket = useRef(0);
   useEffect(() => {
@@ -637,14 +649,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           setState({ phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId });
           // The agent's new thread opens behind the result, as the Desktop opens its terminal: Close leaves the person on it.
           navigate.toThread(started.threadId);
-        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId } }, open);
+        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId }, harness, model }, open);
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         const outcome = startRefused(verb, checked.instance, refusal);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
-        // The agent's thread, as the roster on screen has it, is where a person looks next.
-        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null } }, null);
+        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model }, null);
       },
     );
   };

@@ -56,3 +56,16 @@ exit 1 and an empty stderr. The plan before it went through; nothing was removed
 the same retire, from a new plan, went through. Copied as printed: it holds no path, so nothing
 is substituted. The line the dialog adds does not depend on its message: it is decided from the
 code, the plan's backend and the row's harness.
+
+## Two answers the live scenes shape (`container/scenes/lifecycle.mjs`)
+
+Neither is a file, and neither was met by a run of ours to record:
+
+- **A retire accepted for the background**: `{ retired, deferred: true, planRevision,
+  idempotencyKey, replayed: false }`, SHAPED from the kernel's source (`lib/core.mjs` of
+  awebai/oats: the two places that answer `deferred`). The unit test of it
+  (`test/lifecycle/kernel.test.ts`) shapes the same.
+- **A start that names no thread**: the recorded `start.json` with
+  `result.session.endpoint.threadId` taken out, answered over a roster row changed to
+  `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
+  `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).

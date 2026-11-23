@@ -166,8 +166,8 @@ export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => 
  * The OATS entries are a group of their own in bb's thread menus, which bb sets apart with a
  * separator: by the SDK's string order of groups it stands after bb's organize group and before
  * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire agent (OATS)" never
- * stands directly over bb's Delete. That is all the
- * SDK allows: bb's own entries cannot be taken out of an agent's menu, nor asked to confirm.
+ * stands directly over bb's Delete. The SDK allows no more: bb's own entries cannot be taken out
+ * of an agent's menu, nor asked to confirm.
  */
 export const OATS_GROUP = "3_oats";
 

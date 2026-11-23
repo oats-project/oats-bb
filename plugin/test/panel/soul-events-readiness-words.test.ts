@@ -9,7 +9,7 @@ import { whenText } from "../../app/panel/words";
 const refusalSentence = (read: "readiness" | "activity" | "soul", code: string | null, error: string) => refusalWords(read, code, error).sentence;
 
 /** The clock the lines with an instant are said at. */
-const NOW = Date.parse("2026-11-23T12:30:30.000Z");
+const NOW = Date.parse("2026-11-23T18:16:56.000Z");
 import { checkLabel, checkState, declaredIn, itemFacts, itemLine, itemProblems, observedLine, policyLine, providerSays, summaryLine, warningLine } from "../../app/panel/readiness-words";
 import { coreNote, emptySlot, layerLabel, MODULES_AS_SPAWNED, sourceKind, sourceText, sourceWhole, spawnedFrom, whyTag } from "../../app/panel/soul-words";
 import type { PanelCapability } from "../../kernel/panel-soul";
@@ -40,12 +40,12 @@ describe("the Soul tab's words", () => {
     expect(whyTag(capability({ why: "off", reason: "off", overrides: null })).title).toBe("This soul turns off a default");
   });
   it("where it was spawned from, its modules and its line of repository and teams", () => {
-    expect(spawnedFrom({ name: "oats-expert", commit: "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d" })).toBe("Spawned from oats-expert @ ca5ff78");
+    expect(spawnedFrom({ name: "oats-expert", commit: "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea" })).toBe("Spawned from oats-expert @ ca07fa8");
     expect(spawnedFrom({ name: "oats-expert", commit: null })).toBe("Spawned from oats-expert");
     expect(MODULES_AS_SPAWNED).toBe("Modules as spawned");
     // a commit id as a version is drawn short, and is whole for the line's title
-    const pinned = { kind: "package" as const, name: "oats.bb", version: "9b95a56f237ff4006a69545963d5130d6eb4ddc5" };
-    expect([sourceText(pinned), sourceWhole(pinned)]).toEqual(["oats.bb 9b95a56", "oats.bb 9b95a56f237ff4006a69545963d5130d6eb4ddc5"]);
+    const pinned = { kind: "package" as const, name: "oats.bb", version: "ce546bb879b58d1a16400eccc0e964c9487f4621" };
+    expect([sourceText(pinned), sourceWhole(pinned)]).toEqual(["oats.bb ce546bb", "oats.bb ce546bb879b58d1a16400eccc0e964c9487f4621"]);
   });
 });
 
@@ -66,7 +66,7 @@ describe("the recorded activity's words", () => {
     ]);
     expect(eventFacts(events.events[1]!)).toEqual([{ label: "Backend", value: "bb" }, { label: "Launch configuration", value: "not reported" }, { label: "Harness", value: "claude" }]);
     expect(eventFacts(events.events[2]!)).toEqual([{ label: "Waiting claim", value: "claimed" }, { label: "Reported reason", value: "attention" }, { label: "Note", value: "How should I merge the pull request?" }]);
-    expect(eventFacts(events.events[5]!)).toEqual([{ label: "Signal", value: "not reported" }, { label: "State reported", value: "stopped" }, { label: "Waited (ms)", value: "3155" }, { label: "Targets still running", value: "0" }]);
+    expect(eventFacts(events.events[5]!)).toEqual([{ label: "Signal", value: "not reported" }, { label: "State reported", value: "stopped" }, { label: "Waited (ms)", value: "4436" }, { label: "Targets still running", value: "0" }]);
     const refused = { at: "", kind: "child-spawn-refused", producer: "kernel", incarnation: "current" as const, facts: [{ key: "child", value: "dev-b" }, { key: "unknown", value: "x" }, { key: "waitingOnYou", value: false }], setup: null, policy: { allowed: false, origin: "soul" }, differed: null };
     expect(eventFacts(refused)).toEqual([{ label: "Child", value: "dev-b" }, { label: "Waiting claim", value: "cleared" }, { label: "Reported child policy", value: "not allowed · soul" }]);
     expect([setupLine({ capability: "oats.dev", ok: true }), setupLine({ capability: "oats.x", ok: false })]).toEqual(["oats.dev: done", "oats.x: failed (continuing)"]);
@@ -79,7 +79,7 @@ describe("the recorded activity's words", () => {
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
     // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
-    expect(activitySummary(events, NOW)).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-23T12:15:20.913Z", NOW)}`);
+    expect(activitySummary(events, NOW)).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-23T18:01:45.726Z", NOW)}`);
     expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No recorded lifecycle events in this observed window.");
   });
   it("says when the evidence is not whole", () => {
@@ -170,7 +170,7 @@ describe("readiness' words", () => {
     expect(summaryLine(home.summary)).toBe("Ready — every required check passes or is not applicable.");
     expect(summaryLine({ ready: false, required: 0, fail: 0, unknown: 0 })).toBe("Readiness not established — no required checks reported.");
     expect(summaryLine({ ready: false, required: 5, fail: 2, unknown: 1 })).toBe("2 failing · 1 unknown · 5 required checks");
-    expect(observedLine("2026-11-23T12:14:47.673Z", "instance", NOW)).toBe(`Observed: ${whenText("2026-11-23T12:14:47.673Z", NOW)}. Target: instance. This is not an atomic snapshot or a permission lease.`);
+    expect(observedLine("2026-11-23T18:01:13.703Z", "instance", NOW)).toBe(`Observed: ${whenText("2026-11-23T18:01:13.703Z", NOW)}. Target: instance. This is not an atomic snapshot or a permission lease.`);
     expect(observedLine(null, "soul", NOW)).toBe("Observed. Target: soul. This is not an atomic snapshot or a permission lease.");
   });
   it("the recorded checks: their labels and states, and each item on one line", () => {
@@ -180,7 +180,7 @@ describe("readiness' words", () => {
     ]);
     expect(itemFacts(home.checks[0]!.items[1]!)).toEqual([{ label: "Producer", value: "instance modules", whole: null }, { label: "Origin", value: "package oats.framework 1.26.0 @ 41d8623", whole: null }]);
     // a commit id inside a value is drawn by its first seven, never broken inside; the whole value is the fact's title
-    expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb 9b95a56", whole: "package oats.bb 9b95a56f237ff4006a69545963d5130d6eb4ddc5 @ 9b95a56" });
+    expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb ce546bb", whole: "package oats.bb ce546bb879b58d1a16400eccc0e964c9487f4621 @ ce546bb" });
     // the recorded launch item: a session provider runs the launch, so the kernel reads no folder trust for it and names no file
     expect(itemFacts(home.checks[1]!.items[0]!).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code"]);
     // the soul's recorded readiness, where there is no home to record a session provider: the kernel did read the harness' folder trust, and the file it read is a fact, after the code

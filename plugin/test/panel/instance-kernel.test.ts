@@ -27,7 +27,7 @@ function withRow(name: string, instance: string, change: (row: Record<string, un
 }
 
 describe("the panel's read of one instance", () => {
-  it("a child on its own worktree, idle in bb: every fact is the row's own", () => {
+  it("a child on its own worktree, its harness loaded and its thread at rest in bb: every fact is the row's own", () => {
     const answer = parsePanelInstance(read("panel/status.json"), "panel-worktree-helper");
     expect(answer).toEqual({
       ok: true,
@@ -35,11 +35,11 @@ describe("the panel's read of one instance", () => {
         instance: "panel-worktree-helper",
         soul: "oats-expert",
         home: "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-        running: null,
+        running: true,
         runtimeState: "unknown",
         runtimeError: null,
-        startedAt: "2026-11-23T12:14:30.069Z",
-        createdAt: "2026-11-23T12:14:30.069Z",
+        startedAt: "2026-11-23T18:00:56.149Z",
+        createdAt: "2026-11-23T18:00:56.149Z",
         drift: { soul: null, modules: [] },
         work: "worktree",
         repo: "oats-real",
@@ -51,7 +51,7 @@ describe("the panel's read of one instance", () => {
         model: "claude-opus-5-5",
         modelFrom: "soul",
         backend: "bb",
-        threadId: "thr_fg4rks2zkp",
+        threadId: "thr_u2jw8887aw",
         tmuxSession: null,
         messagingId: null,
       },
@@ -88,7 +88,7 @@ describe("the panel's read of one instance", () => {
       "panel-worktree-helper",
     );
     expect(drifted.ok && drifted.value.drift.modules).toEqual([
-      { name: "oats.bb", status: "missing", was: "9b95a56f237ff4006a69545963d5130d6eb4ddc5", now: "9b95a56f237ff4006a69545963d5130d6eb4ddc5", reason: "package no longer locked" },
+      { name: "oats.bb", status: "missing", was: "ce546bb879b58d1a16400eccc0e964c9487f4621", now: "ce546bb879b58d1a16400eccc0e964c9487f4621", reason: "package no longer locked" },
       { name: "oats.core", status: "moved", was: "1.26.0", now: "1.27.0", reason: null },
       { name: null, status: "moved", was: null, now: null, reason: null },
     ]);

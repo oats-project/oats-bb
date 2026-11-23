@@ -5,7 +5,7 @@
   "eventsApi": 2,
   "instance": "panel-worktree-helper",
   "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-  "incarnation": "2026-11-23T12:14:30.069Z",
+  "incarnation": "2026-11-23T18:00:56.149Z",
   "count": 8,
   "returned": 8,
   "truncated": false,
@@ -28,10 +28,10 @@
   "events": [
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:14:32.037Z",
+    "at": "2026-11-23T18:00:58.151Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "spawned",
     "data": {
@@ -55,10 +55,10 @@
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:14:32.037Z",
+    "at": "2026-11-23T18:00:58.151Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "launched",
     "data": {
@@ -69,40 +69,40 @@
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:14:33.506Z",
+    "at": "2026-11-23T18:00:58.993Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "oats.board",
     "kind": "waiting",
     "data": {
      "waitingOnYou": true,
      "reason": "attention",
      "message": "How should I merge the pull request?",
-     "session": "launched@2026-11-23T12:14:32.037Z#2af046ecc35bcfef"
+     "session": "launched@2026-11-23T18:00:58.151Z#2af046ecc35bcfef"
     }
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:14:53.325Z",
+    "at": "2026-11-23T18:01:21.143Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "restarted",
     "data": {
      "phase": "restart-stop",
      "signal": null,
-     "waitedMs": 2415,
+     "waitedMs": 3775,
      "stillRunning": []
     }
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:14:53.326Z",
+    "at": "2026-11-23T18:01:21.145Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "launched",
     "data": {
@@ -110,30 +110,30 @@
      "backend": "bb",
      "launchConfig": null,
      "phase": "restart",
-     "startId": "ce3a34e7-34f5-4661-809d-d5300522ee2d"
+     "startId": "ca5c5d44-eea9-4c09-b08b-b048f9f7d5fa"
     }
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:15:06.462Z",
+    "at": "2026-11-23T18:01:33.424Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "stopped",
     "data": {
      "signal": null,
-     "waitedMs": 3155,
+     "waitedMs": 4436,
      "stillRunning": [],
      "state": "stopped"
     }
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:15:13.001Z",
+    "at": "2026-11-23T18:01:40.458Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "kernel",
     "kind": "launched",
     "data": {
@@ -141,33 +141,33 @@
      "backend": "bb",
      "launchConfig": null,
      "phase": "start",
-     "startId": "26b5b3c6-00ef-49a4-8463-727779a8ab86"
+     "startId": "4778f47f-96d1-41e8-bfb2-25d14a803739"
     }
    },
    {
     "eventsApi": 2,
-    "at": "2026-11-23T12:15:20.913Z",
+    "at": "2026-11-23T18:01:45.726Z",
     "instance": "panel-worktree-helper",
     "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-    "incarnation": "2026-11-23T12:14:30.069Z",
+    "incarnation": "2026-11-23T18:00:56.149Z",
     "producer": "oats.board",
     "kind": "waiting",
     "data": {
      "waitingOnYou": true,
      "reason": "attention",
      "message": "Which base branch?",
-     "session": "launched@2026-11-23T12:15:13.001Z#4ccb7b74b974ba7d"
+     "session": "launched@2026-11-23T18:01:40.458Z#fabb64b4d76a6c2e"
     }
    }
   ],
   "lastEvent": {
    "kind": "waiting",
-   "at": "2026-11-23T12:15:20.913Z",
+   "at": "2026-11-23T18:01:45.726Z",
    "producer": "oats.board",
-   "incarnation": "2026-11-23T12:14:30.069Z"
+   "incarnation": "2026-11-23T18:00:56.149Z"
   },
   "waitingOnYou": {
-   "since": "2026-11-23T12:15:20.913Z",
+   "since": "2026-11-23T18:01:45.726Z",
    "producer": "oats.board",
    "reason": "attention",
    "message": "Which base branch?"
@@ -176,7 +176,7 @@
    {
     "producer": "oats.board",
     "waiting": true,
-    "since": "2026-11-23T12:15:20.913Z",
+    "since": "2026-11-23T18:01:45.726Z",
     "reason": "attention",
     "message": "Which base branch?"
    }

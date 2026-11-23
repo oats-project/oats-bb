@@ -63,8 +63,8 @@ const withMessaging = (soul = null) =>
 /** A read that fails with no answer of the kernel's: the process ends badly. Reading again can go better. */
 const FAILS = { stdout: "", stderr: "oats: internal error", exit: 1 };
 const FAKE_CONFIG = join(homedir(), ".local/bin/fake-oats.json");
-const CHILD = { instance: "panel-worktree-helper", recorded: "thr_3yccq5dwhk", thread: "thr_mockups" };
-const PARENT = { instance: "redesign-ui-lead", recorded: "thr_2ixzyathpj", thread: "thr_redesign" };
+const CHILD = { instance: "panel-worktree-helper", recorded: "thr_kjrgkze2sz", thread: "thr_mockups" };
+const PARENT = { instance: "redesign-ui-lead", recorded: "thr_bkyz48xf96", thread: "thr_redesign" };
 // The second stage's agents of their own: copies of the child's row.
 const IDLE = { instance: "panel-idle-helper", thread: "thr_ci" };
 const SHELL = { instance: "panel-shell-helper", thread: "thr_harvest" };
@@ -494,7 +494,7 @@ const second = [
       // the Soul tab: the soul as spawned
       await page.evaluate(click(inPanel("oats-tab-soul")));
       const spawned = await page.until(`${textOf(inPanel("oats-panel-spawned-from"))}`, 30);
-      check(spawned === "Spawned from oats-expert @ ca5ff78", `${at} the Soul tab: where the instance was spawned from`, spawned);
+      check(spawned === "Spawned from oats-expert @ ca07fa8", `${at} the Soul tab: where the instance was spawned from`, spawned);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-as-spawned")));
         check(read === "As spawned: an instance never changes under itself. A newer soul or module needs a new instance.", `${at} and that it is as spawned`, read);
@@ -658,7 +658,7 @@ const second = [
         setVerb("instance events", derived("events.json", (result) => {
           result.truncated = true;
           result.integrity.unreadableRows = 1;
-          result.events.push({ ...result.events[1], at: "2026-11-23T12:41:00.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
+          result.events.push({ ...result.events[1], at: "2026-11-23T18:27:26.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
         }));
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Last recorded: Launch prompt · ")`, 30);

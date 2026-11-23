@@ -34,7 +34,7 @@ describe("the readiness read", () => {
     });
     expect(answer.value.checks[1]?.items[0]).toMatchObject({ subject: "launch", status: "not-applicable", required: false, producer: "harness folder trust", code: "harness-trust", file: null });
     expect(answer.value.checks[2]?.items[0]?.evidence).toEqual([
-      { name: "repoKey", value: "local//abs/real/src/oats-real" }, { name: "workspace", value: "local//abs/real/src/oats-real" }, { name: "commit", value: "b89db0bf6804f8b49e930d0c9fed8724ed5ed938" },
+      { name: "repoKey", value: "local//abs/real/src/oats-real" }, { name: "workspace", value: "local//abs/real/src/oats-real" }, { name: "commit", value: "bd67121a08cf55224dd4053449dd7220e54ba643" },
     ]);
     const provider = answer.value.checks[3]?.items[0];
     expect(provider).toMatchObject({ subject: "oats.bb session backend bb", status: "pass", producer: "session provider check", provider: { status: "ready", problems: [] } });

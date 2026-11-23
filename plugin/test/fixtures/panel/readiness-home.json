@@ -15,7 +15,7 @@
    "soul": null,
    "agentsRoot": null
   },
-  "at": "2026-11-23T12:14:44.581Z",
+  "at": "2026-11-23T18:01:10.204Z",
   "checks": {
    "installed": {
     "status": "pass",
@@ -30,9 +30,9 @@
        "from": {
         "kind": "package",
         "package": "oats.bb",
-        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
-        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
-        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+        "version": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "integrity": "sha256-d07c9b40f1c8b24e8f3ec9834902fb424ac1057e01d9b2b45bba3905c404a2c7",
         "repoKey": "local//abs/real/oats-bb.git"
        }
       },
@@ -94,7 +94,7 @@
       "evidence": {
        "repoKey": "local//abs/real/src/oats-real",
        "workspace": "local//abs/real/src/oats-real",
-       "commit": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938"
+       "commit": "bd67121a08cf55224dd4053449dd7220e54ba643"
       },
       "remedy": null
      }
@@ -143,7 +143,7 @@
    "missing": []
   },
   "kernelCopies": {
-   "store": "9035eec1175f",
+   "store": "0b47c668f48e",
    "differing": []
   },
   "summary": {

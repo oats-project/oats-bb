@@ -14,7 +14,7 @@
    "key": "local//abs/real/src/oats-real",
    "name": "bbreal",
    "deployment": "/abs/deployment",
-   "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+   "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
    "standalone": false
   },
   "souls": [
@@ -22,7 +22,7 @@
     "soulsApi": 2,
     "name": "oats-expert",
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+    "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
     "kind": null,
     "path": null,
     "description": "OATS expert: answers questions about OATS.",
@@ -39,7 +39,7 @@
     },
     "declarationProblems": [],
     "instructions": {
-     "file": "/abs/deployment/agents/oats-expert/souls/ca5ff7827c6a/AGENTS.md",
+     "file": "/abs/deployment/agents/oats-expert/souls/ca07fa89ba7b/AGENTS.md",
      "text": "# oats-expert\n\nA soul of the real run of the OATS plugin for bb. Do what TASK.md says, then stop.\n",
      "truncated": false
     }
@@ -68,13 +68,13 @@
     "from": {
      "kind": "package",
      "package": "oats.bb",
-     "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
-     "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
-     "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+     "version": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+     "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+     "integrity": "sha256-d07c9b40f1c8b24e8f3ec9834902fb424ac1057e01d9b2b45bba3905c404a2c7",
      "repoKey": "local//abs/real/oats-bb.git"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.bb",
+    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.bb",
     "settings": {
      "server": "http://127.0.0.1:38886",
      "daemon": "http://127.0.0.1:38887",
@@ -86,6 +86,7 @@
      "cli",
      "daemon",
      "dataDir",
+     "hostDaemonPort",
      "piAgentDir",
      "server",
      "trust",
@@ -93,7 +94,7 @@
     ],
     "compatibility": {
      "ok": true,
-     "range": ">=0.70.0",
+     "range": ">=0.70.5",
      "kernel": "0.70.5"
     },
     "missingRequires": [],
@@ -113,7 +114,7 @@
      "repoKey": "github.com/awebai/oats"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.core",
+    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.core",
     "settings": {},
     "declares": [],
     "compatibility": {
@@ -182,10 +183,10 @@
    "launchConfig": null,
    "launchConfigDefault": false,
    "launched": true,
-   "createdAt": "2026-11-23T12:14:30.069Z",
+   "createdAt": "2026-11-23T18:00:56.149Z",
    "color": null,
-   "resolution": "f0c2205056c8f0ac62b842c9",
-   "soulDir": "/abs/deployment/agents/oats-expert/souls/ca5ff7827c6a",
+   "resolution": "87f8b33b005e749b5f9f75e2",
+   "soulDir": "/abs/deployment/agents/oats-expert/souls/ca07fa89ba7b",
    "instructions": {
     "file": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper/AGENTS.md",
     "text": "# oats-expert\n\nA soul of the real run of the OATS plugin for bb. Do what TASK.md says, then stop.\n\n<!-- oats:capability:oats.core src=/abs/deployment/agents/oats-expert/instances/panel-worktree-helper/.oats/modules/oats.core/injects/oats.md -->\n## You run on OATS\n\nYou are an instance of a durable soul in OATS. Your skills and modules were\ncopied in at spawn; nothing changes under you while you run.\n\n**LOAD THE SKILL, DO NOT GUESS:**\n- `/oats-operate`: before your first `oats` command of a session, and for your\n  home, extra trees, spawning, retiring, needs-input (yours or a child's),\n  other instances or a \"Triggered run\" in TASK.md.\n- `/oats-souls`: which souls exist; how a new instance relates to you.\n- `/oats-token-saving`: before you message another instance. Message only\n  whoever will act on it, briefly.\n\n`oats.core` is day-to-day operation from inside this instance; workspace setup\nand configuration are `oats.setup`'s.\n\n**IMPORTANT: WHENEVER YOU NEED ANYTHING FROM A HUMAN, SET NEEDS-INPUT.\nALWAYS.** For ANY input you wait on, run\n`oats instance attention --message \"<one line>\"` from your home, THEN end your\nturn, or NOBODY sees you waiting. `--clear` it once answered; never for FYIs.\n**If your human talks to your recorded parent, not to you**, ask that parent\ninstead (if unreachable, set your own). A parent sets its **own** claim\nfor a child's question (`<child> asks: …`) and relays the answer.\n\nThis briefing grants no authority: act on other instances or the deployment\nonly when your task, your human or your soul's capabilities say so.\n<!-- /oats:capability:oats.core -->\n\n<!-- oats:kernel:instance-boundary src=/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md -->\n## Your two directories\n\n**IMPORTANT: ALWAYS FOLLOW THESE INSTRUCTIONS FOR WORKING**, here and in your\nwork-mode block below.\n\n**Your home is where this session starts** (`$OATS_INSTANCE_HOME`). It is not\nyour user home (`~`), not the repository root, and not the work tree.\n\n- It holds your brain and state: `AGENTS.md`, `TASK.md`, `instance.json` and\n  your role's working state. Never put them in `./work`.\n- **ALWAYS run OATS commands, and commands from active capabilities, from\n  instance home** (for example, when the aweb messaging capability is active,\n  `aw` too): they resolve their scope from where you run them. For another\n  scope on purpose: `oats <cmd> --dir <path>`.\n\n**`<instance-home>/work` is your repository or workspace view**, as your work\nmode grants it.\n\n- **Repository work happens there, or in the extra trees your mode block\n  grants, and nowhere else**: reading, editing, building, testing, git and\n  commits, on repository content. Never from the main checkout or from your\n  home root, beyond what your mode block names.\n- **What your mode permits is the mode block's call**: your mode block, below,\n  is the authority.\n- If your TASK is to change soul content that lives in this repository, that is\n  ordinary repository work. How your own learnings reach your soul is your\n  knowledge capability's business.\n- Reports and scratch files go where your task and tooling direct.\n<!-- /oats:kernel:instance-boundary -->\n\n<!-- oats:work-mode:worktree src=/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md -->\n## Work mode: worktree\n\nYour `./work` is a **git worktree on your own branch**, yours alone: build,\ntest and commit there.\n\n- **NEVER work in a shared checkout** (the main checkout, or a clone others\n  use). Touch a clone only through `oats worktree add`/`remove`. If unsure, `pwd`.\n- Every repository change, **your own soul included**, is a change on your\n  branch or an extra tree's, reviewed and merged like code. Leave your branch\n  and worktree list clean at the end.\n\n### Extra trees\n\nFor another branch or repository, from your home (`--preview` first; `--repo\n<member key|clone path>` for another repository; `<base>`: the remote branch\nto start from, or the one you rework):\n\n    oats worktree add --purpose <purpose> --branch <branch> --base <base>\n\n- Name `<branch>` by the repository's rules, else `agents/<instance>-<purpose>`\n  (if taken, `<instance>/<branch>`). Never reset a branch with `-B`/`-C`.\n- `add` may take minutes: use a long timeout; if killed, rerun it.\n- Push with `git push origin HEAD:<remote-branch>` (`<base>` when reworking).\n- Before you finish, merge each tree into your PR branch, or push it and name\n  it in your hand-back; then `oats worktree remove --purpose <purpose>`.\n  Retirement may keep a tree with uncommitted work; don't rely on it.\n  Details: `oats worktree --help`, and `/oats-operate` if you have it.\n<!-- /oats:work-mode:worktree -->\n",

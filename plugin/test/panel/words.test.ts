@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { ageText, attachOffered, attachWhere, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
 
-const NOW = Date.parse("2026-11-23T12:31:00.000Z");
+const NOW = Date.parse("2026-11-23T18:17:26.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -97,7 +97,7 @@ describe("the Session card", () => {
     expect(modelFromText({ model: "m", modelFrom: "toString" })).toBeNull();
   });
   it("says where the session runs", () => {
-    expect(sessionWhere({ backend: "bb", threadId: "thr_fg4rks2zkp", tmuxSession: null })).toEqual({ where: "bb thread", id: "thr_fg4rks2zkp", idName: "the thread's id in bb" });
+    expect(sessionWhere({ backend: "bb", threadId: "thr_u2jw8887aw", tmuxSession: null })).toEqual({ where: "bb thread", id: "thr_u2jw8887aw", idName: "the thread's id in bb" });
     expect(sessionWhere({ backend: "bb", threadId: null, tmuxSession: null })).toEqual({ where: "bb", id: null, idName: "the thread's id in bb" });
     expect(sessionWhere({ backend: "tmux", threadId: null, tmuxSession: "oats-main" })).toEqual({ where: "tmux session", id: "oats-main", idName: "the tmux session's name" });
     expect(sessionWhere({ backend: null, threadId: null, tmuxSession: "oats-main" })?.id).toBe("oats-main");

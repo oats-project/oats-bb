@@ -153,9 +153,8 @@ const noticeWatchers = new Set<() => void>();
 const tell = () => {
   for (const watcher of noticeWatchers) watcher();
 };
-onWindowReset(() => {
-  pagesWithNotice = 0;
-});
+// (Nothing is reset with the window: each notice counts itself in when it mounts and out when it
+// unmounts, and a count set to zero under a mounted page would go below it.)
 /** Whether a page drawn now shows the full notice over a roster kept as last read. */
 export function usePageShowsNotice(): boolean {
   return useSyncExternalStore(

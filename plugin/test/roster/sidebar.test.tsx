@@ -362,8 +362,8 @@ test("while OATS cannot be read after it was, the tree stays as last read under 
   // "New agent" is held with the acts: in its place, off, with the reason, and it opens nothing.
   const newAgent = slot.getByTestId("oats-new-agent") as HTMLButtonElement;
   expect([newAgent.disabled, newAgent.title]).toEqual([true, "Comes back when OATS is read again"]);
-  // The reason is words under the button too: a phone has no hover.
-  expect(slot.getByTestId("oats-new-agent-held").textContent).toBe("Comes back when OATS is read again");
+  // Its reason is said once here: the notice above names New agent, so no second saying under the button.
+  expect(slot.queryByTestId("oats-new-agent-held")).toBeNull();
   fireEvent.click(newAgent);
   expect(slot.inspection.navigateCalls).toEqual([]);
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
@@ -554,6 +554,10 @@ test("on the last roster read, beside a page that shows the full notice the side
   expect(line.textContent).toBe("Last observation — 2 min agoRetry");
   expect(within(slot.container).queryByTestId("oats-held")).toBeNull();
   expect(within(slot.container).queryByRole("alert")).toBeNull();
+  // With the notice down to one line, New agent's reason is words under it (a phone has no hover), tied to the button.
+  const heldNew = within(slot.container).getByTestId("oats-new-agent") as HTMLButtonElement;
+  const reason = within(slot.container).getByTestId("oats-new-agent-held");
+  expect([heldNew.disabled, heldNew.title, heldNew.getAttribute("aria-describedby"), reason.id, reason.textContent]).toEqual([true, "", "oats-new-agent-held", "oats-new-agent-held", "Comes back when OATS is read again"]);
   expect(within(slot.container).getAllByTestId("oats-agent-row")).toHaveLength(7); // the roster stays
   fireEvent.click(within(line).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
@@ -561,6 +565,7 @@ test("on the last roster read, beside a page that shows the full notice the side
   page.unmount();
   await waitFor(() => expect(within(slot.container).getByTestId("oats-held")).toBeTruthy());
   expect(within(slot.container).queryByTestId("oats-last-observation")).toBeNull();
+  expect(within(slot.container).queryByTestId("oats-new-agent-held")).toBeNull();
 });
 
 // The whole name is one hover away on every row: a name cut after its second line is still there.

@@ -271,11 +271,17 @@ export default [
       check(shown !== null && /^OATS is not installed on /.test(shown.title) && /Showing what was read /.test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
       // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is, and Retry.
       if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
-      const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null }) : ""; })()`, 15);
-      check(oneLine !== null && new RegExp(`^\\{"line":"Last observation — ${AGE} Retry","full":false\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Last observation — <age>" and Retry`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))})?.innerText.trim() ?? null }) : ""; })()`, 15);
+      check(oneLine !== null && new RegExp(`^\\{"line":"Last observation — ${AGE} Retry","full":false,"why":"Comes back when OATS is read again"\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Last observation — <age>" and Retry, and the held New agent says why under it`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // (The home's image, below, holds the sidebar's one line beside the page's notice.)
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
+      // The home left (a page of bb's own, with no notice of the plugin's): the sidebar's notice is whole
+      // again. A page bb kept mounted out of sight would leave the one line with no full notice in view.
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the sidebar is shown after the home is left`);
+      const whole = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); return s?.querySelector(${JSON.stringify(testId("oats-held"))}) ? JSON.stringify({ line: s.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))}) !== null }) : ""; })()`, 15);
+      check(whole === JSON.stringify({ line: false, why: false }), `${at} with the home left the sidebar's notice is whole again: no one line, and New agent's reason is in the notice alone`, whole ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
     },
   },
   {

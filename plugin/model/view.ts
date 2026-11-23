@@ -14,7 +14,8 @@ export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">):
 
 /**
  * The claim an agent shows: what it waits on a person for, as the kernel's row carries it, or
- * null. ONE gate (the Desktop's `waitingClaim`), so that the tree, the thread's row, the home and
+ * null. ONE gate (the Desktop's `waitingClaim` for a provider's agent; for a tmux agent it shows
+ * more than the Desktop, which asks that the kernel says it runs: WORDS.md), so that the tree, the thread's row, the home and
  * the instance panel say one thing, and one rule for every backend (the spec's A2, as its author
  * amended it on 2026-11-23): a claim is hidden only for an agent the kernel calls stopped
  * (`recordedStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an

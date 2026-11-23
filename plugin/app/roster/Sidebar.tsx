@@ -21,7 +21,7 @@ import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
-import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
+import { Button, DisabledReason, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
 import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
@@ -304,19 +304,22 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <Button
             data-testid="oats-new-agent"
             disabled={oats.stale !== null}
-            title={oats.stale !== null ? HELD_REASON : undefined}
+            title={oats.stale !== null && !pageShowsNotice ? HELD_REASON : undefined}
+            aria-describedby={oats.stale !== null && pageShowsNotice ? "oats-new-agent-held" : undefined}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}
           >
             New agent
           </Button>
-          {/* The reason as words under the button, not only as its title: a phone has no hover (the lead's ruling). */}
-          {oats.stale === null ? null : (
-            <p data-testid="oats-new-agent-held" className="pt-1 text-xs text-muted-foreground">
-              {HELD_REASON}
+          {/* The reason in words, not only as a title: a phone has no hover (the lead's ruling). Said
+              ONCE in the sidebar: its full notice names New agent already; beside a page's notice the
+              sidebar has one line only, and then the reason stands under the button, tied to it. */}
+          {oats.stale !== null && pageShowsNotice ? (
+            <p id="oats-new-agent-held" data-testid="oats-new-agent-held" className="pt-1">
+              <DisabledReason>{HELD_REASON}</DisabledReason>
             </p>
-          )}
+          ) : null}
         </div>
       ) : null}
 

@@ -317,6 +317,36 @@ test("Stop on a working agent's line asks for the stop dialog of that agent, and
   expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);
 });
 
+// The line of one thread of the fixtures, with bb's row of it changed.
+const withThread = async (threadId: string, change: Partial<ReturnType<typeof sidebarThreads>["threads"][number]>) => {
+  const app = await loadApp();
+  setAgentPage(agentPage);
+  const threads = sidebarThreads();
+  return renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    app.threadHeaderRows[0]!,
+    { threadId, projectId: "p", environment: null },
+    { rpc: handlers({}, fixtureAgents()), sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === threadId ? { ...thread, ...change } : thread)) } },
+  );
+};
+
+test("Stop on an idle agent's line too: an agent at rest on its thread runs, and is stopped through its dialog", async () => {
+  const slot = await withThread("thr_mockups", { status: "idle", queuedWork: "none", hasPendingInteraction: false });
+  const line = await slot.findByTestId("oats-status-line");
+  expect(line.getAttribute("data-state")).toBe("idle");
+  expect(line.textContent).toBe("IdleStopInstance panel");
+  fireEvent.click(slot.getByTestId("oats-status-act"));
+  expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
+  expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);
+});
+
+test("a question bb itself shows has no act on the line: it is answered in the thread, and Answer would be a dead press", async () => {
+  const slot = await withThread("thr_mockups", { hasPendingInteraction: true });
+  const line = await slot.findByTestId("oats-status-line");
+  expect(line.getAttribute("data-state")).toBe("needs-you");
+  expect(line.textContent).toBe("!Needs you· bb shows its question in this threadInstance panel");
+  expect(slot.queryByTestId("oats-status-act")).toBeNull();
+});
+
 // The time of a stop is an extra: when the read of the events fails, the line stays the state alone,
 // with no time and no error of its own (the spec's author's condition).
 test("a stopped agent whose events cannot be read says Stopped, with no time and no error on its line", async () => {

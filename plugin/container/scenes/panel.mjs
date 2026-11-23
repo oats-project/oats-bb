@@ -1088,6 +1088,9 @@ const acts = [
         // The page under the header is drawn before its image: this agent's facts start at Session (a stopped agent whose thread is gone has no Work part).
         const session = await page.until(`(() => { const t = ${textOf(inPanel("oats-panel-session-line"))}; return t !== "" ? t : ""; })()`, 30);
         check(Boolean(session), `${at} and its facts are drawn under the header: where its session ran`, session ?? (await page.evaluate(textOf(testId("oats-agent-page")))));
+        // Instance readiness is a later read (a command of its own), and it is in the image: the page is whole once it says its answer.
+        const readiness = await page.until(`(() => { const t = ${textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-summary")}`)}; return t !== "" ? t : ""; })()`, 40);
+        check(Boolean(readiness), `${at} and its readiness is read before the image: the page is whole`, readiness ?? (await page.evaluate(textOf(inPanel("oats-panel-readiness-instance")))));
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "page-missing-acts");
         await page.shot(`panel-${viewport.name}-page-missing-acts`);

@@ -3,6 +3,7 @@
 // provider-row.mjs at awebai/oats 95c7b43b): where words are the feature, bb says what the Desktop
 // says. The words every feature shares (a state, a waiting claim) are in app/ui/words.ts. No bb and
 // no React import.
+import type { AgentState } from "../../model/types";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { shown } from "../ui/text";
 import { waitingClock } from "../ui/words";
@@ -147,4 +148,4 @@ export const attachWhere = (machine: string | null): string => (machine === null
  * of (`oats session attach` refuses), also when such an agent needs the person by a claim it still
  * carries: the state alone would then say yes.
  */
-export const attachOffered = (onTmux: boolean, running: boolean | null, state: string): boolean => onTmux && running === true && (state === "working" || state === "needs-you");
+export const attachOffered = (onTmux: boolean, running: boolean | null, state: AgentState): boolean => onTmux && running === true && (state === "working" || state === "needs-you");

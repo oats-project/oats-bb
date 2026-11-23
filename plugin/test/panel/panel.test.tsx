@@ -813,7 +813,8 @@ test("an agent with no thread in bb has its acts on its own page: Start and Reti
     const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, waiting: null, ...change } : agent));
     return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
       rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance) }),
-      sidebarThreads: panelThreads(agents),
+      // bb lists the threads it has: not the one the roster still names for an agent whose thread is gone
+      sidebarThreads: panelThreads(agents.filter((agent) => agent.threadId !== "thr_gone")),
     });
   };
   // its bb thread is gone (the roster names a thread bb does not have), and the kernel has it stopped

@@ -2,7 +2,7 @@
 // panel (packages/desktop/renderer/context-panel.mjs). It reads one instance by its name and never
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
@@ -15,23 +15,23 @@ import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable"
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
-import { Button, Card, Chip, Code, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { instanceDisplayName, waitingLabel } from "../ui/words";
-import { openSoul } from "../workspace/pages";
+import { agentName, readAge, waitingLabel } from "../ui/words";
+import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
-import { PathLine, SoulMark } from "./parts";
+import { CommandText, PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
 import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, staleAge, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, attachCommand, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { /** the machine OATS is read on, by the name bb gives it; null while none is known */ machine: string | null; nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -85,24 +85,29 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   const oats = useOats();
   const tab = useShownTab();
   const key = threadId ?? instance ?? "";
-  const last = useRef<Shown | null>(null);
+  // The agent last shown is kept in state, set while drawing when the roster names another one: what
+  // a draw shows is then what the roster says at that draw, and nothing is written to a ref on the way.
+  const [last, setLast] = useState<Shown | null>(null);
+  let held = last;
   if (oats.phase === "ready") {
     const node = threadId !== undefined ? oats.nodeByThread.get(threadId) : instance !== undefined ? oats.nodeByInstance.get(instance) : undefined;
     const agent = node?.agent ?? (instance === undefined ? undefined : oats.agents.find((candidate) => candidate.instance === instance));
     // What the roster says now, also when it says the agent is gone.
-    last.current = agent === undefined ? null : { key, agent, node };
-  } else if (known !== undefined && last.current?.key !== key) {
-    last.current = { key, agent: known, node: undefined };
+    held = agent === undefined ? null : last !== null && last.key === key && last.agent === agent && last.node === node ? last : { key, agent, node };
+    if (held !== last) setLast(held);
+  } else if (known !== undefined && last?.key !== key) {
+    held = { key, agent: known, node: undefined };
+    setLast(held);
   }
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const visible = useVisibleWidth(root);
-  const held = last.current;
   // Another thread or name than the one held: nothing of that agent is known yet.
   if (held === null || held.key !== key) return null;
   const roster: Roster = {
     soulOf: oats.soulOf,
     threadById: oats.threadById,
     retry: oats.retry,
+    machine: oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null,
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
@@ -178,7 +183,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <div className="flex min-w-0 items-center gap-2.5">
           <SoulMark soul={oats.soulOf(agent)} />
           <h2 data-testid="oats-panel-name" title={shown(agent.instance)} className="m-0 min-w-0 break-words text-base font-semibold">
-            {instanceDisplayName(shown(agent.instance))}
+            {agentName(agent.instance)}
           </h2>
         </div>
         <div data-testid="oats-panel-state">
@@ -243,7 +248,7 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
       tone="error"
       code={code}
       details={refusal}
-      {...(read.data === undefined ? {} : { age: staleAge(read.data.at, now) })}
+      {...(read.data === undefined ? {} : { age: readAge(read.data.at, now) })}
       actions={
         <>
           {words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : null}
@@ -307,7 +312,7 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
     const thread = oats.nodeByInstance.get(name)?.thread;
     const bbThread = thread === undefined ? undefined : oats.threadById.get(thread.id);
     // An agent by its name as words, as every place names one; the kernel's own name is the title.
-    const words = instanceDisplayName(shown(name));
+    const words = agentName(name);
     if (bbThread === undefined) {
       return (
         <span data-testid={testId} title={shown(name)}>
@@ -416,6 +421,16 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
                 </Fact>
               )}
             </Facts>
+            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel says it runs (it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses. */}
+            {where?.where === "tmux session" && (state === "working" || state === "needs-you") ? (
+              <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
+                <p className="m-0">{attachWhere(oats.machine === null ? null : shown(oats.machine))}</p>
+                <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
+                  <CommandText command={attachCommand(facts.home)} />
+                  <CopyButton text={attachCommand(facts.home)} name="Copy the attach command" />
+                </p>
+              </div>
+            ) : null}
           </Card>
         </Section>
       )}
@@ -459,6 +474,7 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
 
 function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode }) {
   const navigate = useBbNavigate();
+  const soulsShown = usePageShown("souls");
   const answer = read.data;
   // Read again when the instance was started again or what it was built from moved: the same instance, another record.
   const soul = usePanelSoul(agent.instance, answer === undefined ? "" : JSON.stringify([answer.facts.startedAt, answer.facts.drift]));
@@ -478,19 +494,21 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
             {shown(description)}
           </p>
         )}
-        {/* With the soul it opens, at the top: never below the fold, never cut at the window's foot. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            data-testid="oats-panel-open-soul"
-            disabled={key === null}
-            onClick={() => {
-              if (key !== null) openSoul(navigate, key);
-            }}
-          >
-            Open soul page
-          </Button>
-          {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
-        </div>
+        {/* With the soul it opens, at the top: never below the fold, never cut at the window's foot. Offered only where the Souls page is shown in this release: a link leads somewhere. */}
+        {soulsShown ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              data-testid="oats-panel-open-soul"
+              disabled={key === null}
+              onClick={() => {
+                if (key !== null) openSoul(navigate, key);
+              }}
+            >
+              Open soul page
+            </Button>
+            {key !== null || answer === undefined ? null : <span data-testid="oats-panel-open-soul-why" className="text-xs text-muted-foreground">OATS lists no soul of this name here, so there is no soul page to open.</span>}
+          </div>
+        ) : null}
       </header>
       {readState}
       <SoulBody read={soul} now={now} />

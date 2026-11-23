@@ -7,7 +7,7 @@
 // What is left to bb: a read with no answer yet (in flight, or failed) is a query that is on, and
 // bb reads those again when the window takes focus or the network returns while its own realtime
 // connection is down.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import type { PluginRpcResult, StandardSchemaV1InferInput } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../../contract";
@@ -45,8 +45,6 @@ function usePanelRead<Method extends PanelMethod>(
   const held = query.data !== undefined;
   useEffect(() => setOn(!held), [held]);
   const refetch = useRef(query.refetch);
-  /** Reads again and notes when that read ended (`retry`, below), for the effects above it. */
-  const reread = useRef<() => void>(() => undefined);
   useEffect(() => {
     refetch.current = query.refetch;
   });
@@ -58,6 +56,20 @@ function usePanelRead<Method extends PanelMethod>(
   // What the held answer was read for outlives the part (a tab turned away from), so a change
   // while it was off the page is seen when it comes back.
   const key = `${method} ${JSON.stringify(input)}`;
+  const [ended, setEnded] = useState(0);
+  /**
+   * Reads again now, and notes when that read ended. Declared before the effect that calls it: on a
+   * part that is shown again (a mount) that effect runs with this very function, never with a
+   * stand-in from before the first draw.
+   */
+  const retry = useCallback(
+    () =>
+      void refetch.current().then(() => {
+        endedAt.set(key, Date.now());
+        setEnded((n) => n + 1);
+      }),
+    [key],
+  );
   const readFor = useRef(lastReadFor.get(key) ?? again);
   useEffect(() => {
     if (again !== "") lastReadFor.set(key, again);
@@ -65,8 +77,8 @@ function usePanelRead<Method extends PanelMethod>(
     // The first value known is what the first read was for, not a change.
     const unknown = readFor.current === "";
     readFor.current = again;
-    if (enabled && !unknown) reread.current();
-  }, [again, enabled, key]);
+    if (enabled && !unknown) retry();
+  }, [again, enabled, key, retry]);
   useRealtime(REALTIME_CHANGED, () => {
     if (live && enabled) void refetch.current();
   });
@@ -74,25 +86,32 @@ function usePanelRead<Method extends PanelMethod>(
   const fetching = query.isFetching;
   // When the answer held was last read: noted the first time it is seen, and again each time a
   // read asked for here ends with an answer (bb keeps the same object for an answer equal to the
-  // last one, so the object alone does not say that it was read again). Kept for the part that is
-  // shown again.
-  if (data !== undefined && receivedAt.get(key)?.data !== data) receivedAt.set(key, { data, at: Date.now() });
-  // The instant is kept by the read's key, not in this part: a read that ends while its part is
-  // off the page (a tab turned away from) is noted when the part is back.
-  const [, drawAgain] = useState(0);
+  // last one, so the object alone does not say that it was read again). The instant is kept by the
+  // read's key, not in this part, for the part that is shown again: a read that ends while its
+  // part is off the page (a tab turned away from) is noted when the part is back. Noting it reads
+  // the clock and writes what the window keeps, so it is done after the drawing, never during it.
   const answered = query.error === null && data !== undefined;
-  const ended = endedAt.get(key);
-  if (ended !== undefined && !fetching) {
-    if (answered) receivedAt.set(key, { data, at: ended });
-    endedAt.delete(key);
-  }
-  const readAt = data === undefined ? null : (receivedAt.get(key)?.at ?? null);
-  const retry = () =>
-    void refetch.current().then(() => {
-      endedAt.set(key, Date.now());
-      drawAgain((n) => n + 1);
-    });
-  reread.current = retry;
+  const [readAt, setReadAt] = useState<number | null>(() => (data === undefined ? null : (receivedAt.get(key)?.at ?? null)));
+  useEffect(() => {
+    if (data === undefined) {
+      setReadAt(null);
+      return;
+    }
+    let noted = receivedAt.get(key);
+    if (noted?.data !== data) {
+      noted = { data, at: Date.now() };
+      receivedAt.set(key, noted);
+    }
+    const at = endedAt.get(key);
+    if (at !== undefined && !fetching) {
+      if (answered) {
+        noted = { data, at };
+        receivedAt.set(key, noted);
+      }
+      endedAt.delete(key);
+    }
+    setReadAt(noted.at);
+  }, [data, key, fetching, answered, ended]);
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry, fetching, readAt };
   if (data === undefined) return { status: "loading", data: undefined, error: null, retry, fetching, readAt };
   return { status: "ready", data, error: null, retry, fetching, readAt };

@@ -6,6 +6,7 @@ import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import { InstancePanel, showPanelTab } from "../../app/panel/Panel";
+import { attachCommand } from "../../app/panel/words";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import type { Agent } from "../../model/types";
 import { handlers, loadApp, resetApp } from "../helpers/render";
@@ -285,6 +286,42 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
   expect(stateOf(slot)).toBe("Working· session started 18:13");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  // Where its session is and how to reach it: one sentence, and the command to copy (the one function the home's card uses).
+  const attach = slot.getByTestId("oats-panel-attach");
+  expect(text(attach.querySelector("p")!)).toBe("Runs in tmux on falcon. Attach from a terminal:");
+  expect(text(within(attach).getByTestId("oats-command"))).toBe(attachCommand(instanceAnswer(CHILD).facts.home));
+  expect(text(within(attach).getByTestId("oats-command"))).toMatch(/^oats session attach --home \S+$/);
+  expect(within(attach).getByRole("button", { name: "Copy the attach command" })).toBeTruthy();
+});
+
+test("the attach command is for an agent on tmux the kernel says runs: none for a stopped, an unreachable or an idle one, none for an agent on a session provider; one for a tmux agent that waits on a person", async () => {
+  const onTmux = (change: Partial<Agent>) => {
+    const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, waiting: null, ...change } : agent));
+    return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
+      rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, backend: "tmux", threadId: null, tmuxSession: "oats-agents" })) }),
+      sidebarThreads: panelThreads(agents),
+    });
+  };
+  for (const [what, change] of [
+    ["stopped", { running: false as const, runtimeState: "stopped" }],
+    ["unreachable", { running: null, runtimeState: "unreachable" }],
+    ["idle: the kernel does not say it runs", { running: null, runtimeState: "unknown" }],
+    ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
+  ] as const) {
+    const slot = onTmux(change);
+    await slot.findByTestId("oats-panel-session-line");
+    expect(slot.queryByTestId("oats-panel-attach"), what).toBeNull();
+    slot.unmount();
+  }
+  // it runs and waits on a person: the command is how to answer it
+  const waits = onTmux({ running: true, runtimeState: "running", waiting: { reason: "attention", message: "Which branch?", since: "2026-11-21T18:20:00.000Z" } });
+  await waits.findByTestId("oats-panel-session-line");
+  expect(stateOf(waits)).toContain("Needs you");
+  expect(waits.getByTestId("oats-panel-attach")).toBeTruthy();
+  waits.unmount();
+  const onBb = panel();
+  await onBb.findByTestId("oats-panel-session-line");
+  expect(onBb.queryByTestId("oats-panel-attach")).toBeNull();
 });
 
 test("a thread that is no agent's, and a name the roster does not hold, draw nothing", async () => {
@@ -339,7 +376,7 @@ test("a later read that fails keeps what was read, says how old it is and why, a
   // The one drawing of a failed read: the titled notice, with how old what is still shown is, said once.
   const stale = await slot.findByRole("alert");
   expect(text(within(stale).getByRole("heading"))).toBe("This instance could not be read again");
-  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("Showing what was read 3 min ago."); // 2 min 40 s, in the one shared form (minutes to the nearest one: `readAge`)
   expect(text(stale)).toContain("OATS_TIMEOUT");
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
   fail = false;
@@ -466,7 +503,7 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   await waitFor(() => expect(text(within(stale).getByRole("heading"))).toBe("OATS could not read this deployment"));
   expect(text(stale)).toContain("OATS says: no oats-local.yaml here");
   expect(text(stale)).toContain("E_LOCAL_MISSING");
-  expect(text(stale)).toContain("Showing what was read 2 min ago.");
+  expect(text(stale)).toContain("Showing what was read 3 min ago."); // as above: the shared `readAge`
   // Everything it read is still there: the name, the state, the claim, the facts.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-waiting")).not.toBeNull();
@@ -760,4 +797,16 @@ test("the older-build fold scrolls within its own height: the header does not gr
   const lines = fold.querySelector(".overflow-y-auto")!;
   expect(lines.className).toContain("max-h-32");
   expect(lines.children.length).toBeGreaterThan(12);
+});
+
+test("Open soul page is offered only where the Souls page is shown in this release", async () => {
+  const shownSlot = panel({ threadId: CHILD_THREAD }, {}, { settings: { pages: "home, souls" } });
+  fireEvent.click(await shownSlot.findByTestId("oats-panel-soul-link"));
+  expect(text(await shownSlot.findByTestId("oats-panel-open-soul"))).toBe("Open soul page");
+  shownSlot.unmount();
+  const hidden = panel({ threadId: CHILD_THREAD }, {}, { settings: { pages: "home" } });
+  fireEvent.click(await hidden.findByTestId("oats-panel-soul-link"));
+  await hidden.findByTestId("oats-panel-soul-name");
+  expect(hidden.queryByTestId("oats-panel-open-soul")).toBeNull();
+  expect(hidden.queryByTestId("oats-panel-open-soul-why")).toBeNull();
 });

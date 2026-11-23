@@ -62,3 +62,22 @@ export function SoulMark({ soul }: { soul: string }) {
     </span>
   );
 }
+
+/**
+ * A command to copy, in the look of the shared `Code`, whose words may be long paths: a line may
+ * end at a space or after a slash, never inside a name (`Code` breaks anywhere, which cuts a path's
+ * segment in two at a phone's width).
+ */
+export function CommandText({ command }: { command: string }) {
+  return (
+    <code data-testid="oats-command" className="min-w-0 rounded bg-muted px-1 py-0.5 text-xs text-foreground [overflow-wrap:anywhere]">
+      {command.split(" ").map((word, index) => (
+        <Fragment key={index}>
+          {index === 0 ? null : " "}
+          <PathText path={word} />
+        </Fragment>
+      ))}
+    </code>
+  );
+}
+

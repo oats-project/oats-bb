@@ -26,7 +26,7 @@ export async function sendInput(input, settings, { deadline, env = process.env }
     if (!isObject(input)) throw fail("E_SESSION_INPUT_FAILED", "the input is not an object");
     if (typeof input.text !== "string" || input.text.length === 0) throw fail("E_SESSION_INPUT_FAILED", "the input has no text");
     endpoint = readEndpoint(input.endpoint, "E_SESSION_INPUT_FAILED");
-    bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_INPUT_FAILED" });
+    bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_INPUT_FAILED" });
   } catch (error) { throw failed(error); }
 
   let interactions;

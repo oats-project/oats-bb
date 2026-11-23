@@ -108,7 +108,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
 
 ## Settings
 
-All under `settings.oats.bb` in `oats-local.yaml`. `server`, `daemon`, `trust`, `cli`,
+All under `settings.oats.bb` in `oats-local.yaml`. `server`, `daemon`, `hostDaemonPort`, `trust`, `cli`,
 `dataDir` and `piAgentDir` are host-only: a committed workspace or soul file cannot set them, because they choose an
 executable, an endpoint that runs commands, and a statement about this machine.
 
@@ -124,7 +124,8 @@ settings:
 | `version` | the version in `bb-version` | The bb-app version this deployment runs, exactly as `bb --version` prints it. The default is the one version this release of the provider is contract-tested against. Another version is refused at readiness and at every launch: `E_BACKEND_VERSION`. |
 | `trust` | none (required) | Who can reach bb's port: `single-user` or `container` (see [the trust group](#the-trust-group)). Unset or anything else: `E_BACKEND_TRUST`. |
 | `server` | `http://127.0.0.1:38886` | The bb server. A loopback address only. |
-| `daemon` | `http://127.0.0.1:38887` | The bb host daemon. A loopback address only. |
+| `daemon` | `http://127.0.0.1:38887`, or the `hostDaemonPort` on 127.0.0.1 where that is set | The bb host daemon: the address readiness asks for its state. A loopback address only. With `hostDaemonPort` set, leave it unset (it follows the port); the two together must name one port (`E_BACKEND_SETTINGS`). |
+| `hostDaemonPort` | none | The port of this bb's host daemon, a number from 1 to 65535: what bb-app was started with (`--host-daemon-port`). Set it where the daemon is not on bb's default port, 38887 ([two bbs on one host](#two-bbs-on-one-host)): bb's CLI finds its host daemon by this port alone, and every bb command the provider runs is then told it (`BB_HOST_DAEMON_PORT`). Unset: no port is told, and bb's CLI uses its default. A `BB_HOST_DAEMON_PORT` in the environment OATS runs in never reaches bb, set or unset: the port comes from this setting alone, so that one bb's port is never paired with another bb's `server`. Anything that is not such a number (text included) is refused, `E_BACKEND_SETTINGS`. |
 | `cli` | `bb` | The bb CLI: a command on `PATH`, or an absolute path. |
 | `dataDir` | `.bb` in the home of the user that runs bb | bb's data directory on this host (bb-app's `--data-dir`), an absolute path. Read only for a launch in a sandboxed mode, which keeps the agent's tools off bb's thread storage there (see "What a sandboxed agent cannot change", below). |
 | `piAgentDir` | `.pi/agent` in the home of the user that runs bb | The pi configuration directory bb's server runs pi with: pi's `PI_CODING_AGENT_DIR` as the bb server's own environment has it. bb does not say where it is, so this setting does; it is host-only, set in `oats-local.yaml`. It must be an absolute path: any other value is refused by every launch and every readiness read (`E_BACKEND_SETTINGS`). The directory is read only for a pi launch and its readiness. What readiness reads is the directory itself (the `packages` of its `settings.json`), never whether the setting is there: a setting that names another directory than the one bb's server uses checks the wrong one (see [pi](#pi)). |
@@ -665,6 +666,49 @@ archived thread, so the home reads as stopped, mail to it is refused, and
 
 The same goes for a person's answer: answer a thread's question or permission prompt in
 bb. `oats session input` never answers one; it refuses while one is open.
+
+## Two bbs on one host
+
+One bb per workspace: where two workspaces share a host, each has a bb-app of its own.
+The first runs on bb's default ports. The second needs everything of its own:
+
+- its own data directory, server port and host daemon port:
+  `bb-app --data-dir <dir> --server-bind-host 127.0.0.1 --server-port <port> --host-daemon-port <port>`;
+- its own service unit, if you run bb as one;
+- its own pi configuration directory, if it runs pi agents (`piAgentDir`, and
+  `PI_CODING_AGENT_DIR` in that bb server's environment);
+- the OATS plugin for bb installed in it too: a bb's plugins are its data directory's.
+
+Then, in that workspace's `oats-local.yaml`:
+
+```yaml
+settings:
+  oats.bb:
+    trust: single-user
+    server: http://127.0.0.1:<its server port>
+    hostDaemonPort: <its host daemon port>     # a number
+    dataDir: <its data directory>
+```
+
+`hostDaemonPort` is what makes the second bb usable. bb's CLI finds the host daemon of
+the machine it runs on by `BB_HOST_DAEMON_PORT` alone (38887 by default), never from the
+server's address. Without the setting, `bb project create`, which a home's first launch
+runs, goes to the first bb's daemon, and the second bb's server refuses it: the launch
+fails with bb's "Host not found" (or "Cannot reach local host daemon" where no bb is on
+the default port), and nothing is created in either bb. With it, every bb command the
+provider runs for that workspace is told the second bb's daemon port, and the project
+and the thread are made in the second bb alone (`test/contract/contract.test.mjs` pins
+both against real bb). `oats bb doctor` prints the port bb's CLI is told
+(`host daemon port: …`). "Something answers at that port" would also be true of the
+other bb's daemon, so readiness checks what bb itself does: the daemon there says which
+host it is and which server it serves (its `/status`), and the server must list that
+host, connected (`bb host list`). Where it does not, the finding names the daemon, the
+server and the setting. A `daemon` address on
+another port than 38887 with no `hostDaemonPort` is a readiness warning
+(`session-provider-host-daemon-port`): every check passes there and the first launch
+would not.
+
+The first workspace, on bb's default ports, sets neither `server` nor `hostDaemonPort`.
 
 ## A team image: two pins
 

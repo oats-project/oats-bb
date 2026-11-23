@@ -335,6 +335,16 @@ nothing on stdout.
 
 ## The bb surface used
 At the bb-app version in `bb-version`, pinned by `test/contract/`:
+- Every CLI call carries `BB_SERVER_URL`, and, where `settings.oats.bb.hostDaemonPort` is
+  set, `BB_HOST_DAEMON_PORT` (contract A23): bb's CLI finds the host daemon of the machine
+  it runs on by that port alone (38887 by default), never from the server's address, and
+  `bb project create` needs that daemon. Unset, the provider tells no port. Either way a
+  `BB_HOST_DAEMON_PORT` in the provider's own environment is removed, as `BB_SERVER_URL`
+  is: the port comes from the setting alone. Pinned with two bb-apps in one container:
+  with the second bb's port a launch makes its project and thread there alone; without
+  it bb refuses the project (`host_not_found`) and nothing is made. With the setting,
+  readiness also runs `bb host list`: the daemon at the port (its `/status`: `hostId`,
+  `serverUrl`) must be a connected host of the configured server.
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn` (with `--title`), `bb thread tell`, `bb thread interactions list`,

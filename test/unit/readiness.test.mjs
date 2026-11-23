@@ -401,7 +401,7 @@ test("oats bb doctor prints the same findings for a person, names where the cred
   const env = (settings) => ({ ...bb.env, OATS_SETTINGS: JSON.stringify({ ...backend.settings(settings), cli: bb.cli }) });
   const ready = await runBin(["doctor"], { env: env() });
   assert.equal(ready.status, 0);
-  assert.match(ready.stdout, /^bb session provider: ready\n  warning session-provider-full-mode-only: the bb backend launches in bb's full mode only \(sandboxed modes are not offered\): .*\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n$/);
+  assert.match(ready.stdout, /^bb session provider: ready\n  host daemon port: \d+ \(settings\.oats\.bb\.hostDaemonPort\)\n  warning session-provider-full-mode-only: the bb backend launches in bb's full mode only \(sandboxed modes are not offered\): .*\n  claude-code credential: no Claude login: a credential in bb's own configuration or in the bb server's environment\n$/);
   backend.state.provider.accountEmail = "person@example.com";
   const login = await runBin(["doctor", "--json"], { env: env() });
   assert.equal(login.doc.credential, "a Claude login of bb's user");
@@ -454,8 +454,8 @@ test("a bb server bound to every address is E_BACKEND_EXPOSED, naming where it a
 });
 
 test("settings: defaults, and shapes that are refused", () => {
-  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: null, trust: null, cli: "bb", dataDir: join(homedir(), ".bb"), piAgentDir: join(homedir(), ".pi", "agent") });
-  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container", dataDir: "/srv/bb/", piAgentDir: "/srv/pi-agent/" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb", dataDir: "/srv/bb", piAgentDir: "/srv/pi-agent" });
+  assert.deepEqual(readSettings(undefined), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", daemonKey: "daemon", hostDaemonPort: null, version: null, trust: null, cli: "bb", dataDir: join(homedir(), ".bb"), piAgentDir: join(homedir(), ".pi", "agent") });
+  assert.deepEqual(readSettings({ cli: "/opt/bb/bin/bb", version: "0.50.1", trust: "container", dataDir: "/srv/bb/", piAgentDir: "/srv/pi-agent/" }), { server: "http://127.0.0.1:38886", daemon: "http://127.0.0.1:38887", daemonKey: "daemon", hostDaemonPort: null, version: "0.50.1", trust: "container", cli: "/opt/bb/bin/bb", dataDir: "/srv/bb", piAgentDir: "/srv/pi-agent" });
   assert.throws(() => readSettings([]), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ cli: "./bb" }), { code: "E_BACKEND_SETTINGS" });
   assert.throws(() => readSettings({ server: 38886 }), { code: "E_BACKEND_SETTINGS" });

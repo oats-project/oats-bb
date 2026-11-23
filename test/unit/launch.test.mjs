@@ -56,7 +56,8 @@ test("launch runs the readiness checks before it reads or changes anything in bb
   const { backend, bb, run } = await setup(t);
   await run();
   // ("machine env": the read of the project's env, for what a pi launch of this home may have left there.)
-  assert.deepEqual(verbs(bb), ["--version", "project list", "thread list", "thread list --archived", "machine env", "thread spawn"]);
+  // ("host list": the readiness of a deployment that names its host daemon's port asks bb's server for its hosts, test/unit/host-daemon-port.test.mjs.)
+  assert.deepEqual(verbs(bb), ["--version", "host list", "project list", "thread list", "thread list --archived", "machine env", "thread spawn"]);
   assert.deepEqual(backend.requests, ["/health", "/api/v1/system/providers/state?providerId=claude-code"]);
   assert.deepEqual(backend.daemonRequests, ["/status"]);
 });
@@ -583,7 +584,7 @@ test("a launch stops the home's threads archived since its previous thread was m
   const answer = await run({ previous: { server: backend.server, projectId: "proj_a", threadId: "thr_prev" } });
   assert.equal(answer.ok, true, JSON.stringify(answer));
   assert.deepEqual(stops(bb), ["thr_in_ui", "thr_prev"], "the previous thread before its archive, and the one archived after it was made; an older one was stopped by the launch that made the previous thread");
-  assert.deepEqual(verbs(bb).slice(0, 4), ["--version", "project list", "thread list", "thread list --archived"], "every read first");
+  assert.deepEqual(verbs(bb).slice(0, 5), ["--version", "host list", "project list", "thread list", "thread list --archived"], "every read first");
   assert.deepEqual(effects(bb), ["thread stop", "thread stop", "thread archive", "thread spawn"], "then the stops, the archive, and the spawn last");
 });
 

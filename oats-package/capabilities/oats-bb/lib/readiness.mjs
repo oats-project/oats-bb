@@ -11,7 +11,7 @@ import { exposedListeners } from "./exposure.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems } from "./pi-config.mjs";
 import { gapList, missingRemedy, readSandbox, sandboxKeysOf } from "./local-settings.mjs";
-import { TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
+import { DEFAULT_DAEMON_PORT, TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
 
 // Each read's own cap. Every read is also cut at the call's deadline (`left`), so a bb
@@ -88,7 +88,7 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
     }
   }
 
-  const bb = bbClient({ cli: settings.cli, server: server ?? undefined, deadline, env });
+  const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: server ?? undefined, deadline, env });
   if (settings.version != null) {
     try {
       const version = await bb.version();
@@ -118,9 +118,12 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
   }
   if (daemon) {
     // The server's /health answers before the host daemon is up; threads need the daemon.
+    // (The setting that decided the daemon's address is the one a message names:
+    // `hostDaemonPort` where it alone is set, else `daemon`.)
+    const key = `settings.oats.bb.${settings.daemonKey ?? "daemon"}`;
     const status = await http(`${daemon}/status`, left(HTTP_TIMEOUT_MS));
     if (!status.ok) {
-      add("E_BACKEND_UNREACHABLE", "unavailable", `bb's host daemon at ${daemon} does not answer (${status.message}): start bb-app, or set settings.oats.bb.daemon`);
+      add("E_BACKEND_UNREACHABLE", "unavailable", `bb's host daemon at ${daemon} does not answer (${status.message}): start bb-app, or set ${key}${settings.daemonKey === "hostDaemonPort" ? " to the port bb-app was started with (its --host-daemon-port)" : ""}`);
     } else if (!isObject(status.value) || typeof status.value.connected !== "boolean") {
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "connected": true or false)`);
     } else if (status.value.connected !== true) {
@@ -130,7 +133,16 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       // that is no http(s) origin names none.
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "serverUrl" that is an http or https address)`);
     } else if (server && !sameServer(status.value.serverUrl, server)) {
-      add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${new URL(status.value.serverUrl).origin}, not settings.oats.bb.server ${server}: point both settings at one bb`);
+      add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${new URL(status.value.serverUrl).origin}, not settings.oats.bb.server ${server}: point both settings at one bb (settings.oats.bb.server and ${key}${settings.daemonKey === "hostDaemonPort" ? ", the port that bb-app was started with: its --host-daemon-port" : ""})`);
+    } else if (server && settings.hostDaemonPort !== null && settings.hostDaemonPort !== undefined) {
+      // With a port for bb's CLI, the question is the one bb itself asks at `bb project
+      // create`: is the daemon at that port a host of THIS server? "Something answers
+      // there" is not that: another bb's daemon answers too. Two facts of bb's decide it,
+      // from the two sides: the daemon says which host it is (its /status, `hostId`) and
+      // which server it serves (checked above); the server says which hosts it has (`bb
+      // host list`). Only a host the server lists, connected, is this bb's daemon.
+      const problem = await daemonOfServer(bb, status.value.hostId, { daemon, server, port: settings.hostDaemonPort });
+      if (problem !== null) problems.push(problem);
     }
   }
   if (server) {
@@ -151,6 +163,26 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
   // mail alone: read from the pi configuration bb's server runs with, never changed here.
   if (harness === "pi") problems.push(...await piConfiguration(settings, bb));
   return { problems, server, daemon, bb, listable: server !== null && cliRuns, credential };
+}
+
+/** Whether the host daemon that answered at `daemon` (its /status named `hostId`) is a
+ *  connected host of bb's server at `server`, by the server's own list. → null, or the
+ *  problem, which names the daemon, the server and the key. A daemon that does not say
+ *  which host it is, or a list that cannot be read, proves nothing: not ready. */
+async function daemonOfServer(bb, hostId, { daemon, server, port }) {
+  const key = "settings.oats.bb.hostDaemonPort";
+  const not = (status, why) => ({ code: "E_BACKEND_NOT_READY", status, message: `${why}: point settings.oats.bb.server (${server}) and ${key} (${port}, the port that bb-app was started with: its --host-daemon-port) at one bb` });
+  if (typeof hostId !== "string" || hostId === "") return not("unavailable", `bb's host daemon at ${daemon} answered a /status that does not say which host it is (no "hostId"), so nothing shows it is a host of bb's server at ${server}`);
+  let hosts;
+  try { hosts = await bb.hosts(); }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return not("unavailable", `the hosts of bb's server at ${server} could not be read (${error.message}), so nothing shows that the host daemon at ${daemon} (host ${hostId}) is one of them`);
+  }
+  const host = hosts.find((row) => row.id === hostId);
+  if (host === undefined) return not("needs-configuration", `the host daemon at ${daemon} is host ${hostId}, which bb's server at ${server} does not have (its hosts: ${hosts.length > 0 ? someOf(hosts.map((row) => row.id), 3) : "none"}): it is another bb's daemon`);
+  if (host.status !== "connected") return not("unavailable", `the host daemon at ${daemon} is host ${hostId}, which bb's server at ${server} shows as ${JSON.stringify(host.status)}, not connected`);
+  return null;
 }
 
 /** What bb says of one of its providers. → { problem: {code, status, message} | null,
@@ -256,10 +288,23 @@ function sandboxRuntimeWarning(settings, env) {
 /** The readiness result: {status, problems, warnings}, the shape `oats readiness` relays
  *  as a providers item. `status` is ready (no problem), needs-configuration,
  *  authorization-required or unavailable. `credential` is for a person's report only. */
+/** A bb whose host daemon is not on bb's default port, and no `hostDaemonPort`: bb's CLI
+ *  is then not told where that daemon is. Every check here passes (they ask the daemon's
+ *  address, `daemon`), and the first launch of a home is refused by bb, on `bb project
+ *  create`: "host not found" where another bb's daemon listens on the default port,
+ *  "cannot reach local host daemon" where none does. A warning, not a problem: with the
+ *  key unset the provider does what it did before the key was there (contract A23). */
+function hostDaemonPortWarning(settings, daemon) {
+  if (settings.hostDaemonPort !== null && settings.hostDaemonPort !== undefined) return [];
+  if (daemon === null || portOf(daemon) === DEFAULT_DAEMON_PORT) return [];
+  return [{ code: "session-provider-host-daemon-port", message: `settings.oats.bb.daemon names port ${portOf(daemon)}, not bb's default ${DEFAULT_DAEMON_PORT}, and settings.oats.bb.hostDaemonPort is not set: bb's CLI finds its host daemon by that port alone, so a home's first launch on this bb is refused by bb ("Host not found", or "Cannot reach local host daemon"). Set hostDaemonPort: ${portOf(daemon)} in oats-local.yaml (the port bb-app was started with: its --host-daemon-port)` }];
+}
+
 export async function readinessResult(settings, options = {}) {
-  const { problems, bb, listable, credential, server } = await backendProblems(settings, options);
+  const { problems, bb, listable, credential, server, daemon } = await backendProblems(settings, options);
   // (Claude's sandbox is nothing a pi launch runs in: its planned launch is not told of bubblewrap.)
   const warnings = options.harness === "pi" ? [] : sandboxRuntimeWarning(settings, options.env ?? process.env);
+  warnings.push(...hostDaemonPortWarning(settings, daemon));
   // With no planned launch, the harness is not known: Claude's state is the problem above, and pi's is said here.
   if ((options.harness ?? null) === null && !problems.some((problem) => problem.code === "E_BACKEND_UNREACHABLE")) warnings.push(...await piWarnings(settings, { server, bb, http: options.http, deadline: options.deadline }));
   if (listable) {

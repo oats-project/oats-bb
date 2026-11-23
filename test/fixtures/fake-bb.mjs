@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // A fake `bb` for the unit tests: it stands at the provider's one real boundary, bb's CLI.
 // It answers from a script (FAKE_BB_SCRIPT, a JSON file) and records every call
-// (FAKE_BB_LOG, one JSON line per call: argv, stdin, BB_SERVER_URL). The answers' shapes
+// (FAKE_BB_LOG, one JSON line per call: argv, stdin, BB_SERVER_URL, BB_HOST_DAEMON_PORT). The answers' shapes
 // are bb-app 0.50.1's own, copied from a real server; test/contract runs the same provider
 // against that real bb, which is what keeps this fake honest.
 //
@@ -20,7 +20,7 @@ const stdin = await new Promise((resolve) => {
   process.stdin.on("data", (chunk) => { text += chunk; });
   process.stdin.on("end", () => resolve(text));
 });
-appendFileSync(process.env.FAKE_BB_LOG, `${JSON.stringify({ argv, stdin, server: process.env.BB_SERVER_URL ?? null, context: process.env.BB_THREAD_ID ?? null })}\n`);
+appendFileSync(process.env.FAKE_BB_LOG, `${JSON.stringify({ argv, stdin, server: process.env.BB_SERVER_URL ?? null, context: process.env.BB_THREAD_ID ?? null, hostDaemonPort: process.env.BB_HOST_DAEMON_PORT ?? null })}\n`);
 
 const words = argv[0] === "--version" ? ["--version"] : argv.filter((arg) => !arg.startsWith("-"));
 let key = null;
@@ -36,6 +36,12 @@ for (let n = Math.min(words.length, 3); n > 0 && key === null && !archivedRead; 
 // with no archived thread, a thread with nothing held in line.
 if (key === null && (archivedRead || words.slice(0, 3).join(" ") === "thread queue list")) {
   process.stdout.write("[]\n");
+  process.exit(0);
+}
+// The read readiness makes where the deployment names its host daemon's port: the server's
+// hosts. One, connected: the host the fake daemon of test/fixtures/harness.mjs says it is.
+if (key === null && words.slice(0, 2).join(" ") === "host list") {
+  process.stdout.write(`${JSON.stringify([{ id: "host_1", name: "falcon", type: "persistent", status: "connected", lifecycle: { phase: "active" }, maxPermissionMode: "full", lastSeenAt: 1 }])}\n`);
   process.exit(0);
 }
 // And the read every retire and every move off bb makes: a project bb holds no env for.

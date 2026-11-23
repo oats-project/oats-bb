@@ -6,7 +6,7 @@ import { bounded } from "../lib/errors.mjs";
 import { removeLaunchSettings, removeLeftovers, sandboxKeysOf } from "../lib/local-settings.mjs";
 import { clearHomeProjectEnv } from "../lib/project-env.mjs";
 import { FULL_MODE_ONLY, readinessResult } from "../lib/readiness.mjs";
-import { readSettings } from "../lib/settings.mjs";
+import { DEFAULT_DAEMON_PORT, readSettings } from "../lib/settings.mjs";
 import { retire } from "../lib/stop.mjs";
 import { PROVIDER, VERBS, answer, readStdin, settingsFromEnv } from "../lib/wire.mjs";
 
@@ -30,7 +30,8 @@ const print = (doc) => process.stdout.write(`${JSON.stringify(typeof doc?.warnin
 const USAGE = `oats bb: the bb session provider (oats.bb)
 
   oats bb doctor [--json] [--soul <name>]
-                             check this deployment's bb: server, host daemon, version,
+                             check this deployment's bb: server, host daemon (and the port
+                             bb's CLI is told to find it at), version,
                              exposure, trust, bb's claude-code provider (and, as a warning, what
                              a pi launch would be refused for), orphaned threads
                              (--soul: whose settings to read; the kernel resolves them)
@@ -107,11 +108,15 @@ async function main(argv) {
   }
   const doctor = command === "doctor" ? doctorArgs(rest) : null;
   if (doctor !== null) {
-    const { result, credential } = await readinessResult(readSettings(settingsFromEnv(process.env)));
+    const settings = readSettings(settingsFromEnv(process.env));
+    const { result, credential } = await readinessResult(settings);
     result.warnings.push({ ...FULL_MODE_ONLY });
-    if (doctor.json) print({ ...result, credential });
+    // Which host daemon port bb's CLI is told (settings.oats.bb.hostDaemonPort), or that it
+    // is told none: bb's CLI then uses its own default, or what its environment carries.
+    if (doctor.json) print({ ...result, credential, hostDaemonPort: settings.hostDaemonPort });
     else {
       process.stdout.write(`bb session provider: ${result.status}\n`);
+      process.stdout.write(`  host daemon port: ${settings.hostDaemonPort === null ? `default ${DEFAULT_DAEMON_PORT}` : `${settings.hostDaemonPort} (settings.oats.bb.hostDaemonPort)`}\n`);
       for (const problem of result.problems) process.stdout.write(`  problem ${problem.code}: ${problem.message}\n`);
       for (const warning of result.warnings) process.stdout.write(`  warning ${warning.code}: ${warning.message}\n`);
       if (credential) process.stdout.write(`  claude-code credential: ${credential}\n`);

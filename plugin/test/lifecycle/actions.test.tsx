@@ -209,10 +209,10 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
   expect(slot.getByTestId("oats-confirm").textContent).toContain("Stopping Redesign ui lead. This can take up to a minute.");
-  // While it runs the dialog cannot be dismissed into a lost result.
-  expect(button(slot, "oats-confirm-cancel").disabled).toBe(true);
-  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
-  expect(slot.getByRole("dialog")).toBeTruthy();
+  // While it runs the act cannot be asked twice, and the dialog says that it can be left: its result is never lost
+  // (it is told through the toaster then: the tests of "a way out of a dialog whose act runs", below).
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; stopping continues.");
   release();
   await phase(slot, "done");
   const result = slot.getByTestId("oats-result");
@@ -1281,4 +1281,67 @@ test("a cut-off agent whose thread cannot take a message gets no line: bb says i
   expect(archived.text).toContain("This starts a new conversation using the saved briefing and state.");
   const there = await withThreads(fixtureThreads());
   expect(there.line).toBe(true);
+});
+
+// ---- a way out of a dialog whose act runs
+
+test("while a stop runs the dialog says it can be closed and that stopping continues; closed, the result reaches the person through the toaster", async () => {
+  let answer!: (receipt: ReturnType<typeof stopReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof stopReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; stopping continues.");
+  // Close, not Cancel: nothing is cancelled. The act's own button stays off.
+  expect(slot.queryByTestId("oats-confirm-cancel")).toBeNull();
+  expect(button(slot, "oats-confirm-leave").textContent).toBe("Close");
+  expect(button(slot, "oats-confirm-leave").disabled).toBe(false);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  const before = notified().length;
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(notified().length).toBe(before); // nothing is said before there is a result
+  answer(stopReceiptOf());
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "done" });
+  expect(notified().at(-1)!.title).toMatch(/stopped\.$/);
+  expect(calls(slot, "stopApply")).toHaveLength(1);
+});
+
+test("Escape leaves a running dialog too, and a refusal that arrives after it is told as a failure, never lost", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; retiring continues.");
+  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  refuse(new Error("E_CHILDREN_RUNNING: a child would not stop"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "failed", title: "Weekly digest helper wasn't retired" });
+});
+
+test("a start that runs can be left as well: the dialog says so, and the start's result comes through the toaster with the way to the new thread", async () => {
+  let answer!: (started: ReturnType<typeof startedIn>) => void;
+  const held = new Promise<ReturnType<typeof startedIn>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; starting continues.");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  answer(startedIn("thr_digest_2"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Weekly digest helper started." });
+  // The person left: the new thread is offered, not opened under them.
+  expect(slot.inspection.navigateCalls).toEqual([]);
 });

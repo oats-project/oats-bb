@@ -37,8 +37,14 @@ export type ConfirmProps = {
     /** The kernel is being asked: `text` says for what, where the place has the Desktop's own line ("Checking instance…"). */
     | { kind: "reading"; text?: string }
     | { kind: "ready" }
-    /** The act is on its way: the dialog says so (`doing`, once, under the plan) and cannot be dismissed into a lost result. */
-    | { kind: "running"; doing: string }
+    /**
+     * The act is on its way: the dialog says so (`doing`, once, under the plan). It cannot be
+     * dismissed into a lost result: with no `leave` it stays until the act answers. `leave` is for
+     * a place that tells the result elsewhere when the dialog is gone (the toaster): the line that
+     * says so ("You can close this; stopping continues."), with Close on, and `onClose` is then
+     * called while the act runs.
+     */
+    | { kind: "running"; doing: string; leave?: string }
     /**
      * The act's result. `tone: "unknown"` is a result that is NOT CONFIRMED (an answer that was
      * lost): neither done nor failed, drawn as such, with the next step ("Check again") in
@@ -48,7 +54,7 @@ export type ConfirmProps = {
     /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
     | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
-  /** Cancel before the act, Close after it. Not called while the act runs. */
+  /** Cancel before the act, Close after it. Not called while the act runs, unless the running phase has `leave`. */
   onClose: () => void;
   returnFocus?: () => HTMLElement | null;
 };
@@ -61,8 +67,9 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
   const unnamed = phase.kind === "ready" && shownFor === null;
   const off = phase.kind !== "ready" || mismatch || unnamed || blocked !== null;
   const why = unnamed ? "OATS did not say which agent this plan is for." : blocked;
+  const leave = phase.kind === "running" ? (phase.leave ?? null) : null;
   const close = () => {
-    if (!running) onClose();
+    if (!running || leave !== null) onClose();
   };
   // The focus never falls out of the dialog when the act starts or ends: the button that held it
   // goes off, or goes away. It moves to Close once there is a result, and to the dialog meanwhile.
@@ -106,9 +113,16 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
                 {shown(why)}
               </span>
             )}
-            <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>
-              Cancel
-            </Button>
+            {leave !== null ? (
+              // The act runs on without the dialog: Close, not Cancel (nothing is cancelled).
+              <Button data-testid="oats-confirm-leave" onClick={close}>
+                Close
+              </Button>
+            ) : (
+              <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>
+                Cancel
+              </Button>
+            )}
             <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
               {confirmLabel}
             </Button>
@@ -131,7 +145,17 @@ export function Confirm({ title, about, shownFor, happens, kept = [], notice, ch
             {children}
           </>
         )}
-        {phase.kind === "running" ? <Loading>{phase.doing}</Loading> : null}
+        {phase.kind === "running" ? (
+          // One block: a place that brings the running line on screen brings the way out with it.
+          <div data-testid="oats-confirm-running" className="flex flex-col gap-1">
+            <Loading>{phase.doing}</Loading>
+            {leave === null ? null : (
+              <p data-testid="oats-confirm-leave-line" className="text-xs text-muted-foreground">
+                {leave}
+              </p>
+            )}
+          </div>
+        ) : null}
         {phase.kind === "done" ? (
           <Result title={phase.title} tone={phase.tone ?? "done"} code={phase.code} actions={phase.actions}>
             {(phase.lines ?? []).map((line, index) => (

@@ -25,6 +25,7 @@ import {
   applyRefused,
   applying,
   carriesOn,
+  LEAVE,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -191,7 +192,7 @@ function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "k
       if (dialog === null) return;
       // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
       if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
-      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-loading" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
+      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
     // Once more when the dialog has said what is out of sight ("More above", "More below"): those lines take room of their own.
@@ -356,7 +357,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "applying"
-          ? { kind: "running", doing: applying(verb, plan?.instance ?? instance) }
+          ? { kind: "running", doing: applying(verb, plan?.instance ?? instance), leave: LEAVE[verb] }
           : settledPhase(
               state.outcome,
               <>
@@ -597,7 +598,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "running"
-          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting }
+          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting, leave: LEAVE[verb] }
           : unreadable !== null
             ? { kind: "failed", title: `Couldn't check ${agentName(instance)}`, refusal: "", actions: <CannotRead refusal={unreadable} onRetry={check} /> }
             : settledPhase(

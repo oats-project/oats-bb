@@ -117,8 +117,8 @@ const whole = (key) => `(() => {
   const onScreen = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; };
   // What matters now: what the scene names; else, while the act runs, the line that says so; once it has an answer, the result; before, the notice or the first sentence of the plan.
   const phase = document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase");
-  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(`${testId("oats-confirm")} > ${testId("oats-loading")}`)} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
-  const buttons = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-cancel")}, ${testId("oats-confirm-act")}, ${testId("oats-confirm-close")}`)})];
+  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-leave-line"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
+  const buttons = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-cancel")}, ${testId("oats-confirm-leave")}, ${testId("oats-confirm-act")}, ${testId("oats-confirm-close")}`)})];
   const says = [${JSON.stringify(testId("oats-modal-above"))}, ${JSON.stringify(testId("oats-modal-below"))}].map((id) => document.querySelector(id)?.innerText ?? null);
   const above = body.scrollTop > 1;
   const below = body.scrollHeight - body.clientHeight - body.scrollTop > 1;
@@ -178,9 +178,9 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.phase === "running" && running.body.includes("Stopping Redesign ui lead. This can take up to a minute.") && running.off === true, `${at} while it runs the dialog says so, and its buttons are off`, JSON.stringify(running));
-        await page.press("Escape");
-        check((await dialog(page)).phase === "running", `${at} Escape does not dismiss the dialog while the act runs`);
+        check(running.phase === "running" && running.body.includes("Stopping Redesign ui lead. This can take up to a minute.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
+        const leave = JSON.parse(await page.evaluate(`JSON.stringify({ line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-leave"))})?.disabled ?? null })`));
+        check(leave.line === "You can close this; stopping continues." && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog says that it can be closed and that stopping continues, with Close on`, JSON.stringify(leave));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
@@ -277,7 +277,7 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.body.includes("Retiring Weekly digest helper. This can take up to a minute while sessions stop.") && running.off === true, `${at} while it runs the dialog says so, and its buttons are off`, JSON.stringify(running));
+        check(running.body.includes("Retiring Weekly digest helper. This can take up to a minute while sessions stop.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
@@ -351,7 +351,7 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.body.includes("Starting…") && running.off === true, `${at} while it starts the dialog says so, and its buttons are off`, JSON.stringify(running));
+        check(running.body.includes("Starting…") && running.off === true, `${at} while it starts the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);

@@ -677,6 +677,19 @@ describe("a confirmation", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
   });
 
+  test("a place that tells the result elsewhere lets a running dialog be left: the line that says so, Close in place of Cancel, and Escape", () => {
+    const close = vi.fn();
+    render(<Confirm {...base} onClose={close} phase={{ kind: "running", doing: "Retiring…", leave: "You can close this; retiring continues." }} />);
+    expect(screen.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; retiring continues.");
+    expect(screen.queryByTestId("oats-confirm-cancel")).toBeNull(); // nothing is cancelled: the button says Close
+    expect(screen.getByTestId("oats-confirm-leave").textContent).toBe("Close");
+    expect((screen.getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByTestId("oats-confirm-leave"));
+    expect(close).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
   test("while the act runs the dialog says so and cannot be closed; then it shows the result, or the refusal in words with the kernel's code and message", () => {
     const close = vi.fn();
     const { rerender } = render(<Confirm {...base} onClose={close} phase={{ kind: "running", doing: "Retiring…" }} />);

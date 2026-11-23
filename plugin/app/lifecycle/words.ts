@@ -215,6 +215,16 @@ export const UPDATING = "Updating for this choice…";
 export const CHECKING_AGAIN = "Checking again…";
 export const applying = (verb: PlanVerb, instance: string) =>
   verb === "retire" ? `Retiring ${agentName(instance)}. This can take up to a minute while sessions stop.` : `Stopping ${agentName(instance)}. This can take up to a minute.`;
+/**
+ * Under the line that says the act runs: a person need not wait in the dialog (the Desktop's "You
+ * can close this window; stopping continues."). The result then reaches them through bb's toaster.
+ */
+export const LEAVE = {
+  stop: "You can close this; stopping continues.",
+  retire: "You can close this; retiring continues.",
+  start: "You can close this; starting continues.",
+  restart: "You can close this; restarting continues.",
+} as const;
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is

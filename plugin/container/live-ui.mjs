@@ -239,8 +239,9 @@ function statusWithRealIds(threads, changes = {}) {
  * the person, some stopped, some with a parent. The real run holds no tmux-backed agent, so these
  * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
  * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
- * a waiting one carries the claim the kernel printed for release-070-maintainer; a stopped one is
- * `{ running: false }` with no runtimeState, as the kernel prints a stopped tmux home (README).
+ * a waiting one carries the claim the kernel printed for release-070-maintainer; and each says
+ * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
+ * runtimeState word (README).
  */
 function tmuxRoster(threads) {
   const status = JSON.parse(statusWithRealIds(threads));
@@ -254,10 +255,12 @@ function tmuxRoster(threads) {
     row.tmux = { ...model.tmux, window: instance };
     if (row.identity) row.identity = { ...row.identity, alias: instance };
     if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
-    if (how === "stopped") {
-      row.running = false;
-      delete row.runtimeState;
-    }
+    // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
+    // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
+    // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
+    // the kernel it was recorded with; a claim is shown only for a row the kernel says runs.)
+    delete row.runtimeState;
+    row.running = how !== "stopped";
     status.agents.find((group) => group.name === soul).instances.push(row);
   }
   return JSON.stringify(status);

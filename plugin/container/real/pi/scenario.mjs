@@ -4,9 +4,11 @@
 // the OATS bridge on a mock model, and the plugin installed from the checkout with `oatsBin` set
 // to the recording wrapper (../oats-record.mjs).
 //
-// It proves, THROUGH THE NEW AGENT FORM in a browser, that a person can launch a pi agent on bb:
-//   P0b a preview with the harness pi that the kernel refuses (the bridge missing) is shown as
-//       the kernel words it;
+// First, by the plugin's RPC alone (no page):
+//   P0b a preview with the harness pi that the kernel refuses (the bridge missing): the plugin's
+//       spawnPlan answers the kernel's code and message unchanged (what the form puts under
+//       Details).
+// Then it proves, THROUGH THE NEW AGENT FORM in a browser, that a person can launch a pi agent on bb:
 //   P1  a preview with the harness pi answers, and the form shows it;
 //   P2  a spawn with the harness pi creates the agent, its bb thread opens, and it answers a turn;
 //   P3  the pi agent's own needs-input (`oats instance attention`, run by pi's own shell in its
@@ -395,7 +397,7 @@ try {
   const empty = await until("no process to work in the agent's home", () => workingIn().length === 0, 150);
   check(Boolean(empty), `no process is left working in the agent's home ${Math.round((Date.now() - stoppedAt) / 1000)} s after the stop`, JSON.stringify(workingIn()));
   const retirePlan = act("retire plan", "retirePlan", { instance: NAME });
-  check(retirePlan?.instance === NAME && retirePlan.home === HOME && retirePlan.backend === "bb" && retirePlan.session !== "there" && retirePlan.children?.length === 0, "the retire plan is for the pi agent: its home, on bb, its session not there, no child", JSON.stringify(retirePlan));
+  check(retirePlan?.instance === NAME && retirePlan.home === HOME && retirePlan.backend === "bb" && retirePlan.session === "none" && retirePlan.children?.length === 0, "the retire plan is for the pi agent: its home, on bb, no session left, no child", JSON.stringify(retirePlan));
   act("retire apply", "retireApply", { instance: NAME, revision: retirePlan?.revision, key: "retire-0a1b2c3d4e5f" });
   check(rowOf(NAME) === undefined && !existsSync(HOME), "oats status: no row is left, and the home is removed");
   check(bbThread(threadId)?.archivedAt != null, "bb: the agent's thread is archived", JSON.stringify(bbThread(threadId)));

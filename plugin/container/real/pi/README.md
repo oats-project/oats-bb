@@ -54,9 +54,9 @@ for pi is in `../README.md`, "pi agents".
 
 ## What the run does
 
-Everything a person does, the run does in a browser, in the New agent form; after each act it
-reads `oats status --json` (the real `oats`), bb and the mock's log, and each check prints what it
-read.
+Everything a person does, the run does in a browser, in the New agent form (P1 to P4); P0b and P5
+call the plugin's RPC, as its UI does. After each act it reads `oats status --json` (the real
+`oats`), bb and the mock's log, and each check prints what it read.
 
 - **P0** The plugin reads the deployment on this kernel; bb reports its pi provider ready; bb's pi
   configuration lists the bridge at the kernel's version and nothing else; the plugin's harness
@@ -64,8 +64,9 @@ read.
 - **P0b a preview the kernel refuses.** With the bridge taken out of bb's pi configuration for the
   time of one call, the plugin's preview with the harness pi is refused by the provider's own
   check of the planned launch (`E_BACKEND_NOT_READY`; a kernel from 0.70.1 refuses at the preview
-  what it would refuse at the spawn), and the plugin shows the kernel's code and message
-  unchanged. The kernel's answer is kept as `answers/spawn-preview-pi-refused.json`. The
+  what it would refuse at the spawn), and the plugin's `spawnPlan` answers the kernel's code and
+  message unchanged: what the form puts under Details, below its own sentence. This step opens no
+  page. The kernel's answer is kept as `answers/spawn-preview-pi-refused.json`. The
   configuration is put back, and the next preview answers.
 - **P1 the preview.** From the sidebar's New agent: a soul, the harness **pi** from the provider's
   list, the model `mock/echo` from the models bb lists for its pi provider, an instruction and a

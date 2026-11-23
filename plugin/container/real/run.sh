@@ -15,7 +15,7 @@
 #   UPDATE_FIXTURES=1          copy the recorded answers over plugin/test/fixtures/ afterwards
 #   REAL_PI=1                  the pi run instead (pi/README.md; `ci.sh pi`): the same container and
 #                              setup, with pi, its OATS bridge and a mock model for it, on the kernel
-#                              a pi deployment runs (0.70.5), and pi/scenario.mjs in place of
+#                              a pi deployment runs, and pi/scenario.mjs in place of
 #                              scenario.mjs. Its artefacts go to real/pi/out/; it records no fixture.
 #   KEEP=1, NAME, IMAGE, DOCKER_RUN_ARGS   as container/ci.sh
 #

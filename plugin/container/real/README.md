@@ -168,9 +168,9 @@ can launch a pi agent on bb. In plain words, on the machine that runs bb:
 3. **The aweb extension for pi, `@awebai/pi`, is NOT in that configuration.** A person who also
    runs pi agents in tmux usually has it in `~/.pi/agent`: OATS then refuses every pi launch on bb
    (`E_BACKEND_PI_LISTENER`). Give bb's server a pi configuration of its own (point 2).
-4. **A kernel that pairs with a released bridge, 0.70.2 or later for everything shown here** (the
-   pi run is on 0.70.5). The question a pi extension's dialog asks reaches the home's card only
-   from bridge 0.70.2.
+4. **A kernel that pairs with a released bridge.** The pi run is on 0.70.5, and before that on
+   0.70.3: those two are what was run. By the provider's README the question a pi extension's
+   dialog asks sets a claim, and so reaches the home's card, only from bridge 0.70.2.
 5. **A model pi can use.** pi's logins and model list are those of that same configuration. The
    form's model field lists them (bb's own list for its pi provider): pick one, or give the soul a
    `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model

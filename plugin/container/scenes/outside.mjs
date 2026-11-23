@@ -335,7 +335,7 @@ export default [
         `${at} the home's card of the agent that runs outside OATS: the same state and notice, with Stop and Start, and no choice and no reply`,
         JSON.stringify(home),
       );
-      check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary.includes(" · 1 need you") && !/outside/i.test(home.summary), `${at} the home counts it as the roster's foot does: "Needs you 1", "1 need you" in the summary, and no count of its own`, JSON.stringify(home));
+      check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary === "", `${at} the home counts it as the roster's foot does: "Needs you 1" over its card, with no count of its own and no summary line (the summary is Home › Agents')`, JSON.stringify(home));
       await page.shot(`outside-${viewport.name}-home-card`, { targets: true });
 
       // failed, on its open thread
@@ -346,8 +346,8 @@ export default [
 
       // unreachable: what status says, and nothing about a message
       await open("thr_redesign");
-      line = await lineOf(page, /^Unreachable · /);
-      check(line !== null && line.words === "Unreachable · OATS cannot reach its session" && same(line.acts, ["Retry"]) && line.warning === null && !/message/i.test(await shown()), `${at} unreachable: what status says, with Retry, and nothing about a message`, line === null ? await shown() : JSON.stringify(line));
+      line = await lineOf(page, /^Unreachable$/);
+      check(line !== null && line.words === "Unreachable" && same(line.acts, ["Retry"]) && line.warning === null && !/message/i.test(await shown()), `${at} unreachable: the state's word alone, with Retry, and nothing about a message`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-unreachable`, { targets: true });
 
       // stopped, on an open thread: bb's composer is live under it, and the line says what a message there does

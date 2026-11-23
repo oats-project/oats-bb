@@ -484,7 +484,9 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     (`startedAt` in `<settings.oats.bb.dataDir>/bb-app-runtime.json`, bb-app's own record,
     whose `serverUrl` must be this server's; a record that is missing or cannot be read
     counts as "changed"); the home, where there is one, holds no `.pi` (bb resolves in
-    the thread's directory and lists from its own); and the id does not end in a date. Two listed models with the bare
+    the thread's directory and lists from its own); and the id does not end in a date
+    (with a slash or without: a bare id may itself hold one, so an id that looks full
+    may be a held-back model's bare id). Two listed models with the bare
     id are refused whatever is held back. One listed and a second held back passes, and
     bb refuses it at the thread's start, as before.
   - **Nor on a list that may be older than pi's configuration.** bb's server serves the
@@ -494,10 +496,12 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     them cannot be looked at, neither refusal is given. (The directory's own time is not
     read: every pi that starts moves it.) Not covered, and nothing shows it: where bb's
     refresh of its list fails, bb serves the list it kept, of any age, so a model added
-    to pi since is refused until bb's next good refresh; each refusal ends with that
-    way out.
+    to pi since is refused until bb's next good refresh; and a file of the three that
+    was removed in the last minute has no time left to read, so the two-provider
+    refusal may name a provider pi no longer has. Each refusal ends with the way out.
   - A row of bb's list with an id and no `routeProviderId` (a model a person added to
-    bb's own list, its `customModels`) is that id exactly and no pi provider's bare id.
+    bb's own list, its `customModels`) is left out: bb's pi resolves among pi's own
+    models only.
   - **A list that cannot settle it refuses nothing**: an error or no answer in time, an
     answer that is not such a list (one row that cannot be read is enough), an empty
     list, a list bb says it could not load (a line of its stderr), or one of the cases

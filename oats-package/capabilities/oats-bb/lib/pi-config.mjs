@@ -124,7 +124,9 @@ const PI_MODEL_FILES = ["settings.json", "models.json", "auth.json"];
  *  `now`, or one of them cannot be looked at, the list proves nothing for or against a
  *  model. → null | <short why>.
  *  (Not covered, and nothing shows it: where bb's refresh of its list fails, bb serves
- *  the list it kept, of any age.) */
+ *  the list it kept, of any age. And a file that was REMOVED a moment ago: it has no time
+ *  left to read, and the directory's own cannot stand in for it, since every pi that
+ *  starts moves that.) */
 export function piListMayBeOld(agentDir, now = Date.now()) {
   for (const name of PI_MODEL_FILES) {
     let stat;

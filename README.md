@@ -563,8 +563,10 @@ time, answers an error, an empty list or one the provider cannot read), and in t
 cases where bb lists fewer models than its pi resolves (the first two seen at bb-app
 0.50.1, pi 1.5.2):
 
-- a model whose id ends in a date (`-YYYYMMDD`) is held back from the list. Named as
-  `<provider>/<id>` it is found all the same; named by its bare id it is not checked;
+- a model whose id ends in a date (`-YYYYMMDD`) is held back from the list, and listed
+  only where it is named as its exact `<provider>/<id>`: so named, it is found. Any
+  other id that ends in a date and is not listed is not checked (a bare id may itself
+  hold a slash, so an id that looks full may be a held-back model's bare one);
 - where the pi configuration bb's server runs with sets `enabledModels`
   (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
   a thread still starts on any other model pi has. A model that is not listed is then
@@ -586,11 +588,17 @@ pi configuration bb's server runs with changed in the last minute and a half (it
 login), neither refusal is given: the launch goes on with the warning. pi writes
 `auth.json` itself when it renews a login, and that counts too.
 
-**One wrong refusal is possible, and only this one:** where bb's own refresh of pi's
-list has failed (bb then serves the list it kept, of any age, and says nothing) AND a
-model was added to pi since that list was fetched (or a provider removed). It lasts
-until bb's next good refresh. That is why each refusal ends with the way out: try
-again in a minute.
+**A wrong refusal is possible in two cases, and only these:**
+
+- where bb's own refresh of pi's list has failed (bb then serves the list it kept, of
+  any age, and says nothing) AND a model was added to pi since that list was fetched
+  (or a provider removed). It lasts until bb's next good refresh;
+- where one of those three files was removed in the last minute (a provider or a login
+  taken away with its file): a removed file has no time left to read. Only the
+  two-provider refusal can be wrong then, naming a provider pi no longer has, for a
+  minute.
+
+That is why each refusal ends with the way out: try again in a minute.
 
 What this rule reads beside bb's list is bb-app's and pi's own layout (`startedAt` in
 `bb-app-runtime.json`, the three files' times), pinned against bb-app at `bb-version`

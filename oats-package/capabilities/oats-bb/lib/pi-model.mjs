@@ -29,9 +29,11 @@
 //
 // And bb's list may be OLDER than pi's configuration: bb's server serves a list it fetched
 // for a minute as it is. Where that configuration changed a moment ago, neither refusal is
-// given (lib/pi-config.mjs piListMayBeOld). One case is left, which nothing shows: where
+// given (lib/pi-config.mjs piListMayBeOld). Two cases are left, which nothing shows: where
 // bb's refresh of its list fails, bb serves the list it kept, of any age, and a model added
-// to pi since is refused until bb's next good refresh. So every refusal says the way out.
+// to pi since is refused until bb's next good refresh; and where one of pi's files was
+// removed a moment ago (a provider, a login), the two-provider refusal may name a provider
+// pi no longer has, for a minute. So every refusal says the way out.
 import { isObject } from "./errors.mjs";
 
 export const PI_MODEL_REFUSED = "E_BACKEND_LAUNCH_ARG";
@@ -46,14 +48,15 @@ const brief = (text) => { const line = String(text).split("\n")[0].trim(); retur
 
 /** bb's list as [{id, provider, bare}], or null where a row cannot be read as one of pi's
  *  models: its `<provider>/<id>` and the provider that begins it. A row with an id and no
- *  provider at all is a model a person added to bb's own list (bb's customModels): it is
- *  that id and no pi provider's (`provider` and `bare` null), and the rest still reads. */
+ *  provider at all is a model a person added to bb's own list (bb's customModels), not one
+ *  pi reports: bb's pi resolves among pi's own models only, so such a row says nothing of
+ *  what a thread can start on. It is left out, and the rest still reads. */
 function rowsOf(value) {
   if (!Array.isArray(value)) return null;
   const rows = [];
   for (const row of value) {
     if (!isObject(row) || typeof row.id !== "string" || row.id === "") return null;
-    if (row.routeProviderId === undefined || row.routeProviderId === null) { rows.push({ id: row.id, provider: null, bare: null }); continue; }
+    if (row.routeProviderId === undefined || row.routeProviderId === null) continue;
     if (typeof row.routeProviderId !== "string" || row.routeProviderId === "") return null;
     const prefix = `${row.routeProviderId}/`;
     if (!row.id.startsWith(prefix) || row.id.length === prefix.length) return null;
@@ -82,6 +85,8 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (rows.length === 0) return { unchecked: "the list is empty" };
   if (old !== null) return { unchecked: old };
   if (partial !== null) return { unchecked: partial };
+  // Any id that ends in a date, with a slash or without: a bare id may itself hold a slash,
+  // so one that looks like `<provider>/<id>` may be a held-back model's bare id.
   if (DATED.test(model)) return { unchecked: "a model whose id ends in a date is not always listed" };
   return { refused: `pi has no model ${JSON.stringify(model)} (if you just added it to pi, ${RETRY})` };
 }

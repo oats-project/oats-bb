@@ -240,14 +240,15 @@ for (const name of ["models.json", "auth.json"]) {
   });
 }
 
-test("a model a person added to bb's own list (a row with no pi provider) is that id and nobody's bare id: the rest of the list still reads", async (t) => {
+test("a model a person added to bb's own list (a row with no pi provider) is none of pi's: bb's pi would not resolve it, so it is not taken for one, and the rest of the list still reads", async (t) => {
   const custom = { id: "my-own/model", model: "my-own/model", displayName: "Mine", description: "custom", reasoningDiscovery: "unknown", supportedReasoningEfforts: [], defaultReasoningEffort: "none", isDefault: false };
   const { refusedBoth, passesBoth } = await setup(t, { models: { stdout: [...LIST, custom, { ...custom, id: "gpt-6-astra", model: "gpt-6-astra" }] } });
-  await passesBoth("my-own/model");
+  await refusedBoth("my-own/model", 'pi has no model "my-own/model" (if you just added it to pi, try again in a minute)');
   await refusedBoth("model", 'pi has no model "model" (if you just added it to pi, try again in a minute)');
   await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)');
-  // Listed by that exact id, it passes: bb's own row for it.
-  await passesBoth("gpt-6-astra");
+  // A row of bb's own for a bare id two pi providers serve changes nothing: bb's pi still finds two.
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra (if you just changed that in pi, try again in a minute)');
+  await passesBoth("claude-fable-5.1");
 });
 
 test("an empty enabledModels narrows nothing: a model that is not listed is refused", async (t) => {

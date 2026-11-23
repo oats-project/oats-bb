@@ -18,15 +18,17 @@
     (`claude-fable-5.1`) keeps working while one provider serves it.
   - Where bb's list cannot settle it, nothing is refused and the launch goes on as
     before, with one warning (`could not check the model "<id>" against pi's model list:
-    <why>`): a list that cannot be read, a model whose id ends in a date named by its
-    bare id (bb holds such models back from its list), and any model that is not listed
+    <why>`): a list that cannot be read, an id that ends in a date and is not listed
+    (bb holds such models back from its list unless named by their exact full id), and any model that is not listed
     where bb's pi configuration sets `enabledModels` (bb then lists only those), where
     that configuration changed after bb started (bb lists by the settings its pi started
     with: restart bb after changing them), where the home has a `.pi` of its own, or
     where bb's pi configuration (`settings.json`, `models.json`, `auth.json`) changed in
     the last minute and a half (bb serves the list it fetched for a minute).
-  - One wrong refusal is possible: after a refresh of pi's list that bb failed AND a
-    model added to pi since the list bb kept. It lasts until bb's next good refresh.
+  - A wrong refusal is possible in two cases: after a refresh of pi's list that bb
+    failed AND a model added to pi since the list bb kept (until bb's next good
+    refresh); and, for the two-provider refusal, for a minute after one of those three
+    files was removed.
   - The check of a planned launch says the same, at a spawn's preview too, where the
     kernel hands it the launch's model (`launch.model`); with a kernel that does not,
     the refusal comes at the launch, with nothing created in bb.

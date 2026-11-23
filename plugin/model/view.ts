@@ -20,14 +20,21 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 }
 
 /**
- * bb's thread statuses that mean the agent on the thread WORKS (@get-bb/plugin-sdk
- * `threadStatusSchema`, 0.6.157: active, error, idle, pending, starting, stopping): a turn runs
- * ("active"), is starting or stopping, or is accepted and waits for its turn ("pending": it will
- * run). "idle" is idle; "error" (bb's last turn failed: bb shows that in the thread, and the
- * session is still there) is idle too; a status this plugin does not know is idle, as bb's SDK
- * says to treat one.
+ * Whether bb says the agent on a thread WORKS, as the bb session provider itself reads it
+ * (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`: TURN_IN_PROGRESS, SETTLED),
+ * so that the plugin and the provider agree. bb's statuses (@get-bb/plugin-sdk `threadStatusSchema`,
+ * 0.6.157: active, error, idle, pending, starting, stopping):
+ * - a turn runs, is starting or is stopping ("active", "starting", "stopping"): it works;
+ * - "pending" or "idle" with a turn bb holds in line (`queuedWork: "waiting"`: bb starts it by
+ *   itself): it works; with nothing in line: idle;
+ * - "error" (bb's last turn failed; the session is there, at rest): idle. bb shows the failure in
+ *   the thread; where the harness is gone too, the kernel's row says so and the stopped rule takes it;
+ * - a status this plugin does not know: idle, as bb's SDK says to treat one.
  */
-const WORKING: ReadonlySet<string> = new Set(["active", "starting", "stopping", "pending"]);
+const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
+const SETTLED: ReadonlySet<string> = new Set(["pending", "idle"]);
+export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): boolean =>
+  TURN_IN_PROGRESS.has(thread.status) || (SETTLED.has(thread.status) && thread.queuedWork === "waiting");
 
 /**
  * The state of one agent on its thread. First match wins.
@@ -52,7 +59,7 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.running === false) return "stopped";
   if (agent.backend === "tmux") return agent.running === true ? "working" : "idle";
   if (thread === null) return "idle";
-  return WORKING.has(thread.status) ? "working" : "idle";
+  return threadWorks(thread) ? "working" : "idle";
 }
 
 const RANK: Record<AgentState, number> = {

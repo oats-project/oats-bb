@@ -46,6 +46,11 @@ export type BbThread = {
    * works (model/view.ts `state`).
    */
   status: string;
+  /**
+   * Whether bb holds a turn in line for the thread, as bb gives it ("waiting": it will start it by
+   * itself; "none"; "failed"): a thread at rest with a turn in line is one whose agent works.
+   */
+  queuedWork: string;
 };
 
 export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle";

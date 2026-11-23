@@ -35,6 +35,7 @@ const threadOf = (agent: Agent, status = "idle"): BbThread => ({
   isHidden: false,
   hasPendingInteraction: false,
   status,
+  queuedWork: "none",
 });
 
 const home = "/abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer";

@@ -28,7 +28,8 @@ const thread = (id: string, over: Partial<BbThread> = {}): BbThread => ({
   projectId: null,
   displayTitle: id,
   updatedAt: clock--, // earlier calls are newer, so the default order is the order written
-  status: "idle", // bb's own status of the thread: what says whether its agent works
+  status: "idle", // bb's own status of the thread, and whether it holds a turn in line: what says whether its agent works
+  queuedWork: "none",
   isUnread: false,
   isArchived: false,
   isHidden: false,
@@ -178,11 +179,18 @@ describe("A2 state(): first match wins", () => {
   // WORKING and IDLE of an agent on a bb thread are bb's own status of that thread. The kernel's
   // `running` is endpoint activity: a provider answers true for an idle agent whose harness is
   // loaded (docs/desktop-cli-api.md, "session-inspect-running"), so it does not say that the agent works.
-  test("an agent on a bb thread works when bb says its thread does, whatever the kernel's running: every status of bb's, and one bb adds later", () => {
-    const on = (status: string, running: boolean | null) => state(agent("a", { running }), thread("t", { status }));
+  test("an agent on a bb thread works when bb says its thread does, whatever the kernel's running: every status of bb's, a turn in line, and a status bb adds later", () => {
+    const on = (status: string, running: boolean | null, queuedWork = "none") => state(agent("a", { running }), thread("t", { status, queuedWork }));
     for (const running of [true, null]) {
-      for (const status of ["active", "starting", "stopping", "pending"]) expect(on(status, running), `${status}, running ${running}`).toBe("working");
-      for (const status of ["idle", "error", "hibernating", ""]) expect(on(status, running), `${status}, running ${running}`).toBe("idle");
+      // A turn runs, is starting or is stopping.
+      for (const status of ["active", "starting", "stopping"]) expect(on(status, running), `${status}, running ${running}`).toBe("working");
+      // At rest: idle, or accepted and not started ("pending"), with nothing in line; bb's failed turn; a status of a later bb.
+      for (const status of ["idle", "pending", "error", "hibernating", ""]) expect(on(status, running), `${status}, running ${running}`).toBe("idle");
+      // At rest with a turn bb holds in line: bb starts it by itself, so the agent works.
+      for (const status of ["idle", "pending"]) expect(on(status, running, "waiting"), `${status} with a turn in line, running ${running}`).toBe("working");
+      // A turn in line that failed is not one bb will start; and it does not make a failed turn's thread work.
+      expect(on("idle", running, "failed")).toBe("idle");
+      expect(on("error", running, "waiting")).toBe("idle");
     }
     // The kernel's "not running" is stopped, whatever bb's status says of the thread.
     expect(on("active", false)).toBe("stopped");

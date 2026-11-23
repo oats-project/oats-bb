@@ -570,6 +570,18 @@ describe("an act the kernel refused and marked unconfirmed", () => {
 describe("the start of a tmux agent whose session was lost (a resume)", () => {
   // The answers are SHAPED from the kernel's doc (test/fixtures/lifecycle/README.md).
   const answered = (file: string) => value(parseSessionStart(fixture(file).result)); // (the envelope's result, as the runner hands it to the parser)
+  it("is decided from the rows a real tmux home gave (recorded): lost resumes; stopped with OATS and running do not", () => {
+    expect(resumable(fixture("tmux-row-lost.json"))).toBe(true);
+    expect(resumable(fixture("tmux-row-stopped.json"))).toBe(false); // runtimeState "shell", sessionEnd "stopped"
+    expect(resumable(fixture("tmux-row-running.json"))).toBe(false);
+  });
+  it("the recorded plain start and restart of a tmux home say nothing of a conversation; the two recorded refusals of a resume have their words", () => {
+    expect(startOutcome("start", "lost-tmux-developer", answered("tmux-start.json"))).toMatchObject({ tone: "done", title: "Lost tmux developer started.", lines: [] });
+    expect(startOutcome("restart", "lost-tmux-developer", value(parseSessionStart(fixture("tmux-restart.json").result, "restart")))).toMatchObject({ tone: "done", title: "Lost tmux developer restarted.", lines: [] });
+    // Stopped, not lost: back to the check. Running: told as already running, with the way to refresh.
+    expect(startRefused("start", "lost-tmux-developer", fixture("tmux-resume-not-lost.json").error)).toMatchObject({ tone: "failed", lines: ["Its session is no longer lost, so there is no conversation to bring back. Read what Start does now."] });
+    expect(startRefused("start", "lost-tmux-developer", fixture("tmux-resume-running.json").error)).toMatchObject({ tone: "failed", title: "Lost tmux developer wasn't started", lines: ["This instance is already running. Nothing was started."], offers: ["refresh"] });
+  });
   it("is decided from the kernel's row: tmux, and a session that was lost; nothing else", () => {
     expect(resumable({ backend: "tmux", sessionEnd: "lost" })).toBe(true);
     expect(resumable({ backend: "tmux", sessionEnd: "stopped" })).toBe(false);
@@ -579,7 +591,7 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(resumable({ backend: null, sessionEnd: "lost" })).toBe(false);
   });
   it("says after the press what the kernel answered: back in its last conversation", () => {
-    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], code: null, details: null, offers: [] });
+    expect(startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], code: null, details: null, offers: [] });
   });
   it("says that it started FRESH, first and as a warning, then the kernel's reason in words; a reason it does not know is OATS's own word", () => {
     const fresh = answered("start-resume-fresh.json");
@@ -596,7 +608,7 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     const waiting = startOutcome("start", "kernel-fix-developer", answered("start-resume-waiting.json"));
     expect(waiting).toMatchObject({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], waiting: true });
     expect(toasted("start", waiting)).toEqual({ plain: false, tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [] });
-    expect(startOutcome("start", "kernel-fix-developer", answered("start-resume.json")).waiting).toBeUndefined();
+    expect(startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json")).waiting).toBeUndefined();
   });
   it("a start that asked for no resume says nothing of a conversation", () => {
     expect(startOutcome("start", "weekly-digest-helper", value(parseSessionStart(fixture("start.json")))).lines).toEqual([]);

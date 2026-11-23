@@ -125,7 +125,7 @@ describe("start and restart", () => {
     backend = await startBackend();
     const { rpc, fake } = backend;
     const started = await rpc("start", { instance: "kernel-fix-developer", resume: true });
-    expect(started).toMatchObject({ threadId: null, instance: "kernel-fix-developer", resume: { resumed: true, reason: null, waiting: null } });
+    expect(started).toMatchObject({ threadId: null, instance: "lost-tmux-developer", resume: { resumed: true, reason: null, waiting: null } }); // the recorded answer names the agent it was recorded on
     const call = (await fake.calls()).find((each) => each.argv[0] === "session");
     expect(call?.argv).toEqual(["session", "start", "--home", "/abs/deployment/agents/oats-developer/instances/kernel-fix-developer", "--resume", "--json"]);
     // The row the dialog decides on: the kernel's backend.

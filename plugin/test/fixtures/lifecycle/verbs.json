@@ -9,7 +9,7 @@
   "file": "start.json"
  },
  "session start --resume": {
-  "file": "start-resume.json"
+  "file": "tmux-start-resume.json"
  },
  "session restart": {
   "file": "restart.json"

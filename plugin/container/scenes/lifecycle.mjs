@@ -611,7 +611,9 @@ export default [
       try {
         // The pilot's row: on tmux, not running, no word of the runtime's, its session lost.
         changes = { [TMUX]: { running: false, runtimeState: null, sessionEnd: "lost" } };
-        answers(resumed("start-resume.json"));
+        // The recorded answer of a real tmux home, with one substitution: the name of the agent it was recorded
+        // on, for the sample roster's agent on tmux (the name, and so its home; no other edit).
+        answers({ "session start --resume": { stdout: readFileSync(join(FIXTURES, "tmux-start-resume.json"), "utf8").replaceAll("lost-tmux-developer", TMUX), sleepMs: 1500 } });
         await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === TMUX && agent.running === false));
         await open();
         const before = await dialog(page);

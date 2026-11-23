@@ -9,6 +9,7 @@ import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { UNCONFIRMED_ISSUE } from "../../contract/shared";
 import { modelsSdk, retirePlanOf, retireReceiptOf, startCheckOf, startedIn, stopPlanOf, stopReceiptOf } from "./handlers";
 import { notified } from "../../app/ui";
 import type { Contract, Handlers } from "../helpers/render";
@@ -99,9 +100,10 @@ test("each action shows only in the states it applies to", async () => {
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
   // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
-  // is loaded) is IDLE, not stopped: the menu is an idle agent's, and the thread's own row says
-  // what a message and Start each do, with Start (app/outside; the state's rule: test/model/view.test.ts).
-  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "restart", "retire"]);
+  // is loaded) is IDLE, not stopped: the menu is an idle agent's WITH START, since its row says
+  // that it does not run ("not loaded"); the thread's own row says what a message and Start each
+  // do, with Start (app/outside; the state's rule: test/model/view.test.ts). The key follows the menu.
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "start", "restart", "retire"]);
   expect(await by("thr_harvest", with_({ running: false, runtimeState: null }))).toEqual(["start", "retire"]);
   // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
   // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.
@@ -1202,7 +1204,7 @@ test("Restart says, with the Desktop's warning, that it starts a new conversatio
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
-test("an agent with no thread in bb has no conversation to archive: its Start says the Desktop's sentence", async () => {
+test("an agent whose recorded thread bb does not have (deleted, or bb cannot be asked) has no conversation to speak of: its Start says the Desktop's sentence", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, threadId: "thr_not_in_bb" } : agent));
   const { slot } = await menu("thr_plain", { startCheck: ({ instance }) => startCheckOf(instance) }, agents);
   const { openAct } = await import("../../app/lifecycle");
@@ -1673,4 +1675,152 @@ test("on a provider that archives at stop, the result still says what bb SHOWS: 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
   expect(slot.getByTestId("oats-result").textContent).toContain("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+});
+
+// ---- the Start dialog's sentence follows the agent's RECORDED bb thread, listed or archived
+
+test("an agent whose thread a stop archived: bb lists no such thread, and Start still says where its conversation is; the carry-on line is for a thread that can take a message", async () => {
+  const NEW = "Starts a new conversation. The current one stays readable in bb, archived.";
+  const FRESH = "This starts a new conversation using the saved briefing and state.";
+  // The kernel's row records thr_digest; bb lists it no more (archived), deleted it, or lists it.
+  const opened = async (listed: boolean, get: ((args: { threadId: string }) => Promise<unknown>) | null, check: Parameters<typeof startCheckOf>[1] = {}) => {
+    const asked: string[] = [];
+    const sdk = { ...modelsSdk(), ...(get === null ? {} : { threads: { get: (args: { threadId: string }) => (asked.push(args.threadId), get(args)) } }) };
+    const threads = fixtureThreads().map((thread) => (thread.id === "thr_digest" && !listed ? { ...thread, isArchived: true } : thread));
+    const app = await loadApp();
+    const Overlay = app.appOverlays[0]!.component;
+    const slot = renderSlot<object, Contract>({ component: () => <Overlay /> }, {}, { rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance, check) }), sidebarThreads: { status: "ready" as const, threads }, sdk: sdk as never });
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { openAct } = await import("../../app/lifecycle");
+    openAct("start", "weekly-digest-helper");
+    await ready(slot);
+    const said = { text: slot.getByTestId("oats-confirm").textContent!, carry: slot.queryByTestId("oats-start-thread") !== null, asked };
+    resetApp();
+    return said;
+  };
+  // Archived in bb (as bb itself answers): the conversation stays readable there, and the dialog says so.
+  const archived = await opened(false, async ({ threadId }) => ({ id: threadId, archivedAt: 1_763_000_000_000 }));
+  expect(archived.asked).toEqual(["thr_digest"]); // bb is asked once, for the thread the row records
+  expect(archived.text).toContain(NEW);
+  expect(archived.text).not.toContain(FRESH);
+  // An archived thread takes no message: no carry-on line, even for a session that was lost.
+  const lost = await opened(false, async ({ threadId }) => ({ id: threadId, archivedAt: 1_763_000_000_000 }), { running: false, runtimeState: "stopped", sessionEnd: "lost" });
+  expect(lost.text).toContain(NEW);
+  expect(lost.carry).toBe(false);
+  // Deleted in bb, or bb cannot be asked: no conversation to speak of.
+  const deleted = await opened(false, async () => Promise.reject(new Error("thread not found")));
+  expect(deleted.text).toContain(FRESH);
+  expect(deleted.text).not.toContain(NEW);
+  expect((await opened(false, null)).text).toContain(FRESH);
+  // Listed by bb: said from the list, and bb is not asked again.
+  const listed = await opened(true, async ({ threadId }) => ({ id: threadId, archivedAt: null }));
+  expect(listed.text).toContain(NEW);
+  expect(listed.asked).toEqual([]);
+});
+
+// ---- a retire the kernel refused and marked unconfirmed
+// (SHAPED: no real kernel was made to give a marked refusal; the envelope's form and the code are the kernel's;
+// that it marks it, and the message, are ours. test/fixtures/lifecycle/README.md, "An act refused with the kernel's marker".)
+
+test("a retire the kernel refuses with its marker that it cannot confirm what is left is told as not confirmed, with OATS's line and Check again; never as not retired", async () => {
+  let marked = true;
+  const { slot, pick } = await menu("thr_digest", {
+    retirePlan: () => retirePlanOf(),
+    retireApply: () => {
+      if (!marked) return retireReceiptOf();
+      throw Object.assign(new Error("E_RETIRE_INCOMPLETE: the home was moved aside and the retire hooks did not answer"), { code: "conflict", issues: [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }] });
+    },
+  });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  const result = slot.getByTestId("oats-result").textContent!;
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Result not confirmed");
+  expect(result).toContain("OATS could not confirm what the retire left. Check again before assuming nothing happened.");
+  expect(result).toContain("OATS says: the home was moved aside and the retire hooks did not answer");
+  expect(result).toContain("E_RETIRE_INCOMPLETE");
+  expect(result).not.toContain("wasn't retired");
+  // Check again asks for the same apply, and the kernel's answer settles it.
+  marked = false;
+  fireEvent.click(button(slot, "oats-act-check"));
+  await phase(slot, "done");
+  const sent = calls(slot, "retireApply").map((call) => (call.input as { key: string }).key);
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toBe(sent[0]);
+});
+
+test("the same refusal WITHOUT the kernel's marker is a refusal: the retire did not happen, as the kernel says", async () => {
+  const { slot, pick } = await menu("thr_digest", {
+    retirePlan: () => retirePlanOf(),
+    retireApply: () => {
+      throw Object.assign(new Error("E_CHILDREN_RUNNING: a child would not stop"), { code: "conflict" });
+    },
+  });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Weekly digest helper wasn't retired");
+});
+
+test("a stop and a start refused with the kernel's marker are told as not confirmed too: Check again for the stop, Refresh status for the start (shaped from the envelope's form)", async () => {
+  const issues = [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }];
+  const stop = await menu("thr_redesign", {
+    stopPlan: () => stopPlanOf(),
+    stopApply: () => {
+      throw Object.assign(new Error("E_SESSION_STOP_FAILED: its harness was signalled; whether it ended is not known"), { code: "conflict", issues });
+    },
+  });
+  await stop.pick("stop");
+  await ready(stop.slot);
+  fireEvent.click(button(stop.slot, "oats-confirm-act"));
+  await waitFor(() => expect(stop.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  expect(stop.slot.getByTestId("oats-result").textContent).toContain("OATS could not confirm what the stop left. Check again before assuming nothing happened.");
+  expect(stop.slot.getByTestId("oats-result").textContent).not.toContain("wasn't stopped");
+  expect(stop.slot.getByTestId("oats-act-check")).toBeTruthy();
+  resetApp();
+  const start = await menu("thr_digest", {
+    startCheck: ({ instance }) => startCheckOf(instance),
+    start: () => {
+      throw Object.assign(new Error("E_BACKEND_NOT_READY: the launch was sent and its session was not seen"), { code: "conflict", issues });
+    },
+  });
+  await start.pick("start");
+  await ready(start.slot);
+  fireEvent.click(button(start.slot, "oats-confirm-act"));
+  await waitFor(() => expect(start.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  const said = start.slot.getByTestId("oats-result").textContent!;
+  expect(said).toContain("Result not confirmed");
+  expect(said).toContain("OATS could not confirm what the start left. Refresh its status before another try.");
+  expect(said).toContain("OATS says: the launch was sent and its session was not seen");
+  expect(said).not.toContain("wasn't started");
+  expect(start.slot.getByTestId("oats-start-refresh")).toBeTruthy();
+});
+
+// ---- an agent that is idle with no harness loaded ("Idle · not loaded") does not run: Start is for it
+
+test("the Start key on an agent that is idle with no harness loaded opens Start, and never says that it is already running; with a harness loaded it still says so", async () => {
+  // The kernel's row of a provider's session that is there with no harness: running false beside "unknown", no end of a session.
+  const idle = (running: boolean) => fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, running, runtimeState: "unknown", sessionEnd: null } : agent));
+  const { slot, shown } = await menu("thr_digest", { startCheck: () => startCheckOf("weekly-digest-helper", { running: false, runtimeState: "unknown", sessionEnd: null }) }, idle(false));
+  // The thread's menu follows the same rule as the key: Start is among its acts.
+  expect(shown()).toEqual(["stop", "start", "restart", "retire"]);
+  const { commands } = await import("../../app/lifecycle");
+  const press = (id: string) => commands.find((each) => each.id === id)!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  const before = notified().length;
+  await press("agent-start");
+  await ready(slot);
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
+  expect(notified().length).toBe(before);
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/already running/);
+  resetApp();
+  // Idle WITH a harness loaded (the kernel's `running: true`): it runs, and the key says so.
+  const loaded = await menu("thr_digest", {}, idle(true));
+  expect(loaded.shown()).toEqual(["stop", "restart", "retire"]);
+  const again = await import("../../app/lifecycle");
+  await again.commands.find((each) => each.id === "agent-start")!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Weekly digest helper is already running." });
+  expect(loaded.slot.queryByRole("dialog")).toBeNull();
 });

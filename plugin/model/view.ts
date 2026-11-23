@@ -6,8 +6,10 @@ import type { Agent, AgentState, BbThread, Node, ThreadWhere, View } from "./typ
  * waiting-on-you.mjs `waitingClaim`, read at 95c7b43b3), so that the tree, the thread's row and
  * the instance panel say one thing.
  * - A row on a session provider (bb): the claim the kernel's row carries, unless the kernel calls
- *   the row stopped (`running === false`, its session not one that failed or that it cannot
- *   reach): a home OATS stopped shows none, whatever it still carries.
+ *   the row stopped (`recordedStopped`: not running, beside the word "stopped" or no word): a home
+ *   OATS stopped shows none, whatever it still carries. A row that is not running beside another
+ *   word keeps its claim: one whose session failed, one the kernel cannot reach, and one whose
+ *   session is there with no harness loaded ("unknown"), whose question still waits for a person.
  * - A tmux row: only while the kernel says it runs (`running === true`, and no `runtimeState`
  *   other than "running").
  * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
@@ -15,8 +17,17 @@ import type { Agent, AgentState, BbThread, Node, ThreadWhere, View } from "./typ
 export function claimOf(agent: Agent): Agent["waiting"] {
   if (agent.waiting === null) return null;
   if (agent.backend === "tmux") return agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") ? agent.waiting : null;
-  const stopped = agent.running === false && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
-  return stopped ? null : agent.waiting;
+  return recordedStopped(agent) ? null : agent.waiting;
+}
+
+/**
+ * Whether the kernel's row says the agent is STOPPED: not running, beside the word "stopped" or no
+ * word at all. The one predicate of the claim's gate and of the state: a row that is not running
+ * beside another word ("unknown": its session is there and no harness is loaded; "shell";
+ * "unreachable") is not stopped, keeps its claim, and is told by its own state.
+ */
+function recordedStopped(agent: Agent): boolean {
+  return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);
 }
 
 /**
@@ -45,7 +56,7 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere): AgentState {
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
-  if (agent.backend !== "tmux" && agent.sessionEnd === "lost" && agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null)) {
+  if (agent.backend !== "tmux" && agent.sessionEnd === "lost" && recordedStopped(agent)) {
     if (where === "archived") return "archived";
     if (where === "missing") return "deleted";
   }
@@ -56,7 +67,7 @@ export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere)
   // With a word that is not "stopped" (a provider row reads `runtimeState: "unknown"`: its session
   // is there and no harness is loaded) the agent is not stopped: it is idle, and a message in its
   // thread carries its conversation on.
-  if (agent.running === false && (agent.runtimeState === null || agent.backend === "tmux")) return "stopped";
+  if (recordedStopped(agent) || (agent.running === false && agent.backend === "tmux")) return "stopped";
   return "idle";
 }
 

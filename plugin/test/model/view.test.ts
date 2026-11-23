@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Node } from "../../model/types";
-import { flatten, state, view } from "../../model/view";
+import { claimOf, flatten, state, view } from "../../model/view";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 
 let clock = 1_000;
@@ -193,6 +193,24 @@ describe("A2 state(): first match wins", () => {
     }
     expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), t, "open")).toBe("stopped");
     expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), thread("t", { hasPendingInteraction: true }), "open")).toBe("needs-you");
+  });
+  // The claim's gate and the state use ONE predicate for "the kernel calls this row stopped" (not
+  // running, beside the word "stopped" or no word). A provider's row that is not running beside
+  // "unknown" has its session there with no harness loaded (the kernel's contract for a provider
+  // home's row, v0.70.5; shaped, not recorded: the bb provider prints it from its next release):
+  // it is not stopped, so a question it asked before its harness went away still waits for a person.
+  test("a row that is not running beside \"unknown\" keeps its claim: it needs you, shows the claim, and is counted; beside \"stopped\" or no word it shows none", () => {
+    const unloaded = agent("a", { waiting: claim, running: false, runtimeState: "unknown" });
+    expect(claimOf(unloaded)).toBe(claim);
+    expect(state(unloaded, t, "open")).toBe("needs-you");
+    expect(view([unloaded], [thread("thr_a")]).needing).toEqual([unloaded]);
+    expect(view([unloaded], []).needing).toEqual([unloaded]); // also with no thread listed
+    for (const runtimeState of ["stopped", null]) {
+      const stopped = agent("a", { waiting: claim, running: false, runtimeState });
+      expect(claimOf(stopped)).toBeNull();
+      expect(state(stopped, t, "open")).toBe("stopped");
+      expect(view([stopped], [thread("thr_a")]).needing).toEqual([]);
+    }
   });
   test("a tmux row shows its claim only while the kernel says it runs", () => {
     const tmux = (over: Partial<Agent>) => state(agent("a", { backend: "tmux", waiting: claim, ...over }), null, "none");

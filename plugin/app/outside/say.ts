@@ -22,13 +22,16 @@ import {
   NOT_SHOWN_NOTE,
   OUTSIDE_NOTE,
   STOPPED_DELETED,
+  STOPPED_OPEN,
 } from "./words";
 
-export type Act = "stop" | "start" | "restart";
+export type Act = "stop" | "start" | "restart" | "retire";
 
 export type Kind =
   /** OATS recorded it stopped and a harness runs in it: the kernel's own report. */
   | "outside"
+  /** Stopped by an operator, on a thread that is open: a message there starts it again without OATS. */
+  | "stopped-open"
   /** Stopped, and bb has its thread archived: what a stop leaves once the provider archives at stop. */
   | "stopped-archived"
   /** Stopped, and its thread was deleted in bb. */
@@ -76,7 +79,7 @@ function whereNote(where: ThreadWhere): string | null {
 
 /**
  * What to say of one agent, or null where the roster's own words stand (an agent on tmux, one that
- * runs, one the kernel cannot reach, a stopped one on an open thread: the roster's own line).
+ * runs, one the kernel cannot reach).
  *
  * The STATE is never named here: it is the one state function's (`state`, model/view.ts), which
  * this reads with the same `where`. What this adds to a state is its sentence, the few words of its
@@ -92,7 +95,9 @@ function whereNote(where: ThreadWhere): string | null {
  * 2. the state "archived" (a session lost, the thread archived in bb): Stop, then Start.
  * 3. the state "deleted" (a session lost, no such thread in bb): Start.
  * 4. the state "error" (its session ended in a shell) on an open thread: that a message there starts it again. Restart.
- * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted. Start.
+ * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted, Start;
+ *    on an open thread, for a stop OATS made (not a session it lost: a message then starts an
+ *    agent OATS sees running), the interim warning that a message there starts it without OATS.
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said | null {
   if (agent.backend === "tmux") return null;
@@ -111,6 +116,13 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
     case "stopped":
       if (where === "archived") return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, acts: ["start"], archived };
       if (where === "missing") return { ...base, kind: "stopped-deleted", sentence: STOPPED_DELETED, note: DELETED_NOTE, acts: ["start"] };
+      // THE GATE (the one place): whether the bb session provider archives the thread of a home it
+      // stops is `stopArchivesThread(providerVersion)` of app/lifecycle/words.ts, which is not on
+      // main yet. Until it is, and for every provider version, a stop leaves the thread open, and
+      // the warning is said of every stopped agent on an open thread. With it, the same sentence
+      // stays for exactly this case (a home stopped before the provider archived, or a thread a
+      // person unarchived): the gate then changes no word here, only what the stop's dialog says.
+      if (where === "open" && attached && agent.sessionEnd !== "lost") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN };
       return threadless;
     default:
       return threadless;

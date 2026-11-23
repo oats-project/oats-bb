@@ -74,7 +74,7 @@ const kernelSays = (act: keyof typeof GONE) => `${GONE[act].error.code}: ${GONE[
 test("a stop plan the kernel refuses for an agent it does not know: the notice, and both rows say so, with no act left on the thread's row", async () => {
   const { slot, ask, facts, mark, line } = await places({ stopPlan: refuse(kernelSays("stopPlan")) });
   expect(facts()).toBe("Stopped · oats-expert");
-  expect(line()).toBe("StoppedStartInstance panel");
+  expect(line()).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   act(() => ask().plan("stop"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");

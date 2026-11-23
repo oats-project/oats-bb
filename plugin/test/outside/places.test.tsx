@@ -187,7 +187,8 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   expect(row.getAttribute("data-outside")).toBe("stopped-archived");
   expect(within(row).getByTestId("oats-outside-agent").textContent).toBe("Weekly digest helper");
   expect(words(slot)).toEqual(["Stopped", "Its conversation is archived in bb"]);
-  expect(acts(slot)).toEqual(["Start"]);
+  // Its acts are on this row: bb's menu of an archived thread has none of the roster's.
+  expect(acts(slot)).toEqual(["Start", "Retire"]);
   fireEvent.click(within(row).getByRole("button", { name: "Start" }));
   await waitFor(() => expect(calls(slot, "start")).toEqual([{ instance: DIGEST }]));
 });
@@ -199,9 +200,89 @@ test("the archived thread of an agent whose session OATS lost: \"Archived in bb\
   expect(row.getAttribute("data-outside")).toBe("lost-archived");
   expect(words(slot)).toEqual(["Archived in bb", "OATS lost its session, and its process still runs. Stop it, then start it from OATS."]);
   expect(within(row).getByTestId("oats-status-line").getAttribute("data-state")).toBe("archived");
-  expect(acts(slot)).toEqual(["Stop"]);
+  expect(acts(slot)).toEqual(["Stop", "Retire"]);
   fireEvent.click(within(row).getByRole("button", { name: "Stop" }));
   await waitFor(() => expect(calls(slot, "stopPlan")).toEqual([{ instance: DIGEST }]));
+});
+
+test("Retire on the archived thread's row asks OATS for the retire plan of that agent", async () => {
+  const retirePlan = vi.fn(() => ({ revision: "r1", lines: ["Removed: the home of weekly-digest-helper"], instance: DIGEST }));
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }, { ...noEvents, retirePlan }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  fireEvent.click(within(await slot.findByTestId("oats-identity-row")).getByRole("button", { name: "Retire" }));
+  await waitFor(() => expect(calls(slot, "retirePlan")).toEqual([{ instance: DIGEST }]));
+});
+
+test("a stopped agent on its open thread: since when, then that a message here starts it again without OATS, and Start", async () => {
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(words(slot)).toHaveLength(3)); // the time is read from the agent's events, after the state
+  expect(words(slot)).toEqual(["Stopped", expect.stringMatching(/^since /), "A message sent here in bb starts it again without OATS. Use Start."]);
+  expect(acts(slot)).toEqual(["Start"]);
+  expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
+});
+
+// ---- the agent's own page (the instance panel's header)
+
+async function agentPage(instance: string, options: RenderSlotOptions<Contract>) {
+  const app = await loadApp();
+  const Overlay = app.appOverlays[0]!.component;
+  const Page = app.navPanels.find((candidate) => candidate.id === "agent")!.component;
+  const slot = renderSlot<{ subPath: string }, Contract>(
+    {
+      component: function AgentPage(props: { subPath: string }) {
+        return (
+          <>
+            <Page {...props} />
+            <Overlay />
+          </>
+        );
+      },
+    },
+    { subPath: instance },
+    options,
+  );
+  await slot.findByTestId("oats-panel-header");
+  return slot;
+}
+const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
+  const head = slot.getByTestId("oats-panel-header");
+  const block = within(head).queryByTestId("oats-outside-agent-block");
+  return {
+    state: within(within(head).getByTestId("oats-panel-state")).getByTestId("oats-state").textContent,
+    kind: block?.getAttribute("data-outside") ?? null,
+    sentence: block?.querySelector(":scope > p")?.textContent ?? null,
+    acts: block === null ? [] : within(block).queryAllByTestId("oats-status-act").map((button) => button.textContent),
+    block,
+  };
+};
+
+test("an agent whose thread was deleted in bb: its own page says \"Deleted in bb\", what happened, and has Start and Retire", async () => {
+  const start = vi.fn(() => ({ threadId: "thr_new" }));
+  const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }, { start }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
+  await waitFor(() => expect(header(slot).state).toBe("Deleted in bb"));
+  expect(header(slot)).toMatchObject({ kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start", "Retire"] });
+  fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Start" }));
+  await waitFor(() => expect(calls(slot, "start")).toEqual([{ instance: DIGEST }]));
+});
+
+test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire", async () => {
+  const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", acts: ["Start", "Retire"] });
+  resetApp();
+  const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
+  await waitFor(() => expect(header(deleted).kind).toBe("stopped-deleted"));
+  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start", "Retire"] });
+});
+
+test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
+  const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(header(reported).kind).toBe("outside"));
+  expect(header(reported)).toMatchObject({ state: "Stopped", sentence: null, acts: ["Stop", "Start"] }); // the notice's own two
+  expect(within(header(reported).block!).getByTestId("oats-notice").textContent).toContain(MESSAGE);
+  resetApp();
+  const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(header(plain)).toMatchObject({ state: "Stopped", kind: null });
 });
 
 test("a thread that is no agent's, and the id of a thread bb no longer has, draw nothing", async () => {
@@ -222,6 +303,7 @@ test("on a roster that is the last one read the acts are held, on the archived t
   };
   const archived = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped" } })) }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   const start = within(await archived.findByTestId("oats-identity-row")).getByRole("button", { name: "Start" }) as HTMLButtonElement;
+  expect((within(archived.getByTestId("oats-identity-row")).getByRole("button", { name: "Retire" }) as HTMLButtonElement).disabled).toBe(true);
   expect([start.disabled, start.title]).toEqual([true, "Comes back when OATS is read again"]);
   expect(archived.getByTestId("oats-unreadable").getAttribute("data-compact")).toBe("");
   resetApp();

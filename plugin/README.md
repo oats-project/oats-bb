@@ -105,7 +105,7 @@ word comes first.
 | What OATS says | What bb says of its thread | The row and the thread's line say | Acts |
 |---|---|---|---|
 | stopped | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | Start |
-| stopped | open | the roster's own line | Start |
+| stopped | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start." The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. Not said of a session OATS lost: a message then starts an agent OATS sees running. | Start |
 | stopped | deleted | "Stopped · Its conversation was deleted in bb. Start it from OATS for a new one." | Start |
 | recorded stopped, with the kernel's `outsideOats` | any | under the state OATS recorded, a notice in the warning tone: "Running outside OATS", the kernel's own message, its code. On the sidebar's row: "running outside OATS" and a warning mark. | Stop, Start |
 | its session lost | archived | "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS." | Stop (then Start) |
@@ -143,14 +143,24 @@ absence there says nothing. Both acts of its notice are the lifecycle's own (`ap
 asks the kernel's plan and confirms once, which asks the provider to stop the session again; Start
 stops it and launches a new one): no second path to `oats`.
 
+**Where the acts of an agent with no listed thread are.** The roster's entries in bb's thread menu
+are for a thread it draws an agent on, and an agent whose thread bb has archived or deleted has
+none. Its row leads to them: to the ARCHIVED thread, whose own row (`OutsideThreadRow`) has what
+mends its state (Start, or Stop) and Retire; or, for a thread that is deleted, to the agent's own
+page, where the instance panel's header says its state and, under it, what happened, with Start
+and Retire (`OutsideAgent`). The header carries the kernel's report for any agent.
+
 The words are in `app/outside/words.ts`, with the fact each rests on in `WORDS.md`. Beside the
 state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent, bb's answer and
 whether the tree draws it on its thread in; its sentence, its row's few words, its acts and the
 kernel's report out), `outsideOf(oats)` that gives it its inputs from the caller's own roster, and
-three drawings (`OutsideWarning`: the notice; `OutsideMark`: the row's mark; `OutsideThreadRow`:
-the thread's own row on a thread bb has archived, which the roster draws on no thread). It
-registers no slot and has no read and no `oats` verb of its own: the roster's row and line
-(`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) call it.
+four drawings (`OutsideWarning`: the notice; `OutsideMark`: the row's mark; `OutsideThreadRow`:
+the thread's own row on a thread bb has archived, which the roster draws on no thread;
+`OutsideAgent`: the block under the instance panel's state). It registers no slot and has no read
+and no `oats` verb of its own: the roster's row and line (`app/roster/Sidebar.tsx`,
+`IdentityRow.tsx`) and the panel's header (`app/panel/Panel.tsx`) call it. Whether the provider
+archives a stopped home's thread (`stopArchivesThread`, the lifecycle dialogs') has ONE place to
+go in, marked in `say.ts`; it changes no word of this table.
 
 Not there yet: the home's card of an agent OATS recorded stopped that bb has a question open for
 will carry the same notice (`<OutsideWarning said={outside.of(agent)} … />`, one line in the

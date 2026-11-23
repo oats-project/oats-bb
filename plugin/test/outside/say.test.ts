@@ -23,8 +23,14 @@ describe("stopped (an operator's stop: sessionEnd \"stopped\")", () => {
   it("with its thread archived in bb: the fact after \"Stopped\", the way to it, and Start", () => {
     expect(said(agent, "archived", false)).toEqual({ kind: "stopped-archived", sentence: "Its conversation is archived in bb", note: "its conversation is archived in bb", warning: null, acts: ["start"], archived: true });
   });
-  it("with its thread open: nothing of this feature's, the roster's own line says it", () => {
-    expect(said(agent, "open", true)).toBeNull();
+  it("on its open thread: the interim warning, that a message there starts it again without OATS; the roster's own Start", () => {
+    expect(said(agent, "open", true)).toEqual({ kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", note: null, warning: null, acts: null, archived: false });
+  });
+  it("the warning is for a stop OATS made or cannot tell from one (a kernel that names no sessionEnd), never for a session it lost: a message then starts an agent OATS sees running", () => {
+    expect(said({ ...agent, sessionEnd: undefined }, "open", true)?.kind).toBe("stopped-open");
+    expect(said(recorded("threadDeleted"), "open", true)).toBeNull();
+    // A thread that is listed and that the tree does not draw the agent on (hidden, or another row's) has no line of its own.
+    expect(said(agent, "open", false)).toEqual({ kind: "threadless", sentence: null, note: "its bb thread is not shown", warning: null, acts: null, archived: false });
   });
   it("with its thread deleted in bb: that it was deleted, and Start for a new one; never \"its bb thread is gone\"", () => {
     expect(said(agent, "missing", false)).toEqual({ kind: "stopped-deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", note: "its conversation was deleted in bb", warning: null, acts: ["start"], archived: false });
@@ -64,7 +70,7 @@ describe("any state, with the kernel's outsideOats", () => {
   it("on a kernel that does not list the feature nothing is said of it: the row is an ordinary stopped one", () => {
     const old = outside(false);
     expect(old.outsideOats).toBeUndefined();
-    expect(said(old, "open", true)).toBeNull();
+    expect(said(old, "open", true)?.kind).toBe("stopped-open");
     expect(said(old, "archived", false)?.kind).toBe("stopped-archived");
     expect(view([old], []).needing).toEqual([]);
   });

@@ -3,6 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { OutsideAgent } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
@@ -180,6 +181,8 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
           <KernelSays text={status.kernel} />
         </div>
+        {/* What happened to it outside OATS (app/outside): the kernel's report; and for an agent with no thread to carry them, what happened and its acts. */}
+        <OutsideAgent agent={agent} roster={oats} held={failure !== null} />
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>

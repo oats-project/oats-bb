@@ -226,7 +226,7 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${digest.id}")`, 15)), `${at} the row of a stopped agent whose conversation is archived opens that thread in bb`, await page.evaluate("location.pathname"));
       let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`));
-      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`).test(line.words) && same(line.acts, ["Start"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and "Its conversation is archived in bb", with Start`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`).test(line.words) && same(line.acts, ["Start", "Retire"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and "Its conversation is archived in bb", with Start and Retire`, line === null ? await shown() : JSON.stringify(line));
       // What bb 0.50.1 itself does with an archived thread opened by its id: the conversation, no composer, and its own bar.
       const bar = await page.until(`(() => { const text = document.body.innerText.replace(/\\s+/g, " "); return /Thread is archived/.test(text) ? JSON.stringify({ composer: document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length, unarchive: [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Unarchive") }) : ""; })()`, 15);
       check(bar === JSON.stringify({ composer: 0, unarchive: true }), `${at} bb shows the archived thread to read: no composer, "Thread is archived" and its own Unarchive`, bar ?? (await page.evaluate(`document.body.innerText.replace(/\\s+/g, " ").slice(-300)`)));
@@ -236,7 +236,7 @@ export default [
       await open("thr_research");
       const LOST = "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS.";
       line = await lineOf(page, /^Archived in bb · /);
-      check(line !== null && line.kind === "lost-archived" && line.state === "archived" && line.words === LOST && same(line.acts, ["Stop"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, and Stop (then Start)`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "lost-archived" && line.state === "archived" && line.words === LOST && same(line.acts, ["Stop", "Retire"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, with Stop (then Start) and Retire`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-lost-archived`, { targets: true });
 
       // the kernel's report, on the open thread
@@ -262,11 +262,34 @@ export default [
       check(line !== null && line.words === "Unreachable · OATS cannot reach its session" && same(line.acts, ["Retry"]) && line.warning === null && !/message/i.test(await shown()), `${at} unreachable: what status says, with Retry, and nothing about a message`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-unreachable`, { targets: true });
 
-      // stopped, on an open thread: the roster's own line
+      // stopped, on an open thread: bb's composer is live under it, and the line says what a message there does
       await open("thr_release");
-      line = await lineOf(page, new RegExp(`^Stopped${SINCE}`));
-      check(line !== null && line.state === "stopped" && same(line.acts, ["Start"]) && line.warning === null && !/archived|deleted/i.test(line.words), `${at} stopped, open: the roster's own line, with Start; nothing of an archive`, line === null ? await shown() : JSON.stringify(line));
+      const OPEN = new RegExp(`^Stopped${SINCE} · A message sent here in bb starts it again without OATS\\. Use Start\\.$`);
+      line = await lineOf(page, OPEN);
+      const composer = await page.evaluate(`document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length`);
+      check(line !== null && line.state === "stopped" && OPEN.test(line.words) && same(line.acts, ["Start"]) && line.warning === null && composer > 0, `${at} stopped, open: "Stopped", since when, that a message sent here starts it again without OATS, with Start; bb's composer is there`, line === null ? await shown() : JSON.stringify({ line, composer }));
       await page.shot(`outside-${viewport.name}-thread-stopped-open`, { targets: true });
+    },
+  },
+  {
+    stage: "outside",
+    name: "an agent whose thread was deleted in bb: its row opens its own page, where its state, what happened, Start and Retire are",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts.startsWith("Deleted in bb") === true`, 30);
+      await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
+      check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
+      const read = await page.until(
+        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); if (!block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat) }); })()`,
+        30,
+      );
+      check(
+        read === JSON.stringify({ name: "Flaky ci developer", state: "Deleted in bb", kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start", "Retire"] }),
+        `${at} its page says "Deleted in bb", that its conversation is gone, and has Start and Retire`,
+        read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
+      );
+      await page.shot(`outside-${viewport.name}-agent-deleted`, { targets: true });
     },
   },
   {

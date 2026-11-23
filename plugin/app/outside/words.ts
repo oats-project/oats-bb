@@ -3,6 +3,13 @@
 
 /** A stopped agent whose thread bb has archived: the fact after "Stopped". */
 export const ARCHIVED_FACT = "Its conversation is archived in bb";
+/**
+ * A stopped agent whose thread is OPEN: bb's composer is live under it, and a message typed there
+ * starts the agent again without OATS knowing (OATS keeps saying "stopped"). The interim warning:
+ * it stays for as long as a stop leaves the thread open, and after that for a home stopped before
+ * the provider archived at stop, and for a thread a person unarchived.
+ */
+export const STOPPED_OPEN = "A message sent here in bb starts it again without OATS. Use Start.";
 /** The same, as the few words a sidebar's row has room for. */
 export const ARCHIVED_NOTE = "its conversation is archived in bb";
 /** The link, on the agent's own page and in a notice, that opens the archived thread to read it. */

@@ -134,9 +134,10 @@ export default [
       // the thread of an agent OATS stopped: "Stopped", and the act that brings it back
       const digest = threads.get("thr_digest");
       await page.goto(`/projects/${digest.projectId}/threads/${digest.id}`);
-      const STOPPED = /^Stopped · since (\w+ \d+, )?\d\d:\d\d$/; // the time comes from the agent's events, after the state: waited for
+      // The time comes from the agent's events, after the state: waited for. Then the interim warning (the outside feature's sentence): its composer is live.
+      const STOPPED = /^Stopped · since (\w+ \d+, )?\d\d:\d\d · A message sent here in bb starts it again without OATS\. Use Start\.$/;
       const stopped = await statusOf(page, "stopped", STOPPED);
-      check(stopped !== null && STOPPED.test(stopped.line) && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped", since when (its last recorded stop), with Start`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
+      check(stopped !== null && STOPPED.test(stopped.line) && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped", since when (its last recorded stop), that a message here starts it again without OATS, with Start`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
       await page.shot(`a13-${viewport.name}-thread-stopped`, { targets: true });
 
       // a thread that is no agent has no row

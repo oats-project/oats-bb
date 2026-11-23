@@ -15,15 +15,18 @@ import type { Contract } from "../store";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
+import type { Agent, ThreadWhere } from "../../model/types";
+import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
 import { OUTSIDE_TITLE } from "./words";
 
-const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", restart: "Restart" };
+const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", restart: "Restart", retire: "Retire" };
 
 /**
- * The acts this feature offers for an agent, as buttons, in order: Stop asks the kernel's plan and
- * confirms once, Start and Restart run through OATS. `held`: the roster is the last one read, and
+ * The acts this feature offers for an agent, as buttons, in order: the lifecycle's own
+ * (app/lifecycle/acts.tsx), never a second path to `oats`. Stop and Retire ask the kernel's plan
+ * and confirm once, Start and Restart run through OATS. `held`: the roster is the last one read, and
  * the acts stay in their place, off, with the reason (the Desktop's rule).
  */
 export function OutsideActs({ instance, acts, held }: { instance: string; acts: readonly Act[]; held: boolean }) {
@@ -38,7 +41,7 @@ export function OutsideActs({ instance, acts, held }: { instance: string; acts: 
           data-act={act}
           disabled={held}
           title={held ? HELD_REASON : undefined}
-          onClick={() => (act === "stop" ? askPlan("stop", instance) : void run(act, instance, rpc, navigate))}
+          onClick={() => (act === "stop" || act === "retire" ? askPlan(act, instance) : void run(act, instance, rpc, navigate))}
         >
           {LABEL[act]}
         </Button>
@@ -56,6 +59,15 @@ export function lineActs(said: Said | null, instance: string, held: boolean): Re
   if (said === null || said.acts === null) return undefined;
   if (said.warning !== null) return null;
   return <OutsideActs instance={instance} acts={said.acts} held={held} />;
+}
+
+/**
+ * The acts of an agent the roster draws on no thread (its thread archived or deleted in bb), for
+ * the place that shows that agent (its archived thread's row, its own page): what mends its state,
+ * then Retire. The acts of the kernel's report are in its notice, not here.
+ */
+export function detachedActs(said: Said | null): readonly Act[] {
+  return [...(said === null || said.acts === null || said.warning !== null ? [] : said.acts), "retire"];
 }
 
 /**
@@ -104,7 +116,9 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
   const held = oats.stale !== null;
-  const acts = lineActs(said, agent.instance, held);
+  // The thread's menu is bb's, and the roster's entries in it are for a thread it draws an agent
+  // on: this thread is none, so the agent's acts are here, Retire among them.
+  const acts = <OutsideActs instance={agent.instance} acts={detachedActs(said)} held={held} />;
   const since = timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null;
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
@@ -128,6 +142,33 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
       />
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
+    </div>
+  );
+}
+
+/**
+ * For the place that shows ONE agent and is not its thread (the instance panel's header, on the
+ * agent's own page and in the thread's tab), under its state:
+ * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
+ *   happened in one sentence, and its acts, since it has no thread's line to carry them;
+ * - of any agent: the kernel's report, with its acts.
+ * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
+ * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
+ */
+export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere | undefined }; held: boolean }) {
+  const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
+  const where = roster.whereOf(agent);
+  const said = where === undefined ? null : sayOf(agent, where, attached);
+  if (said === null || (attached && said.warning === null)) return null;
+  return (
+    <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
+      {attached || said.sentence === null ? null : <p className="m-0 min-w-0 break-words text-muted-foreground">{said.sentence}</p>}
+      {attached ? null : (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <OutsideActs instance={agent.instance} acts={detachedActs(said)} held={held} />
+        </div>
+      )}
+      <OutsideWarning said={said} instance={agent.instance} held={held} />
     </div>
   );
 }

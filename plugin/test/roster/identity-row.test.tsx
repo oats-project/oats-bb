@@ -99,7 +99,7 @@ test("an agent that needs you: since when and its question, on its own thread", 
 test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
   // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
   const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }), panelEvents: () => ({ ...recordedEvents(), events: [] }) });
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   await vi.waitFor(() => expect(stopped.inspection.rpcCalls.filter((call) => call.method === "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]));
   stopped.unmount();
@@ -228,7 +228,7 @@ test("the soul is a link to its page where that page is shown, and its name alon
 
 test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
   const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
-  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}StartInstance panel`));
+  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
   slot.unmount();
   resetApp();
@@ -252,7 +252,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   });
   const line = () => slot.getByTestId("oats-status-line").textContent;
   const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").length;
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(1);
   // Started: the line is no longer the stopped one, and nothing more is asked.
   agents = digest({ running: true, runtimeState: "running", startedAt: started });
@@ -263,7 +263,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   agents = digest({ startedAt: started });
   events = [{ ...stop, at: first }, { ...stop, at: second }];
   await slot.behavior.emitRealtime("oats/changed", { at: second });
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(2);
 });
 
@@ -272,7 +272,7 @@ test("events read before the session's start hold no time for this stop: the lin
   const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
 });
 
 // The settings can mend what Retry cannot (which machine holds the agents): the notice then has no

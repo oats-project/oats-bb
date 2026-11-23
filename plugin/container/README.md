@@ -182,6 +182,11 @@ docker exec -u node -w /home/node/plugin bb-plugin-dev bash container/live.sh
 docker rm -f bb-plugin-dev
 ```
 
+`ci.sh` also copies the bb session provider's two manifests (`oats-package/oats-package.json`,
+`oats-package/capabilities/oats-bb/oats.json`) beside the plugin, to `/home/node/oats-package/`:
+`test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
+needs them there too.
+
 ## Against a real kernel
 
 `real/` holds the other run: the plugin against a real OATS kernel and the bb session provider,

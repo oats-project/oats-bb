@@ -1,8 +1,9 @@
 // The lost session's part of the real run (parts/README.md): ONE agent on the TMUX backend, on the
 // real kernel, taken through the three states a person meets on a deployment of tmux agents
 // (running, stopped with OATS, and LOST: its tmux window gone, as after a crash or a reboot), with
-// what the plugin shows and offers in each, and the kernel's own answers for the three acts that
-// bring such an agent back (a plain start, a start with --resume, a restart), kept as fixtures.
+// what the plugin shows and offers in each, and the three acts that bring such an agent back:
+// RESTART a running one, START one stopped with OATS, RESUME a lost one. The kernel's answers for
+// them are kept as fixtures (test/fixtures/lifecycle/README.md, "An agent on tmux").
 //
 // Every other agent of the run is on bb. This one is spawned on the command line (`oats spawn
 // --backend tmux`: the plugin's own spawn is always a bb thread) and runs Claude Code on the run's
@@ -12,35 +13,38 @@
 //   - the OATS tmux server, started by hand as the kernel's docs say for a shell whose PATH the
 //     panes need (docs/execution-targets.md: `tmux -L oats new-session -d -s <session> -n hq`): a
 //     pane's environment is its tmux server's, and the kernel's own server would not find `claude`
-//     (it is in npm's prefix, which only this process's PATH holds) nor carry the placeholder key;
+//     (it is in npm's prefix, which only this process's PATH holds; the spawn is then refused,
+//     E_HARNESS_UNAVAILABLE) nor carry the placeholder key;
 //   - Claude Code's folder trust for the deployment (`oats harness trust`, the kernel's command);
 //   - Claude Code's first-run screens answered in its own state file (the theme chooser, the
 //     question whether to use the API key in the environment): nothing answers them in a pane.
 //
 // The session is LOST as a crash loses it: its tmux window is killed (never `oats instance stop`);
 // the kernel then prints `running: false` and `sessionEnd: "lost"` for the row, with no
-// `runtimeState`.
+// `runtimeState`. An OATS stop, by contrast, leaves the window at a shell: `runtimeState: "shell"`
+// with `sessionEnd: "stopped"`.
 //
 // WHAT IT ASSERTS IS WHAT MAIN DOES, in two halves that each change with one switch below:
-//   WORDS  the row and the page of a lost tmux agent. Today: plain "Stopped", as for one stopped
-//          with OATS. Target (the one-predicate PR): "Stopped · session lost · tmux".
-//   ACTS   what the agent's page offers. Today: Stop… and Retire… while it runs, Retire… alone
-//          once it is stopped or lost: no Start and no Restart for an agent on tmux
-//          (app/lifecycle/index.tsx `actsFor`). Target (the dialogs' third PR): START a stopped
-//          one, RESUME a lost one, RESTART a running one, each through its dialog, each with the
-//          result's line read.
-// Until ACTS is on main the three acts are made on the command line, so that the kernel's answers
-// exist as fixtures for whoever builds the dialogs (test/fixtures/lifecycle/README.md).
+//   WORDS  how a tmux agent that does not run is said. Off (main before the one-predicate PR): a
+//          lost one is plain "Stopped", and one stopped with OATS is "Failed · Its session ended"
+//          (the shell its window is left at). On: the row's sessionEnd decides: "Stopped · <soul>
+//          · tmux" for a stop, "Stopped · session lost · tmux" for a loss.
+//   ACTS   what the agent's page offers. Off (main before the dialogs' Start and Restart for
+//          tmux): Stop… and Retire… while it runs, Retire… alone otherwise; the three acts are
+//          then made on the command line, and the part also shows what the plugin's own start does
+//          when asked directly (a plain start, then a refusal of its own). On: each act goes
+//          through its dialog, from the agent's page, in every view, with the result read: what
+//          happened, where the agent runs, and for a resume what the kernel's `resume` said.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
-import { click, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
+import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 
-/** The row and the page say that a tmux agent's session was lost (the one-predicate PR is on main). */
+/** The row and the page say a tmux agent's stop and its loss by the row's sessionEnd (the one-predicate PR is on main). */
 const WORDS = false;
-/** Start and Restart are offered for an agent on tmux, and a lost one's Start resumes (the dialogs' third PR is on main). */
+/** Start and Restart are offered for an agent on tmux, and a lost one's Start resumes (the dialogs' PR for tmux is on main). */
 const ACTS = false;
 
 const NAME = "lost-tmux-developer";
@@ -49,25 +53,29 @@ const CALLED = "Lost tmux developer"; // the instance name as the plugin's words
 /** The placeholder the run's bb server has too (setup.sh): the mock model asks for no credential, Claude Code for one. */
 const KEY = "placeholder-not-a-key";
 
-/** What the plugin says and offers TODAY, per state; and what it will, once each switch is on. */
+/** What the plugin says and offers per state: today's, and with each switch on. */
 const EXPECTED = {
-  running: { acts: ACTS ? ["Stop…", "Restart…", "Retire…"] : ["Stop…", "Retire…"], words: ["Working", "Idle"] },
-  // An OATS stop leaves the agent's tmux window at a shell: the kernel's row is `runtimeState:
-  // "shell"` with `sessionEnd: "stopped"`, and main draws that as "Failed · Its session ended".
-  // The ruling (the specialist's, 23 Nov): where the row has a sessionEnd, IT decides: "stopped"
-  // is "Stopped · <soul> · tmux" whatever runtimeState says; "lost" is "Stopped · session lost ·
+  running: { acts: ACTS ? ["Stop…", "Restart…", "Retire…"] : ["Stop…", "Retire…"], words: ["Working", "Idle"], row: null },
+  // The ruling (the specialist's, 23 Nov): where the row has a sessionEnd, IT decides: "stopped" is
+  // "Stopped · <soul> · tmux" whatever runtimeState says; "lost" is "Stopped · session lost ·
   // tmux"; "exited", or "shell" with no sessionEnd, is "Failed".
-  stopped: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: `Stopped · ${SOUL} · tmux` },
-  lost: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: ["Stopped"], row: "Stopped · session lost · tmux" },
+  stopped: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: WORDS ? `Stopped · ${SOUL} · tmux` : `Failed · ${SOUL} · runs in tmux` },
+  lost: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: ["Stopped"], row: WORDS ? "Stopped · session lost · tmux" : `Stopped · ${SOUL} · runs in tmux` },
 };
-// The target's words, to be confirmed with their authors when the two PRs exist (the requirements:
-// specs/lost-sessions.requirements.md, 1 and the kernel's facts). Read only with ACTS on.
-const TARGET = {
-  /** before the press, on a lost agent's Start */
-  resumeBefore: "Start tries to bring it back in its last conversation; if that is gone, it starts fresh on its task.",
-  /** after it, by the kernel's `resume.resumed` */
-  resumed: "Back in its last conversation.",
-  fresh: "Started fresh: its last conversation was not found.",
+// The dialogs' words for an agent on tmux, as their author gave them (bb-plugin-dialogs-developer,
+// 23 Nov, from app/lifecycle/words.ts RESUME and START and app/panel/words.ts attachWhere): read
+// only with ACTS on, and to be read again against the PR that lands.
+const SAYS = {
+  start: "This starts a new conversation using the saved briefing and state.",
+  restart: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
+  resume: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
+  resumeClaude: "Claude may first ask, in its terminal, how to load a long conversation.",
+  started: `${CALLED} started.`,
+  restarted: `${CALLED} restarted.`,
+  resumed: `${CALLED} is back in its last conversation.`,
+  fresh: `${CALLED} started fresh: its last conversation was not brought back.`,
+  where: /^Runs in tmux on \S+\. Attach from a terminal:/,
+  waiting: "It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.",
 };
 
 export default async (run) => {
@@ -79,8 +87,6 @@ export default async (run) => {
     const done = spawnSync(command, args, { encoding: "utf8", ...options });
     return { exit: done.status, stdout: done.stdout ?? "", stderr: done.stderr ?? "", error: done.error?.message ?? null };
   };
-  /** The OATS tmux server: the kernel's socket name (`-L oats`), or the socket a row names. */
-  const tmux = (...args) => sh("tmux", ["-L", "oats", ...args]);
   const prepare = () => {
     const version = sh("tmux", ["-V"]);
     check(version.exit === 0, "tmux is in the container (container/Dockerfile): an agent on the tmux backend needs it", version.error ?? version.stderr);
@@ -96,14 +102,16 @@ export default async (run) => {
     // The folder trust, by the kernel's own command (docs/harness-trust.md): it writes one leaf of that file.
     const trust = oats("harness", "trust", "--dir", DEPLOY, "--harness", "claude", "--json");
     check(trust.exit === 0 && JSON.parse(trust.stdout).ok === true, "oats harness trust: Claude Code trusts the deployment's folder", trust.stdout.slice(0, 400) || trust.stderr);
-    // The OATS tmux server, with this process's PATH (where `claude` is) and the placeholder key:
-    // a pane's environment is its server's. No update of Claude Code under the run's pin.
+    // The OATS tmux server (the kernel's socket name, `-L oats`), with this process's PATH (where
+    // `claude` is) and the placeholder key: a pane's environment is its server's. No update of
+    // Claude Code under the run's pin.
     const session = "oats-agents";
-    if (tmux("has-session", "-t", session).exit !== 0) {
+    const there = () => sh("tmux", ["-L", "oats", "has-session", "-t", session]).exit === 0;
+    if (!there()) {
       const started = sh("tmux", ["-L", "oats", "new-session", "-d", "-s", session, "-n", "hq", "-x", "160", "-y", "50"], { env: { ...process.env, ANTHROPIC_API_KEY: KEY, DISABLE_AUTOUPDATER: "1" } });
       check(started.exit === 0, `the OATS tmux server is started by hand, as the kernel's docs say (tmux -L oats new-session -d -s ${session} -n hq), with this run's PATH and the placeholder key`, started.stderr);
     }
-    return tmux("has-session", "-t", session).exit === 0;
+    return there();
   };
 
   // ---- the kernel's row, and the pane
@@ -132,6 +140,15 @@ export default async (run) => {
     show("oats status", brief(row()));
     return lost;
   };
+  /** Stopped with OATS, by the plugin's own Stop (its plan, then its apply). */
+  const stop = async (key) => {
+    const plan = act(`stop plan of ${NAME}`, "stopPlan", { instance: NAME });
+    check(plan?.targets?.[0]?.instance === NAME && plan.targets[0].backend === "tmux", "the kernel's stop plan names the agent, on tmux", JSON.stringify(plan?.targets));
+    act(`stop apply of ${NAME}`, "stopApply", { instance: NAME, revision: plan?.revision, key });
+    const stopped = await untilRow("to read stopped by OATS", (r) => r.running === false && r.sessionEnd === "stopped");
+    check(stopped?.sessionEnd === "stopped" && stopped.runtimeState === "shell", 'oats status: running false, sessionEnd "stopped", runtimeState "shell" (the stop leaves its window at a shell)', brief(row()));
+    show("oats status", brief(row()));
+  };
   /** One row of `oats status --json`, as printed, for a fixture. */
   const keepRow = (file) => fixtures.keep(file, JSON.stringify(row()));
   /** A command of the kernel's made on the command line, its answer kept as printed. */
@@ -148,6 +165,19 @@ export default async (run) => {
     if (answer !== undefined && file !== null) fixtures.keep(file, done.stdout);
     return { exit: done.exit, answer };
   };
+  /** A start's or a restart's answer without its long members: what says where the agent now runs. */
+  const pick = (result) => (result ? Object.fromEntries(Object.entries(result).filter(([, value]) => JSON.stringify(value).length <= 300)) : null);
+  /** The two refusals of `--resume` on a home that is not lost, each recorded once. */
+  const resumeWhileRunning = () => {
+    const refused = cli("lifecycle/tmux-resume-running.json", "session", "start", "--resume", "--home", home, "--json");
+    check(refused.answer?.ok === false && refused.answer.error?.code === "E_SESSION_RUNNING", "oats session start --resume on a home that RUNS is refused: E_SESSION_RUNNING", JSON.stringify(refused.answer?.error ?? refused.answer).slice(0, 400));
+    check(row()?.running === true, "and the agent goes on running", brief(row()));
+  };
+  const resumeWhileStopped = () => {
+    const refused = cli("lifecycle/tmux-resume-not-lost.json", "session", "start", "--resume", "--home", home, "--json");
+    check(refused.answer?.ok === false && refused.answer.error?.code === "E_RESUME_NOT_LOST", "oats session start --resume on a home that is NOT lost (stopped with OATS) is refused: E_RESUME_NOT_LOST", JSON.stringify(refused.answer?.error ?? refused.answer).slice(0, 400));
+    check(row()?.running === false && row()?.sessionEnd === "stopped", "and the agent stays stopped", brief(row()));
+  };
 
   // ---- what the plugin shows: the row in the sidebar, and the agent's page with its acts
   const ROW = `[data-testid="oats-agent-row-threadless"][data-instance="${NAME}"]`;
@@ -155,31 +185,38 @@ export default async (run) => {
   const clean = (expression) => `(${expression} ?? "").replace(/\\s+/g, " ").trim()`;
   /** The agent's page once it shows a state among `words` (a wait on the state it asserts) → what it says and offers. */
   const pageSays = (words) =>
-    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), session: ${clean(`p.querySelector('[data-testid="oats-panel-session-line"]')?.innerText`)}, attach: ${clean(`p.querySelector('[data-testid="oats-panel-attach"]')?.innerText`)}, work: ${clean(`p.querySelector('[data-testid="oats-panel-work-sentence"]')?.innerText`)} }); })()`;
+    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()) }); })()`;
   const pageNow = `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); return p ? ${clean("p.innerText")}.slice(0, 600) : ${clean("document.body.innerText")}.slice(0, 300); })()`;
   /** The agent's row in the sidebar, once it says one of `words`. */
   const rowSays = (words) => `(() => { const r = document.querySelector(${JSON.stringify(ROW)}); if (!r) return ""; const text = ${clean("r.innerText")}; return ${JSON.stringify(words)}.some((word) => text.includes(word)) ? text : ""; })()`;
   /**
-   * In each view: the row in the sidebar and the agent's own page, for the state the kernel's row is
-   * in, with their images; the acts the page offers are the ones of EXPECTED.
+   * In one view: the row in the sidebar and the agent's own page, for the state the kernel's row is
+   * in, with their images; the words and the acts are the ones of EXPECTED.
+   * → { at, row, name, state, acts }
    */
-  const shown = async (state) => {
-    const { words } = EXPECTED[state];
+  const look = async ({ page, at, viewport, shot }, state) => {
+    const { words, acts, row: rowWords } = EXPECTED[state];
+    rpc("refresh");
+    await page.goto("/");
+    await showSidebar(page, viewport);
+    const inRow = await page.until(rowSays(words), 60);
+    // (Without the agent's own name, which holds the word "lost".)
+    const says = (inRow ?? "").replace(CALLED, "").trim();
+    check(Boolean(inRow) && (rowWords === null || says === rowWords), `${at} the ${state} tmux agent's row in the sidebar, among the agents with no bb thread${rowWords === null ? ", says its state in a word" : `: "${rowWords}"`}`, inRow ?? (await page.evaluate(`${clean(`document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
+    await shot(`${state}-row`);
+    await page.goto(`/plugins/oats/agent/${NAME}`);
+    const said = await page.until(pageSays(words), 60);
+    const read = said ? JSON.parse(said) : null;
+    check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
+    check(JSON.stringify(read?.acts) === JSON.stringify(acts), `${at} the page offers ${acts.join(" and ")}${ACTS ? "" : state === "running" ? ": no Restart for an agent on tmux (main today)" : ": no Start for an agent on tmux (main today)"}`, JSON.stringify(read?.acts));
+    await shot(`${state}-page`);
+    return { at, row: inRow ?? null, ...read };
+  };
+  /** The same in every view, for a state that holds while they are drawn. */
+  const lookEverywhere = async (state) => {
     const seen = [];
-    await views(`real-tmux-${state}`, async ({ page, at, viewport, shot }) => {
-      rpc("refresh");
-      await page.goto("/");
-      await showSidebar(page, viewport);
-      const inRow = await page.until(rowSays(words), 60);
-      check(Boolean(inRow), `${at} the ${state} tmux agent has a row in the sidebar, among the agents with no bb thread, with its state in a word`, inRow ?? (await page.evaluate(`${clean(`document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
-      await shot("row");
-      await page.goto(`/plugins/oats/agent/${NAME}`);
-      const said = await page.until(pageSays(words), 60);
-      const read = said ? JSON.parse(said) : null;
-      check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
-      check(JSON.stringify(read?.acts) === JSON.stringify(EXPECTED[state].acts), `${at} the page offers ${EXPECTED[state].acts.join(" and ")}${ACTS ? "" : state === "running" ? ": no Restart for an agent on tmux (main today)" : ": no Start for an agent on tmux (main today)"}`, JSON.stringify(read?.acts));
-      await shot("page");
-      seen.push({ at, row: inRow ?? null, ...read });
+    await views("real-tmux", async (view) => {
+      seen.push(await look(view, state));
     });
     return seen;
   };
@@ -200,82 +237,56 @@ export default async (run) => {
     note(`NO TMUX AGENT IN THIS RUN: the kernel did not launch ${NAME} on tmux (above); nothing of a lost session was proven`);
     return;
   }
-
-  // ---- 1. it runs
-  step("C lost 1: it runs: what the plugin shows and offers for a running agent on tmux");
   await turned("spawned");
   show("oats status", brief(row()));
-  keepRow("lifecycle/tmux-row-running.json");
-  const running = await shown("running");
-  show("the plugin, for the running tmux agent", running);
-  // --resume on a home that RUNS: the kernel's refusal, and nothing is started.
-  const whileRunning = cli("lifecycle/tmux-resume-running.json", "session", "start", "--resume", "--home", home, "--json");
-  check(whileRunning.answer?.ok === false && whileRunning.answer.error?.code === "E_SESSION_RUNNING", "oats session start --resume on a home that RUNS is refused: E_SESSION_RUNNING", JSON.stringify(whileRunning.answer?.error ?? whileRunning.answer).slice(0, 400));
-  check(row()?.running === true, "and the agent goes on running", brief(row()));
 
-  // ---- RESTART a running one
-  step(`C lost 2: RESTART a running tmux agent${ACTS ? ", through its dialog" : " (on the command line: the plugin offers no Restart for it today)"}`);
-  const before = row().startedAt;
-  if (ACTS) {
-    await restartThroughDialog();
-  } else {
+  if (ACTS) await throughTheDialogs();
+  else await onTheCommandLine();
+
+  step(`C lost, the end: ${NAME} is retired`);
+  const gone = oats("retire", NAME, "--json");
+  check(gone.exit === 0, `oats retire ${NAME}`, gone.stdout.slice(0, 400) || gone.stderr.slice(0, 400));
+  await until(`${NAME} to be gone from oats status`, () => (row() === undefined ? true : undefined));
+
+  // =============================================================================================
+  // ACTS off: main offers a tmux agent no Start and no Restart. The plugin's side is what it shows
+  // and offers in each state; the acts are made on the command line, for their answers.
+  async function onTheCommandLine() {
+    step("C lost 1: it runs: what the plugin shows and offers for a running agent on tmux");
+    keepRow("lifecycle/tmux-row-running.json");
+    show("the plugin, for the running tmux agent", await lookEverywhere("running"));
+    resumeWhileRunning();
+
+    step("C lost 2: RESTART a running tmux agent (on the command line: the plugin offers no Restart for it today)");
+    const before = row().startedAt;
     const restarted = cli("lifecycle/tmux-restart.json", "session", "restart", "--home", home, "--json");
     check(restarted.exit === 0 && restarted.answer?.ok === true, "oats session restart --home <home> --json: restarted", JSON.stringify(restarted.answer?.error ?? {}).slice(0, 400));
     show("the kernel's answer", pick(restarted.answer?.result));
-  }
-  const again = await untilRow("to be started anew", (r) => r.running === true && r.startedAt !== before);
-  check(Boolean(again), "oats status: running, with a new start", brief(row()));
-  await turned("restarted");
+    check(Boolean(await untilRow("to be started anew", (r) => r.running === true && r.startedAt !== before)), "oats status: running, with a new start", brief(row()));
+    await turned("restarted");
 
-  // ---- 2. stopped with OATS
-  step("C lost 3: stopped with OATS (the plugin's own Stop): what the plugin shows and offers");
-  const plan = act(`stop plan of ${NAME}`, "stopPlan", { instance: NAME });
-  check(plan?.targets?.[0]?.instance === NAME && plan.targets[0].backend === "tmux", "the kernel's stop plan names the agent, on tmux", JSON.stringify(plan?.targets));
-  act(`stop apply of ${NAME}`, "stopApply", { instance: NAME, revision: plan?.revision, key: "stop-10574b1ed0c1" });
-  const stopped = await untilRow("to read stopped by OATS", (r) => r.running === false && r.sessionEnd === "stopped");
-  check(stopped?.sessionEnd === "stopped" && stopped.runtimeState === "shell", 'oats status: running false, sessionEnd "stopped", runtimeState "shell" (the stop leaves its window at a shell)', brief(row()));
-  show("oats status", brief(row()));
-  keepRow("lifecycle/tmux-row-stopped.json");
-  const stoppedSeen = await shown("stopped");
-  show("the plugin, for the tmux agent stopped with OATS", stoppedSeen);
-  if (WORDS) for (const seen of stoppedSeen) check((seen.row ?? "").replace(CALLED, "").trim().startsWith(EXPECTED.stopped.row) && !/lost|failed/i.test(seen.state ?? ""), `${seen.at} an agent stopped with OATS reads "${EXPECTED.stopped.row}": its sessionEnd decides, not the shell its window is left at`, JSON.stringify({ row: seen.row, page: seen.state }));
-  else note(`MAIN TODAY: a tmux agent stopped with OATS (the kernel's row: runtimeState "shell", sessionEnd "stopped") is drawn as "${stoppedSeen[0]?.state}", in the row as "${stoppedSeen[0]?.row}"`);
-  // --resume on a home that is NOT lost (stopped with OATS): the kernel's refusal.
-  const notLost = cli("lifecycle/tmux-resume-not-lost.json", "session", "start", "--resume", "--home", home, "--json");
-  check(notLost.answer?.ok === false && notLost.answer.error?.code === "E_RESUME_NOT_LOST", "oats session start --resume on a home that is NOT lost (stopped with OATS) is refused: E_RESUME_NOT_LOST", JSON.stringify(notLost.answer?.error ?? notLost.answer).slice(0, 400));
-  check(row()?.running === false && row()?.sessionEnd === "stopped", "and the agent stays stopped", brief(row()));
+    step("C lost 3: stopped with OATS (the plugin's own Stop): what the plugin shows and offers");
+    await stop("stop-10574b1ed0c1");
+    keepRow("lifecycle/tmux-row-stopped.json");
+    const stoppedSeen = await lookEverywhere("stopped");
+    show("the plugin, for the tmux agent stopped with OATS", stoppedSeen);
+    if (!WORDS) note(`MAIN TODAY: a tmux agent stopped with OATS (the kernel's row: runtimeState "shell", sessionEnd "stopped") is drawn as "${stoppedSeen[0]?.state}", in the row as "${stoppedSeen[0]?.row}"`);
+    resumeWhileStopped();
 
-  // ---- START a stopped one
-  step(`C lost 4: START a tmux agent stopped with OATS${ACTS ? ", through its dialog" : " (on the command line: the plugin offers no Start for it today)"}`);
-  if (ACTS) {
-    await startThroughDialog({ lost: false });
-  } else {
+    step("C lost 4: START a tmux agent stopped with OATS (on the command line: the plugin offers no Start for it today)");
     const started = cli("lifecycle/tmux-start.json", "session", "start", "--home", home, "--json");
     check(started.exit === 0 && started.answer?.ok === true, "oats session start --home <home> --json (a plain start): started", JSON.stringify(started.answer?.error ?? {}).slice(0, 400));
     show("the kernel's answer", pick(started.answer?.result));
-  }
-  await turned("started after an OATS stop");
+    await turned("started after an OATS stop");
 
-  // ---- 3. LOST
-  step("C lost 5: its session is LOST (its tmux window killed): the row, the page, the acts");
-  await lose("the first loss");
-  keepRow("lifecycle/tmux-row-lost.json");
-  const lostSeen = await shown("lost");
-  show("the plugin, for the lost tmux agent", lostSeen);
-  for (const seen of lostSeen) {
-    // (Without the agent's own name, which holds the word.)
-    const says = (seen.row ?? "").replace(CALLED, "").trim();
-    if (WORDS) check(says.includes(EXPECTED.lost.row), `${seen.at} the row says that its session was lost: "${EXPECTED.lost.row}"`, says);
-    else check(says.startsWith("Stopped ·") && !/lost/i.test(says) && seen.state === "Stopped", `${seen.at} MAIN TODAY: the row and the page say plain "Stopped" for a lost session: nothing says it was lost, nor that a start could bring it back`, JSON.stringify({ row: says, page: seen.state }));
-  }
+    step("C lost 5: its session is LOST (its tmux window killed): the row, the page, the acts");
+    await lose("the first loss");
+    keepRow("lifecycle/tmux-row-lost.json");
+    const lostSeen = await lookEverywhere("lost");
+    show("the plugin, for the lost tmux agent", lostSeen);
+    if (!WORDS) check(lostSeen.every((seen) => seen.state === "Stopped"), 'MAIN TODAY: the row and the page say plain "Stopped" for a lost session: nothing says it was lost, nor that a start could bring it back', JSON.stringify(lostSeen.map((seen) => [seen.row, seen.state])));
 
-  // ---- RESUME a lost one
-  if (ACTS) {
-    step("C lost 6: RESUME a lost tmux agent, through its Start dialog");
-    await startThroughDialog({ lost: true });
-    await untilRow("to run again", (r) => r.running === true);
-  } else {
-    step("C lost 6: MAIN TODAY, a start of the lost agent: no place of the plugin offers one; its RPC, asked directly, starts it FRESH and then fails");
+    step("C lost 6: MAIN TODAY, a start of the lost agent: no place of the plugin offers one; its RPC, asked directly, starts it FRESH and then refuses");
     const since = Date.now();
     const direct = rpc("start", { instance: NAME });
     const asked = recorded(["session", "start", "--home", home]);
@@ -290,12 +301,10 @@ export default async (run) => {
     await turned("started fresh by the plugin's plain start");
     // Whether the plugin, having refused, shows that the agent runs: its own snapshot at the next read.
     rpc("refresh");
-    const after = await until("the plugin's snapshot to say what the kernel says of the agent it refused to have started", () => {
-      const agent = rpc("snapshot").value?.agents?.find((each) => each.instance === NAME);
-      return agent?.running === true ? agent : undefined;
-    }, 30);
-    check(after?.running === true, "after that refusal the plugin's own snapshot, read again, has the agent running: the row is right, only the call's answer was wrong", JSON.stringify(after ? { running: after.running, runtimeState: after.runtimeState ?? null, backend: after.backend } : rpc("snapshot").value?.agents?.find((each) => each.instance === NAME) ?? null));
-    // The resume itself, on the command line, for the fixture: lost once more, then `--resume`.
+    const mine = () => rpc("snapshot").value?.agents?.find((each) => each.instance === NAME);
+    const after = await until("the plugin's snapshot to have the agent it refused to have started as running", () => (mine()?.running === true ? mine() : undefined), 30);
+    check(after?.running === true, "after that refusal the plugin's own snapshot, read again, has the agent running: the row is right, only the call's answer was wrong", JSON.stringify(after ? { running: after.running, runtimeState: after.runtimeState ?? null, backend: after.backend } : (mine() ?? null)));
+
     step("C lost 7: lost again, then oats session start --resume (on the command line): the kernel's `resume` object");
     await lose("the second loss");
     const resumed = cli("lifecycle/tmux-start-resume.json", "session", "start", "--resume", "--home", home, "--json");
@@ -307,70 +316,97 @@ export default async (run) => {
     show("its pane", pane().replace(/\s+/g, " ").trim().slice(-400));
   }
 
-  // ---- the end: nothing of this part is left
-  step(`C lost 8: ${NAME} is retired`);
-  const gone = oats("retire", NAME, "--json");
-  check(gone.exit === 0, `oats retire ${NAME}`, gone.stdout.slice(0, 400) || gone.stderr.slice(0, 400));
-  await until(`${NAME} to be gone from oats status`, () => (row() === undefined ? true : undefined));
-
   // =============================================================================================
-  // THE TARGET (ACTS on): the three acts through their dialogs, from the agent's own page. Written
-  // against the dialogs as they are for an agent on bb (scenes/lifecycle.mjs); not run until the
-  // dialogs' third PR is on main, and its words are to be confirmed with its author then.
-  /** A start's or a restart's answer without its long members (the composition, the capabilities): what says where the agent now runs. */
-  function pick(result) {
-    return result ? Object.fromEntries(Object.entries(result).filter(([, value]) => JSON.stringify(value).length <= 300)) : null;
-  }
-  async function throughDialog(verb, title, read) {
-    await views(`real-tmux-${verb}`, async ({ page, at, viewport, shot }) => {
-      // One act per run of the part: the first view makes it, the others would find another state.
-      if (throughDialog.done?.has(verb)) return;
-      (throughDialog.done ??= new Set()).add(verb);
-      await page.goto(`/plugins/oats/agent/${NAME}`);
-      await page.until(`document.querySelector('[data-testid="oats-agent-act-${verb === "resume" ? "start" : verb}"]') !== null`, 60);
-      await page.evaluate(click(`oats-agent-act-${verb === "resume" ? "start" : verb}`));
-      await page.until(phaseIs("ready"), 60);
-      let said = await dialog(page);
-      check(said.title === title && said.about === NAME, `${at} the ${verb} dialog is for ${NAME}`, JSON.stringify(said));
-      await read.before(said, at);
-      await shot("before");
-      await page.evaluate(click("oats-confirm-act"));
-      await page.until(phaseIs("done"), 180);
-      said = await dialog(page);
-      await read.after(said, at);
-      await shot("done");
-      void viewport;
-    });
-  }
-  /** Where a tmux agent runs, as a result must say it: the tmux session the kernel's answer names (`target`), and the plugin's own attach command for the home. */
-  function saysWhere(body, answer) {
-    return typeof answer?.target?.session === "string" && body.includes(answer.target.session) && body.includes(`oats session attach --home ${home}`);
-  }
-  async function restartThroughDialog() {
-    await throughDialog("restart", `Restart ${CALLED}`, {
-      before: async () => {},
-      after: async (said, at) => {
-        const asked = recorded(["session", "restart", "--home", home]);
-        const answer = JSON.parse(asked.stdout).result;
-        fixtures.keep("lifecycle/tmux-restart.json", asked.stdout);
-        check(said.phase === "done" && said.body.includes(`${CALLED} restarted.`) && saysWhere(said.body, answer), `${at} the result says it restarted, and where it runs (the attach command)`, JSON.stringify(said));
-      },
-    });
-  }
-  async function startThroughDialog({ lost }) {
-    await throughDialog(lost ? "resume" : "start", `Start ${CALLED}`, {
-      before: async (said, at) => {
-        if (lost) check(said.body.includes(TARGET.resumeBefore), `${at} before the press, the dialog says what a start of a lost agent tries: "${TARGET.resumeBefore}"`, said.body);
-        else check(!said.body.includes(TARGET.resumeBefore), `${at} a start of an agent stopped with OATS promises no resume`, said.body);
-      },
-      after: async (said, at) => {
-        const asked = recorded(["session", "start", "--home", home]);
-        const answer = JSON.parse(asked.stdout).result;
-        fixtures.keep(lost ? "lifecycle/tmux-start-resume.json" : "lifecycle/tmux-start.json", asked.stdout);
-        check(asked.argv.includes("--resume") === lost, `${at} the kernel was asked ${lost ? "session start --resume" : "a plain session start"}`, JSON.stringify(asked.argv));
-        check(said.phase === "done" && saysWhere(said.body, answer), `${at} the result says where it runs (the attach command)`, JSON.stringify(said));
-        if (lost) check(said.body.includes(answer?.resume?.resumed === true ? TARGET.resumed : TARGET.fresh), `${at} the result says what the kernel's \`resume\` said (resumed: ${answer?.resume?.resumed}, reason: ${answer?.resume?.reason ?? "none"})`, said.body);
-      },
+  // ACTS on: in each view (bb's light and dark themes, at each width) the agent goes round once:
+  // it runs (RESTART, through its dialog), it is stopped with OATS (START), it is lost (its Start
+  // RESUMES), and runs again for the next view. The kernel's rows and answers are kept from the
+  // first round.
+  async function throughTheDialogs() {
+    let round = 0;
+    await views("real-tmux", async (view) => {
+      const { page, at, shot } = view;
+      round += 1;
+      const first = round === 1;
+      /** One act through its dialog, from the agent's own page → what the dialog said before the press, and its result. */
+      const through = async (verb, name, title, before, never = []) => {
+        await page.goto(`/plugins/oats/agent/${NAME}`);
+        const offered = await page.until(`document.querySelector('[data-testid="oats-agent-act-${verb}"]') !== null && !document.querySelector('[data-testid="oats-agent-act-${verb}"]').disabled`, 60);
+        check(Boolean(offered), `${at} ${name}: the agent's page offers ${verb === "start" ? "Start…" : "Restart…"}`, await page.evaluate(pageNow));
+        await page.evaluate(click(`oats-agent-act-${verb}`));
+        await page.until(phaseIs("ready"), 60);
+        const said = await dialog(page);
+        check(said.title === title && said.about === NAME && before.every((sentence) => said.body.includes(sentence)) && never.every((sentence) => !said.body.includes(sentence)), `${at} ${name}: the dialog is "${title}", for ${NAME}, and says before the press: ${before.join(" ")}`, JSON.stringify(said));
+        await shot(`${name}-before`);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("done"), 180);
+        const result = JSON.parse(
+          await page.evaluate(
+            `(() => { const r = document.querySelector('[data-testid="oats-modal"] [data-testid="oats-result"]'); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: ${clean(`r?.querySelector("h3")?.innerText`)}, where: ${clean(`document.querySelector('[data-testid="oats-start-where"]')?.innerText`)}, waiting: ${clean(`document.querySelector('[data-testid="oats-start-waiting"] h3')?.innerText`)}, body: ${clean(`document.querySelector('[data-testid="oats-modal"]')?.innerText`)} }); })()`,
+          ),
+        );
+        // Where it runs, under every result of an agent on tmux: the machine, and the command that attaches to its home.
+        check(SAYS.where.test(result.where) && result.where.includes(`oats session attach --home ${home}`), `${at} ${name}: the result says where it runs: in tmux, on the machine, with the command that attaches to it`, JSON.stringify(result));
+        await shot(`${name}-done`);
+        await page.evaluate(click("oats-confirm-close"));
+        check(Boolean(await page.until(closed, 10)), `${at} ${name}: Close closes the dialog`);
+        return result;
+      };
+      /** The plugin's last call of `oats session <verb>` for the home, made in this round. */
+      const asked = (verb, since) => {
+        const call = recorded(["session", verb, "--home", home]);
+        check(Date.parse(call.at) >= since, `${at} the plugin asked the kernel: oats session ${verb} --home <home>`, JSON.stringify([call.at, call.argv]));
+        return { argv: call.argv, stdout: call.stdout, result: JSON.parse(call.stdout).result };
+      };
+      const NO_CHOICE = ["--launch-config", "--harness", "--model", "--yolo", "--no-yolo", "--reselect-launch"];
+
+      // ---- it runs: RESTART
+      step(`C lost, at ${at}: RESTART a running tmux agent, through its dialog`);
+      await untilRow("to run", (r) => r.running === true);
+      if (first) keepRow("lifecycle/tmux-row-running.json");
+      await look(view, "running");
+      if (first) resumeWhileRunning();
+      let since = Date.now();
+      const before = row().startedAt;
+      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.restart, SAYS.start]);
+      let call = asked("restart", since);
+      if (first) fixtures.keep("lifecycle/tmux-restart.json", call.stdout);
+      check(result.tone === "done" && result.title === SAYS.restarted, `${at} the result says it restarted: "${SAYS.restarted}"`, JSON.stringify(result));
+      check(Boolean(await untilRow("to be started anew", (r) => r.running === true && r.startedAt !== before)), "oats status: running, with a new start", brief(row()));
+      await turned("restarted through the dialog");
+
+      // ---- stopped with OATS: START
+      step(`C lost, at ${at}: START a tmux agent stopped with OATS, through its dialog`);
+      await stop(`stop-10574b1ed0c${round}`);
+      if (first) keepRow("lifecycle/tmux-row-stopped.json");
+      await look(view, "stopped");
+      if (first) resumeWhileStopped();
+      since = Date.now();
+      result = await through("start", "start", `Start ${CALLED}`, [SAYS.start], [SAYS.resume]);
+      call = asked("start", since);
+      if (first) fixtures.keep("lifecycle/tmux-start.json", call.stdout);
+      check(!call.argv.includes("--resume") && !call.argv.some((word) => NO_CHOICE.includes(word)), `${at} a start of an agent stopped with OATS is a plain session start: no --resume`, JSON.stringify(call.argv));
+      check(result.tone === "done" && result.title === SAYS.started && (call.result?.resume ?? null) === null, `${at} the result says it started: "${SAYS.started}"`, JSON.stringify(result));
+      await turned("started through the dialog");
+
+      // ---- LOST: its Start RESUMES
+      step(`C lost, at ${at}: RESUME a lost tmux agent, through its Start dialog`);
+      await lose(`lost, at ${at}`);
+      if (first) keepRow("lifecycle/tmux-row-lost.json");
+      await look(view, "lost");
+      since = Date.now();
+      result = await through("start", "resume", `Start ${CALLED}`, [SAYS.resume, SAYS.resumeClaude], [SAYS.start]);
+      call = asked("start", since);
+      if (first) fixtures.keep("lifecycle/tmux-start-resume.json", call.stdout);
+      const resume = call.result?.resume ?? null;
+      show("the kernel's `resume`", resume);
+      check(call.argv.includes("--resume") && !call.argv.some((word) => NO_CHOICE.includes(word)), `${at} the kernel was asked session start --resume, with no harness, model, mode or launch configuration (it refuses them with --resume)`, JSON.stringify(call.argv));
+      check(typeof resume?.resumed === "boolean", `${at} the kernel's answer says whether the conversation was resumed`, JSON.stringify(resume));
+      // What the result says is what the kernel's `resume` said, never a guess.
+      if (resume?.resumed === true) check(result.tone === "done" && result.title === SAYS.resumed, `${at} resumed: the result says "${SAYS.resumed}"`, JSON.stringify(result));
+      else check(result.tone === "unknown" && result.title === SAYS.fresh, `${at} not resumed (${resume?.reason ?? "no reason"}): the result says "${SAYS.fresh}", in the warning tone`, JSON.stringify(result));
+      check((typeof resume?.waiting === "string") === (result.waiting === SAYS.waiting), `${at} it says that the harness waits in its terminal exactly when the kernel says so (waiting: ${resume?.waiting ?? "none"})`, JSON.stringify(result));
+      const back = await untilRow("to run again", (r) => r.running === true);
+      check(back?.running === true && (back.sessionEnd ?? null) === null, "oats status: it runs again, and the row no longer says lost", brief(row()));
     });
   }
 };

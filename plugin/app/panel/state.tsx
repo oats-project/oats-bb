@@ -5,11 +5,11 @@
 // drawing whether or not something read earlier is still shown: with it, the notice says how old
 // that is, once.
 import { codes } from "../../kernel/result";
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button, Code, Loading, Notice } from "../ui";
 import type { Read } from "../store";
+import { readAge } from "../ui/words";
 import { refusalWords } from "./refusal-words";
-import { staleAge } from "./words";
 
 /**
  * The code that leads a refusal as the server words it (`<code>: <message>`), the kernel's or one
@@ -47,9 +47,18 @@ export const mendable = (read: CommandRead, of: "readiness" | "activity" | "soul
  * the panel received it); `now` is the clock.
  */
 export function CommandState({ read, of, reading, failed, at = null, now }: { read: CommandRead; of: "readiness" | "activity" | "soul"; reading: string; failed: string; at?: string | null; now: number }) {
+  // The panel's clock ticks every half minute: a failure is aged by the clock as it was when the
+  // failure was seen, read after the drawing (an effect), never during it.
+  const [seen, setSeen] = useState(now);
+  const failing = read.status === "error" && !read.fetching;
+  useEffect(() => {
+    if (failing) setSeen(Date.now());
+  }, [failing, read.error]);
   if (read.status === "loading") return <Loading>{reading}</Loading>;
   if (read.status !== "error") return null;
   const code = codeOf(read.error);
+  /** When what is still shown was read: the instant the part names, else when this window received it. */
+  const stale = at ?? read.readAt;
   const words = refusalWords(of, code, read.error);
   const kept = read.data !== undefined;
   // OATS has none of it for this kind of agent: a fact, said once and not drawn as a failure; nothing to press.
@@ -60,8 +69,7 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
       tone="error"
       code={code}
       details={read.error}
-      // The panel's clock ticks every half minute: a failure drawn between two ticks is aged by the clock as it is now.
-      {...(kept ? { age: staleAge(at ?? read.readAt, Math.max(now, Date.now())) } : {})}
+      {...(kept ? { age: stale === null ? null : readAge(stale, Math.max(now, seen)) } : {})}
       actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
       {words.sentence === null ? null : <Sentence>{words.sentence}</Sentence>}

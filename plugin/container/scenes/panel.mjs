@@ -39,7 +39,7 @@
 // a filled core slot. Readiness that is not ready is a recording
 // (test/fixtures/panel/readiness-home-not-ready.json).
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,7 +112,10 @@ function setVerb(verb, behaviour) {
   const verbs = { ...config.verbs };
   if (behaviour === null) delete verbs[verb];
   else verbs[verb] = behaviour;
-  writeFileSync(FAKE_CONFIG, JSON.stringify({ ...config, verbs }));
+  // Written beside and moved into place: the fake reads this file at every `oats` it stands for, and
+  // must never read half of it (a read that began during a plain write failed with no answer).
+  writeFileSync(`${FAKE_CONFIG}.next`, JSON.stringify({ ...config, verbs }));
+  renameSync(`${FAKE_CONFIG}.next`, FAKE_CONFIG);
 }
 const setStatus = (behaviour) => setVerb("status", behaviour);
 /** A kernel refusal, as the kernel prints one. */
@@ -233,11 +236,11 @@ const panelWhole = `(() => { const strip = document.querySelector('[data-testid=
  * loaded and pushes the side panel off the window (by how much varies with what
  * the page holds). That cut is bb's, on every tab of its side panel; it is printed with the check, not hidden and not held against the panel.
  */
-async function fits(page, viewport) {
+async function fits(page, viewport, root = testId("oats-panel")) {
   const need = viewport.mobile ? 44 : 32;
   return JSON.parse(
     await page.evaluate(
-      `(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const broken = []; const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (!node.parentElement || node.parentElement.getClientRects().length === 0) continue; const atom = /[^\\s\\/\\-]+/g; for (let found = atom.exec(node.data); found; found = atom.exec(node.data)) { if (found[0].length < 2) continue; const range = document.createRange(); range.setStart(node, found.index); range.setEnd(node, found.index + found[0].length); const tops = new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))); if (tops.size > 1) broken.push(found[0]); } } const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; const shownBox = (e) => { const box = e.getBoundingClientRect(); const pane = e.closest('[role="tabpanel"]'); if (!pane) return box; const within = pane.getBoundingClientRect(); return { left: Math.max(box.left, within.left), right: Math.min(box.right, within.right), top: Math.max(box.top, within.top), bottom: Math.min(box.bottom, within.bottom) }; }; const targets = [...panel.querySelectorAll("a, button, summary")].filter((e) => e.getClientRects().length > 0 && (typeof e.checkVisibility !== "function" || e.checkVisibility())).map((e) => [e, shownBox(e)]).filter(([, box]) => box.right - box.left > 1 && box.bottom - box.top > 1); const overlap = []; for (let i = 0; i < targets.length; i += 1) for (let j = i + 1; j < targets.length; j += 1) { const [a, x] = targets[i], [b, y] = targets[j]; if (a.contains(b) || b.contains(a)) continue; if (Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1) overlap.push((a.innerText || a.getAttribute("aria-label") || a.tagName).trim() + " / " + (b.innerText || b.getAttribute("aria-label") || b.tagName).trim()); } return JSON.stringify({ low, wide, broken, overlap, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
+      `(() => { const panel = document.querySelector(${JSON.stringify(root)}); const low = [...panel.querySelectorAll("button, summary, a")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${need} - 0.5).map((e) => (e.innerText || e.getAttribute("aria-label") || e.tagName).trim() + " " + Math.round(e.getBoundingClientRect().height)); const edge = panel.getBoundingClientRect().right; const seen = Math.min(edge, document.documentElement.clientWidth); const broken = []; const walk = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT); for (let node = walk.nextNode(); node; node = walk.nextNode()) { if (!node.parentElement || node.parentElement.getClientRects().length === 0) continue; const atom = /[^\\s\\/\\-]+/g; for (let found = atom.exec(node.data); found; found = atom.exec(node.data)) { if (found[0].length < 2) continue; const range = document.createRange(); range.setStart(node, found.index); range.setEnd(node, found.index + found[0].length); const tops = new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))); if (tops.size > 1) broken.push(found[0]); } } const wide = [...panel.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().right > seen + 0.5).length; const shownBox = (e) => { const box = e.getBoundingClientRect(); const pane = e.closest('[role="tabpanel"]'); if (!pane) return box; const within = pane.getBoundingClientRect(); return { left: Math.max(box.left, within.left), right: Math.min(box.right, within.right), top: Math.max(box.top, within.top), bottom: Math.min(box.bottom, within.bottom) }; }; const targets = [...panel.querySelectorAll("a, button, summary")].filter((e) => e.getClientRects().length > 0 && (typeof e.checkVisibility !== "function" || e.checkVisibility())).map((e) => [e, shownBox(e)]).filter(([, box]) => box.right - box.left > 1 && box.bottom - box.top > 1); const overlap = []; for (let i = 0; i < targets.length; i += 1) for (let j = i + 1; j < targets.length; j += 1) { const [a, x] = targets[i], [b, y] = targets[j]; if (a.contains(b) || b.contains(a)) continue; if (Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1) overlap.push((a.innerText || a.getAttribute("aria-label") || a.tagName).trim() + " / " + (b.innerText || b.getAttribute("aria-label") || b.tagName).trim()); } const turned = [...panel.querySelectorAll("details")].filter((fold) => fold.querySelector(":scope > summary")?.getClientRects().length > 0).filter((fold) => { const mark = fold.querySelector(':scope > summary [data-testid=oats-disclosure-mark]'); if (!mark) return false; const look = getComputedStyle(mark); const isTurned = look.transform !== "none" || (look.rotate !== undefined && look.rotate !== "none"); return isTurned !== fold.open; }).map((fold) => (fold.querySelector(":scope > summary").innerText.trim() + (fold.open ? " (open, its mark not turned)" : " (closed, its mark turned)"))); return JSON.stringify({ low, wide, broken, overlap, turned, scroll: document.documentElement.scrollWidth - innerWidth, past: Math.max(0, Math.round(edge - innerWidth)) }); })()`,
     ),
   );
 }
@@ -245,8 +248,8 @@ async function fits(page, viewport) {
 async function fitted(page, viewport, check, at, what) {
   const fit = await fits(page, viewport);
   check(
-    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0 && fit.overlap.length === 0,
-    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, no word, id or path segment is broken across two lines, no two controls overlap, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
+    fit.low.length === 0 && fit.wide === 0 && fit.scroll <= 0 && fit.broken.length === 0 && fit.overlap.length === 0 && fit.turned.length === 0,
+    `${at} ${what}: nothing the panel draws is cut by its own edge or by the window's, no word, id or path segment is broken across two lines, no two controls overlap, a fold's mark is turned when its own fold is open and only then, and every control of the panel is high enough to press${fit.past > 0 ? ` (bb's side panel is ${fit.past} px past the window: bb's own layout at this width; the panel draws within what is in the window)` : ""}`,
     JSON.stringify(fit),
   );
 }
@@ -397,6 +400,20 @@ const holds = (text, wants) => wants.every((want) => text.includes(want));
 /** The titled notice of a part of the panel, as a person reads it: "title | role | all its text"; "" with none. */
 const noticeOf = (part) =>
   `(() => { const e = document.querySelector(${JSON.stringify(`${inPanel(part)} ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
+/**
+ * A part's notice once its read has ended, holding every one of `wants` (and `also`, a condition
+ * of the page). A failed read's notice is there in two states: while that read is tried again its
+ * act says "Reading…", and once it has ended, "Retry". A check of the notice's words and its act
+ * is about the second state, so it waits for it: a notice read the moment it is there can be the
+ * first. → the notice as `noticeOf` reads it; when the wait runs out, what is there then, which
+ * the check fails on and prints.
+ */
+async function noticeAtRest(page, part, { wants = [], also = "true", seconds = 30 } = {}) {
+  const notice = JSON.stringify(`${inPanel(part)} ${testId("oats-notice")}`);
+  const reading = `[...(document.querySelector(${notice})?.querySelectorAll("button") ?? [])].some((act) => act.innerText.trim() === "Reading…")`;
+  const read = await page.until(`(() => { const t = ${noticeOf(part)}; return t !== "" && !${reading} && ${JSON.stringify(wants)}.every((want) => t.includes(want)) && (${also}) ? t : ""; })()`, seconds);
+  return read ?? (await page.evaluate(noticeOf(part)));
+}
 /** Whether a notice (as `noticeOf` reads it) offers Retry. */
 const offersRetry = (read) => /(^| )Retry( |$)/.test(read ?? "");
 
@@ -547,7 +564,7 @@ const second = [
           check(tone === "info" && again === 0, `${at} it is no failure notice, and offers no reading again`, `tone: ${tone}; buttons to read again: ${again}`);
         }
         // the soul's readiness, failed, under the soul's refused read: reading again may go better, so Retry
-        const soulReadinessFailed = await page.until(noticeOf("oats-panel-readiness-soul"), 30);
+        const soulReadinessFailed = await noticeAtRest(page, "oats-panel-readiness-soul");
         check(
           (soulReadinessFailed ?? "").startsWith("Readiness could not be read | alert | ") && soulReadinessFailed.includes("The installed CLI could not complete the readiness read.") && soulReadinessFailed.includes("OATS_FAILED") && offersRetry(soulReadinessFailed),
           `${at} the soul's readiness, failed: a person's sentence, the code, and Retry`,
@@ -673,7 +690,7 @@ const second = [
         setVerb("readiness --home", FAILS);
         setVerb("instance events", FAILS);
         await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
-        const staleReadiness = await page.until(noticeOf("oats-panel-readiness-instance"), 30);
+        const staleReadiness = await noticeAtRest(page, "oats-panel-readiness-instance", { wants: ["could not be read again"] });
         check(
           /^Readiness could not be read again \| alert \| Readiness could not be read again The installed CLI could not complete the readiness read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleReadiness ?? ""),
           `${at} readiness read again and failed: the titled notice, a person's sentence, a relative age said once, the code and Retry`,
@@ -684,7 +701,7 @@ const second = [
           check(read === "1 failing · 0 unknown · 4 required checks", `${at} and the summary read before is still shown`, read);
         }
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const staleActivity = await page.until(noticeOf("oats-panel-activity"), 30);
+        const staleActivity = await noticeAtRest(page, "oats-panel-activity", { wants: ["could not be read again"] });
         check(
           /^The recorded activity could not be read again \| alert \| The recorded activity could not be read again The installed CLI could not complete the activity read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleActivity ?? ""),
           `${at} the activity read again and failed: the same drawing, with its own age`,
@@ -772,7 +789,8 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-soul")));
         await page.until(`/only the core ones/.test(${textOf(inPanel("oats-panel-capabilities"))})`, 30);
         const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
-        check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only);
+        // When it is not there, the check prints what the Soul tab says in its place, a notice's folded details included (seen once: the read was refused).
+        check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only !== "" ? only : `(no capabilities part; the Soul tab says: ${await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 900)`)})`);
         await bring(page, check, at, "oats-panel-core");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");
@@ -783,7 +801,7 @@ const second = [
         const restarted = recorded(threads);
         restarted.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance).startedAt = new Date().toISOString();
         record(restarted);
-        const stale = await page.until(noticeOf("oats-panel-soul-body"), 30);
+        const stale = await noticeAtRest(page, "oats-panel-soul-body", { wants: ["could not be read again"] });
         check(
           /^The soul as spawned could not be read again \| alert \| The soul as spawned could not be read again OATS could not finish reading it\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(stale ?? ""),
           `${at} the soul read again and failed: what was read stays under the titled notice, with its age, the code and Retry`,
@@ -941,6 +959,9 @@ const more = [
       await page.until(visible(inPanel("oats-panel-session")), 30);
       const session = await page.evaluate(factsOf("oats-panel-session"));
       check(session.includes("Runs in: tmux session oats-agents"), `${at} Session: where an agent on tmux runs`, session);
+      // Where its session is and how to reach it: one sentence, and the kernel's own command to copy.
+      const attach = await page.evaluate(`(() => { const part = document.querySelector(${JSON.stringify(inPanel("oats-panel-attach"))}); return part ? JSON.stringify({ says: part.querySelector("p").innerText.trim(), command: part.querySelector('[data-testid="oats-command"]')?.innerText.replace(/\\s+/g, " ").trim() ?? null, copy: part.querySelector('[data-testid="oats-copy"]') !== null }) : ""; })()`);
+      check(attach !== "" && /^Runs in tmux on \S.*\. Attach from a terminal:$/.test(JSON.parse(attach).says) && /^oats session attach --home \S+\/panel-tmux-helper$/.test(JSON.parse(attach).command ?? "") && JSON.parse(attach).copy === true, `${at} and how to reach its session: the machine, and the attach command to copy`, attach);
       {
         const read = await page.evaluate(textOf(testId("oats-agent-back")));
         check(read === "Back to Home", `${at} with no thread to go back to, the way back is Home`, read);
@@ -988,7 +1009,8 @@ const more = [
         await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
         setStatus(REFUSED);
         refresh();
-        const stale = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
+        // Waited for: the notice of the read that was refused, once that read has ended (its act says Retry, not "Reading…").
+        const stale = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["E_LOCAL_MISSING"], seconds: 40 });
         check(
           /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory Showing what was read (less than a minute|\d+ (min|h|d)) ago\. E_LOCAL_MISSING .*Retry$/.test(stale ?? ""),
           `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same words), how old what it shows is, the code and Retry`,
@@ -1007,7 +1029,7 @@ const more = [
         // A page opened while OATS cannot be read: the plugin's server keeps the last roster it read,
         // so the page shows the agent as last read, with how old that is and why, and Retry.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const opened = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) && t.includes("E_LOCAL_MISSING") && t.includes("Showing what was read") ? t : ""; })()`, 40);
+        const opened = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["E_LOCAL_MISSING", "Showing what was read"], also: `document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) !== null`, seconds: 40 });
         const named = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(
           // The server answers the agent's facts from the last roster it read, so the settled notice says how old they are.
@@ -1022,7 +1044,9 @@ const more = [
 
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
-        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-panel-page-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
+        // The press waits for the act to say Retry: while a read is in flight the same button says "Reading…".
+        const pressed = await page.until(`(() => { const act = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-panel-page-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry"); if (!act) return ""; act.click(); return "pressed"; })()`, 30);
+        check(pressed === "pressed", `${at} the notice's act says Retry, and it is pressed`, await page.evaluate(noticeOf("oats-panel-page-instance")));
         check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, await page.evaluate(textOf(model)));
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });
@@ -1030,5 +1054,8 @@ const more = [
     },
   },
 ];
+
+/** For the other scenes of this developer (the home's): the every-image measurement, the wait before an image, the printing check, and the fake's verbs. */
+export { FAILS, fits, printing, refresh, setVerb, settled };
 
 export default [...first, ...second, ...more];

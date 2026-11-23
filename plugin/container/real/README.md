@@ -68,10 +68,12 @@ takes six to eight minutes.
 ## CI runs it
 
 `container/ci.sh all` ends with this run (`ci.sh real` is the run alone), and the workflow
-(`.github/workflows/plugin.yml`) calls `ci.sh all`: the kernel is a release on npm that the
+(`.github/workflows/plugin.yml`) runs `ci.sh real` as a job of its own, `plugin-real`, beside the
+unit and the live stages' jobs: the kernel is a release on npm that the
 provider's floor admits, and the provider is this checkout's own (`oats-package/`), so a CI runner
-needs nothing but docker and the network. The run has a container of its own, started once the
-unit and live tests' container is gone, and its artefacts are kept beside theirs.
+needs nothing but docker and the network. The run has a container of its own (with `ci.sh all`,
+started once the unit and live tests' container is gone), and its artefacts are kept as the job's own
+(`plugin-real`).
 
 In CI the kernel is the release named above, with its integrity checked. A newer kernel is a
 change to `run.sh` (`KERNEL_NPM`, `KERNEL_INTEGRITY`), with `UPDATE_FIXTURES=1` when the answers

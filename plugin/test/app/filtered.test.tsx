@@ -56,17 +56,16 @@ test("the sidebar: the workspace, the machine and a soul's name are each one fil
   expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/[\n\u202E]/);
 });
 
-test("the home: what bb says an agent asks (its title, its choices) and a thread's title in the reply box are filtered", async () => {
-  const threads = sidebarThreads();
-  const titled = { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, displayTitle: `Fix${BIDI} CI` } : thread)) };
+test("the home: what bb says an agent asks (its title, its choices) and an agent's name in its reply are filtered", async () => {
+  const renamed = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, instance: `flaky${BIDI}ci-developer` } : agent));
   const asked = [{ id: "p1", threadId: "thr_x", status: "pending", payload: { kind: "provider-pi/extension-ui", title: "Confirm", data: { method: "select", fullTitle: "Run\tit\nnow?", options: [`Yes${BIDI}`, "use password: hunter2"] } } }];
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
-  const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(), sidebarThreads: titled, sdk: { threads: { interactions: { list: async () => asked as never } } } });
+  const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers({}, renamed), sidebarThreads: sidebarThreads(), sdk: { threads: { interactions: { list: async () => asked as never } } } });
   await waitFor(() => expect(slot.getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(expect.arrayContaining([`Yes${GONE}`, "[withheld]"])));
   expect(slot.getAllByTestId("oats-needs-detail").map((detail) => detail.textContent)).toContain("Run it now?");
-  const options = Array.from(slot.getByTestId("oats-reply-agent").querySelectorAll("option")).map((option) => option.textContent);
-  expect(options).toContain(`Fix${GONE} CI · flaky-ci-developer`);
+  // the reply is on the agent's card and names the agent: its name goes through the filter as every OATS text
+  expect(slot.getAllByTestId("oats-reply-text").map((box) => (box as HTMLTextAreaElement).placeholder)).toContain(`Write to Flaky${GONE}ci developer…`);
 });
 
 test("the machines page: a server's id, its route and its note are each one filtered line", async () => {

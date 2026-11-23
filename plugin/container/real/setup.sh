@@ -64,6 +64,9 @@ if ! [ -f "$REAL/mock.pid" ] || ! kill -0 "$(cat "$REAL/mock.pid")" 2> /dev/null
   echo $! > "$REAL/mock.pid"
 fi
 
+# The pi run (REAL_PI=1; pi/README.md): pi, its OATS bridge and its mock model, before bb starts.
+[ "${REAL_PI:-0}" != 1 ] || REAL="$REAL" OUT="$OUT" bash "$PLUGIN/container/real/pi/setup.sh"
+
 echo "== bb-app"
 if ! bb machine list > /dev/null 2>&1; then
   # Sovereign: no account, no telemetry, loopback. The key is a placeholder: bb reports its

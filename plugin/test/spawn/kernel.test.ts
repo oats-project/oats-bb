@@ -39,11 +39,16 @@ describe("A5 spawn", () => {
     expect(existsSync(call!.taskFile!.path)).toBe(false);
     if (!preview.ok) return;
     expect(preview.value.revision).toMatch(/^[0-9a-f]{24}$/);
+    // What will be created, in the form's words (model/spawn.ts), for the name that was asked: never the kernel's preview whole.
+    expect(preview.value.facts.identity[0]).toEqual({ label: "Name", text: "flaky-ci-2-developer" });
+    expect(preview.value.facts.resolved).toEqual({ harness: "pi", model: "github-copilot/claude-fable-5.1" });
+    // And as the short lines a soul's page draws.
     expect(preview.value.summary.launch).toBe("pi · github-copilot/claude-fable-5.1 (local-default preference)");
     expect(preview.value.summary.teams).toEqual(["oats (default)"]);
     expect(preview.value.summary.modules).toContain("oats.aweb 1.43.0");
     expect(preview.value.summary.warnings).toEqual(["the bb server at http://127.0.0.1:38886 runs bb-app 0.50.1; the capability was tested up to 0.50.1"]);
     expect(preview.value.summary.problems).toEqual([]);
+    expect(preview.value.problem).toBeNull();
   });
 
   it("applies a previewed decision with the idempotency key", async () => {
@@ -124,5 +129,91 @@ describe("A5 spawn", () => {
     const preview = await slow.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
     expect(preview.ok === false && preview.error.code).toBe(codes.timeout);
     expect(await leftInTemp()).toEqual([]);
+  });
+});
+
+describe("the choices of the New agent form, as arguments", () => {
+  const argvOf = async () => (await fake.calls()).map((call) => call.argv);
+
+  it("passes nothing a person did not choose: no --name, no task file for an empty instruction, no --harness, no --model, no relation", async () => {
+    const preview = await oats.spawnPreview({ soul: "oats-developer", task: "  \n" }, context());
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    // With no name the facts say who names it.
+    expect(preview.value.facts.identity[0]).toEqual({ label: "Name", text: "numbered by the kernel", muted: true });
+    const spawned = await oats.spawn({ soul: "oats-developer", task: "", key: "spawn-1f0c9a7e", revision: preview.value.revision }, context());
+    expect(spawned.ok).toBe(true);
+    expect(await argvOf()).toEqual([
+      ["spawn", "oats-developer", "--backend", "bb", "--yolo", "--preview", "--json"],
+      ["spawn", "oats-developer", "--backend", "bb", "--yolo", "--expect-decision", preview.value.revision, "--idempotency-key", "spawn-1f0c9a7e", "--json"],
+    ]);
+    expect((await fake.calls()).every((call) => call.taskFile === undefined || call.taskFile === null)).toBe(true);
+    expect(await leftInTemp()).toEqual([]);
+  });
+
+  it("passes a harness, a model and a relation, each as its own elements, the same on the preview and the apply", async () => {
+    const choices = { soul: "oats-developer", name: "x-developer", task: "t", harness: "claude", model: "anthropic/claude-opus-5-5", relation: { kind: "child" as const, to: "flaky-ci-developer", root: "/abs/deployment/agents" } };
+    await oats.spawnPreview(choices, context());
+    await oats.spawn({ ...choices, key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" }, context());
+    const [preview, apply] = await fake.calls();
+    const shared = ["spawn", "oats-developer", "--backend", "bb", "--yolo", "--name", "x-developer", "--task-file"];
+    const chosen = ["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "child", "--relative-to", "flaky-ci-developer", "--relative-root", "/abs/deployment/agents"];
+    expect(preview!.argv).toEqual([...shared, preview!.taskFile!.path, ...chosen, "--preview", "--json"]);
+    expect(apply!.argv).toEqual([...shared, apply!.taskFile!.path, ...chosen, "--expect-decision", "c557d8ec9a272ba1c1739dc3", "--idempotency-key", "spawn-1f0c9a7e", "--json"]);
+  });
+
+  it("refuses a harness, a model or a relation that could be read as anything else, before any process starts", async () => {
+    const base = { soul: "oats-developer", name: "x-developer", task: "t" };
+    const bad = [
+      { ...base, harness: "--yolo" },
+      { ...base, harness: "Claude" },
+      { ...base, harness: "" },
+      { ...base, model: "--no-launch" },
+      { ...base, model: "" },
+      { ...base, model: "a\nb" },
+      { ...base, relation: { kind: "child" as const, to: "--help" } },
+      { ...base, relation: { kind: "child" as const, to: "Two Words" } },
+      { ...base, relation: { kind: "owner" as never, to: "flaky-ci-developer" } },
+      { ...base, relation: { kind: "child" as const, to: "flaky-ci-developer", root: "--dir" } },
+      { ...base, relation: { kind: "child" as const, to: "flaky-ci-developer", root: "relative/agents" } },
+    ];
+    for (const choices of bad) {
+      const preview = await oats.spawnPreview(choices, context());
+      expect(preview.ok === false && preview.error.code, JSON.stringify(choices)).toBe(codes.invalidInput);
+      const spawned = await oats.spawn({ ...choices, key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" }, context());
+      expect(spawned.ok === false && spawned.error.code, JSON.stringify(choices)).toBe(codes.invalidInput);
+    }
+    expect(await fake.calls()).toEqual([]);
+    expect(await leftInTemp()).toEqual([]);
+  });
+});
+
+describe("a preview that is no decision a spawn could apply says why, with the code the Desktop's client gives it", () => {
+  const answer = async (change: (result: Record<string, unknown>) => void) => {
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: Record<string, unknown> };
+    change(document.result);
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    const preview = await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+    return preview.ok ? { problem: preview.value.problem, problems: preview.value.summary.problems } : null;
+  };
+
+  it("a launch the kernel found a problem with: the problem's own code and message", async () => {
+    const preview = await answer((result) => {
+      (result.launch as Record<string, unknown>).problem = { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" };
+    });
+    expect(preview).toEqual({ problem: { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" }, problems: ["E_LAUNCH_EXECUTABLE: pi is not on PATH"] });
+  });
+
+  it("checks that did not finish in the kernel's budget, and a backend that is not installed", async () => {
+    const slow = await answer((result) => {
+      result.preflight = { status: "timeout", budgetMs: 20000, elapsedMs: 20000 };
+    });
+    expect(slow).toEqual({ problem: { code: "E_PREFLIGHT_INCOMPLETE", message: "the kernel's checks did not finish within 20 s" }, problems: ["the kernel's checks did not finish within 20 s"] });
+    const missing = await answer((result) => {
+      result.backendStatus = { name: "bb", installed: false, started: false };
+    });
+    expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" }, problems: ["the bb backend is not installed on this machine"] });
   });
 });

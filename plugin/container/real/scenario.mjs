@@ -592,8 +592,9 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
  * plugin's own `oats status` calls, as the wrapper recorded them (when each started and how long it
  * took, the time it is held here included):
  * - the agent sets a claim (its event starts a read) and clears it while that read is in flight
- *   (each status is held 400 ms for that): the read that follows must start sooner after the first
- *   ended than the pause allows any other read. The server counts its pause (1 s at least) from a
+ *   (each status is held 600 ms for that, and the clear is run the moment the plugin's `oats
+ *   status` is SEEN running, in the process list: not after a guess of when it started): the read
+ *   that follows must start sooner after the first ended than the pause allows any other read. The server counts its pause (1 s at least) from a
  *   moment after the kernel's exit, and the next call's start is after the server's own, so a gap
  *   under 1 s between two calls is a read at once, and nothing else makes one (no reload of the
  *   plugin and no change of its settings happens inside this step);
@@ -612,7 +613,18 @@ async function followedAtOnce(asInstance) {
   const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
   const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
   const NEAR_MS = 1500; // a first read this long, with the host call around it, is at about the limit for the server
-  const HELD_MS = 400;
+  const HELD_MS = 600;
+  /** Whether an `oats status` of the plugin's is running now: the wrapper's own process (it holds the call HELD_MS before it starts the kernel). */
+  const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record/.test(line) && /\sstatus(\s|$)/.test(line));
+  /** Waits, looking every 25 ms, until `seen()`; false when it did not come in `seconds`. */
+  const soon = async (seen, seconds = 15) => {
+    const deadline = Date.now() + seconds * 1000;
+    while (!seen()) {
+      if (Date.now() > deadline) return false;
+      await sleep(25);
+    }
+    return true;
+  };
   const ended = (read) => Date.parse(read.at) + read.ms;
   const tries = [];
   let pair = null; // { first, second, gap, after }: `after` is the gap to the read after the pair, or null
@@ -624,10 +636,13 @@ async function followedAtOnce(asInstance) {
     await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - ended(read) > 3000), 60);
     const before = records().length;
     const set = asInstance("instance", "attention", "--message", `Pacing check ${attempt}`);
-    const cleared = asInstance("instance", "attention", "--clear"); // lands while the read the claim started is in flight
-    // The first read has ended (its record is written at its end): the read at once, if there is one, is in flight now.
-    await until("the read the claim started has ended", () => statusReads(before).length >= 1, 60);
-    const again = asInstance("instance", "attention", "--message", `Pacing check ${attempt}, again`); // lands in the second read
+    // The read the claim's event started is seen running: the clear is made now, and lands in it.
+    const first = await soon(statusRunning);
+    const cleared = asInstance("instance", "attention", "--clear");
+    // The first read has ended (its record is written at its end) and a status runs again: the read
+    // at once, if there is one. The claim is set again now, and lands in that second read.
+    const second = (await soon(() => statusReads(before).length >= 1)) && (await soon(statusRunning, 5));
+    const again = asInstance("instance", "attention", "--message", `Pacing check ${attempt}, again`);
     // The reads the three changes ask for, waited for: two at least, and then none for 3 s.
     await until("the reads the changes ask for have ended", () => {
       const since = statusReads(before);
@@ -637,7 +652,7 @@ async function followedAtOnce(asInstance) {
     const reads = statusReads(before);
     const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - ended(reads[index]) }));
     const said = gaps.map(({ first, second, gap }) => `a read of ${first.ms} ms, then ${gap} ms, then a read of ${second.ms} ms`).join("; ");
-    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status}, attention ${again.status}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
+    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status} ${first ? "with a status seen running" : "with NO status seen running"}, attention ${again.status} ${second ? "with the next status seen running" : "with no next status seen running"}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
     if (reads.length > 0 && reads[0].ms >= NEAR_MS) slow += 1;
     const at = gaps.findIndex(({ first, gap }) => gap < PAUSE_MS && first.ms <= LIMIT_MS);
     if (at !== -1 && (pair === null || pair.after === null)) pair = { ...gaps[at], after: gaps[at + 1]?.gap ?? null };

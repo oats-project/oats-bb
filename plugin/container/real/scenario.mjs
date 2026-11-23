@@ -1156,7 +1156,8 @@ fixtures.keep("roster/status.json", sampleStatus(readFileSync(join(SAMPLES, "ros
 for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
 
-// The run's freshness, in one line a person finds, every run, pass or fail: the delays are measured
+// The run's freshness, in one line a person finds, in every run that reaches its end, green or
+// red (a run that throws prints neither this nor its verdict line): the delays are measured
 // and fail nothing here (fresh(), above, asserts the order of reads), so a drift has to be SEEN. The
 // 3 s bar of the UX standard is asserted on a real host by the release's QA, not by this run.
 const delay = ({ fromRecordMs, fromCommandMs }) => (fromRecordMs !== null ? `${fromRecordMs} ms` : fromCommandMs !== null ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)` : "never seen");

@@ -100,7 +100,7 @@ claim set, a claim cleared and a stop the plugin's own snapshot has it, counted 
 own record (the time of the event the change wrote, read from `oats instance events --json`, so the
 `oats` command's own start-up is not in it); the kernel's own `oats status` time is said beside it,
 with the delay from before the command, and a NOTE reports either delay over 3 s. The run's last
-lines hold them in ONE line, every run ("== freshness, measured …: the claim N ms, the claim
+lines hold them in ONE line, in every run that reaches its end, green or red ("== freshness, measured …: the claim N ms, the claim
 cleared N ms, the agent stopped … N ms"), and `out/freshness.json` keeps them: a drift is to be
 seen there, since the delays are printed and fail nothing (the 3 s bar is asserted on a real host
 by the release's QA): what the check ASSERTS is the order of reads (a bound on elapsed time

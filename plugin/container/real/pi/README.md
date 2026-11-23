@@ -10,13 +10,13 @@ plugin/container/ci.sh pi         # or: REAL_PI=1 plugin/container/real/run.sh
 ```
 
 It is not part of `ci.sh all`: CI runs it as a job of its own (`.github/workflows/plugin.yml`,
-`plugin-pi`, the fourth beside `plugin-unit`, `test` and `plugin-real`), so the main run's time does
-not grow. It changes nothing of the main run: it records no
+`plugin-pi`, one more beside `plugin-unit`, the two live jobs and `plugin-real`), so the main run's
+time does not grow. It changes nothing of the main run: it records no
 fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/` (or
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
 are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the
 two refusals the run makes),
-`kernel.json` and `bridge.json` (what npm says of the two tarballs), `doctor.txt`, `bb.out`,
+`kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
@@ -36,6 +36,7 @@ OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 | `KERNEL_NPM`, `KERNEL_INTEGRITY` | the main run's (`0.70.5`, that tarball's integrity) | the kernel of this run: the same pin |
 | `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.5`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
 | `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against |
+| `PI_INTEGRITY` | the integrity of `@earendil-works/pi-coding-agent@1.5.2`, for that version; none for another | pi's own tarball, checked before it is installed (that file is what is installed; its dependencies come from the registry). A mismatch stops the setup |
 | the others | as the main run | `REQUIRE_REAL_FLOOR`, `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` |
 
 ## What is in the container, beside the main run's

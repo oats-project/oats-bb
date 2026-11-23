@@ -545,13 +545,14 @@ plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, th
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same command: `.github/workflows/plugin.yml`.
+CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`):
+`.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`
 puts bb-app, a real OATS kernel, the bb session provider and Claude Code on a mock model in one
 container, drives the plugin through its RPC (spawn, stop, start, restart, retire, and the
 refusals), and records what the kernel printed; `test/fixtures/README.md` says which fixtures are
-those recordings, and at which versions. It is the last stage of `ci.sh`, so CI runs it too
+those recordings, and at which versions. It is the last stage of `ci.sh`, and a job of its own in CI
 (`plugin/container/real/README.md`).
 
 The bb version the tests run is the repository's pin: the one line of `bb-version` at the

@@ -8,6 +8,9 @@ deployment is `/abs/deployment`, the run's directory `/abs/real`, the container 
 `/abs/home`. Times, commit ids, run ids and instance names are as recorded, and the tests hold
 some as literals or patterns: a new recording changes both.
 
+(The recorder's kernel is now the one the real run pins, OATS 0.70.5, which the provider's floor
+must admit; the files here are still the recording below.)
+
 Recorded on 2026-11-21 from OATS 0.70.0 from npm (`@awebai/oats@0.70.0`), bb-app 0.50.1, the bb
 session provider of this repository at `134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5`, Claude Code on
 the mock model, by `record/record.sh` (about twelve minutes; `UPDATE_FIXTURES=1` copies the

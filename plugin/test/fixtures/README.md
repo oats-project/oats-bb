@@ -50,7 +50,12 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
     `model/view.ts`), and a start given a directory that never was a home ("is not an OATS
     instance home": no roster names such a home).
   - `version.json`: `oats version --json`, printed in the run's deployment for the run's own call (no
-    RPC of the plugin asks for it yet).
+    RPC of the plugin asks for it yet). Alone among these, it is of the run of 2026-11-23 on OATS
+    0.70.5 (`@awebai/oats@0.70.5`, gitHead e5e7a2a48db42140718948553e8272fb4e8e3ed4), the kernel the
+    real run pins now and the plugin's floor: a version below the floor reads as "older". The
+    others stay as recorded at 0.70.0: the run's checks pass on 0.70.5 against them
+    (`container/real/README.md`, which also names the one answer whose content differs at 0.70.5:
+    the "harness folder trust" item of `panel/readiness-home*.json`).
   - `servers.json`: two servers registered with `oats server add` (no host is behind them).
   - `status-recorded.json`: the whole `oats status --json` the kernel printed for the plugin's own
     read, one document per state under a key of this file: `working`,

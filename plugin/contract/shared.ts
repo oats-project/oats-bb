@@ -16,7 +16,27 @@ export const plan = z.object({ revision: z.string(), lines: z.array(z.string()),
 
 /** Where the host entry runs `oats`: the deployment directory (its cwd) and the binary ("" = `oats` on PATH). */
 export const hostBase = { deployment: z.string().min(1), oatsBin: z.string() };
-const kernelError = z.object({ code: z.string(), message: z.string() });
+/** A refusal or a failure of `oats`; `unconfirmed` only where the kernel set its marker (kernel/result.ts `KernelError`). */
+const kernelError = z.object({ code: z.string(), message: z.string(), unconfirmed: z.literal(true).optional() });
+/**
+ * How the kernel's marker reaches the app. bb's RPC refusal carries a code, a message and `issues`:
+ * the server adds this one issue to the refusal of an error the kernel marked unconfirmed
+ * (server/core.ts `refusal`), and a place that needs the marker reads it with `unconfirmedOf`. The
+ * refusal's message stays `<code>: <message>`.
+ */
+export const UNCONFIRMED_ISSUE = { message: "unconfirmed", path: ["details", "unconfirmed"] } as const;
+/** Whether a failed call is the refusal of an error the kernel marked unconfirmed. */
+export function unconfirmedOf(cause: unknown): boolean {
+  const issues = typeof cause === "object" && cause !== null ? (cause as { issues?: unknown }).issues : undefined;
+  return (
+    Array.isArray(issues) &&
+    issues.some((issue: unknown) => {
+      if (typeof issue !== "object" || issue === null) return false;
+      const { message, path } = issue as { message?: unknown; path?: unknown };
+      return message === UNCONFIRMED_ISSUE.message && Array.isArray(path) && path.length === UNCONFIRMED_ISSUE.path.length && UNCONFIRMED_ISSUE.path.every((part, at) => path[at] === part);
+    })
+  );
+}
 export const answer = <Value extends z.ZodType>(value: Value) =>
   z.union([
     z.object({ ok: z.literal(true), value }),

@@ -12,6 +12,7 @@ import { host as spawnHost } from "../contract/spawn.js";
 import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
+import { unconfirmedOf } from "../contract/shared.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
 import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
@@ -415,6 +416,33 @@ describe("acts", () => {
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BAD_ARGS", message: "--backend must be tmux" } }) } });
     expect(await refusalOf(rpc("spawn", { soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
     expect(await refusalOf(rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
+  });
+
+  it("carries the kernel's marker of an unconfirmed outcome on the refusal, as its one issue; a refusal without the marker has none", async () => {
+    const input = (key: string) => ({ soul: "oats-developer", name: "x-developer", task: "t", key });
+    const failure = (promise: Promise<unknown>) =>
+      promise.then(
+        () => {
+          throw new Error("expected a refusal");
+        },
+        (error: { code?: string; message: string; issues?: unknown }) => ({ code: error.code, message: error.message, issues: error.issues, unconfirmed: unconfirmedOf(error) }),
+      );
+    const refuse = (details: unknown) => fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present", details } }) } });
+    await refuse({ unconfirmed: true, home: "/abs/home" });
+    expect(await failure(rpc("spawn", input("spawn-1f0c9a7e")))).toEqual({
+      code: "conflict",
+      message: "E_BACKEND_NOT_READY: not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present",
+      issues: [{ message: "unconfirmed", path: ["details", "unconfirmed"] }],
+      unconfirmed: true,
+    });
+    // The same words without the marker: the refusal's text alone.
+    await refuse({ home: "/abs/home" });
+    const plain = await failure(rpc("spawn", input("spawn-2a1d8b6f")));
+    expect([plain.code, plain.issues ?? null, plain.unconfirmed]).toEqual(["conflict", null, false]);
+    // A list under the marker's name (E_SOUL_UNKNOWN's unconfirmed members) is no marker.
+    await refuse({ unconfirmed: [{ key: "oats", reason: "unreachable", detail: "d" }] });
+    const listed = await failure(rpc("spawn", input("spawn-3c5e7a90")));
+    expect([listed.issues ?? null, listed.unconfirmed]).toEqual([null, false]);
   });
 
   // Stop, start, restart and retire: test/lifecycle/server.test.ts.

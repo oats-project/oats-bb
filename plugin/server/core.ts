@@ -6,6 +6,7 @@
 import { experimental_PluginRpcRefusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
+import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import type { Agent } from "../model/types.js";
 
@@ -62,11 +63,16 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 /** The kernel's (or the plugin's) code behind each refusal built here, for the handlers that act on one. */
 export const refusedWith = new WeakMap<object, string>();
 
-/** A kernel refusal or a failed `oats`, as the RPC refusal the app shows: the code, then the message, unchanged. */
+/**
+ * A kernel refusal or a failed `oats`, as the RPC refusal the app shows: the code, then the message,
+ * unchanged. The kernel's marker that it could not confirm what is left (`KernelError.unconfirmed`)
+ * goes with it as the refusal's one issue (contract/shared.ts `UNCONFIRMED_ISSUE`).
+ */
 export function refusal(error: KernelError): experimental_PluginRpcRefusal {
   const refused = new experimental_PluginRpcRefusal({
     code: error.code === codes.invalidInput ? "invalid" : "conflict",
     message: error.code === codes.invalidInput ? error.message : `${error.code}: ${error.message}`,
+    ...(error.unconfirmed === true ? { issues: [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }] } : {}),
   });
   refusedWith.set(refused, error.code);
   return refused;

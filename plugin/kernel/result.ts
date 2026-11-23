@@ -1,11 +1,17 @@
 // The answer of every kernel/ function: a value, or a typed error. No function of kernel/ throws
 // for something `oats` did or said.
 
-export type KernelError = { code: string; message: string };
+/**
+ * `unconfirmed` is the kernel's own marker, `error.details.unconfirmed: true` (docs/desktop-cli-api.md
+ * "Spawn errors": "A code says nothing about how far the spawn got: details.unconfirmed does"): the
+ * act was refused or failed AND the kernel could not confirm that nothing of it is left. Present
+ * only when the kernel set it; it is the one thing of an error's `details` the plugin carries.
+ */
+export type KernelError = { code: string; message: string; unconfirmed?: true };
 export type Result<Value> = { ok: true; value: Value } | { ok: false; error: KernelError };
 
 export const ok = <Value>(value: Value): Result<Value> => ({ ok: true, value });
-export const err = (code: string, message: string): Result<never> => ({ ok: false, error: { code, message } });
+export const err = (code: string, message: string, unconfirmed = false): Result<never> => ({ ok: false, error: unconfirmed ? { code, message, unconfirmed: true } : { code, message } });
 
 /**
  * The plugin's own codes, for what is not the kernel's word. None starts with `E_`, so one is never

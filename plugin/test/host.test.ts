@@ -154,6 +154,27 @@ describe("the host verbs", () => {
     expect(applied).toMatchObject({ ok: false, error: { code: "E_PLAN_STALE" } });
   });
 
+  it("answers a refusal as its code and its message, with the kernel's marker of an unconfirmed outcome where it is the literal true, and nothing else of the error's details", async () => {
+    const spawn = () => harness.experimental_call("spawn", { ...base(), soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" });
+    const refuse = (details?: unknown) => fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched", ...(details === undefined ? {} : { details }) } }) } });
+    // The marker (docs/desktop-cli-api.md "Spawn errors": details.unconfirmed), beside other details: only the marker passes.
+    await refuse({ unconfirmed: true, home: "/abs/home", launched: "unknown" });
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched", unconfirmed: true } });
+    // No marker: details without it, and no details at all.
+    await refuse({ home: "/abs/home" });
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched" } });
+    await refuse();
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched" } });
+    // Not the literal true: false, a word, and the list E_SOUL_UNKNOWN names its unconfirmed members with. Ignored.
+    for (const other of [false, "true", 1, [{ key: "oats", reason: "unreachable", detail: "d" }], null]) {
+      await refuse({ unconfirmed: other });
+      expect(await spawn(), JSON.stringify(other)).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched" } });
+    }
+    // Details that are no object.
+    await refuse("unconfirmed");
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched" } });
+  });
+
   it("refuses a relative deployment or oats path without running anything", async () => {
     expect(await harness.experimental_call("status", { deployment: "relative", oatsBin: "" })).toMatchObject({ ok: false, error: { code: codes.invalidInput } });
     expect(await harness.experimental_call("status", { deployment: fake.deployment, oatsBin: "./oats" })).toMatchObject({ ok: false, error: { code: codes.invalidInput } });

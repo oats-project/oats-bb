@@ -804,7 +804,11 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
       assert.equal(JSON.parse(await cli(`thread tell ${made.threadId} 'SECOND-PORT-${port} marker' --mode auto`)).delivery, "sent", `tell with port ${port}`);
       await waitFor("that turn", async () => (await landed(`SECOND-PORT-${port}`)) === 1, { timeoutMs: 90_000 });
       await waitFor("the thread to be idle", async () => (JSON.parse(await sh(`BB_SERVER_URL=${SECOND} bb thread show ${made.threadId} --json`))).thread.status === "idle", { timeoutMs: 120_000 });
+      // (An idle thread: what is shown is that the CLI's stop asks no local daemon.)
       assert.equal(JSON.parse(await cli(`thread stop ${made.threadId}`)).ok, true, `stop with port ${port}`);
+      assert.ok(Array.isArray(JSON.parse(await cli(`machine env list --project ${made.projectId}`)).variables), `machine env list with port ${port}`);
+      assert.equal(JSON.parse(await cli(`thread archive ${made.threadId}`)).ok, true, `archive with port ${port}`);
+      assert.equal(JSON.parse(await cli(`thread unarchive ${made.threadId}`)).ok, true, `unarchive with port ${port}`);
     }
     // And through the provider, with settings that name the other bb's port for this endpoint's server (a workspace moved to another bb, its homes still on the old one).
     const moved = { ...SETTINGS, hostDaemonPort: 38887 };

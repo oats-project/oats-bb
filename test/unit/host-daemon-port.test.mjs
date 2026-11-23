@@ -204,6 +204,9 @@ test("readiness asks the daemon at the port, and its findings name the key", asy
   // With `daemon` given and no port, the words name `daemon`, as before.
   const asBefore = await check({ daemon: `http://127.0.0.1:${other.daemonPort}` });
   assert.match(asBefore.result.problems[0].message, /point both at one bb, settings\.oats\.bb\.server and settings\.oats\.bb\.daemon$/);
+  // With both given (and agreeing), both are named: changing one alone would be refused for the other.
+  const both = await check({ daemon: `http://127.0.0.1:${other.daemonPort}`, hostDaemonPort: other.daemonPort });
+  assert.match(both.result.problems[0].message, new RegExp(`point both at one bb, settings\\.oats\\.bb\\.server and settings\\.oats\\.bb\\.daemon and ${PORT_KEY}, which name one daemon$`));
 });
 
 // The likeliest mistake with a second bb: `server` is set to it, and neither `daemon` nor
@@ -289,6 +292,11 @@ test("with the port set, readiness asks bb's server for its hosts: the daemon mu
   assert.deepEqual([anonymous.result.status, anonymous.result.problems.map((problem) => problem.code)], ["unavailable", ["E_BACKEND_NOT_READY"]]);
   assert.match(anonymous.result.problems[0].message, named);
   assert.match(anonymous.result.problems[0].message, /nothing shows they do: bb's host daemon at \S+ answered a \/status that does not say which host it is \(no "hostId"\)$/);
+  // A bb CLI that cannot be run is said once, by the read of its version: its hosts are not asked for too.
+  backend.state.daemonStatus = null;
+  bb.setScript(script());
+  const missing = await call("check", { home, soul: null }, { settings: backend.settings(), bb: { cli: join(dir, "no-such-bb"), env: bb.env } });
+  assert.deepEqual(missing.result.problems.map((problem) => problem.code), ["E_BACKEND_VERSION"], JSON.stringify(missing.result.problems));
   // Without the port (the daemon's address alone, as before the key), the server is not asked for its hosts.
   backend.state.daemonStatus = null;
   const before = bb.calls().length;

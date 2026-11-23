@@ -119,12 +119,14 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
   if (daemon) {
     // The server's /health answers before the host daemon is up; threads need the daemon.
     // What a finding tells a person to set is the setting that decided the daemon's
-    // address: `daemon` where it is given, `hostDaemonPort` where it alone is. Where
+    // address: `daemon` where it is given (with `hostDaemonPort` beside it where that is
+    // set too: the two must agree), `hostDaemonPort` where it alone is. Where
     // neither is (the address is bb's default), it is `hostDaemonPort`: a bb whose daemon
     // is elsewhere was started with --host-daemon-port, and that key is the one that also
     // tells bb's CLI (`daemon` follows it).
     const PORT_KEY = "settings.oats.bb.hostDaemonPort (the port bb-app was started with: its --host-daemon-port)";
-    const setKey = settings.daemonKey === "daemon" ? "settings.oats.bb.daemon" : settings.daemonKey === "hostDaemonPort" ? PORT_KEY : `${PORT_KEY} where this bb's host daemon is not on bb's default port`;
+    const setKey = settings.daemonKey === "daemon" ? (settings.hostDaemonPort != null ? `settings.oats.bb.daemon and ${PORT_KEY}, which name one daemon` : "settings.oats.bb.daemon")
+      : settings.daemonKey === "hostDaemonPort" ? PORT_KEY : `${PORT_KEY} where this bb's host daemon is not on bb's default port`;
     const status = await http(`${daemon}/status`, left(HTTP_TIMEOUT_MS));
     if (!status.ok) {
       add("E_BACKEND_UNREACHABLE", "unavailable", `bb's host daemon at ${daemon} does not answer (${status.message}): start bb-app, or set ${setKey}`);
@@ -138,7 +140,8 @@ export async function backendProblems(settings, { deadline = Date.now() + 16_000
       add("E_BACKEND_NOT_READY", "unavailable", `bb's host daemon at ${daemon} answered a /status this provider cannot read (no "serverUrl" that is an http or https address)`);
     } else if (server && !sameServer(status.value.serverUrl, server)) {
       add("E_BACKEND_NOT_READY", "needs-configuration", `the host daemon at ${daemon} serves ${new URL(status.value.serverUrl).origin}, not settings.oats.bb.server ${server}: point both at one bb, settings.oats.bb.server and ${setKey}`);
-    } else if (server && settings.hostDaemonPort != null) {
+    } else if (server && settings.hostDaemonPort != null && cliRuns) {
+      // (Where bb's CLI could not be run, that is said already, once: its hosts are not asked for.)
       // With a port for bb's CLI, the question is the one bb itself asks at `bb project
       // create`: is the daemon at that port a host of THIS server? "Something answers
       // there" is not that: another bb's daemon answers too. Two facts of bb's decide it,

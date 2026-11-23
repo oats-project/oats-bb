@@ -470,13 +470,14 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   list of `{id, routeProviderId, …}`: `id` is `<provider>/<id>`, `routeProviderId` the
   provider; through the same client as every bb call, so within one call's time and the
   launch's, and told `hostDaemonPort`), and refuses with `E_BACKEND_LAUNCH_ARG`:
-  `pi has no model "<id>"`, or `pi model "<id>" is served by A and B: use A/<id> or
-  B/<id>`, every provider named.
+  `pi has no model "<id>" (if you just added it to pi, try again in a minute)`, or `pi
+  model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in
+  pi, try again in a minute)`, every provider named.
   - **Never stricter than bb.** bb lists fewer models than it resolves: a model whose id
     ends in a date (`-YYYYMMDD`) only where the read names it exactly
     (`--selected-model <provider>/<id>`), and, where pi's `enabledModels` is set, only
     those models, and bb's pi keeps the setting it started with (a list stays narrowed
-    after the setting is removed, until bb is restarted). So "not listed" refuses only
+    after the setting is removed, at least while bb's pi is in use). So "not listed" refuses only
     where the list is whole for the id: the `settings.json` of
     `settings.oats.bb.piAgentDir` sets no `enabledModels` (an empty list sets none) and
     has not changed (content or place: its mtime and ctime) since this bb started
@@ -486,6 +487,17 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     the thread's directory and lists from its own); and the id does not end in a date. Two listed models with the bare
     id are refused whatever is held back. One listed and a second held back passes, and
     bb refuses it at the thread's start, as before.
+  - **Nor on a list that may be older than pi's configuration.** bb's server serves the
+    list it fetched for 60 s as it is (bb-app 0.50.1), and the thread starts by what pi
+    has now. Where `settings.json`, `models.json` or `auth.json` of
+    `settings.oats.bb.piAgentDir` changed (mtime or ctime) less than 90 s ago, or one of
+    them cannot be looked at, neither refusal is given. (The directory's own time is not
+    read: every pi that starts moves it.) Not covered, and nothing shows it: where bb's
+    refresh of its list fails, bb serves the list it kept, of any age, so a model added
+    to pi since is refused until bb's next good refresh; each refusal ends with that
+    way out.
+  - A row of bb's list with an id and no `routeProviderId` (a model a person added to
+    bb's own list, its `customModels`) is that id exactly and no pi provider's bare id.
   - **A list that cannot settle it refuses nothing**: an error or no answer in time, an
     answer that is not such a list (one row that cannot be read is enough), an empty
     list, a list bb says it could not load (a line of its stderr), or one of the cases

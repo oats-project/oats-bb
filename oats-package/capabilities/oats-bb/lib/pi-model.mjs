@@ -24,8 +24,14 @@
 // (The first two seen against bb-app 0.50.1 and pi 1.5.2: such a model starts a thread and
 // is not in the list. lib/pi-config.mjs piListMayBePartial says when the list is whole.) In those cases, and wherever the list cannot be read, nothing is refused:
 // the launch goes on as it did before this check, with a warning. Two listed models with
-// the id are two models whatever else is held back, so that refusal always stands. One
+// the id are two models whatever else is held back, so that refusal stands there. One
 // listed and a second held back passes here, and bb refuses it at the thread's start.
+//
+// And bb's list may be OLDER than pi's configuration: bb's server serves a list it fetched
+// for a minute as it is. Where that configuration changed a moment ago, neither refusal is
+// given (lib/pi-config.mjs piListMayBeOld). One case is left, which nothing shows: where
+// bb's refresh of its list fails, bb serves the list it kept, of any age, and a model added
+// to pi since is refused until bb's next good refresh. So every refusal says the way out.
 import { isObject } from "./errors.mjs";
 
 export const PI_MODEL_REFUSED = "E_BACKEND_LAUNCH_ARG";
@@ -39,12 +45,16 @@ const listed = (names, last = "and") => (names.length <= 1 ? names.join("") : `$
 const brief = (text) => { const line = String(text).split("\n")[0].trim(); return line.length > WHY_MAX ? `${line.slice(0, WHY_MAX - 1)}…` : line; };
 
 /** bb's list as [{id, provider, bare}], or null where a row cannot be read as one of pi's
- *  models: its `<provider>/<id>` and the provider that begins it. */
+ *  models: its `<provider>/<id>` and the provider that begins it. A row with an id and no
+ *  provider at all is a model a person added to bb's own list (bb's customModels): it is
+ *  that id and no pi provider's (`provider` and `bare` null), and the rest still reads. */
 function rowsOf(value) {
   if (!Array.isArray(value)) return null;
   const rows = [];
   for (const row of value) {
-    if (!isObject(row) || typeof row.id !== "string" || typeof row.routeProviderId !== "string" || row.routeProviderId === "") return null;
+    if (!isObject(row) || typeof row.id !== "string" || row.id === "") return null;
+    if (row.routeProviderId === undefined || row.routeProviderId === null) { rows.push({ id: row.id, provider: null, bare: null }); continue; }
+    if (typeof row.routeProviderId !== "string" || row.routeProviderId === "") return null;
     const prefix = `${row.routeProviderId}/`;
     if (!row.id.startsWith(prefix) || row.id.length === prefix.length) return null;
     rows.push({ id: row.id, provider: row.routeProviderId, bare: row.id.slice(prefix.length) });
@@ -52,29 +62,35 @@ function rowsOf(value) {
   return rows;
 }
 
+// The way out of a refusal that rests on a list bb kept too long (above).
+const RETRY = "try again in a minute";
+
 /** What bb's list says of the model. `partial`: why the list may not be all the models the
- *  thread can start on, or null (lib/pi-config.mjs piListMayBePartial).
+ *  thread can start on, or null (lib/pi-config.mjs piListMayBePartial). `old`: why it may
+ *  be older than pi's configuration, or null (piListMayBeOld).
  *  → { ok: true } | { refused: <sentence> } | { unchecked: <short why> }. */
-export function piModelVerdict(model, value, { partial = null } = {}) {
+export function piModelVerdict(model, value, { partial = null, old = null } = {}) {
   const rows = rowsOf(value);
   if (rows === null) return { unchecked: "the list is not one this provider can read" };
   if (rows.some((row) => row.id === model)) return { ok: true };
   const serving = rows.filter((row) => row.bare === model);
   if (serving.length === 1) return { ok: true };
   if (serving.length > 1) {
-    return { refused: `pi model ${JSON.stringify(model)} is served by ${listed(serving.map((row) => row.provider))}: use ${listed(serving.map((row) => row.id), "or")}` };
+    if (old !== null) return { unchecked: old };
+    return { refused: `pi model ${JSON.stringify(model)} is served by ${listed(serving.map((row) => row.provider))}: use ${listed(serving.map((row) => row.id), "or")} (if you just changed that in pi, ${RETRY})` };
   }
   if (rows.length === 0) return { unchecked: "the list is empty" };
+  if (old !== null) return { unchecked: old };
   if (partial !== null) return { unchecked: partial };
   if (DATED.test(model)) return { unchecked: "a model whose id ends in a date is not always listed" };
-  return { refused: `pi has no model ${JSON.stringify(model)}` };
+  return { refused: `pi has no model ${JSON.stringify(model)} (if you just added it to pi, ${RETRY})` };
 }
 
 /** The check of one launch's model: one read of bb's list. `bb`: a client (lib/bb.mjs).
  *  → null (the model passes), { problem: {code, message, status} } (refused: nothing may
  *  be started), or { warning: {code, message} } (it could not be checked: the launch goes
  *  on). Never throws for anything bb did or did not answer. */
-export async function piModelFinding(model, bb, { partial = null } = {}) {
+export async function piModelFinding(model, bb, { partial = null, old = null } = {}) {
   const unchecked = (why) => ({ warning: { code: PI_MODEL_UNCHECKED, message: `could not check the model ${JSON.stringify(model)} against pi's model list: ${brief(why)}` } });
   const answer = await bb.piModels(model);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);
@@ -82,7 +98,7 @@ export async function piModelFinding(model, bb, { partial = null } = {}) {
   // on a line of its own among whatever else it wrote there.
   const notLoaded = (answer.said ?? "").split("\n").find((line) => /could not load models/i.test(line));
   if (notLoaded !== undefined) return unchecked(notLoaded);
-  const verdict = piModelVerdict(model, answer.value, { partial });
+  const verdict = piModelVerdict(model, answer.value, { partial, old });
   if (verdict.ok) return null;
   if (verdict.unchecked !== undefined) return unchecked(verdict.unchecked);
   return { problem: { code: PI_MODEL_REFUSED, message: verdict.refused, status: "needs-configuration" } };

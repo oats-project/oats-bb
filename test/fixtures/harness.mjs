@@ -15,6 +15,9 @@ export const providerBin = join(capabilityDir, "bin/oats-bb.mjs");
 // The same session commands with bb's sandboxed modes taken, which the provider's own
 // command refuses, as they are not offered (test/fixtures/sandboxed-bin.mjs).
 export const sandboxedBin = join(repoRoot, "test/fixtures/sandboxed-bin.mjs");
+// The same session commands two minutes from now: for the pi model check, which refuses
+// nothing right after pi's configuration changed (test/fixtures/later-bin.mjs).
+export const laterBin = join(repoRoot, "test/fixtures/later-bin.mjs");
 const fakeBb = join(here, "fake-bb.mjs");
 
 // The PATH the provider runs with in the tests: a directory holding a `bwrap` (so the
@@ -211,9 +214,9 @@ export async function call(verb, input, options) {
 
 /** The same call, with what the command wrote beside its answer. → { doc, stderr }:
  *  the kernel does not read a provider's stderr, and a person running the command does. */
-export async function callSeen(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false }) {
+export async function callSeen(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false, bin = sandboxedModes ? sandboxedBin : providerBin }) {
   const request = requestFor(verb, input);
-  const run = await runBin(["session", verb], { bin: sandboxedModes ? sandboxedBin : providerBin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
+  const run = await runBin(["session", verb], { bin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
   if (run.status !== 0 || run.doc === null) throw new Error(`the provider did not answer one JSON document (exit ${run.status}): ${run.stdout}\n${run.stderr}`);
   if (run.stdout.trim().split("\n").length !== 1) throw new Error(`more than one line on stdout: ${run.stdout}`);
   const expected = ["schemaVersion", "phase", "capability", "provider", "verb", "ok", run.doc.ok === true ? "result" : "error"];

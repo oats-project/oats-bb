@@ -9,7 +9,7 @@ import { checkDataDir, sandboxDeny } from "./deny.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
-import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems, piListMayBePartial } from "./pi-config.mjs";
+import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems, piListMayBeOld, piListMayBePartial } from "./pi-config.mjs";
 import { isModelId, piModelFinding } from "./pi-model.mjs";
 import { gapList, missingRemedy, readSandbox, sandboxKeysOf } from "./local-settings.mjs";
 import { DEFAULT_DAEMON_PORT, TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
@@ -332,7 +332,7 @@ export async function readinessResult(settings, options = {}) {
   // settle it a warning (lib/pi-model.mjs). Asked last, and only of a launch nothing else
   // refuses: one more read of bb, and none for another harness or a launch with no model.
   if (options.harness === "pi" && isModelId(options.model) && problems.length === 0) {
-    const finding = await piModelFinding(options.model, bb, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home: options.home }) });
+    const finding = await piModelFinding(options.model, bb, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home: options.home }), old: piListMayBeOld(settings.piAgentDir, (options.now ?? Date.now)()) });
     if (finding?.problem) problems.push(finding.problem);
     if (finding?.warning) warnings.push(finding.warning);
   }

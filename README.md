@@ -547,8 +547,8 @@ call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`
 
 | the launch's model | the refusal |
 |---|---|
-| a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>"` |
-| a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id>` |
+| a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>" (if you just added it to pi, try again in a minute)` |
+| a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in pi, try again in a minute)` |
 
 The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
 or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no
@@ -570,7 +570,7 @@ cases where bb lists fewer models than its pi resolves (the first two seen at bb
   a thread still starts on any other model pi has. A model that is not listed is then
   not checked. Two listed models with the id are still refused. bb's pi keeps the
   setting it started with: after `enabledModels` is removed, bb goes on listing only
-  those models until it is restarted. So a model that is not listed is refused only
+  those models, at least while its pi is in use. So a model that is not listed is refused only
   where that `settings.json` sets no `enabledModels` **and has not changed since bb
   started** (bb-app's own record of its start, `bb-app-runtime.json` in
   `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
@@ -578,6 +578,23 @@ cases where bb lists fewer models than its pi resolves (the first two seen at bb
 - a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
   that bb, which lists from a directory of its own, does not show: its launch is not
   refused for a model that is not listed.
+
+**bb's list may also be older than pi's configuration.** bb's server serves the list it
+fetched for a minute as it is, while a thread starts by what pi has now. So where the
+pi configuration bb's server runs with changed in the last minute and a half (its
+`settings.json`, `models.json` or `auth.json`: a model or a provider added or removed, a
+login), neither refusal is given: the launch goes on with the warning. pi writes
+`auth.json` itself when it renews a login, and that counts too.
+
+**One wrong refusal is possible, and only this one:** where bb's own refresh of pi's
+list has failed (bb then serves the list it kept, of any age, and says nothing) AND a
+model was added to pi since that list was fetched (or a provider removed). It lasts
+until bb's next good refresh. That is why each refusal ends with the way out: try
+again in a minute.
+
+What this rule reads beside bb's list is bb-app's and pi's own layout (`startedAt` in
+`bb-app-runtime.json`, the three files' times), pinned against bb-app at `bb-version`
+by `test/contract/pi.test.mjs`; whatever cannot be read warns, and never refuses.
 
 One edge is left as it was: a bare id that bb lists once and that a second, held-back
 model also has (a dated one, or one outside `enabledModels`) passes here, and bb refuses

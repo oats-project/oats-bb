@@ -2,11 +2,11 @@
 // anything is started, at the launch and at the check of a planned launch that names its
 // model; where bb's list of pi's models cannot settle it, the launch goes on with a warning.
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { piModelVerdict } from "../../oats-package/capabilities/oats-bb/lib/pi-model.mjs";
-import { VERSION, call, callSeen, fakeBackend, fakeBbIn, piModelRow, projectRow, scratch } from "../fixtures/harness.mjs";
+import { VERSION, call, callSeen, fakeBackend, fakeBbIn, laterBin, piModelRow, projectRow, scratch } from "../fixtures/harness.mjs";
 
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
 // What a deployment's pi serves here: one model twice, one with a date in its id (bb lists
@@ -18,7 +18,7 @@ const LIST = [
 const UNCHECKED = "session-provider-pi-model-unchecked";
 const listReads = (bb) => bb.calls().filter((c) => c.argv[0] === "provider");
 
-async function setup(t, { models = { stdout: LIST }, script = {}, piSettings } = {}) {
+async function setup(t, { models = { stdout: LIST }, script = {}, piSettings, at = "later" } = {}) {
   const { dir, home } = scratch(t);
   const backend = await fakeBackend(t);
   if (piSettings !== undefined) backend.piSettings(piSettings);
@@ -34,7 +34,10 @@ async function setup(t, { models = { stdout: LIST }, script = {}, piSettings } =
     ...script,
   });
   const input = (extra = {}) => ({ home, instance: "dev-a", harness: "pi", yolo: true, env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });
-  const options = { settings: backend.settings(), bb };
+  // Every call is made two minutes from now (test/fixtures/later-bin.mjs): the fixture wrote
+  // pi's configuration a moment ago, and right after such a change nothing is refused.
+  // `at`: the provider's own command, which reads the clock, for the tests of that.
+  const options = { settings: backend.settings(), bb, bin: at === "now" ? undefined : laterBin };
   /** The launch with this model. → { doc, stderr }. */
   const launch = (model, extra = {}) => callSeen("launch", input({ ...(model === undefined ? {} : { model }), ...extra }), options);
   /** The check of the planned launch with this model, as a kernel that names it hands it. → the result. */
@@ -82,30 +85,30 @@ async function setup(t, { models = { stdout: LIST }, script = {}, piSettings } =
 
 test("a bare model id no pi provider serves is refused, at the launch and at the check: pi has no model", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9"');
+  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)');
 });
 
 test("a bare model id two pi providers serve is refused, naming both and the full ids to choose from", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra');
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra (if you just changed that in pi, try again in a minute)');
 });
 
 test("a bare model id three pi providers serve: every one is named", async (t) => {
   const { refusedBoth } = await setup(t, { models: { stdout: [...LIST, piModelRow("azure", "gpt-6-astra")] } });
-  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot, openai and azure: use github-copilot/gpt-6-astra, openai/gpt-6-astra or azure/gpt-6-astra');
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot, openai and azure: use github-copilot/gpt-6-astra, openai/gpt-6-astra or azure/gpt-6-astra (if you just changed that in pi, try again in a minute)');
 });
 
 test("a provider/id that is not in pi's list is refused: pi has no model", async (t) => {
   const { refusedBoth } = await setup(t);
   // A provider pi has, with a model it does not serve; and a provider pi does not have.
-  await refusedBoth("openai/claude-fable-5.1", 'pi has no model "openai/claude-fable-5.1"');
-  await refusedBoth("anthropic/claude-fable-5.1", 'pi has no model "anthropic/claude-fable-5.1"');
+  await refusedBoth("openai/claude-fable-5.1", 'pi has no model "openai/claude-fable-5.1" (if you just added it to pi, try again in a minute)');
+  await refusedBoth("anthropic/claude-fable-5.1", 'pi has no model "anthropic/claude-fable-5.1" (if you just added it to pi, try again in a minute)');
 });
 
 test("the id is matched exactly, as bb's pi matches it: no other case, no prefix", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth("Claude-Fable-5.1", 'pi has no model "Claude-Fable-5.1"');
-  await refusedBoth("claude-fable", 'pi has no model "claude-fable"');
+  await refusedBoth("Claude-Fable-5.1", 'pi has no model "Claude-Fable-5.1" (if you just added it to pi, try again in a minute)');
+  await refusedBoth("claude-fable", 'pi has no model "claude-fable" (if you just added it to pi, try again in a minute)');
 });
 
 test("a bare model id exactly one pi provider serves passes: claude-fable-5.1, as a soul declares it", async (t) => {
@@ -149,7 +152,7 @@ for (const [name, stdout] of [
   ["an object, not a list", { models: LIST }],
   ["a row that is no object", [...LIST, "openai/gpt-7"]],
   ["a row with no id", [...LIST, { routeProviderId: "openai", displayName: "gpt-7" }]],
-  ["a row that does not name its provider", [...LIST, { id: "openai/gpt-7", model: "openai/gpt-7" }]],
+  ["a row whose provider is no name", [...LIST, { id: "openai/gpt-7", model: "openai/gpt-7", routeProviderId: 7 }]],
   ["a row whose id does not begin with its provider", [...LIST, { id: "gpt-7", routeProviderId: "openai" }]],
 ]) {
   test(`an answer of the wrong shape only warns, ${name}: nothing is refused on a list this provider cannot read`, async (t) => {
@@ -166,7 +169,7 @@ test("an empty list only warns: it names no model to hold an id against", async 
 test("where pi's enabledModels narrows bb's list, a model that is not listed only warns; one listed twice is still refused, and one listed passes", async (t) => {
   const { warnsBoth, refusedBoth, passesBoth } = await setup(t, { piSettings: { packages: ["npm:@awebai/oats-pi@0.70.0"], enabledModels: ["github-copilot/*"] } });
   await warnsBoth("claude-fable-9", "pi's enabledModels setting narrows the list to the models it names");
-  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra');
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra (if you just changed that in pi, try again in a minute)');
   await passesBoth("claude-fable-5.1");
 });
 
@@ -177,10 +180,10 @@ test("enabledModels removed from pi's settings under a running bb: bb still list
   const why = "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with";
   await warnsBoth("claude-fable-9", why);
   await passesBoth("claude-fable-5.1");
-  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra');
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra (if you just changed that in pi, try again in a minute)');
   // bb restarted since: its list is by the settings as they are.
   backend.piSettings({ packages: [BRIDGE] });
-  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9"');
+  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)');
 });
 
 for (const [name, record] of [
@@ -210,9 +213,46 @@ test("a home with a pi configuration of its own (.pi) may serve its thread model
   assert.equal(bb.calls().filter((c) => c.argv[1] === "spawn").length, 1);
 });
 
+test("pi's configuration changed a moment ago: bb serves the list it fetched for a minute, so neither refusal is given, only the warning; a listed model passes with nothing said", async (t) => {
+  // The provider's own command, at this moment: the fixture has just written pi's settings.
+  const { warnsBoth, passesBoth } = await setup(t, { at: "now" });
+  const why = "pi's configuration changed a moment ago, and bb's list may be older than it";
+  await warnsBoth("claude-fable-9", why);
+  await warnsBoth("gpt-6-astra", why);
+  await passesBoth("claude-fable-5.1");
+});
+
+for (const name of ["models.json", "auth.json"]) {
+  test(`a change of pi's ${name} a moment ago counts like one of its settings; the directory's own time, which every pi that starts moves, does not`, async (t) => {
+    const { backend, check } = await setup(t);
+    const file = join(backend.piAgentDir, name);
+    const refused = async () => (await check("claude-fable-9")).problems.length === 1;
+    assert.equal(await refused(), true, "two minutes after the fixture's own write");
+    // Dated two minutes from now, where the calls are made: changed a moment ago, for them.
+    const later = new Date(Date.now() + 119_000);
+    writeFileSync(file, "{}");
+    utimesSync(file, later, later);
+    assert.equal(await refused(), false);
+    assert.deepEqual((await check("claude-fable-9")).warnings.map((warning) => warning.code), [UNCHECKED]);
+    rmSync(file);
+    utimesSync(backend.piAgentDir, later, later);
+    assert.equal(await refused(), true);
+  });
+}
+
+test("a model a person added to bb's own list (a row with no pi provider) is that id and nobody's bare id: the rest of the list still reads", async (t) => {
+  const custom = { id: "my-own/model", model: "my-own/model", displayName: "Mine", description: "custom", reasoningDiscovery: "unknown", supportedReasoningEfforts: [], defaultReasoningEffort: "none", isDefault: false };
+  const { refusedBoth, passesBoth } = await setup(t, { models: { stdout: [...LIST, custom, { ...custom, id: "gpt-6-astra", model: "gpt-6-astra" }] } });
+  await passesBoth("my-own/model");
+  await refusedBoth("model", 'pi has no model "model" (if you just added it to pi, try again in a minute)');
+  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)');
+  // Listed by that exact id, it passes: bb's own row for it.
+  await passesBoth("gpt-6-astra");
+});
+
 test("an empty enabledModels narrows nothing: a model that is not listed is refused", async (t) => {
   const { refusedBoth } = await setup(t, { piSettings: { packages: ["npm:@awebai/oats-pi@0.70.0"], enabledModels: [] } });
-  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9"');
+  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)');
 });
 
 test("a model id that ends in a date and is not listed only warns: bb holds such a model back from its list", async (t) => {
@@ -248,7 +288,7 @@ test("a launch with no model, and a Claude launch, never read pi's models: nothi
   assert.equal((await check(undefined)).status, "ready");
   assert.equal((await check(null)).status, "ready");
   assert.equal((await check("claude-opus-5-5", { harness: "claude" })).status, "ready");
-  assert.equal((await call("check", { home: null, soul: null }, { settings: (await fakeBackend(t)).settings(), bb })).result.status, "ready");
+  assert.equal((await call("check", { home: null, soul: null }, { settings: (await fakeBackend(t)).settings(), bb, bin: laterBin })).result.status, "ready");
   assert.deepEqual(listReads(bb), []);
 });
 
@@ -278,5 +318,9 @@ test("the rule on bb's list, by itself: the full id first, then the bare id; one
   assert.deepEqual(piModelVerdict("claude-opus-5-5", both), { ok: true });
   // Where the list may not be whole, nothing is refused for a model that is not listed.
   assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { partial: "the list may not be whole" }), { unchecked: "the list may not be whole" });
-  assert.deepEqual(piModelVerdict("claude-fable-9", LIST), { refused: 'pi has no model "claude-fable-9"' });
+  // Where it may be older than pi's configuration, neither refusal is given; a listed model still passes.
+  assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { old: "the list may be old" }), { unchecked: "the list may be old" });
+  assert.deepEqual(piModelVerdict("gpt-6-astra", LIST, { old: "the list may be old" }), { unchecked: "the list may be old" });
+  assert.deepEqual(piModelVerdict("claude-fable-5.1", LIST, { old: "the list may be old" }), { ok: true });
+  assert.deepEqual(piModelVerdict("claude-fable-9", LIST), { refused: 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)' });
 });

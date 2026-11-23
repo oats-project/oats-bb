@@ -26,10 +26,13 @@ function plannedLaunch(input) {
  *  offer the sandboxed modes (bb lets a command leave the sandbox, so they are no
  *  boundary), so such a launch is refused before anything starts and the check says so.
  *  What a sandboxed launch does (the allowances, the deny rules of contract item 6c) is
- *  here and tested; the tests reach it with `true`. */
-export function sessionHandlers({ sandboxedModes = false } = {}) {
+ *  here and tested; the tests reach it with `true`.
+ *
+ *  `now`: the clock the pi model check reads to tell whether pi's configuration changed a
+ *  moment ago (lib/pi-config.mjs piListMayBeOld); the tests give one of their own. */
+export function sessionHandlers({ sandboxedModes = false, now = Date.now } = {}) {
   return {
-    launch: (input, rawSettings, options) => launch(input, readSettings(rawSettings), { ...options, sandboxedModes }),
+    launch: (input, rawSettings, options) => launch(input, readSettings(rawSettings), { ...options, sandboxedModes, now }),
     inspect: withSettings(inspect),
     inspectMany: withSettings(inspectMany),
     input: withSettings(sendInput),
@@ -44,7 +47,7 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       // bb runs each harness with a provider of its own: the planned launch says whose state
       // must be ready. A harness the provider does not run is the planned launch's own finding.
       const harness = planned !== null && HARNESSES.includes(planned.harness) ? planned.harness : null;
-      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, home, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, home, now, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
       // For a home, what its own settings say of the sandbox (a report only). Where no
       // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
       if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));

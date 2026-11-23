@@ -11,7 +11,8 @@
   thread that had failed as it started (`oats status`: not running, session lost). The
   launch now reads the models bb lists for its pi, once, and refuses before anything is
   started (`E_BACKEND_LAUNCH_ARG`): `pi has no model "<id>"`, or `pi model "<id>" is
-  served by A and B: use A/<id> or B/<id>`.
+  served by A and B: use A/<id> or B/<id>`, each ending with the way out of the one
+  wrong refusal that is possible (`try again in a minute`: below).
   - The rule is bb's own, no stricter: an exact `<provider>/<id>`, or a bare id that
     exactly one pi provider serves, passes. A soul that names a bare id
     (`claude-fable-5.1`) keeps working while one provider serves it.
@@ -21,7 +22,11 @@
     bare id (bb holds such models back from its list), and any model that is not listed
     where bb's pi configuration sets `enabledModels` (bb then lists only those), where
     that configuration changed after bb started (bb lists by the settings its pi started
-    with: restart bb after changing them), or where the home has a `.pi` of its own.
+    with: restart bb after changing them), where the home has a `.pi` of its own, or
+    where bb's pi configuration (`settings.json`, `models.json`, `auth.json`) changed in
+    the last minute and a half (bb serves the list it fetched for a minute).
+  - One wrong refusal is possible: after a refresh of pi's list that bb failed AND a
+    model added to pi since the list bb kept. It lasts until bb's next good refresh.
   - The check of a planned launch says the same, at a spawn's preview too, where the
     kernel hands it the launch's model (`launch.model`); with a kernel that does not,
     the refusal comes at the launch, with nothing created in bb.

@@ -7,7 +7,7 @@ import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPath
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, bounded, fail, isObject, someOf } from "./errors.mjs";
 import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
-import { piListMayBePartial } from "./pi-config.mjs";
+import { piListMayBeOld, piListMayBePartial } from "./pi-config.mjs";
 import { isModelId, piModelFinding } from "./pi-model.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
@@ -49,7 +49,7 @@ function readInput(input) {
  *  A pi launch (`harness` "pi") is the same launch with bb's pi provider, and nothing of
  *  Claude's: no launch argument is carried, the mode is full, and the home's `.claude` is
  *  neither read nor written. */
-export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false, warn = warnOnStderr } = {}) {
+export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false, warn = warnOnStderr, now = Date.now } = {}) {
   const { home, instance, harness, model, promptFile, previous } = readInput(input);
   const pi = harness === "pi";
   const mode = permissionMode(input.args, input.yolo, harness);
@@ -99,7 +99,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // its pi cannot resolve is refused here, with nothing started (lib/pi-model.mjs). Where
   // bb's list of pi's models cannot settle it, the launch goes on as it always did.
   if (pi && model !== null) {
-    const finding = await piModelFinding(model, reader, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home }) });
+    const finding = await piModelFinding(model, reader, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home }), old: piListMayBeOld(settings.piAgentDir, now()) });
     if (finding?.problem) throw fail(finding.problem.code, finding.problem.message);
     if (finding?.warning) warn(finding.warning.message);
   }

@@ -23,7 +23,7 @@
 // that runs bb). What is read there is settings.json's `packages`, by the packages' npm
 // names. A package installed from a local path or a git URL, or an extension loaded by an
 // `extensions` entry or dropped into the directory, is not recognised by name.
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { isObject } from "./errors.mjs";
 
@@ -86,8 +86,8 @@ export const absolutePath = (value) => typeof value === "string" && isAbsolute(v
  *  or null where nothing says it is not (lib/pi-model.mjs). bb lists only the models pi's
  *  `enabledModels` names (pi 1.5.2, docs/settings.md), and a thread still starts on any
  *  model pi has. bb's pi reads that setting when bb starts it and keeps it while it lives
- *  (seen at bb-app 0.50.1: a list stays narrowed after the setting is removed, until bb is
- *  restarted), so the file as it is now proves nothing by itself: the list is whole only
+ *  (seen at bb-app 0.50.1: a list stays narrowed after the setting is removed, at least
+ *  while bb's pi is in use), so the file as it is now proves nothing by itself: the list is whole only
  *  where the file sets no `enabledModels` AND has not changed since this bb started
  *  (`startedAt` of bb-app's own bb-app-runtime.json in its data directory). Whatever
  *  cannot be read counts against the list, never for it. And a home with a pi
@@ -104,6 +104,37 @@ export function piListMayBePartial(agentDir, { dataDir, server, home = null } = 
   const started = bbStartedMs(dataDir, server);
   if (doc === null || started === null || !(started > changedMs)) return "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with";
   if (typeof home === "string" && isAbsolute(home) && existsSync(join(home, ".pi"))) return "the home has a pi configuration of its own (.pi), which bb's list does not read";
+  return null;
+}
+
+// How long bb's server serves a list of pi's models it has fetched, as it is (bb-app
+// 0.50.1: 60 s), and a margin.
+const LIST_AGE_MS = 90_000;
+// What gives pi its models, in the pi configuration bb's server runs with (pi 1.5.2): its
+// settings, its own providers and models, its logins. (Not the directory's own time: every
+// pi that starts moves it, bb's own included. pi writes auth.json itself: when it first
+// runs, and when it renews a login.)
+const PI_MODEL_FILES = ["settings.json", "models.json", "auth.json"];
+
+/** Why bb's list of pi's models may be older than pi's configuration, or null. bb's
+ *  server keeps the list it fetched and serves it as it is for a minute (bb-app 0.50.1),
+ *  so a model added to pi a moment ago, or a provider removed, is not in it yet, while a
+ *  thread starts by what pi has now. Where any of the files that give pi its models
+ *  changed (content or place: mtime and ctime) less than a minute and a half before
+ *  `now`, or one of them cannot be looked at, the list proves nothing for or against a
+ *  model. → null | <short why>.
+ *  (Not covered, and nothing shows it: where bb's refresh of its list fails, bb serves
+ *  the list it kept, of any age.) */
+export function piListMayBeOld(agentDir, now = Date.now()) {
+  for (const name of PI_MODEL_FILES) {
+    let stat;
+    try { stat = statSync(join(agentDir, name)); }
+    catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") continue;
+      return "when pi's configuration last changed cannot be read, and bb's list may be older than it";
+    }
+    if (now - Math.max(stat.mtimeMs, stat.ctimeMs) < LIST_AGE_MS) return "pi's configuration changed a moment ago, and bb's list may be older than it";
+  }
   return null;
 }
 

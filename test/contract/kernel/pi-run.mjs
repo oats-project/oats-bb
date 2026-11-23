@@ -84,10 +84,14 @@ after(() => box.stop());
 // launch refused with an E_BACKEND_ code for a spawn that started nothing, and undoes it.
 test("a pi spawn whose model bb's pi does not have is refused by the kernel's own spawn, and leaves nothing: no home, no instance, no bb project, no thread", async () => {
   const holds = async () => ({ projects: (await bbJson("project list")).map((project) => project.id).sort(), threads: (await bbJson("thread list --include-hidden")).map((thread) => thread.id).sort() });
+  // Right after pi's configuration changed the check refuses nothing (bb serves the list it
+  // fetched for a minute as it is), and this container's pi wrote its auth.json when bb
+  // first started it: wait until the check refuses again.
+  await waitFor("the model check to refuse, pi's configuration being older than bb's list can be", async () => (await box.provider("check", { home: null, soul: null, launch: { harness: "pi", yolo: true, args: [], model: "claude-fable-9" } })).result.problems.length === 1, { timeoutMs: 180_000, everyMs: 3_000 });
   const before = await holds();
   for (const [instance, model, sentence] of [
-    ["pi-model-none", "claude-fable-9", 'pi has no model "claude-fable-9"'],
-    ["pi-model-twin", "twin", 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin'],
+    ["pi-model-none", "claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)'],
+    ["pi-model-twin", "twin", 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin (if you just changed that in pi, try again in a minute)'],
   ]) {
     const refused = JSON.parse(await oats(`spawn piworker --name ${instance} --backend bb --model ${model} --task-file ~/task.md --json`, { ok: false }));
     assert.equal(refused.ok, false, JSON.stringify(refused));

@@ -181,6 +181,11 @@ test("P1 bb itself runs pi in full mode only, and the provider refuses the same 
 // bb holds back from its list (test/contract/pi/models.json).
 /** The check of a planned pi launch that names its model, as a kernel that hands the check the model makes it. */
 const checkModel = async (model) => (await provider("check", { home: null, soul: null, launch: { ...PLANNED, model } })).result;
+const NO_FABLE_9 = 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)';
+/** Right after pi's configuration changed, the check refuses nothing (bb serves a list it
+ *  fetched for a minute as it is): wait until it refuses a model pi does not have again.
+ *  The image's own files are that young where the image was built for this run. */
+const refusesAgain = () => waitFor("the model check to refuse again, pi's configuration being older than bb's list can be", async () => JSON.stringify((await checkModel("claude-fable-9")).problems) === JSON.stringify([{ code: "E_BACKEND_LAUNCH_ARG", message: NO_FABLE_9 }]), { timeoutMs: 180_000, everyMs: 3_000 });
 /** What bb holds: its projects, and its threads, hidden and archived ones included. */
 const bbHolds = async () => {
   const projects = await bbJson("project list");
@@ -210,11 +215,40 @@ test("bb's list of pi's models, as the model check reads it: every id is its pro
   assert.ok(!(await bbJson("provider models pi --selected-model dated-20250101")).some((model) => model.id === "mock-b/dated-20250101"));
 });
 
+// What the check's rule reads beside bb's list, all of it bb-app's and pi's own layout and
+// not their CLI (seen at bb-app 0.50.1, pi 1.5.2): a bb or a pi that moves one fails here,
+// and the check would then only warn (what it cannot read never refuses).
+test("what the model check reads of bb and pi beside the list: bb-app's record of its start in its data directory, and the files that give pi its models in its configuration directory", async () => {
+  // bb-app's record: this server, and when it started (after the image's pi settings were written).
+  const record = JSON.parse(await sh("cat ~/bbdata/bb-app-runtime.json"));
+  assert.equal(record.serverUrl, "http://127.0.0.1:38886");
+  assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  const [now, settingsChanged] = (await sh("date +%s; stat -c %Z ~/.pi/agent/settings.json")).trim().split("\n").map(Number);
+  const started = Date.parse(record.startedAt) / 1000;
+  assert.ok(started <= now && started > now - 3600, `${record.startedAt} is this run's start`);
+  assert.ok(started > settingsChanged, "bb started after pi's settings were last changed");
+  // pi's models come from models.json in that directory (the image's mock models are listed from it), its
+  // packages and enabledModels from settings.json there (the last test narrows the list by it).
+  assert.match(await sh("cat ~/.pi/agent/models.json"), /"claude-fable-5\.1"/);
+  assert.match(await sh("cat ~/.pi/agent/settings.json"), /"packages"/);
+  // A pi that runs, bb's own included, leaves those files alone, and auth.json once it has
+  // made it (bb's first pi did, when this bb started): otherwise the check would read every
+  // list as older than pi's configuration. (It does move the directory's own time, which
+  // is why the check does not read that.)
+  const times = () => sh("stat -c '%n %Y %Z' ~/.pi/agent/settings.json ~/.pi/agent/models.json ~/.pi/agent/auth.json");
+  const before = await times();
+  await bbJson("provider models pi --selected-model mock/echo");
+  const { endpoint } = await launched("model-times");
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+  assert.equal(await times(), before, "a listing and a thread's turn changed none of them");
+});
+
 test("a model pi does not have is refused at the check of the planned launch and at the launch, and nothing is created in bb; bb itself would answer a thread that ends in error", async () => {
+  await refusesAgain();
   const home = await makeHome("model-unknown");
   const before = await bbHolds();
   for (const model of ["claude-fable-9", "mock/claude-fable-9", "nobody/echo"]) {
-    const sentence = `pi has no model ${JSON.stringify(model)}`;
+    const sentence = `pi has no model ${JSON.stringify(model)} (if you just added it to pi, try again in a minute)`;
     const planned = await checkModel(model);
     assert.equal(planned.status, "needs-configuration");
     assert.deepEqual(planned.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
@@ -241,7 +275,7 @@ test("a bare model id one pi provider serves passes, as a soul declares it (clau
 test("a bare model id two pi providers serve is refused, naming both and the full ids; each full id launches; bb itself would answer a thread that ends in error", async () => {
   const home = await makeHome("model-twin");
   const before = await bbHolds();
-  const sentence = 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin';
+  const sentence = 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin (if you just changed that in pi, try again in a minute)';
   assert.deepEqual((await checkModel("twin")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
   assert.deepEqual((await provider("launch", launchInput(home, "model-twin", { model: "twin" }))).error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
   assert.deepEqual(await bbHolds(), before, "no project, no thread");
@@ -261,6 +295,27 @@ test("a model bb holds back from its list is not refused: named by its bare id i
   const exact = await checkModel("mock-b/dated-20250101");
   assert.equal(exact.status, "ready");
   assert.deepEqual(exact.warnings, []);
+});
+
+// bb's server serves the list of pi's models it fetched for a minute as it is, while a
+// thread starts by what pi has now (seen at bb-app 0.50.1, recorded here): a model added
+// to pi right after a read of the list is not in the next one. So right after a change of
+// pi's configuration the check refuses nothing.
+test("a model added to pi a moment ago is not in bb's list yet, and bb starts a thread on it: the check only warns and the launch runs; once bb's list can no longer be older, the check passes it with nothing said", async () => {
+  await refusesAgain();
+  const sentence = 'pi has no model "late-model" (if you just added it to pi, try again in a minute)';
+  assert.deepEqual((await checkModel("late-model")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }], "pi has none yet, and bb has just listed");
+  await sh(`node -e 'const fs = require("fs"), file = process.env.HOME + "/.pi/agent/models.json", doc = JSON.parse(fs.readFileSync(file, "utf8")); doc.providers.mock.models.push({ ...doc.providers.mock.models[0], id: "late-model", name: "Added while bb runs (mock)" }); fs.writeFileSync(file, JSON.stringify(doc, null, 2));'`);
+  assert.ok(!(await bbJson("provider models pi --selected-model late-model")).some((model) => model.id === "mock/late-model"), "bb still serves the list it fetched");
+  const soon = await checkModel("late-model");
+  assert.equal(soon.status, "ready");
+  assert.deepEqual(soon.warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked"), [{ code: "session-provider-pi-model-unchecked", message: 'could not check the model "late-model" against pi\'s model list: pi\'s configuration changed a moment ago, and bb\'s list may be older than it' }]);
+  // bb resolves it: the launch is taken and the thread runs its first turn.
+  const { endpoint } = await launched("model-late", { model: "late-model" });
+  assert.equal(await threadStatus(endpoint.threadId), "idle");
+  // Later, the list is fetched again and has it: nothing is said. (The model stays in the image's pi for the tests that follow.)
+  await waitFor("the check to pass late-model with nothing said", async () => { const later = await checkModel("late-model"); return later.status === "ready" && later.warnings.length === 0; }, { timeoutMs: 180_000, everyMs: 3_000 });
+  await refusesAgain();
 });
 
 test("P2 the kernel's two variables and the PATH reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
@@ -786,8 +841,9 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     await box.restartBb();
     restored = true;
     await waitFor("bb to list every model again", async () => (await listedIds()).includes("mock/claude-fable-5.1"), { timeoutMs: 60_000, everyMs: 1_000 });
+    // (Once the change of the settings is older than bb's list can be.)
+    await refusesAgain();
     assert.deepEqual((await checkModel("claude-fable-5.1")).warnings, []);
-    assert.deepEqual((await checkModel("claude-fable-9")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: 'pi has no model "claude-fable-9"' }]);
   } finally {
     if (!restored) {
       await sh(`cat > ${settingsFile}`, { input: original });

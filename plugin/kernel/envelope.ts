@@ -1,15 +1,19 @@
 // From what one `oats … --json` process did to a typed answer. `oats` prints one JSON object on
 // stdout: an envelope `{schemaVersion, ok, result | error}`, or for a few verbs the document itself
 // (`oats status --json`, a first guarded `oats retire`): docs/desktop-cli-api.md "The envelope".
+// A refusal is answered as its code and its message, with the kernel's marker `details.unconfirmed`
+// where it set one (kernel/result.ts `KernelError`).
 import { z } from "zod";
 import { codes, err, ok, type Result } from "./result.js";
 import type { RunOutcome } from "./run.js";
 
 const failure = z.looseObject({
   ok: z.literal(false),
-  error: z.looseObject({ code: z.string().min(1), message: z.string() }),
+  error: z.looseObject({ code: z.string().min(1), message: z.string(), details: z.unknown().optional() }),
 });
 const success = z.looseObject({ schemaVersion: z.number(), ok: z.literal(true), result: z.unknown() });
+
+const markedUnconfirmed = (details: unknown): boolean => typeof details === "object" && details !== null && (details as { unconfirmed?: unknown }).unconfirmed === true;
 
 const firstLines = (text: string, lines = 3): string =>
   text
@@ -55,7 +59,10 @@ export function answerOf(outcome: RunOutcome, bin: string, options: AnswerOption
     return err(codes.failed, `\`oats\` ${how}${said ? `: ${said}` : ""}`);
   }
   const refused = failure.safeParse(document);
-  if (refused.success) return err(refused.data.error.code, refused.data.error.message);
+  // Of the error's `details` only the kernel's marker passes, and only as the literal `true`: for
+  // some codes `details.unconfirmed` is something else (E_SOUL_UNKNOWN: a list of members), which
+  // says nothing of how far an act got.
+  if (refused.success) return err(refused.data.error.code, refused.data.error.message, markedUnconfirmed(refused.data.error.details));
   const enveloped = success.safeParse(document);
   const answered = enveloped.success ? enveloped.data.result : document;
   if (outcome.code !== 0 && !(outcome.signal === null && options.failedDocument?.(answered) === true)) {

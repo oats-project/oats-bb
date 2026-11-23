@@ -5,7 +5,8 @@
 // read, with a press that starts nothing, then read, then read again after a change; Spawn
 // pressed (held, one spawn for three presses; where it lands has no image here: the fake makes no
 // agent, and the created agent's thread is the real run's image); a spawn that ended
-// without an answer (held, Check result under the same key); a refused spawn; the form held while
+// without an answer (held, Check result under the same key); a refused spawn; a spawn the kernel
+// refused and could not undo completely (its marker, through bb's own RPC); the form held while
 // OATS cannot be read; and the way in under the release's default pages. What the fake `oats`
 // answers is what the real kernel printed, recorded by the real run (test/fixtures/spawn/README.md).
 import { fill, FOCUSED, showSidebar, testId, textOf, visible } from "../browser.mjs";
@@ -365,6 +366,36 @@ export default [
     },
   },
   {
+    stage: "spawn-unconfirmed",
+    name: "the New agent form: a spawn the kernel refused and could not undo completely (its marker, through bb's own RPC) is never 'nothing was created': held, with what to clean up under Details and nothing to press but Close",
+    run: async ({ page, at, viewport, check }) => {
+      const since = Date.now();
+      check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
+      check(Boolean(await fillNamed(page)), `${at} the form is filled and its preview read`, await whole(page));
+      await page.evaluate(`${SPAWN}.click()`);
+      const SAID = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: r?.querySelector("h3").innerText ?? null, words: r?.querySelector("p").innerText ?? null, code: r ? [...r.querySelectorAll("p, span, code")].some((e) => e.innerText.trim() === "E_BACKEND_NOT_READY") : null, button: ${SPAWN}.innerText.trim(), off: ${SPAWN}.disabled, fields: ${FIELDS}.disabled, cancel: ${textOf(testId("oats-spawn-cancel"))}, path: location.pathname }); })()`;
+      const said = await page.until(`document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}) && ${SPAWN}.innerText.trim() !== "Spawning…" && ${SPAWN}.innerText.trim() !== "Spawn" && ${SAID}`, 30);
+      check(
+        said ===
+          JSON.stringify({ tone: "failed", title: "The spawn was refused, and could not be undone completely", words: "OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.", code: true, button: "Spawn incomplete", off: true, fields: true, cancel: "Close", path: `${FORM}/oats-developer` }),
+        `${at} the kernel's marker reached the form: it says the spawn was refused and not undone completely, with the kernel's code; every field and the button are held, and the one press left is Close`,
+        said ?? (await page.evaluate(SAID)),
+      );
+      // A press, by the button or by the key, asks the kernel nothing more: the one spawn stays the one.
+      await page.evaluate(`${SPAWN}.click()`);
+      await page.evaluate(MOD_ENTER);
+      await page.evaluate(show("oats-result"));
+      await page.shot(`spawn-${viewport.name}-unconfirmed`, { targets: true });
+      await page.evaluate(click(`${testId("oats-spawn-details")} summary`));
+      const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(`${testId("oats-spawn-details")} p`)}`, 10);
+      check(/rollback INCOMPLETE, clean up manually: instance home .+: still present$/.test(details ?? ""), `${at} Details opens to the kernel's own message, which names what is left`, String(details));
+      // An absence is not read at once: a second spawn would be in the fake's log well within two seconds of its press (the one made is there in under one).
+      await page.until("false", 2);
+      const keys = applied(since);
+      check(keys.length === 1, `${at} and a press started nothing: the kernel was asked to spawn once`, JSON.stringify(keys));
+    },
+  },
+  {
     stage: "no-oats",
     name: "the New agent form while OATS cannot be read: held like the acts, under the roster's own notice with the age of what is shown",
     run: async ({ page, at, viewport, check }) => {
@@ -372,10 +403,11 @@ export default [
       const held = await page.until(`(() => { const n = document.querySelector(${q("oats-new-agent-page")} + " " + ${q("oats-unreadable")}); const f = ${FIELDS}; return n && f ? JSON.stringify({ title: n.querySelector("h3").innerText, age: /Showing what was read .+ ago\\./.test(n.innerText), held: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-held")}).length, notices: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-notice")}).length, foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
       check(/^\{"title":"OATS is not installed on [^"]+","age":true,"held":1,"notices":1,"foot":\{"button":"Spawn","off":true,"reason":"Comes back when OATS is read again","fields":true\}\}$/.test(held ?? ""), `${at} the roster's one notice (what is wrong, the age of what is shown, the acts held, Retry), every field and Spawn off with the acts' own reason, and no second notice`, held ?? (await whole(page)));
       // A press, by the button or by the key, starts nothing.
-      const since = Date.now();
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
-      check((await page.evaluate("location.pathname")).startsWith(FORM) && (await page.evaluate(`${SPAWN}.innerText.trim()`)) === "Spawn", `${at} and a press starts nothing`, String(since));
+      // An absence is not read at once: the form is given the time a press takes to show (the button reads "Spawning…" in the same tick), and must not have moved.
+      const moved = await page.until(`!location.pathname.startsWith(${JSON.stringify(FORM)}) || ${SPAWN}.innerText.trim() !== "Spawn" ? JSON.stringify({ path: location.pathname, button: ${SPAWN}.innerText.trim() }) : ""`, 2);
+      check(!moved, `${at} and a press starts nothing`, String(moved));
       await page.shot(`spawn-${viewport.name}-held`, { targets: true });
     },
   },
@@ -429,6 +461,22 @@ const stage = (label, verbs) => ({
     await settled(untilSnapshot);
   },
 });
+/**
+ * A spawn the kernel refused and could not roll back completely. SHAPED, not recorded: a rollback
+ * that fails cannot be made in the real run (the kernel's own removal of the home would have to
+ * fail). It is the recorded refusal of a spawn on pi (spawn-pi-refused.json) with what the kernel
+ * writes on that path instead of " — spawn rolled back" (awebai/oats lib/core.mjs at v0.70.5, the
+ * note of line 5235 with the entry of 5234), and the marker `unconfirmedSpawn` sets (3863-3865).
+ */
+const rollbackIncomplete = () => {
+  const answer = JSON.parse(read(join(FIXTURES, "spawn-pi-refused.json"), "utf8"));
+  if (!answer.error.message.endsWith(" — spawn rolled back")) throw new Error("spawn-pi-refused.json no longer ends with the kernel's ' — spawn rolled back'");
+  if (!answer.error.message.startsWith("form-pi-developer ")) throw new Error("spawn-pi-refused.json no longer leads with the instance it was recorded for");
+  // (The recording is of another instance's spawn: the message names this scene's, as the kernel would.)
+  answer.error.message = `${NAME} ${answer.error.message.slice("form-pi-developer ".length, -" — spawn rolled back".length)} — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/${NAME}: still present`;
+  answer.error.details = { ...answer.error.details, unconfirmed: true };
+  return JSON.stringify(answer);
+};
 export const stages = {
   // The form's own stage: the preview the kernel printed for a named, independent agent (no warning: it gave none).
   "spawn-form": stage("SP0", () => ({})),
@@ -446,4 +494,6 @@ export const stages = {
   "spawn-preview-refused": stage("SP7", () => ({ "spawn --preview": { file: "spawn/spawn-preview-model-refused.json" } })),
   // The preview answers; the apply is refused as the real kernel refuses a decision that moved.
   "spawn-refused": stage("SP6", () => ({ spawn: { file: "spawn/spawn-decision-stale.json" } })),
+  // The preview answers; the apply is refused, and the kernel marks that it could not undo all of it.
+  "spawn-unconfirmed": stage("SP8", () => ({ spawn: { stdout: rollbackIncomplete(), exit: 1 } })),
 };

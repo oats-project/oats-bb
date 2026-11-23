@@ -225,6 +225,9 @@ export default [
       // The roster stays: the agents as last read, joined to their threads, never bb's flat list.
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
       check(rows.length >= 6 && rows.includes(threads.get("thr_release").id), `${at} the tree is still drawn, as last read (${rows.length} agents)`, JSON.stringify(rows));
+      // "New agent" is held with the acts: in its place, off, with the reason.
+      const newAgent = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
+      check(newAgent === JSON.stringify({ text: "New agent", off: true, why: "Comes back when OATS is read again" }), `${at} "New agent" stays in its place, off, with the reason`, newAgent);
       await page.shot(`a14-${viewport.name}-sidebar`);
 
       const target = threads.get("thr_redesign");
@@ -240,6 +243,9 @@ export default [
         `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, the acts held, Retry`,
         kept ?? (await page.evaluate(textOf(testId("oats-identity-row")))),
       );
+      // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off, with the reason.
+      const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
+      check(heldAct === JSON.stringify({ text: "Stop", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop) is held: in its place, off, with the reason`, heldAct);
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.
@@ -247,6 +253,11 @@ export default [
       const home = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-home-page")} ${testId("oats-unreadable")}`)}); const cards = document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length; return e && cards > 0 ? JSON.stringify({ title: e.querySelector("h3")?.innerText ?? "", text: e.innerText.replace(/\\s+/g, " "), cards }) : ""; })()`, 30);
       const shown = home ? JSON.parse(home) : null;
       check(shown !== null && /^OATS is not installed on /.test(shown.title) && /Showing what was read /.test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
+      // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is, and Retry.
+      if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
+      const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null }) : ""; })()`, 15);
+      check(oneLine !== null && new RegExp(`^\\{"line":"Last observation — ${AGE} Retry","full":false\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Last observation — <age>" and Retry`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      await page.shot(`a14-${viewport.name}-home-sidebar-line`);
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
     },

@@ -79,6 +79,7 @@ export function panelThreads(agents: Agent[] = panelAgents()): { status: "ready"
   const template = fixtureThreads()[0]!;
   const threads = agents
     .filter((agent) => agent.threadId !== null)
-    .map((agent) => ({ ...template, id: agent.threadId!, title: agent.instance, displayTitle: agent.instance, href: `/projects/proj_panel/threads/${agent.threadId}`, projectId: "proj_panel", hasPendingInteraction: false }));
+    // bb's own status of each thread: a turn runs on the thread of an agent the roster calls running (what says that it works).
+    .map((agent) => ({ ...template, status: agent.running === true ? ("active" as const) : ("idle" as const), id: agent.threadId!, title: agent.instance, displayTitle: agent.instance, href: `/projects/proj_panel/threads/${agent.threadId}`, projectId: "proj_panel", hasPendingInteraction: false }));
   return { status: "ready", threads };
 }

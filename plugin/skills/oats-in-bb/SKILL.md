@@ -1,6 +1,6 @@
 ---
 name: oats-in-bb
-description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one from a soul's page, reading the sidebar tree and the "needs you" list, reading OATS schedules and triggers on the Automations page, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
+description: Use when working with OATS agents shown in bb by the OATS plugin - stopping, starting, restarting or retiring an OATS agent from bb, spawning one with New agent, reading the sidebar tree and the "needs you" list, reading OATS schedules and triggers on the Automations page, or when the plugin shows "No OATS deployment found", "oats was not found" or "choose a machine".
 ---
 
 # OATS agents in bb
@@ -29,10 +29,13 @@ agents, their homes, identities and mail are OATS's and aweb's.
   kernel's code and its message under Details, is said in the same dialog.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.
-- **Spawn** from a soul's page (Souls, pick a soul, name, task, Preview, Spawn in bb). The name is
-  lower-case letters, digits and dashes. The new agent opens in its own thread. It runs in bb's
-  full mode, with no sandbox between it and the account bb runs as: the plugin asks for that on
-  every spawn (`--yolo`), and the form says so in one line.
+- **Spawn** with **New agent** (the sidebar's foot, the home's heading): the form's own page.
+  Choose the soul; the rest is optional: an opening instruction (empty: the agent starts and
+  waits), the harness and the model (the defaults are the kernel's), a relationship to another
+  agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will
+  be created" is the kernel's preview of what is on screen; Spawn applies exactly that, and opens
+  the new agent's thread. It runs in bb's full mode, with no sandbox between it and the account bb
+  runs as: the plugin asks for that on every spawn (`--yolo`), and the form says so in one line.
 - **Answer an agent in bb**: in its thread, or on the OATS home's "Needs you" cards. A card
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types
@@ -49,8 +52,20 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - Under an agent's thread header, one line of chips: soul, instance, aweb alias, parent (a link
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
-  a tab in a thread's side panel): Needs you, Working, Finished and not looked at. On the page, a
-  reply box sends a message to the agent you pick, through bb's own send.
+  the OATS tab of a thread that is no agent's): **Needs you** first, one card per agent that waits
+  (who, since when, what it asks), then a summary line ("8 agents · 3 working · 3 need you · …"),
+  tiles for Agents and the pages this release shows, **Working** and **Finished, not looked at**.
+  A card offers the answer the request takes: bb's choices as buttons (an approval, a question
+  with options); a reply box that writes to that agent through bb's own send, for an agent that
+  asks in its own words; "open its thread" where the answer is in the thread; for an agent on
+  tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
+  A message never grants an approval: beside choices it is behind "Write a message instead".
+  The card of an agent that is not running offers neither an answer nor a message (either would
+  start it outside OATS): it offers Start….
+  **New agent** is in the heading's row of every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
+  with no bb thread among them, with its state and who started it. While OATS cannot be read the
+  cards' choices and replies are held until it is read again. The home also says when the
+  installed `oats` is older than the plugin works with, or newer than it reads.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
   to copy), its harness, model and thread, its messaging id, its parent, whether it is ready

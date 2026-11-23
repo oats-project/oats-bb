@@ -7,7 +7,7 @@ import { claimOf, state } from "../../model/view";
 import { STATE, waitingClock, waitingDetail, waitingSince } from "../ui/words";
 
 export type AgentStatus = {
-  /** The drawn state: the kernel's word for whether the agent runs, and whether it waits on a person. */
+  /** The drawn state (model/view.ts `state`): whether the agent waits on a person, what the kernel says of its session, and for an agent on a bb thread whether bb has a turn running on it. */
   state: AgentState;
   /** The state's word, the standard's ("Needs you", "Working", "Failed", …). */
   word: string;

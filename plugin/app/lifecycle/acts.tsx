@@ -24,6 +24,7 @@ import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "
 import {
   applyRefused,
   applying,
+  carriesOn,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -182,13 +183,14 @@ function useKeepFocus(): void {
  * line that says the act runs, the result or the refusal when it arrives; and a plan, or a notice
  * above it, is read from its top. `what` names the moment; it moves nothing while it stays the same.
  */
-function useReveal(what: "top" | "running" | "result" | "warning" | "kept" | null): void {
+function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "kept" | null): void {
   useEffect(() => {
     if (what === null) return;
     const reveal = () => {
       const dialog = document.querySelector<HTMLElement>('[data-testid="oats-confirm"]');
       if (dialog === null) return;
-      if (what === "top") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
+      // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
+      if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
       else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-loading" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
@@ -467,7 +469,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
 
 // ---- Start and Restart ----
 
-type Check = Answer<"startCheck">;
+/**
+ * The kernel's answer, with what the dialog says of the agent's conversation: decided ONCE, from
+ * bb's threads as they were when the check answered. The launch archives the thread the agent
+ * had, so the same question asked while it runs would answer something else.
+ */
+type Check = Answer<"startCheck"> & { begins: string; carryOn: string | null };
 type StartState =
   | { phase: "checking" }
   | { phase: "ready"; check: Check }
@@ -498,6 +505,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
+  /** bb's own row of the agent's thread as it is at each render: read when the check answers. */
+  const threadNow = useRef<{ id: string; status: string } | null>(null);
+  threadNow.current = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const [state, setState] = useState<StartState>({ phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
   const [harness, setHarness] = useState("");
@@ -516,7 +526,20 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     setState({ phase: "checking" });
     rpc.call("startCheck", { instance }).then(
       (answer) => {
-        if (live.current && mine === ticket.current) setState({ phase: "ready", check: answer });
+        if (!live.current || mine !== ticket.current) return;
+        // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
+        const thread = threadNow.current;
+        setState({
+          phase: "ready",
+          check: {
+            ...answer,
+            // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
+            begins: thread === null ? START.fresh : START.newThread,
+            // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
+            // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
+            carryOn: thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
+          },
+        });
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
@@ -589,9 +612,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               );
   const editable = state.phase === "ready";
   useFocusWhenReady(editable);
-  useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : "top");
+  // A dialog that says first to send a message instead is read from that line, whatever field takes the focus.
+  useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : state.phase === "ready" && state.check.carryOn !== null ? "first" : "top");
   useKeepFocus();
   const recorded = known?.harness ?? null;
+  const begins = known?.begins ?? START.fresh;
+  const carryOn = state.phase === "ready" ? state.check.carryOn : null;
 
   return (
     <Confirm
@@ -600,10 +626,22 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
-      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, START.fresh, FULL_MODE] : [START.fresh, FULL_MODE]}
+      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
       kept={known === null ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (badModel ? START.badModel : null)}
+      notice={
+        carryOn !== null ? (
+          <Notice
+            title={START.carryOn}
+            actions={
+              <Button data-testid="oats-start-thread" onClick={() => openThread(carryOn)}>
+                {`Open ${agentName(name)}`}
+              </Button>
+            }
+          />
+        ) : null
+      }
       phase={phase}
       onConfirm={start}
       onClose={close}

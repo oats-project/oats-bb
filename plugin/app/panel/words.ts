@@ -133,16 +133,10 @@ export function whenText(iso: string, now: number): string {
   return waitingClock(iso, now) || shown(iso);
 }
 
-/**
- * How old what is still shown is, for the notice over a read that failed after one answered: always
- * relative and never "just now" (a read that just failed is not news of now): "less than a minute
- * ago", "12 min ago", "3 h ago", "2 d ago"; null for an instant that cannot be read.
- */
-export function staleAge(at: string | number | null, now: number): string | null {
-  const then = at === null ? Number.NaN : typeof at === "number" ? at : Date.parse(at);
-  if (!Number.isFinite(then)) return null;
-  const minutes = Math.floor(Math.max(0, now - then) / 60_000);
-  if (minutes < 1) return "less than a minute ago";
-  if (minutes < 60) return `${minutes} min ago`;
-  return minutes < 1440 ? `${Math.floor(minutes / 60)} h ago` : `${Math.floor(minutes / 1440)} d ago`;
-}
+// ---- reaching the session of an agent on tmux (the agent's page, and the home's card of one that waits)
+/** A path as one word of a shell command: as it is when it has nothing a shell reads, else in single quotes. */
+const shellWord = (text: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text) ? text : `'${text.replaceAll("'", `'\\''`)}'`);
+/** The kernel's own way into an agent's session, by its home (docs/execution-targets.md, "Attach"): it runs from any directory of that machine. */
+export const attachCommand = (home: string): string => `oats session attach --home ${shellWord(home)}`;
+/** Where an agent on tmux runs, and that its session is reached from a terminal; the command follows. */
+export const attachWhere = (machine: string | null): string => (machine === null ? "Runs in tmux. Attach from a terminal:" : `Runs in tmux on ${machine}. Attach from a terminal:`);

@@ -483,15 +483,64 @@ function record(threads, changes = {}) {
 // person does by walking through it. (A setting of bb's own; nothing of the plugin depends on it.)
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
-// Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
+const WORK_HOLD = "live-ui-working";
+const WORK_HOLD_FILE = join(homedir(), "mock", "hold", WORK_HOLD);
+// A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
+rmSync(WORK_HOLD_FILE, { force: true });
+// At this point every thread is a healthy one: its turn was answered and bb shows it idle. (Two are then given a turn that is held, below.)
 const threads = await healthyThreads();
-const { scenes, stages } = await loadScenes();
-const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
+// Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
+// rows with `running: true`, and the two threads bb's fixture calls active). An agent on a bb
+// thread works when BB says its thread does, so bb must have a turn running on those two threads
+// while a scene reads them: each gets a message whose turn the mock model holds open (MOCK-HOLD)
+// and is waited for until bb calls it active.
+// The hold is taken PER STAGE, and lifted for a stage that tells a thread itself (`tellsAThread:
+// true` on the stage, or its name below): a turn kept open across another stage's own turn was
+// seen to keep that turn from starting. A stage with the hold lifted draws the two as idle.
+const WORKING_THREADS = ["thr_redesign", "thr_mockups"];
+/** Stages that tell a thread a message of their own (their scenes wait for its turn): the hold is lifted for them. */
+const TELLS_A_THREAD = new Set(["home-stopped-asks"]);
+let holdsNow = false;
+const workingNow = () => WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
+/** Waits until bb says `status` of both threads; answers what it saw last. */
+async function untilBoth(status, seconds) {
+  const deadline = Date.now() + seconds * 1000;
+  let seen = workingNow();
+  while (!seen.every((line) => line.endsWith(`: ${status}`)) && Date.now() < deadline) {
+    await sleep(1000);
+    seen = workingNow();
+  }
+  return seen;
+}
+async function holdWorking(stage) {
+  mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
+  writeFileSync(WORK_HOLD_FILE, "");
+  for (const id of WORKING_THREADS) if (statusNow(threads.get(id).id) !== "active") bb("thread", "tell", threads.get(id).id, `carry on MOCK-HOLD:${WORK_HOLD}`);
+  const seen = await untilBoth("active", 90);
+  check(seen.every((line) => line.endsWith(": active")), `bb has a turn running on the threads of the two agents that work, for the stage "${stage}"`, seen.join(" | "));
+  holdsNow = true;
+}
+async function releaseWorking(stage) {
+  rmSync(WORK_HOLD_FILE, { force: true });
+  const seen = await untilBoth("idle", 90);
+  check(seen.every((line) => line.endsWith(": idle")), `the two held turns are answered and bb shows both threads idle, for the stage "${stage}" (it tells a thread itself)`, seen.join(" | "));
+  holdsNow = false;
+}
+let browser;
+let scenes;
+let stages;
 try {
+  // (Everything that takes the hold is inside the `try` whose `finally` lifts it: whatever throws, no turn stays held.)
+  ({ scenes, stages } = await loadScenes());
+  browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
     if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
+    // The hold for this stage: taken, or lifted where the stage tells a thread itself.
+    // (None for the local stage either: it archives the fixtures' threads, and no turn is held on an archived thread.)
+    const wantsHold = !(stage.tellsAThread === true || TELLS_A_THREAD.has(name) || name === "local-roster");
+    if (wantsHold !== holdsNow) await (wantsHold ? holdWorking : releaseWorking)(name);
     try {
       await stage.enter({ fake, statusWithRealIds, threads, untilSnapshot });
       for (const theme of THEMES) {
@@ -516,7 +565,8 @@ try {
   const same = sameImages(OUT);
   check(same.length === 0, "no two images of this run are the same image", same.map((names) => names.join(" = ")).join(" | "));
 } finally {
-  await browser.close();
+  rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now, whatever was thrown
+  await browser?.close();
   fake(); // the fixtures as they are, for the checks that follow in live.sh
   try {
     rpc("refresh");

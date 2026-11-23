@@ -11,7 +11,9 @@ plugin/container/ci.sh real       # the run against a real OATS kernel and the b
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the first line (`.github/workflows/plugin.yml`).
+they run from any directory. CI runs the three stages of the first line as three jobs side by side,
+each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
+stage, `plugin-real`), so each of the last three lines installs and builds what it needs by itself.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -69,7 +71,14 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **Healthy threads.** `live.sh` gives bb a provider it can run: Claude Code, at the real run's
   version, on the real run's mock model (`real/mock-anthropic.mjs`; no login, nothing spent). The
   fixture threads are made on it, and the run checks that each one's turn was answered and bb
-  shows it idle before any image is taken: an image of a thread shows a healthy one. Each thread
+  shows it idle before any image is taken: an image of a thread shows a healthy one. Two of them
+  are then given a turn that the mock model holds open (`MOCK-HOLD:live-ui-working`): the threads
+  of the fixtures' two working agents (`thr_redesign`, `thr_mockups`), since an agent on a bb
+  thread works when bb has a turn running on it. The hold is taken per stage. A scene on either
+  thread sees bb "active", and a message told to one is not answered. A stage that tells a thread
+  a message of its own says so (`tellsAThread: true` on the stage; `home-stopped-asks` is named in
+  `live-ui.mjs`): the hold is lifted for it, both threads are waited for idle, and its scenes see
+  the two agents idle. `live-ui.mjs`'s `finally` lifts the hold whatever was thrown. Each thread
   is waited for by name. bb starts the eight turns at once on a cold Claude Code, and a thread
   has been seen to stay "pending" (a turn in bb's queue) with the others long idle; why is not
   known. One that is not idle after 120 s is reported (a `NOTE`,

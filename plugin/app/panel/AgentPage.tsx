@@ -2,7 +2,7 @@
 // a phone (bb's compact layout has no side panel to show the thread's tab in), and for an agent
 // that has no bb thread at all. The page shows one agent and a way back.
 import { Unreadable } from "../roster/unreadable";
-import { useRef } from "react";
+import { useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useOats } from "../oats";
@@ -35,12 +35,15 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
   const instance = instanceOf(subPath);
   // The agent as the roster last named it: kept while the roster is read again or cannot be read,
   // as the panel keeps what it showed.
-  const last = useRef<{ instance: string; threadId: string | null } | null>(null);
+  const [last, setLast] = useState<{ instance: string; threadId: string | null } | null>(null);
+  let held = last;
   if (oats.phase === "ready") {
     const agent = instance === null ? undefined : oats.agents.find((candidate) => candidate.instance === instance);
-    last.current = agent === undefined ? null : { instance: agent.instance, threadId: oats.nodeByInstance.get(agent.instance)?.thread.id ?? null };
+    const threadOf = agent === undefined ? null : (oats.nodeByInstance.get(agent.instance)?.thread.id ?? null);
+    held = agent === undefined ? null : last !== null && last.instance === agent.instance && last.threadId === threadOf ? last : { instance: agent.instance, threadId: threadOf };
+    if (held !== last) setLast(held);
   }
-  const known = last.current !== null && last.current.instance === instance ? last.current : null;
+  const known = held !== null && held.instance === instance ? held : null;
   const threadId = known?.threadId ?? null;
   return (
     <div data-testid="oats-agent-page" className="flex h-full min-h-0 flex-col text-sm text-foreground">

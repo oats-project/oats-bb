@@ -1,0 +1,8 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_MODEL_UNKNOWN",
+  "message": "model preference \"no-such-provider/no-such-model\" has no entry usable by harness claude; give a claude model id"
+ }
+}

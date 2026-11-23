@@ -149,7 +149,7 @@ test("the workspace line; at the roster's foot the needs line and New agent; the
   fireEvent.click(slot.getByTestId("oats-new-agent"));
   expect(slot.inspection.navigateCalls).toEqual([
     { method: "toPluginPanel", path: "home" },
-    { method: "toPluginPanel", path: "souls" },
+    { method: "toPluginPanel", path: "new-agent" }, // the form's own page (app/spawn)
   ]);
   expect(navigated()).toBe(2);
 });
@@ -429,7 +429,8 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
 
 // The plugin's setting `pages`: a release shows only the pages that are finished (its default: the
 // home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
-// waits still opens the home; "New agent" is there only where it has somewhere to open.
+// waits still opens the home; "New agent" stays, whatever pages are shown: the form is a page of its
+// own (app/spawn), not one a release leaves out.
 test("with the release's default (pages: home) the sidebar has the roster, who waits and no page link; with every page, all of them", async () => {
   const withPages = async (pages: string) => {
     const app = await loadApp();
@@ -443,9 +444,10 @@ test("with the release's default (pages: home) the sidebar has the roster, who w
   await pilot.findByTestId("oats-tree");
   expect(pilot.queryByTestId("oats-pages")).toBeNull();
   for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
-  expect(pilot.queryByTestId("oats-new-agent")).toBeNull(); // nowhere to open yet: the form's own page names itself
+  expect(pilot.getByTestId("oats-new-agent").textContent).toBe("New agent"); // the way to start an agent survives the hidden pages
   fireEvent.click(pilot.getByTestId("oats-needs-line"));
-  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  fireEvent.click(pilot.getByTestId("oats-new-agent"));
+  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }, { method: "toPluginPanel", path: "new-agent" }]);
   pilot.unmount();
   resetApp();
   const all = await withPages(ALL_PAGES);
@@ -474,20 +476,28 @@ test("the path of a page that is not shown answers one line and the way back; th
   expect(shown_.getByTestId("the-page")).toBeTruthy();
 });
 
-test("\"New agent\" opens the form's own page once the spawn feature names it, whatever pages are shown", async () => {
+test("until a feature names the form's page, \"New agent\" opens the Souls page where that is shown, and is absent where it is not", async () => {
   const { setNewAgent } = await import("../../app/workspace/pages");
+  const { openNewAgent } = await import("../../app/spawn");
   const app = await loadApp();
-  setNewAgent((navigate) => navigate.toPluginPanel("new-agent"));
-  try {
-    const slot = renderSlot<PluginThreadListProps, Contract>(
+  const withPages = (pages: string) =>
+    renderSlot<PluginThreadListProps, Contract>(
       app.threadLists[0]!,
       { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
-      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home" } },
+      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages } },
     );
-    fireEvent.click(await slot.findByTestId("oats-new-agent"));
-    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
+  setNewAgent(null);
+  try {
+    const pilot = withPages("home");
+    await pilot.findByTestId("oats-tree");
+    expect(pilot.queryByTestId("oats-new-agent")).toBeNull();
+    pilot.unmount();
+    resetApp();
+    const souls = withPages("home, souls");
+    fireEvent.click(await souls.findByTestId("oats-new-agent"));
+    expect(souls.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
   } finally {
-    setNewAgent(null);
+    setNewAgent(openNewAgent); // as the spawn feature's register left it
   }
 });
 

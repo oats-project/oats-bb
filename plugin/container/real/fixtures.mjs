@@ -64,9 +64,17 @@ export class Fixtures {
 export const SESSION_FIELDS = ["backend", "tmux", "session", "open", "running", "runtimeState", "runtimeError", "sessionEnd"];
 
 /**
+ * The sample's agents that WORK, by instance: the two whose threads bb's fixture (threads.json)
+ * calls active. Named, never read from a row's `running`: a provider answers `running: true` for
+ * an idle agent whose harness is loaded, so after a re-record that field no longer tells the two
+ * apart.
+ */
+export const SAMPLE_WORKING = ["redesign-ui-lead", "desktop-mockups-developer"];
+
+/**
  * test/fixtures/roster/status.json is the design's sample (its agents, parents, identities and claims are
  * not this run's). This gives each of its bb rows the session-side fields of a row the real kernel
- * printed for an agent in the same state: running, idle, or stopped by OATS. The sample's own thread
+ * printed for an agent in the same state: working (SAMPLE_WORKING), idle, or stopped by OATS. The sample's own thread
  * id, and the project of that thread in threads.json, take the place of the recorded ones; a field
  * the real row does not have is removed. Nothing else of the sample changes.
  * `recorded`: the status documents by state, as status-recorded.json holds them.
@@ -79,9 +87,14 @@ export function sampleStatus(sampleText, threadsText, recorded) {
   for (const group of sample.agents) {
     for (const row of group.instances) {
       if (row.backend !== "bb") continue;
-      const from = row.runtimeState === "stopped" ? real.stopped : row.running === true ? real.working : real.idle;
       const threadId = row.session.threadId;
-      const projectId = threads.find((thread) => thread.id === threadId)?.projectId;
+      const works = SAMPLE_WORKING.includes(row.instance);
+      // The sample and bb's fixture must agree on who works: a working agent's thread has a turn running.
+      const thread = threads.find((candidate) => candidate.id === threadId);
+      const status = thread?.status;
+      if (works !== (status === "active")) throw new Error(`fixtures: the sample's ${row.instance} ${works ? "works" : "does not work"}, and threads.json says its thread ${threadId} is ${JSON.stringify(status)}`);
+      const from = row.runtimeState === "stopped" ? real.stopped : works ? real.working : real.idle;
+      const projectId = thread?.projectId;
       if (projectId === undefined) throw new Error(`fixtures: threads.json has no thread ${threadId} for the sample's ${row.instance}`);
       const recordedProject = /\/projects\/([^/]+)\//.exec(firstRow(recorded.working).open.url)[1];
       for (const field of SESSION_FIELDS) {

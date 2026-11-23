@@ -37,7 +37,9 @@ export default async (run) => {
   };
   const idle = (name) => until(`${name} to be there and idle in oats status`, () => {
     const row = rowOf(name);
-    return row?.session?.threadId && row.running === null ? row : undefined;
+    // At rest: the kernel's `running` is null from a provider that cannot tell and true from one that scans its harness
+    // (oats-bb #40); that its turn is over is bb's word (run.atRest, scenario.mjs).
+    return row?.session?.threadId && run.atRest(row) ? row : undefined;
   }, 120);
   const stopped = (name) => until(`${name} to read stopped in oats status`, () => {
     const row = rowOf(name);
@@ -117,7 +119,7 @@ export default async (run) => {
     check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
     await ready();
     said = await dialog(page);
-    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, and starts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));
@@ -147,7 +149,7 @@ export default async (run) => {
     check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed`);
     await ready();
     said = await dialog(page);
-    check(said.title === `Restart ${called}` && said.body.includes("Restart stops the current harness after checking the new configuration.") && said.act === "Restart", `${at} the Restart dialog says that the current harness is stopped first, and restarts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Restart ${called}` && said.body.includes("Restart stops the current harness after checking the new configuration.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Restart", `${at} the Restart dialog says that the current harness is stopped first and that it starts a new conversation, and restarts nothing by itself`, JSON.stringify(said));
     await shot("restart-before");
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 180);

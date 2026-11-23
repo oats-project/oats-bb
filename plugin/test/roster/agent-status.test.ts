@@ -46,13 +46,15 @@ test("an agent that waits says since when and what about; the others say only wh
   expect(agentStatus({ ...waiting, waiting: null }, { ...thread, hasPendingInteraction: true }, now)).toEqual({ state: "needs-you", word: "Needs you", since: null, detail: "bb shows its question in this thread", kernel: null });
   // The gate: a row the kernel calls stopped shows no claim, whatever it still carries.
   expect(agentStatus({ ...waiting, running: false, runtimeState: "stopped", waiting: claim }, { ...thread, hasPendingInteraction: false }, now)).toEqual({ state: "stopped", word: "Stopped", since: null, detail: null, kernel: null });
-  const working = agents.find((agent) => agent.running === true && agent.waiting === null)!;
+  const working = agents.find((agent) => agent.instance === "desktop-mockups-developer")!; // one of the two whose thread bb's fixture calls active, named: `running` does not say that an agent works
   const quiet = { ...of(working.instance).thread, hasPendingInteraction: false };
   expect(agentStatus(working, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
   expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, quiet, now)).toEqual({ state: "error", word: "Failed", since: null, detail: "Its session ended", kernel: null });
   expect(agentStatus({ ...working, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }, quiet, now)).toEqual({ state: "unreachable", word: "Unreachable", since: null, detail: "OATS cannot reach its session", kernel: "bb did not answer" });
-  // An agent with no bb thread (it runs in tmux): the kernel's word alone.
-  expect(agentStatus(working, null, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
+  // An agent with no bb thread that runs in tmux: the kernel's word alone.
+  expect(agentStatus({ ...working, backend: "tmux" }, null, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
+  // The same agent on its bb thread works because bb says its thread does: with the thread idle it is idle, a loaded harness or not.
+  expect(agentStatus(working, { ...quiet, status: "idle" }, now).state).toBe("idle");
 });
 
 // "Since when", only where the kernel recorded a time (the spec's author, 2026-11-22; WORDS.md has
@@ -61,10 +63,11 @@ test("an agent that waits says since when and what about; the others say only wh
 // for Idle, Failed and Unreachable.
 test("a working agent says when OATS last started it (the row's startedAt), as \"started <time>\": true before and after a resume by bb; with no start in the kernel's row, no time", () => {
   const now = new Date(2026, 10, 21, 14, 30).getTime();
-  const working = fixtureAgents().find((agent) => agent.running === true && agent.waiting === null)!;
-  expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, null, now)).toMatchObject({ state: "working", since: "started 14:03", detail: null });
-  expect(agentStatus({ ...working, startedAt: null }, null, now).since).toBeNull();
-  expect(agentStatus(working, null, now).since).toBeNull(); // a row with no startedAt
+  const working = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")!; // named, not picked by `running`
+  const thread = of(working.instance).thread; // bb has a turn running on it
+  expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, thread, now)).toMatchObject({ state: "working", since: "started 14:03", detail: null });
+  expect(agentStatus({ ...working, startedAt: null }, thread, now)).toMatchObject({ state: "working", since: null });
+  expect(agentStatus(working, thread, now).since).toBeNull(); // a row with no startedAt
   expect(sessionStarted("not a time", now)).toBeNull();
 });
 

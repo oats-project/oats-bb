@@ -44,6 +44,8 @@ export type PlanView = {
 };
 
 const SESSION = { there: "Running", none: "Not running", unknown: "Unknown (couldn't be checked)" } as const;
+/** The same, in a row labelled with an agent's name and not with "Session". */
+const SESSION_OF = { there: "Session running", none: "Session not running", unknown: "Session unknown (couldn't be checked)" } as const;
 const ambiguous = (instance: string) => `Not included: ${agentName(instance)} (another instance has the same parent name, so OATS can't tell whose child it is).`;
 
 /**
@@ -56,18 +58,27 @@ export const stopThreadSentence = (archives: boolean): string =>
   archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
 /**
  * The fact, read from the provider's VERSION (the `version` of `oats capabilities show oats.bb
- * --json`, the read the harness list makes): the provider archives at stop from the release named
- * here on. No release does yet (null): the answer is then "does not archive" for every version,
- * and for a version that is not known.
+ * --json`, the read the harness list makes): the bb session provider archives the thread at stop
+ * from oats-bb v0.4.0 on (fixed by the release lane). The compare is numeric, part by part.
+ * Everything that is not known to archive answers false, so that the dialog keeps the sentence
+ * that warns ("a message sent in its thread starts it again without OATS"):
+ * - a version below it;
+ * - a version that is not a release's `major.minor.patch` (a commit, for a provider taken from a
+ *   repository; an empty or partial one), and none at all;
+ * - a PRE-RELEASE of the threshold itself (`0.4.0-rc.1`): by semver it comes before 0.4.0, and
+ *   nothing says that a candidate already archives. A pre-release of a later version is later.
  */
-export const ARCHIVES_AT_STOP_FROM: string | null = null;
+export const ARCHIVES_AT_STOP_FROM: string | null = "0.4.0";
+const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 export function stopArchivesThread(providerVersion: string | null, from: string | null = ARCHIVES_AT_STOP_FROM): boolean {
-  if (from === null || providerVersion === null) return false;
-  const parts = (version: string) => version.split(/[.+-]/).slice(0, 3).map((part) => Number.parseInt(part, 10));
-  const [have, need] = [parts(providerVersion), parts(from)];
-  if (have.length < 3 || have.some((part) => !Number.isFinite(part))) return false;
-  for (let index = 0; index < 3; index += 1) if (have[index]! !== need[index]!) return have[index]! > need[index]!;
-  return true;
+  const [have, need] = [providerVersion === null ? null : RELEASE.exec(providerVersion), from === null ? null : RELEASE.exec(from)];
+  if (have === null || need === null) return false;
+  for (const part of [1, 2, 3]) {
+    const [mine, theirs] = [Number(have[part]), Number(need[part])];
+    if (mine !== theirs) return mine > theirs;
+  }
+  // The same release: a pre-release of it comes before it.
+  return have[4] === undefined;
 }
 
 export const STOP_CHOICE = "Include child instances";
@@ -91,7 +102,9 @@ export function stopPlanView(plan: StopPlan, archives = false): PlanView {
     happens,
     kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
     attention: targets.filter((target) => target.midTask === true).map((target) => `${agentName(target.instance)} reports it is in the middle of a task.`),
-    state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION[target.session] })),
+    // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
+    // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
+    state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
     notes: plan.ambiguous.map(ambiguous),
     choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive, warning: null } : null,
     blocked: null,
@@ -215,6 +228,16 @@ export const UPDATING = "Updating for this choice…";
 export const CHECKING_AGAIN = "Checking again…";
 export const applying = (verb: PlanVerb, instance: string) =>
   verb === "retire" ? `Retiring ${agentName(instance)}. This can take up to a minute while sessions stop.` : `Stopping ${agentName(instance)}. This can take up to a minute.`;
+/**
+ * Under the line that says the act runs: a person need not wait in the dialog (the Desktop's "You
+ * can close this window; stopping continues."). The result then reaches them through bb's toaster.
+ */
+export const LEAVE = {
+  stop: "You can close this; stopping continues.",
+  retire: "You can close this; retiring continues.",
+  start: "You can close this; starting continues.",
+  restart: "You can close this; restarting continues.",
+} as const;
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
@@ -224,7 +247,7 @@ export const PLAN_STALE = "Something changed since you opened this. Review it an
  * says that what this would do has changed. Empty only when the two views are equal (the kernel's
  * revision moved for a fact the plan does not draw): the notice then says so.
  */
-export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan, archives = false): string[] {
+export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan, archives = false, archivedBefore = archives): string[] {
   const lines: string[] = [];
   const was = (value: keyof typeof SESSION) => SESSION[value].toLowerCase();
   if (before.action === "stop" && after.action === "stop") {
@@ -247,7 +270,8 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
     for (const child of after.children) if (!before.children.includes(child)) lines.push(`${agentName(child)} is now one of its children.`);
     for (const child of before.children) if (!after.children.includes(child)) lines.push(`${agentName(child)} is no longer one of its children.`);
   }
-  if (lines.length === 0 && drawn(before, archives) !== drawn(after, archives)) lines.push(PLAN_CHANGED);
+  // Each plan is drawn with its own answer on whether a stop archives the thread (`archivedBefore`: the earlier plan's).
+  if (lines.length === 0 && drawn(before, archivedBefore) !== drawn(after, archives)) lines.push(PLAN_CHANGED);
   return lines;
 }
 /** Everything the dialog draws of a plan: its title's agent and its view (a retire's with its tick off and on). */
@@ -289,7 +313,11 @@ export function stoppedRowText(row: StoppedRow): string {
 const rowLines = (rows: readonly StoppedRow[]) => rows.map((row) => `${agentName(row.instance)}: ${stoppedRowText(row)}`);
 const quotes = (rows: readonly StoppedRow[]) => rows.flatMap((row) => (row.detail === null ? [] : [`${row.instance}: ${row.detail}`]));
 
-/** `onBb`: some session of the plan runs on bb, so the result says what a stop means for its thread (`archives`: as for the plan). */
+/**
+ * `onBb`: some session of the plan runs on bb, so the result says what the stop means for its
+ * thread. `archived`: whether bb shows the thread archived after the stop, where bb answered;
+ * else what the confirmation said of it (`stopArchivesThread`).
+ */
 export function stopOutcome(receipt: StopReceipt, instance: string, onBb = false, archives = false): Outcome {
   const replay = receipt.replayed ? [REPLAYED] : [];
   const details = quotes(receipt.results).join("\n") || null;
@@ -310,10 +338,12 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const lines: string[] = [];
   if (complete && plan.session === "there") lines.push("Session stopped.");
   if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child instance")} stopped and kept.`);
-  lines.push(receipt.removedDir ? "Home folder deleted." : `Home folder kept${receipt.retainedHome ? ` at ${receipt.retainedHome}` : ""}.`);
-  if (receipt.worktree === "retained") lines.push(`Worktree kept${receipt.movedTo ? ` at ${receipt.movedTo}` : ""}.`);
+  // A path stands on a line of its own, as the Desktop sets it apart: no full stop is glued to it, and it can be selected whole.
+  const at = (sentence: string, path: string | null) => (path ? [`${sentence}, at:`, path] : [`${sentence}.`]);
+  lines.push(...(receipt.removedDir ? ["Home folder deleted."] : at("Home folder kept", receipt.retainedHome)));
+  if (receipt.worktree === "retained") lines.push(...at("Worktree kept", receipt.movedTo));
   if (receipt.worktree === "removed") lines.push("Worktree deleted.");
-  if (receipt.recoveryPath !== null) lines.push(`Recovery copy saved at ${receipt.recoveryPath}`);
+  if (receipt.recoveryPath !== null) lines.push("Recovery copy saved at:", receipt.recoveryPath);
   // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
   if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
   // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.
@@ -324,13 +354,17 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     lines.push(deleted ? `Branch ${branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${branch} kept: ${reason ?? "no reason given"}`);
   }
   if (receipt.incomplete.length > 0) lines.push("Cleanup didn't finish.");
-  if (complete) return { tone: "done", title: `${name} retired.`, lines: [...lines, ...replay], code: null, details: null, offers: [] };
+  // What the kernel, or a capability's retire hook, warns of (why a retire could only archive, a
+  // tree that was not the agent's own): each under its name, its first line; all of it under Details.
+  const warned = receipt.warnings.flatMap(oatsSays);
+  const warnings = receipt.warnings.join("\n");
+  if (complete) return { tone: "done", title: `${name} retired.`, lines: [...lines, ...warned, ...replay], code: null, details: warnings || null, offers: [] };
   return {
     tone: "failed",
     title: "Retirement didn't finish",
-    lines: ["Retirement didn't finish. Some steps ran:", ...lines, "Check what was kept before trying again.", ...replay],
+    lines: ["Retirement didn't finish. Some steps ran:", ...lines, ...warned, "Check what was kept before trying again.", ...replay],
     code: "RETIRE_INCOMPLETE",
-    details: receipt.incomplete.join("\n") || null,
+    details: [...receipt.incomplete, ...receipt.warnings].join("\n") || null,
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };
@@ -399,15 +433,27 @@ export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, 
   return { tone: "failed", title: `Couldn't check what ${verb === "retire" ? "retiring" : "stopping"} ${name} will do`, lines: [sentence, ...(sentence === UNDESCRIBED ? oatsSays(refusal.message) : []), "Nothing was changed."], code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
+/**
+ * After the kernel's line, when a RETIRE is refused because a process still works in the home
+ * (E_RUNTIME_QUIESCE_FAILED) and the agent runs pi on bb: opening a pi thread makes bb list its
+ * models with a pi of its own in the agent's home, which leaves by itself within a minute. The
+ * line claims nothing about which process the kernel met (its message is not read): it is true
+ * whichever it was, and says the one thing "stop it, then retire again" does not, that waiting
+ * is the remedy. Decided from read facts only: the code, the plan's backend, the row's harness.
+ */
+export const PI_LISTING = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+export const piOnBb = (plan: { backend: string | null; harness: string | null }): boolean => plan.backend === "bb" && plan.harness === "pi";
+
 /** An apply that was refused, or whose answer was lost. */
-export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal): Outcome {
+export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal, piListing = false): Outcome {
   const name = agentName(instance);
   if (refusal.code !== null && LOST.has(refusal.code)) {
     return { tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
-  const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED ? [sentence, ...oatsSays(refusal.message)] : [sentence];
+  const waits = verb === "retire" && refusal.code === "E_RUNTIME_QUIESCE_FAILED" && piListing; // (the function's own guard: a caller may pass the flag for a stop)
+  const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED || waits ? [sentence, ...oatsSays(refusal.message), ...(waits ? [PI_LISTING] : [])] : [sentence];
   return { tone: "failed", title: `${name} wasn't ${verb === "retire" ? "retired" : "stopped"}`, lines, code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
@@ -418,11 +464,28 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal)
  * the call failed again) leaves what it was: not confirmed, with Check again. And a kernel that
  * answers "busy" to its own key is still doing the first: that is said, not "nothing was done".
  */
-export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Refusal): Outcome {
+export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Refusal, piListing = false): Outcome {
   const kernels = refusal.code !== null && /^E_[A-Z0-9_]+$/.test(refusal.code);
-  if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal);
+  if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal, piListing);
   const still = `The ${verb === "retire" ? "removal" : "stop"} of ${agentName(instance)} is still running. Check again to read its result.`;
   return { tone: "unknown", title: "Result not confirmed", lines: [kernels ? still : "OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
+}
+
+/**
+ * An outcome as bb's toaster tells it, when the dialog it belonged to is gone (the person left it
+ * while the act ran, or opened another). A toast has no Details, no "Check again", no "Review
+ * again", no "Refresh status", and it cannot hold a path a person will need later. So there are
+ * two kinds:
+ * - `plain`: a stop, a start or a restart that is DONE. The toast says it whole, and leaves by itself.
+ * - anything else (a refusal, a result that is not confirmed, an unfinished or a finished RETIRE,
+ *   whose lines hold where the worktree and the recovery copy are): the toast says the title, and
+ *   first what the dialog sets apart (a home that was kept); it STAYS until dismissed and carries
+ *   "Show result", which opens the dialog again on that result, with everything it offers.
+ */
+export const SHOW_RESULT = "Show result";
+export function toasted(verb: Verb, outcome: Outcome): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
+  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined;
+  return { plain, tone: outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
 }
 
 // ---- Start and Restart ----

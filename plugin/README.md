@@ -124,11 +124,17 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
   Restart says that it stops the current harness first. An agent the kernel says is running is
   not started again: the dialog says so and offers its thread.
-- **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
-  same dialog, in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept
-  at …", "Recovery copy saved at …"); a start opens the agent's new thread behind it. When the
-  person opened another act's dialog meanwhile, the result reaches them through bb's toaster, with
-  **Open <agent>**.
+- **While the act runs** the dialog says so, and that it can be closed ("You can close this;
+  stopping continues."), with Close in Cancel's place. **Its result** is said in the same dialog,
+  in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept, at:" and
+  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  gone by then (the person closed it, or opened another act's), the result reaches them through
+  bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
+  and leaves by itself. Anything else (a refusal, a result that is not confirmed, a retire,
+  whose result holds where the worktree and the recovery copy are) is told by its title, with
+  what the dialog sets first (a home that was kept); that toast stays until dismissed and has
+  **Show result**, which opens the dialog again on that result, with its Details, its paths and
+  its next step ("Check again" asks for the same apply: the plan and its key are kept).
 - **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
   message under **Details**. What to do next is a button: **Review again** reads a new plan (also
   when the plan changed under the confirmation: it comes back as it is now, with what changed
@@ -731,14 +737,16 @@ to draw), and on `navPanel`:
 
 App, hooks and components: `experimental_useSidebarThreads`, `experimental_useRpcQuery` (the
 watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisible`,
-`experimental_usePluginId`, `experimental_THREAD_ACTION_GROUPS`,
+`experimental_usePluginId`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,
 `experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
 Open file: a file of the machine that holds the deployment, in bb's own preview).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 
-Not experimental, but bb's to change: the thread rows' `data-sidebar-thread-shortcut-target` and
+Not experimental, but bb's to change: the strings of bb's thread action groups and their order
+(`app/lifecycle/index.tsx` `OATS_GROUP`, "3_oats": a group of the plugin's own, which stands
+between bb's "2_organize" and its "3_settings" and "4_lifecycle" by the SDK's string order), the thread rows' `data-sidebar-thread-shortcut-target` and
 `data-sidebar-thread-id` attributes, the settings route `/settings/plugins/<plugin id>` (the
 "Choose a machine" link), the icon names (each feature's `ICON`; `app.tsx` says how to check one), and bb's compact breakpoint
 `(max-width: 767px)` (`app/roster/IdentityRow.tsx`).

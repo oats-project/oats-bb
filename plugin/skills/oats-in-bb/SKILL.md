@@ -77,7 +77,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   (nothing to do: OATS starts it again); "Idle · not loaded" (send it a message in its thread to
   carry on; Start begins a new conversation); "Running outside OATS" (OATS recorded it stopped and
   it runs, because a message was sent in its thread: Stop or Start it through OATS). Never answer
-  a stopped agent in bb's composer: that starts it without OATS.
+  in bb's composer an agent whose line warns that a message starts it without OATS: Start it.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.
   "Idle" means the kernel does not say the agent is working: it may be waiting or done.
 

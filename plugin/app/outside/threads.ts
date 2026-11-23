@@ -105,8 +105,8 @@ onWindowReset(() => {
 });
 
 /**
- * What bb says of the thread each agent's row names, for `useOats()`, which gives it to the one
- * state function and to `view()`: a function of the roster's `agents`, bb's `listed` threads by id
+ * What bb says of the thread each agent's row names, for `useOats()` (`Oats.whereOf`), which this
+ * feature's reasons read (say.ts): a function of the roster's `agents`, bb's `listed` threads by id
  * and bb's answer for the ids it does not list. bb is asked again at each roster read (`at`) and
  * each minute: it tells nobody when an archived thread is deleted.
  * - an agent on tmux, or a row that names no thread: "none";

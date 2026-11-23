@@ -23,6 +23,9 @@ describe("readOutsideOats", () => {
   it("reads the report in the kernel's exact shape: the three keys, the one code, a one-line message of at most 500 characters", () => {
     expect(readOutsideOats(REPORT, STOPPED)).toEqual(REPORT);
     expect(readOutsideOats({ ...REPORT, message: "x".repeat(500) }, STOPPED)?.message).toHaveLength(500);
+    // 500 characters as the kernel counts them (code points): an astral character is one, and two UTF-16 units.
+    expect([...(readOutsideOats({ ...REPORT, message: "𝒙".repeat(500) }, STOPPED)?.message ?? "")]).toHaveLength(500);
+    expect(readOutsideOats({ ...REPORT, message: "𝒙".repeat(501) }, STOPPED)).toBeNull();
     const broken: unknown[] = [
       undefined, null, false, true, "running-outside-oats", [],
       { ...REPORT, code: "something-else" },

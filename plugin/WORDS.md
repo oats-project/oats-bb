@@ -61,7 +61,7 @@ and is one of the set (the first table: Needs you, Working, Idle, Stopped, Faile
 Running outside OATS); then the reason: one sentence with one remedy on the thread's line, and on
 the sidebar's row a few words in the soul's place (a row is never three lines). Each rests on one
 fact of the kernel's row and one answer of bb's (`app/outside/say.ts`, `words.ts`). A reason said
-in the warning tone needs a remedy, or warns of a thing a person may do by mistake. The home's
+in the warning tone needs a remedy, or warns of a thing a person may do by mistake. The
 home lists an agent that runs outside OATS among those that need you ("The home", below): one
 number in the sidebar's foot, the home's badge, its heading and its summary line.
 

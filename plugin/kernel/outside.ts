@@ -16,7 +16,16 @@ export const OUTSIDE_FEATURE = "provider-outside-oats";
 export const OUTSIDE_CODE = "running-outside-oats";
 
 /** The kernel's report, as it prints it: the three keys, the one code, a one-line message of at most 500 characters. */
-export const outsideOats = z.object({ code: z.literal(OUTSIDE_CODE), backend: z.string().min(1), message: z.string().min(1).max(500) }).strict();
+export const outsideOats = z
+  .object({
+    code: z.literal(OUTSIDE_CODE),
+    backend: z.string().min(1),
+    message: z
+      .string()
+      .min(1)
+      .refine((message) => [...message].length <= 500), // characters as the kernel counts them (code points), not UTF-16 units
+  })
+  .strict();
 export type OutsideOats = z.output<typeof outsideOats>;
 
 /**

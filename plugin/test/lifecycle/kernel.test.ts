@@ -31,9 +31,9 @@ describe("stop", () => {
         at: "2026-11-19T12:30:00.000Z",
         recursive: true,
         targets: [
-          { instance: "redesign-ui-lead", soul: "oats-product-expert", depth: 0, session: "there", backend: "bb", midTask: true },
-          { instance: "desktop-mockups-developer", soul: "oats-desktop-developer", depth: 1, session: "there", backend: "bb", midTask: true },
-          { instance: "harvest-knowledge-helper", soul: "knowledge-harvester", depth: 1, session: "there", backend: "bb", midTask: "unknown" },
+          { instance: "redesign-ui-lead", soul: "oats-product-expert", depth: 0, session: "there", backend: "bb", midTask: true, work: { observed: true, branch: "agents/redesign-ui-lead", detached: false, drift: false, changed: 2, untracked: 1 } },
+          { instance: "desktop-mockups-developer", soul: "oats-desktop-developer", depth: 1, session: "there", backend: "bb", midTask: true, work: { observed: true, branch: "agents/desktop-mockups-developer", detached: false, drift: false, changed: 2, untracked: 1 } },
+          { instance: "harvest-knowledge-helper", soul: "knowledge-harvester", depth: 1, session: "there", backend: "bb", midTask: "unknown", work: { observed: false, branch: null, detached: false, drift: false, changed: 0, untracked: 0 } },
         ],
         skipped: [],
         ambiguous: [],
@@ -51,7 +51,7 @@ describe("stop", () => {
       instance: "dialogs-1-helper",
       at: "2026-11-22T17:53:35.622Z",
       recursive: false,
-      targets: [{ instance: "dialogs-1-helper", soul: "oats-expert", depth: 0, session: "there", backend: "bb", midTask: "unknown" }],
+      targets: [{ instance: "dialogs-1-helper", soul: "oats-expert", depth: 0, session: "there", backend: "bb", midTask: "unknown", work: { observed: true, branch: "agents/dialogs-1-helper", detached: false, drift: false, changed: 0, untracked: 0 } }],
       skipped: ["dialogs-1-child"],
       ambiguous: [],
     });

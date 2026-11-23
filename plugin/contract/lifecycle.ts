@@ -13,7 +13,7 @@ export const stopPlan = z.object({
   instance: z.string().nullable(),
   at: z.string().nullable(),
   recursive: z.boolean(),
-  targets: z.array(z.object({ instance: z.string(), soul: z.string().nullable(), depth: z.number(), session: sessionFact, backend: z.string().nullable(), midTask: z.union([z.boolean(), z.literal("unknown")]) })),
+  targets: z.array(z.object({ instance: z.string(), soul: z.string().nullable(), depth: z.number(), session: sessionFact, backend: z.string().nullable(), midTask: z.union([z.boolean(), z.literal("unknown")]), work: workFact })),
   skipped: z.array(z.string()),
   ambiguous: z.array(z.string()),
 }) satisfies z.ZodType<StopPlan>;

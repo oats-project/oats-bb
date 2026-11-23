@@ -194,8 +194,14 @@ test("Stop opens a dialog titled with the act and the agent, says what will happ
   ]);
   expect(kept!.querySelector("h3")!.textContent).toBe("What is kept");
   expect(texts(kept as HTMLElement, "li")).toEqual(["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."]);
-  // An agent in the middle of a task is said before the act, and the state of each session.
-  expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual(["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."]);
+  // An agent with uncommitted work in its home is said before the act (the plan's own observation), and the state of each session.
+  // And who works on a turn now: bb's own word on each one's thread (the fixture's two are in a turn), after its work.
+  expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual([
+    "Redesign ui lead has uncommitted work in its home.",
+    "Redesign ui lead is working on a turn now.",
+    "Desktop mockups developer has uncommitted work in its home.",
+    "Desktop mockups developer is working on a turn now.",
+  ]);
   expect(texts(slot.getByTestId("oats-plan"), "dt")).toEqual(["Redesign ui lead", "Desktop mockups developer", "Harvest knowledge helper"]);
   // The button is named for the act; a stop ends something a person may want running, so the focus starts on Cancel.
   expect(button(slot, "oats-confirm-act").textContent).toBe("Stop");

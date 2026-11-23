@@ -110,8 +110,11 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
 
 - **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
   PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
-  each session and of its uncommitted work, and what a person should see first (an agent in the
-  middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
+  each session and of its uncommitted work, and what a person should see first. For a stop that is
+  said from facts, never from the plan's `midTask` (reported activity: true for every session that
+  runs, an idle one too): "<Name> has uncommitted work in its home." (the plan's own observation of
+  its work tree) and, for an agent on bb, "<Name> is working on a turn now." (bb's word on its
+  thread); an agent whose session runs with neither gets no line. Stop has the switch **Include child instances** (on: the kernel's default; off
   reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
   with a worktree of its own, with what would be lost said under it; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the

@@ -221,12 +221,12 @@ start, restart, the retire plan and the retire. Last, two servers registered wit
 
 Each is the kernel's or the provider's to decide; the plugin shows what they say.
 
-- **A stop plan cannot say whether an idle bb agent works.** For a bb session whose thread is
-  idle, the kernel's plan says `session: {state: "unknown", present: true}` and
-  `midTask: "unknown"` (bb cannot tell an agent that waits from one that is done); for a thread in
-  a turn, or one whose turn bb holds in line, `midTask: true`. The plugin's confirmation says
-  "its session is open; bb cannot tell whether it is working" for the first and "running, in the
-  middle of a task" for the second.
+- **A stop plan's `midTask` is reported activity, not a turn.** It is `true` for a session that
+  runs (a harness is loaded: from the provider that scans its harness, oats-bb #40, an idle bb
+  agent too; a tmux agent always) or for uncommitted work, and `"unknown"` from a provider that
+  cannot tell (the bb provider before #40, for an idle thread). The plugin's confirmation says
+  nothing from it: it says "<Name> has uncommitted work in its home." from the plan's `work`, and
+  "<Name> is working on a turn now." from bb's own word on the thread.
 - **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the

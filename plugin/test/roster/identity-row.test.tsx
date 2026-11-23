@@ -205,23 +205,31 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
   expect(slot.getByTestId("oats-status-line").firstElementChild!.className).toContain("flex-wrap");
 });
 
-test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are off, Retry", async () => {
+test("on the last roster read, while OATS cannot be read: the line as last read, its act off, and under it the one drawing of why: the age, that the acts are off, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStopInstance panel");
-  // The act that applies is held: in its place, off, with the reason.
+  // SAFETY: the act that applies is held: in its place, off, and a press does nothing. No reason of its
+  // own, in words or in a title: the one-line notice under it, in the same row, says why, with Retry.
   const held = slot.getByTestId("oats-status-act") as HTMLButtonElement;
-  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, "Comes back when OATS is read again"]);
+  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, ""]);
+  fireEvent.click(held);
+  expect(asked()).toBeNull();
+  expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("Comes back when OATS is read again");
   const stale = slot.getByTestId("oats-unreadable");
+  expect(slot.getByTestId("oats-identity-row").contains(stale)).toBe(true);
   expect(stale.getAttribute("data-compact")).toBe("");
   expect(stale.textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
   slot.unmount();
-  // A stopped agent's Start stays in its place, off, and says when it comes back.
+  // A stopped agent's Start stays in its place, off, under the same one-line notice.
   const stopped = await render("thr_digest", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   const start = (await stopped.findByTestId("oats-status-act")) as HTMLButtonElement;
-  expect([start.textContent, start.disabled, start.title]).toEqual(["Start", true, "Comes back when OATS is read again"]);
+  expect([start.textContent, start.disabled, start.title]).toEqual(["Start", true, ""]);
+  expect(stopped.getByTestId("oats-unreadable").textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
+  fireEvent.click(start);
+  expect(asked()).toBeNull();
 });
 
 test("with no roster ever read the row says that OATS cannot be read, with Retry: never nothing", async () => {

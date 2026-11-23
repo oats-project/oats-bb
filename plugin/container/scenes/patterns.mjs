@@ -47,7 +47,7 @@ export default [
       );
       check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the seven states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
       const lines = await page.evaluate(texts(book("oats-status-line")));
-      check(lines[0] === "! Needs you · waiting 27 min (since 14:03) · Asked you a question Open" && lines[1] === "Working", `${at} the status line: the word, since when, the reason, the act`, JSON.stringify(lines));
+      check(lines[0] === "! Needs you · 27 min · approval Open" && lines[1] === "Working", `${at} the status line: the word, how long, the reason in a word, the act`, JSON.stringify(lines));
       await page.shot(`patterns-${viewport.name}-states`, { targets: true });
     },
   },
@@ -88,10 +88,10 @@ export default [
         JSON.stringify(notices),
       );
       const stale = await page.evaluate(texts(book("oats-stale")));
-      check(stale[0].startsWith("Showing what was read 2 min ago.") && stale[1] === "Refreshing… showing what was read just now.", `${at} the stale line says the age of what is shown, and a re-read in flight`, JSON.stringify(stale));
+      check(stale[0].startsWith("Read 2 min ago.") && stale[1] === "Refreshing… read just now.", `${at} the stale line says the age of what is shown, and a re-read in flight`, JSON.stringify(stale));
       const empty = await page.evaluate(textOf(book("oats-empty")));
       const loading = JSON.parse(await page.evaluate(`JSON.stringify({ role: document.querySelector('${book("oats-loading")}').getAttribute("role"), words: ${textOf(book("oats-loading"))} })`));
-      check(empty === "No agents yet. New agent" && loading.role === "status" && loading.words === "Reading your agents…", `${at} the empty state says its sentence with the act that fills it, and the loading state is announced with its words`, JSON.stringify([empty, loading]));
+      check(empty === "No agents yet. New agent" && loading.role === "status" && loading.words === "Reading…", `${at} the empty state says its sentence with the act that fills it, and the loading state is announced with its words`, JSON.stringify([empty, loading]));
       // The kernel's own message is one press away, under Details.
       const details = JSON.parse(await page.evaluate(`JSON.stringify({ open: document.querySelector('${book("oats-notice-details")}').open, summary: ${textOf(`${book("oats-notice-details")} summary`)} })`));
       check(details.open === false && /^▸\s?Details$/.test(details.summary), `${at} a notice keeps the kernel's message under Details, closed`, JSON.stringify(details));

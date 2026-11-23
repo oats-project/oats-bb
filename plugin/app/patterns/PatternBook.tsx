@@ -80,12 +80,14 @@ export function PatternBook() {
           <li><Toned tone="muted">Off</Toned></li>
         </ul>
         <Heading>Status line</Heading>
-        <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "question", message: null, since: null })} action={<Button>Open</Button>} />
+        <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "permission", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
-        {/* A line that warns (a stopped agent's live composer): the mark and the sentence in the warning tone; the time beside it is not toned. */}
-        <StatusLine state="stopped" since="since 14:03" detail="A message sent here in bb starts it again without OATS. Use Start." tone="warning" action={<Button>Start</Button>} />
-        <StatusLine state="unreachable" detail="OATS cannot reach its session" action={<Button>Retry</Button>} />
+        {/* A line that warns (a stopped agent's live composer): the mark and the sentence in the warning tone. */}
+        <StatusLine state="stopped" detail="A message here starts it outside OATS." tone="warning" action={<Button>Start</Button>} />
+        {/* A state whose word says it all, and a state with its reason in two words. */}
+        <StatusLine state="unreachable" action={<Button>Retry</Button>} />
+        <StatusLine state="error" detail="session ended" action={<Button>Restart</Button>} />
       </section>
 
       <section data-testid="oats-patterns-facts" className="flex flex-col gap-2">
@@ -115,7 +117,7 @@ export function PatternBook() {
         </Notice>
         <Heading>Empty, loading, stale</Heading>
         <Empty action={<Button variant="primary">New agent</Button>}>No agents yet.</Empty>
-        <Loading>Reading your agents…</Loading>
+        <Loading>Reading…</Loading>
         <Stale age="2 min ago" held="Acts are held until OATS is read again." action={<Button>Retry</Button>} />
         <Stale age="just now" refreshing />
         <Heading>Result</Heading>

@@ -195,7 +195,7 @@ async function needsYou(scene, { instance, soul, threadId, projectId, text, choi
     await page.goto("/plugins/oats/home");
     const card = await page.until(CARD(text, choices.length), 30);
     const read = JSON.parse(card || "{}");
-    check(read.question === text && JSON.stringify(read.choices) === JSON.stringify(choices) && read.card.includes(soul), `${at}: the home's card of ${instance} says what it waits for${choices.length > 0 ? `, with ${choices.length} choice(s)` : ""}`, card || (await page.evaluate(textOf(testId("oats-home-needs")))));
+    check(read.question === text && JSON.stringify(read.choices) === JSON.stringify(choices) && !read.card.includes(soul), `${at}: the home's card of ${instance} says what it waits for, and no soul${choices.length > 0 ? `, with ${choices.length} choice(s)` : ""}`, card || (await page.evaluate(textOf(testId("oats-home-needs")))));
     show("card", read.card ?? "none");
     await page.until(TILES_COUNTED, 20);
     await page.evaluate(`(${cardOf(text)})?.scrollIntoView({ block: "center" })`);
@@ -203,7 +203,7 @@ async function needsYou(scene, { instance, soul, threadId, projectId, text, choi
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     // Waited for: the line that says what it waits for. A thread with a pending interaction can read "Needs you" before the claim's text has reached the page.
     const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "needs-you" && ${textOf(testId("oats-status-line"))}.includes(${JSON.stringify(text)}) && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
-    check(line.state === "needs-you" && line.status.replace(/^! /, "").startsWith("Needs you") && line.status.includes(text) && line.row.includes(`instance of ${soul}`), `${at}: the thread's status line says "Needs you" and what it waits for`, JSON.stringify(line));
+    check(line.state === "needs-you" && line.status.replace(/^! /, "").startsWith("Needs you") && line.status.includes(text) && !line.row.includes("instance of"), `${at}: the thread's status line says "Needs you" and what it waits for, and its row says no soul`, JSON.stringify(line));
     show("status line", line.status);
     await shot("thread");
     await answer(view);
@@ -335,7 +335,7 @@ try {
   await views("real-pi-idle", async ({ page, at, shot }) => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "idle" && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
-    check(line.state === "idle" && line.status.startsWith("Idle") && line.row.includes(`instance of ${SOUL}`), `${at}: the pi agent's thread says "Idle" in its own row, with its soul`, JSON.stringify(line));
+    check(line.state === "idle" && line.status.startsWith("Idle") && !line.row.includes("instance of") && line.row.includes("Instance panel"), `${at}: the pi agent's thread says "Idle" in its own row, with the way to its instance panel (where its soul is)`, JSON.stringify(line));
     const reply = await page.until(`(document.body.innerText.match(/MOCK-REPLY \\d+/) ?? [""])[0]`, 30);
     check(Boolean(reply), `${at}: and the thread shows what pi answered (${reply})`, await page.evaluate("document.body.innerText.slice(0, 600)"));
     show("header row", line.row);

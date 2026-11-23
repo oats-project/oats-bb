@@ -276,7 +276,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (
-    <div data-testid="oats-sidebar" className="flex flex-col p-1">
+    // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
+    // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
+    // (no page link, no needs line) waits on this first.
+    <div data-testid="oats-sidebar" data-pages={pagesNow.known ? "known" : "reading"} className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
       {/* Where a page beside it shows the full notice, one line here: how old the roster is, and Retry. */}
       {oats.stale === null ? null : pageShowsNotice ? (

@@ -10,7 +10,7 @@ import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
-import { HELD_REASON, Unreadable } from "../roster/unreadable";
+import { Unreadable } from "../roster/unreadable";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
@@ -26,13 +26,13 @@ const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Reti
  * The acts this feature itself offers for an agent, as buttons, in order. Each opens the
  * lifecycle's own dialog for that act (`openAct`, app/lifecycle): the kernel is asked first and
  * nothing runs on one press. Never a second path to `oats`. `held`: the roster is the last one
- * read, and the acts stay in their place, off, with the reason (the Desktop's rule).
+ * read, and the acts stay in their place, off (the Desktop's rule); the notice on the same screen says why.
  */
 export function OutsideActs({ instance, acts, held }: { instance: string; acts: readonly Act[]; held: boolean }) {
   return (
     <>
       {acts.map((act) => (
-        <Button key={act} data-testid="oats-status-act" data-act={act} disabled={held} title={held ? HELD_REASON : undefined} onClick={() => openAct(act, instance)}>
+        <Button key={act} data-testid="oats-status-act" data-act={act} disabled={held} onClick={() => openAct(act, instance)}>
           {LABEL[act]}
         </Button>
       ))}

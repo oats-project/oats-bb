@@ -451,13 +451,13 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
     );
   };
   const buttons = (place: HTMLElement) => Array.from(place.querySelectorAll<HTMLButtonElement>(ACT)).map((button) => [button.textContent, button.disabled, button.title]);
-  // The read failed (bb cannot list its threads): both are the notice's own, held with the reason, as every act is then.
+  // The read failed (bb cannot list its threads): both are the notice's own, held (off, with no reason of their own: the place's notice of the failed read says why), as every act is then.
   const failed = await drawn({ status: "error", threads: [] }, true);
   const block = await failed.findByTestId("oats-outside-agent-block");
   expect(actsIn(failed.getByTestId("header-acts"))).toEqual([]);
   expect(buttons(block)).toEqual([
-    ["Stop", true, "Comes back when OATS is read again"],
-    ["Start", true, "Comes back when OATS is read again"],
+    ["Stop", true, ""],
+    ["Start", true, ""],
   ]);
   failed.unmount();
   resetApp();
@@ -491,11 +491,11 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it."); // (the kernel's own sentence stays under Details)
   other.unmount();
   resetApp();
-  // The same agent with the read failed: the header has none, so the notice has its own Stop, held with the reason, and still no Start.
+  // The same agent with the read failed: the header has none, so the notice has its own Stop, held (off), and still no Start.
   const otherFailed = await drawn({ status: "error", threads: [] }, true, "other");
   const otherBlock = await otherFailed.findByTestId("oats-outside-agent-block");
   expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
-  expect(buttons(otherBlock)).toEqual([["Stop", true, "Comes back when OATS is read again"]]);
+  expect(buttons(otherBlock)).toEqual([["Stop", true, ""]]);
   expect(named(otherFailed)).toEqual(["Stopstops the harness that runs outside OATS"]);
   expect(sentenceOf(otherBlock)).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   otherFailed.unmount();

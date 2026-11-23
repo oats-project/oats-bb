@@ -20,7 +20,7 @@ import { Button } from "../ui";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { agentStatus } from "./status";
-import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
+import { failureWords, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -85,14 +85,14 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     } else if (!panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
   };
   // While the roster is the last one read the OATS acts are held (the Desktop's rule): the act
-  // stays in its place, off, with the reason; the notice under the line has Retry.
+  // stays in its place, off; the notice under the line says that the acts are off, and has Retry.
   const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
   const verb = status.state === "stopped" ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
   const act =
     verb !== null ? (
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
         {verb[1]}
       </Button>
     ) : status.state === "needs-you" && claimOf(agent) !== null ? (
@@ -115,7 +115,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     ) : status.state === "working" || status.state === "idle" ? (
       // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
       // with it), then the confirmation. bb's own stop of a turn is not this.
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? undefined : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
         Stop
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (

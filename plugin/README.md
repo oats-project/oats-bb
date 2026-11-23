@@ -301,7 +301,9 @@ endpoint activity: true while a harness is loaded, an idle agent's too; it never
 agent works. Each row below that names a recording is the kernel's row as printed on that
 provider (OATS 0.70.5, the provider at oats-bb #40), and a test reads every recorded row against
 this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
-it with the thread as the column gives it. A dash is a field the row does not carry.
+it with the thread as the column gives it. That test holds the plugin's side alone: the
+provider's `inspectAnswer` is named here, not checked: no test of the plugin calls it (the
+provider's own tests hold its side). A dash is a field the row does not carry.
 
 | Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
 |---|---|---|---|---|---|---|---|

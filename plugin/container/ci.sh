@@ -8,6 +8,8 @@
 #   KEEP=1            leave the container running afterwards, to work in it (docker exec -it …)
 #   NAME=<name>       the container's name (default: bb-plugin-oats-ci-<pid>)
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
+#   LIVE_THEMES       the themes the live stage draws: "light", "dark" or "light,dark" (default: both;
+#                     CI's two live jobs name one each)
 # The bb version is the repository's pin: the one line of bb-version at the repository's root when
 # that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
 # `real` is the run against a real OATS kernel and the bb session provider, in a container of its
@@ -18,7 +20,19 @@ set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$STAGE" in
-  all | unit | live) ;;
+  all | live)
+    # A wrong LIVE_THEMES is refused here, before anything starts; unset or empty is both themes.
+    # live-ui.mjs, which reads it, refuses it too. It also takes spaces around a name; this
+    # does not.
+    case "${LIVE_THEMES:-light,dark}" in
+      light | dark | light,dark | dark,light) ;;
+      *)
+        echo "ci: LIVE_THEMES is \"${LIVE_THEMES}\": it names the themes the live stage draws, light, dark or light,dark" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  unit) ;;
   real) exec sh "$HERE/real/run.sh" ;;
   pi) REAL_PI=1 exec sh "$HERE/real/run.sh" ;;
   *)
@@ -75,7 +89,8 @@ if [ -n "${LOCAL_STATUS:-}" ]; then
   docker exec -u root "$NAME" chown node /tmp/local-status.json
   LOCAL_ENV="-e LIVE_UI_STATUS_FILE=/tmp/local-status.json"
 fi
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
+# LIVE_THEMES is passed by name: only when it is set here, so that one left unset draws both themes.
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 # The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts).

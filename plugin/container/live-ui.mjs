@@ -39,7 +39,16 @@ const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800, mobile: false },
   { name: "390x800", width: 390, height: 800, mobile: true },
 ];
-const THEMES = ["light", "dark"];
+// The themes this run draws: both, unless LIVE_THEMES names them ("light", "dark" or "light,dark").
+// CI runs the live stage as two jobs, one theme each (.github/workflows/plugin.yml), so that its
+// wall time is half; on a machine `ci.sh live` and `ci.sh all` draw both. A value that names
+// anything else stops the run: a typo must not pass as a run that drew nothing.
+const ALL_THEMES = ["light", "dark"];
+const THEMES = (process.env.LIVE_THEMES ?? "").trim() === "" ? ALL_THEMES : process.env.LIVE_THEMES.split(",").map((theme) => theme.trim());
+if (new Set(THEMES).size !== THEMES.length || THEMES.some((theme) => !ALL_THEMES.includes(theme))) {
+  console.error(`live-ui: LIVE_THEMES is ${JSON.stringify(process.env.LIVE_THEMES)}: it names the themes to draw, "light", "dark" or "light,dark"`);
+  process.exit(2);
+}
 mkdirSync(OUT, { recursive: true });
 
 let failures = 0;

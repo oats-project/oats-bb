@@ -313,6 +313,14 @@ test("the attach command is for an agent on tmux the kernel says runs: none for 
     expect(slot.queryByTestId("oats-panel-attach"), what).toBeNull();
     slot.unmount();
   }
+  // One the kernel cannot reach that still carries a claim has no command: the kernel does not say it runs,
+  // and `oats session attach` refuses. (Today the model hides such a claim, so its state is unreachable and
+  // the state alone decides; under the one claim rule it will be needs-you, and then the kernel's own
+  // `running` is what decides: test/panel/words.test.ts holds that case of the rule itself.)
+  const unreachableClaim = onTmux({ running: null, runtimeState: "unreachable", waiting: { reason: "attention", message: "Which branch?", since: "2026-11-21T18:20:00.000Z" } });
+  await unreachableClaim.findByTestId("oats-panel-session-line");
+  expect(unreachableClaim.queryByTestId("oats-panel-attach")).toBeNull();
+  unreachableClaim.unmount();
   // it runs and waits on a person: the command is how to answer it
   const waits = onTmux({ running: true, runtimeState: "running", waiting: { reason: "attention", message: "Which branch?", since: "2026-11-21T18:20:00.000Z" } });
   await waits.findByTestId("oats-panel-session-line");
@@ -809,4 +817,62 @@ test("Open soul page is offered only where the Souls page is shown in this relea
   await hidden.findByTestId("oats-panel-soul-name");
   expect(hidden.queryByTestId("oats-panel-open-soul")).toBeNull();
   expect(hidden.queryByTestId("oats-panel-open-soul-why")).toBeNull();
+});
+
+// ---- the lifecycle's acts, in the header
+
+const actsOf = (slot: { queryByTestId(id: string): HTMLElement | null }) => Array.from(slot.queryByTestId("oats-agent-acts")?.querySelectorAll("button") ?? []).map((button) => button.textContent);
+
+test("the header offers the lifecycle's acts that apply to the agent's state, under its state; a press opens that act's dialog and runs nothing", async () => {
+  const { asked } = await import("../../app/lifecycle");
+  const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null, running: true }) });
+  await slot.findByTestId("oats-panel-work");
+  expect(actsOf(slot)).toEqual(["Stop…", "Restart…", "Retire…"]);
+  // in the header, after the state: it stays in view on both tabs
+  const header = slot.getByTestId("oats-panel-header");
+  expect(header.contains(slot.getByTestId("oats-agent-acts"))).toBe(true);
+  expect(slot.getByTestId("oats-panel-state").compareDocumentPosition(slot.getByTestId("oats-agent-acts")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const before = slot.inspection.rpcCalls.length;
+  fireEvent.click(slot.getByTestId("oats-agent-act-stop"));
+  expect(asked()).toEqual({ verb: "stop", instance: CHILD });
+  // the press asked for the dialog and nothing else: no act of OATS was made from the panel
+  expect(slot.inspection.rpcCalls.slice(before).map((call) => call.method).filter((method) => !["snapshot", "souls", "panelInstance"].includes(method))).toEqual([]);
+});
+
+test("an agent with no thread in bb has its acts on its own page: Start and Retire for one whose thread is gone, Stop and Retire for one on tmux", async () => {
+  const byName = (change: Partial<Agent>) => {
+    const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, waiting: null, ...change } : agent));
+    return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
+      rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance) }),
+      // bb lists the threads it has: not the one the roster still names for an agent whose thread is gone
+      sidebarThreads: panelThreads(agents.filter((agent) => agent.threadId !== "thr_gone")),
+    });
+  };
+  // its bb thread is gone (the roster names a thread bb does not have), and the kernel has it stopped
+  const gone = byName({ threadId: "thr_gone", running: false, runtimeState: "stopped" });
+  await gone.findByTestId("oats-panel-work");
+  expect(actsOf(gone)).toEqual(["Start…", "Retire…"]);
+  gone.unmount();
+  const tmux = byName({ backend: "tmux", threadId: null, running: true, runtimeState: "running" });
+  await tmux.findByTestId("oats-panel-work");
+  expect(actsOf(tmux)).toEqual(["Stop…", "Retire…"]);
+});
+
+test("while the roster is the last one read the acts are off, and say why", async () => {
+  let fail = false;
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
+    rpc: handlers({
+      snapshot: () => {
+        const read = panelSnapshot();
+        return fail ? { ok: false as const, at: "2026-11-21T18:29:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last: { at: read.at, deployment: read.deployment, agents: read.agents } } : read;
+      },
+    }),
+    sidebarThreads: panelThreads(),
+  });
+  await slot.findByTestId("oats-panel-work");
+  expect(Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).every((button) => !button.disabled)).toBe(true);
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:29:00.000Z" }));
+  await waitFor(() => expect(Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).every((button) => button.disabled)).toBe(true));
+  expect(within(slot.getByTestId("oats-agent-acts")).getByTestId("oats-disabled-reason").textContent).not.toBe("");
 });

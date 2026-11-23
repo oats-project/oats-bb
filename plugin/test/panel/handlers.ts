@@ -29,7 +29,7 @@ export function recordedFacts(instance: string, file = "status.json"): { facts: 
   throw new Error(`${file} has no instance ${instance}`);
 }
 
-export const PANEL_AT = "2026-11-21T18:30:00.000Z";
+export const PANEL_AT = "2026-11-23T12:31:00.000Z";
 
 /** The answer of `panelInstance` for one instance of the recorded roster, changed by `change`. */
 export function instanceAnswer(instance: string, change: (facts: PanelInstance) => PanelInstance = (facts) => facts, file?: string) {

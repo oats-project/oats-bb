@@ -38,8 +38,8 @@ describe("the panel's read of one instance", () => {
         running: null,
         runtimeState: "unknown",
         runtimeError: null,
-        startedAt: "2026-11-21T18:13:36.478Z",
-        createdAt: "2026-11-21T18:13:36.478Z",
+        startedAt: "2026-11-23T12:14:30.069Z",
+        createdAt: "2026-11-23T12:14:30.069Z",
         drift: { soul: null, modules: [] },
         work: "worktree",
         repo: "oats-real",
@@ -51,7 +51,7 @@ describe("the panel's read of one instance", () => {
         model: "claude-opus-5-5",
         modelFrom: "soul",
         backend: "bb",
-        threadId: "thr_gx4sgexjgw",
+        threadId: "thr_fg4rks2zkp",
         tmuxSession: null,
         messagingId: null,
       },
@@ -88,7 +88,7 @@ describe("the panel's read of one instance", () => {
       "panel-worktree-helper",
     );
     expect(drifted.ok && drifted.value.drift.modules).toEqual([
-      { name: "oats.bb", status: "missing", was: "a3cca8511461e92c25d86f693365ec250b7c4684", now: "a3cca8511461e92c25d86f693365ec250b7c4684", reason: "package no longer locked" },
+      { name: "oats.bb", status: "missing", was: "9b95a56f237ff4006a69545963d5130d6eb4ddc5", now: "9b95a56f237ff4006a69545963d5130d6eb4ddc5", reason: "package no longer locked" },
       { name: "oats.core", status: "moved", was: "1.26.0", now: "1.27.0", reason: null },
       { name: null, status: "moved", was: null, now: null, reason: null },
     ]);

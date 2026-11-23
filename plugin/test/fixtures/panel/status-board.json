@@ -13,13 +13,437 @@
    },
    "kind": "persistent",
    "dir": "/abs/deployment/agents/knowledge-harvester",
-   "instances": [],
-   "key": null,
+   "instances": [
+    {
+     "agent": "knowledge-harvester",
+     "kind": "persistent",
+     "instance": "harvest-knowledge-helper",
+     "home": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper",
+     "soulDir": "/abs/deployment/agents/knowledge-harvester/souls/ca5ff7827c6a",
+     "repo": "/abs/deployment",
+     "work": "directory",
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "modelFrom": "soul",
+     "launchFrom": "soul",
+     "launchAt": "local//abs/real/src/oats-real:souls/knowledge-harvester/soul.yaml#/launch",
+     "launchDeclared": {
+      "harness": "claude",
+      "model": "claude-opus-5-5"
+     },
+     "yolo": true,
+     "parentInstance": "redesign-ui-lead",
+     "relation": "child",
+     "relativeTo": "redesign-ui-lead",
+     "spawnOrigin": "operator",
+     "spawnedBy": null,
+     "policy": {
+      "childSpawns": {
+       "allowed": true,
+       "origin": {
+        "kind": "default",
+        "detail": "no spawn option: children allowed"
+       }
+      }
+     },
+     "capabilities": [
+      {
+       "id": "oats.bb",
+       "command": "bb",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "level": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "provenance": [
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       ],
+       "skills": [],
+       "hooks": [
+        "launch",
+        "retire"
+       ],
+       "trusted": true
+      },
+      {
+       "id": "oats.core",
+       "origin": "package:oats.framework@1.26.0",
+       "level": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper",
+       "settings": {},
+       "settingsOrigins": {},
+       "provenance": [
+        "package oats.framework v1.26.0"
+       ],
+       "skills": [
+        "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills/oats-operate",
+        "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills/oats-souls",
+        "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills/oats-token-saving"
+       ],
+       "hooks": [
+        "spawn",
+        "launch",
+        "upgrade"
+       ],
+       "trusted": true
+      }
+     ],
+     "skills": [
+      {
+       "name": "oats-operate",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-souls",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-token-saving",
+       "source": "module:oats.core"
+      }
+     ],
+     "instructions": [
+      {
+       "source": "capability:oats.core",
+       "file": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/injects/oats.md"
+      },
+      {
+       "source": "kernel:instance-boundary",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+      },
+      {
+       "source": "work-mode:directory",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+      }
+     ],
+     "composition": {
+      "expected": [
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-operate",
+        "resolved": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-souls",
+        "resolved": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-token-saving",
+        "resolved": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "injection",
+        "source": "oats.core",
+        "declared": "injects/oats.md",
+        "resolved": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/injects/oats.md",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "instruction-block",
+        "source": "capability:oats.core",
+        "declared": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/injects/oats.md",
+        "resolved": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/injects/oats.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "kernel:instance-boundary",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "work-mode:directory",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+       }
+      ],
+      "materialized": {
+       "skills": [
+        {
+         "name": "oats-operate",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/skills/oats-operate"
+        },
+        {
+         "name": "oats-souls",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/skills/oats-souls"
+        },
+        {
+         "name": "oats-token-saving",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/skills/oats-token-saving"
+        }
+       ],
+       "instructions": [
+        {
+         "source": "capability:oats.core",
+         "file": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/injects/oats.md"
+        },
+        {
+         "source": "kernel:instance-boundary",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+        },
+        {
+         "source": "work-mode:directory",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+        }
+       ],
+       "harnessPackages": [],
+       "harnessPosture": {
+        "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+        "ambient": [
+         "user skills",
+         "project and ancestor skills to the repository root",
+         "user and project plugins",
+         "user and project settings",
+         "user and ancestor CLAUDE.md"
+        ],
+        "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+       },
+       "canonicalSkillTree": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.agents/skills",
+       "skillAlias": {
+        "path": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.claude/skills",
+        "target": "../.agents/skills"
+       }
+      }
+     },
+     "capabilityRuntime": [
+      {
+       "id": "oats.bb",
+       "level": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "hooks": {
+        "launch": "node '/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.bb/bin/oats-bb.mjs' retire-hook"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": true
+      },
+      {
+       "id": "oats.core",
+       "level": "/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper",
+       "settings": {},
+       "settingsOrigins": {},
+       "hooks": {
+        "spawn": "node '/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/knowledge-harvester/instances/harvest-knowledge-helper/.oats/modules/oats.core/bin/oats-core.mjs' upgrade"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": false
+      }
+     ],
+     "backend": "bb",
+     "session": {
+      "provider": "oats.bb",
+      "threadId": "thr_cvbpapf8ji"
+     },
+     "launch": {
+      "version": 2,
+      "harness": "claude",
+      "launchConfig": null,
+      "launchConfigSource": null,
+      "executable": null,
+      "executableDeclared": null,
+      "executableResolvedFrom": "session provider bb",
+      "args": [],
+      "env": {},
+      "model": "claude-opus-5-5",
+      "yolo": true,
+      "hooks": {
+       "launch": {},
+       "env": {},
+       "contributions": []
+      },
+      "prompt": {
+       "kind": "task-file",
+       "file": "TASK.md"
+      }
+     },
+     "createdAt": "2026-11-23T12:04:12.687Z",
+     "modules": [
+      {
+       "name": "oats.bb",
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+        "repoKey": "local//abs/real/oats-bb.git"
+       },
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "current": {
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       },
+       "status": "current"
+      },
+      {
+       "name": "oats.core",
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       },
+       "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+       "current": {
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "version": "1.26.0"
+       },
+       "status": "current"
+      }
+     ],
+     "providers": {
+      "oats.bb": {
+       "server": "http://127.0.0.1:38886",
+       "daemon": "http://127.0.0.1:38887",
+       "version": "0.50.1",
+       "cli": "bb",
+       "trust": "container"
+      },
+      "oats.core": {}
+     },
+     "workspace": {
+      "key": "local//abs/real/src/oats-real",
+      "name": "bbreal",
+      "deployment": "/abs/deployment",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "9e18332b7d06a0621427e493",
+      "standalone": false,
+      "soul": {
+       "id": "local//abs/real/src/oats-real#knowledge-harvester",
+       "repoKey": "local//abs/real/src/oats-real",
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
+      },
+      "layers": {
+       "knowledge": null,
+       "messaging": null,
+       "tasks": null
+      }
+     },
+     "teams": [],
+     "defaultTeam": null,
+     "launched": true,
+     "startId": "066c2713-e56d-44d3-bb94-85e2bf071789",
+     "launchPrompts": {
+      "status": "not-engaged",
+      "startId": "066c2713-e56d-44d3-bb94-85e2bf071789",
+      "at": "2026-11-23T12:04:14.931Z"
+     },
+     "startedAt": "2026-11-23T12:04:12.687Z",
+     "identityAddress": null,
+     "attributedHuman": null,
+     "color": null,
+     "tmux": null,
+     "open": null,
+     "moduleCopy": {
+      "runs": "kernel-copy",
+      "homeCopy": "same",
+      "differs": []
+     },
+     "running": false,
+     "runtimeState": "stopped",
+     "sessionEnd": "stopped",
+     "waitingOnYou": null,
+     "board": null,
+     "soul": {
+      "repoKey": "local//abs/real/src/oats-real",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+      "status": "moved"
+     }
+    }
+   ],
+   "key": "knowledge-harvester",
    "soulSource": {
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
+    "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
     "path": "souls/knowledge-harvester",
-    "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "status": "moved"
    }
   },
@@ -35,13 +459,437 @@
    },
    "kind": "persistent",
    "dir": "/abs/deployment/agents/oats-desktop-developer",
-   "instances": [],
-   "key": null,
+   "instances": [
+    {
+     "agent": "oats-desktop-developer",
+     "kind": "persistent",
+     "instance": "desktop-mockups-developer",
+     "home": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer",
+     "soulDir": "/abs/deployment/agents/oats-desktop-developer/souls/ca5ff7827c6a",
+     "repo": "/abs/deployment",
+     "work": "directory",
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "modelFrom": "soul",
+     "launchFrom": "soul",
+     "launchAt": "local//abs/real/src/oats-real:souls/oats-desktop-developer/soul.yaml#/launch",
+     "launchDeclared": {
+      "harness": "claude",
+      "model": "claude-opus-5-5"
+     },
+     "yolo": true,
+     "parentInstance": "redesign-ui-lead",
+     "relation": "child",
+     "relativeTo": "redesign-ui-lead",
+     "spawnOrigin": "operator",
+     "spawnedBy": null,
+     "policy": {
+      "childSpawns": {
+       "allowed": true,
+       "origin": {
+        "kind": "default",
+        "detail": "no spawn option: children allowed"
+       }
+      }
+     },
+     "capabilities": [
+      {
+       "id": "oats.bb",
+       "command": "bb",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "level": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "provenance": [
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       ],
+       "skills": [],
+       "hooks": [
+        "launch",
+        "retire"
+       ],
+       "trusted": true
+      },
+      {
+       "id": "oats.core",
+       "origin": "package:oats.framework@1.26.0",
+       "level": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer",
+       "settings": {},
+       "settingsOrigins": {},
+       "provenance": [
+        "package oats.framework v1.26.0"
+       ],
+       "skills": [
+        "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills/oats-operate",
+        "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills/oats-souls",
+        "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills/oats-token-saving"
+       ],
+       "hooks": [
+        "spawn",
+        "launch",
+        "upgrade"
+       ],
+       "trusted": true
+      }
+     ],
+     "skills": [
+      {
+       "name": "oats-operate",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-souls",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-token-saving",
+       "source": "module:oats.core"
+      }
+     ],
+     "instructions": [
+      {
+       "source": "capability:oats.core",
+       "file": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/injects/oats.md"
+      },
+      {
+       "source": "kernel:instance-boundary",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+      },
+      {
+       "source": "work-mode:directory",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+      }
+     ],
+     "composition": {
+      "expected": [
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-operate",
+        "resolved": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-souls",
+        "resolved": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-token-saving",
+        "resolved": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "injection",
+        "source": "oats.core",
+        "declared": "injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/injects/oats.md",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "instruction-block",
+        "source": "capability:oats.core",
+        "declared": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/injects/oats.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "kernel:instance-boundary",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "work-mode:directory",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+       }
+      ],
+      "materialized": {
+       "skills": [
+        {
+         "name": "oats-operate",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/skills/oats-operate"
+        },
+        {
+         "name": "oats-souls",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/skills/oats-souls"
+        },
+        {
+         "name": "oats-token-saving",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/skills/oats-token-saving"
+        }
+       ],
+       "instructions": [
+        {
+         "source": "capability:oats.core",
+         "file": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/injects/oats.md"
+        },
+        {
+         "source": "kernel:instance-boundary",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+        },
+        {
+         "source": "work-mode:directory",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+        }
+       ],
+       "harnessPackages": [],
+       "harnessPosture": {
+        "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+        "ambient": [
+         "user skills",
+         "project and ancestor skills to the repository root",
+         "user and project plugins",
+         "user and project settings",
+         "user and ancestor CLAUDE.md"
+        ],
+        "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+       },
+       "canonicalSkillTree": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.agents/skills",
+       "skillAlias": {
+        "path": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.claude/skills",
+        "target": "../.agents/skills"
+       }
+      }
+     },
+     "capabilityRuntime": [
+      {
+       "id": "oats.bb",
+       "level": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "hooks": {
+        "launch": "node '/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.bb/bin/oats-bb.mjs' retire-hook"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": true
+      },
+      {
+       "id": "oats.core",
+       "level": "/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer",
+       "settings": {},
+       "settingsOrigins": {},
+       "hooks": {
+        "spawn": "node '/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/oats-desktop-developer/instances/desktop-mockups-developer/.oats/modules/oats.core/bin/oats-core.mjs' upgrade"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": false
+      }
+     ],
+     "backend": "bb",
+     "session": {
+      "provider": "oats.bb",
+      "threadId": "thr_u5j2z6pxeg"
+     },
+     "launch": {
+      "version": 2,
+      "harness": "claude",
+      "launchConfig": null,
+      "launchConfigSource": null,
+      "executable": null,
+      "executableDeclared": null,
+      "executableResolvedFrom": "session provider bb",
+      "args": [],
+      "env": {},
+      "model": "claude-opus-5-5",
+      "yolo": true,
+      "hooks": {
+       "launch": {},
+       "env": {},
+       "contributions": []
+      },
+      "prompt": {
+       "kind": "task-file",
+       "file": "TASK.md"
+      }
+     },
+     "createdAt": "2026-11-23T12:04:22.106Z",
+     "modules": [
+      {
+       "name": "oats.bb",
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+        "repoKey": "local//abs/real/oats-bb.git"
+       },
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "current": {
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       },
+       "status": "current"
+      },
+      {
+       "name": "oats.core",
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       },
+       "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+       "current": {
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "version": "1.26.0"
+       },
+       "status": "current"
+      }
+     ],
+     "providers": {
+      "oats.bb": {
+       "server": "http://127.0.0.1:38886",
+       "daemon": "http://127.0.0.1:38887",
+       "version": "0.50.1",
+       "cli": "bb",
+       "trust": "container"
+      },
+      "oats.core": {}
+     },
+     "workspace": {
+      "key": "local//abs/real/src/oats-real",
+      "name": "bbreal",
+      "deployment": "/abs/deployment",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "64d2170851fc65957a88d71d",
+      "standalone": false,
+      "soul": {
+       "id": "local//abs/real/src/oats-real#oats-desktop-developer",
+       "repoKey": "local//abs/real/src/oats-real",
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
+      },
+      "layers": {
+       "knowledge": null,
+       "messaging": null,
+       "tasks": null
+      }
+     },
+     "teams": [],
+     "defaultTeam": null,
+     "launched": true,
+     "startId": "734fb065-2d03-411f-9ce3-61a64fb3d9aa",
+     "launchPrompts": {
+      "status": "not-engaged",
+      "startId": "734fb065-2d03-411f-9ce3-61a64fb3d9aa",
+      "at": "2026-11-23T12:04:24.333Z"
+     },
+     "startedAt": "2026-11-23T12:04:22.106Z",
+     "identityAddress": null,
+     "attributedHuman": null,
+     "color": null,
+     "tmux": null,
+     "open": null,
+     "moduleCopy": {
+      "runs": "kernel-copy",
+      "homeCopy": "same",
+      "differs": []
+     },
+     "running": false,
+     "runtimeState": "stopped",
+     "sessionEnd": "stopped",
+     "waitingOnYou": null,
+     "board": null,
+     "soul": {
+      "repoKey": "local//abs/real/src/oats-real",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+      "status": "moved"
+     }
+    }
+   ],
+   "key": "oats-desktop-developer",
    "soulSource": {
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
+    "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
     "path": "souls/oats-desktop-developer",
-    "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "status": "moved"
    }
   },
@@ -57,13 +905,436 @@
    },
    "kind": "persistent",
    "dir": "/abs/deployment/agents/oats-developer",
-   "instances": [],
-   "key": null,
+   "instances": [
+    {
+     "agent": "oats-developer",
+     "kind": "persistent",
+     "instance": "oats-developer-real-run-digest-202611231207",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207",
+     "soulDir": "/abs/deployment/agents/oats-developer/souls/ca5ff7827c6a",
+     "repo": "/abs/deployment",
+     "work": "directory",
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "modelFrom": "soul",
+     "launchFrom": "soul",
+     "launchAt": "local//abs/real/src/oats-real:souls/oats-developer/soul.yaml#/launch",
+     "launchDeclared": {
+      "harness": "claude",
+      "model": "claude-opus-5-5"
+     },
+     "yolo": true,
+     "spawnOrigin": "operator",
+     "spawnedBy": null,
+     "policy": {
+      "childSpawns": {
+       "allowed": true,
+       "origin": {
+        "kind": "default",
+        "detail": "no spawn option: children allowed"
+       }
+      }
+     },
+     "capabilities": [
+      {
+       "id": "oats.bb",
+       "command": "bb",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "level": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "provenance": [
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       ],
+       "skills": [],
+       "hooks": [
+        "launch",
+        "retire"
+       ],
+       "trusted": true
+      },
+      {
+       "id": "oats.core",
+       "origin": "package:oats.framework@1.26.0",
+       "level": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207",
+       "settings": {},
+       "settingsOrigins": {},
+       "provenance": [
+        "package oats.framework v1.26.0"
+       ],
+       "skills": [
+        "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills/oats-operate",
+        "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills/oats-souls",
+        "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills/oats-token-saving"
+       ],
+       "hooks": [
+        "spawn",
+        "launch",
+        "upgrade"
+       ],
+       "trusted": true
+      }
+     ],
+     "skills": [
+      {
+       "name": "oats-operate",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-souls",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-token-saving",
+       "source": "module:oats.core"
+      }
+     ],
+     "instructions": [
+      {
+       "source": "capability:oats.core",
+       "file": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/injects/oats.md"
+      },
+      {
+       "source": "kernel:instance-boundary",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+      },
+      {
+       "source": "work-mode:directory",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+      }
+     ],
+     "composition": {
+      "expected": [
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-operate",
+        "resolved": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-souls",
+        "resolved": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-token-saving",
+        "resolved": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "injection",
+        "source": "oats.core",
+        "declared": "injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/injects/oats.md",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "instruction-block",
+        "source": "capability:oats.core",
+        "declared": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/injects/oats.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "kernel:instance-boundary",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "work-mode:directory",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+       }
+      ],
+      "materialized": {
+       "skills": [
+        {
+         "name": "oats-operate",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/skills/oats-operate"
+        },
+        {
+         "name": "oats-souls",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/skills/oats-souls"
+        },
+        {
+         "name": "oats-token-saving",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/skills/oats-token-saving"
+        }
+       ],
+       "instructions": [
+        {
+         "source": "capability:oats.core",
+         "file": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/injects/oats.md"
+        },
+        {
+         "source": "kernel:instance-boundary",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+        },
+        {
+         "source": "work-mode:directory",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+        }
+       ],
+       "harnessPackages": [],
+       "harnessPosture": {
+        "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+        "ambient": [
+         "user skills",
+         "project and ancestor skills to the repository root",
+         "user and project plugins",
+         "user and project settings",
+         "user and ancestor CLAUDE.md"
+        ],
+        "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+       },
+       "canonicalSkillTree": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.agents/skills",
+       "skillAlias": {
+        "path": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.claude/skills",
+        "target": "../.agents/skills"
+       }
+      }
+     },
+     "capabilityRuntime": [
+      {
+       "id": "oats.bb",
+       "level": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "hooks": {
+        "launch": "node '/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.bb/bin/oats-bb.mjs' retire-hook"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": true
+      },
+      {
+       "id": "oats.core",
+       "level": "/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207",
+       "settings": {},
+       "settingsOrigins": {},
+       "hooks": {
+        "spawn": "node '/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/oats-developer/instances/oats-developer-real-run-digest-202611231207/.oats/modules/oats.core/bin/oats-core.mjs' upgrade"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": false
+      }
+     ],
+     "backend": "bb",
+     "session": {
+      "provider": "oats.bb",
+      "threadId": "thr_bgqzwv2fwx"
+     },
+     "launch": {
+      "version": 2,
+      "harness": "claude",
+      "launchConfig": null,
+      "launchConfigSource": null,
+      "executable": null,
+      "executableDeclared": null,
+      "executableResolvedFrom": "session provider bb",
+      "args": [],
+      "env": {},
+      "model": "claude-opus-5-5",
+      "yolo": true,
+      "hooks": {
+       "launch": {},
+       "env": {},
+       "contributions": []
+      },
+      "prompt": {
+       "kind": "task-file",
+       "file": "TASK.md"
+      }
+     },
+     "createdAt": "2026-11-23T12:07:11.197Z",
+     "modules": [
+      {
+       "name": "oats.bb",
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+        "repoKey": "local//abs/real/oats-bb.git"
+       },
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "current": {
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       },
+       "status": "current"
+      },
+      {
+       "name": "oats.core",
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       },
+       "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+       "current": {
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "version": "1.26.0"
+       },
+       "status": "current"
+      }
+     ],
+     "providers": {
+      "oats.bb": {
+       "server": "http://127.0.0.1:38886",
+       "daemon": "http://127.0.0.1:38887",
+       "version": "0.50.1",
+       "cli": "bb",
+       "trust": "container"
+      },
+      "oats.core": {}
+     },
+     "workspace": {
+      "key": "local//abs/real/src/oats-real",
+      "name": "bbreal",
+      "deployment": "/abs/deployment",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "a5500efa87246b74dfe2e4db",
+      "standalone": false,
+      "soul": {
+       "id": "local//abs/real/src/oats-real#oats-developer",
+       "repoKey": "local//abs/real/src/oats-real",
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
+      },
+      "layers": {
+       "knowledge": null,
+       "messaging": null,
+       "tasks": null
+      }
+     },
+     "teams": [],
+     "defaultTeam": null,
+     "launched": true,
+     "startId": "91ff4ba0-47fe-467d-a209-90cf4a52adab",
+     "launchPrompts": {
+      "status": "not-engaged",
+      "startId": "91ff4ba0-47fe-467d-a209-90cf4a52adab",
+      "at": "2026-11-23T12:07:13.336Z"
+     },
+     "startedAt": "2026-11-23T12:07:11.197Z",
+     "identityAddress": null,
+     "attributedHuman": null,
+     "color": null,
+     "tmux": null,
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_sj3s2g2w6t/threads/thr_bgqzwv2fwx"
+     },
+     "moduleCopy": {
+      "runs": "kernel-copy",
+      "homeCopy": "same",
+      "differs": []
+     },
+     "running": null,
+     "runtimeState": "unknown",
+     "waitingOnYou": null,
+     "board": null,
+     "soul": {
+      "repoKey": "local//abs/real/src/oats-real",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+      "status": "moved"
+     }
+    }
+   ],
+   "key": "oats-developer",
    "soulSource": {
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
+    "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
     "path": "souls/oats-developer",
-    "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "status": "moved"
    }
   },
@@ -83,15 +1354,442 @@
     {
      "agent": "oats-expert",
      "kind": "persistent",
+     "instance": "digest-links-helper",
+     "home": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
+     "soulDir": "/abs/deployment/agents/oats-expert/souls/ca5ff7827c6a",
+     "repo": "/abs/deployment/oats-real",
+     "work": "worktree",
+     "branch": "agents/digest-links-helper",
+     "base": {
+      "ref": "local//abs/real/src/oats-real",
+      "oid": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
+     },
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "modelFrom": "soul",
+     "launchFrom": "soul",
+     "launchAt": "local//abs/real/src/oats-real:souls/oats-expert/soul.yaml#/launch",
+     "launchDeclared": {
+      "harness": "claude",
+      "model": "claude-opus-5-5"
+     },
+     "yolo": true,
+     "relation": "child",
+     "relativeTo": "weekly-digest-helper",
+     "spawnOrigin": "operator",
+     "spawnedBy": null,
+     "policy": {
+      "childSpawns": {
+       "allowed": true,
+       "origin": {
+        "kind": "default",
+        "detail": "no spawn option: children allowed"
+       }
+      }
+     },
+     "capabilities": [
+      {
+       "id": "oats.bb",
+       "command": "bb",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "level": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "provenance": [
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       ],
+       "skills": [],
+       "hooks": [
+        "launch",
+        "retire"
+       ],
+       "trusted": true
+      },
+      {
+       "id": "oats.core",
+       "origin": "package:oats.framework@1.26.0",
+       "level": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
+       "settings": {},
+       "settingsOrigins": {},
+       "provenance": [
+        "package oats.framework v1.26.0"
+       ],
+       "skills": [
+        "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills/oats-operate",
+        "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills/oats-souls",
+        "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills/oats-token-saving"
+       ],
+       "hooks": [
+        "spawn",
+        "launch",
+        "upgrade"
+       ],
+       "trusted": true
+      }
+     ],
+     "skills": [
+      {
+       "name": "oats-operate",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-souls",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-token-saving",
+       "source": "module:oats.core"
+      }
+     ],
+     "instructions": [
+      {
+       "source": "capability:oats.core",
+       "file": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/injects/oats.md"
+      },
+      {
+       "source": "kernel:instance-boundary",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+      },
+      {
+       "source": "work-mode:worktree",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+      }
+     ],
+     "composition": {
+      "expected": [
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-operate",
+        "resolved": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-souls",
+        "resolved": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-token-saving",
+        "resolved": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "injection",
+        "source": "oats.core",
+        "declared": "injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/injects/oats.md",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "instruction-block",
+        "source": "capability:oats.core",
+        "declared": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/injects/oats.md",
+        "resolved": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/injects/oats.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "kernel:instance-boundary",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "work-mode:worktree",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+       }
+      ],
+      "materialized": {
+       "skills": [
+        {
+         "name": "oats-operate",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/skills/oats-operate"
+        },
+        {
+         "name": "oats-souls",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/skills/oats-souls"
+        },
+        {
+         "name": "oats-token-saving",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/skills/oats-token-saving"
+        }
+       ],
+       "instructions": [
+        {
+         "source": "capability:oats.core",
+         "file": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/injects/oats.md"
+        },
+        {
+         "source": "kernel:instance-boundary",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+        },
+        {
+         "source": "work-mode:worktree",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+        }
+       ],
+       "harnessPackages": [],
+       "harnessPosture": {
+        "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+        "ambient": [
+         "user skills",
+         "project and ancestor skills to the repository root",
+         "user and project plugins",
+         "user and project settings",
+         "user and ancestor CLAUDE.md"
+        ],
+        "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+       },
+       "canonicalSkillTree": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.agents/skills",
+       "skillAlias": {
+        "path": "/abs/deployment/agents/oats-expert/instances/digest-links-helper/.claude/skills",
+        "target": "../.agents/skills"
+       }
+      }
+     },
+     "capabilityRuntime": [
+      {
+       "id": "oats.bb",
+       "level": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "hooks": {
+        "launch": "node '/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.bb/bin/oats-bb.mjs' retire-hook"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": true
+      },
+      {
+       "id": "oats.core",
+       "level": "/abs/deployment/agents/oats-expert/instances/digest-links-helper",
+       "settings": {},
+       "settingsOrigins": {},
+       "hooks": {
+        "spawn": "node '/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/oats-expert/instances/digest-links-helper/.oats/modules/oats.core/bin/oats-core.mjs' upgrade"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": false
+      }
+     ],
+     "backend": "bb",
+     "session": {
+      "provider": "oats.bb",
+      "threadId": "thr_x4r7u93cgw"
+     },
+     "launch": {
+      "version": 2,
+      "harness": "claude",
+      "launchConfig": null,
+      "launchConfigSource": null,
+      "executable": null,
+      "executableDeclared": null,
+      "executableResolvedFrom": "session provider bb",
+      "args": [],
+      "env": {},
+      "model": "claude-opus-5-5",
+      "yolo": true,
+      "hooks": {
+       "launch": {},
+       "env": {},
+       "contributions": []
+      },
+      "prompt": {
+       "kind": "task-file",
+       "file": "TASK.md"
+      }
+     },
+     "createdAt": "2026-11-23T12:05:46.348Z",
+     "modules": [
+      {
+       "name": "oats.bb",
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+        "repoKey": "local//abs/real/oats-bb.git"
+       },
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+       "current": {
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+       },
+       "status": "current"
+      },
+      {
+       "name": "oats.core",
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       },
+       "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+       "current": {
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "version": "1.26.0"
+       },
+       "status": "current"
+      }
+     ],
+     "providers": {
+      "oats.bb": {
+       "server": "http://127.0.0.1:38886",
+       "daemon": "http://127.0.0.1:38887",
+       "version": "0.50.1",
+       "cli": "bb",
+       "trust": "container"
+      },
+      "oats.core": {}
+     },
+     "workspace": {
+      "key": "local//abs/real/src/oats-real",
+      "name": "bbreal",
+      "deployment": "/abs/deployment",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "f0c2205056c8f0ac62b842c9",
+      "standalone": false,
+      "soul": {
+       "id": "local//abs/real/src/oats-real#oats-expert",
+       "repoKey": "local//abs/real/src/oats-real",
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
+      },
+      "layers": {
+       "knowledge": null,
+       "messaging": null,
+       "tasks": null
+      }
+     },
+     "teams": [],
+     "defaultTeam": null,
+     "launched": true,
+     "startId": "734d2813-c81e-4d60-9258-37729a9abc8c",
+     "launchPrompts": {
+      "status": "not-engaged",
+      "startId": "734d2813-c81e-4d60-9258-37729a9abc8c",
+      "at": "2026-11-23T12:05:48.735Z"
+     },
+     "startedAt": "2026-11-23T12:05:46.348Z",
+     "identityAddress": null,
+     "attributedHuman": null,
+     "color": null,
+     "tmux": null,
+     "open": null,
+     "moduleCopy": {
+      "runs": "kernel-copy",
+      "homeCopy": "same",
+      "differs": []
+     },
+     "running": false,
+     "runtimeState": "stopped",
+     "sessionEnd": "stopped",
+     "waitingOnYou": null,
+     "board": null,
+     "soul": {
+      "repoKey": "local//abs/real/src/oats-real",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+      "status": "moved"
+     }
+    },
+    {
+     "agent": "oats-expert",
+     "kind": "persistent",
      "instance": "panel-worktree-helper",
      "home": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
-     "soulDir": "/abs/deployment/agents/oats-expert/souls/0ab9f62d3d27",
+     "soulDir": "/abs/deployment/agents/oats-expert/souls/ca5ff7827c6a",
      "repo": "/abs/deployment/oats-real",
      "work": "worktree",
      "branch": "agents/panel-worktree-helper",
      "base": {
       "ref": "local//abs/real/src/oats-real",
-      "oid": "0ab9f62d3d27913d0fda74c372860b1a90cce147"
+      "oid": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
      },
      "harness": "claude",
      "model": "claude-opus-5-5",
@@ -121,7 +1819,7 @@
       {
        "id": "oats.bb",
        "command": "bb",
-       "origin": "package:oats.bb@a3cca8511461e92c25d86f693365ec250b7c4684",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
        "level": "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper",
        "settings": {
         "server": "http://127.0.0.1:38886",
@@ -153,7 +1851,7 @@
         }
        },
        "provenance": [
-        "package oats.bb va3cca8511461e92c25d86f693365ec250b7c4684"
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
        ],
        "skills": [],
        "hooks": [
@@ -319,7 +2017,7 @@
      "backend": "bb",
      "session": {
       "provider": "oats.bb",
-      "threadId": "thr_t9xz6jqajf"
+      "threadId": "thr_3yccq5dwhk"
      },
      "launch": {
       "version": 2,
@@ -399,22 +2097,22 @@
        "file": "TASK.md"
       }
      },
-     "createdAt": "2026-11-21T18:13:36.478Z",
+     "createdAt": "2026-11-23T12:14:30.069Z",
      "modules": [
       {
        "name": "oats.bb",
        "from": {
         "kind": "package",
         "package": "oats.bb",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
         "repoKey": "local//abs/real/oats-bb.git"
        },
-       "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
        "current": {
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684"
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
        },
        "status": "current"
       },
@@ -440,13 +2138,13 @@
       "key": "local//abs/real/src/oats-real",
       "name": "bbreal",
       "deployment": "/abs/deployment",
-      "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
-      "resolution": "d08591f4683c110f0678c6a6",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "f0c2205056c8f0ac62b842c9",
       "standalone": false,
       "soul": {
        "id": "local//abs/real/src/oats-real#oats-expert",
        "repoKey": "local//abs/real/src/oats-real",
-       "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147"
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
       },
       "layers": {
        "knowledge": null,
@@ -457,20 +2155,20 @@
      "teams": [],
      "defaultTeam": null,
      "launched": true,
-     "startId": "ebd1fa11-10db-4a21-9b01-1fc823c3b91b",
+     "startId": "26b5b3c6-00ef-49a4-8463-727779a8ab86",
      "launchPrompts": {
       "status": "not-engaged",
-      "startId": "ebd1fa11-10db-4a21-9b01-1fc823c3b91b",
-      "at": "2026-11-21T18:23:30.569Z"
+      "startId": "26b5b3c6-00ef-49a4-8463-727779a8ab86",
+      "at": "2026-11-23T12:15:19.625Z"
      },
      "restarts": [
       {
-       "startedAt": "2026-11-21T18:23:06.662Z",
+       "startedAt": "2026-11-23T12:14:53.326Z",
        "model": "claude-opus-5-5",
        "reused": "new"
       },
       {
-       "startedAt": "2026-11-21T18:23:27.220Z",
+       "startedAt": "2026-11-23T12:15:13.001Z",
        "model": "claude-opus-5-5",
        "reused": "new"
       }
@@ -510,8 +2208,8 @@
         }
        },
        "hooks": {
-        "launch": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/11a993ba71ef/oats.bb/bin/oats-bb.mjs' launch-hook",
-        "retire": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/11a993ba71ef/oats.bb/bin/oats-bb.mjs' retire-hook"
+        "launch": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.bb/bin/oats-bb.mjs' retire-hook"
        },
        "requiredHooks": [],
        "environment": [],
@@ -529,9 +2227,9 @@
        "settings": {},
        "settingsOrigins": {},
        "hooks": {
-        "spawn": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/11a993ba71ef/oats.core/bin/oats-core.mjs' spawn",
-        "launch": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/11a993ba71ef/oats.core/bin/oats-core.mjs' launch",
-        "upgrade": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/11a993ba71ef/oats.core/bin/oats-core.mjs' upgrade"
+        "spawn": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/9035eec1175f/oats.core/bin/oats-core.mjs' upgrade"
        },
        "requiredHooks": [],
        "environment": [],
@@ -554,14 +2252,14 @@
       },
       "oats.core": {}
      },
-     "startedAt": "2026-11-21T18:23:27.220Z",
+     "startedAt": "2026-11-23T12:15:13.001Z",
      "identityAddress": null,
      "attributedHuman": null,
      "color": null,
      "tmux": null,
      "open": {
       "label": "Open in bb",
-      "url": "http://127.0.0.1:38886/projects/proj_g4xetta7t2/threads/thr_t9xz6jqajf"
+      "url": "http://127.0.0.1:38886/projects/proj_zrqup6ein8/threads/thr_3yccq5dwhk"
      },
      "moduleCopy": {
       "runs": "kernel-copy",
@@ -571,7 +2269,7 @@
      "running": null,
      "runtimeState": "unknown",
      "waitingOnYou": {
-      "since": "2026-11-21T18:23:39.829Z",
+      "since": "2026-11-23T12:15:20.913Z",
       "producer": "oats.board",
       "reason": "attention",
       "message": "Which base branch?"
@@ -584,7 +2282,7 @@
         "value": "#42",
         "unit": null,
         "link": "https://github.com/oats-project/oats-bb/pull/42",
-        "at": "2026-11-21T18:14:11.580Z"
+        "at": "2026-11-23T12:14:32.338Z"
        },
        {
         "key": "tests",
@@ -592,7 +2290,7 @@
         "value": "3",
         "unit": "failing",
         "link": null,
-        "at": "2026-11-21T18:14:12.802Z"
+        "at": "2026-11-23T12:14:33.129Z"
        }
       ],
       "questions": [
@@ -604,24 +2302,14 @@
          "release: the 0.1 line"
         ],
         "hasContext": false,
-        "since": "2026-11-21T18:23:39.827Z"
-       },
-       {
-        "id": "q4",
-        "question": "How should I merge the pull request?",
-        "options": [
-         "Squash: one clean commit",
-         "Merge: keep the three commits"
-        ],
-        "hasContext": true,
-        "since": "2026-11-21T18:26:49.200Z"
+        "since": "2026-11-23T12:15:20.911Z"
        }
       ]
      },
      "soul": {
       "repoKey": "local//abs/real/src/oats-real",
-      "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
-      "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
       "status": "moved"
      }
     }
@@ -629,9 +2317,9 @@
    "key": "oats-expert",
    "soulSource": {
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "commit": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "path": "souls/oats-expert",
-    "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "status": "current"
    }
   },
@@ -653,7 +2341,7 @@
      "kind": "persistent",
      "instance": "redesign-ui-lead",
      "home": "/abs/deployment/agents/oats-product-expert/instances/redesign-ui-lead",
-     "soulDir": "/abs/deployment/agents/oats-product-expert/souls/0ab9f62d3d27",
+     "soulDir": "/abs/deployment/agents/oats-product-expert/souls/ca5ff7827c6a",
      "repo": "/abs/deployment",
      "work": "directory",
      "harness": "claude",
@@ -703,8 +2391,8 @@
         "oats.core": {}
        }
       },
-      "resolution": "e910f32241a6d2aac12d6a08",
-      "revision": "195fd2686968bbedb6a26611"
+      "resolution": "a7b736d66d4aede42884cfce",
+      "revision": "c6323530b1cf0c9cec579157"
      },
      "spawnIdempotencyKey": "spawn-3c2e9d7a",
      "spawnCompleted": true,
@@ -712,7 +2400,7 @@
       {
        "id": "oats.bb",
        "command": "bb",
-       "origin": "package:oats.bb@a3cca8511461e92c25d86f693365ec250b7c4684",
+       "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
        "level": "/abs/deployment/agents/oats-product-expert/instances/redesign-ui-lead",
        "settings": {
         "server": "http://127.0.0.1:38886",
@@ -744,7 +2432,7 @@
         }
        },
        "provenance": [
-        "package oats.bb va3cca8511461e92c25d86f693365ec250b7c4684"
+        "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
        ],
        "skills": [],
        "hooks": [
@@ -978,7 +2666,7 @@
      "backend": "bb",
      "session": {
       "provider": "oats.bb",
-      "threadId": "thr_uz64t6aahn"
+      "threadId": "thr_2ixzyathpj"
      },
      "launch": {
       "version": 2,
@@ -1002,22 +2690,22 @@
        "file": "TASK.md"
       }
      },
-     "createdAt": "2026-11-21T18:10:07.574Z",
+     "createdAt": "2026-11-23T12:04:06.664Z",
      "modules": [
       {
        "name": "oats.bb",
        "from": {
         "kind": "package",
         "package": "oats.bb",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
         "repoKey": "local//abs/real/oats-bb.git"
        },
-       "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
+       "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
        "current": {
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684"
+        "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+        "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
        },
        "status": "current"
       },
@@ -1053,13 +2741,13 @@
       "key": "local//abs/real/src/oats-real",
       "name": "bbreal",
       "deployment": "/abs/deployment",
-      "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
-      "resolution": "e910f32241a6d2aac12d6a08",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "resolution": "a7b736d66d4aede42884cfce",
       "standalone": false,
       "soul": {
        "id": "local//abs/real/src/oats-real#oats-product-expert",
        "repoKey": "local//abs/real/src/oats-real",
-       "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147"
+       "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d"
       },
       "layers": {
        "knowledge": null,
@@ -1070,18 +2758,18 @@
      "teams": [],
      "defaultTeam": null,
      "launched": true,
-     "startId": "4f130641-27dc-4924-87c1-446b902cce7c",
+     "startId": "e698da4f-7d30-4953-8c41-ed04661f573a",
      "launchPrompts": {
       "status": "not-engaged",
-      "startId": "4f130641-27dc-4924-87c1-446b902cce7c",
-      "at": "2026-11-21T18:10:09.095Z"
+      "startId": "e698da4f-7d30-4953-8c41-ed04661f573a",
+      "at": "2026-11-23T12:04:08.660Z"
      },
      "wake": {
       "requested": false,
       "saved": null,
       "error": null
      },
-     "startedAt": "2026-11-21T18:10:07.574Z",
+     "startedAt": "2026-11-23T12:04:06.664Z",
      "identityAddress": null,
      "attributedHuman": null,
      "color": null,
@@ -1099,8 +2787,8 @@
      "board": null,
      "soul": {
       "repoKey": "local//abs/real/src/oats-real",
-      "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
-      "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+      "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
+      "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
       "status": "moved"
      }
     }
@@ -1108,9 +2796,9 @@
    "key": "oats-product-expert",
    "soulSource": {
     "repoKey": "local//abs/real/src/oats-real",
-    "commit": "0ab9f62d3d27913d0fda74c372860b1a90cce147",
+    "commit": "ca5ff7827c6abb5a1b6a05d19d47a2f7f2ef124d",
     "path": "souls/oats-product-expert",
-    "current": "56a9e15963da80c72eaec3b6623cd83ddd331e5a",
+    "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
     "status": "moved"
    }
   }
@@ -1213,7 +2901,8 @@
   "schedule-host-register-only",
   "spawn-task-stdin",
   "instance-board",
-  "session-providers"
+  "session-providers",
+  "provider-outside-oats"
  ],
  "sessionViewer": {
   "prefixScroll": false

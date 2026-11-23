@@ -1190,7 +1190,7 @@ test("an agent with no thread in bb has no conversation to archive: its Start sa
 
 // The rows an agent that does not run can read (test/fixtures/lifecycle/README.md says which are recorded and which are shaped from the contract).
 const LOST = { running: false, runtimeState: "stopped", sessionEnd: "lost" } as const; // its session was lost with the host, or its harness is gone
-const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // from the bb provider's next release: its thread at rest, no harness loaded
+const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // from the bb provider's A15(1) change (its next release): its thread at rest, no harness loaded
 const OPERATOR_STOP = { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as const;
 
 test.each([

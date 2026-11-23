@@ -22,13 +22,20 @@ No file: the tests of `carriesOn` and of the Start dialog (`test/lifecycle/words
 from a contract:
 
 - **An operator's stop**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "stopped"`.
-  RECORDED: the row of `weekly-digest-helper` in `../roster/status.json` and
-  `../roster/status-recorded.json`.
-- **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. SHAPED
-  from the kernel's source, not recorded (`lib/instance-listing.mjs` of awebai/oats: a session the
-  host's shutdown stopped, or one that is gone on a home OATS did not stop). The live scene uses
-  the same shape over the recorded roster.
+  RECORDED: `stoppedByOats` in `../roster/status-recorded.json` (the row of `flaky-ci-2-developer`),
+  and the same row under the sample's name `weekly-digest-helper` in `../roster/status.json`.
+- **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. The ROW is
+  RECORDED: `threadDeleted` in `../roster/status-recorded.json`, an agent whose thread was deleted
+  in bb; with no thread in bb it gets no line. What is SHAPED is only its pairing with a thread bb
+  still has: a home stopped with the host (`oats host run`'s shutdown; the kernel's
+  `lib/instance-listing.mjs` answers the same three fields for it). Its thread is not archived,
+  and a message in it carries the conversation on (confirmed by the kernel's side). The live scene
+  is that pairing: the same fields over the recorded roster, on a thread the run's bb has. A
+  thread in `error` whose harness is gone reads the same row; bb's status excludes it from the
+  line, which is harmless (it could take a message too) and kept.
 - **A thread at rest with no harness loaded**: `running: false`, `runtimeState: "unknown"`, no
-  `sessionEnd`. SHAPED from the contract of the bb session provider's NEXT release (its harness
-  scan answers `running` for an idle thread); the provider on main answers `running: null` for
-  that thread, so no kernel prints this row yet. To be recorded when that release is pinned.
+  `sessionEnd`. SHAPED from the bb session provider's A15(1) change (its harness scan answers
+  `running` for an idle thread: `inspectAnswer` in the provider's `lib/threads.mjs`, on its branch
+  and not on main); the provider on main answers `running: null` for that thread, so no kernel
+  prints this row yet. Such a thread takes a message: bb starts the harness and runs the turn on
+  the same conversation. To be recorded when that release is pinned.

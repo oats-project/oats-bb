@@ -535,7 +535,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
             begins: thread === null ? START.fresh : START.newThread,
             // Cut off, with a thread that can take a message: said first, with the way to that thread; Start stays possible.
-            carryOn: verb === "start" && thread !== null && carriesOn(answer, thread) ? thread.id : null,
+            carryOn: verb === "start" && thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
           },
         });
       },

@@ -1,7 +1,7 @@
 // The roster's live scenes: the sidebar's tree, an agent's thread with its header row, the states
 // of the dot, and the sidebar while OATS cannot be read. (container/live-ui.mjs says what a scene is.)
 import { hostname } from "node:os";
-import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
+import { showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
 import { TMUX_ROSTER } from "../tmux-roster.mjs";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
@@ -59,13 +59,17 @@ export default [
       check((await page.evaluate(textOf(testId("oats-needs-line")))) === "! 3 need you", `${at} "3 need you", with the mark of an agent that waits`, await page.evaluate(textOf(testId("oats-needs-line"))));
       // What the image's name says: every agent a row, each with its state in a word, and no soul; the
       // one that runs in tmux among them; the roster first, then who waits, New agent, the pages.
-      const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
+      const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
       const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable)( · tmux)?$/;
       check(
         drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"]),
         `${at} eight agents, eight rows: each its mark and its state in a word, and no soul; the one in tmux says "tmux"; then who waits, New agent and the pages`,
         JSON.stringify(drawn),
       );
+      // "tmux" on the row is bb's own terminal glyph, named "tmux" (the plugin draws no icon of its own): the
+      // app looked, where it first drew it, that bb's set holds the glyph (else it would draw the word).
+      const tmuxMark = await page.evaluate(tmuxMarks);
+      check(tmuxMark === JSON.stringify({ marks: 1, glyphs: 1, named: 1, drawn: 1 }), `${at} "tmux" on the row of the agent on tmux is bb's terminal glyph, named "tmux" for a screen reader, with no word beside it`, tmuxMark);
       // No row's second line is cut: each is as wide as its text needs, on as many lines as it takes.
       const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
       check(cut.length === 0, `${at} no row's second line is cut`, JSON.stringify(cut));
@@ -329,11 +333,14 @@ export default [
       const side = JSON.stringify(testId("oats-sidebar"));
       const tmux = TMUX_ROSTER.tmux;
       // Every tmux agent is a row, by its one name, and says its state and "tmux" (no soul).
-      const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""])) : ""; })()`, 30);
+      const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
       const wanted = tmux.map(([instance, , , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, then "tmux", and no soul`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // ("tmux" in that reading is the glyph's name: every tmux row draws bb's terminal glyph, named, and no word.)
+      const glyphs = JSON.parse(await page.evaluate(tmuxMarks));
+      check(glyphs.marks === tmux.length && glyphs.glyphs === tmux.length && glyphs.named === tmux.length && glyphs.drawn === tmux.length, `${at} on each of the ${tmux.length} rows "tmux" is bb's terminal glyph, named "tmux"`, JSON.stringify(glyphs));
       // Who waits: the three on tmux that wait... every one that waits, with a thread or not, in ONE number.
       const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
       const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);

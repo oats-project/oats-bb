@@ -347,7 +347,7 @@ test("a soul's page on the last roster read: Start and Retire of an agent whose 
   await slot.findByTestId("oats-soul-agent-detached");
   for (const id of ["oats-detached-start", "oats-detached-retire"]) {
     const button = slot.getByTestId(id) as HTMLButtonElement;
-    expect([id, button.disabled, button.title]).toEqual([id, true, "Comes back when OATS is read again"]);
+    expect([id, button.disabled, button.title]).toEqual([id, true, ""]); // off, with no reason of its own: the page's notice says "Acts are off."
     fireEvent.click(button);
   }
   expect(rpcOf(slot, "start")).toEqual([]);

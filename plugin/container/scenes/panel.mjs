@@ -292,7 +292,7 @@ const first = [
       check(soulLine === "oats-expert", `${at} the header names the soul alone, as the way to the Soul tab`, soulLine);
       // What it asks stands first on the page, under no heading: its message, then since when (the clock time left the header for here).
       const asks = await page.evaluate(`(() => { const block = document.querySelector(${JSON.stringify(inPanel("oats-panel-waiting"))}); return block ? JSON.stringify({ text: block.innerText.replace(/\\s+/g, " ").trim(), headings: block.querySelectorAll("h1, h2, h3").length, head: block.querySelector(${JSON.stringify(testId("oats-panel-waiting-head"))}) !== null, first: block.parentElement.firstElementChild === block }) : ""; })()`);
-      check(/^\{"text":"Which base branch\? since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d","headings":0,"head":false,"first":true\}$/.test(asks), `${at} what the agent asks is first on the page, under no heading: its message, then since when; no sentence for the reason`, asks);
+      check(/^\{"text":"since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d Which base branch\?","headings":0,"head":false,"first":true\}$/.test(asks), `${at} what the agent asks is first on the page, under no heading: since when, then its message; no sentence for the reason`, asks);
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "worktree · agents/panel-worktree-helper", `${at} Work: the mode as a fact, with its branch`, work);
       const session = await page.evaluate(textOf(inPanel("oats-panel-session")));

@@ -188,6 +188,17 @@ export const visible = (selector) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0) return false; const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(r.top + Math.min(r.height / 2, 40), 0), innerHeight - 1); const top = document.elementFromPoint(x, y); return top !== null && (e.contains(top) || top.contains(e)); })()`;
 export const testId = (id) => `[data-testid="${id}"]`;
 export const texts = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`;
+/**
+ * The same two reads with a glyph that has a name read BY its name, as a person reads it: the
+ * plugin's "tmux" mark is bb's terminal glyph, named "tmux" (app/ui/tmux.tsx), and a glyph is no
+ * text of the page. The name is put in the mark for the length of the read, in one evaluation:
+ * nothing is painted meanwhile. (Where the mark is the word, there is nothing to add.)
+ */
+const NAMED = `(read) => { const marks = [...document.querySelectorAll('[data-testid="oats-tmux"][data-tmux="glyph"]')]; const added = marks.map((mark) => mark.appendChild(document.createTextNode(mark.getAttribute("aria-label") ?? ""))); try { return read(); } finally { for (const node of added) node.remove(); } }`;
+export const textsNamed = (selector) => `(${NAMED})(() => ${texts(selector)})`;
+export const textOfNamed = (selector) => `(${NAMED})(() => ${textOf(selector)})`;
+/** The plugin's "tmux" marks on the page, as drawn: how many are the glyph (with its name and a drawing of some size), how many the word. */
+export const tmuxMarks = `JSON.stringify((() => { const marks = [...document.querySelectorAll('[data-testid="oats-tmux"]')].filter((mark) => mark.getClientRects().length > 0); const glyphs = marks.filter((mark) => mark.getAttribute("data-tmux") === "glyph"); return { marks: marks.length, glyphs: glyphs.length, named: glyphs.filter((mark) => mark.getAttribute("role") === "img" && mark.getAttribute("aria-label") === "tmux" && mark.innerText.trim() === "").length, drawn: glyphs.filter((mark) => { const drawing = mark.querySelector('[aria-hidden="true"] > *'); return drawing !== null && drawing.getBoundingClientRect().width >= 8; }).length }; })())`;
 export const textOf = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 
 /**

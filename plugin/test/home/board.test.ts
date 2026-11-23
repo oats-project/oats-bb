@@ -2,8 +2,9 @@
 // function for a state.
 import { describe, expect, it } from "vitest";
 import { board, mayAnswer, notRunning } from "../../app/home/board";
-import { ON_TMUX, THREAD_GONE_NOTE, summaryLine, tileCount } from "../../app/home/home-words";
+import { THREAD_GONE_NOTE, summaryLine, tileCount } from "../../app/home/home-words";
 import * as words from "../../app/home/home-words";
+import { TMUX } from "../../app/ui/tmux";
 import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
 import { view } from "../../model/view";
@@ -110,7 +111,7 @@ describe("the home's words", () => {
   });
   it("a tile's count; and the reasons of an agent with no bb thread, the only words of a row's second line (who started it is the panel's Lineage: no row says it)", () => {
     expect([tileCount(4), tileCount("loading"), tileCount("failed")]).toEqual(["4", "Counting…", "Couldn't count"]);
-    expect([ON_TMUX, THREAD_GONE_NOTE]).toEqual(["tmux", "its bb thread is gone"]);
+    expect([TMUX, THREAD_GONE_NOTE]).toEqual(["tmux", "its bb thread is gone"]);
     expect(Object.keys(words)).not.toContain("startedBy");
   });
   it("the command into a tmux agent's session names its home as one word of a shell", () => {

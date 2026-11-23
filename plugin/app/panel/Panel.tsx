@@ -286,8 +286,13 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
       <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         // What the agent asks, first on the page, under no heading: the header two lines up says
-        // "Needs you". How long it has waited is the header's; since when (the clock time) is here.
+        // "Needs you". How long it has waited is the header's; since when (the clock time) is here, first and muted.
         <section data-testid="oats-panel-waiting" aria-label="Needs input" className="flex min-w-0 flex-col gap-2">
+          {since === "" ? null : (
+            <p data-testid="oats-panel-waiting-since" className="m-0 text-xs text-muted-foreground">
+              {`since ${since}`}
+            </p>
+          )}
           {message !== "" ? (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
               {message}
@@ -296,11 +301,6 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
             // No message: the reason in a word, where it says what is needed.
             <p data-testid="oats-panel-waiting-head" className="m-0 font-semibold text-foreground">
               {waitingLabel(claim)}
-            </p>
-          )}
-          {since === "" ? null : (
-            <p data-testid="oats-panel-waiting-since" className="m-0 text-xs text-muted-foreground">
-              {`since ${since}`}
             </p>
           )}
         </section>

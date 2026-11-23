@@ -877,7 +877,9 @@ Start, Restart and Retire, which a thread action has no place
 to draw), and on `navPanel`:
 `experimental_useBadge`, `experimental_hideFromNavigation`.
 
-App, hooks and components: `experimental_useSidebarThreads`, `experimental_useRpcQuery` (the
+App, hooks and components: `experimental_Icon` (one glyph of bb's own set drawn in the plugin's
+rows: "Terminal", named "tmux", for an agent on tmux; `app/ui/tmux.tsx` looks once whether bb's
+set holds it, and draws the word "tmux" where it does not), `experimental_useSidebarThreads`, `experimental_useRpcQuery` (the
 watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisible`,
 `experimental_usePluginId`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,

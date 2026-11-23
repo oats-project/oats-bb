@@ -23,7 +23,7 @@ import { needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
-import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
+import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX, TmuxMark } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
 import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
@@ -129,7 +129,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * - the second block is ONE line, never wrapped: the state's word, and where there is one a
    *   reason: what happened to the agent outside OATS (`reason`, app/outside `rowParts`:
    *   "archived in bb", "with the machine"), and for an agent on tmux where it is (`where`:
-   *   "tmux"). The state's word and `where` are never cut; a reason fits the line beside the
+   *   bb's terminal glyph, named "tmux"; the word on a bb with no such glyph). The state's word and `where` are never cut; a reason fits the line beside the
    *   state's word (should one ever not fit, it is cut with "…" and whole in the title: never
    *   drawn past the row). The soul is not on the row: the name tells agents apart, and the
    *   instance panel says the soul. Nothing is drawn past the row (the block clips), and the
@@ -155,7 +155,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
                 </span>
               )}
               <span data-phrase={part.kind} className={part.className}>
-                {part.text}
+                {part.kind === "where" && part.text === TMUX ? <TmuxMark /> : part.text}
               </span>
             </Fragment>
           ))}
@@ -298,7 +298,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           {agentRows(view.roots)}
           {/* Where its thread is, by bb's own answer, after the state's word; nothing until bb has answered. */}
           {view.detached.map((agent) => threadlessRow(agent, undefined, outside.of(agent)))}
-          {view.elsewhere.map((agent) => threadlessRow(agent, "tmux"))}
+          {view.elsewhere.map((agent) => threadlessRow(agent, TMUX))}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. With

@@ -41,7 +41,6 @@ export const tileCount = (n: number | "loading" | "failed"): string => (n === "l
  * An agent's second line: the reason alone, where there is one, for an agent with no bb thread (it
  * runs in tmux, or its thread is gone). Its soul, its machine and who started it are on its page.
  */
-export const ON_TMUX = "tmux";
 export const THREAD_GONE_NOTE = "its bb thread is gone";
 
 /** The empty workspace: New agent is the primary button over it. */

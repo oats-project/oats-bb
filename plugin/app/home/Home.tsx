@@ -22,6 +22,7 @@ import { lineParts, outsideOf, OutsideWarning } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
+import { TmuxMark } from "../ui";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
@@ -34,7 +35,7 @@ import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEWER_API_WHY,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, ON_TMUX, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE_NOTE, TMUX_ANSWER, WORKING, WORKING_SHOWN,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE_NOTE, TMUX_ANSWER, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, replyLabel, replyPlaceholder, required, showAll, summaryLine, tileCount,
 } from "./home-words";
 import { question } from "./interactions";
@@ -87,8 +88,8 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
   );
 }
 
-/** The reason on the second line of an agent with no bb thread: where it is, in a word or a few. */
-const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? ON_TMUX : THREAD_GONE_NOTE);
+/** The reason on the second line of an agent with no bb thread: where it is: bb's terminal glyph named "tmux" (the word on a bb with none), or a few words. */
+const elsewhere = (entry: Entry): ReactNode => (entry.agent.backend === "tmux" ? <TmuxMark /> : THREAD_GONE_NOTE);
 
 /** The lifecycle's own word for the act that starts an agent ("Start…": it opens that act's dialog). */
 const START = ACTS.find((each) => each.verb === "start")!.button;

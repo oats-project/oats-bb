@@ -25,7 +25,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fill, testId, textOf, texts } from "../browser.mjs";
+import { fill, testId, textOf, texts, textsNamed } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
 /** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
@@ -305,7 +305,8 @@ export default [
       await page.evaluate(click(within("oats-tile-agents")));
       const title = await page.until(`${heading("oats-home-agents", "agents 8")} ? ${headingOf("oats-home-agents")} : ""`, 15);
       check(Boolean(title) && (await page.evaluate("location.pathname")).endsWith("/home/agents"), `${at} Agents opens Home › Agents, at its own address, with every agent`, `${await page.evaluate(headingOf("oats-home-agents"))} at ${await page.evaluate("location.pathname")}`);
-      const rows = JSON.parse(await page.evaluate(`JSON.stringify(${texts(within("oats-home-agent-row"))})`));
+      // ("tmux" is read by the glyph's name: on a row it is bb's terminal glyph, named "tmux".)
+      const rows = JSON.parse(await page.evaluate(`JSON.stringify(${textsNamed(within("oats-home-agent-row"))})`));
       check(rows.length === 8 && rows.some((row) => /\btmux\b/.test(row) && !/runs in/.test(row)) && rows.some((row) => /Stopped$/.test(row)) && rows.every((row) => !/started by|${MACHINE}|oats-/.test(row)), `${at} the stopped agent and the one on tmux are in the list, each row with its state, the reason alone ("tmux"), and no soul, machine or who started it`, JSON.stringify(rows));
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
@@ -515,9 +516,9 @@ export default [
       check(first.slice(0, 3).every((instance) => !instance.startsWith("sweep-")) && first[3] === `sweep-${MANY}-helper`, `${at} the three that can be answered here come before the agents on tmux`, JSON.stringify(first));
       // the card of an agent on tmux: what it asks, where it runs in a word, where to answer it in five, Open, and no reply box and no command (that is on its page)
       const tmuxCard = card(`sweep-${MANY}-helper`);
-      const tmux = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(tmuxCard)}); return JSON.stringify({ text: card.innerText.replace(/\\s+/g, " ").trim(), reply: card.querySelector('[data-testid="oats-reply"]') !== null, command: card.querySelector("code")?.innerText ?? null, copy: card.querySelector('[data-testid="oats-copy"]') !== null, open: card.querySelector('[data-testid="oats-needs-open"]').innerText.trim() }); })()`);
+      const tmux = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(tmuxCard)}); return JSON.stringify({ text: card.innerText.replace(/\\s+/g, " ").trim(), glyph: card.querySelector('[data-testid="oats-needs-where"] [data-tmux="glyph"][role="img"][aria-label="tmux"] [aria-hidden="true"] > *') !== null, reply: card.querySelector('[data-testid="oats-reply"]') !== null, command: card.querySelector("code")?.innerText ?? null, copy: card.querySelector('[data-testid="oats-copy"]') !== null, open: card.querySelector('[data-testid="oats-needs-open"]').innerText.trim() }); })()`);
       const read = JSON.parse(tmux);
-      check(read.reply === false && /^Sweep \d+ helper tmux Open\b/.test(read.text) && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, "tmux" under its name, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
+      check(read.reply === false && /^Sweep \d+ helper Open\b/.test(read.text) && read.glyph === true && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, bb's terminal glyph named "tmux" under its name, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
       await shown(page, check, at, tmuxCard, "the card of an agent on tmux");
       await sound(page, viewport, check, at, "the home with a card of an agent on tmux");
       await page.shot(`home-${viewport.name}-card-tmux`);

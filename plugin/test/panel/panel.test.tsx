@@ -114,7 +114,7 @@ test("what the agent asks stands first on the page, under no heading; how long i
   expect(waiting.getAttribute("aria-label")).toBe("Needs input");
   expect(slot.queryByTestId("oats-panel-waiting-head")).toBeNull();
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
-  expect(text(waiting)).toBe(`How should I merge the pull request?since ${clock}`);
+  expect(text(waiting)).toBe(`since ${clock}How should I merge the pull request?`); // since when first, muted; then what it asks
   expect(slot.getByTestId("oats-panel-page-instance").firstElementChild).toBe(waiting); // first on the page
   expect(stateOf(slot)).toBe("Needs you· 15 min");
 });

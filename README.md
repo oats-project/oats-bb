@@ -483,11 +483,11 @@ never a failed start.
 
 ## pi
 
-A soul whose harness is pi runs on bb as a thread of bb's own pi provider
-(`bb thread spawn --provider pi --model <the launch's model>`; a model is
-`<pi provider>/<id>`, which bb splits itself, or the bare `<id>` where one pi provider
-serves it: "The model", below). Everything above holds for it, except what follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
-(`test/contract/pi.test.mjs`).
+A soul whose harness is pi runs on bb as a thread of bb's own pi provider (`bb thread
+spawn --provider pi --model <the launch's model>`; a model is `<pi provider>/<id>`, which
+bb splits itself, or the bare `<id>` where one pi provider serves it: "The model",
+below). Everything above holds for it, except what follows. Checked against bb-app at
+`bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
 
@@ -538,12 +538,12 @@ serves it: "The model", below). Everything above holds for it, except what follo
   a launch, of either harness. bb shows no value of its env back, and no record of it
   is kept in the home.
 
-**The model must be one bb's pi resolves.** bb takes any model id when a thread is spawned and resolves it only when the thread
-starts. An id its pi cannot resolve used to leave a spawn that looked launched (a thread
-id, `launched: true`) over a thread that had failed as it started: `oats status` then
-read not running, session lost. So a pi launch that names a model reads the models bb
-lists for its pi (`bb provider models pi`, one call) and is **refused before anything is
-started**, with `E_BACKEND_LAUNCH_ARG`:
+**The model must be one bb's pi resolves.** bb takes any model id when a thread is
+spawned and resolves it only when the thread starts. An id its pi cannot resolve used to
+leave a spawn that looked launched (a thread id, `launched: true`) over a thread that had
+failed as it started: `oats status` then read not running, session lost. So a pi launch
+that names a model reads the models bb lists for its pi (`bb provider models pi`, one
+call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`:
 
 | the launch's model | the refusal |
 |---|---|

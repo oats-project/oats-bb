@@ -408,6 +408,26 @@ export default [
       const three = await lineOf(page, /^Idle · /);
       check(three !== null && three.state === "idle" && three.words === "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; that a message here carries on and Start begins a new conversation; no warning tone`, three === null ? await shown() : JSON.stringify(three));
       await page.shot(`outside-${viewport.name}-three-3-idle-not-loaded`, { targets: true });
+      // Its Start is the lifecycle's Start dialog, which says FIRST that a message in the thread carries the conversation on
+      // (the line's own sentence, in the dialog's words), and then that a start begins a new one. Start stays possible; nothing is started here.
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}[data-act="start"]`)})?.click()`);
+      const confirmBox = testId("oats-confirm");
+      const asked = await page.until(`document.querySelector(${JSON.stringify(confirmBox)})?.getAttribute("data-phase") === "ready" && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30);
+      const dialogSays = asked
+        ? JSON.parse(
+            await page.evaluate(
+              `(() => { const confirm = document.querySelector(${JSON.stringify(confirmBox)}); const notice = confirm.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ first: confirm.firstElementChild === notice, title: notice?.querySelector("h3")?.innerText ?? null, body: confirm.innerText.replace(/\\s+/g, " ") }); })()`,
+            ),
+          )
+        : null;
+      check(
+        dialogSays !== null && dialogSays.first && dialogSays.title === "To carry on its conversation, send it a message in its thread instead." && dialogSays.body.includes("Starts a new conversation. The current one stays readable in bb, archived."),
+        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to send a message in its thread to carry on, then that a start begins a new conversation`,
+        JSON.stringify(dialogSays),
+      );
+      await page.shot(`outside-${viewport.name}-three-3-start-dialog`, { targets: true });
+      await page.press("Escape");
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10)), `${at} (3) Escape closes the Start dialog, and nothing was started`);
 
       // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
       const lines = [one, two, three];

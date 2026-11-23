@@ -17,9 +17,12 @@
 //     named exactly, as `<provider>/<id>`, with --selected-model (which every read here
 //     does). One named by its bare id stays held back;
 //   - where pi's own configuration narrows the models it offers (`enabledModels`), bb
-//     lists only those, and a thread still starts on any other model pi has.
-// (Both seen against bb-app 0.50.1 and pi 1.5.2: such a model starts a thread and is not
-// in the list.) In those cases, and wherever the list cannot be read, nothing is refused:
+//     lists only those, and a thread still starts on any other model pi has. bb's pi
+//     keeps the narrowing it started with, so the settings must also be older than bb;
+//   - a home with a pi configuration of its own (`<home>/.pi`) may add models for its
+//     thread alone (bb resolves in the thread's directory, and lists from its own).
+// (The first two seen against bb-app 0.50.1 and pi 1.5.2: such a model starts a thread and
+// is not in the list. lib/pi-config.mjs piListMayBePartial says when the list is whole.) In those cases, and wherever the list cannot be read, nothing is refused:
 // the launch goes on as it did before this check, with a warning. Two listed models with
 // the id are two models whatever else is held back, so that refusal always stands. One
 // listed and a second held back passes here, and bb refuses it at the thread's start.
@@ -29,7 +32,7 @@ export const PI_MODEL_REFUSED = "E_BACKEND_LAUNCH_ARG";
 export const PI_MODEL_UNCHECKED = "session-provider-pi-model-unchecked";
 // A model id bb holds back from its list (its isModelAlias, negated): dated, and not "-latest".
 const DATED = /-\d{8}$/;
-const WHY_MAX = 160;
+const WHY_MAX = 200;
 
 /** "A and B", "A, B and C" (`last`: the word before the last name). */
 const listed = (names, last = "and") => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} ${last} ${names[names.length - 1]}`);
@@ -49,10 +52,10 @@ function rowsOf(value) {
   return rows;
 }
 
-/** What bb's list says of the model. `narrowed`: whether pi's configuration narrows the
- *  models bb lists (true, false, or null where that could not be read).
+/** What bb's list says of the model. `partial`: why the list may not be all the models the
+ *  thread can start on, or null (lib/pi-config.mjs piListMayBePartial).
  *  → { ok: true } | { refused: <sentence> } | { unchecked: <short why> }. */
-export function piModelVerdict(model, value, { narrowed = false } = {}) {
+export function piModelVerdict(model, value, { partial = null } = {}) {
   const rows = rowsOf(value);
   if (rows === null) return { unchecked: "the list is not one this provider can read" };
   if (rows.some((row) => row.id === model)) return { ok: true };
@@ -62,7 +65,7 @@ export function piModelVerdict(model, value, { narrowed = false } = {}) {
     return { refused: `pi model ${JSON.stringify(model)} is served by ${listed(serving.map((row) => row.provider))}: use ${listed(serving.map((row) => row.id), "or")}` };
   }
   if (rows.length === 0) return { unchecked: "the list is empty" };
-  if (narrowed !== false) return { unchecked: narrowed === null ? "pi's settings could not be read, and they may narrow the list" : "pi's enabledModels setting narrows the list to the models it names" };
+  if (partial !== null) return { unchecked: partial };
   if (DATED.test(model)) return { unchecked: "a model whose id ends in a date is not always listed" };
   return { refused: `pi has no model ${JSON.stringify(model)}` };
 }
@@ -71,13 +74,15 @@ export function piModelVerdict(model, value, { narrowed = false } = {}) {
  *  → null (the model passes), { problem: {code, message, status} } (refused: nothing may
  *  be started), or { warning: {code, message} } (it could not be checked: the launch goes
  *  on). Never throws for anything bb did or did not answer. */
-export async function piModelFinding(model, bb, { narrowed = false } = {}) {
+export async function piModelFinding(model, bb, { partial = null } = {}) {
   const unchecked = (why) => ({ warning: { code: PI_MODEL_UNCHECKED, message: `could not check the model ${JSON.stringify(model)} against pi's model list: ${brief(why)}` } });
   const answer = await bb.piModels(model);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);
-  // bb answers a list it kept where it could not load pi's models, and says so beside it.
-  if (/could not load models/i.test(answer.said ?? "")) return unchecked(answer.said);
-  const verdict = piModelVerdict(model, answer.value, { narrowed });
+  // bb answers a list it kept where it could not load pi's models, and says so beside it,
+  // on a line of its own among whatever else it wrote there.
+  const notLoaded = (answer.said ?? "").split("\n").find((line) => /could not load models/i.test(line));
+  if (notLoaded !== undefined) return unchecked(notLoaded);
+  const verdict = piModelVerdict(model, answer.value, { partial });
   if (verdict.ok) return null;
   if (verdict.unchecked !== undefined) return unchecked(verdict.unchecked);
   return { problem: { code: PI_MODEL_REFUSED, message: verdict.refused, status: "needs-configuration" } };

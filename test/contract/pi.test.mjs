@@ -739,22 +739,28 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
 // running. The kernel reads that as a session that is there, not a lost one, so no sweep
 // resumes it: its next input starts the harness again, on the same conversation.
 // Where pi's own settings narrow the models it offers (`enabledModels`), bb lists only
-// those and still starts a thread on any model pi has (seen at bb-app 0.50.1, pi 1.5.2,
-// recorded here): so a model that is not listed is never refused there. bb reads pi's
-// settings when it starts its pi, so bb is restarted around the change.
-test("with pi's enabledModels set, bb lists only those models: the bare id a soul names (claude-fable-5.1), left out of them, only warns at the check, and its launch runs", async () => {
+// those and still starts a thread on any model pi has. And bb's pi keeps the narrowing it
+// started with: the list stays narrowed after the setting is removed, until bb is
+// restarted. (Both seen at bb-app 0.50.1, pi 1.5.2, recorded here.) So a model that is not
+// listed is refused only where pi's settings set no enabledModels and have not changed
+// since bb started; otherwise it only warns.
+test("with pi's enabledModels set, bb lists only those models, and goes on doing so after the setting is removed, until it is restarted: the bare id a soul names (claude-fable-5.1), left out of them, only warns at the check, and its launch runs", async () => {
   const settingsFile = "/home/node/.pi/agent/settings.json";
   const original = await sh(`cat ${settingsFile}`);
   const listedIds = async () => (await bbJson("provider models pi")).map((model) => model.id).sort();
+  const unchecked = async (model) => (await checkModel(model)).warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked").map((warning) => warning.message);
+  const sentence = (model, why) => `could not check the model ${JSON.stringify(model)} against pi's model list: ${why}`;
+  let restored = false;
   try {
     await sh(`cat > ${settingsFile}`, { input: JSON.stringify({ ...JSON.parse(original), enabledModels: ["mock/echo"] }, null, 2) });
     await box.restartBb();
     // (bb learns the narrowing a moment after its pi starts: until then it lists every model.)
     await waitFor("bb to list only the enabled model", async () => JSON.stringify(await listedIds()) === JSON.stringify(["mock/echo"]), { timeoutMs: 60_000, everyMs: 1_000 });
+    const NARROWED = "pi's enabledModels setting narrows the list to the models it names";
     const planned = await checkModel("claude-fable-5.1");
     assert.equal(planned.status, "ready");
     assert.deepEqual(planned.problems, []);
-    assert.deepEqual(planned.warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked"), [{ code: "session-provider-pi-model-unchecked", message: 'could not check the model "claude-fable-5.1" against pi\'s model list: pi\'s enabledModels setting narrows the list to the models it names' }]);
+    assert.deepEqual(await unchecked("claude-fable-5.1"), [sentence("claude-fable-5.1", NARROWED)]);
     // bb resolves it all the same: the launch is taken, and the thread runs its first turn.
     const { endpoint, since } = await launched("model-narrowed", { model: "claude-fable-5.1" });
     assert.match((await turns())[since].lastText, /TASK-model-narrowed say hi\./);
@@ -763,10 +769,31 @@ test("with pi's enabledModels set, bb lists only those models: the bare id a sou
     assert.deepEqual((await checkModel("claude-fable-9")).problems, []);
     // The listed model passes with nothing said.
     assert.deepEqual((await checkModel("mock/echo")).warnings, []);
-  } finally {
+
+    // The setting removed, and bb not restarted: bb's list is still the narrowed one, and
+    // the settings file no longer says so. Still no refusal: the file is newer than bb.
     await sh(`cat > ${settingsFile}`, { input: original });
+    assert.deepEqual(await listedIds(), ["mock/echo"], "bb lists by the settings its pi started with");
+    const STALE = "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with";
+    const after = await checkModel("claude-fable-5.1");
+    assert.equal(after.status, "ready");
+    assert.deepEqual(after.problems, []);
+    assert.deepEqual(await unchecked("claude-fable-5.1"), [sentence("claude-fable-5.1", STALE)]);
+    const again = await launched("model-narrowed-stale", { model: "claude-fable-5.1" });
+    assert.equal(await threadStatus(again.endpoint.threadId), "idle");
+
+    // bb restarted: it lists by the settings as they are, and the check refuses again what pi does not have.
     await box.restartBb();
+    restored = true;
     await waitFor("bb to list every model again", async () => (await listedIds()).includes("mock/claude-fable-5.1"), { timeoutMs: 60_000, everyMs: 1_000 });
+    assert.deepEqual((await checkModel("claude-fable-5.1")).warnings, []);
+    assert.deepEqual((await checkModel("claude-fable-9")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: 'pi has no model "claude-fable-9"' }]);
+  } finally {
+    if (!restored) {
+      await sh(`cat > ${settingsFile}`, { input: original });
+      await box.restartBb();
+      await waitFor("bb to list every model again", async () => (await listedIds()).includes("mock/claude-fable-5.1"), { timeoutMs: 60_000, everyMs: 1_000 });
+    }
   }
 });
 

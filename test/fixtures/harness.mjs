@@ -1,7 +1,7 @@
 // What the unit tests share: a fake bb on disk, a fake bb server and host daemon on
 // loopback, and the provider run as the kernel runs it (a process, JSON in, JSON out).
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -127,12 +127,24 @@ export async function fakeBackend(t, overrides = {}) {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "thread-storage"));
   // The pi configuration bb's server runs with, as `pi install npm:@awebai/oats-pi` leaves
-  // one: the bridge, and no aweb extension. `piSettings(doc)` rewrites its settings.json.
+  // one: the bridge, and no aweb extension. `piSettings(doc)` rewrites its settings.json,
+  // as before this bb started: bb-app's own record of its start in its data directory
+  // (bb-app-runtime.json, bb-app 0.50.1's keys) is written again, a moment later than the
+  // file. `piSettings(doc, { bbRestarted: false })` changes the file under a running bb.
   const piAgentDir = join(dataDir, "pi-agent");
   mkdirSync(piAgentDir);
-  const piSettings = (doc) => writeFileSync(join(piAgentDir, "settings.json"), typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
+  let startedAt = 0;
+  const bbStarted = (at) => { startedAt = at; writeFileSync(join(dataDir, "bb-app-runtime.json"), JSON.stringify({ entryPath: "/usr/local/bin/bb-app", pid: 15, serverUrl, startedAt: new Date(at).toISOString(), surface: "web", version: VERSION }, null, 2)); };
+  const piSettings = (doc, { bbRestarted = true } = {}) => {
+    const file = join(piAgentDir, "settings.json");
+    // (A change under a running bb is later than the start this fake recorded, to the millisecond.)
+    while (!bbRestarted && Date.now() <= startedAt + 1) { /* the clock moves on */ }
+    writeFileSync(file, typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
+    const stat = statSync(file);
+    if (bbRestarted) bbStarted(Math.ceil(Math.max(stat.mtimeMs, stat.ctimeMs)) + 1);
+  };
   piSettings({ packages: ["npm:@awebai/oats-pi@0.70.0"] });
-  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, daemonPort: daemon.address().port,
+  return { state, requests, daemonRequests, bbStarted, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, daemonPort: daemon.address().port,
     // As a deployment whose bb is not on bb's default ports sets them: the server, and the
     // host daemon's port (the daemon's address is given too, and agrees with it). A test
     // that gives a daemon address of its own gives no port with it, unless it says one.

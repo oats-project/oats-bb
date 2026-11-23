@@ -2,6 +2,7 @@
 // anything is started, at the launch and at the check of a planned launch that names its
 // model; where bb's list of pi's models cannot settle it, the launch goes on with a warning.
 import assert from "node:assert/strict";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { piModelVerdict } from "../../oats-package/capabilities/oats-bb/lib/pi-model.mjs";
@@ -128,7 +129,7 @@ for (const [name, models, why] of [
   ["bb refuses the read", { error: { code: "error", message: "fetch failed: connect ECONNREFUSED 127.0.0.1:38886" } }, "fetch failed: connect ECONNREFUSED 127.0.0.1:38886"],
   ["bb's CLI ends without an answer", { exit: 3, stderr: "bb: internal error\n" }, "bb: internal error"],
   ["no answer is scripted (a bb with no such command)", null, 'fake bb: no scripted answer for ["provider","models","pi","--selected-model","claude-fable-9","--json"]'],
-  ["bb says beside its list that it could not load pi's models", { stdout: [piModelRow("github-copilot", "claude-fable-5.1")], stderr: "Could not load models for pi (provider_unavailable)\n  pi did not answer\n" }, "Could not load models for pi (provider_unavailable)"],
+  ["bb says beside its list that it could not load pi's models", { stdout: [piModelRow("github-copilot", "claude-fable-5.1")], stderr: "(node:41) Warning: something of the CLI's own\nCould not load models for pi (provider_unavailable)\n  pi did not answer\n" }, "Could not load models for pi (provider_unavailable)"],
 ]) {
   test(`a list that cannot be read only warns, ${name}: the launch goes on, and the check is ready`, async (t) => {
     const { warnsBoth } = await setup(t, { models });
@@ -167,6 +168,46 @@ test("where pi's enabledModels narrows bb's list, a model that is not listed onl
   await warnsBoth("claude-fable-9", "pi's enabledModels setting narrows the list to the models it names");
   await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra');
   await passesBoth("claude-fable-5.1");
+});
+
+test("enabledModels removed from pi's settings under a running bb: bb still lists by the settings its pi started with, so a model that is not listed only warns until bb is restarted", async (t) => {
+  const BRIDGE = "npm:@awebai/oats-pi@0.70.0";
+  const { backend, warnsBoth, refusedBoth, passesBoth } = await setup(t, { piSettings: { packages: [BRIDGE], enabledModels: ["github-copilot/*"] } });
+  backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+  const why = "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with";
+  await warnsBoth("claude-fable-9", why);
+  await passesBoth("claude-fable-5.1");
+  await refusedBoth("gpt-6-astra", 'pi model "gpt-6-astra" is served by github-copilot and openai: use github-copilot/gpt-6-astra or openai/gpt-6-astra');
+  // bb restarted since: its list is by the settings as they are.
+  backend.piSettings({ packages: [BRIDGE] });
+  await refusedBoth("claude-fable-9", 'pi has no model "claude-fable-9"');
+});
+
+for (const [name, record] of [
+  ["no record of its start in its data directory", null],
+  ["a record that is not JSON", "{ not json"],
+  ["a record with no start", { serverUrl: "SERVER", version: "0.50.1" }],
+  ["a record whose start is no date", { serverUrl: "SERVER", startedAt: "soon" }],
+  ["a record of another bb's server", { serverUrl: "http://127.0.0.1:1", startedAt: "2999-01-01T00:00:00.000Z" }],
+]) {
+  test(`when bb started cannot be read (${name}), a model that is not listed only warns: nothing shows the list is by pi's settings as they are`, async (t) => {
+    const { backend, warnsBoth } = await setup(t);
+    const file = join(backend.dataDir, "bb-app-runtime.json");
+    if (record === null) rmSync(file);
+    else writeFileSync(file, typeof record === "string" ? record : JSON.stringify(record).replace("SERVER", backend.server));
+    await warnsBoth("claude-fable-9", "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with");
+  });
+}
+
+test("a home with a pi configuration of its own (.pi) may serve its thread models bb does not list: its launch only warns for a model that is not listed", async (t) => {
+  const { home, launch, check, bb } = await setup(t);
+  mkdirSync(join(home, ".pi"));
+  const message = 'could not check the model "claude-fable-9" against pi\'s model list: the home has a pi configuration of its own (.pi), which bb\'s list does not read';
+  const { doc, stderr } = await launch("claude-fable-9");
+  assert.equal(doc.ok, true, JSON.stringify(doc));
+  assert.equal(stderr, `oats bb: warning: ${message}\n`);
+  assert.deepEqual((await check("claude-fable-9")).warnings, [{ code: UNCHECKED, message }]);
+  assert.equal(bb.calls().filter((c) => c.argv[1] === "spawn").length, 1);
 });
 
 test("an empty enabledModels narrows nothing: a model that is not listed is refused", async (t) => {
@@ -235,7 +276,7 @@ test("the rule on bb's list, by itself: the full id first, then the bare id; one
   const both = [piModelRow("openrouter", "anthropic/claude-opus-5-5"), piModelRow("anthropic", "claude-opus-5-5"), piModelRow("other", "anthropic/claude-opus-5-5")];
   assert.deepEqual(piModelVerdict("anthropic/claude-opus-5-5", both), { ok: true });
   assert.deepEqual(piModelVerdict("claude-opus-5-5", both), { ok: true });
-  // Whether pi's settings narrow the list could not be read: nothing is refused for a model that is not listed.
-  assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { narrowed: null }), { unchecked: "pi's settings could not be read, and they may narrow the list" });
-  assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { narrowed: false }), { refused: 'pi has no model "claude-fable-9"' });
+  // Where the list may not be whole, nothing is refused for a model that is not listed.
+  assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { partial: "the list may not be whole" }), { unchecked: "the list may not be whole" });
+  assert.deepEqual(piModelVerdict("claude-fable-9", LIST), { refused: 'pi has no model "claude-fable-9"' });
 });

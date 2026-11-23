@@ -559,16 +559,25 @@ want.
 **Where the list cannot settle it, nothing is refused**: the launch goes on as it did
 before this check, and says once `could not check the model "<id>" against pi's model
 list: <why>`. That is the case when bb's list cannot be read (bb does not answer in
-time, answers an error, an empty list or one the provider cannot read), and in two
-cases where bb lists fewer models than its pi resolves (seen at bb-app 0.50.1, pi
-1.5.2):
+time, answers an error, an empty list or one the provider cannot read), and in three
+cases where bb lists fewer models than its pi resolves (the first two seen at bb-app
+0.50.1, pi 1.5.2):
 
 - a model whose id ends in a date (`-YYYYMMDD`) is held back from the list. Named as
   `<provider>/<id>` it is found all the same; named by its bare id it is not checked;
 - where the pi configuration bb's server runs with sets `enabledModels`
   (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
   a thread still starts on any other model pi has. A model that is not listed is then
-  not checked. Two listed models with the id are still refused.
+  not checked. Two listed models with the id are still refused. bb's pi keeps the
+  setting it started with: after `enabledModels` is removed, bb goes on listing only
+  those models until it is restarted. So a model that is not listed is refused only
+  where that `settings.json` sets no `enabledModels` **and has not changed since bb
+  started** (bb-app's own record of its start, `bb-app-runtime.json` in
+  `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
+  is not checked. After a change to bb's pi settings, restart bb;
+- a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
+  that bb, which lists from a directory of its own, does not show: its launch is not
+  refused for a model that is not listed.
 
 One edge is left as it was: a bare id that bb lists once and that a second, held-back
 model also has (a dated one, or one outside `enabledModels`) passes here, and bb refuses

@@ -19,7 +19,9 @@
     before, with one warning (`could not check the model "<id>" against pi's model list:
     <why>`): a list that cannot be read, a model whose id ends in a date named by its
     bare id (bb holds such models back from its list), and any model that is not listed
-    where bb's pi configuration sets `enabledModels` (bb then lists only those).
+    where bb's pi configuration sets `enabledModels` (bb then lists only those), where
+    that configuration changed after bb started (bb lists by the settings its pi started
+    with: restart bb after changing them), or where the home has a `.pi` of its own.
   - The check of a planned launch says the same, at a spawn's preview too, where the
     kernel hands it the launch's model (`launch.model`); with a kernel that does not,
     the refusal comes at the launch, with nothing created in bb.

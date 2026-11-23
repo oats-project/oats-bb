@@ -475,14 +475,20 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   - **Never stricter than bb.** bb lists fewer models than it resolves: a model whose id
     ends in a date (`-YYYYMMDD`) only where the read names it exactly
     (`--selected-model <provider>/<id>`), and, where pi's `enabledModels` is set, only
-    those models. So "not listed" refuses only where the list is whole for the id: the
-    `settings.json` of `settings.oats.bb.piAgentDir` sets no `enabledModels` (an empty
-    list sets none), and the id does not end in a date. Two listed models with the bare
+    those models, and bb's pi keeps the setting it started with (a list stays narrowed
+    after the setting is removed, until bb is restarted). So "not listed" refuses only
+    where the list is whole for the id: the `settings.json` of
+    `settings.oats.bb.piAgentDir` sets no `enabledModels` (an empty list sets none) and
+    has not changed (content or place: its mtime and ctime) since this bb started
+    (`startedAt` in `<settings.oats.bb.dataDir>/bb-app-runtime.json`, bb-app's own record,
+    whose `serverUrl` must be this server's; a record that is missing or cannot be read
+    counts as "changed"); the home, where there is one, holds no `.pi` (bb resolves in
+    the thread's directory and lists from its own); and the id does not end in a date. Two listed models with the bare
     id are refused whatever is held back. One listed and a second held back passes, and
     bb refuses it at the thread's start, as before.
   - **A list that cannot settle it refuses nothing**: an error or no answer in time, an
     answer that is not such a list (one row that cannot be read is enough), an empty
-    list, a list bb says it could not load (its line on stderr), or one of the two cases
+    list, a list bb says it could not load (a line of its stderr), or one of the cases
     above. The launch goes on and writes one line on the command's standard error
     (`oats bb: warning: could not check the model "<id>" against pi's model list:
     <why>`): the launch result is exactly `{endpoint}`.

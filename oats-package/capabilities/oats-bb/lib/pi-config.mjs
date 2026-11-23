@@ -23,7 +23,7 @@
 // that runs bb). What is read there is settings.json's `packages`, by the packages' npm
 // names. A package installed from a local path or a git URL, or an extension loaded by an
 // `extensions` entry or dropped into the directory, is not recognised by name.
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { isObject } from "./errors.mjs";
 
@@ -41,9 +41,10 @@ function names(entry, name) {
   return spec === name || spec.startsWith(`${name}@`);
 }
 
-/** `<agentDir>/settings.json` as pi's settings. → { doc } (`doc` null for a directory
- *  with no settings.json), or { unreadable: <why> } for a file that is there and cannot
- *  be read as pi's settings. */
+/** `<agentDir>/settings.json` as pi's settings. → { doc, changedMs } (`doc` null for a
+ *  directory with no settings.json; `changedMs`: when the file last changed, its content
+ *  or its place, in milliseconds), or { unreadable: <why> } for a file that is there and
+ *  cannot be read as pi's settings. */
 function readPiSettings(agentDir) {
   const file = join(agentDir, "settings.json");
   let fd;
@@ -59,9 +60,9 @@ function readPiSettings(agentDir) {
     let doc;
     try { doc = JSON.parse(bytes.subarray(0, read).toString("utf8")); } catch { return { unreadable: "it is not JSON" }; }
     if (!isObject(doc)) return { unreadable: "it is not a JSON object" };
-    return { doc };
+    return { doc, changedMs: Math.max(stat.mtimeMs, stat.ctimeMs) };
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return { doc: null };
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return { doc: null, changedMs: null };
     return { unreadable: `it cannot be read (${error?.code ?? "an error"})` };
   } finally {
     if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ }
@@ -80,19 +81,47 @@ export function readPiPackages(agentDir) {
   return { bridge: packages.some((entry) => names(entry, PI_BRIDGE)), listener: packages.some((entry) => names(entry, PI_AWEB_EXTENSION)) };
 }
 
-/** Whether the pi configuration at `agentDir` narrows the models pi offers to choose from
- *  (pi's `enabledModels`: docs/settings.md of pi 1.5.2): bb then lists only those, while a
- *  thread still starts on any model pi has (lib/pi-model.mjs). → true, false (no
- *  settings.json, no `enabledModels`, or an empty one), or null where the file cannot be
- *  read: nothing then says the list is whole. Anything else under that key counts as set. */
-export function piModelsNarrowed(agentDir) {
-  const { doc, unreadable } = readPiSettings(agentDir);
-  if (unreadable !== undefined) return null;
-  if (doc === null || doc.enabledModels === undefined || doc.enabledModels === null) return false;
-  return !(Array.isArray(doc.enabledModels) && doc.enabledModels.length === 0);
+export const absolutePath = (value) => typeof value === "string" && isAbsolute(value) && !value.includes("\0");
+/** Why bb's list of pi's models may not be all the models a thread in `home` can start on,
+ *  or null where nothing says it is not (lib/pi-model.mjs). bb lists only the models pi's
+ *  `enabledModels` names (pi 1.5.2, docs/settings.md), and a thread still starts on any
+ *  model pi has. bb's pi reads that setting when bb starts it and keeps it while it lives
+ *  (seen at bb-app 0.50.1: a list stays narrowed after the setting is removed, until bb is
+ *  restarted), so the file as it is now proves nothing by itself: the list is whole only
+ *  where the file sets no `enabledModels` AND has not changed since this bb started
+ *  (`startedAt` of bb-app's own bb-app-runtime.json in its data directory). Whatever
+ *  cannot be read counts against the list, never for it. And a home with a pi
+ *  configuration of its own (`<home>/.pi`) may give its thread models that bb, which
+ *  lists with no project, does not show. → null | <short why>. */
+export function piListMayBePartial(agentDir, { dataDir, server, home = null } = {}) {
+  const { doc, changedMs, unreadable } = readPiSettings(agentDir);
+  if (unreadable !== undefined) return "pi's settings could not be read, and they may narrow the list";
+  if (doc !== null && doc.enabledModels !== undefined && doc.enabledModels !== null && !(Array.isArray(doc.enabledModels) && doc.enabledModels.length === 0)) {
+    return "pi's enabledModels setting narrows the list to the models it names";
+  }
+  // With no settings.json nothing says when one was removed: never the case of a pi launch
+  // that got this far (it lists the bridge), and not taken for a whole list.
+  const started = bbStartedMs(dataDir, server);
+  if (doc === null || started === null || !(started > changedMs)) return "pi's settings changed after bb started, or when bb started cannot be read, and bb lists by the settings its pi started with";
+  if (typeof home === "string" && isAbsolute(home) && existsSync(join(home, ".pi"))) return "the home has a pi configuration of its own (.pi), which bb's list does not read";
+  return null;
 }
 
-export const absolutePath = (value) => typeof value === "string" && isAbsolute(value) && !value.includes("\0");
+/** When the bb that serves `server` started, by bb-app's own record in its data directory
+ *  (`<dataDir>/bb-app-runtime.json`: {serverUrl, startedAt, …}, bb-app 0.50.1), in
+ *  milliseconds; null where the record is not there, cannot be read, or is another
+ *  server's. */
+function bbStartedMs(dataDir, server) {
+  if (!absolutePath(dataDir) || typeof server !== "string") return null;
+  try {
+    const record = JSON.parse(readFileSync(join(dataDir, "bb-app-runtime.json"), "utf8"));
+    if (!isObject(record) || typeof record.serverUrl !== "string" || typeof record.startedAt !== "string") return null;
+    const [theirs, mine] = [new URL(record.serverUrl), new URL(server)];
+    if (theirs.protocol !== mine.protocol || theirs.port !== mine.port) return null;
+    const at = Date.parse(record.startedAt);
+    return Number.isFinite(at) ? at : null;
+  } catch { return null; }
+}
 /** What a `piAgentDir` that is no absolute path is answered with: by every launch and every
  *  readiness read, as a setting of the wrong shape (the value is not shown). */
 export const PI_AGENT_DIR_SHAPE = Object.freeze({ code: "E_BACKEND_SETTINGS", status: "needs-configuration", message: "settings.oats.bb.piAgentDir must be an absolute path: the pi configuration directory bb's server runs pi with (its PI_CODING_AGENT_DIR). Set it in oats-local.yaml, or remove it for the default (.pi/agent in the home of the user that runs bb)" });

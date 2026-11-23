@@ -44,7 +44,7 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       // bb runs each harness with a provider of its own: the planned launch says whose state
       // must be ready. A harness the provider does not run is the planned launch's own finding.
       const harness = planned !== null && HARNESSES.includes(planned.harness) ? planned.harness : null;
-      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, home, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
       // For a home, what its own settings say of the sandbox (a report only). Where no
       // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
       if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));

@@ -7,8 +7,8 @@ import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPath
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, bounded, fail, isObject, someOf } from "./errors.mjs";
 import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
-import { piModelsNarrowed } from "./pi-config.mjs";
-import { piModelFinding } from "./pi-model.mjs";
+import { piListMayBePartial } from "./pi-config.mjs";
+import { isModelId, piModelFinding } from "./pi-model.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, samePath } from "./threads.mjs";
@@ -34,7 +34,7 @@ function readInput(input) {
   // The name becomes bb's project name, and as words its thread's title (lib/title.mjs):
   // arguments, never options. (The words of a name that starts so start with a letter or digit too.)
   if (typeof instance !== "string" || !/^[A-Za-z0-9][^\0\n\r]*$/.test(instance)) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name (one line, starting with a letter or digit)");
-  if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
+  if (model !== undefined && model !== null && !isModelId(model)) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
   if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
   if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
   // A bb thread is resumed by an input into its own conversation, never by a launch.
@@ -99,7 +99,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // its pi cannot resolve is refused here, with nothing started (lib/pi-model.mjs). Where
   // bb's list of pi's models cannot settle it, the launch goes on as it always did.
   if (pi && model !== null) {
-    const finding = await piModelFinding(model, reader, { narrowed: piModelsNarrowed(settings.piAgentDir) });
+    const finding = await piModelFinding(model, reader, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home }) });
     if (finding?.problem) throw fail(finding.problem.code, finding.problem.message);
     if (finding?.warning) warn(finding.warning.message);
   }

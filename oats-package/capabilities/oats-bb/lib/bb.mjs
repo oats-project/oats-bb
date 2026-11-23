@@ -7,6 +7,7 @@ import { fail, isObject } from "./errors.mjs";
 
 const CALL_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT = 32 * 1024 * 1024;
+const SAID_MAX = 4_000;
 // How bb's CLI finds the host daemon of the machine it runs on: by this port alone (its
 // default is 38887), never from BB_SERVER_URL. A command that needs the local host (`bb
 // project create`, for one) goes to whatever daemon listens there: with a second bb on
@@ -22,7 +23,7 @@ const CONTEXT_ENV = ["BB_THREAD_ID", "BB_PROJECT_ID", "BB_ENVIRONMENT_ID", "BB_S
 
 /** One CLI call. Resolves, never rejects:
  *  { ok: true, value, said? } | { ok: false, code, message, timedOut?, missing?, refused? }
- *  (`said`: the first line bb wrote beside a JSON answer, on its stderr, where it wrote one;
+ *  (`said`: what bb wrote beside a JSON answer, on its stderr, where it wrote anything, cut to a few lines' length;
  *  `refused`: bb printed its own failure envelope).
  *  `code` is bb's own error code where it gave one (thread_not_found, invalid_request…),
  *  else `error`; `timeout` and `cli_missing` are this module's.
@@ -81,8 +82,8 @@ export function runBb(cli, args, { server, hostDaemonPort = null, input, timeout
       }
       let doc, parsed = false;
       try { doc = JSON.parse(stdout); parsed = true; } catch { /* reported below, with the exit */ }
-      // (What bb wrote beside a JSON answer, where it wrote anything: its first line.)
-      if (status === 0 && parsed) return finish({ ok: true, value: doc, ...(firstLine(stderr) ? { said: firstLine(stderr) } : {}) });
+      // (What bb wrote beside a JSON answer, where it wrote anything: the start of it.)
+      if (status === 0 && parsed) return finish({ ok: true, value: doc, ...(stderr.trim() ? { said: stderr.trim().slice(0, SAID_MAX) } : {}) });
       if (parsed && isObject(doc) && doc.ok === false && isObject(doc.error) && typeof doc.error.code === "string") {
         return finish({ ok: false, refused: true, code: doc.error.code, message: typeof doc.error.message === "string" ? doc.error.message : doc.error.code });
       }

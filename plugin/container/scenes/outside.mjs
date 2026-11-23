@@ -307,7 +307,7 @@ export default [
       await open("thr_research");
       const LOST = new RegExp(`^Stopped${SINCE} · Archived in bb while running: it may still run\\.$`);
       line = await lineOf(page, LOST);
-      check(line !== null && line.kind === "lost-archived" && line.state === "stopped" && line.stateTone === "warning" && same(line.tones, ["warning"]) && LOST.test(line.words) && same(line.acts, ["Stop", "Retire"]) && line.warning === null, `${at} lost, archived: "Stopped" in the warning tone, that its process may still run, with Stop (Start comes once it is stopped) and Retire`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "lost-archived" && line.state === "stopped" && line.stateTone === "warning" && same(line.tones, ["warning"]) && LOST.test(line.words) && same(line.acts, ["Stop…", "Retire…"]) && line.warning === null, `${at} lost, archived: "Stopped" in the warning tone, that its process may still run, with Stop (Start comes once it is stopped) and Retire`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-lost-archived`, { targets: true });
 
       // the kernel's report, on the open thread
@@ -316,7 +316,7 @@ export default [
       line = await lineOf(page, OUTSIDE_LINE);
       const warned = line?.warning ?? null;
       check(
-        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.acts, []) && warned !== null && warned.tone === "warning" && warned.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && warned.text.includes("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.") && !/`|oats instance stop|running-outside-oats/.test(warned.text) && warned.folded === true && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.does, ["Stop stops the harness that runs outside OATS", "Start starts it from OATS, in a new conversation"]) && same(warned.acts, ["Stop", "Start"]),
+        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.acts, []) && warned !== null && warned.tone === "warning" && warned.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && warned.text.includes("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.") && !/`|oats instance stop|running-outside-oats/.test(warned.text) && warned.folded === true && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.does, ["Stop stops the harness that runs outside OATS", "Start starts it from OATS, in a new conversation"]) && same(warned.acts, ["Stop…", "Start…"]),
         `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then what OATS recorded; the notice in a person's words (no command and no backtick on screen), the kernel's sentence and its code folded under Details, and Stop and Start each with what it does`,
         line === null ? await shown() : JSON.stringify(line),
       );
@@ -331,7 +331,7 @@ export default [
       );
       const home = homeSays ? JSON.parse(homeSays) : null;
       check(
-        home !== null && home.offer === "outside" && home.state === "Running outside OATS" && home.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(home.acts, ["Stop", "Start"]) && home.answers === 0,
+        home !== null && home.offer === "outside" && home.state === "Running outside OATS" && home.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(home.acts, ["Stop…", "Start…"]) && home.answers === 0,
         `${at} the home's card of the agent that runs outside OATS: the same state and notice, with Stop and Start, and no choice and no reply`,
         JSON.stringify(home),
       );
@@ -341,7 +341,7 @@ export default [
       // failed, on its open thread
       await open("thr_mockups");
       line = await lineOf(page, /^Failed · /);
-      check(line !== null && line.words === "Failed · session ended" && same(line.acts, ["Restart"]) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, with Restart and no warning`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.words === "Failed · session ended" && same(line.acts, ["Restart…"]) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, with Restart and no warning`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-failed`, { targets: true });
 
       // unreachable: what status says, and nothing about a message
@@ -355,7 +355,7 @@ export default [
       const OPEN = new RegExp(`^Stopped${SINCE} · A message here starts it outside OATS\\.$`);
       line = await lineOf(page, OPEN);
       const composer = await page.evaluate(`document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length`);
-      check(line !== null && line.state === "stopped" && OPEN.test(line.words) && same(line.acts, ["Start"]) && line.warning === null && composer > 0, `${at} stopped, open: "Stopped", that a message here starts it outside OATS, with Start; bb's composer is there`, line === null ? await shown() : JSON.stringify({ line, composer }));
+      check(line !== null && line.state === "stopped" && OPEN.test(line.words) && same(line.acts, ["Start…"]) && line.warning === null && composer > 0, `${at} stopped, open: "Stopped", that a message here starts it outside OATS, with Start; bb's composer is there`, line === null ? await shown() : JSON.stringify({ line, composer }));
       await page.shot(`outside-${viewport.name}-thread-stopped-open`, { targets: true });
     },
   },
@@ -443,20 +443,20 @@ export default [
       await page.goto(`/projects/${operator.projectId}/threads/${operator.id}`);
       const OPERATOR = new RegExp(`^Stopped${SINCE} · A message here starts it outside OATS\\.$`);
       const one = await lineOf(page, OPERATOR);
-      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
+      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
       // (2) stopped with the machine: "Stopped · with the machine …", no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
       const HOST = new RegExp(`^Stopped${SINCE} · with the machine\\. OATS starts it again when the machine is back\\.$`);
       const two = await lineOf(page, HOST);
-      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start"]) && two.warning === null && !/outside OATS/.test(two.words), `${at} (2) stopped with the machine: "Stopped · with the machine", that OATS starts it again; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start…"]) && two.warning === null && !/outside OATS/.test(two.words), `${at} (2) stopped with the machine: "Stopped · with the machine", that OATS starts it again; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
       await page.shot(`outside-${viewport.name}-three-2-stopped-with-machine`, { targets: true });
 
       // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
       const three = await lineOf(page, /^Idle · /);
-      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded" && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; the reason alone, "not loaded", with Start (its dialog says first what Start does); no warning tone`, three === null ? await shown() : JSON.stringify(three));
+      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded" && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start…"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; the reason alone, "not loaded", with Start (its dialog says first what Start does); no warning tone`, three === null ? await shown() : JSON.stringify(three));
       await page.shot(`outside-${viewport.name}-three-3-idle-not-loaded`, { targets: true });
       // Its Start is the lifecycle's Start dialog, which says FIRST that a message in the thread carries the conversation on
       // (the line's own sentence, in the dialog's words), and then that a start begins a new one. Start stays possible; nothing is started here.
@@ -479,7 +479,7 @@ export default [
       await page.press("Escape");
       const shut = Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10));
       const after = await lineOf(page, /^Idle · /);
-      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
+      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start…"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
 
       // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
       const lines = [one, two, three];
@@ -500,7 +500,7 @@ export default [
       // (The home's card of such an agent carries the same notice once the rebuilt home calls it: README, "Outside OATS".)
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       const line = await lineOf(page, /^Running outside OATS · /);
-      check(line !== null && line.state === "outside" && /^Running outside OATS · recorded stopped/.test(line.words) && line.warning?.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(line.warning.acts, ["Stop", "Start"]), `${at} on its thread, while bb holds a question: still ONE statement, "Running outside OATS", and the notice under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
+      check(line !== null && line.state === "outside" && /^Running outside OATS · recorded stopped/.test(line.words) && line.warning?.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(line.warning.acts, ["Stop…", "Start…"]), `${at} on its thread, while bb holds a question: still ONE statement, "Running outside OATS", and the notice under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-outside-question`, { targets: true });
     },
   },
@@ -533,7 +533,7 @@ export default [
       const RAN = /^Idle · Archived in bb while running: it may still run\.$/;
       const line = await lineOf(page, RAN);
       check(
-        line !== null && line.kind === "running-archived" && line.state === "idle" && line.stateTone === "warning" && same(line.tones, ["warning"]) && RAN.test(line.words) && same(line.acts, ["Stop", "Retire"]) && line.warning === null,
+        line !== null && line.kind === "running-archived" && line.state === "idle" && line.stateTone === "warning" && same(line.tones, ["warning"]) && RAN.test(line.words) && same(line.acts, ["Stop…", "Retire…"]) && line.warning === null,
         `${at} it still runs, archived: its archived thread's own row says its state in the warning tone, that its process may still run, with Stop and Retire`,
         line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line),
       );

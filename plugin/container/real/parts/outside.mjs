@@ -31,13 +31,13 @@ const NAME = "flaky-ci-2-developer";
 const SOUL = "oats-developer";
 // The plugin's words (app/outside/words.ts, app/ui/words.ts), restated: a run cannot read the app's code; they move together.
 const SAYS = {
-  notLoaded: "not loaded. To carry on, send it a message here. Start begins a new conversation.",
+  notLoaded: "not loaded",
   notLoadedRow: "Idle · not loaded",
   outsideState: "Running outside OATS",
   outsideRecorded: "recorded stopped",
   outsideTitle: (called) => `${called} is running in bb, but OATS recorded it as stopped.`,
   outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
-  archivedWhileRunning: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.",
+  archivedWhileRunning: "Archived in bb while running: it may still run.",
   archivedRow: "archived in bb",
 };
 

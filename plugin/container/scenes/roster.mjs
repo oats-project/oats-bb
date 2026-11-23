@@ -173,7 +173,7 @@ export default [
       // The state, then the warning (the outside feature's sentence): its composer is live. No time on the line: when it stopped is the panel's.
       const STOPPED = /^Stopped · A message here starts it outside OATS\.$/;
       const stopped = await statusOf(page, "stopped", STOPPED);
-      check(stopped !== null && STOPPED.test(stopped.line) && stopped.act === "Start", `${at} the thread of a stopped agent says "Stopped" and that a message here starts it outside OATS, with Start, and no time`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
+      check(stopped !== null && STOPPED.test(stopped.line) && stopped.act === "Start…", `${at} the thread of a stopped agent says "Stopped" and that a message here starts it outside OATS, with Start, and no time`, stopped === null ? await rowText(page) : JSON.stringify(stopped));
       await page.shot(`a13-${viewport.name}-thread-stopped`, { targets: true });
 
       // a thread that is no agent has no row
@@ -216,7 +216,7 @@ export default [
       const failed = threads.get("thr_harvest");
       await page.goto(`/projects/${failed.projectId}/threads/${failed.id}`);
       const ended = await statusOf(page, "error");
-      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Restart", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
+      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Restart…", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
       await page.shot(`a16-${viewport.name}-thread-failed`, { targets: true });
 
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

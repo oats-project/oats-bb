@@ -21,6 +21,8 @@ import type { Outside } from "./use";
 import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
 
 const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
+/** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
+const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
 
 /**
  * The acts this feature itself offers for an agent, as buttons, in order. Each opens the
@@ -33,7 +35,7 @@ export function OutsideActs({ instance, acts, held }: { instance: string; acts: 
     <>
       {acts.map((act) => (
         <Button key={act} data-testid="oats-status-act" data-act={act} disabled={held} onClick={() => openAct(act, instance)}>
-          {LABEL[act]}
+          {BUTTON[act]}
         </Button>
       ))}
     </>

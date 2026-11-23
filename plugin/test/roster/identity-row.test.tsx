@@ -108,7 +108,7 @@ test("an agent that needs you: how long it has waited and its question, on its o
 test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says Unreachable, with what OATS says under Details, and Retry", async () => {
   const stopped = await render("thr_digest", fixtureAgents());
   // The warning of a stopped agent's live composer, in the warning tone, with Start beside it.
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
   expect(stopped.getByTestId("oats-status-part").getAttribute("data-tone")).toBe("warning");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
@@ -123,7 +123,7 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedRestartInstance panel"); // the reason after the state; Restart is the button beside it
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedRestart…Instance panel"); // the reason after the state; Restart is the button beside it
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // The state's word says it, with no sentence that repeats it; what the kernel said is one press away, under Details, never the line's words.
@@ -226,7 +226,7 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   // A stopped agent's Start stays in its place, off, under the same one-line notice.
   const stopped = await render("thr_digest", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   const start = (await stopped.findByTestId("oats-status-act")) as HTMLButtonElement;
-  expect([start.textContent, start.disabled, start.title]).toEqual(["Start", true, ""]);
+  expect([start.textContent, start.disabled, start.title]).toEqual(["Start…", true, ""]);
   expect(stopped.getByTestId("oats-unreadable").textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
   fireEvent.click(start);
   expect(asked()).toBeNull();
@@ -261,7 +261,7 @@ test("a stopped agent's line says no time, and the thread's row reads no events:
   const slot = await render("thr_digest", fixtureAgents()); // the recorded events hold a stop at 2026-11-21T18:23:24.196Z
   await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
   expect(slot.getByTestId("oats-identity-row").textContent).not.toMatch(/since|\d\d:\d\d/);
   expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
   slot.unmount();
@@ -279,7 +279,7 @@ test("a stopped agent that was started and stopped again: the line says Stopped 
   let agents = digest({ startedAt: "2026-11-21T09:00:00.000Z" });
   const slot = await render("thr_digest", fixtureAgents(), { snapshot: (input) => handlers({}, agents).snapshot(input) });
   const line = () => slot.getByTestId("oats-status-line").textContent;
-  const STOPPED = "Stopped· A message here starts it outside OATS.StartInstance panel";
+  const STOPPED = "Stopped· A message here starts it outside OATS.Start…Instance panel";
   await vi.waitFor(() => expect(line()).toBe(STOPPED));
   // Started: the line is no longer the stopped one.
   agents = digest({ running: true, runtimeState: "running", startedAt: started });
@@ -297,7 +297,7 @@ test("a session started after the last recorded stop: the line says Stopped and 
   const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
   await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
   expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });
 
@@ -363,7 +363,7 @@ test("a stopped agent whose events cannot be read says Stopped and its warning, 
   });
   await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 30));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.StartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
   expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
   expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
   expect(slot.queryByRole("alert")).toBeNull();

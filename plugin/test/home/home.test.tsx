@@ -906,10 +906,10 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(within(card).getByTestId("oats-state").textContent).toBe("Running outside OATS");
   const notice = within(card).getByTestId("oats-outside-warning");
   expect(notice.textContent).toContain("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
-  expect(Array.from(notice.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop", "Start"]);
+  expect(Array.from(notice.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
   for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
   const { asked } = await import("../../app/lifecycle");
-  fireEvent.click(within(notice).getByRole("button", { name: "Stop" }));
+  fireEvent.click(within(notice).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 

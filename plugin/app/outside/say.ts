@@ -148,9 +148,13 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   const note = attached ? null : whereNote(where);
   const archived = where === "archived";
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
-  const is = state(agent, null);
   // How it is at rest: the one reading of the row (model/rest.ts), which the home's card and the Start dialog read too.
   const how = rest(agent);
+  // Its state. A stop that still shows a claim (the word "stopped" with no word that the row does
+  // not run: the claim's gate lets it through) is drawn "Needs you": this feature says of it what
+  // it says of a stop, so that its line warns where the home's card refuses.
+  const drawn = state(agent, null);
+  const is = how === "stopped" && drawn === "needs-you" ? "stopped" : drawn;
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
   // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable

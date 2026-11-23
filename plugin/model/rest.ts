@@ -32,7 +32,7 @@ export function rest(agent: Row): Rest {
   if (agent.running !== false) return "stopped";
   if (agent.sessionEnd === "lost") return "lost";
   if (agent.sessionEnd === "exited") return "ended";
-  if (recordedStopped(agent) || agent.runtimeState === "stopped" || agent.sessionEnd === "stopped") return "stopped";
+  if (recordedStopped(agent)) return "stopped"; // as in the state: the row says a stop, or says nothing of how it ended beside "stopped" or no word
   return agent.runtimeState === "shell" ? "ended" : "unloaded";
 }
 

@@ -101,6 +101,17 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   });
 });
 
+describe("the word \"stopped\" with no word that the row does not run, on a row that still shows a claim", () => {
+  // No kernel prints it. The claim's gate lets the claim through (it asks `running: false`), so the row is drawn
+  // "Needs you"; the home's card refuses it as a stop, and its line must warn as for a stop.
+  it("on its open thread: the stop's warning, with Start, whatever it says of how its session ended", () => {
+    for (const running of [null, true]) for (const sessionEnd of [undefined, "stopped", "lost", "exited"]) {
+      const asks: Agent = { ...operator, running, sessionEnd, waiting: { reason: "question", message: "ok?", since: null } };
+      expect([word(asks), said(asks, "open", true)?.kind, said(asks, "open", true)?.tone], `${running} ${sessionEnd}`).toEqual(["Needs you", "stopped-open", "warning"]);
+    }
+  });
+});
+
 describe("a row that still says it runs, and bb has its thread archived", () => {
   // A person archived the conversation of an agent whose process goes on: bb's Archive never touches the harness.
   const SENTENCE = "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.";

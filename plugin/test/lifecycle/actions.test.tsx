@@ -109,6 +109,17 @@ test("an agent with no harness loaded that also carries a claim (it is drawn \"N
   expect(slot).toBeTruthy();
 });
 
+test("an agent whose session ended by itself and that still asks (it is drawn \"Needs you\") is offered Start, and its Start key opens Start", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false, runtimeState: "shell" } : agent));
+  expect(agents.find((agent) => agent.instance === "flaky-ci-developer")!.waiting).not.toBeNull();
+  const { shown } = await menu("thr_ci", {}, agents);
+  expect(shown()).toContain("start");
+  const { asked, commands } = await import("../../app/lifecycle");
+  await commands.find((each) => each.id === "agent-start")!.run({ threadId: "thr_ci", projectId: null, experimental_panel: {} as never });
+  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/already running/);
+});
+
 test("each action shows only in the states it applies to", async () => {
   const by = async (threadId: string, agents?: Agent[]) => {
     const shown = (await menu(threadId, {}, agents)).shown();

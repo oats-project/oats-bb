@@ -27,11 +27,11 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * stopping) and its `queuedWork` (none, waiting, failed):
  * - a turn runs, is starting or is stopping ("active", "starting", "stopping"): it works;
  * - at rest ("pending", "idle", and "error": bb's last turn failed, the session is there) with
- *   work bb holds in line (`queuedWork` other than "none"): it works; with nothing in line: idle.
- *   "waiting" is a message bb starts by itself. "failed" is a queued message that failed to send:
- *   nothing starts by itself, and the row still says Working until a person clears it, BECAUSE
- *   THE PROVIDER COUNTS IT AS IN LINE (`hasQueuedWork`): the two must say one thing, and whether
- *   "failed" should count is the provider's to change, which this follows;
+ *   work bb will start by itself (`queuedWork: "waiting"`): it works; with nothing in line: idle.
+ *   A queued message that FAILED to send (`queuedWork: "failed"`) is at rest: nothing starts by
+ *   itself. (The provider on main counts "failed" as in line, `hasQueuedWork`; the kernel side
+ *   changes that with oats-bb #40, so that only work bb starts by itself holds a thread as
+ *   working: this is the rule it changes to.)
  * - a status this plugin does not know: idle, as bb's SDK says to treat one (the provider refuses
  *   such a thread; the plugin has to draw the row).
  */
@@ -40,7 +40,7 @@ export const isListed = (thread: Pick<BbThread, "isArchived" | "isHidden">): boo
 const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
 const AT_REST: ReadonlySet<string> = new Set(["pending", "idle", "error"]);
 export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): boolean =>
-  TURN_IN_PROGRESS.has(thread.status) || (AT_REST.has(thread.status) && typeof thread.queuedWork === "string" && thread.queuedWork !== "none");
+  TURN_IN_PROGRESS.has(thread.status) || (AT_REST.has(thread.status) && thread.queuedWork === "waiting");
 
 /**
  * The state of one agent on its thread. First match wins.

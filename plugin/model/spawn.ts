@@ -3,8 +3,9 @@
 // shared by its clients (awebai/oats at 3d834aa3c: packages/client/spawn-preview-facts.mjs
 // `previewFacts`, packages/client/spawn-messages.mjs `spawnProblem`, and the Desktop's own words
 // for the act that follows in packages/desktop/renderer/spawn-words.mjs), ported as they are; where
-// a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React.
-import { DETAIL_WITHHELD, displayLine } from "../app/ui/text.js";
+// a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React,
+// and nothing of app/: what it answers is the kernel's text as it came, and whoever draws it
+// puts it through the display filter (app/ui/text.ts), as for every text of the kernel's.
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -132,7 +133,7 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
   // The capabilities whose `worktree` hook sets up ./work, in the order they run.
   const hooks = list(data.worktreeHooks)
     .filter(record)
-    .map((hook) => `${displayLine(hook.capability) ?? ""}${hook.required === true ? " (required)" : ""}`);
+    .map((hook) => `${text(hook.capability) ?? ""}${hook.required === true ? " (required)" : ""}`);
   if (hooks.length > 0) facts.push({ label: "Setup", parts: [{ text: hooks.join(", ") }, { text: "Runs after the worktree is made. Can take several minutes.", sub: true }] });
   let prompts: PreviewFacts["prompts"] = null;
   if (record(data.launchPromptAnswers)) {
@@ -333,19 +334,34 @@ const UNKNOWN = said("OATS didn’t say whether the instance was created.", "che
 /**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
- * installed is said as the kernel words it, through the display filter (the table's sentence when
- * the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
+ * installed is said as the kernel words it, through the drawer's display filter (`line`; the
+ * table's sentence when the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
  * Harness field (the provider declares several): a sentence sends a person there only when it does.
  */
 export function spawnProblem(
   reason: { code: string | null; message: string | null },
   stage: "preview" | "spawn" = "preview",
-  { harnessField = true, replay = false }: { harnessField?: boolean; /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */ replay?: boolean } = {},
+  {
+    harnessField = true,
+    replay = false,
+    line,
+  }: {
+    harnessField?: boolean;
+    /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */
+    replay?: boolean;
+    /**
+     * The drawer's display filter for one line of the kernel's text: the line as it may be shown,
+     * or null where none of it may (nothing left, or withheld). The one sentence that is the
+     * kernel's own words (a harness that is not installed) is said only through it; without it,
+     * the table's sentence stands.
+     */
+    line?: (text: string) => string | null;
+  } = {},
 ): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
-  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" && line !== undefined && message !== "" ? line(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" ? said(kernelLine, "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;

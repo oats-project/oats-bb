@@ -27,7 +27,7 @@ import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
-import { refusalCode, refusalLines, shown } from "../ui/text";
+import { DETAIL_WITHHELD, displayLine, refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
 import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
@@ -93,6 +93,12 @@ function useFlight(): { soul: string } | null {
 
 type Preview = { key: string; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
+
+/** One line of the kernel's text as the form may show it; null where the display filter leaves nothing, or withholds it. */
+const kernelLine = (text: string): string | null => {
+  const line = displayLine(text);
+  return line === null || line === "" || line === DETAIL_WITHHELD ? null : line;
+};
 
 /** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
 const piece = (text: string): string => `${/^\s/u.test(text) ? " " : ""}${shown(text)}${/\s$/u.test(text) ? " " : ""}`;
@@ -306,7 +312,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           },
           (cause: unknown) => {
             if (serial.current !== ticket) return;
-            setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField }) });
+            setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField, line: kernelLine }) });
             setReading(false);
           },
         );
@@ -369,7 +375,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           setFlight(null);
           if (!alive.current) return;
           // What is known decides what can be pressed next (model/spawn.ts `SpawnOutcome`).
-          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay });
+          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay, line: kernelLine });
           setFailure(problem);
           if (problem.outcome === "unknown") {
             // Whether an agent was made is not known: the intent is kept, and only asking again under its key is offered.

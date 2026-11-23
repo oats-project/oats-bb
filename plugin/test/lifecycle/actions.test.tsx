@@ -1971,3 +1971,66 @@ test("the line on Claude's question before a resume is for an agent whose record
     resetApp();
   }
 });
+
+// ---- the same safety rules for an agent on tmux as for one on bb (the lead's requirement), one test per rule
+
+test("tmux, rule 1: the dialog is named from the kernel's check, never from the place that was pressed", async () => {
+  // The check answers for another agent than the one asked: no plan is drawn and nothing can be confirmed.
+  const slot = await menu("thr_plain", { startCheck: () => lostCheck({ instance: "another-tmux-agent" }) }, lostRoster());
+  const { openAct } = await import("../../app/lifecycle");
+  openAct("start", TMUX);
+  await waitFor(() => expect(slot.slot.getByRole("dialog").textContent).toContain("This is not the plan for this agent."));
+  expect(slot.slot.getByRole("dialog").textContent).not.toContain("continue its last conversation");
+  expect(button(slot.slot, "oats-confirm-act").disabled).toBe(true);
+  resetApp();
+  // And named as the kernel names it.
+  const named = await tmuxStart({ startCheck: () => lostCheck() });
+  expect(named.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Kernel fix developer");
+});
+
+test("tmux, rule 2: the consequence is said before the press, for each of its three shapes: a resume, a plain start, a restart", async () => {
+  const says = async (verb: "start" | "restart", check: Parameters<typeof startCheckOf>[1]) => {
+    const { slot } = await menu("thr_plain", { startCheck: () => startCheckOf(TMUX, { backend: "tmux", harness: "pi", ...check }) }, lostRoster());
+    const { openAct } = await import("../../app/lifecycle");
+    openAct(verb, TMUX);
+    await ready(slot);
+    const lines = texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li");
+    resetApp();
+    return lines;
+  };
+  expect(await says("start", { running: false, runtimeState: null, sessionEnd: "lost" })).toEqual(["Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so."]);
+  // Stopped by an operator (the kernel's row of a tmux home stopped with OATS: runtimeState "shell", sessionEnd "stopped"): the same words as for bb, and nothing of a bb thread.
+  expect(await says("start", { running: false, runtimeState: "shell", sessionEnd: "stopped" })).toEqual(["This starts a new conversation using the saved briefing and state."]);
+  expect(await says("restart", { running: true, runtimeState: null, sessionEnd: null })).toEqual(["Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.", "This starts a new conversation using the saved briefing and state."]);
+});
+
+test("tmux, rule 3: one act per press: opening the dialog starts nothing, and a second press while it runs sends nothing more", async () => {
+  let answer!: (started: ReturnType<typeof resumedAs>) => void;
+  const held = new Promise<ReturnType<typeof resumedAs>>((resolve) => (answer = resolve));
+  const slot = await tmuxStart({ startCheck: () => lostCheck(), start: () => held });
+  expect(calls(slot, "start", "restart")).toEqual([]);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  answer(resumedAs({ resumed: true, reason: null, waiting: null }));
+  await phase(slot, "done");
+  expect(calls(slot, "start")).toHaveLength(1);
+});
+
+test("tmux, rule 4: on a roster kept as last read the acts of a tmux agent are held, with the reason, and its Start opens nothing", async () => {
+  const { AgentActs } = await import("../../app/lifecycle");
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: lostRoster() };
+  const slot = renderSlot<object, Contract>(
+    { component: () => <AgentActs instance={TMUX} /> },
+    {},
+    { rpc: handlers({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) }), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
+  );
+  await waitFor(() => expect(slot.queryByTestId("oats-agent-acts")).not.toBeNull());
+  const buttons = Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button"));
+  expect(buttons.map((each) => `${each.textContent}${each.disabled ? " (off)" : ""}`)).toEqual(["Start… (off)", "Retire… (off)"]);
+  expect(slot.getByTestId("oats-disabled-reason").textContent).toBe("Comes back when OATS is read again");
+  fireEvent.click(buttons[0]!);
+  expect(slot.queryByRole("dialog")).toBeNull();
+  expect(calls(slot as never, "startCheck", "start")).toEqual([]);
+});

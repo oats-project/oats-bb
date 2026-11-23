@@ -150,6 +150,8 @@ for (const [name, answer, why] of [
   ["a row that cannot be read", { stdout: [onEnv("thr_a"), { id: "thr_b" }] }, /could not be read \(E_SESSION_UNAVAILABLE\)$/],
   ["a row of another environment", { stdout: [onEnv("thr_a"), onEnv("thr_a2", { environmentId: "env_other" })] }, /could not be read \(E_SESSION_UNAVAILABLE\)$/],
   ["a row that names no environment", { stdout: [onEnv("thr_a", { environmentId: null })] }, /could not be read \(E_SESSION_UNAVAILABLE\)$/],
+  // A list that reads well and is short: it lacks a thread the hook itself saw on that environment.
+  ["an empty list", { stdout: [] }, /^bb's list of the threads on environment env_home is not whole \(it lacks a thread of this home's bb project that is on it\)$/],
 ]) {
   test(`bb's list of the environment's threads that is not read whole blocks the delete: ${name}`, async (t) => {
     const { records, retire } = setup(t);
@@ -304,6 +306,18 @@ test("the delete is asked only once every thread of the home is stopped and arch
   assert.deepEqual(stuck.last.meta, { archived: ["thr_first"], left: ["thr_a"] });
   assert.match(WHY.exec(stuck.last.warning)[1], /^not every bb thread of this home was stopped and archived$/);
   assert.equal(stuckHome.records().length, 1, "nothing was decided: the record stays for a retire run again");
+  // The usual home, one thread that was never restarted: the thread that will not stop is on no
+  // archived row, so no environment is looked at. Nothing is decided there either, and the record stays.
+  const soleHome = setup(t);
+  const sole = await soleHome.retire({
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "active", { environmentId: ENV })] },
+    "thread show": { stdout: { thread: threadRow("thr_a", "proj_a", "active", { environmentId: ENV }), environment: null, pendingTodos: null } },
+    "thread list --archived": { stdout: [] },
+  });
+  assert.deepEqual(sole.last.meta, { archived: [], left: ["thr_a"] });
+  assert.equal(verbs(sole.calls).includes("environment show"), false);
+  assert.equal(soleHome.records().length, 1);
+  assert.deepEqual((await soleHome.retire()).last, { meta: { retired: true, archived: ["thr_a"], environments: [ENV] } }, "a retire run again, the thread stopped by then, deletes");
   const unswept = await setup(t).retire({ "thread stop": { error: { code: "error", message: "HTTP 500: no" } } });
   assert.deepEqual(deletes(unswept.calls), []);
   assert.equal(unswept.last.meta.unswept, true);

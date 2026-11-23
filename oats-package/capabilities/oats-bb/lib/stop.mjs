@@ -217,7 +217,9 @@ function recordGap(record) {
  *  → { deleted: [environment ids], why: [text], decided }. */
 async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine, note }) {
   const deleted = [], why = [];
-  let decided = true;
+  // A thread that would not stop is on no archived row, so its environment may never be
+  // looked at below: nothing is decided while one is left, whatever the rows show.
+  let decided = allStopped;
   if (rows === null) return { deleted, why: ["the home's archived bb threads could not be listed"], decided: false };
   const bare = rows.filter((row) => mine(row.id) && !isBbId(row.environmentId)).map((row) => row.id);
   if (bare.length > 0) why.push(`${bare.length} thread${bare.length > 1 ? "s" : ""} of this home ${bare.length > 1 ? "have" : "has"} no bb environment to delete yet (bb makes one when a thread's first turn starts): ${someOf(bare, 3)}`);
@@ -254,6 +256,11 @@ async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine
       decided = false;
       continue;
     }
+    // Whole, by what the hook itself knows: every thread of the home's project that it
+    // saw on this environment must be in bb's list of it. One that is not means the list
+    // is short (a bb that filters or pages it), and "every thread on it" would rest on less.
+    const listedHere = new Set(threads.map((thread) => thread.id));
+    if (rows.some((row) => row.environmentId === id && !listedHere.has(row.id))) { why.push(`bb's list of the threads on environment ${id} is not whole (it lacks a thread of this home's bb project that is on it)`); decided = false; continue; }
     const others = threads.filter((thread) => !record.ids.has(thread.id));
     if (others.length > 0) { why.push(`${others.length} thread${others.length > 1 ? "s" : ""} on bb environment ${id} ${others.length > 1 ? "are" : "is"} not in this home's thread record (a person's, or one the provider could not note): ${someOf(others.map((thread) => thread.id), 3)}`); continue; }
     if (threads.some(isLive)) { why.push(`a thread on bb environment ${id} is not archived`); decided = false; continue; }

@@ -579,7 +579,8 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
     warning says so where a thread of the home's own is on it, and nothing where only
     other threads of the home's bb project are;
   - `bb thread list --environment <id> --include-archived --include-hidden` was read
-    whole (every row readable, every row on that environment), and every thread in it is
+    whole (every row readable, every row on that environment, and none missing of the
+    threads the hook itself saw on it in the home's project), and every thread in it is
     archived and is in the home's record.
   The delete answers at once and bb tears the environment down afterwards; the hook
   waits for neither more than one bb call. A delete that bb refuses, that does not

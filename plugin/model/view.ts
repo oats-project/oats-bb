@@ -25,9 +25,15 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * word at all. The one predicate of the claim's gate and of the state: a row that is not running
  * beside another word ("unknown": its session is there and no harness is loaded; "shell";
  * "unreachable") is not stopped, keeps its claim, and is told by its own state.
+ * One more row is stopped: not running beside "unknown" (or a word of a later kernel) while the
+ * row still says an operator stopped it (`sessionEnd: "stopped"`). The stop wins: a row that says
+ * both is read as the stop, so that no place calls it "not loaded" and sends a message to it (the
+ * spec's author's ruling of 23 Nov 2026; no kernel prints the row today).
  */
-export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
-  return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);
+export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState"> & { sessionEnd?: string | null }): boolean {
+  if (agent.running !== false) return false;
+  if (agent.runtimeState === "stopped" || agent.runtimeState === null) return true;
+  return agent.sessionEnd === "stopped" && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
 }
 
 /** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */

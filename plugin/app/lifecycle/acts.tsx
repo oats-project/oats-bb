@@ -27,6 +27,7 @@ import {
   carriesOn,
   LEAVE,
   piOnBb,
+  SHOW_RESULT,
   toasted,
   checkAgainRefused,
   checking,
@@ -52,7 +53,13 @@ import type { Outcome, PlanVerb, Refusal, RunVerb, Verb } from "./words";
 
 export type { PlanVerb, RunVerb, Verb };
 
-type Request = { verb: Verb; instance: string; id: number };
+/**
+ * A result whose dialog went before it arrived, kept so that the dialog can be opened again ON it
+ * (the toaster's "Show result"): the settled state as the dialog held it, with what "Check again"
+ * needs (the plan and its key) and the plan's tick.
+ */
+type Resume = { plan: Extract<PlanState, { phase: "settled" }>; discard: boolean } | { start: Extract<StartState, { phase: "settled" }> };
+type Request = { verb: Verb; instance: string; id: number; resume?: Resume };
 
 let current: Request | null = null;
 let sequence = 0;
@@ -79,6 +86,19 @@ export const asked = (): { verb: Verb; instance: string } | null => (current ===
 /** Open the dialog of an act on an agent. It asks the kernel first, and acts only on its own button. */
 export function openAct(verb: Verb, instance: string): void {
   set({ verb, instance, id: ++sequence });
+}
+/** Open an act's dialog again on a result it had when it was gone: nothing is asked of the kernel. */
+function reopen(verb: Verb, instance: string, resume: Resume): void {
+  set({ verb, instance, id: ++sequence, resume });
+}
+/**
+ * Tell the result of an act whose dialog is gone (`toasted`): a plain one whole, with the way to
+ * the agent; any other by its title, staying until dismissed, with "Show result".
+ */
+function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null): void {
+  const { plain, ...toast } = toasted(verb, outcome);
+  if (plain) notify({ ...toast, ...(open === null ? {} : { open }) });
+  else notify({ ...toast, stays: true, open: { label: SHOW_RESULT, run: () => reopen(verb, instance, resume) } });
 }
 /** Ask for the kernel's plan to stop or retire an agent; the overlay shows it and asks once. */
 export const askPlan = (verb: PlanVerb, instance: string): void => openAct(verb, instance);
@@ -267,10 +287,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const { verb, instance } = request;
   const threadId = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(threadId);
-  const [state, setState] = useState<PlanState>({ phase: "reading", kept: null, why: checking(verb, instance) });
+  // Opened again on a result (the toaster's "Show result"): that result, and nothing is read.
+  const resumed = request.resume !== undefined && "plan" in request.resume ? request.resume : null;
+  const [state, setState] = useState<PlanState>(resumed?.plan ?? { phase: "reading", kept: null, why: checking(verb, instance) });
   /** The plan's one tick: a stop's children (on, the kernel's default), a retire's worktree (off). */
   const [recursive, setRecursive] = useState(true);
-  const [discard, setDiscard] = useState(false);
+  const [discard, setDiscard] = useState(resumed?.discard ?? false);
   const [now, setNow] = useState(() => Date.now());
   const live = useRef(true);
   /** The read whose answer is still wanted: a newer read, or a close, drops an older one's. */
@@ -312,8 +334,9 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     [rpc, verb, instance, archives],
   );
   useEffect(() => {
-    read(checking(verb, instance), true);
-  }, [read, verb, instance]);
+    if (resumed === null) read(checking(verb, instance), true);
+    // (`resumed` is the request's, and a dialog has one request for its whole life.)
+  }, [read, verb, instance, resumed]);
 
   /** `again`: the same revision and key, sent to read the result of an apply whose answer was lost ("Check again"). */
   const send = (plan: Plan, key: string, again = false) => {
@@ -321,9 +344,9 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     const sent = { plan, key };
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
-      // The person moved on (another act's dialog took this one's place): the result reaches them where they are.
-      // What is not confirmed is told as that, never as a failure.
-      else notify({ ...toasted(outcome), ...(threadId === null || verb === "retire" ? {} : { open: { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) } }) });
+      // The person moved on (they left the dialog, or another act's took its place): the result reaches them
+      // where they are, and what a toast cannot hold is one press away ("Show result").
+      else tell(verb, instance, outcome, { plan: { phase: "settled", outcome, refusal, sent }, discard }, threadId === null || verb === "retire" ? null : { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) });
     };
     const answered =
       plan.action === "stop"
@@ -339,7 +362,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         // The plan changed under the confirmation: back to review with the plan as it is now.
-        const pi = plan.action === "retire" && piOnBb(plan);
+        const pi = plan.action === "retire" && piOnBb(plan); // (a retire's plan alone says the backend and the harness)
         if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
         else if (refusal.code === "E_PLAN_STALE" && live.current && current === request) read(checking(verb, instance), recursive, plan);
         else settle(applyRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
@@ -548,7 +571,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   useEffect(() => {
     threadNow.current = thread;
   }, [thread]);
-  const [state, setState] = useState<StartState>({ phase: "checking" });
+  const resumed = request.resume !== undefined && "start" in request.resume ? request.resume.start : null;
+  const [state, setState] = useState<StartState>(resumed ?? { phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
   const [harness, setHarness] = useState("");
   const [model, setModel] = useState("");
@@ -587,7 +611,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       },
     );
   }, [rpc, verb, instance]);
-  useEffect(check, [check]);
+  useEffect(() => {
+    // Opened again on a result: nothing is asked until the person asks (Refresh status).
+    if (resumed === null) check();
+  }, [check, resumed]);
 
   const known = state.phase === "checking" ? null : state.check;
   const name = known?.instance ?? instance;
@@ -610,14 +637,14 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           setState({ phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId });
           // The agent's new thread opens behind the result, as the Desktop opens its terminal: Close leaves the person on it.
           navigate.toThread(started.threadId);
-        } else notify({ tone: "done", title: outcome.title, lines: outcome.lines, open });
+        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId } }, open);
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         const outcome = startRefused(verb, checked.instance, refusal);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
         // The agent's thread, as the roster on screen has it, is where a person looks next.
-        else notify({ ...toasted(outcome), ...(rowThread === null ? {} : { open: { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(rowThread) } }) });
+        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null } }, null);
       },
     );
   };

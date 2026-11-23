@@ -3,7 +3,7 @@
 // dialog of each that the plugin's overlay draws: the kernel's plan as what will happen and what
 // is kept, the act in progress, its result and its refusal (parity D-158 to D-173).
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@get-bb/plugin-sdk/app";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -919,9 +919,13 @@ test("a start that fails after the person moved on is told through the toaster w
     await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?"));
     fail();
     await waitFor(() => expect(notified().length).toBe(before + 1));
-    expect(notified().at(-1)).toMatchObject({ tone, open: { label: "Open Weekly digest helper" } });
-    notified().at(-1)!.open!.run();
-    expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+    // Neither is a result a toast can hold (a refusal has Details and Refresh status): it stays, and Show result
+    // opens the Start dialog again on it, in the place of the dialog the person had moved on to.
+    expect(notified().at(-1)).toMatchObject({ tone, stays: true, open: { label: "Show result" } });
+    act(() => notified().at(-1)!.open!.run());
+    await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Weekly digest helper"));
+    expect(slot.getByTestId("oats-result")).toBeTruthy();
+    expect(slot.inspection.navigateCalls).toEqual([]);
     resetApp();
   }
 });
@@ -1441,40 +1445,105 @@ test("the OATS entries start with a row that names the agent and its state, off;
 
 // ---- what the toaster tells of an act whose dialog is gone
 
-test("a retire that is left while it runs and keeps the home of an agent on bb: the toast says first that its thread can bring it back with no OATS around it", async () => {
+/** Leave the dialog of `verb` while it runs: the press, the wait for the running line, Close. */
+async function leave(slot: Awaited<ReturnType<typeof menu>>["slot"]) {
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  return notified().length;
+}
+
+test("a retire that is left while it runs and keeps the home: the toast stays, says first that its thread can bring it back with no OATS around it, and Show result opens the dialog on the whole result", async () => {
   let answer!: (receipt: ReturnType<typeof retireReceiptOf>) => void;
   const held = new Promise<ReturnType<typeof retireReceiptOf>>((resolve) => (answer = resolve));
   const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
   await pick("retire");
   await ready(slot);
-  fireEvent.click(button(slot, "oats-confirm-act"));
-  await phase(slot, "running");
-  fireEvent.click(button(slot, "oats-confirm-leave"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
-  const before = notified().length;
+  const before = await leave(slot);
   answer({ ...retireReceiptOf(), removedDir: false, retainedHome: "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", recoveryPath: null, incomplete: ["retire hook oats.aweb: the team certificate could not be removed (exit 1)"] });
   await waitFor(() => expect(notified().length).toBe(before + 1));
   const toast = notified().at(-1)!;
-  expect(toast).toMatchObject({ tone: "failed", title: "Retirement didn't finish" });
-  // What the dialog sets apart, first and in the warning tone, is the toast's first line: a toast has no place apart.
-  expect(toast.lines![0]).toBe("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.");
-  expect(toast.lines).toContain("Home folder kept, at:");
+  expect(toast).toMatchObject({ tone: "failed", title: "Retirement didn't finish", stays: true });
+  // What the dialog sets apart, first and in the warning tone, is the toast's one line: a toast has no place apart.
+  expect(toast.lines).toEqual(["Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it."]);
+  expect(toast.open!.label).toBe("Show result");
+  // Show result: the dialog again, on that result, with the warning, the steps and Details; the kernel is not asked.
+  const asked = calls(slot, "retirePlan", "retireApply").length;
+  act(() => toast.open!.run());
+  await phase(slot, "failed");
+  expect(within(slot.getByTestId("oats-act-warning")).getByTestId("oats-notice").getAttribute("data-tone")).toBe("warning");
+  expect(slot.getByTestId("oats-result").textContent).toContain("Home folder kept, at:");
+  expect(slot.getByTestId("oats-act-details").textContent).toContain("the team certificate could not be removed");
+  expect(calls(slot, "retirePlan", "retireApply")).toHaveLength(asked);
 });
 
-test("a stop that is left while it runs and whose answer is lost: the toast says the result is not confirmed and where to see what it came to, never to press a button it has not", async () => {
-  let refuse!: (cause: Error) => void;
-  const held = new Promise<never>((_, reject) => (refuse = reject));
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held });
-  await pick("stop");
+test("a retire that finished after its dialog was left: the toast stays until dismissed, and Show result opens where the worktree and the recovery copy are, and the warnings", async () => {
+  let answer!: (receipt: ReturnType<typeof retireReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof retireReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
   await ready(slot);
-  fireEvent.click(button(slot, "oats-confirm-act"));
-  await phase(slot, "running");
-  fireEvent.click(button(slot, "oats-confirm-leave"));
-  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
-  const before = notified().length;
-  refuse(new Error("OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped"));
+  const before = await leave(slot);
+  answer({ ...retireReceiptOf(), warnings: ["the bb thread of weekly-digest-helper could only be archived"] });
   await waitFor(() => expect(notified().length).toBe(before + 1));
   const toast = notified().at(-1)!;
-  expect(toast).toMatchObject({ tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Its row in the sidebar shows what it came to."] });
-  expect(JSON.stringify(toast)).not.toContain("Check again");
+  // Done, and not lost to a timer: what it leads to can be read nowhere else once the agent's row is gone.
+  expect(toast).toMatchObject({ tone: "done", title: "Weekly digest helper retired.", stays: true, lines: [] });
+  expect(toast.open!.label).toBe("Show result");
+  act(() => toast.open!.run());
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result").textContent!;
+  expect(result).toContain("Worktree kept, at:");
+  expect(result).toContain("/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper");
+  expect(result).toContain("Recovery copy saved at:");
+  expect(result).toContain("OATS says: the bb thread of weekly-digest-helper could only be archived");
+});
+
+test("a stop that is left and whose answer is lost: the toast says the result is not confirmed and names no button; Show result opens the dialog, where Check again asks for THAT apply", async () => {
+  let second = false;
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => stopPlanOf(),
+    stopApply: () => {
+      if (second) return stopReceiptOf();
+      second = true;
+      return new Promise((_, reject) => setTimeout(() => reject(new Error("OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped")), 30));
+    },
+  });
+  await pick("stop");
+  await ready(slot);
+  const before = await leave(slot);
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "unknown", title: "Result not confirmed", lines: [] });
+  expect(JSON.stringify({ ...toast, open: toast.open!.label })).not.toMatch(/Check again|Review again|Details/);
+  act(() => toast.open!.run());
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  fireEvent.click(button(slot, "oats-act-check"));
+  await phase(slot, "done");
+  // The same apply was asked for: its revision and its key, which the result kept.
+  const sent = calls(slot, "stopApply").map((call) => call.input as { key: string; revision: string });
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toEqual(sent[0]);
+});
+
+test("a start that is refused after its dialog was left: the toast names no button of the dialog, and Show result opens the refusal with Refresh status and Details", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  const before = await leave(slot);
+  refuse(new Error("E_WORKSPACE_PATH_UNSAFE: directory instance home was removed or exchanged"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "failed", title: "OATS refused to start Weekly digest helper", lines: [], stays: true });
+  expect(toast.open!.label).toBe("Show result");
+  const checks = calls(slot, "startCheck").length;
+  act(() => toast.open!.run());
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: directory instance home was removed or exchanged");
+  expect(slot.getByTestId("oats-act-details")).toBeTruthy();
+  expect(calls(slot, "startCheck")).toHaveLength(checks); // nothing is asked until the person asks
+  expect(slot.getByTestId("oats-start-refresh")).toBeTruthy();
 });

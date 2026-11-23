@@ -81,7 +81,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     async retirePlan({ instance }, context) {
       await core.agentForAct(instance);
       // The harness is the kernel's status row's, not the plan's: the roster this act was admitted on holds it.
-      const [plan, { row }] = await Promise.all([core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal), core.rowOf(instance)]);
+      // (A row that cannot be read now fails nothing: the harness is then not known, and the plan the kernel answered stands.)
+      const [plan, row] = await Promise.all([core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal), core.rowOf(instance).then(({ row }) => row, () => null)]);
       const read = launch.safeParse(row);
       return { ...plan, harness: read.success ? (read.data.harness ?? null) : null };
     },

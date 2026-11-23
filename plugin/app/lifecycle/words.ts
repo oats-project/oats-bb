@@ -442,7 +442,7 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal,
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
-  const waits = verb === "retire" && refusal.code === "E_RUNTIME_QUIESCE_FAILED" && piListing;
+  const waits = verb === "retire" && refusal.code === "E_RUNTIME_QUIESCE_FAILED" && piListing; // (the function's own guard: a caller may pass the flag for a stop)
   const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED || waits ? [sentence, ...oatsSays(refusal.message), ...(waits ? [PI_LISTING] : [])] : [sentence];
   return { tone: "failed", title: `${name} wasn't ${verb === "retire" ? "retired" : "stopped"}`, lines, code: refusal.code, details: refusal.message, offers: ["review"] };
 }
@@ -463,17 +463,19 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
 
 /**
  * An outcome as bb's toaster tells it, when the dialog it belonged to is gone (the person left it
- * while the act ran, or opened another): the same title and lines, with what the dialog set apart
- * or offered said in the lines, since a toast has neither.
- * - What must be read first (a home that was kept) stands first.
- * - "Check again" is the dialog's button, and the plan and its key went with the dialog: a result
- *   that is not confirmed says where a person finds what it came to.
+ * while the act ran, or opened another). A toast has no Details, no "Check again", no "Review
+ * again", no "Refresh status", and it cannot hold a path a person will need later. So there are
+ * two kinds:
+ * - `plain`: a stop, a start or a restart that is DONE. The toast says it whole, and leaves by itself.
+ * - anything else (a refusal, a result that is not confirmed, an unfinished or a finished RETIRE,
+ *   whose lines hold where the worktree and the recovery copy are): the toast says the title, and
+ *   first what the dialog sets apart (a home that was kept); it STAYS until dismissed and carries
+ *   "Show result", which opens the dialog again on that result, with everything it offers.
  */
-export const NOT_CONFIRMED_GONE = "OATS didn't confirm the result. Its row in the sidebar shows what it came to.";
-export function toasted(outcome: Outcome): Pick<Outcome, "tone" | "title" | "lines"> {
-  const unconfirmed = outcome.tone === "unknown" && outcome.offers.includes("check") && outcome.title === "Result not confirmed";
-  const lines = unconfirmed ? [NOT_CONFIRMED_GONE] : outcome.lines;
-  return { tone: outcome.tone, title: outcome.title, lines: outcome.warning === undefined ? lines : [outcome.warning.title, ...lines] };
+export const SHOW_RESULT = "Show result";
+export function toasted(verb: Verb, outcome: Outcome): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
+  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined;
+  return { plain, tone: outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
 }
 
 // ---- Start and Restart ----

@@ -73,6 +73,9 @@ export const dialog = async (page) =>
       `JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-about") ?? null, phase: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-phase") ?? null, body: ${textOf(testId("oats-modal"))}, act: ${textOf(testId("oats-confirm-act"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-act"))})?.disabled ?? null, focus: ${FOCUSED} })`,
     ),
   );
+/** A toast of ours (found by what it says) has come in whole: it is opaque, and where it was at the last look. An image taken before shows it half way. */
+const toastSettled = (text) =>
+  `(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes(${JSON.stringify(text)})); if (!toast || Number(getComputedStyle(toast).opacity) < 1) return false; const top = Math.round(toast.getBoundingClientRect().top); const was = window.__oatsToastTop; window.__oatsToastTop = top; return was === top; })()`;
 const menuItems = `[...document.querySelectorAll('[role="menuitem"]')]`;
 /**
  * bb's menu has come in whole (a menu fades in at 1280; a sheet slides up at 390): nothing that holds
@@ -306,7 +309,33 @@ export default [
         check(Boolean(await page.until(closed, 10)), `${at} Close leaves the dialog while the stop runs`);
         const told = await page.until(`(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped.")); return toast ? toast.innerText.replace(/\\s+/g, " ").trim() : null; })()`, 30);
         check(Boolean(told), `${at} the result of a stop whose dialog was left is told through bb's toaster`, String(told));
+        await page.until(toastSettled("3 sessions stopped."), 10);
         await page.shot(`lifecycle-${viewport.name}-stop-left-toast`);
+        await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped."))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+
+        // A refusal that arrives after the dialog was left: a toast cannot hold it (no Details, no Review again).
+        // It stays, names no button of the dialog, and "Show result" opens the dialog again on the refusal.
+        answers({ "instance stop --apply": { ...gone("stopApply"), sleepMs: 4000 } });
+        await open();
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("running"), 10);
+        await page.evaluate(click("oats-confirm-leave"));
+        await page.until(closed, 10);
+        const refusedToast = `[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("Redesign ui lead wasn't stopped"))`;
+        const said = await page.until(`(() => { const toast = ${refusedToast}; return toast ? JSON.stringify({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }) : null; })()`, 30);
+        const toast = said ? JSON.parse(said) : { text: "", buttons: [] };
+        check(toast.buttons.includes("Show result") && !/Review again|Details|Check again/.test(toast.text), `${at} a refusal that arrives after the dialog was left is told by its title, with Show result, and names no button of the dialog`, JSON.stringify(toast));
+        await page.until(toastSettled("Redesign ui lead wasn't stopped"), 10);
+        await page.shot(`lifecycle-${viewport.name}-stop-left-refused-toast`);
+        await page.evaluate(`[...${refusedToast}.querySelectorAll("button")].find((button) => button.innerText.trim() === "Show result").click()`);
+        await page.until(phaseIs("failed"), 10);
+        const shown = await dialog(page);
+        check(shown.body.includes("Redesign ui lead wasn't stopped") && shown.body.includes("Review again") && shown.body.includes("Details"), `${at} Show result opens the dialog again on that refusal, with Review again and Details`, JSON.stringify(shown));
+        await shot("left-refused-shown");
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+        await page.evaluate(`${refusedToast}?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
       } finally {
         answers();
         await page.clock(null);

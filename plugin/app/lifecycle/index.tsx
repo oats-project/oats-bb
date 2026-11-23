@@ -177,7 +177,8 @@ export function register(app: PluginAppBuilder): void {
   // bb's menus have no heading: it is a row that is off.
   app.slots.experimental_threadAction({
     id: "agent",
-    title: "OATS agent",
+    // (bb also lists a thread action where a person picks a row's quick actions, by this title: it says what the row is.)
+    title: "OATS agent's name and state",
     icon: ICON.oats,
     group: OATS_GROUP,
     order: -1,

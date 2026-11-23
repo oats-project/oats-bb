@@ -476,24 +476,34 @@ describe("a retire refused because a process still works in the home", () => {
 });
 
 describe("an outcome as the toaster tells it, when its dialog is gone", () => {
-  it("keeps the title, the tone and the lines of a result or a refusal", () => {
+  it("a stop, a start or a restart that is done is told whole, and may leave by itself", () => {
     const done = stopOutcome(value(parseStopApply(fixture("stop-apply.json").result)), "redesign-ui-lead");
-    expect(toasted(done)).toEqual({ tone: done.tone, title: done.title, lines: done.lines });
-    const refused = applyRefused("retire", "dev-1", { code: "E_CHILDREN_RUNNING", message: "m" });
-    expect(toasted(refused)).toEqual({ tone: "failed", title: refused.title, lines: refused.lines });
+    expect(toasted("stop", done)).toEqual({ plain: true, tone: "done", title: done.title, lines: done.lines });
+    const started = startOutcome("start", "dev-1", value(parseSessionStart(fixture("start.json"))));
+    expect(toasted("start", started).plain).toBe(true);
+  });
+  it("anything else is told by its title alone, for the dialog to be opened again on: a toast names no button and holds no path", () => {
+    const outcomes: [Parameters<typeof toasted>[0], ReturnType<typeof applyRefused>][] = [
+      ["retire", applyRefused("retire", "dev-1", { code: "E_UNIDENTIFIED_INSTANCE_HOME", message: "what is left, and how to finish" })], // "Details says …"
+      ["stop", applyRefused("stop", "dev-1", { code: null, message: "m" })], // "Details says why."
+      ["stop", applyRefused("stop", "dev-1", { code: "E_SESSION_UNKNOWN", message: "m" })], // "Review again …"
+      ["stop", applyRefused("stop", "dev-1", { code: "E_PLAN_STALE", message: "m" })],
+      ["stop", applyRefused("stop", "dev-1", { code: "OATS_TIMEOUT", message: "m" })], // "Check again …"
+      ["retire", checkAgainRefused("retire", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "m" })],
+      ["start", startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m" })], // "Refresh status, …"
+      ["restart", startRefused("restart", "dev-1", { code: "E_SOMETHING_ELSE", message: "m" })],
+      // A retire that finished: its lines hold where the worktree and the recovery copy are, and its warnings.
+      ["retire", retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), warnings: ["the bb thread could only be archived"] }, retirePlan())],
+    ];
+    for (const [verb, outcome] of outcomes) {
+      const toast = toasted(verb, outcome);
+      expect(toast, outcome.title).toEqual({ plain: false, tone: outcome.tone, title: outcome.title, lines: [] });
+      expect(JSON.stringify(toast)).not.toMatch(/Details|Check again|Review again|Refresh status|\/abs\//);
+    }
   });
   it("says first what the dialog sets apart: a home that was kept", () => {
     const kept = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
     expect(kept.warning).toBeDefined();
-    expect(toasted(kept).lines).toEqual([kept.warning!.title, ...kept.lines]);
-  });
-  it("a result that is not confirmed points at the agent's row: Check again is the dialog's, and went with it", () => {
-    for (const lost of [applyRefused("stop", "dev-1", { code: "OATS_TIMEOUT", message: "m" }), checkAgainRefused("retire", "dev-1", { code: "E_LIFECYCLE_BUSY", message: "m" })]) {
-      expect(lost.offers).toEqual(["check"]);
-      expect(toasted(lost)).toEqual({ tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Its row in the sidebar shows what it came to."] });
-    }
-    // A retire accepted in the background already points at the row: its lines stay.
-    const accepted = retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), deferred: true }, retirePlan());
-    expect(toasted(accepted).lines).toEqual(accepted.lines);
+    expect(toasted("retire", kept)).toEqual({ plain: false, tone: "failed", title: kept.title, lines: [kept.warning!.title] });
   });
 });

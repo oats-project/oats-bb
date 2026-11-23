@@ -212,12 +212,15 @@ of who needs a person):
   say "Stopped" of an agent that runs: there is ONE statement about it. Such an agent is counted
   among those that need a person (`view().needing`: the sidebar's "N need you"), since only a
   person can stop or start it again. What OATS recorded is a fact after the state.
-- **Stopped is said of a provider's row only when the kernel calls it stopped**
-  (`recordedStopped`: not running, beside the word "stopped" or no word; the claim's gate reads the
-  same predicate). A row that is not running beside `runtimeState: "unknown"` has its session there
-  and no harness loaded (a reboot on a host that does not run `oats host run`, or bb let the
-  harness exit): it is idle, and keeps a question it asked. (A tmux row that does not run is
-  stopped as before.) That row is shaped from the kernel's contract, not recorded: the bb session
+- **Stopped is said of a row only when the kernel calls it stopped** (`recordedStopped`, for
+  every backend; the claim's gate reads the same predicate): the row does not run, and says that
+  an operator stopped it or that its session was lost (`sessionEnd`, beside any word: a tmux agent
+  stopped with OATS reads "shell"), or says nothing of how it ended beside the word "stopped" or
+  no word at all. A harness that ended by itself (`sessionEnd: "exited"`) failed. A row that is
+  not running beside `runtimeState: "unknown"` has its session there and no harness loaded (a
+  reboot on a host that does not run `oats host run`, or bb let the harness exit): it is idle, and
+  keeps a question it asked. A session the kernel cannot reach is never called stopped. That
+  not-loaded row is shaped from the kernel's contract, not recorded: the bb session
   provider prints it only from its next release, and until then an idle bb thread reads `running:
   null` and says "Idle" with nothing after it.
 
@@ -290,10 +293,7 @@ On the home, an agent that runs outside OATS is one of those that need you: its 
 choice and no reply, and the badge, the heading and the summary's "N need you" count it as the
 sidebar's foot does (`view.needing`).
 
-Not there yet: the one predicate the home's card, the Start dialog and this feature's lines share
-for "a message here is the designed resume" (the change after this one: until then the home's
-card of an agent that does not run refuses an answer for every such agent, and offers Start);
-the line of a thread that belonged to a RETIRED agent;
+Not there yet: the line of a thread that belonged to a RETIRED agent;
 the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
 come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
 
@@ -352,10 +352,12 @@ that one, not a free-text box beside it as an equal:
 | bb shows its request in a form the card cannot draw (a plugin's form, free text) | "bb shows its request in its thread: open the thread to answer it.", and **Open thread** |
 | the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.", and **Open thread**. The card cannot grant what bb does not list, and does not pretend to |
 | it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
-| the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost) or cannot reach its session, and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
-| the kernel says it does not run and NOBODY STOPPED IT (its session was lost, it ended in a shell, or no harness is loaded), on a thread bb lists and does not call failed | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line) |
+| the kernel cannot reach its session, and it needs you all the same | no choices and no message: nobody can tell where either would go. The card says "OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.", with **Open thread** and no Start (the lifecycle offers none for it) |
+| the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost), and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
+| the kernel says it does not run and NOBODY STOPPED IT (its session was lost, it ended in a shell, or no harness is loaded), on a thread bb lists (one whose last turn bb calls failed included) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line) |
 | it has no thread in bb: it runs in tmux | "It runs in tmux on <machine>, where bb cannot write to it. Answer it in its terminal there:", the kernel's own command to copy (`oats session attach --home <its home>`), and **Open its page**, with "Open its page shows who it is and how it runs." |
-| it has no thread in bb: its thread was archived or deleted | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+| it has no thread bb lists: bb answers that it has none of that id (deleted) | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+| it has no thread bb lists: bb has it archived or hidden, or the row names none | "bb lists no thread of it to write in, so nothing can be sent to it from here.", and **Open its page** (for an agent OATS stopped whose thread is archived, the press opens that thread) |
 
 Beside choices, or a request answered in the thread, a message is still possible, behind **Write a
 message instead**, which first says what a message does not do: "A message does not answer its
@@ -826,7 +828,7 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
   harness: `running: false`, `sessionEnd: "lost"`; or a thread at rest with no harness loaded:
-  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
+  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar (whatever bb says of its last turn: the one reading, `messageResumes`, `model/rest.ts`). An operator's stop never
   gets the line. The sentence under "What will happen" is decided once, when the check answers:
   the launch archives the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms

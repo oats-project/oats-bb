@@ -36,7 +36,7 @@ describe("the three recorded rows of an agent on tmux", () => {
 
 describe("rest(): how an agent that does not run is at rest", () => {
   test("an agent the kernel does not call not-running runs, whatever else its row says", () => {
-    for (const running of [true, null]) for (const word of ["running", "unknown", null, "shell", "unreachable"]) expect(rest(row(running, word)), `${running} ${word}`).toBe("runs");
+    for (const running of [true, null]) for (const word of ["running", "unknown", null, "shell"]) expect(rest(row(running, word)), `${running} ${word}`).toBe("runs");
   });
   test("where the row says how its session ended, that decides, beside any word", () => {
     for (const word of ["stopped", "shell", "unknown", null, "a-later-word"]) {
@@ -54,9 +54,9 @@ describe("rest(): how an agent that does not run is at rest", () => {
     }
     expect(rest(row(null, "stopped"))).toBe("stopped"); // the word alone
   });
-  test("a session the kernel cannot reach is never called stopped or lost: nobody can tell", () => {
-    for (const end of [undefined, "stopped", "lost"]) expect(recordedStopped(row(false, "unreachable", end)), String(end)).toBe(false);
-    expect(rest(row(false, "unreachable", "lost"))).toBe("unloaded");
+  test("a session the kernel cannot reach is its own answer, never stopped, lost or running: nobody can tell", () => {
+    // The row the kernel prints is `running: null` beside "unreachable" (awebai/oats lib/instance-listing.mjs at v0.70.5); the others are held too.
+    for (const running of [null, false, true]) for (const end of [undefined, "stopped", "lost", "exited"]) expect([rest(row(running, "unreachable", end)), recordedStopped(row(running, "unreachable", end))], `${running} ${end}`).toEqual(["unreachable", false]);
   });
 });
 
@@ -68,14 +68,17 @@ describe("messageResumes(): a message in the thread is the designed way to carry
     for (const agent of [row(false, "stopped", "stopped"), row(false, "shell", "stopped"), row(false, "unknown", "stopped"), row(false, "stopped"), row(false, null)]) expect(messageResumes(agent, listed), JSON.stringify(agent)).toBe(false);
   });
   test("never where nobody can tell: the kernel cannot reach its session", () => {
-    expect(messageResumes(row(false, "unreachable"), listed)).toBe(false);
+    for (const running of [null, false, true]) expect(messageResumes(row(running, "unreachable"), listed), String(running)).toBe(false);
     expect(messageResumes(row(false, "unreachable", "lost"), listed)).toBe(false);
   });
-  test("never for an agent that runs, one on tmux, a thread bb does not list, or one bb calls failed", () => {
+  test("a listed thread whose last turn bb calls failed takes a message as any other", () => {
+    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown"), row(false, "shell")]) expect(messageResumes(agent, { status: "error" }), JSON.stringify(agent)).toBe(true);
+    expect(messageResumes(row(false, "stopped", "stopped"), { status: "error" })).toBe(false);
+  });
+  test("never for an agent that runs, one on tmux, or a thread bb does not list", () => {
     expect(messageResumes(row(true, "unknown"), listed)).toBe(false);
     expect(messageResumes(row(null, "stopped", "lost"), listed)).toBe(false); // the kernel does not say it does not run
     expect(messageResumes(row(false, null, "lost", "tmux"), listed)).toBe(false);
     expect(messageResumes(row(false, "stopped", "lost"), null)).toBe(false);
-    expect(messageResumes(row(false, "stopped", "lost"), { status: "error" })).toBe(false);
   });
 });

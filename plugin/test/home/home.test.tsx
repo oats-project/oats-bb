@@ -860,7 +860,7 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs.
   const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
   const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
-  await waitFor(() => expect(tmux.words()).toContain(" · session lost · runs in tmux"));
+  await waitFor(() => expect(tmux.words()).toContain(" · session lost · tmux"));
   expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
 });
 
@@ -1009,9 +1009,7 @@ test.each([
   ["an operator stopped it", { running: false as const, runtimeState: "stopped", sessionEnd: "stopped" }, "Which shard do I rerun?"],
   ["it still says an operator stopped it, beside \"unknown\"", { running: false as const, runtimeState: "unknown", sessionEnd: "stopped" }, "Which shard do I rerun?"],
   ["the kernel's word is stopped, with no word on whether it runs", { running: null, runtimeState: "stopped" }, null],
-  // Where nobody can tell whether a message reaches it, the home does not send one.
-  ["it does not run, and the kernel cannot reach its session", { running: false as const, runtimeState: "unreachable" }, "needs your permission to use Bash"],
-])("an agent the kernel calls stopped, or cannot reach (%s) while bb holds a request on its thread: no answer and no message on its card, which says so and offers Start", async (_what, change, question) => {
+])("an agent the kernel calls stopped (%s) while bb holds a request on its thread: no answer and no message on its card, which says so and offers Start", async (_what, change, question) => {
   // An answer or a message to that thread would start the agent's harness again behind OATS's back: a stopped agent stays stopped.
   const { asked } = await import("../../app/lifecycle");
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change } : agent));
@@ -1038,6 +1036,29 @@ test.each([
   fireEvent.click(within(card).getByTestId("oats-needs-start"));
   expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
   expect(slot.inspection.sdkCalls.filter((call) => call.method !== "threads.interactions.list")).toEqual([]);
+});
+
+test("an agent the kernel cannot reach while bb holds a request on its thread: no answer and no message on its card, which says that nothing is sent from here; no Start", async () => {
+  // The row the kernel prints for it: `running: null` beside "unreachable" (awebai/oats lib/instance-listing.mjs at v0.70.5). Nobody can tell where an answer would go.
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: null, runtimeState: "unreachable" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(slot.inspection.sdkCalls.some((call) => call.method === "threads.interactions.list")).toBe(true));
+  await waitFor(() => expect(card.dataset.offer).toBe("unreachable"));
+  expect(within(card).getByTestId("oats-needs-unreachable").textContent).toBe("OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.");
+  expect(within(card).queryAllByTestId("oats-needs-choice")).toEqual([]);
+  for (const id of ["oats-reply", "oats-reply-send", "oats-needs-message", "oats-needs-stopped", "oats-needs-start"]) expect(within(card).queryByTestId(id)).toBeNull();
+  expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open thread"]);
+  expect(slot.inspection.sdkCalls.filter((call) => call.method !== "threads.interactions.list")).toEqual([]);
+});
+
+test("an agent whose session was lost, on a thread whose last turn bb calls failed, is answered as on any listed thread", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
+  const threads = sidebarThreads();
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
+  expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
 });
 
 test("an agent whose session was LOST while bb holds a request on its thread is answered from its card: bb's choices, no Start", async () => {

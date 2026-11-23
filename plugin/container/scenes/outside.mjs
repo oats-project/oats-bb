@@ -1,8 +1,8 @@
 // The outside feature's live scenes: what the sidebar's row and the thread's line
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
-// or an act in bb, at once on one roster; `outside-host`, the two rows that are neither (stopped
-// with the machine, idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
+// or an act in bb, at once on one roster; `outside-host`, the rows that are neither (a session
+// lost, on bb and on tmux; idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
 // holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).

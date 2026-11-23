@@ -523,7 +523,7 @@ export const START = {
  * conversation on: the plugin's ONE reading of that (`messageResumes`, model/rest.ts), which the
  * home's card and the thread's own line read too. The kernel's row says the agent does not run and
  * that nobody stopped it (its session was lost, or no harness is loaded), and bb has its thread in
- * the sidebar, not in error. An operator's stop never gets the line, and neither does a stopped
+ * the sidebar (whatever bb says of its last turn). An operator's stop never gets the line, and neither does a stopped
  * row that does not say how its session ended, or one with no word of the runtime's state.
  * `thread` is bb's own row of it, or null when bb shows none.
  */

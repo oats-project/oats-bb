@@ -1283,7 +1283,7 @@ test.each([
   expect(calls(slot, "start", "restart")).toEqual([]);
 });
 
-test("a cut-off agent whose thread cannot take a message gets no line: bb says its thread is in error, or shows none", async () => {
+test("a cut-off agent whose thread cannot take a message gets no line: bb does not list it (archived). A listed thread whose last turn bb calls failed takes a message, and gets the line", async () => {
   const withThreads = async (threads: ReturnType<typeof fixtureThreads>) => {
     const app = await loadApp();
     const Overlay = app.appOverlays[0]!.component;
@@ -1298,7 +1298,8 @@ test("a cut-off agent whose thread cannot take a message gets no line: bb says i
     return said;
   };
   const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)));
-  expect(inError.line).toBe(false);
+  // bb's last turn failed and the session is there (a harness killed in a turn is how a session is lost): bb's composer is live on it.
+  expect(inError.line).toBe(true);
   // Its thread is still there for bb: a start archives it, and the dialog says so.
   expect(inError.text).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
   const archived = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, isArchived: true } : thread)));

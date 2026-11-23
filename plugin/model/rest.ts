@@ -15,14 +15,19 @@ type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; 
  * - "lost": its session was LOST (`sessionEnd: "lost"`): it ended without OATS stopping it;
  * - "ended": its session ended by itself (`sessionEnd: "exited"`, or a shell with no word how);
  * - "unloaded": not running beside another word (a provider's "unknown": its session is there
- *   and no harness is loaded; a session the kernel cannot reach).
+ *   and no harness is loaded);
+ * - "unreachable": the kernel cannot reach its session (`runtimeState: "unreachable"`, which it
+ *   prints beside `running: null`): nobody can tell whether it runs.
  * Where the row says how its session ended, that decides, as in the state (`recordedStopped`).
  */
-export type Rest = "runs" | "stopped" | "lost" | "ended" | "unloaded";
+export type Rest = "runs" | "stopped" | "lost" | "ended" | "unloaded" | "unreachable";
 
 export function rest(agent: Row): Rest {
+  // Nobody can tell of a session the kernel cannot reach, whatever else the row says (the kernel
+  // prints it `running: null` beside "unreachable"): its own answer, before every other.
+  if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.running !== false && agent.runtimeState !== "stopped") return "runs";
-  if (agent.sessionEnd === "lost" && agent.runtimeState !== "unreachable") return "lost";
+  if (agent.sessionEnd === "lost") return "lost";
   if (agent.sessionEnd === "exited") return "ended";
   if (recordedStopped(agent) || agent.runtimeState === "stopped" || agent.sessionEnd === "stopped") return "stopped";
   return agent.runtimeState === "shell" ? "ended" : "unloaded";
@@ -34,16 +39,17 @@ export function rest(agent: Row): Rest {
  * stopped, or that is stopped with no word that its session was lost (the kernel's stop: the
  * message would start its harness outside OATS), and where nobody can tell (the kernel cannot
  * reach its session). Everything else that does not run (`running: false`: its session was lost,
- * no harness is loaded for it, or its session ended in a shell) and is an agent on bb whose thread
- * bb lists (not archived, not hidden) and does not call failed carries on by a message: the
- * provider brings its session back, and OATS reads it running at its next read (the kernel's
- * contract for a provider home, docs/desktop-cli-api.md at v0.70.5: a session that a message
- * started reads running at the next status; `outsideOats` is reported only against a recorded
- * stop). Never for an agent on tmux (bb cannot write to it).
- * `thread` is bb's own row of the thread the roster draws the agent on, or null.
+ * it ended by itself, or no harness is loaded for it) and is an agent on bb whose thread bb LISTS
+ * (not archived, not hidden) carries on by a message: the provider brings its session back, and
+ * OATS reads it running at its next read (the kernel's contract for a provider home,
+ * docs/desktop-cli-api.md at v0.70.5: a session that a message started reads running at the next
+ * status; `outsideOats` is reported only against a recorded stop). A listed thread whose last
+ * turn bb calls failed ("error") takes a message as any other: a harness killed in a turn is how
+ * a session is lost. Never for an agent on tmux (bb cannot write to it).
+ * `thread` is bb's own row of the thread the roster draws the agent on, or null where bb lists none.
  */
-export function messageResumes(agent: Row, thread: { status: string } | null): boolean {
+export function messageResumes(agent: Row, thread: object | null): boolean {
+  if (agent.running !== false || agent.backend === "tmux" || thread === null) return false;
   const how = rest(agent);
-  if (agent.running !== false || agent.runtimeState === "unreachable" || agent.backend === "tmux") return false;
-  return (how === "lost" || how === "ended" || how === "unloaded") && thread !== null && thread.status !== "error";
+  return how === "lost" || how === "ended" || how === "unloaded";
 }

@@ -15,7 +15,7 @@
 // "Archived" is told from "deleted" by bb's answer alone, never by the kernel's message.
 import type { Agent, OutsideOats, ThreadWhere } from "../../model/types";
 import { rest } from "../../model/rest";
-import { recordedStopped, state } from "../../model/view";
+import { state } from "../../model/view";
 import {
   ARCHIVED_FACT,
   ARCHIVED_NOTE,
@@ -149,12 +149,14 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   const archived = where === "archived";
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
   const is = state(agent, null);
+  // How it is at rest: the one reading of the row (model/rest.ts), which the home's card and the Start dialog read too.
+  const how = rest(agent);
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
   // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable
   // (by its own word: a claim makes such a row "Needs you", and it is still not one that runs),
   // and the kernel does not say that no harness is loaded (`running: false`).
-  const cannotRun = agent.runtimeState === "shell" || agent.runtimeState === "unreachable" || agent.running === false;
+  const cannotRun = agent.runtimeState === "shell" || how === "unreachable" || agent.running === false;
   if (archived && !attached && (is === "idle" || is === "needs-you") && !cannotRun) {
     return { ...base, kind: "running-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
   }
@@ -167,7 +169,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
     case "stopped": {
       if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
-      const lost = agent.sessionEnd === "lost" && recordedStopped(agent);
+      const lost = how === "lost";
       if (where === "archived") {
         if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
         // The row keeps the soul beside "Stopped", in the plain tone: once the provider archives at
@@ -196,7 +198,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       // The kernel's own word that no harness runs: `running: false`. (With no thread given, the state
       // function answers "idle" for every provider row that is not stopped, failed or unreachable:
       // one whose harness is loaded reads `true`, one the provider cannot tell reads `null`.)
-      if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };
+      if (where === "open" && attached && how === "unloaded") return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };
       return threadless;
     default:
       return threadless;

@@ -31,8 +31,9 @@ from a contract:
   `lib/instance-listing.mjs` answers the same three fields for it). Its thread is not archived,
   and a message in it carries the conversation on (confirmed by the kernel's side). The live scene
   is that pairing: the same fields over the recorded roster, on a thread the run's bb has. A
-  thread in `error` whose harness is gone reads the same row; bb's status excludes it from the
-  line, which is harmless (it could take a message too) and kept.
+  thread in `error` whose harness is gone reads the same row, and takes a message as any listed
+  thread does (bb's composer is live on it): it gets the line too (the one reading,
+  `messageResumes`; read from bb's behaviour, not proven by a run).
 - **A thread at rest with no harness loaded**: `running: false`, `runtimeState: "unknown"`, no
   `sessionEnd`. SHAPED from the bb session provider's A15(1) change (its harness scan answers
   `running` for an idle thread: `inspectAnswer` in the provider's `lib/threads.mjs`, on its branch

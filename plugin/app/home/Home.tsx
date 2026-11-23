@@ -31,13 +31,13 @@ import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
-import { board, mayAnswer, refuses } from "./board";
+import { board, mayAnswer, refusal } from "./board";
 import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, THREAD_NOT_LISTED, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREACHABLE, NOT_NOW_UNREAD, UNREACHABLE_WAITS, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, THREAD_NOT_LISTED, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
 import { question } from "./interactions";
@@ -105,7 +105,7 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
  * at stop that is every stopped agent: its row says Stopped, and opens the archived thread).
  */
 function elsewhere(entry: Entry, said: Said | null): string | null {
-  if (entry.agent.backend === "tmux") return said !== null && said.note ? `${said.note} · runs in tmux` : "runs in tmux";
+  if (entry.agent.backend === "tmux") return said !== null && said.note ? `${said.note} · tmux` : "runs in tmux"; // (after a reason, where it is: an agent whose session was lost does not "run")
   if (said === null || said.kind === "stopped-archived") return null;
   return said.note ? said.note : null;
 }
@@ -114,7 +114,7 @@ function elsewhere(entry: Entry, said: Said | null): string | null {
 const START = ACTS.find((each) => each.verb === "start")!.button;
 
 /** How a card is answered: what the agent asks decides what the card offers (`offer`, below). */
-type Offer = "stopped" | "choices" | "in-thread" | "reply" | "elsewhere";
+type Offer = "stopped" | "unreachable" | "choices" | "in-thread" | "reply" | "elsewhere";
 
 /** The reply to one agent: one line that grows with its text, Send beside it, on that agent's card. */
 function Reply({ name, text, onText, busy, held, said, onSend }: { name: string; text: string; onText: (text: string) => void; busy: boolean; held: boolean; said: string | null; onSend: () => void }) {
@@ -289,7 +289,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       if (agent === undefined) throw new Error(NOT_NOW_GONE);
       // The AGENT is the server's roster's, read now; the THREAD is the card's own (bb's row as it
       // was drawn): the guard is fresh on what OATS says, not on what bb says of the thread.
-      if (refuses(agent, entry.thread)) throw new Error(NOT_NOW_STOPPED);
+      const why = refusal(agent, entry.thread);
+      if (why !== null) throw new Error(why === "unreachable" ? NOT_NOW_UNREACHABLE : NOT_NOW_STOPPED);
       return run();
     }).then(
       () => {
@@ -331,9 +332,9 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   // says so, and offers Start, the lifecycle's own act, which starts it through OATS. An agent
   // whose session was LOST, or that has no harness loaded, is answered as any other: a message in
   // its thread is how it comes back (`refuses`, board.ts: the Start dialog's own reading).
-  const stopped = refuses(entry.agent, entry.thread);
+  const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
-    thread === undefined ? "elsewhere" : stopped ? "stopped" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+    thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -345,7 +346,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const saidOf = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
   const where = entry.thread === null ? elsewhere(entry, saidOf) : null;
   return (
-    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || answered === null ? offer : "answered"}>
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || offer === "unreachable" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -368,7 +369,12 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {shown(detail)}
           </p>
         )}
-        {offer === "stopped" ? (
+        {offer === "unreachable" ? (
+          // Nobody can tell where an answer or a message would go: none is offered, and no Start (the lifecycle has none for it).
+          <p data-testid="oats-needs-unreachable" className="m-0 text-xs text-muted-foreground">
+            {UNREACHABLE_WAITS}
+          </p>
+        ) : offer === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
             <p className="m-0 text-xs text-muted-foreground">{STOPPED_WAITS}</p>
             <div className="flex flex-wrap items-center gap-2">

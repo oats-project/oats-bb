@@ -666,8 +666,8 @@ test("a preview the kernel refuses: a person's words first, the code after, the 
 });
 
 test("a preview the provider refuses (from OATS 0.70.1 it refuses as the spawn does) is drawn as a refusal, with Spawn off for that reason: not as a preview still to come, nor as a failed read", async () => {
-  // What the real kernel printed for a spawn on pi where bb has no pi provider (0.70.0 refuses at the spawn; later kernels at the preview, with the same code).
-  const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+  // What the real kernel (OATS 0.70.5) printed for a PREVIEW on pi where bb has no pi provider.
+  const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
   const slot = await ready({
     spawnPlan: (input) => {
       if (input.harness === "pi") throw new Error(`${refused.code}: ${refused.message}`);

@@ -99,6 +99,10 @@ describe("a refusal, in a person's words, with what to do", () => {
     expect([problem.code, problem.sentence]).toEqual(["E_BACKEND_NOT_READY", "bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."]);
     expect(problem.detail).toMatch(/bb reports its pi provider as not_installed.*spawn rolled back$/);
     // From OATS 0.70.1 the PREVIEW refuses with the same code (the provider's own check): a refusal in a person's words, not a failed read.
+    // As the real kernel (0.70.5) printed it at the preview: nothing was started.
+    const atPreview = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+    expect(atPreview.message).toMatch(/would not be launched.*nothing was created$/);
+    expect(spawnProblem(atPreview, "preview")).toMatchObject({ code: "E_BACKEND_NOT_READY", outcome: "refused", sentence: "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above.", detail: atPreview.message });
     expect(spawnProblem(refused, "preview")).toMatchObject({ code: "E_BACKEND_NOT_READY", next: "change-options", sentence: "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above." });
     expect(spawnProblem(refused, "preview", { harnessField: false }).sentence).toBe("bb isn’t ready to launch this agent as chosen. Details says what bb needs.");
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");

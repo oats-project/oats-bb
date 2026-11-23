@@ -135,7 +135,7 @@ export default [
       await page.shot(`a13-${viewport.name}-thread-needs`, { targets: true });
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
-      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.startsWith("Needs you · ") ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
+      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim().startsWith("Needs you · ") ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
       const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
       check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
       // At 1280 the sidebar is beside the thread: the image above already shows the open row. At 390 it is bb's drawer, over the thread.
@@ -299,7 +299,7 @@ export default [
   {
     stage: "tmux-roster",
     name: "a deployment that is mostly tmux agents: every one a row that says where it runs, the count of who waits, no phrase broken, the last row reachable, and a row opens its agent's page",
-    run: async ({ page, at, viewport, check }) => {
+    run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const side = JSON.stringify(testId("oats-sidebar"));

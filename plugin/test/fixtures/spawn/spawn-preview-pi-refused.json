@@ -1,0 +1,12 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_BACKEND_NOT_READY",
+  "message": "form-pi-developer would not be launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_NOT_READY: bb reports its pi provider as not_installed; E_BACKEND_NOT_READY: bb's pi would load none of the home's skills, and nothing would say so: @awebai/oats-pi is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai/oats-pi), or point settings.oats.bb.piAgentDir at the directory bb's server uses (in the team image for bb: /state/home/.bb-pi). Read: /abs/home/.pi/agent/settings.json; nothing was created",
+  "details": {
+   "backend": "bb",
+   "capability": "oats.bb"
+  }
+ }
+}

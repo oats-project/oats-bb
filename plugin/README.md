@@ -246,8 +246,9 @@ not scroll, so the block is on the page). They are the lifecycle's buttons for t
 thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
 Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
 report has its Stop and Start in its notice, each with what it does there. On the agent's page
-this feature adds one act to the header's: Stop for a session OATS lost, which reads stopped and
-is offered none there.
+no act is drawn twice: the acts are the header's, the notice there says what Stop and Start do
+and draws no second button, and this feature adds one act the header does not offer: Stop for a
+session OATS lost, which reads stopped.
 
 The words are in `app/outside/words.ts`, with the fact each rests on in `WORDS.md`. Beside the
 state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent, bb's answer and

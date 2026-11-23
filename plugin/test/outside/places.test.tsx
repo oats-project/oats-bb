@@ -379,10 +379,42 @@ test("a stopped agent whose thread bb has archived, or deleted: its own page say
   expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: [], headed: ["Start…", "Retire…"] });
 });
 
+test("no act is drawn twice on the agent's page: the three agents whose thread bb has archived, and the one that runs outside OATS", async () => {
+  const HARVEST = "harvest-knowledge-helper";
+  const verbs = (slot: Awaited<ReturnType<typeof agentPage>>) => actsIn(slot.getByTestId("oats-agent-page")).map((label) => label!.replace("…", ""));
+  const once = (all: string[]) => expect(new Set(all).size, all.join(", ")).toBe(all.length);
+  // An operator's stop, archived: the header's Start and Retire.
+  const stopped = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  await waitFor(() => expect(header(stopped).kind).toBe("stopped-archived"));
+  expect(verbs(stopped)).toEqual(["Start", "Retire"]);
+  resetApp();
+  // A session lost, archived: the header's Start and Retire, and this feature's Stop, which the header does not offer.
+  const lost = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  await waitFor(() => expect(header(lost).kind).toBe("lost-archived"));
+  once(verbs(lost));
+  expect([...verbs(lost)].sort()).toEqual(["Retire", "Start", "Stop"]);
+  resetApp();
+  // It still runs, archived: the header's acts for its state; Stop is among them, and this feature adds none.
+  const threads = { status: "ready" as const, threads: fixtureThreads().filter((thread) => thread.id !== "thr_harvest") };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: true, runtimeState: "unknown", waiting: null } : agent));
+  const runs = await agentPage(HARVEST, { rpc: handlers({}, agents), sidebarThreads: threads, sdk: bb(["thr_harvest"]).sdk });
+  await waitFor(() => expect(header(runs).kind).toBe("running-archived"));
+  once(verbs(runs));
+  expect(verbs(runs)).toContain("Stop");
+  expect(header(runs)).toMatchObject({ acts: [], tone: "warning", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS." });
+  resetApp();
+  // It runs outside OATS: the header's Stop, Start and Retire; the notice says what Stop and Start do.
+  const outside = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(header(outside).kind).toBe("outside"));
+  expect(verbs(outside)).toEqual(["Stop", "Start", "Retire"]);
+});
+
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
   const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(reported).kind).toBe("outside"));
-  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: ["Stop", "Start"] }); // the notice's own two
+  // The header has the lifecycle's acts; the notice under it says what Stop and Start do, and draws no second button.
+  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"] });
+  expect(Array.from(header(reported).block!.querySelectorAll('[data-testid="oats-outside-act"]')).map((act) => act.textContent)).toEqual(["Stopstops the harness that runs outside OATS", "Startstarts it from OATS, in a new conversation"]);
   expect(within(header(reported).block!).getByTestId("oats-notice").querySelector("h3")!.textContent).toBe("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });

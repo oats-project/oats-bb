@@ -403,8 +403,8 @@ export default [
         );
         const drawn = read ? JSON.parse(read) : null;
         check(
-          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, ["Stop", "Start"]) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
-          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with the notice's title in view, and its Stop and Start (Retire is the header's)`,
+          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, []) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
+          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with the notice's title in view, and no second button (Stop, Start and Retire are the header's)`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );
         await page.shot(`outside-${viewport.name}-agent-archived-outside`, { targets: true });

@@ -120,7 +120,7 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
  * one press away, under Details, through the display filter: no command is on screen where the two
  * buttons do the same. Nothing where the kernel reports nothing.
  */
-export function OutsideWarning({ said, instance, held }: { said: Said | null; instance: string; held: boolean }) {
+export function OutsideWarning({ said, instance, held, acts = "own" }: { said: Said | null; instance: string; held: boolean; /** "above": the place has the lifecycle's Stop and Start for this agent over the notice (the panel's header): the notice says what each does and draws no second button */ acts?: "own" | "above" }) {
   if (said === null || said.warning === null) return null;
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
@@ -134,7 +134,7 @@ export function OutsideWarning({ said, instance, held }: { said: Said | null; in
             ] as const
           ).map(([act, does]) => (
             <li key={act} data-testid="oats-outside-act" className="flex min-w-0 flex-wrap items-center gap-2">
-              <OutsideActs instance={instance} acts={[act]} held={held} />
+              {acts === "own" ? <OutsideActs instance={instance} acts={[act]} held={held} /> : <span className="font-semibold text-foreground">{LABEL[act]}</span>}
               <span className="min-w-0 break-words text-muted-foreground">{does}</span>
             </li>
           ))}
@@ -225,7 +225,8 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
           <OutsideActs instance={agent.instance} acts={["stop"]} held={held} />
         </div>
       )}
-      <OutsideWarning said={said} instance={agent.instance} held={held} />
+      {/* (Its Stop and Start are the header's, over this block: the notice says what each does.) */}
+      <OutsideWarning said={said} instance={agent.instance} held={held} acts="above" />
     </div>
   );
 }

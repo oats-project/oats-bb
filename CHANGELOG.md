@@ -34,8 +34,10 @@
   - The retire warns whenever a thread of the home is left without a deleted
     environment. That includes a home retired before its first turn started: bb makes a
     thread's environment at its first turn, so there is none to delete.
-  - A record can outlive a home whose retire never reached bb (the hook then decided
-    nothing and keeps it). It is harmless, and the README says how to remove leftovers.
+  - Where the hook could not decide (bb could not be asked or read, or did not do the
+    delete), the record stays and a retire run again can still delete. So a record can
+    outlive a home whose retire never got through to bb. It is harmless, and the README
+    says how to remove leftovers.
   - The receipt (`capabilityMeta` of oats.bb) gains `environments`, the environments bb
     was asked to delete. Where the home's record is there, `archived` names only the
     home's own threads (and those the hook itself archived): a home made at a path an

@@ -158,15 +158,19 @@ for (const [name, answer, why] of [
     assert.match(WHY.exec(last.warning)[1], why);
     assert.doesNotMatch(last.warning, /boom/);
     assert.deepEqual(last.meta, { archived: ["thr_a"] });
+    // Nothing was decided: the record stays, and a retire run again, with bb readable, deletes.
+    assert.equal(records().length, 1);
+    assert.deepEqual((await retire()).last, { meta: { retired: true, archived: ["thr_a"], environments: [ENV] } });
     assert.deepEqual(records(), []);
   });
 }
 
 test("an environment bb cannot show blocks the delete; one bb no longer has, or has destroyed, is nothing to delete and nothing to warn of", async (t) => {
-  const { retire } = setup(t);
+  const { retire, records } = setup(t);
   const unread = await retire({ "environment show": { error: { code: "error", message: "HTTP 500: boom" } } });
   assert.deepEqual(deletes(unread.calls), []);
   assert.equal(WHY.exec(unread.last.warning)[1], `bb environment ${ENV} could not be read (E_SESSION_UNAVAILABLE)`);
+  assert.equal(records().length, 1, "nothing was decided: the record stays");
   for (const [answer, noted] of [[{ error: { code: "environment_not_found", message: "HTTP 404: Environment not found" } }, ["thr_a"]], [{ stdout: environmentRow(ENV, null, { status: "destroyed" }) }, ["thr_a"]], [{ stdout: environmentRow(ENV, null, { status: "destroyed" }) }, null]]) {
     const again = setup(t, { noted });
     const { last, calls } = await again.retire({ "environment show": answer });
@@ -188,14 +192,26 @@ test("only the local-path kind is deleted: an environment bb manages, or one of 
     assert.equal(WHY.exec(last.warning)[1], `bb environment ${ENV} is not a local directory bb leaves alone (it is ${said})`);
     assert.equal(verbs(calls).includes("thread list --environment"), false);
   }
-  // A thread of the home's project that runs in another directory (a person's worktree): its environment is not looked at further.
-  const { home, retire } = setup(t);
-  for (const path of [`${home}/work`, `${home}-other`, "/"]) {
-    const { last, calls } = await retire({ "environment show": { stdout: environmentRow(ENV, path) } });
+  // An environment at another directory than the home is never deleted, and its threads are not listed.
+  // A thread of the home's own on it (one moved to another directory) is left with an environment: the warning says so.
+  for (const path of ["work", "-other", "/"]) {
+    const { home, records, retire } = setup(t);
+    const { last, calls } = await retire({ "environment show": { stdout: environmentRow(ENV, path === "/" ? "/" : path === "work" ? `${home}/work` : `${home}${path}`) } });
     assert.deepEqual(deletes(calls), [], path);
     assert.equal(verbs(calls).includes("thread list --environment"), false);
-    assert.equal(last.warning, undefined);
+    assert.equal(WHY.exec(last.warning)[1], `1 thread of this home is on bb environment ${ENV}, which is not the home's directory and is never deleted: thr_a`);
+    assert.deepEqual(last.meta, { archived: ["thr_a"] });
+    assert.deepEqual(records(), [], "a no that rests on what was read: decided");
   }
+  // A person's thread of the home's project that runs elsewhere (their worktree) is not this home's to speak of:
+  // the home's own environment is deleted, and nothing is said of theirs.
+  const { home, retire } = setup(t);
+  const { last, calls } = await retire({
+    "thread list --archived": { stdout: [onEnv("thr_a"), onEnv("thr_person", { environmentId: "env_theirs" })] },
+    "environment show": [{ stdout: environmentRow(ENV, home) }, { stdout: environmentRow("env_theirs", `${home}-worktree`, { environmentProviderId: "git-worktree", managed: true }) }],
+  });
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"], environments: [ENV] } });
+  assert.deepEqual(deletes(calls), [["environment", "delete", ENV, "--json"]]);
 });
 
 test("a home with no record gets archive only, and the warning says a home spawned before the record gets none", async (t) => {
@@ -278,7 +294,8 @@ test("a record that is unreadable (another mode) blocks the delete and is left w
 });
 
 test("the delete is asked only once every thread of the home is stopped and archived: one that would not stop, or an archived one whose stop is not confirmed, leaves archive only", async (t) => {
-  const stuck = await setup(t, { noted: ["thr_first", "thr_a"] }).retire({
+  const stuckHome = setup(t, { noted: ["thr_first", "thr_a"] });
+  const stuck = await stuckHome.retire({
     "thread list": { stdout: [threadRow("thr_a", "proj_a", "active", { environmentId: ENV })] },
     "thread show": { stdout: { thread: threadRow("thr_a", "proj_a", "active", { environmentId: ENV }), environment: null, pendingTodos: null } },
     "thread list --archived": { stdout: [onEnv("thr_first")] },
@@ -286,14 +303,17 @@ test("the delete is asked only once every thread of the home is stopped and arch
   assert.deepEqual(deletes(stuck.calls), []);
   assert.deepEqual(stuck.last.meta, { archived: ["thr_first"], left: ["thr_a"] });
   assert.match(WHY.exec(stuck.last.warning)[1], /^not every bb thread of this home was stopped and archived$/);
+  assert.equal(stuckHome.records().length, 1, "nothing was decided: the record stays for a retire run again");
   const unswept = await setup(t).retire({ "thread stop": { error: { code: "error", message: "HTTP 500: no" } } });
   assert.deepEqual(deletes(unswept.calls), []);
   assert.equal(unswept.last.meta.unswept, true);
   assert.match(unswept.last.warning, WHY);
   // And a thread bb's list shows unarchived on the environment (unarchived by a person a moment ago): bb would refuse, and it is not asked.
-  const live = await setup(t).retire({ "thread list --environment": { stdout: [onEnv("thr_a", { archivedAt: null })] } });
+  const liveHome = setup(t);
+  const live = await liveHome.retire({ "thread list --environment": { stdout: [onEnv("thr_a", { archivedAt: null })] } });
   assert.deepEqual(deletes(live.calls), []);
   assert.equal(WHY.exec(live.last.warning)[1], `a thread on bb environment ${ENV} is not archived`);
+  assert.equal(liveHome.records().length, 1);
 });
 
 test("where the home's archived threads cannot be listed, no environment is looked for, and the warning says so", async (t) => {
@@ -302,7 +322,7 @@ test("where the home's archived threads cannot be listed, no environment is look
   assert.equal(verbs(calls).includes("environment show"), false);
   assert.deepEqual(last.meta, { archived: [], unswept: true });
   assert.equal(WHY.exec(last.warning)[1], "the home's archived bb threads could not be listed");
-  assert.deepEqual(records(), []);
+  assert.equal(records().length, 1, "nothing was decided: the record stays");
 });
 
 for (const [name, answer, said] of [
@@ -321,7 +341,10 @@ for (const [name, answer, said] of [
     assert.match(run.stderr, said);
     assert.match(run.stderr, /^oats bb: warning: bb did not delete environment env_home of this home: its threads are archived only: if the home is kept, a person can unarchive one in bb and a message then starts its agent with no OATS around it\. Delete it in bb \(bb environment delete env_home\)\. bb said: /);
     assert.equal(run.stderr.trim().split("\n").length, 1);
-    assert.deepEqual(records(), [], "the hook has decided");
+    // bb did not do it: the record stays, and a retire run again, with bb answering, deletes.
+    assert.equal(records().length, 1);
+    assert.deepEqual((await retire()).last, { meta: { retired: true, archived: ["thr_a"], environments: [ENV] } });
+    assert.deepEqual(records(), []);
   });
 }
 
@@ -369,6 +392,17 @@ test("run twice, the hook is quiet the second time: the environment is destroyed
   assert.deepEqual(deletes(calls), []);
   assert.equal(run.stderr, "");
   assert.equal(existsSync(home), true);
+});
+
+test("a no that rests on what was read is decided, and the record goes: a retire run again says there is no record, and deletes nothing", async (t) => {
+  const { records, retire } = setup(t);
+  const rows = [onEnv("thr_a"), onEnv("thr_person")];
+  const script = { "thread list --archived": { stdout: rows }, "thread list --environment": { stdout: rows } };
+  assert.match(WHY.exec((await retire(script)).last.warning)[1], /thr_person$/);
+  assert.deepEqual(records(), []);
+  const again = await retire(script);
+  assert.deepEqual(deletes(again.calls), []);
+  assert.match(WHY.exec(again.last.warning)[1], /^this home has no thread record/);
 });
 
 test("where bb cannot be asked at all nothing was decided: the record stays, and a retire run again deletes", async (t) => {

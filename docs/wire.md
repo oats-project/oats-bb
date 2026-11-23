@@ -575,7 +575,9 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   - the environment (the one a thread of the home's project is on, `bb environment show`)
     is there, has the home as its `path`, and is the local-path kind:
     `environmentProviderId: "project-checkout"` and `managed: false`. One bb has destroyed
-    already, or one at another directory, is passed over in silence;
+    already is passed over in silence. One at another directory is never deleted: the
+    warning says so where a thread of the home's own is on it, and nothing where only
+    other threads of the home's bb project are;
   - `bb thread list --environment <id> --include-archived --include-hidden` was read
     whole (every row readable, every row on that environment), and every thread in it is
     archived and is in the home's record.
@@ -602,8 +604,11 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   not regular, has a second name, another owner or another mode, or whose directories
   are not this user's `0700` directories (unreadable); anything but that first line and
   whole lines of one id (malformed). The hook removes the record once it has decided
-  (deleted, or archived only); where bb could not be asked at all it stays, so one can
-  outlive a home whose retire never reached bb: harmless (ids only; a later home at the
+  (deleted, or a no that rests on what was read: the kind, the record, a thread that is
+  not the home's own). Where it could not decide (bb could not be asked or read, a
+  thread would not stop, a thread on the environment was not archived, bb did not do the
+  delete) the record stays, and a retire run again decides. So one can outlive a home
+  whose retire never got through to bb: harmless (ids only; a later home at the
   path does not match it and replaces it), and an operator may delete the files of
   `homes/` while no bb home of that user runs. No other verb or hook reads or writes it.
   **WARNING: a retired agent whose home was kept (`oats retire --keep-dir`, or a retire

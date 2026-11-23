@@ -780,9 +780,12 @@ thread from the agent's. So the hook deletes only where it is certain, and other
 leaves the threads archived, as before this release, and says why in the retire's
 warning:
 
-- **The environment is not the local-path kind** (`project-checkout`, a directory bb
-  does not manage, which is what a home is). A worktree or a remote environment is
-  never deleted.
+- **The environment is not the home's own local directory.** Only an environment whose
+  path is the home and whose kind is local-path (`project-checkout`, a directory bb
+  does not manage) is deleted. A worktree, a remote environment, or one at another
+  directory never is. Where a thread of the home's own is on such an environment (one
+  moved to another directory), the warning says so; a person's thread of the home's bb
+  project that runs elsewhere is passed over in silence.
 - **A thread on it is not the home's own.** The provider keeps a record of the threads
   its launches made for each home, and deletes only where bb's list of the threads on
   the environment (`bb thread list --environment <id> --include-archived
@@ -794,7 +797,6 @@ warning:
   (the launch warns on its standard error and goes on), for a launch whose answer was
   lost, and for a record that cannot be read whole.
 - **A thread of the home could not be stopped and archived**, or bb could not be read.
-
 - **A thread has no environment yet.** bb makes a thread's environment when its first
   turn starts. A home retired before that (bb held the turn in line) has nothing to
   delete, and its thread, unarchived, would still start.
@@ -822,11 +824,17 @@ Directories are `0700`, files `0600`.
 - A file with another mode or owner, a link, or a file with a second name is not read.
   A line that was not written whole makes the record malformed. Both mean archive only.
 - Each launch adds its thread's id. Only the retire hook reads it, for this one
-  question, and removes it once it has decided. No other command reads it: which
-  threads are a home's stays by project, environment and the recorded endpoint.
-- Where bb could not be asked at all, the hook has decided nothing and the record
-  stays, so a retire run again can still delete. So a record can outlive a home whose
-  retire never reached bb. That is harmless: it holds thread ids only, and a later home
+  question, and removes it once it has decided: the environment deleted, or a no that
+  rests on what it read (a thread that is not the home's own, the wrong kind, a record
+  that cannot be read). After such a no, the home is archived only for good. No other
+  command reads it: which threads are a home's stays by project, environment and the
+  recorded endpoint.
+- Its place is read from the environment of the process that runs OATS
+  (`XDG_STATE_HOME`). A launch and a retire that run with different values look in two
+  places: the retire then finds no record and archives only.
+- Where the hook could not decide (bb could not be asked or read, a thread would not
+  stop, bb did not do the delete), the record stays, so a retire run again can still
+  delete. So a record can outlive a home whose retire never got through to bb. That is harmless: it holds thread ids only, and a later home
   at that path is another directory, which it does not match (that home's first launch
   replaces it). To remove leftovers by hand, delete the files in
   `$XDG_STATE_HOME/oats-bb/homes/` (`~/.local/state/oats-bb/homes/`) while no bb home

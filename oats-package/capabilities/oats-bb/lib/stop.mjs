@@ -209,10 +209,16 @@ function recordGap(record) {
  *  seconds), and never throws for bb's sake: a delete that bb refuses, that does not
  *  answer, or that meets a bb that is down is said on stderr (`note`), with bb's own
  *  words and the command to run, and the retire goes on.
- *  → { deleted: [environment ids], why: [text] }. */
+ *
+ *  `decided`: whether the question was answered: deleted, or a no that rests on what was
+ *  read (the kind, the record, a thread that is not the home's own). False where a read
+ *  of bb or a call to it failed, a thread would not stop, or bb did not do the delete: a
+ *  retire run again may then still delete, so the caller keeps the record.
+ *  → { deleted: [environment ids], why: [text], decided }. */
 async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine, note }) {
   const deleted = [], why = [];
-  if (rows === null) return { deleted, why: ["the home's archived bb threads could not be listed"] };
+  let decided = true;
+  if (rows === null) return { deleted, why: ["the home's archived bb threads could not be listed"], decided: false };
   const bare = rows.filter((row) => mine(row.id) && !isBbId(row.environmentId)).map((row) => row.id);
   if (bare.length > 0) why.push(`${bare.length} thread${bare.length > 1 ? "s" : ""} of this home ${bare.length > 1 ? "have" : "has"} no bb environment to delete yet (bb makes one when a thread's first turn starts): ${someOf(bare, 3)}`);
   // The environments the home's threads are on. (A thread row names its environment.)
@@ -223,32 +229,43 @@ async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
       why.push(`bb environment ${id} could not be read (${error.code})`);
+      decided = false;
       continue;
     }
-    // Gone, destroyed already (an earlier run of this hook; a person), or not this home's
-    // directory (a thread of the home's project that runs elsewhere): nothing to delete here.
-    if (environment === null || environment.status === "destroyed" || !samePath(environment.path, home)) continue;
+    // Gone, or destroyed already (an earlier run of this hook; a person): nothing to delete.
+    if (environment === null || environment.status === "destroyed") continue;
+    // Not this home's directory: never deleted. Where a thread of the home's own is on it
+    // (one moved to another directory, a worktree), that thread keeps an environment, and
+    // the warning says so; a person's thread of the home's project that runs elsewhere is
+    // not this home's to speak of.
+    if (!samePath(environment.path, home)) {
+      const here = rows.filter((row) => row.environmentId === id && mine(row.id)).map((row) => row.id);
+      if (here.length > 0) why.push(`${here.length} thread${here.length > 1 ? "s" : ""} of this home ${here.length > 1 ? "are" : "is"} on bb environment ${id}, which is not the home's directory and is never deleted: ${someOf(here, 3)}`);
+      continue;
+    }
     if (environment.environmentProviderId !== LOCAL_PATH_PROVIDER || environment.managed !== false) { why.push(`bb environment ${id} is not a local directory bb leaves alone (it is ${environment.environmentProviderId}${environment.managed ? ", managed by bb" : ""})`); continue; }
-    if (!allStopped) { why.push("not every bb thread of this home was stopped and archived"); continue; }
+    if (!allStopped) { why.push("not every bb thread of this home was stopped and archived"); decided = false; continue; }
     if (record.state !== "ok") { why.push(recordGap(record)); continue; }
     let threads;
     try { threads = await bb.threadsOn(id); }
     catch (error) {
       if (!(error instanceof ProviderError)) throw error;
       why.push(`bb's list of the threads on environment ${id} could not be read (${error.code})`);
+      decided = false;
       continue;
     }
     const others = threads.filter((thread) => !record.ids.has(thread.id));
     if (others.length > 0) { why.push(`${others.length} thread${others.length > 1 ? "s" : ""} on bb environment ${id} ${others.length > 1 ? "are" : "is"} not in this home's thread record (a person's, or one the provider could not note): ${someOf(others.map((thread) => thread.id), 3)}`); continue; }
-    if (threads.some(isLive)) { why.push(`a thread on bb environment ${id} is not archived`); continue; }
+    if (threads.some(isLive)) { why.push(`a thread on bb environment ${id} is not archived`); decided = false; continue; }
     const answer = await bb.environmentDelete(id);
     if (answer.ok) { deleted.push(id); continue; }
     // bb's own words go to stderr, with the remedy before them (they may be long: a cut
     // must fall in them); the warning says only that it was not done, and what to run.
+    decided = false;
     why.push(`bb was asked to delete bb environment ${id} and did not: delete it in bb (bb environment delete ${id})`);
     note(`bb did not delete environment ${id} of this home: ${ARCHIVED_ONLY}. Delete it in bb (bb environment delete ${id}). bb said: ${String(answer.message).replace(/\s+/g, " ").trim()}`);
   }
-  return { deleted, why: [...new Set(why)] };
+  return { deleted, why: [...new Set(why)], decided };
 }
 
 /** The retire hook: stop and archive every live thread that runs in the home, after the
@@ -276,7 +293,8 @@ async function deleteHomeEnvironments(bb, home, { rows, record, allStopped, mine
  *  Last, it deletes the home's bb environment where every thread on it is the provider's
  *  own for this home (deleteHomeEnvironments; contract r32, A17), and removes the home's
  *  record, which has then answered the one question it is kept for. Where bb could not be
- *  asked at all the record stays: nothing was decided, and a retire run again decides. */
+ *  asked, could not be read on the way, or did not do the delete, the record stays:
+ *  nothing was decided, and a retire run again decides. */
 export async function retire(home, readSettings, { deadline, env = process.env, note = warnOnStderr } = {}) {
   // The hook runs for every home that has the capability, and is not told the home's
   // backend; nothing in the home says it either (the home is its agent's to write, and
@@ -325,15 +343,16 @@ export async function retire(home, readSettings, { deadline, env = process.env, 
     if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
     if (projectEnv.warning !== null) warnings.push(projectEnv.warning);
     // Last, the home's bb environment (contract r32, A17): deleted where every thread on
-    // it is in the provider's record of this home's threads, and only then. The record has
-    // then answered its one question, and goes, whatever the answer was.
+    // it is in the provider's record of this home's threads, and only then. Once that is
+    // decided, yes or no, the record has answered its one question, and goes. Where it
+    // is not (bb could not be read, or did not do it), the record stays for a retire run again.
     const record = readRecord(home, { env });
     // Which threads of the home's bb project are this home's: those in its record, where
     // it has one that vouches for them, and those this hook archived; with no such record,
     // every one. (A home made at a path an earlier home had shares that home's bb project.)
     const ofThisHome = record.state === "ok" ? (id) => record.ids.has(id) || archived.includes(id) : () => true;
     const environments = await deleteHomeEnvironments(bb, home, { rows: listed, record, allStopped: left.length === 0 && unswept === null, mine: ofThisHome, note });
-    try { removeRecord(record); }
+    try { if (environments.decided) removeRecord(record); }
     catch (error) {
       if (!(error instanceof RecordError)) throw error;
       note(`${error.message}: it holds thread ids only, and the next home at this path replaces it (${record.file})`);

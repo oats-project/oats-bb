@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { RecordError, identityOf, noteThread, readRecord, recordDir, removeRecord, sameHome, stateRoot } from "../../oats-package/capabilities/oats-bb/lib/record.mjs";
-import { VERSION, call, callSeen, fakeBackend, fakeBbIn, projectRow, scratch, tellSent } from "../fixtures/harness.mjs";
+import { VERSION, call, callSeen, fakeBackend, fakeBbIn, projectRow, runBin, scratch, tellSent } from "../fixtures/harness.mjs";
 
 /** A home and a state directory of its own (XDG_STATE_HOME), under one scratch directory. */
 function layout(t) {
@@ -277,7 +277,7 @@ test("a record that cannot be written never fails the launch: the endpoint is an
   assert.equal(readFileSync(only(recordDir(env)), "utf8").includes("thr_next"), false);
 });
 
-test("no other verb reads or writes the record: inspect, input, stop and the launch hook leave the state directory as it is", async (t) => {
+test("no other verb writes the record, or makes one: inspect, inspectMany, input, stop, check and the launch hook leave the state directory as it is", async (t) => {
   const state = mkdtempSync(join(tmpdir(), "oats-bb-record-state-"));
   t.after(() => rmSync(state, { recursive: true, force: true }));
   const env = { XDG_STATE_HOME: state };
@@ -287,9 +287,28 @@ test("no other verb reads or writes the record: inspect, input, stop and the lau
   const bb = fakeBbIn(dir, { "thread list": { stdout: [thread] }, "thread show": { stdout: { thread, environment: null, pendingTodos: null } }, "thread stop": { stdout: { ok: true } }, "thread archive": { stdout: { ok: true } },
     "thread interactions list": { stdout: [] }, "thread tell": { stdout: tellSent("thr_a") }, "project list": { stdout: [projectRow("proj_a", home)] } });
   const settings = { version: VERSION, trust: "single-user" };
-  for (const [verb, input] of [["inspect", { home, endpoint }], ["inspectMany", { homes: [{ home, endpoint }] }], ["input", { home, endpoint, text: "hello" }], ["stop", { home, endpoint, graceSeconds: 2 }], ["stop", { home, endpoint: null, graceSeconds: 2 }]]) {
+  const verbs = [["inspect", { home, endpoint }], ["inspectMany", { homes: [{ home, endpoint }] }], ["input", { home, endpoint, text: "hello" }], ["stop", { home, endpoint, graceSeconds: 2 }], ["stop", { home, endpoint: null, graceSeconds: 2 }]];
+  // The launch hook of a home that moves off bb, as the kernel runs it.
+  const launchHook = () => runBin(["launch-hook"], { env: { ...bb.env, ...env, OATS_INSTANCE_HOME: home, OATS_BACKEND: "tmux", OATS_PREVIOUS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }) } });
+  // With no record: none is made.
+  for (const [verb, input] of verbs) {
     const answer = await call(verb, input, { settings, bb, env });
     assert.equal(answer.ok, true, `${verb}: ${JSON.stringify(answer)}`);
     assert.deepEqual(readdirSync(state), [], verb);
   }
+  assert.equal((await call("check", { home, soul: null }, { settings, bb, env })).ok, true);
+  assert.equal((await launchHook()).status, 0);
+  assert.deepEqual(readdirSync(state), []);
+  // With one: it is as it was, to the byte and the time.
+  noteThread(home, "thr_a", { env });
+  const file = only(recordDir(env));
+  const before = [readFileSync(file, "utf8"), statSync(file).mtimeMs, mode(file)];
+  for (const [verb, input] of verbs) {
+    assert.equal((await call(verb, input, { settings, bb, env })).ok, true, verb);
+    assert.deepEqual([readFileSync(file, "utf8"), statSync(file).mtimeMs, mode(file)], before, verb);
+  }
+  assert.equal((await call("check", { home, soul: null }, { settings, bb, env })).ok, true);
+  assert.equal((await launchHook()).status, 0);
+  assert.deepEqual([readFileSync(file, "utf8"), statSync(file).mtimeMs, mode(file)], before);
+  assert.deepEqual(readdirSync(recordDir(env)).length, 1);
 });

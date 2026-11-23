@@ -111,7 +111,7 @@ Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plu
 open, a confirmation before its act, in progress, done, refused and with another agent's plan.
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
-  that needs you (the thread's own row says "Needs you", since when and its question; in the sidebar
+  that needs you (the thread's own row says "Needs you", how long and its question; in the sidebar
   its row is the open one, with its "!"), the thread of a stopped agent ("Stopped", Start), the home (its badge
   shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
@@ -123,9 +123,9 @@ open, a confirmation before its act, in progress, done, refused and with another
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
   `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state, its soul and "tmux"; the foot counts every
+  holds: every one is a row that says its state and "tmux" (no soul); the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
-  second; the second block on one line, where only the soul gives way, with its "…"); the
+  second; the second block on one line); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the
   second, whole in its title; the last row and the foot can be scrolled into view; a row opens
   its agent's own page.
@@ -138,15 +138,15 @@ open, a confirmation before its act, in progress, done, refused and with another
   arrive, a failed contrast check print no name); the images are in `container/out/`
   (`local-roster-<width>-sidebar[-dark].png`), which git ignores: they stay with whoever ran it.
 - **A14** with `oats` removed after it was read: the roster stays as last read under the notice
-  ("OATS is not installed on …", "Showing what was read <age>.", that the acts are held, Retry,
-  Open settings); a thread opens from it and its own row says the same on one line, with its act
-  off; the home keeps its cards under the same notice.
+  ("OATS is not installed on …", "Read <age>. Acts are off.", Retry, Open settings; what to do,
+  the code and the message under its Details); a thread opens from it and its own row says the
+  same on one line, with its act off; the home keeps its cards under the same notice.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
-  ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "Its session
-  ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
-  roster and says that its conversation was deleted in bb.
+  ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "session ended",
+  Restart); and the agent whose bb thread is gone, which stays in the
+  roster and says "deleted in bb".
   With A13's rows, all six states are drawn, each with its word.
 - **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's

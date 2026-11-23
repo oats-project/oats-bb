@@ -53,24 +53,26 @@ agents, their homes, identities and mail are OATS's and aweb's.
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
   the OATS tab of a thread that is no agent's): **Needs you** first, one card per agent that waits
-  (who, since when, what it asks), then a summary line ("8 agents · 3 working · 3 need you · …"),
-  tiles for Agents and the pages this release shows, **Working** and **Finished, not looked at**.
+  (who, how long it has waited, what it asks), then tiles for Agents and the pages this release
+  shows, **Working** and **Unread**.
   A card offers the answer the request takes: bb's choices as buttons (an approval, a question
   with options); a reply box that writes to that agent through bb's own send, for an agent that
-  asks in its own words; "open its thread" where the answer is in the thread; for an agent on
-  tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
-  A message never grants an approval: beside choices it is behind "Write a message instead".
+  asks in its own words; "Answer it in its thread." where the answer is in the thread (Open leads
+  there); for an agent on tmux, "Answer it in its terminal." (Open leads to its own page, which
+  has the command that reaches it: `oats session attach --home <its home>`).
+  A message never grants an approval: beside choices it is behind "Message instead".
   The card of an agent that is not running offers neither an answer nor a message (either would
   start it outside OATS): it offers Start….
-  **New agent** is in the heading's row of every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
-  with no bb thread among them, with its state and who started it. While OATS cannot be read the
-  cards' choices and replies are held until it is read again. The home also says when the
+  **New agent** is first on every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
+  with no bb thread among them, with its state, under one count line ("3 working · 3 need you · …").
+  While OATS cannot be read the cards' choices and replies are off, and the notice over them says
+  "Acts are off.", with Retry. The home also says when the
   installed `oats` is older than the plugin works with, or newer than it reads.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
-  to copy), its harness, model and thread, its messaging id, its parent, whether it is ready
-  (Instance readiness, with the checks behind a fold) and, once you press Load activity, its
-  recorded lifecycle events. Soul: its soul as the instance was spawned from it (core
+  to copy, under Paths), its harness, model and where it runs, when it was started or stopped, its
+  parent and its messaging id (Lineage), whether it is ready (Readiness, with the checks behind a
+  fold) and, once you press Load, its recorded events (Activity). Soul: its soul as the instance was spawned from it (core
   capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
   Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
@@ -83,7 +85,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   (nothing to do: OATS starts it again); "Idle · not loaded" (send it a message in its thread to
   carry on; Start begins a new conversation); "Running outside OATS" (OATS recorded it stopped and
   it runs, because a message was sent in its thread: Stop or Start it through OATS). Never answer
-  in bb's composer an agent whose line warns that a message starts it without OATS: Start it.
+  in bb's composer an agent whose line warns that a message starts it outside OATS: Start it.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.
   "Idle" means the kernel does not say the agent is working: it may be waiting or done.
 

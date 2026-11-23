@@ -1,0 +1,29 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "instance": "lost-tmux-developer",
+  "agent": "oats-developer",
+  "home": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+  "harness": "claude",
+  "backend": "tmux",
+  "model": "claude-opus-5-5",
+  "launchConfig": null,
+  "yolo": null,
+  "target": {
+   "backend": "tmux",
+   "session": "oats-agents",
+   "window": "lost-tmux-developer",
+   "socket": "/tmp/tmux-1000/oats"
+  },
+  "startedAt": "2026-11-23T14:40:32.876Z",
+  "restartCount": 2,
+  "reused": "pane",
+  "warnings": [],
+  "launchPrompts": {
+   "status": "not-engaged",
+   "startId": "28ebf197-7183-4401-b599-c9e45adb7d8c",
+   "at": "2026-11-23T14:40:32.876Z"
+  }
+ }
+}

@@ -456,7 +456,7 @@ const second = [
       {
         // An item that does not apply says so in the kernel's word, as the Desktop's line does: for an agent on a session
         // provider the kernel reads no folder trust (OATS 0.70.5), and names no configuration file.
-        const launch = await page.evaluate(`(() => { const item = [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-readiness-checks")} ${testId("oats-panel-check-item")}`)})].find((node) => /^launch /.test(node.querySelector("summary")?.textContent ?? node.textContent ?? "")); return item ? JSON.stringify({ line: (item.querySelector("summary") ?? item).textContent.replace(/\s+/g, " ").trim(), facts: [...item.querySelectorAll("dt")].map((dt) => dt.textContent.trim()) }) : ""; })()`);
+        const launch = await page.evaluate(`(() => { const item = [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-readiness-checks")} ${testId("oats-panel-check-item")}`)})].map((node) => ({ node, line: (node.querySelector("summary") ?? node).textContent.split("▸").join("").split(/\\s+/).join(" ").trim() })).find((each) => each.line.startsWith("launch ")); return item ? JSON.stringify({ line: item.line, facts: [...item.node.querySelectorAll("dt")].map((dt) => dt.textContent.trim()) }) : ""; })()`);
         const read = launch ? JSON.parse(launch) : null;
         check(read !== null && read.line === "launch · not-applicable · optional" && read.facts.includes("Reason") && !read.facts.includes("Configuration file"), `${at} the launch item, which does not apply to an agent on a session provider, says "not-applicable" on its line, with the kernel's reason and no configuration file`, launch || checks);
       }

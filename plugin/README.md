@@ -464,7 +464,7 @@ every layer, and the entry of a layer only composes them:
 | host | `host/<feature>.ts`: `handlers(core)`, one per verb of its `host` | `host.ts` | `host/core.ts` |
 | kernel | `kernel/<feature>.ts` (and `kernel/<feature>-*.ts`): `verbs(oats)`, the argv and the parser of each command | `kernel/index.ts` | `kernel/runner.ts`, `run.ts`, `envelope.ts`, `input.ts`, `result.ts`, `task-file.ts` |
 | app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
-| model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts` |
+| model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts`, `model/text.ts` |
 | unit tests | `test/<feature>/`, with `handlers.ts`: the slot tests' default answer of each of its RPC verbs | `test/helpers/render.ts` | `test/helpers/`, `test/support/` |
 | fixtures | `test/fixtures/<feature>/`, with `verbs.json`: each `oats` verb the fake answers, and its file | `container/fake-oats.mjs` | |
 | live checks | `container/scenes/<feature>.mjs` | `container/live-ui.mjs` | `container/` |
@@ -552,7 +552,7 @@ A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
 ### Text from OATS or an agent
 
 Everything the plugin draws that OATS or an agent wrote (a name, a description, a message, a
-refusal) goes through one display filter, `app/ui/text.ts`: the OATS Desktop's
+refusal) goes through one display filter, `app/ui/text.ts` (its functions are in `model/text.ts`): the OATS Desktop's
 (`packages/client/display-text.mjs`). Control characters and line breaks never reach the screen (a
 character that is not text is drawn as U+FFFD), a line is cut at 2048 characters, and a text that
 looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `shown(text)` is
@@ -660,13 +660,14 @@ plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, th
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same command: `.github/workflows/plugin.yml`.
+CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`):
+`.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`
 puts bb-app, a real OATS kernel, the bb session provider and Claude Code on a mock model in one
 container, drives the plugin through its RPC (spawn, stop, start, restart, retire, and the
 refusals), and records what the kernel printed; `test/fixtures/README.md` says which fixtures are
-those recordings, and at which versions. It is the last stage of `ci.sh`, so CI runs it too
+those recordings, and at which versions. It is the last stage of `ci.sh`, and a job of its own in CI
 (`plugin/container/real/README.md`).
 
 The bb version the tests run is the repository's pin: the one line of `bb-version` at the

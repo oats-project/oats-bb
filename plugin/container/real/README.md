@@ -18,14 +18,30 @@ tarball integrity
 and the bb session provider of this repository's `main` at
 `134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5` (oats-bb#8 merged; wire 1.3), bb-app at the root `bb-version`
 (0.50.1), Claude Code on a mock model, no aweb. The floor was the provider's real one
-(`compatibility.oats: >=0.70.0`): it admits that kernel, so **no trial commit was made**, and the
-run's log says so (`workspace: … (no trial commit: its own floor (>=0.70.0) admits the kernel)`).
+(`compatibility.oats: >=0.70.0` then): it admitted that kernel, so no trial commit was made.
+
+**The run is now on OATS 0.70.5** (`@awebai/oats@0.70.5`, gitHead
+`e5e7a2a48db42140718948553e8272fb4e8e3ed4`, tarball integrity
+`sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==`),
+which is also the plugin's own floor (`kernel/compat.ts`, `OATS_FLOOR`). It was moved on 2026-11-23
+without recording the fixtures again: every check of the run passed on 0.70.5 against the answers
+recorded at 0.70.0, and no answer it records gained or lost a field. One fixture is of the 0.70.5
+run, because it is the kernel's version itself: `roster/version.json` (`test/fixtures/README.md`).
+One recorded answer does differ in what it says, and its fixtures were left as recorded, since no
+check of the run reads the difference: in `oats readiness --home` for a bb home
+(`panel/readiness-home.json`, `panel/readiness-home-not-ready.json`), the item "harness folder
+trust" is `status: "unknown"` with `file: "…/.claude.json"` at 0.70.0, and from OATS 0.70.4
+`status: "not-applicable"` with `file: null` ("a session provider runs this launch … claude folder
+trust is not read for it"). The panel's tests on those two fixtures hold the 0.70.0 answer.
+The floor is the provider's own (`compatibility.oats`: `>=0.70.0` when the run was moved, `>=0.70.5`
+from oats-bb#40): it admits the kernel, so **no trial commit is made**, and the run's log says so
+(`workspace: … (no trial commit: its own floor (>=…) admits the kernel)`).
 This is the run the release lane asks for before an oats-bb release.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `KERNEL_NPM` | `0.70.0` | the OATS release installed from npm: the registry's tarball is fetched once in the container (`npm pack`, kept as `kernel.json`) and that file is installed |
-| `KERNEL_INTEGRITY` | the integrity of 0.70.0's tarball, for that version; none for another | the tarball's integrity, checked before the install; with another `KERNEL_NPM`, set it too, or leave it out for no check |
+| `KERNEL_NPM` | `0.70.5` | the OATS release installed from npm: the registry's tarball is fetched once in the container (`npm pack`, kept as `kernel.json`) and that file is installed |
+| `KERNEL_INTEGRITY` | the integrity of 0.70.5's tarball, for that version; none for another | the tarball's integrity, checked before the install; with another `KERNEL_NPM`, set it too, or leave it out for no check |
 | `REQUIRE_REAL_FLOOR` | `1` | the provider's floor is its own: a floor that refuses the kernel under test fails the run. `0`: a trial, the floor is lowered inside the container (below, "The provider") |
 | `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
@@ -52,10 +68,12 @@ takes six to eight minutes.
 ## CI runs it
 
 `container/ci.sh all` ends with this run (`ci.sh real` is the run alone), and the workflow
-(`.github/workflows/plugin.yml`) calls `ci.sh all`: the kernel is a release on npm that the
+(`.github/workflows/plugin.yml`) runs `ci.sh real` as a job of its own, `plugin-real`, beside the
+unit and the live stages' jobs: the kernel is a release on npm that the
 provider's floor admits, and the provider is this checkout's own (`oats-package/`), so a CI runner
-needs nothing but docker and the network. The run has a container of its own, started once the
-unit and live tests' container is gone, and its artefacts are kept beside theirs.
+needs nothing but docker and the network. The run has a container of its own (with `ci.sh all`,
+started once the unit and live tests' container is gone), and its artefacts are kept as the job's own
+(`plugin-real`).
 
 In CI the kernel is the release named above, with its integrity checked. A newer kernel is a
 change to `run.sh` (`KERNEL_NPM`, `KERNEL_INTEGRITY`), with `UPDATE_FIXTURES=1` when the answers
@@ -105,7 +123,7 @@ thread's own row says its agent's state at every width).
   `compatibility.oats` to `>=<the kernel's version>` in both manifests (the provider's README, "A
   trial against an unreleased kernel"); it exists only inside the container and is never pushed,
   and the line then reads `trial floor >=… in place of …`. Without it such a kernel answers
-  `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=0.70.0; this kernel is …`.
+  `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=<its floor>; this kernel is …`.
   The workspace pins the package by the container's commit:
   `oats.bb: git:file://…/oats-bb.git@<commit>`.
 - **The workspace**: one member repository with five souls named as the fixtures name them

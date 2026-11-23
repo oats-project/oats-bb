@@ -522,15 +522,24 @@ const scenes = [
 
       // Refresh: the list stays, and the page says it is reading again
       await page.evaluate(click(testId("oats-automations-refresh")));
-      const again = await page.until(`(() => ${textOf(`${testId("oats-automations-page")} ${testId("oats-stale")}`)})()`, 15);
+      // Waited for: the line of THIS re-read ("Refreshing…"), not any line about the list's age (one stands there by itself once the list is 30 s old).
+      const stale = `${testId("oats-automations-page")} ${testId("oats-stale")}`;
+      const again = (await page.until(`(() => { const t = ${textOf(stale)}; return t.startsWith("Refreshing…") ? t : ""; })()`, 15)) ?? (await page.evaluate(textOf(stale)));
       check(/^Refreshing… showing what was read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
       await page.shot(`automations-${viewport.name}-refreshing`, { targets: true });
-      await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-stale"))}) === null ? "done" : "")()`, 60);
+      // The re-read has ended when its line is gone, or no longer says "Refreshing…" (a list older than 30 s keeps a line of its age).
+      await page.until(`(() => { const t = ${textOf(stale)}; return !t.startsWith("Refreshing…") ? "done" : ""; })()`, 60);
 
       // the next read is refused: the notice says so over the list that was read, with its age
       refuse();
       await page.evaluate(click(testId("oats-automations-refresh")));
-      const failed = await page.until(`(() => ${textOf(testId("oats-automations-failed"))})()`, 40);
+      // Waited for: the notice of the REFUSED re-read, once that re-read has ended. While it is under
+      // way the notice (there already when an earlier read failed, or drawn before the read settles)
+      // says "Refreshing…": that is not the state this check is about. What was read is printed when it fails.
+      const refusedNotice = testId("oats-automations-failed");
+      const failed =
+        (await page.until(`(() => { const t = ${textOf(refusedNotice)}; return t !== "" && !t.includes("Refreshing…") && document.querySelector(${JSON.stringify(testId("oats-automations-rereading"))}) === null ? t : ""; })()`, 40)) ??
+        (await page.evaluate(textOf(refusedNotice)));
       check(/^Schedules could not be read \/abs\/deployment\/oats-schedules\.json must be \{version: 1\|2, jobs: \{\}\} Held until the list can be read again: what each row is now is not known\. Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
       const heldSwitch = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(`${ROW}[data-id="local/daily-review"] [role="switch"]`)}); return s && s.disabled ? s.title : ""; })()`, 15);
       check(heldSwitch === "Held until the list can be read again: what each row is now is not known.", `${at} over a list that could not be read again a row's switch is held, and says why`, String(heldSwitch));

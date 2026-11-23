@@ -11,7 +11,9 @@ plugin/container/ci.sh real       # the run against a real OATS kernel and the b
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the first line (`.github/workflows/plugin.yml`).
+they run from any directory. CI runs the three stages of the first line as three jobs side by side,
+each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
+stage, `plugin-real`), so each of the last three lines installs and builds what it needs by itself.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -165,6 +167,11 @@ docker exec -u node -w /home/node/plugin bb-plugin-dev npx vitest run test/kerne
 docker exec -u node -w /home/node/plugin bb-plugin-dev bash container/live.sh
 docker rm -f bb-plugin-dev
 ```
+
+`ci.sh` also copies the bb session provider's two manifests (`oats-package/oats-package.json`,
+`oats-package/capabilities/oats-bb/oats.json`) beside the plugin, to `/home/node/oats-package/`:
+`test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
+needs them there too.
 
 ## Against a real kernel
 

@@ -187,6 +187,14 @@ new conversation using the saved briefing and state.". What the read cannot tell
 changed what its stop does, at every stop alike, passes as the other kind; the NOTE is where to
 look.
 
+The Stop dialog says two things of the thread, and the lifecycle's part holds each to its own
+fact: before the stop, what a provider of the version the kernel prints does (`oats capabilities
+show oats.bb --json`, compared as the plugin compares it: a release from 0.4.0 archives); after
+it, what bb shows of the thread. This run's workspace pins the provider by commit, and the kernel
+then prints the commit as its version: a commit pin reads as "not known to archive", so the
+confirmation warns on both providers here, and only the result differs. A provider pinned by a
+release is not exercised by this run.
+
 **The question** (A5c): a message in the agent's thread makes the mock have Claude Code call
 AskUserQuestion. bb then holds a pending interaction, and the hook oats.core wrote into the home's
 Claude settings sets a waiting claim: `oats status --json` shows it with `producer: "oats.core"`,

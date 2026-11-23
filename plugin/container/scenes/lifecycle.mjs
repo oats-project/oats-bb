@@ -356,9 +356,11 @@ export default [
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
         check(done.body.includes("Weekly digest helper started.") && done.focus === "oats-confirm-close", `${at} the dialog says that it started, with the focus on Close`, JSON.stringify(done));
-        // Behind the result the agent's thread is open and loaded, and says that it works.
-        const opened = await page.until(`location.pathname.endsWith("/threads/${helper.id}") && ${textOf(testId("oats-status-line"))}.startsWith("Working")`, 30);
-        check(Boolean(opened), `${at} behind the result the agent's thread is open, and its row says Working`, await page.evaluate(`location.pathname + " | " + ${textOf(testId("oats-status-line"))}`));
+        // Behind the result the agent's thread is open and loaded, and its row no longer says Stopped: it says what
+        // bb says of the thread, which in this fixture has no turn running (Idle; after a real start bb runs the
+        // agent's first turn, and the real run holds that).
+        const opened = await page.until(`location.pathname.endsWith("/threads/${helper.id}") && ${textOf(testId("oats-status-line"))}.startsWith("Idle")`, 30);
+        check(Boolean(opened), `${at} behind the result the agent's thread is open, and its row says it is there, at rest (Idle)`, await page.evaluate(`location.pathname + " | " + ${textOf(testId("oats-status-line"))}`));
         await shot("done");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -448,7 +450,7 @@ export default [
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
         check(done.body.includes("Weekly digest helper restarted."), `${at} the dialog says that it restarted`, JSON.stringify(done));
-        check(Boolean(await page.until(`location.pathname.endsWith("/threads/${helper.id}") && ${textOf(testId("oats-status-line"))}.startsWith("Working")`, 30)), `${at} behind the result the agent's thread is open and loaded`);
+        check(Boolean(await page.until(`location.pathname.endsWith("/threads/${helper.id}") && ${textOf(testId("oats-status-line"))}.startsWith("Idle")`, 30)), `${at} behind the result the agent's thread is open and loaded (its row says Idle: bb has no turn running on this fixture's thread)`);
         await shot("done");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);

@@ -414,8 +414,10 @@ export default [
         await page.evaluate(click("oats-start-thread"));
         check(Boolean(await page.until(`${closed} && location.pathname.endsWith("/threads/${helper.id}")`, 15)), `${at} Open Weekly digest helper closes the dialog on the agent's thread, and starts nothing`);
       } finally {
+        // The stage's own roster again, and READ by the plugin's server: the dialog's check made the server read the lost row.
         changes = {};
         answers();
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.running === false));
       }
     },
   },

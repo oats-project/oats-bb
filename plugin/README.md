@@ -480,9 +480,8 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
-  harness: `running: false`, `sessionEnd: "lost"`; from the bb provider's next release also a
-  thread at rest with no harness loaded: `running: false` with a runtime state that is not
-  `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
+  harness: `running: false`, `sessionEnd: "lost"`; or a thread at rest with no harness loaded:
+  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
   gets the line. The sentence under "What will happen" is decided once, when the check answers:
   the launch archives the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms

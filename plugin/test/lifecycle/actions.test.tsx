@@ -1163,7 +1163,7 @@ test("a start the lock blocks says OATS's own line under the sentence that point
   expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: /abs/home/.oats/start.lock is held by pid 4242");
 });
 
-// ---- a start begins a new conversation (the lead's pilot condition)
+// ---- a start begins a new conversation
 
 test("Restart says, with the Desktop's warning, that it starts a new conversation and that the current one stays readable in bb, archived", async () => {
   const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }) });
@@ -1190,7 +1190,7 @@ test("an agent with no thread in bb has no conversation to archive: its Start sa
 
 // The rows an agent that does not run can read (test/fixtures/lifecycle/README.md says which are recorded and which are shaped from the contract).
 const LOST = { running: false, runtimeState: "stopped", sessionEnd: "lost" } as const; // its session was lost with the host, or its harness is gone
-const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // from the bb provider's A15(1) change (its next release): its thread at rest, no harness loaded
+const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // its thread at rest, no harness loaded (the bb provider's A15(1) change: the fixtures' README)
 const OPERATOR_STOP = { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as const;
 
 test.each([

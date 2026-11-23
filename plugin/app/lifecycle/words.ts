@@ -459,8 +459,8 @@ export const START = {
  * conversation on. Two facts, both read, neither inferred:
  * - the kernel's row says the agent does NOT run and that no operator stopped it: its session was
  *   lost (`running: false`, "stopped", `sessionEnd: "lost"`: with the host, or its harness gone),
- *   or, from the bb provider's next release, its thread is at rest with no harness loaded
- *   (`running: false` with a runtime state that is not "stopped"). An operator's stop
+ *   or its thread is at rest with no harness loaded (`running: false` with a runtime state that
+ *   is not "stopped"; test/fixtures/lifecycle/README.md says which provider prints that row). An operator's stop
  *   (`sessionEnd: "stopped"`) never gets the line, and neither does a stopped row that does not
  *   say how its session ended;
  * - bb has its thread, in the sidebar (not archived, not hidden), and not in error: a thread that

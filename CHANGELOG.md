@@ -80,9 +80,14 @@
     then corrects itself); only a message that
     waits to start (`waiting`) reads `true` without a look, and a queue word the provider
     does not know reads `null`.
-  - The retire hook finds no live thread in a home OATS stopped, so it names none in
-    `archived` (for a Claude home with nothing else to remove, its answer is
-    `{retired: false, reason: "nothing-to-delete"}`).
+  - The retire hook's receipt (`capabilityMeta` of oats.bb) says what bb holds of the
+    home when the hook ends. `archived` lists every thread of the home that is archived
+    in bb then: the ones the hook archived, then the ones it found archived already (by
+    the stop inside the retire, which archives the home's thread; by a person; by an
+    earlier start). `retired: true` wherever bb has a thread of the home and none is left
+    live. `{retired: false, reason: "nothing-to-delete"}` is now only for a home bb has
+    no thread of at all (and no env to remove), such as one that never ran on bb. Before,
+    `archived` held only what the hook itself archived.
 
 - **A home's bb thread is titled with the instance's name as words.** bb's header and
   thread list now show the name the OATS Desktop and the OATS plugin for bb draw:

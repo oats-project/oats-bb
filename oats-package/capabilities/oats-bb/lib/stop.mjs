@@ -173,7 +173,16 @@ const RETIRE_GRACE_SECONDS = 5;
 
 /** The retire hook: stop and archive every live thread that runs in the home, after the
  *  kernel's stop, and stop the home's threads that were archived before. → the hook's
- *  final JSON line. It is safe to run twice and after a spawn that never launched
+ *  final JSON line: the provider's own receipt of what bb holds of the home when the hook
+ *  ends.
+ *  - `archived`: every thread of the home that is archived in bb then: those this hook
+ *    archived, then those it found archived already (by the stop inside the retire, which
+ *    archives the home's thread; by a person; by an earlier start), in bb's order. Where
+ *    the home's archived threads could not be listed, only those this hook archived.
+ *  - `retired: true`: bb has at least one thread of the home, live or archived, and none
+ *    is left live (or the env of its project was removed).
+ *  - `{retired: false, reason: "nothing-to-delete"}`: bb has no thread of the home at all
+ *    (a home that never ran on bb), and no env was removed. It is safe to run twice and after a spawn that never launched
  *  (nothing to archive is a complete cleanup). A thread is archived only once its stop is
  *  confirmed. A bb that does not answer does not hold the retire: what is left is said in
  *  a warning, and readiness reports it (`session-provider-orphaned`) once the home is gone. */
@@ -188,6 +197,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
     const { projects, live } = await liveInHome(bb, home);
     const options = { deadline, grace: RETIRE_GRACE_SECONDS };
+    // What this hook archived, and what it could not stop or archive.
     const archived = [], left = [];
     for (const thread of live) {
       // Nothing waiting to run and no process left behind, confirmed, before the archive:
@@ -202,9 +212,14 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     }
     // The home's threads archived before now (in bb's UI, or by an earlier start) may
     // hold a process too: all are stopped. The hook is told no thread to count from.
-    let unswept = null;
-    try { const ids = projects.map((project) => project.id); await stopArchived(bb, await archivedOf(bb, ids), relistOf(bb, ids), options); }
-    catch (error) {
+    // Read after this hook's own archives: the listing holds them too, and it is what
+    // the receipt's `archived` is told from (one read for the sweep and for the receipt).
+    let unswept = null, listed = null;
+    try {
+      const ids = projects.map((project) => project.id);
+      listed = await archivedOf(bb, ids);
+      await stopArchived(bb, listed, relistOf(bb, ids), options);
+    } catch (error) {
       if (!(error instanceof ProviderError)) throw error;
       // The sweep's own account (how many, the remedy) is carried; bb's raw words are not.
       unswept = error.code === "E_SESSION_STOP_FAILED" ? error.message : `bb could not be asked (${error.code}): an agent process of one may still be loaded; look at them in bb (bb thread list --project <id> --archived)`;
@@ -218,9 +233,13 @@ export async function retire(home, readSettings, { deadline, env = process.env }
     if (unswept !== null) warnings.push(`the home's archived bb threads could not all be stopped: ${unswept}`);
     if (left.length > 0) warnings.push(`${left.length} bb thread${left.length > 1 ? "s" : ""} of this home could not be stopped and archived: stop and archive ${left.length > 1 ? "them" : "it"} in bb (bb thread stop <id>, bb thread archive <id>). ${left.length > 1 ? "They are" : "It is"} ${someOf(left)}`);
     if (projectEnv.warning !== null) warnings.push(projectEnv.warning);
-    if (warnings.length > 0) return { meta: { archived, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}), ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) }, warning: bounded(warnings.join(". ")) };
-    if (live.length === 0 && projectEnv.removed.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
-    return { meta: { retired: true, archived, ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) } };
+    // Every thread of the home that is archived in bb now: this hook's own first, then
+    // the ones it found archived already. (Where the listing could not be read, its own.)
+    const inBb = [...archived, ...(listed ?? []).map((thread) => thread.id).filter((id) => !archived.includes(id) && !left.includes(id))];
+    if (warnings.length > 0) return { meta: { archived: inBb, ...(left.length > 0 ? { left } : {}), ...(unswept !== null ? { unswept: true } : {}), ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) }, warning: bounded(warnings.join(". ")) };
+    // bb has no thread of this home at all, live or archived, and held no env for it.
+    if (live.length === 0 && inBb.length === 0 && projectEnv.removed.length === 0) return { meta: { retired: false, reason: "nothing-to-delete" } };
+    return { meta: { retired: true, archived: inBb, ...(projectEnv.removed.length > 0 ? { env: projectEnv.removed.length } : {}) } };
   } catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     // Why, in the provider's own words (they may carry bb's), cut short: the remedy stands before it.

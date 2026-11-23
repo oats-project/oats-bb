@@ -610,17 +610,24 @@ test("retire withdraws what bb holds in line for a thread, stops it and archives
     "thread queue list": [{ stdout: [{ id: "qmsg_1", state: "waiting" }] }, { stdout: [] }], "thread queue delete": { stdout: { ok: true } },
     "thread stop": { stdout: { ok: true } }, "thread archive": archived("thr_a"),
   }));
-  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
+  // The receipt names every thread of the home that is archived in bb when the hook ends:
+  // the one it archived, then the one it found archived already.
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a", "thr_arch"] } });
   assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
   assert.deepEqual(calls.filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_a", "thr_arch"]);
 });
 
-test("retire with nothing live still stops the home's archived threads, and is a complete cleanup", async (t) => {
+// Changed with the stop's archive (contract r24, A15(1)): this answered "nothing-to-delete".
+// The stop inside a retire now archives the home's thread, so a retired agent's hook finds
+// nothing live: its receipt still says the home is retired and names the archived thread
+// (a client says "its conversation stays readable in bb, archived" from it).
+// "nothing-to-delete" is for a home bb has no thread of at all (below).
+test("retire with nothing live still stops the home's archived threads, and its receipt names them: retired, with what is archived in bb", async (t) => {
   const { last, calls } = await retireWith(t, (home) => ({
     "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] },
     "thread list --archived": { stdout: [threadRow("thr_arch", "proj_a", "idle", { archivedAt: 5 })] }, "thread stop": { stdout: { ok: true } },
   }));
-  assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_arch"] } });
   assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
 });
 
@@ -663,7 +670,8 @@ test("retire says what the sweep said, first: how many archived threads were sto
     "thread list --archived": { stdout: rows }, "thread stop": { delayMs: 60_000, stdout: { ok: true } },
   }));
   assert.equal(run.status, 0, "the retire is never failed or held");
-  assert.deepEqual(last.meta, { archived: [], left: ["thr_live"], unswept: true });
+  // (The archived threads were listed, so the receipt names them; what could not be done is their stop.)
+  assert.deepEqual(last.meta, { archived: rows.map((row) => row.id), left: ["thr_live"], unswept: true });
   assert.ok(last.warning.length <= 480);
   assert.match(last.warning, /^the home's archived bb threads could not all be stopped: this home's bb project holds 40 archived threads, and 40 of them could not be stopped in the time this command has \(0 were\).*bb thread stop <id>, then bb thread delete --yes <id>\), and try again\. 1 bb thread of this home could not be stopped and archived/);
 });
@@ -677,9 +685,39 @@ test("launchSent is a time only when it is one: an impossible date archives noth
   }
 });
 
-test("retire with nothing to archive is a complete cleanup (a home that never launched, or a second run)", async (t) => {
+test("retire of a home bb has no thread of at all is \"nothing-to-delete\" (a home that never launched on bb)", async (t) => {
   const { last } = await retireWith(t, { "project list": { stdout: [] }, "thread list": { stdout: [threadRow("thr_z", "proj_z", "idle")] } });
   assert.deepEqual(last, { meta: { retired: false, reason: "nothing-to-delete" } });
+  // A project rooted at the home that holds no thread, live or archived, is the same.
+  const empty = await retireWith(t, (home) => ({ "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: [] } }));
+  assert.deepEqual(empty.last, { meta: { retired: false, reason: "nothing-to-delete" } });
+  // And one whose only threads were deleted in bb: bb has none of them any more.
+  const deleted = await retireWith(t, (home) => ({ "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] }, "thread list --archived": { stdout: [threadRow("thr_gone", "proj_a", "idle", { archivedAt: 5, deletedAt: 6 })] } }));
+  assert.deepEqual(deleted.last, { meta: { retired: false, reason: "nothing-to-delete" } });
+});
+
+// The retire of a running agent: the kernel's stop comes first and archives the home's
+// thread (contract r24, A15(1)); the hook then finds nothing live. Its receipt says what bb
+// holds of the home: retired, and that thread archived.
+test("after a stop archived the home's only thread, the retire's receipt is retired: true with that thread", async (t) => {
+  const { last, calls } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] }, "thread list": { stdout: [] },
+    "thread list --archived": { stdout: [threadRow("thr_a", "proj_a", "idle", { archivedAt: 9 })] }, "thread stop": { stdout: { ok: true } },
+  }));
+  assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a"] } });
+  assert.equal(archives(calls).length, 0, "the hook archives nothing: the stop did");
+  assert.deepEqual(calls.filter((c) => c.argv[1] === "list" && c.argv.includes("--archived")).length, 2, "one read of the home's archived threads for the sweep and the receipt, and the sweep's own re-read");
+});
+
+test("where the home's archived threads cannot be listed, the receipt names only what this hook archived, and says so", async (t) => {
+  const { run, last } = await retireWith(t, (home) => ({
+    "project list": { stdout: [projectRow("proj_a", home)] },
+    "thread list": { stdout: [threadRow("thr_a", "proj_a", "idle")] }, "thread archive": archived("thr_a"),
+    "thread list --archived": UNREACHABLE,
+  }));
+  assert.equal(run.status, 0);
+  assert.deepEqual(last.meta, { archived: ["thr_a"], unswept: true });
+  assert.match(last.warning, /^the home's archived bb threads could not all be stopped: bb could not be asked/);
 });
 
 test("retire asks bb for every home, whatever the home holds: nothing in it says which backend it ran on", async (t) => {

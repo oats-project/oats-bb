@@ -232,7 +232,8 @@ test("P2 every pi launch rewrites the project's env whole; the retire hook and a
   // And the retire hook: set again by hand, as a launch would have left it.
   await sh(`bb machine env set OATS_INSTANCE --project ${endpoint.projectId} --json >/dev/null`, { input: "p2-again" });
   const retired = await hook("retire-hook", home);
-  assert.deepEqual(retired.meta, { retired: true, archived: [again.result.endpoint.threadId], env: 1 });
+  // (Its receipt names the thread it archived, then the home's thread archived before: the first launch's.)
+  assert.deepEqual(retired.meta, { retired: true, archived: [again.result.endpoint.threadId, endpoint.threadId], env: 1 });
   assert.deepEqual(await projectEnv(endpoint.projectId), []);
 });
 
@@ -521,6 +522,12 @@ test("P5 stop ends the thread's pi, its bridge and its catalog pi: no process is
   await nothingIn(home, "after the stop");
   assert.equal(await threadStatus(endpoint.threadId), "idle");
   assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null, "the stop archived the thread (contract r24, A15(1))");
+  // The retire of a running agent is this sequence: the stop, then the hook. The hook finds
+  // nothing live, and its receipt says what bb holds of the home: retired, the thread the
+  // stop archived, and the project's env it removed.
+  const stoppedThenRetired = await hook("retire-hook", home);
+  assert.deepEqual(stoppedThenRetired.meta, { retired: true, archived: [endpoint.threadId], env: 3 });
+  assert.equal(stoppedThenRetired.warning, undefined);
 
   // A thread stopped while it runs a turn.
   const busy = await launched("p5-busy");
@@ -632,7 +639,8 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
   assert.deepEqual(Object.keys(JSON.parse(await sh(`cat ${home}/.claude/settings.local.json`)).env).sort(), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
   // The retire leaves nothing: no thread live, no env, no process.
   const retired = await hook("retire-hook", home);
-  assert.deepEqual(retired.meta, { retired: true, archived: [third.threadId] });
+  // (Its receipt names the thread it archived, then the home's two threads archived before, in bb's order.)
+  assert.deepEqual({ ...retired.meta, archived: [retired.meta.archived[0], ...retired.meta.archived.slice(1).sort()] }, { retired: true, archived: [third.threadId, ...[first.threadId, second.threadId].sort()] });
   await nothingIn(home, "after the retire");
 });
 

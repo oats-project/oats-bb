@@ -560,10 +560,15 @@ test("T5 stop, then inspect and input: the stop archives the thread, so the prov
   assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
   // A stop with no endpoint (the kernel after a launch whose answer was lost) finds the
   // home's threads by itself, and has nothing live left to stop; nor has the retire hook
-  // anything left to archive.
+  // anything left to archive. Its receipt still says what bb holds of the home: retired,
+  // and the thread the stop archived (the retire of a running agent is this sequence: the
+  // kernel's stop, then the hook).
   assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: false, reason: "nothing-to-delete" } });
+  assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
+  // A home bb has no thread of at all (it never ran on bb) is the one that answers "nothing-to-delete".
+  const never = JSON.parse((await sh(`OATS_INSTANCE_HOME=/home/node/homes/t5-never-on-bb OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+  assert.deepEqual(never, { meta: { retired: false, reason: "nothing-to-delete" } });
   const told = await provider("input", { home, endpoint, text: "T5-ARCHIVED marker" });
   assert.equal(told.ok, false);
   assert.equal(told.error.code, "E_SESSION_INPUT_FAILED");
@@ -714,7 +719,9 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   assert.equal(started.ok, true, JSON.stringify(started));
   await waitStatus(started.result.endpoint.threadId, "idle");
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId] } });
+  // The receipt names every thread of the home archived in bb now: the one the hook
+  // archived first, then the one found archived already (the killed launch's).
+  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId, thread.id] } });
   assert.deepEqual(await live(), []);
 });
 
@@ -822,7 +829,8 @@ test("a thread archived in bb keeps its Claude: a start, a stop and a retire eac
   await sh(`bb thread archive ${fourth.result.endpoint.threadId} --json`);
   await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: false, reason: "nothing-to-delete" } }, "nothing live to archive");
+  // Nothing live to archive; the receipt names the home's four threads, all archived in bb.
+  assert.deepEqual({ ...retired.meta, archived: [...retired.meta.archived].sort() }, { retired: true, archived: [first.endpoint.threadId, second.result.endpoint.threadId, third.result.endpoint.threadId, fourth.result.endpoint.threadId].sort() });
   await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
 });
 

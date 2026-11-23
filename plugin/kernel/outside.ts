@@ -23,7 +23,7 @@ export const outsideOats = z
     message: z
       .string()
       .min(1)
-      .refine((message) => [...message].length <= 500), // characters as the kernel counts them (code points), not UTF-16 units
+      .refine((message) => [...message].length <= 500), // counted here as the kernel counts them (code points), whatever a library's own maximum counts
   })
   .strict();
 export type OutsideOats = z.output<typeof outsideOats>;

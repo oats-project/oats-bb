@@ -88,8 +88,8 @@ test("a session OATS lost: \"Stopped\" in the warning tone, then the reason, by 
 test("while bb has not said, or cannot say, where the thread is, the row claims nothing of it", async () => {
   const sdk = { threads: { list: async () => Promise.reject(new Error("bb is away")) } } as never as RenderSlotOptions<Contract>["sdk"];
   const { slot } = await sidebar({ rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert");
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a claim to be drawn, if one were made)
+  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert"));
 });
 
 test("the kernel's report on a row: its state IS \"Running outside OATS\", in the warning tone, alone on the row's line; and it is counted among those that need a person", async () => {
@@ -107,7 +107,7 @@ test("with nothing reported, the rows are the roster's own: no note, no mark, an
   const { slot } = await sidebar({ rpc: handlers(), sidebarThreads: sidebarThreads(), sdk });
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(slot.container.querySelector('[data-mark][data-state="outside"], [data-mark][data-tone="warning"]')).toBeNull();
-  expect(slot.getAllByTestId("oats-row-facts").map((line) => line.textContent)).toContain("Stopped · oats-expert");
+  await waitFor(() => expect(slot.getAllByTestId("oats-row-facts").map((line) => line.textContent)).toContain("Stopped · oats-expert"));
   expect(asked).toEqual([]);
 });
 
@@ -337,7 +337,8 @@ test("the panel's header of an agent on its thread carries the kernel's report, 
   expect(within(header(reported).block!).getByTestId("oats-notice").querySelector("h3")!.textContent).toBe("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for the block to be drawn, if one were)
   expect(header(plain)).toMatchObject({ state: "Stopped", kind: null });
 });
 

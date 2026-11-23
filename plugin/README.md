@@ -289,7 +289,10 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   read again and says so.
 - On the press the button reads "Spawning…" and is held, with every field: one press makes one
   agent, however often the button or the key is pressed meanwhile. When the kernel answers the
-  form says "Created <name>", stays held, and opens the new agent's thread.
+  form says "Created <name>", stays held, and opens the new agent's thread; "Created <name>." is
+  also told through bb's own toaster (`notify`, `app/ui/notify.ts`), with "Open <name>": it stays
+  when the thread opens, and reaches a person who left the form while it spawned (a failure is
+  told there the same way, and stays until dismissed).
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, or a call that never

@@ -96,6 +96,10 @@ export const CANCEL = "Cancel";
 export const CREATED = "Created";
 export const createdTitle = (name: string): string => `Created ${name}`;
 export const OPENING = "Opening its thread…";
+/** The same, as a notification that stays when the thread opens. */
+export const createdNotice = (name: string): string => `Created ${name}.`;
+/** In the notification of an unknown outcome, for a person who left the form: there is no Check result where they are. */
+export const UNKNOWN_AWAY = "OATS didn’t say whether the instance was created. Check the agents in the sidebar before spawning again.";
 export const openAgent = (name: string): string => `Open ${name}`;
 /** Cancel's word once the agent is made: there is nothing left to cancel. */
 export const CLOSE = "Close";

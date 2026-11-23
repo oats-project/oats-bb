@@ -26,6 +26,7 @@ import { useOats } from "../oats";
 import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
+import { notify } from "../ui";
 import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
 import { DETAIL_WITHHELD, displayLine, refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
@@ -365,6 +366,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         (answer) => {
           setFlight(null);
           intent.current = null;
+          // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
+          // reaches a person who left the form meanwhile, with the way to the agent.
+          const created = agentName(answer.instance);
+          notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
           if (!alive.current) return;
           // Created: the form stays held, says so, and opens the agent's thread.
           setMade(answer);
@@ -373,9 +378,13 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         },
         (cause: unknown) => {
           setFlight(null);
-          if (!alive.current) return;
           // What is known decides what can be pressed next (model/spawn.ts `SpawnOutcome`).
           const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay, line: kernelLine });
+          if (!alive.current) {
+            // The person left the form: what became of the spawn is told where they are, and stays until dismissed.
+            notify({ tone: problem.outcome === "refused" ? "failed" : "unknown", title: problem.outcome === "unknown" ? W.SPAWN_UNKNOWN_TITLE : problem.outcome === "created" ? W.SPAWN_INCOMPLETE_TITLE : W.SPAWN_FAILED_TITLE, lines: [problem.outcome === "unknown" ? W.UNKNOWN_AWAY : problem.sentence, problem.code] });
+            return;
+          }
           setFailure(problem);
           if (problem.outcome === "unknown") {
             // Whether an agent was made is not known: the intent is kept, and only asking again under its key is offered.

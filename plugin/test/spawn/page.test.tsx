@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { notified } from "../../app/ui";
 import { openNewAgent } from "../../app/workspace/pages";
 import { formFacts } from "../../model/spawn";
 import { agentName } from "../../app/ui/words";
@@ -300,6 +301,8 @@ test("Spawn applies the decision the preview showed, once: the form says Created
   expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent, result.querySelector("p")!.textContent]).toEqual(["done", "Created Ranker v4 probe", "Opening its thread…"]);
   expect(slot.getByTestId("oats-spawn-status").textContent).toBe("Created Ranker v4 probe");
   expect(slot.getByTestId("oats-spawn-cancel").textContent).toBe("Close");
+  // And through bb's own toaster, which stays when the thread opens: what was made, with the way to it.
+  expect(notified().map((note) => [note.tone, note.title, note.open?.label])).toEqual([["done", "Created Ranker v4 probe.", "Open Ranker v4 probe"]]);
   // A second press, by the button or by the key, starts nothing.
   fireEvent.click(submit(slot));
   fireEvent.keyDown(slot.getByTestId("oats-spawn-task"), { key: "Enter", ctrlKey: true });
@@ -328,6 +331,11 @@ test("while it spawns the button says so and the fields are held", async () => {
   expect((again.getByTestId("oats-spawn-submit") as HTMLButtonElement).disabled).toBe(true);
   await act(async () => finish({ instance: "oats-developer-2", threadId: "thr_new" }));
   await waitFor(() => expect(again.queryByTestId("oats-disabled-reason")).toBeNull());
+  // The form that made it was left: the person is told where they are, with the way to the agent; nothing navigates under them.
+  expect(notified().map((note) => [note.tone, note.title, note.open?.label])).toEqual([["done", "Created Oats developer 2.", "Open Oats developer 2"]]);
+  expect(again.inspection.navigateCalls).toEqual([]);
+  notified()[0]!.open!.run();
+  expect(slot.inspection.navigateCalls.concat(again.inspection.navigateCalls)).toContainEqual({ method: "toThread", threadId: "thr_new" });
 });
 
 test("a refused spawn leads with a person's words, the kernel's code after and its message under Details; a retry of the same values reuses the key, changed values get a new one", async () => {
@@ -486,6 +494,17 @@ test("a failure nobody classed is of unknown outcome, never 'not spawned': an an
   await waitFor(() => expect(submit(slot).textContent).toBe("Check result"));
   expect((await slot.findByTestId("oats-result")).querySelector("h3")!.textContent).toBe("It is not known whether the agent was spawned");
   expect(fieldset(slot).disabled).toBe(true);
+});
+
+test("a spawn that fails after its form was left is told where the person is, and stays until dismissed", async () => {
+  let fail: (cause: Error) => void = () => undefined;
+  const slot = await ready(previews({ spawn: () => new Promise((_resolve, reject) => (fail = reject)) }));
+  fireEvent.click(submit(slot));
+  await waitFor(() => expect(submit(slot).textContent).toBe("Spawning…"));
+  slot.unmount();
+  await act(async () => fail(new Error("OATS_TIMEOUT: oats spawn did not answer")));
+  await waitFor(() => expect(notified()).toHaveLength(1));
+  expect(notified()[0]).toMatchObject({ tone: "unknown", title: "It is not known whether the agent was spawned", lines: ["OATS didn’t say whether the instance was created. Check the agents in the sidebar before spawning again.", "OATS_TIMEOUT"] });
 });
 
 test("a spawn that ends with no answer at all is of unknown outcome too; one the plugin refused before asking the kernel is not", async () => {

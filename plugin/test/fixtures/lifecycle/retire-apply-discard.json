@@ -1,0 +1,82 @@
+{
+ "retired": "dialogs-2-helper",
+ "agent": "oats-expert",
+ "workRecovery": {
+  "path": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/dialogs-2-helper-RXy8YP",
+  "classes": [
+   "changed instance-home bytes"
+  ],
+  "bytes": 375082,
+  "home": {
+   "paths": [
+    {
+     "path": ".oats/",
+     "bytes": 305123
+    },
+    {
+     "path": ".agents/",
+     "bytes": 38440
+    },
+    {
+     "path": "instance.json",
+     "bytes": 15948
+    },
+    {
+     "path": ".claude/",
+     "bytes": 6089
+    },
+    {
+     "path": "AGENTS.md",
+     "bytes": 4686
+    },
+    {
+     "path": ".oats-events.jsonl",
+     "bytes": 2145
+    },
+    {
+     "path": ".oats-stop-receipt.feef6a4fadd6445905240c03c6650b55.json",
+     "bytes": 690
+    },
+    {
+     "path": "TASK.md",
+     "bytes": 454
+    },
+    {
+     "path": ".oats-stop.json",
+     "bytes": 218
+    },
+    {
+     "path": "CLAUDE.md",
+     "bytes": 9
+    }
+   ],
+   "bytes": 373802
+  },
+  "repoCopy": {
+   "copied": false,
+   "reason": "Only instance-home bytes changed; no work state requires a repository copy",
+   "source": "/abs/deployment/oats-real",
+   "branch": "agents/dialogs-2-helper"
+  }
+ },
+ "retention": {
+  "worktree": "removed",
+  "branch": "agents/dialogs-2-helper",
+  "recordedBranch": "agents/dialogs-2-helper"
+ },
+ "worktreeRemoved": true,
+ "branchDeleted": false,
+ "removedDir": true,
+ "childrenStopped": [],
+ "capabilityMeta": {
+  "oats.bb": {
+   "retired": true,
+   "archived": [
+    "thr_rdcqjskfci"
+   ]
+  }
+ },
+ "planRevision": "758a917e73b21c937d529239",
+ "idempotencyKey": "01e6d60aa878485b69d069b52fa0391e",
+ "replayed": false
+}

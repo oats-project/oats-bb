@@ -261,6 +261,7 @@ export default [
       // The other states of a confirmation: the plan being read, blocked with its reason, a plan that names no agent, and one that is not destructive.
       for (const [opener, name, holds] of [
         ["oats-patterns-open-reading", "reading", (d) => d.phase === "reading" && d.body.includes("Reading the plan from OATS…") && d.off === true],
+        ["oats-patterns-open-checking", "checking", (d) => d.phase === "reading" && d.body.includes("Checking instance…") && !d.body.includes("Reading the plan") && d.off === true],
         ["oats-patterns-open-blocked", "blocked", (d) => d.phase === "ready" && d.reason === "Tick the box to discard its work." && d.off === true],
         ["oats-patterns-open-unnamed", "unnamed", (d) => d.phase === "ready" && d.reason === "OATS did not say which agent this plan is for." && d.off === true],
         ["oats-patterns-open-stop", "stop", (d) => d.title === "Stop Weekly digest helper?" && d.phase === "ready" && d.off === false && d.focus === "oats-confirm-act"],
@@ -274,6 +275,57 @@ export default [
         await page.press("Escape");
         await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       }
+      // A result that is not confirmed: neither done nor failed, with its code after the words and the next step.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-unknown")}').focus()`);
+      await page.press("Enter");
+      await page.until(visible(testId("oats-confirm")), 10);
+      const unknown = JSON.parse(await page.evaluate(`JSON.stringify({ tone: document.querySelector('${testId("oats-confirm")} ${testId("oats-result")}')?.getAttribute("data-tone"), body: ${textOf(testId("oats-confirm"))}, focus: ${FOCUSED} })`));
+      check(unknown.tone === "unknown" && unknown.body.includes("Result not confirmed") && unknown.body.indexOf("OATS_TIMEOUT") > unknown.body.indexOf("Check again before assuming") && unknown.body.includes("Check again") && unknown.focus === "oats-confirm-close", `${at} a result that is not confirmed is drawn as neither done nor failed: its words, the code after them, Check again, the focus on Close`, JSON.stringify(unknown));
+      await page.shot(`patterns-${viewport.name}-confirm-not-confirmed`, { targets: true });
+      await page.press("Escape");
+      await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
+      // A dialog that holds more than the window gives it: it says so above and below, and the room of
+      // those two lines is kept, so that the body does not change height while it is scrolled.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-long")}').focus()`);
+      await page.press("Enter");
+      await page.until(`${visible(testId("oats-confirm"))} && document.querySelector('${testId("oats-modal-below")}') !== null`, 10);
+      const scrolled = `(() => { const body = document.querySelector('${testId("oats-modal-body")}'); return JSON.stringify({ height: body.clientHeight, above: document.querySelector('${testId("oats-modal-above")}')?.innerText ?? null, below: document.querySelector('${testId("oats-modal-below")}')?.innerText ?? null }); })()`;
+      // Scrolls the body, WAITS for the lines the place should then say, and reads them with the body's height (what it read is printed when the wait fails).
+      const scrollTo = async (top, above, below) => {
+        await page.evaluate(`(() => { const body = document.querySelector('${testId("oats-modal-body")}'); body.scrollTop = ${top === "end" ? "body.scrollHeight" : top}; })()`);
+        await page.until(`(() => { const read = JSON.parse(${scrolled}); return read.above === ${JSON.stringify(above)} && read.below === ${JSON.stringify(below)}; })()`, 10);
+        return JSON.parse(await page.evaluate(scrolled));
+      };
+      const atTop = JSON.parse(await page.evaluate(scrolled));
+      await page.shot(`patterns-${viewport.name}-confirm-long`, { targets: true });
+      const atEnd = await scrollTo("end", "More above", null);
+      const midway = await scrollTo(200, "More above", "More below");
+      const again = await scrollTo(0, null, "More below");
+      check(
+        atTop.above === null && atTop.below === "More below" && atEnd.above === "More above" && atEnd.below === null && midway.above === "More above" && midway.below === "More below" && again.above === null && again.below === "More below",
+        `${at} a dialog longer than the window says "More below" at its top, both in between, "More above" at its end, and "More below" again back at the top`,
+        JSON.stringify({ atTop, midway, atEnd, again }),
+      );
+      check(new Set([atTop.height, atEnd.height, midway.height, again.height]).size === 1, `${at} its body keeps one height while it is scrolled: the two lines keep their room`, JSON.stringify([atTop.height, midway.height, atEnd.height, again.height]));
+      await page.press("Escape");
+      await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
+      // A result through bb's own toaster (app/ui/notify.ts): `sonner` is bb's shim in the BUILT plugin, so the
+      // toast is one bb draws. A result leaves by itself; a failure stays until it is dismissed.
+      const toasts = `[...document.querySelectorAll("[data-sonner-toast]")].map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-failed")}').click()`);
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-done")}').click()`);
+      const drawn = await page.until(`(() => { const all = ${toasts}; return all.length === 2 ? JSON.stringify(all) : null; })()`, 10);
+      const both = drawn ? JSON.parse(drawn) : [];
+      check(
+        both.some((toast) => toast.text.startsWith("Weekly digest helper started.") && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes("Weekly digest helper wasn't started") && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
+        `${at} a result and a failure are told through bb's own toaster: the result with "Open <agent>", the failure with its sentence`,
+        JSON.stringify(both),
+      );
+      await page.shot(`patterns-${viewport.name}-toasts`);
+      const left = await page.until(`(() => { const all = ${toasts}; return all.length === 1 ? JSON.stringify(all) : null; })()`, 15);
+      check(Boolean(left) && JSON.parse(left)[0].text.includes("wasn't started"), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
+      await page.evaluate(`document.querySelector('[data-sonner-toast] button[aria-label="Dismiss notification"]')?.click()`);
+      await page.until(`document.querySelectorAll("[data-sonner-toast]").length === 0`, 10);
     },
   },
 ];

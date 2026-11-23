@@ -387,13 +387,14 @@ test("an agent with no thread that waits on a person says Needs you, as its Need
   expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)})`);
 });
 
-test("an agent on tmux shows a claim only while the kernel says it runs: one it cannot reach says Unreachable and shows none", async () => {
+// One claim rule for bb and tmux (the spec's author, 2026-11-23): a claim is hidden only for an agent the kernel calls stopped.
+test("an agent on tmux that the kernel cannot reach still shows what it waits for: a claim wins, as on bb", async () => {
   const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: null, runtimeState: "unreachable" } : agent));
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-work");
-  expect(stateOf(slot)).toBe("Unreachable· OATS cannot reach its session");
-  expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
+  expect(stateOf(slot)).toBe(`Needs you· waiting 15 min (since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)})`);
+  expect(slot.getByTestId("oats-panel-waiting")).toBeTruthy();
 });
 
 test("an agent that needs you for a question bb shows, with no claim, says Needs you with no time, never the age of its start", async () => {

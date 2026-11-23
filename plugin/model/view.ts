@@ -2,21 +2,26 @@
 import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
- * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
- * waiting-on-you.mjs `waitingClaim`, read at 95c7b43b3), so that the tree, the thread's row and
- * the instance panel say one thing.
- * - A row on a session provider (bb): the claim the kernel's row carries, unless the kernel calls
- *   the row stopped (`running === false`, its session not one that failed or that it cannot
- *   reach): a home OATS stopped shows none, whatever it still carries.
- * - A tmux row: only while the kernel says it runs (`running === true`, and no `runtimeState`
- *   other than "running").
+ * Whether the kernel calls an agent STOPPED: its word is "stopped", or it says the agent does not
+ * run and gives no word (what it prints for a tmux home whose window is gone). One rule, for
+ * every backend, read by the claim gate below (and the state's "stopped").
+ */
+export function calledStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
+  return agent.runtimeState === "stopped" || (agent.running === false && agent.runtimeState === null);
+}
+
+/**
+ * The claim an agent shows: what it waits on a person for, as the kernel's row carries it, or
+ * null. ONE gate (the Desktop's `waitingClaim`), so that the tree, the thread's row, the home and
+ * the instance panel say one thing, and one rule for every backend (the spec's A2, as its author
+ * amended it on 2026-11-23): a claim is hidden only for an agent the kernel calls stopped
+ * (`calledStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an
+ * agent that runs, one the kernel says nothing of, one whose harness ended in a shell, one that
+ * cannot be reached, on bb and on tmux alike.
  * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
  */
 export function claimOf(agent: Agent): Agent["waiting"] {
-  if (agent.waiting === null) return null;
-  if (agent.backend === "tmux") return agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") ? agent.waiting : null;
-  const stopped = agent.running === false && agent.runtimeState !== "shell" && agent.runtimeState !== "unreachable";
-  return stopped ? null : agent.waiting;
+  return agent.waiting === null || calledStopped(agent) ? null : agent.waiting;
 }
 
 /**

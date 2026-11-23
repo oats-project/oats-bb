@@ -390,6 +390,26 @@ bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
 // Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
 const threads = await healthyThreads();
+// Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
+// rows with `running: true`, and the two threads bb's fixture calls active). An agent on a bb
+// thread works when BB says its thread does, so bb must have a turn running on those two threads
+// for the whole run: each gets a message whose turn the mock model holds open (MOCK-HOLD), and is
+// waited for until bb calls it active. The hold is lifted when the run ends.
+const WORK_HOLD_FILE = join(homedir(), "mock", "hold", "live-ui-working");
+const WORKING_THREADS = ["thr_redesign", "thr_mockups"];
+mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
+writeFileSync(WORK_HOLD_FILE, "");
+for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, "carry on MOCK-HOLD:live-ui-working");
+{
+  const deadline = Date.now() + 90_000;
+  let seen = [];
+  for (;;) {
+    seen = WORKING_THREADS.map((id) => `${id}: ${statusNow(threads.get(id).id)}`);
+    if (seen.every((line) => line.endsWith(": active")) || Date.now() > deadline) break;
+    await sleep(1000);
+  }
+  check(seen.every((line) => line.endsWith(": active")), "bb has a turn running on the threads of the two agents that work, for the whole run", seen.join(" | "));
+}
 const { scenes, stages } = await loadScenes();
 const browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
 try {
@@ -421,6 +441,7 @@ try {
   check(same.length === 0, "no two images of this run are the same image", same.map((names) => names.join(" = ")).join(" | "));
 } finally {
   await browser.close();
+  rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now
   fake(); // the fixtures as they are, for the checks that follow in live.sh
   try {
     rpc("refresh");

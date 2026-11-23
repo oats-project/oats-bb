@@ -3,7 +3,7 @@ import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sd
 import { z } from "zod";
 import type { rpc } from "../contract/lifecycle.js";
 import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
-import { harnessesOf } from "./spawn.js";
+import { harnessesOf, providerVersionOf } from "./spawn.js";
 
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
 const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish(), sessionEnd: z.string().nullish() });
@@ -42,7 +42,13 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   return {
     async stopPlan({ instance, recursive }, context) {
       await core.agentForAct(instance);
-      return core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal);
+      // The provider's version beside the plan (the read every dialog shares): a version that cannot be read fails
+      // nothing, it is then not known, and the dialog says what is true of every provider released so far.
+      const [plan, providerVersion] = await Promise.all([
+        core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal),
+        providerVersionOf(core).catch(() => null),
+      ]);
+      return { ...plan, providerVersion };
     },
     async stopApply({ instance, revision, key, recursive }) {
       await core.agentForAct(instance);

@@ -1607,3 +1607,16 @@ test("a stop's result does not wait on bb's word of the thread beyond a moment: 
     vi.useRealTimers();
   }
 });
+
+// ---- the provider's version reaches the one function that decides what a stop says of the thread
+
+test("the Stop dialog reads the provider's version from the plan: no release archives at stop yet, so every version, a commit and none say that a message starts the agent again", async () => {
+  const MESSAGE = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+  for (const version of ["0.9.0", "99.0.0", "9b95a56f237ff4006a69545963d5130d6eb4ddc5", null]) {
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, version) });
+    await pick("stop");
+    await ready(slot);
+    expect(slot.getByTestId("oats-confirm").textContent, String(version)).toContain(MESSAGE);
+    resetApp();
+  }
+});

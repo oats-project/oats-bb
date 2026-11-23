@@ -30,8 +30,9 @@ const read = <Value>(result: { ok: true; value: Value } | { ok: false; error: { 
 };
 
 /** The recorded stop plan (redesign-ui-lead and its two children), as the kernel named it or for `instance` alone. */
-export function stopPlanOf(instance?: string): StopPlan {
-  const plan = read(parseStopPlan(recorded("stop-plan.json")));
+export function stopPlanOf(instance?: string, providerVersion: string | null = null): StopPlan & { providerVersion: string | null } {
+  // The provider's version is read beside the plan by the plugin's server (contract `stopPlanRead`).
+  const plan = { ...read(parseStopPlan(recorded("stop-plan.json"))), providerVersion };
   return instance === undefined ? plan : { ...plan, instance, targets: [{ ...plan.targets[0]!, instance }] };
 }
 export const stopReceiptOf = (): StopReceipt => read(parseStopApply(recorded("stop-apply.json")));

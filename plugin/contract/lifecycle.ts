@@ -98,8 +98,16 @@ const startedIn = started.extend({ threadId: z.string() });
  */
 export const retirePlanRead = retirePlan.extend({ harness: z.string().nullable() });
 
+/**
+ * The stop plan as the dialog reads it: the kernel's plan, and the bb session provider's version
+ * (from the one read of the harness list, `server/spawn.ts`), by which the dialog knows whether a
+ * stop archives the agent's thread (`stopArchivesThread`); null when the kernel prints none or the
+ * read failed.
+ */
+export const stopPlanRead = stopPlan.extend({ providerVersion: z.string().nullable() });
+
 export const rpc = defineRpcContract({
-  stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlan },
+  stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlanRead },
   stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceipt },
   startCheck: { input: instance, output: startCheck },
   start: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },

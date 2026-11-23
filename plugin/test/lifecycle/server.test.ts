@@ -25,6 +25,20 @@ const declares = (harnesses: string[] | undefined) => ({ "capabilities show": { 
 const HOME = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
 
 describe("stop", () => {
+  it("the stop plan is answered with the bb session provider's version, from the one read of the provider; a read that fails names none and fails nothing", async () => {
+    backend = await startBackend();
+    // The recorded `oats capabilities show oats.bb --json`: a provider taken from a repository prints its commit.
+    const printed = JSON.parse(await readFile(join(FIXTURES, "spawn/capabilities-show-bb.json"), "utf8"));
+    const version = (printed.result ?? printed).version;
+    expect(typeof version).toBe("string");
+    expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: version });
+    await backend.rpc("startCheck", { instance: "weekly-digest-helper" });
+    expect((await backend.verbs()).filter((verb) => verb === "capabilities show")).toHaveLength(1); // one read for every dialog
+    await backend.dispose();
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: "", stderr: "oats: no such capability", exit: 1 } } });
+    expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: null });
+  }, 20_000);
+
   it("answers the plan as the kernel's facts, applies it with its revision, and shows the kernel's refusal of a stale one unchanged", async () => {
     backend = await startBackend();
     const { rpc, fake } = backend;

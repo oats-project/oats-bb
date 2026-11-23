@@ -256,7 +256,7 @@ function CannotRead({ refusal, onRetry }: { refusal: Refusal; onRetry: () => voi
 
 // ---- Stop and Retire ----
 
-type Plan = StopPlan | Answer<"retirePlan">;
+type Plan = Answer<"stopPlan"> | Answer<"retirePlan">;
 type PlanState =
   /** `kept`: the plan under review stays on screen while a new one is read for a choice or a check. */
   | { phase: "reading"; kept: Plan | null; why: string }
@@ -292,6 +292,13 @@ async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string):
 /** How long a stop's result waits for bb's word on the thread before it says what the confirmation said. */
 const THREAD_READ_MS = 5_000;
 
+/**
+ * The bb session provider's version, by which the dialog knows whether a stop archives the
+ * agent's thread (`stopArchivesThread`: one fact, one function): the plugin's server answers it
+ * beside the stop plan. A plan that names none, and a retire's, is not known.
+ */
+const versionOf = (plan: Plan | null): string | null => (plan !== null && plan.action === "stop" ? plan.providerVersion : null);
+
 function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const rpc = useRpc<Contract>();
   const sdk = useSdk();
@@ -319,10 +326,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
   }, []);
 
-  // Whether the provider archives the thread of a home it stops: from its version, which the spawn
-  // module's read of the provider will expose; until it does the version is not known here, and
-  // the answer is the one that is true of every provider released so far.
-  const archives = stopArchivesThread(null);
 
   const read = useCallback(
     (why: string, withChildren: boolean, changedFrom: Plan | null = null) => {
@@ -332,7 +335,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       asked.then(
         (plan) => {
           // A new plan is a new intent: it gets its own idempotency key.
-          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, archives) });
+          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, stopArchivesThread(versionOf(plan))) });
         },
         (cause: unknown) => {
           const refusal = refusalOf(cause);
@@ -344,7 +347,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
         },
       );
     },
-    [rpc, verb, instance, archives],
+    [rpc, verb, instance],
   );
   useEffect(() => {
     if (resumed === null) read(checking(verb, instance), true);
@@ -367,7 +370,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
             const onBb = plan.targets.some((target) => target.backend === "bb");
             // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
             const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
-            return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? archives);
+            return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan)));
           })
         : rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard }).then((receipt) => retireOutcome(receipt, plan));
     answered.then(
@@ -388,7 +391,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     if (current === request) set(null);
   };
   const plan = state.phase === "ready" || state.phase === "applying" ? state.plan : state.phase === "reading" ? state.kept : (state.sent?.plan ?? null);
-  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, archives) : retirePlanView(plan, discard);
+  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, stopArchivesThread(versionOf(plan))) : retirePlanView(plan, discard);
   const shownFor = plan === null ? null : plan.instance;
   const choose = (checked: boolean) => {
     if (verb === "stop") {

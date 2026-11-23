@@ -41,10 +41,15 @@ export default async (run) => {
     const said = asInstance("instance", "board", ...words, "--json");
     check(said.status === 0, `oats instance board ${words[0]} ${words[1]}, run in the agent's home`, said.stdout + said.stderr);
   }
-  const row = await until(`${CHILD} to read idle with the board's claim in oats status`, () => {
+  // At rest with the board's claim: the kernel's row says the agent is there (`running` null, or true
+  // from a provider that scans its harness: oats-bb #40) AND bb says its first turn is over
+  // (run.atRest, scenario.mjs): `running` alone no longer says that. The row compared below is one
+  // read AFTER that, since bb is asked after `oats status` was read.
+  const rested = await until(`${CHILD} to read idle with the board's claim in oats status`, () => {
     const now = rowOf(CHILD);
-    return now?.running === null && now.waitingOnYou?.producer === "oats.board" ? now : undefined;
+    return now !== undefined && run.atRest(now) && now.waitingOnYou?.producer === "oats.board" ? now : undefined;
   });
+  const row = rested === undefined ? rested : (rowOf(CHILD) ?? rested);
   rpc("refresh");
   const answer = act("the panel's facts of the child", "panelInstance", { instance: CHILD });
   const facts = answer?.facts;

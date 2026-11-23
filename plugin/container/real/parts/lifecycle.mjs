@@ -37,7 +37,9 @@ export default async (run) => {
   };
   const idle = (name) => until(`${name} to be there and idle in oats status`, () => {
     const row = rowOf(name);
-    return row?.session?.threadId && row.running === null ? row : undefined;
+    // At rest: the kernel's `running` is null from a provider that cannot tell and true from one that scans its harness
+    // (oats-bb #40); that its turn is over is bb's word (run.atRest, scenario.mjs).
+    return row?.session?.threadId && run.atRest(row) ? row : undefined;
   }, 120);
   const stopped = (name) => until(`${name} to read stopped in oats status`, () => {
     const row = rowOf(name);

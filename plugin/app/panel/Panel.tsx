@@ -8,8 +8,8 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, Node } from "../../model/types";
-import { claimOf } from "../../model/view";
+import type { Agent, AgentState, BbThread, Node } from "../../model/types";
+import { claimOf, isListed } from "../../model/view";
 import { AgentActs } from "../lifecycle";
 import { agentStatus } from "../roster/status";
 import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
@@ -112,6 +112,13 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
+  // The agent's bb thread, for its state: the tree's own where the agent is drawn on one. Where the
+  // roster is NOT ready and the panel shows the agent its caller remembered, there is no node: bb's
+  // own row of that thread is given (bb lists its threads whatever OATS answers), since whether the
+  // agent works is what bb says of the thread. In a ready roster a missing node means no thread to
+  // read, as the sidebar's row of such an agent says.
+  const remembered = oats.phase === "ready" || held.agent.threadId === null ? undefined : oats.threadById.get(held.agent.threadId);
+  const thread = held.node?.thread ?? (remembered !== undefined && isListed(remembered) ? remembered : null);
   // OATS cannot be read: never (no roster), or not again (the roster is the last one read).
   const unread = oats.phase === "failed" ? oats : oats.phase === "ready" ? oats.stale : null;
   const failure: RosterFailure | null = unread === null ? null : { code: unread.code, message: unread.message, machine: oats.phase === "failed" ? oats.machine : oats.phase === "ready" ? oats.deployment.machine : null, line: failureLine(unread), retry: oats.retry };
@@ -120,7 +127,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
       {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
       <div data-testid="oats-panel-visible" className="flex min-h-0 min-w-0 flex-1 flex-col" style={visible === null ? undefined : { width: visible }}>
         {/* One instance at a time: another agent starts from its own read. */}
-        <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} tab={tab} failure={failure} />
+        <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} thread={thread} tab={tab} failure={failure} />
       </div>
     </div>
   );
@@ -160,14 +167,14 @@ function useVisibleWidth(element: HTMLElement | null): number | null {
   return width;
 }
 
-function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent; node: Node | undefined; tab: TabId; failure: RosterFailure | null }) {
+function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null }) {
   const read = usePanelInstance(agent.instance);
   const now = useNow();
   const state = <ReadState read={read} now={now} failure={failure} />;
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
-  // bb thread has none to give it.
-  const status = agentStatus(agent, node?.thread ?? null, now);
+  // bb thread has none to give it (`thread`, from InstancePanel).
+  const status = agentStatus(agent, thread, now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (

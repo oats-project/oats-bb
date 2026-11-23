@@ -309,7 +309,8 @@ test("an agent that is not loaded, on a thread bb says works (a turn runs): the 
   await unloaded.findByTestId("oats-identity-row");
   await waitFor(() => expect(words(unloaded)[0]).toBe("Working"));
   expect(words(unloaded).join(" ")).not.toMatch(/not loaded|carry on/);
-  expect(acts(unloaded)).toEqual([]);
+  // No Start. The line of an agent that works offers Stop (the roster's second pass: it opens the stop dialog, nothing stops on the press).
+  expect(acts(unloaded)).toEqual(["Stop"]);
 });
 
 // ---- the agent's own page (the instance panel's header)

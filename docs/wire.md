@@ -352,10 +352,14 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   and sends it no resume. So a thread the provider stopped and left live (`reason:
   "host"`) reads `running: false`, and the same thread after bb started its harness again
   reads `true`. A turn bb holds in line (`queuedWork: "waiting"` in the thread's list
-  row: bb starts it by itself) still reads `running: true` without a look. A queued
-  message that failed to send (`queuedWork: "failed"`) starts nothing: such a thread is
-  at rest and reads by its harness, like any other, so a home stopped with the host whose
-  thread holds only a failed message is not read as running. A word for the queue that
+  row: bb starts it by itself) still reads `running: true` without a look. A thread
+  whose row says `queuedWork: "failed"` (a queued message whose dispatch failed) reads by
+  its harness, like any thread at rest, so a home stopped with the host whose thread
+  holds only a failed message is not read as running. bb's word does not say that
+  nothing will start: it wins over `waiting` in the row, and covers a message bb will
+  retry by itself as well as one that waits for a person. So such a thread may read
+  `running: false` a moment before bb starts a turn in it; the answer corrects itself
+  when it does, and a false `true` is the one the provider must never give. A word for the queue that
   the provider does not know (bb-app 0.50.1 has `none`, `waiting` and `failed`) reads
   `running: null`: it cannot be told. (A stop still clears whatever is in line, a failed
   message too, and a launch still refuses to start over one.) A

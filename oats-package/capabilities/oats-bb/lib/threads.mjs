@@ -15,8 +15,8 @@ const MISSING = Object.freeze({ present: false, state: "stopped", running: false
 // when a slot frees: such a thread is busy, whatever is loaded now.
 const HELD = Object.freeze({ present: true, state: "unknown", running: true });
 
-/** `running` of a thread at rest (idle or pending with nothing in line, or in error with
- *  its harness alive): whether its harness works in the home now, asked of the processes
+/** `running` of a thread at rest (idle or pending with nothing that waits to start in
+ *  line, a failed message included, or in error with its harness alive): whether its harness works in the home now, asked of the processes
  *  (lib/processes.mjs, `runsIn`). bb's word is the same for a thread whose agent is loaded,
  *  waiting for its next message, and for one `bb thread stop` released: only the process
  *  tells them apart, and the kernel needs it to tell a home stopped with the host from one
@@ -65,8 +65,9 @@ export function inspectAnswer(thread, processes, home) {
     // A word for the thread's queue that this provider does not know: whether something
     // will start cannot be told, and neither "it runs" nor "it does not" is said.
     if (hasQueuedWork(thread) && !QUEUE_WORDS.has(thread.queuedWork)) return { present: true, state: "unknown", running: null };
-    // (`failed`: a message bb could not send stays in line and starts nothing. The thread
-    // is at rest, and reads by its harness, below.)
+    // (`failed`: a queued message whose dispatch failed. It does not say a turn will
+    // start, so the thread reads by its harness, below. bb may still retry such a message
+    // by itself, and the word hides a message that waits behind it: see QUEUE_WORDS.)
   }
   if (SETTLED.has(status)) return { present: true, state: "unknown", running: harnessRuns(thread, processes, home) };
   if (status === "error") return processes.has(thread) ? { present: true, state: "unknown", running: harnessRuns(thread, processes, home) } : { ...MISSING };
@@ -77,10 +78,17 @@ export const isSettled = (thread) => SETTLED.has(thread.status) || thread.status
 // bb's words for a thread's queue in its list row (bb-app 0.50.1's own enum, `bb guide
 // json`: `queuedWork ("none" | "waiting" | "failed")`): nothing in line; a message that
 // waits to start, which bb starts by itself (its concurrency limit, a busy thread); a
-// queued message that failed to send, which stays in line and starts nothing.
+// queued message whose dispatch failed. `failed` wins over `waiting` in bb's row, and
+// covers two states of bb's (its guide): `failed_retrying`, which bb retries by itself
+// later, and `failed_exhausted`, which waits for a person. So a thread that reads
+// `failed` MAY still start a turn by itself, and the row cannot tell. It is read by its
+// harness all the same: taken for "it runs", a home stopped with the host whose thread
+// holds only a message that will never start would be read as one that came back, and a
+// false "it runs" is the dangerous answer; a false "it does not" corrects itself when bb
+// starts the turn (the thread is then in a turn, or its harness is seen).
 const QUEUE_WORDS = new Set(["none", "waiting", "failed"]);
 /** Whether bb's list row says a turn of the thread will start by itself: a message waits
- *  in line (`queuedWork: "waiting"`). Not a message that failed to send, and not a word
+ *  in line (`queuedWork: "waiting"`). Not `failed`, which does not say so, and not a word
  *  this provider does not know. What `running` is answered from without a look at the
  *  processes: a false "it runs" here would have the kernel take a home stopped with the
  *  host, whose thread holds only a failed message, for one that came back. */

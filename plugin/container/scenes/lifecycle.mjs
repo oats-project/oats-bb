@@ -16,7 +16,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test
 const recorded = (name) => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 /** What the real kernel answered for each act on an agent it no longer has (gone.json): one refusal per act. */
 const gone = (act) => ({ stdout: JSON.stringify(recorded("gone.json")[act]) });
-/** When the recorded plans were read: the page's clock is set just after, so that "Observed" says what a person would read. */
+/** When the recorded plans were read: the page's clock is set just after. */
 const STOP_AT = "2026-11-19T12:30:20.000Z";
 const RETIRE_AT = "2026-11-21T15:52:20.000Z";
 
@@ -44,13 +44,30 @@ const startedOn = (name, thread) => {
   return JSON.stringify(answer);
 };
 /** The fake answers the roster with the run's thread ids, and what the scene asks of a verb (the rest is each feature's recorded default). */
-const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => tools.fake({ status: { stdout: status }, ...verbs });
+const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => tools.fake({ status: { stdout: status }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbs });
+/**
+ * The bb session provider these scenes run on: the recorded `oats capabilities show oats.bb` with
+ * the version of the release that archives a thread at stop (oats-bb 0.4.0, the pilot's), in place
+ * of the recording's commit: so the Stop dialog says the pilot's one line, "Archives its thread.".
+ * (Below that release the line is the warning: the unit tests draw both.) SHAPED in that one field.
+ */
+const PILOT_PROVIDER = (() => {
+  const answer = JSON.parse(readFileSync(join(FIXTURES, "..", "spawn", "capabilities-show-bb.json"), "utf8"));
+  answer.result.version = "0.4.0";
+  return JSON.stringify(answer);
+})();
+/** The plugin's server keeps the provider's answer for 30 s (server/core.ts PAGE_TTL_MS): the first of these stages waits that out ONCE, so that no dialog is drawn on an earlier stage's answer. */
+let providerSettled = false;
 const stage = (label, states) => ({
   label,
   enter: async (given) => {
     tools = given;
     changes = states;
     answers();
+    if (!providerSettled) {
+      await new Promise((resolve) => setTimeout(resolve, 31_000));
+      providerSettled = true;
+    }
     await given.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.threadId === given.threads.get(HELPER).id && (states["weekly-digest-helper"] === undefined || agent.running === true)));
   },
 });
@@ -73,6 +90,12 @@ export const dialog = async (page) =>
       `JSON.stringify({ title: ${textOf(`${testId("oats-modal")} h2`)}, about: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-about") ?? null, phase: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-phase") ?? null, body: ${textOf(testId("oats-modal"))}, act: ${textOf(testId("oats-confirm-act"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-act"))})?.disabled ?? null, focus: ${FOCUSED} })`,
     ),
   );
+/** What is under a fold of the dialog (its Details): whether it is open, and its words. A closed fold's words are not in the dialog's `body` (innerText reads what is drawn). */
+export const folded = (id) => `(() => { const fold = document.querySelector(${JSON.stringify(testId(id))}); return JSON.stringify(fold === null ? null : { open: fold.open, summary: fold.querySelector("summary")?.innerText.trim() ?? null, text: fold.textContent.replace(/\\s+/g, " ").trim() }); })()`;
+/** The dialog's lines before the act, in view: its one consequence line, and at most one more. */
+export const saysNow = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-says")} li`)})].map((line) => line.innerText.trim()))`;
+/** No section heading of the four the cut removed, and one fold at most, in the dialog. */
+export const plainNow = `(() => { const dialog = document.querySelector(${JSON.stringify(confirm)}); return JSON.stringify({ headings: [...dialog.querySelectorAll("h3")].map((each) => each.innerText.trim()).filter((text) => /^(what will happen|what is kept|before you confirm|current state)$/i.test(text)), folds: dialog.querySelectorAll("details").length }); })()`;
 /** A toast of ours (found by what it says) has come in whole: it is opaque, and where it was at the last look. An image taken before shows it half way. */
 const toastSettled = (text) =>
   `(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes(${JSON.stringify(text)})); if (!toast || Number(getComputedStyle(toast).opacity) < 1) return false; const top = Math.round(toast.getBoundingClientRect().top); const was = window.__oatsToastTop; window.__oatsToastTop = top; return was === top; })()`;
@@ -109,7 +132,7 @@ export async function openThreadMenu(page) {
 }
 /**
  * Nothing a person needs is cut without a sign (the first UX read of the dialogs, S5 and T5): what
- * the act does (the first sentence of "What will happen", or the result) and the dialog's buttons
+ * the act does (the dialog's one consequence line, or the result) and the dialog's buttons
  * are in view together; or the dialog says that there is more above or below.
  */
 const whole = (key) => `(() => {
@@ -120,7 +143,7 @@ const whole = (key) => `(() => {
   const onScreen = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; };
   // What matters now: what the scene names; else, while the act runs, the line that says so; once it has an answer, the result; before, the notice or the first sentence of the plan.
   const phase = document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase");
-  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-leave-line"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
+  const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-running"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
   const buttons = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-cancel")}, ${testId("oats-confirm-leave")}, ${testId("oats-confirm-act")}, ${testId("oats-confirm-close")}`)})];
   const says = [${JSON.stringify(testId("oats-modal-above"))}, ${JSON.stringify(testId("oats-modal-below"))}].map((id) => document.querySelector(id)?.innerText ?? null);
   const above = body.scrollTop > 1;
@@ -161,24 +184,29 @@ export default [
         await page.goto("/");
         check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
         const items = await menuTexts(page);
-        check(["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)"].every((label) => items.includes(label)) && !items.includes("Start agent (OATS)"), `${at} the row's menu of a working agent holds Stop, Restart and Retire, each "(OATS)" beside bb's own, and no Start`, JSON.stringify(items));
+        check(["Stop (OATS)", "Restart (OATS)", "Retire (OATS)"].every((label) => items.includes(label)) && !items.includes("Start (OATS)"), `${at} the row's menu of a working agent holds Stop, Restart and Retire, each "(OATS)" beside bb's own, and no Start`, JSON.stringify(items));
         const named = items.indexOf("Redesign ui lead · Working");
-        check(named >= 0 && items[named + 1] === "Stop agent (OATS)" && items.indexOf("Archive") > items.indexOf("Retire agent (OATS)"), `${at} the OATS entries start with a row that names the agent and its state, and stand before bb's own Archive and Delete`, JSON.stringify(items));
+        check(named >= 0 && items[named + 1] === "Stop (OATS)" && items.indexOf("Archive") > items.indexOf("Retire (OATS)"), `${at} the OATS entries start with a row that names the agent and its state, and stand before bb's own Archive and Delete`, JSON.stringify(items));
         // A separator is a gap in the list: more room between Retire and Archive than between two entries of one group.
-        const apart = await page.evaluate(`(() => { const rows = [...document.querySelectorAll('[role="menuitem"]')]; const row = (text) => rows.find((each) => each.innerText.trim() === text)?.getBoundingClientRect(); const [stop, restart, retire, archive] = ["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)", "Archive"].map(row); if (!stop || !restart || !retire || !archive) return false; return archive.top - retire.bottom > restart.top - stop.bottom + 4; })()`);
+        const apart = await page.evaluate(`(() => { const rows = [...document.querySelectorAll('[role="menuitem"]')]; const row = (text) => rows.find((each) => each.innerText.trim() === text)?.getBoundingClientRect(); const [stop, restart, retire, archive] = ["Stop (OATS)", "Restart (OATS)", "Retire (OATS)", "Archive"].map(row); if (!stop || !restart || !retire || !archive) return false; return archive.top - retire.bottom > restart.top - stop.bottom + 4; })()`);
         check(apart, `${at} bb sets the OATS entries apart from its own Archive and Delete`);
         await page.shot(`lifecycle-${viewport.name}-row-menu`);
-        check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
+        check(await pick(page, "Stop (OATS)"), `${at} Stop (OATS) is pressed in the row's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && /what will happen/i.test(before.body) && before.body.includes("Stops 3 sessions, children first: Redesign ui lead, Desktop mockups developer, Harvest knowledge helper.") && /what is kept/i.test(before.body) && before.body.includes("Nothing is deleted.") && before.body.includes("Include child instances"),
-          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, what will happen, what is kept, the choice of its children`,
+          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && before.body.includes("Include child instances") && !/nothing is forced|Stops \d+ sessions|transcript|Observed|To talk to it again|Nothing is deleted/.test(before.body),
+          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, with the choice of its children, and none of the sentences the cut removed`,
           JSON.stringify(before),
         );
-        check(before.body.includes("Redesign ui lead has uncommitted work in its home.") && !before.body.includes("in the middle of a task") && before.body.includes("Observed less than a minute ago"), `${at} it says who has uncommitted work, and how old the plan is`, before.body);
+        const stopSays = await page.evaluate(saysNow);
+        check(stopSays === JSON.stringify(["Archives its thread.", "Also stops: Desktop mockups developer, Harvest knowledge helper."]), `${at} in view, under no heading: its ONE consequence line, "Archives its thread." (the pilot's provider), then who else it stops, second and last`, stopSays);
+        const stopPlain = await page.evaluate(plainNow);
+        check(stopPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} the dialog has none of the four section headings, and ONE fold`, stopPlain);
+        const stopFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
+        check(stopFold !== null && stopFold.open === false && /Details$/.test(stopFold.summary) && stopFold.text.includes("Nothing is deleted.") && stopFold.text.includes("Redesign ui lead") && stopFold.text.includes("Session running"), `${at} under Details, closed: that nothing is deleted, and each session's state`, JSON.stringify(stopFold));
+        check(before.body.includes("Redesign ui lead has uncommitted work.") && !before.body.includes("in the middle of a task"), `${at} it says who has uncommitted work: the fact that is a reason not to confirm, set apart`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
-        check(before.body.includes("A message sent in its thread starts it again without OATS. To talk to it again, use Start."), `${at} it says what a stop means for the agent's thread`, before.body);
         await shot("before");
         const order = await walk(page, 4);
         check(same(order, ["oats-confirm-act", "oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Stop, the choice, Check again, Cancel and round again: the focus stays in the dialog`, JSON.stringify(order));
@@ -186,14 +214,16 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.phase === "running" && running.body.includes("Stopping Redesign ui lead. This can take up to a minute.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
+        check(running.phase === "running" && running.body.includes("Stopping…") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         const leave = JSON.parse(await page.evaluate(`JSON.stringify({ line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-leave"))})?.disabled ?? null })`));
-        check(leave.line === "You can close this; stopping continues." && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog says that it can be closed and that stopping continues, with Close on`, JSON.stringify(leave));
+        check(leave.line === "" && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog can be left: Close is on (not Cancel), and no line says so`, JSON.stringify(leave));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
-        check(done.body.includes("3 sessions stopped.") && done.body.includes("Redesign ui lead: Stopped") && done.body.includes("Harvest knowledge helper: Was already stopped") && !/what will happen/i.test(done.body) && done.focus === "oats-confirm-close", `${at} the result is said in the dialog, each session on its line, and the focus is on Close`, JSON.stringify(done));
-        check(done.body.includes("A message sent in its thread starts it again without OATS. To talk to it again, use Start."), `${at} the result says again what a stop means for the thread`, done.body);
+        const stopResult = await page.evaluate(textOf(`${confirm} ${testId("oats-result")}`));
+        check(done.body.includes("3 sessions stopped.") && !/: Stopped|already stopped|Archives its thread/.test(done.body) && done.focus === "oats-confirm-close", `${at} the result is said in the dialog by its title, with no row for a session that stopped and no plan over it, and the focus is on Close`, JSON.stringify(done));
+        // What it says of the thread is what bb SHOWS of it after the stop (the fake stops no thread: bb holds it live): the warning, as the result's one line.
+        check(stopResult === "3 sessions stopped. A message in its thread starts it outside OATS.", `${at} the result's one line more: bb still holds the thread live, so a message there would start it outside OATS`, stopResult);
         await shot("done");
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
@@ -206,7 +236,7 @@ export default [
         const stale = recorded("stop-apply-stale.json");
         answers({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
         check(await openRowMenu(page, viewport, lead.id), `${at} the row's menu opens again`);
-        await pick(page, "Stop agent (OATS)");
+        await pick(page, "Stop (OATS)");
         await page.until(phaseIs("ready"), 30);
         answers({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" }, "instance stop --plan": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: stale.error.details.plan }) } });
         await page.evaluate(click("oats-confirm-act"));
@@ -214,7 +244,7 @@ export default [
         const changed = await dialog(page);
         const notice = JSON.parse(await page.evaluate(`(() => { const notice = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-notice")}`)}); const box = notice.getBoundingClientRect(); return JSON.stringify({ text: notice.innerText.replace(/\\s+/g, " ").trim(), first: notice.parentElement.firstElementChild === notice, onScreen: box.top >= 0 && box.bottom <= innerHeight }); })()`));
         check(notice.first && notice.onScreen && notice.text.startsWith("Something changed since you opened this") && notice.text.includes("Harvest knowledge helper: its session was running, and is now not running.") && notice.text.includes("Review again"), `${at} a plan that changed comes back for review: the notice is the first thing in the dialog, on screen, and says WHAT changed, with Review again`, JSON.stringify(notice));
-        check(changed.off === true && changed.focus === "oats-confirm-cancel" && changed.body.includes("Read what changed, then press Review again."), `${at} the changed plan is NOT armed: Stop is off with the reason, and the focus is on Cancel`, JSON.stringify(changed));
+        check(changed.off === true && changed.focus === "oats-confirm-cancel" && !changed.body.includes("Read what changed"), `${at} the changed plan is NOT armed: Stop is off under the notice that says why (no words beside the button), and the focus is on Cancel`, JSON.stringify(changed));
         await shot("changed");
         await page.evaluate(click("oats-plan-review"));
         const reviewed = await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-notice")}`)}) === null && document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled === false`, 20);
@@ -226,9 +256,9 @@ export default [
         await page.until(phaseIs("failed"), 20);
         const refused = await dialog(page);
         const title = await page.evaluate(textOf(`${confirm} ${testId("oats-result")} h3`));
-        check(title === "Redesign ui lead wasn't stopped" && refused.body.indexOf("OATS no longer knows this agent") < refused.body.indexOf("E_SESSION_UNKNOWN") && refused.body.indexOf("E_SESSION_UNKNOWN") > 0, `${at} a refusal leads with a person's words; the kernel's code comes after them`, JSON.stringify({ title, body: refused.body }));
+        check(title === "Redesign ui lead wasn't stopped" && refused.body.includes("OATS no longer knows this agent") && !refused.body.includes("E_SESSION_UNKNOWN"), `${at} a refusal is a person's words; the kernel's code is not on its face`, JSON.stringify({ title, body: refused.body }));
         const details = JSON.parse(await page.evaluate(`JSON.stringify({ open: document.querySelector(${JSON.stringify(testId("oats-act-details"))}).open, text: document.querySelector(${JSON.stringify(testId("oats-act-details"))}).textContent })`));
-        check(details.open === false && details.text.includes("no instance"), `${at} the kernel's own message is one press away, under Details`, JSON.stringify(details));
+        check(details.open === false && details.text.includes("no instance") && details.text.includes("E_SESSION_UNKNOWN"), `${at} the kernel's own message and its code are one press away, under the result's Details`, JSON.stringify(details));
         await shot("refused");
         const after = await walk(page, 4);
         check(refused.focus === "oats-confirm-close" && after.length === 4 && after[0] === "oats-act-review" && after[1].endsWith("Details") && after[2] === "oats-confirm-close" && after[3] === "oats-act-review", `${at} the focus is on Close, and Tab walks Review again, Details, Close and round again`, JSON.stringify({ focus: refused.focus, after }));
@@ -249,7 +279,7 @@ export default [
       const open = async () => {
         await page.goto("/");
         check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
-        check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
+        check(await pick(page, "Stop (OATS)"), `${at} Stop (OATS) is pressed in the row's menu`);
       };
       await page.clock(STOP_AT);
       try {
@@ -258,7 +288,7 @@ export default [
         await open();
         await page.until(phaseIs("reading"), 10);
         const reading = await dialog(page);
-        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking what stopping Redesign ui lead will do…") && reading.off === true, `${at} while the plan is read the dialog says what it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
+        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
         await shot("reading");
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-cancel"));
@@ -270,7 +300,7 @@ export default [
         await page.until(phaseIs("failed"), 30);
         const unread = await dialog(page);
         check(
-          unread.body.includes("Couldn't check what stopping Redesign ui lead will do") && unread.body.includes("Nothing was changed.") && unread.body.includes("Review again") && !/what will happen/i.test(unread.body),
+          unread.body.includes("Couldn't check Redesign ui lead") && unread.body.includes("Nothing was changed.") && unread.body.includes("Review again") && !/Archives its thread|Also stops/.test(unread.body),
           `${at} a plan that cannot be read says so in a person's words, that nothing was changed, and offers to read it again; no plan is drawn`,
           JSON.stringify(unread),
         );
@@ -286,7 +316,7 @@ export default [
         await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
         const lost = await dialog(page);
         check(
-          lost.body.includes("Result not confirmed") && lost.body.includes("OATS didn't confirm the result. Check again before assuming nothing happened.") && lost.body.includes("Check again") && !lost.body.includes("wasn't stopped"),
+          lost.body.includes("Result not confirmed") && lost.body.includes("Check again before assuming nothing happened.") && !lost.body.includes("OATS didn't confirm the result.") && lost.body.includes("Check again") && !lost.body.includes("wasn't stopped"),
           `${at} an apply whose answer is lost is told as not confirmed, never as stopped and never as not stopped, with Check again`,
           JSON.stringify(lost),
         );
@@ -352,26 +382,31 @@ export default [
       const shot = (name, key) => dialogShot({ page, at, viewport, check }, "retire", name, key);
       const open = async () => {
         await page.goto(threadPath(helper));
-        return (await openThreadMenu(page)) && (await pick(page, "Retire agent (OATS)"));
+        return (await openThreadMenu(page)) && (await pick(page, "Retire (OATS)"));
       };
       await page.clock(RETIRE_AT);
       try {
         await page.goto(threadPath(helper));
         check(await openThreadMenu(page), `${at} the thread's own menu opens on Weekly digest helper's thread`);
         const items = await menuTexts(page);
-        check(["Start agent (OATS)", "Retire agent (OATS)"].every((label) => items.includes(label)) && !items.includes("Stop agent (OATS)") && !items.includes("Restart agent (OATS)"), `${at} the thread's menu of a stopped agent holds Start and Retire, and neither Stop nor Restart`, JSON.stringify(items));
+        check(["Start (OATS)", "Retire (OATS)"].every((label) => items.includes(label)) && !items.includes("Stop (OATS)") && !items.includes("Restart (OATS)"), `${at} the thread's menu of a stopped agent holds Start and Retire, and neither Stop nor Restart`, JSON.stringify(items));
         await page.shot(`lifecycle-${viewport.name}-thread-menu`);
-        check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed in the thread's menu`);
+        check(await pick(page, "Retire (OATS)"), `${at} Retire (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && before.body.includes("Stops its 1 child instance first: Digest links helper. They are kept, with their homes.") && before.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && before.body.includes("Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.") && before.body.includes("Branches and pull requests are not changed."),
-          `${at} Retire opens its dialog and retires nothing: what goes and what stays, in the Desktop's sentences, for the agent the kernel's plan names`,
+          before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && !/won't stop|pull requests|recovery copy|stays readable|Stops its session|Observed|Deletes its home|Keeps its worktree/.test(before.body),
+          `${at} Retire opens its dialog and retires nothing, for the agent the kernel's plan names, with none of the sentences the cut removed or folded`,
           JSON.stringify(before),
         );
+        const retireSays = await page.evaluate(saysNow);
+        check(retireSays === JSON.stringify(["This cannot be undone.", "Also stops: Digest links helper."]), `${at} in view, under no heading: its ONE consequence line, "This cannot be undone.", then who else it stops`, retireSays);
+        const retirePlain = await page.evaluate(plainNow);
+        check(retirePlain === JSON.stringify({ headings: [], folds: 1 }), `${at} the dialog has none of the four section headings, and ONE fold`, retirePlain);
+        const retireFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
+        check(retireFold !== null && retireFold.open === false && retireFold.text.includes("Deletes its home.") && retireFold.text.includes("Keeps its worktree, moved aside, on branch agents/weekly-digest-helper.") && retireFold.text.includes("Uncommitted work") && !retireFold.text.includes("/abs/"), `${at} under Details, closed: what goes and what stays, and the current state; no path`, JSON.stringify(retireFold));
         check(!before.body.includes("SIGTERM") && !before.body.includes("the ADE") && !before.body.includes("/abs/"), `${at} none of the kernel's own notes and no path is pasted into the plan`, before.body);
         check(before.act === "Retire" && before.off === false && before.focus === "oats-confirm-cancel", `${at} Retire is destructive: the focus starts on Cancel`, JSON.stringify(before));
-        check(before.body.includes("This cannot be undone. Its conversation stays readable in bb, archived."), `${at} it says that a retire cannot be undone, and that its conversation stays readable in bb, archived`, before.body);
         await shot("before");
         const order = await walk(page, 4);
         check(same(order, ["oats-confirm-act", "oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Retire, the choice, Check again, Cancel and round again`, JSON.stringify(order));
@@ -380,7 +415,9 @@ export default [
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-plan-choice")} [role="switch"]`)}).click()`);
         await page.until(`document.querySelector(${JSON.stringify(testId("oats-plan-warning"))}) !== null`, 10);
         const ticked = await dialog(page);
-        check(ticked.body.includes("Also delete the worktree On") && ticked.body.includes("Deletes its worktree. Branch agents/weekly-digest-helper stays in the repository.") && !ticked.body.includes("Keeps its worktree") && ticked.body.includes("Deletes the worktree folder, including 1 uncommitted change (a recovery copy is saved first)."), `${at} with "Also delete the worktree" on, the worktree is among what goes, and the dialog says what is lost`, ticked.body);
+        const tickedSays = await page.evaluate(saysNow);
+        const tickedFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
+        check(ticked.body.includes("Also delete the worktree On") && tickedSays === JSON.stringify(["This cannot be undone.", "Deletes 1 uncommitted change too (a copy is saved)."]) && tickedFold.text.includes("Also stops: Digest links helper.") && tickedFold.text.indexOf("Also stops: Digest links helper.") < tickedFold.text.indexOf("Deletes its home.") && !tickedFold.text.includes("Keeps its worktree") && ticked.body.split("uncommitted change").length === 2, `${at} with "Also delete the worktree" on, what is lost is the dialog's second line, counted and said once; who else it stops moves under Details, first`, JSON.stringify({ says: tickedSays, fold: tickedFold }));
         await shot("delete-worktree", testId("oats-plan-warning")); // what would be lost is what this image is of
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-plan-choice")} [role="switch"]`)}).click()`);
 
@@ -389,11 +426,11 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
-        check(running.body.includes("Retiring Weekly digest helper. This can take up to a minute while sessions stop.") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
+        check(running.body.includes("Retiring…") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
-        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && done.body.includes("Home folder deleted.") && done.body.includes("Worktree kept, at:") && done.body.includes("Recovery copy saved at") && done.body.includes("Its conversation stays readable in bb, archived.") && done.focus === "oats-confirm-close", `${at} the result is the Desktop's lines: the children, the home, the worktree, the recovery copy; and the thread`, JSON.stringify(done));
+        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && !/Home folder deleted|Session stopped/.test(done.body) && done.body.includes("Worktree kept, at:") && done.body.includes("Recovery copy saved at") && done.body.includes("Conversation archived in bb.") && done.focus === "oats-confirm-close", `${at} the result is the facts a person needs later: the children, where the worktree and the recovery copy are, the thread; no step that only says what was asked`, JSON.stringify(done));
         // Behind the result the retired agent is gone from the roster, and its thread offers no Start (the real run shows the same).
         const behind = await page.until(`document.querySelector(${JSON.stringify(testId("oats-status-act"))}) === null && document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${helper.id}"]') === null`, 20);
         check(Boolean(behind), `${at} behind the result the agent is in no row, and its thread offers no Start`);
@@ -419,9 +456,10 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const partial = await dialog(page);
-        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept, at:") && partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it.") && partial.body.includes("Review again") && partial.body.indexOf("RETIRE_INCOMPLETE") > partial.body.indexOf("Check what was kept before trying again."), `${at} a retire whose cleanup did not finish says what ran and what is kept, the code after the words, and offers Review again`, JSON.stringify(partial));
+        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept, at:") && !partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept: a message in its thread would start it outside OATS.") && partial.body.includes("Check what was kept before trying again.") && partial.body.includes("Review again") && !partial.body.includes("RETIRE_INCOMPLETE"), `${at} a retire whose cleanup did not finish says what is kept and to check it, and offers Review again; the code is not on its face`, JSON.stringify(partial));
         const warned = JSON.parse(await page.evaluate(`(() => { const warning = document.querySelector(${JSON.stringify(`${testId("oats-act-warning")} ${testId("oats-notice")}`)}); const result = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)}); return JSON.stringify({ tone: warning?.getAttribute("data-tone") ?? null, first: Boolean(warning && result && (warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING)), details: warning?.querySelector("details")?.open ?? null }); })()`));
-        check(warned.tone === "warning" && warned.first && warned.details === false, `${at} that the home was kept is a warning of its own, before the steps, with the rest one press away`, JSON.stringify(warned));
+        const keptFold = JSON.parse(await page.evaluate(folded("oats-act-details")));
+        check(warned.tone === "warning" && warned.first && warned.details === null && keptFold !== null && keptFold.open === false && keptFold.text.includes("No status row, no hooks OATS runs for it, no stop by OATS.") && keptFold.text.includes("RETIRE_INCOMPLETE"), `${at} that the home was kept is a warning of its own, before the facts; the rest (the release lane's words, the kernel's lines, the code) is one press away, under the result's ONE Details`, JSON.stringify({ warned, keptFold }));
         await shot("incomplete", `${testId("oats-act-warning")} h3`); // the warning is what this image is of
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -440,18 +478,22 @@ export default [
       try {
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
-        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        check(await pick(page, "Start (OATS)"), `${at} Start (OATS) is pressed in the row's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && !before.body.includes("carry on its conversation") && before.body.includes("Continue in this instance’s existing home, with its identity, work and notes.") && before.body.includes("Machine") && before.body.includes("Home") && before.body.includes("Ready to start."),
-          `${at} Start opens its dialog and starts nothing: titled with the agent as the kernel's roster names it now, what will happen, what is kept, its machine and home`,
+          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("Starts a new conversation.") && !/message it instead|existing home|stays readable|Ready to start|full mode|Refresh status|Leave blank/.test(before.body) && before.body.includes("Saved for later starts too."),
+          `${at} Start opens its dialog and starts nothing: titled with the agent as the kernel's roster names it now, with its one line and none of the sentences the cut removed or folded; a Start that can run says nothing more`,
           JSON.stringify(before),
         );
+        const startSaid = await page.evaluate(saysNow);
+        const startPlain = await page.evaluate(plainNow);
+        check(startSaid === JSON.stringify(["Starts a new conversation."]) && startPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} in view, under no heading: its ONE consequence line; and ONE fold`, `${startSaid} ${startPlain}`);
         const fields = JSON.parse(await page.evaluate(`JSON.stringify({ harness: [...document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).options].map((option) => option.text), chosen: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).value, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value })`));
         check(fields.chosen === "" && fields.harness[0].startsWith("Keep the recorded harness") && same(fields.harness.slice(1), ["Claude Code", "pi"]) && fields.model === "", `${at} the harness starts on "Keep the recorded harness", with the ones the provider declares after it; the model is blank`, JSON.stringify(fields));
         check(before.act === "Start" && before.off === false && before.focus === "oats-start-harness", `${at} the focus starts on the form's first field`, JSON.stringify(before));
-        check(before.body.includes("Runs in bb's full mode: no sandbox."), `${at} it says that the agent runs in bb's full mode, with no sandbox`, before.body);
+        const startFold = JSON.parse(await page.evaluate(folded("oats-start-details")));
+        check(startFold !== null && startFold.open === false && startFold.text.includes("Runs in bb's full mode: no sandbox.") && startFold.text.includes("Machine") && startFold.text.includes("Home"), `${at} under Details, closed: that the agent runs in bb's full mode, with no sandbox, its machine and its home`, JSON.stringify(startFold));
         await shot("before");
         const order = await walk(page, 5);
         check(same(order, ["oats-start-model", "oats-start-refresh", "oats-confirm-cancel", "oats-confirm-act", "oats-start-harness"]), `${at} Tab walks the model, Refresh status, Cancel, Start and round again`, JSON.stringify(order));
@@ -483,12 +525,12 @@ export default [
         await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.running === false));
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} the row's menu opens again`);
-        await pick(page, "Start agent (OATS)");
+        await pick(page, "Start (OATS)");
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const refused = await dialog(page);
-        check(refused.body.includes("OATS refused to start Weekly digest helper") && refused.body.includes("OATS says: directory instance home was removed or exchanged") && refused.body.indexOf("E_WORK_INSPECTION_FAILED") > refused.body.indexOf("OATS says:") && refused.body.includes("Refresh status") && !refused.body.includes("not in OATS any more"), `${at} a refused start leads with a person's words and says WHY in the kernel's own line, under its name; the code comes after, and Refresh status before another try; it does not call the agent gone`, JSON.stringify(refused));
+        check(refused.body.includes("OATS refused to start Weekly digest helper") && refused.body.includes("Refresh its status before another try.") && !refused.body.includes("OATS says:") && !refused.body.includes("E_WORK_INSPECTION_FAILED") && JSON.parse(await page.evaluate(folded("oats-act-details"))).text.includes("directory instance home was removed or exchanged") && JSON.parse(await page.evaluate(folded("oats-act-details"))).text.includes("E_WORK_INSPECTION_FAILED") && refused.body.includes("Refresh status") && !refused.body.includes("not in OATS any more"), `${at} a refused start is a person's words, with Refresh status before another try; WHY, in the kernel's own line, and the code are under Details; it does not call the agent gone`, JSON.stringify(refused));
         await shot("refused");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -510,7 +552,7 @@ export default [
         answers();
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
-        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        check(await pick(page, "Start (OATS)"), `${at} Start (OATS) is pressed in the row's menu`);
         check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Start dialog of an agent whose session was lost points at its thread`);
         const said = JSON.parse(
           await page.evaluate(
@@ -518,8 +560,8 @@ export default [
           ),
         );
         check(
-          said.first && said.title === "To carry on its conversation, send it a message in its thread instead." && said.open === "Open Weekly digest helper" && said.next.includes("Starts a new conversation. The current one stays readable in bb, archived."),
-          `${at} the dialog says FIRST to send a message in its thread to carry on, with Open Weekly digest helper, and then that a start begins a new conversation`,
+          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Starts a new conversation.",
+          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then that a start begins a new conversation`,
           JSON.stringify(said),
         );
         const before = await dialog(page);
@@ -547,7 +589,7 @@ export default [
         await page.clock(RETIRE_AT);
         await page.goto(threadPath(helper));
         check(await openThreadMenu(page), `${at} the thread's own menu opens on Weekly digest helper's thread`);
-        check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed in the thread's menu`);
+        check(await pick(page, "Retire (OATS)"), `${at} Retire (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-act"));
         await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
@@ -567,7 +609,7 @@ export default [
         answers();
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
-        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        check(await pick(page, "Start (OATS)"), `${at} Start (OATS) is pressed in the row's menu`);
         await page.until(phaseIs("ready"), 30);
         const started = recorded("start.json");
         delete started.result.session.endpoint.threadId;
@@ -620,12 +662,12 @@ export default [
         const fields = await page.evaluate(`JSON.stringify({ harness: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}) !== null, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}) !== null, fresh: document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)})?.getAttribute("aria-checked") ?? null })`);
         check(
           before.title === "Start Kernel fix developer" &&
-            before.body.includes("Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.") &&
-            !before.body.includes("full mode") &&
-            !before.body.includes("stays readable in bb") &&
+            (await page.evaluate(saysNow)) === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) &&
+            !/full mode|stays readable in bb|Claude may|how to load/.test(before.body) &&
+            !JSON.parse(await page.evaluate(folded("oats-start-details"))).text.includes("full mode") &&
             before.act === "Start" &&
             before.off === false,
-          `${at} Start of a lost tmux agent says that it tries to continue its last conversation, and that it says so if it starts fresh; nothing of bb's full mode or thread`,
+          `${at} Start of a lost tmux agent says in its one line that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode (under Details either) or thread, nor of a question its harness may ask`,
           JSON.stringify(before),
         );
         check(fields === JSON.stringify({ harness: false, model: false, fresh: "false" }), `${at} no harness and no model are offered; the plain start is a choice that is off`, fields);
@@ -635,7 +677,7 @@ export default [
         const back = await dialog(page);
         const where = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
         check(back.body.includes("Kernel fix developer is back in its last conversation.") && (await page.evaluate("location.pathname")).endsWith(`/plugins/oats/agent/${TMUX}`), `${at} the result says what the kernel answered: it is back in its last conversation; no thread opens`, JSON.stringify(back));
-        check(where.includes("Runs in tmux on") && where.includes("Attach from a terminal:") && where.includes("oats session attach --home ") && where.includes(TMUX), `${at} and where it runs, with the command that attaches (the panel's own words)`, where);
+        check(where.startsWith("Attach:") && !where.includes("Runs in tmux") && where.includes("oats session attach --home ") && where.includes(TMUX), `${at} and the command that attaches to it, under the panel's own word, "Attach:"`, where);
         await shot("resume-back");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -647,7 +689,7 @@ export default [
         await page.until(phaseIs("done"), 30);
         const fresh = await dialog(page);
         const tone = await page.evaluate(`document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone")`);
-        check(fresh.body.includes("Kernel fix developer started fresh: its last conversation was not brought back.") && fresh.body.includes("Its last conversation was not found.") && !fresh.body.includes("is back in its last conversation") && tone === "unknown", `${at} a resume that started fresh leads with that, in the warning tone, then the kernel's reason in words`, JSON.stringify({ fresh, tone }));
+        check(fresh.body.includes("Kernel fix developer started fresh.") && !fresh.body.includes("was not brought back") && fresh.body.includes("Its last conversation was not found.") && !fresh.body.includes("is back in its last conversation") && tone === "unknown", `${at} a resume that started fresh leads with that, in the warning tone, then the kernel's reason in words`, JSON.stringify({ fresh, tone }));
         await shot("resume-fresh");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -659,7 +701,7 @@ export default [
         await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}) !== null`, 30);
         const waiting = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-waiting"))}).innerText.replace(/\\s+/g, " ").trim()`);
         const reach = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
-        check(waiting.includes("It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.") && reach.includes("oats session attach --home ") && reach.includes(TMUX), `${at} a harness that waits for its person is said apart, in the attention tone, and the command that attaches follows`, `${waiting} | ${reach}`);
+        check(waiting === "Waiting for you in its terminal." && reach.includes("oats session attach --home ") && reach.includes(TMUX), `${at} a harness that waits for its person is said apart, in the attention tone, and the command that attaches follows`, `${waiting} | ${reach}`);
         await shot("resume-waiting");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -671,7 +713,7 @@ export default [
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-start-fresh-choice")} [role="switch"]`)}).click()`);
         await page.until(`document.querySelector(${JSON.stringify(testId("oats-start-fresh-warning"))}) !== null`, 10);
         const chosen = await dialog(page);
-        check(chosen.body.includes("This starts a new conversation on its task. Its last conversation is not brought back.") && chosen.body.includes("This starts a new conversation using the saved briefing and state.") && !chosen.body.includes("tries to continue its last conversation"), `${at} the plain start, chosen on purpose, says what it loses and what it does`, JSON.stringify(chosen));
+        check(chosen.body.includes("Its last conversation is not brought back.") && (await page.evaluate(saysNow)) === JSON.stringify(["Starts a new conversation."]) && !chosen.body.includes("Tries to continue its last conversation"), `${at} the plain start, chosen on purpose, says what it loses and what it does`, JSON.stringify(chosen));
         await shot("resume-fresh-choice");
         await page.evaluate(click("oats-confirm-cancel"));
         await page.until(closed, 10);
@@ -694,18 +736,18 @@ export default [
         await page.goto(threadPath(helper));
         check(await openThreadMenu(page), `${at} the thread's own menu opens on a running agent's thread`);
         const items = await menuTexts(page);
-        check(items.includes("Restart agent (OATS)") && items.includes("Stop agent (OATS)") && !items.includes("Start agent (OATS)"), `${at} it holds Restart and Stop, and no Start`, JSON.stringify(items));
-        check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed in the thread's menu`);
+        check(items.includes("Restart (OATS)") && items.includes("Stop (OATS)") && !items.includes("Start (OATS)"), `${at} it holds Restart and Stop, and no Start`, JSON.stringify(items));
+        check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
-        check(before.title === "Restart Weekly digest helper" && before.body.includes("Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.") && before.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && before.body.includes("Runs in bb's full mode: no sandbox.") && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: it says that the current harness is stopped first, that it starts a new conversation and the current one stays in bb, archived, and that it runs in bb's full mode`, JSON.stringify(before));
+        check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Stops what it is doing now."]) && !/full mode|stays readable|Save any in-progress/.test(before.body) && /Starts a new conversation\..*Runs in bb's full mode: no sandbox\./.test(JSON.parse(await page.evaluate(folded("oats-start-details"))).text) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its ONE line says that it stops what the agent does now; that it starts a new conversation, and bb's full mode, are under Details`, JSON.stringify(before));
         check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);
         check(same(order, ["oats-start-model", "oats-start-refresh", "oats-confirm-cancel", "oats-confirm-act", "oats-start-harness"]), `${at} Tab walks the model, Refresh status, Cancel, Restart and round again`, JSON.stringify(order));
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
-        check((await dialog(page)).body.includes("Checking configuration and restarting…"), `${at} while it restarts the dialog says so`);
+        check((await dialog(page)).body.includes("Restarting…"), `${at} while it restarts the dialog says so`);
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
@@ -717,12 +759,12 @@ export default [
 
         // A refusal (recorded: a restart on a home that was retired).
         answers({ "session restart": gone("restart") });
-        check((await openThreadMenu(page)) && (await pick(page, "Restart agent (OATS)")), `${at} Restart is asked again from the thread's menu`);
+        check((await openThreadMenu(page)) && (await pick(page, "Restart (OATS)")), `${at} Restart is asked again from the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const refused = await dialog(page);
-        check(refused.body.includes("OATS refused to restart Weekly digest helper") && refused.body.includes("OATS says: directory instance home was removed or exchanged") && refused.body.indexOf("E_WORK_INSPECTION_FAILED") > refused.body.indexOf("OATS says:") && refused.body.includes("Refresh status") && refused.focus === "oats-confirm-close", `${at} a refused restart leads with a person's words and says why in the kernel's own line; the code comes after, with Refresh status, and the focus on Close`, JSON.stringify(refused));
+        check(refused.body.includes("OATS refused to restart Weekly digest helper") && refused.body.includes("Refresh its status before another try.") && !refused.body.includes("OATS says:") && !refused.body.includes("E_WORK_INSPECTION_FAILED") && JSON.parse(await page.evaluate(folded("oats-act-details"))).text.includes("directory instance home was removed or exchanged") && JSON.parse(await page.evaluate(folded("oats-act-details"))).text.includes("E_WORK_INSPECTION_FAILED") && refused.body.includes("Refresh status") && refused.focus === "oats-confirm-close", `${at} a refused restart is a person's words, with Refresh status and the focus on Close; why, in the kernel's own line, and the code are under Details`, JSON.stringify(refused));
         await shot("refused");
         const after = await walk(page, 4);
         check(after.length === 4 && after[0] === "oats-start-refresh" && after[1].endsWith("Details") && after[2] === "oats-confirm-close" && after[3] === "oats-start-refresh", `${at} Tab walks Refresh status, Details, Close and round again`, JSON.stringify(after));
@@ -746,7 +788,7 @@ export default [
         // the dialog reads the kernel's row again, and it is the lost one (not running, stopped, not by an operator).
         changes = { "weekly-digest-helper": { running: false, runtimeState: "stopped", sessionEnd: "lost" } };
         answers();
-        check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed in the thread's menu`);
+        check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed in the thread's menu`);
         check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Restart dialog of an agent whose session was lost points at its thread`);
         const said = JSON.parse(
           await page.evaluate(
@@ -754,8 +796,8 @@ export default [
           ),
         );
         check(
-          said.first && said.title === "To carry on its conversation, send it a message in its thread instead." && said.open === "Open Weekly digest helper" && said.next.includes("Starts a new conversation. The current one stays readable in bb, archived."),
-          `${at} the dialog says FIRST to send a message in its thread to carry on, with Open Weekly digest helper, and then that a restart begins a new conversation`,
+          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Stops what it is doing now.",
+          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then its one line, that a restart stops what it is doing now`,
           JSON.stringify(said),
         );
         const before = await dialog(page);

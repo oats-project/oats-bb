@@ -17,7 +17,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
-import { click, closed, dialog, menuTexts, openRowMenu, openThreadMenu, phaseIs, pick } from "../../scenes/lifecycle.mjs";
+import { click, closed, dialog, menuTexts, openRowMenu, openThreadMenu, phaseIs, pick, folded, saysNow } from "../../scenes/lifecycle.mjs";
 
 /** An instance name as the plugin's words (app/ui/words.ts `agentName`). */
 const words = (instance) => {
@@ -25,8 +25,13 @@ const words = (instance) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-/** What the Stop dialog says a stop means for the agent's bb thread (app/lifecycle/words.ts `stopThreadSentence`). */
-const stopSentence = (archives) => (archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+/** The Stop dialog's ONE consequence line: what a stop means for the agent's bb thread (app/lifecycle/words.ts `stopThreadLine`). */
+const ARCHIVES = "Archives its thread.";
+const WARNS = "A message in its thread starts it outside OATS.";
+const stopLine = (archives) => (archives ? ARCHIVES : WARNS);
+/** The dialog's lines in view, and what is under one of its folds, read from the page. */
+const saysOf = async (page) => JSON.parse(await page.evaluate(saysNow));
+const foldOf = async (page, id) => JSON.parse(await page.evaluate(folded(id)))?.text ?? "";
 /** The plugin's own threshold and its shape of a release (app/lifecycle/words.ts `ARCHIVES_AT_STOP_FROM`, `RELEASE`): restated here, a run cannot read the app's code; they move together. */
 const ARCHIVES_AT_STOP_FROM = "0.4.0";
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
@@ -121,24 +126,24 @@ export default async (run) => {
     check(await rowDrawn(spawnedOn), `${at} ${called} has a row in the sidebar`);
     check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
     const items = await menuTexts(page);
-    check(items.includes("Stop agent (OATS)") && items.includes("Restart agent (OATS)") && items.includes("Retire agent (OATS)") && !items.includes("Start agent (OATS)"), `${at} the menu of an agent that runs holds Stop, Restart and Retire, and no Start`, JSON.stringify(items));
-    check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed`);
+    check(items.includes("Stop (OATS)") && items.includes("Restart (OATS)") && items.includes("Retire (OATS)") && !items.includes("Start (OATS)"), `${at} the menu of an agent that runs holds Stop, Restart and Retire, and no Start`, JSON.stringify(items));
+    check(await pick(page, "Stop (OATS)"), `${at} Stop (OATS) is pressed`);
     await ready();
     let said = await dialog(page);
-    check(said.title === `Stop ${called}?` && said.about === name && /what will happen/i.test(said.body) && /what is kept/i.test(said.body) && said.body.includes("Nothing is deleted.") && said.focus === "oats-confirm-cancel", `${at} the Stop dialog is the kernel's plan for ${name}, as what will happen and what is kept, the focus on Cancel`, JSON.stringify(said));
-    check(said.body.includes(stopSentence(saysArchives)) && !said.body.includes(stopSentence(!saysArchives)), `${at} before the stop it says what a provider of this version does to the agent's thread: "${stopSentence(saysArchives)}"`, said.body);
+    check(said.title === `Stop ${called}?` && said.about === name && !/what will happen|what is kept|nothing is forced/i.test(said.body) && (await foldOf(page, "oats-plan-details")).includes("Nothing is deleted.") && said.focus === "oats-confirm-cancel", `${at} the Stop dialog is the kernel's plan for ${name}: no section heading, that nothing is deleted under Details, the focus on Cancel`, JSON.stringify(said));
+    check((await saysOf(page))[0] === stopLine(saysArchives) && !said.body.includes(stopLine(!saysArchives)), `${at} before the stop its ONE consequence line says what a provider of this version does to the agent's thread: "${stopLine(saysArchives)}"`, said.body);
     if (child !== null) {
-      check(said.body.includes(`Stops 2 sessions, children first: ${called}, ${words(child)}.`) && said.body.includes("Include child instances On"), `${at} with a child, the plan stops both, children first, and offers the choice`, said.body);
+      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives), `Also stops: ${words(child)}.`]) && said.body.includes("Include child instances On"), `${at} with a child, the second and last line says who else is stopped, and the choice is offered`, said.body);
       // Without the children: the kernel is asked again, for the agent alone.
       await page.evaluate(`document.querySelector('[data-testid="oats-plan-choice"] [role="switch"]').click()`);
-      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("children not included") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
+      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Include child instances Off") && !document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Also stops") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
       said = await dialog(page);
-      check(said.body.includes(`Stops the session of ${called}.`) && said.body.includes(`Not stopped: ${words(child)} (children not included).`) && said.body.includes("Include child instances Off"), `${at} without "Include child instances" the kernel's plan is for ${name} alone, and says who is not stopped`, said.body);
+      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives)]) && !said.body.includes(words(child)) && said.body.includes("Include child instances Off"), `${at} without "Include child instances" the kernel's plan is for ${name} alone: its one line, nobody else named, and the choice says Off`, said.body);
       const alone = recorded(["instance", "stop", name], ["--plan", "--no-recursive"]);
       check(JSON.parse(alone.stdout).result?.recursive === false, "the plugin asked the kernel for the plan with --no-recursive", alone.stdout.slice(0, 300));
       if (theme === "light") fixtures.keep("lifecycle/stop-plan-no-recursive.json", alone.stdout);
       await page.evaluate(`document.querySelector('[data-testid="oats-plan-choice"] [role="switch"]').click()`);
-      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Stops 2 sessions") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
+      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Also stops") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
     }
     await shot("stop-before");
     await page.evaluate(click("oats-confirm-act"));
@@ -146,7 +151,7 @@ export default async (run) => {
     said = await dialog(page);
     check(said.phase === "done" && said.body.includes(child === null ? `${called} stopped.` : "2 sessions stopped."), `${at} the dialog says that it stopped`, JSON.stringify(said));
     // What the result says of the thread is what bb shows of it after the stop, whatever the version said before.
-    check(said.body.includes(stopSentence(run.stopArchives())) && !said.body.includes(stopSentence(!run.stopArchives())), `${at} after the stop it says what the stop did to the thread: "${stopSentence(run.stopArchives())}"`, said.body);
+    check(said.body.includes(WARNS) === !run.stopArchives() && !said.body.includes(ARCHIVES), `${at} after the stop the result says of the thread what bb shows: ${run.stopArchives() ? "archived, so nothing more than its title" : `still live, so "${WARNS}"`}`, said.body);
     row = await stopped(name);
     check(row?.session?.threadId === spawnedOn, "oats status: stopped, on the same thread", JSON.stringify(row?.session));
     if (child !== null) await stopped(child);
@@ -159,7 +164,7 @@ export default async (run) => {
     if (!run.stopArchives()) {
       check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
       check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
-      check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
+      check(await pick(page, "Start (OATS)"), `${at} Start (OATS) is pressed`);
     } else {
       // bb lists no archived thread: the agent keeps a row of the roster on no thread, which opens its
       // archived conversation, and that thread's own row has the acts (scenario.mjs, archivedShots).
@@ -180,8 +185,7 @@ export default async (run) => {
     // thread: one bb lists, or one bb has archived (it is asked for that one thread): on both providers, the one
     // that leaves a stopped agent's thread open and the one that archives it at the stop, the conversation stays
     // readable in bb, archived.
-    const begins = "Starts a new conversation. The current one stays readable in bb, archived.";
-    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes(begins) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Start ${called}` && said.about === name && !said.body.includes("Ready to start.") && (await foldOf(page, "oats-start-details")).includes("Runs in bb's full mode: no sandbox.") && JSON.stringify(await saysOf(page)) === JSON.stringify(["Starts a new conversation."]) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));
@@ -208,10 +212,10 @@ export default async (run) => {
     // ---- Restart, from the thread's own menu
     check(await openThread(startedOn), `${at} the agent's new thread opens from its row`);
     check(await openThreadMenu(page), `${at} the thread's own menu opens`);
-    check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed`);
+    check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed`);
     await ready();
     said = await dialog(page);
-    check(said.title === `Restart ${called}` && said.body.includes("Restart stops the current harness after checking the new configuration.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Restart", `${at} the Restart dialog says that the current harness is stopped first and that it starts a new conversation, and restarts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Restart ${called}` && JSON.stringify(await saysOf(page)) === JSON.stringify(["Stops what it is doing now."]) && (await foldOf(page, "oats-start-details")).includes("Starts a new conversation.") && said.act === "Restart", `${at} the Restart dialog's one line says that it stops what the agent does now (that it starts a new conversation is under Details), and it restarts nothing by itself`, JSON.stringify(said));
     await shot("restart-before");
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 180);
@@ -229,15 +233,15 @@ export default async (run) => {
     const discard = viewport.mobile;
     check(await openThread(restartedOn), `${at} the restarted agent's thread opens from its row`);
     check(await openThreadMenu(page), `${at} the thread's own menu opens`);
-    check(await pick(page, "Retire agent (OATS)"), `${at} Retire agent (OATS) is pressed`);
+    check(await pick(page, "Retire (OATS)"), `${at} Retire (OATS) is pressed`);
     await ready();
     said = await dialog(page);
     check(
-      said.title === `Retire ${called}?` && said.about === name && said.body.includes("Saves a recovery copy of any uncommitted work, then deletes its home folder.") && said.body.includes("This cannot be undone. Its conversation stays readable in bb, archived.") && said.body.includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
-      `${at} the Retire dialog is the kernel's plan for ${name}: what goes, what stays, the worktree's choice, the focus on Cancel`,
+      said.title === `Retire ${called}?` && said.about === name && (await saysOf(page))[0] === "This cannot be undone." && (await foldOf(page, "oats-plan-details")).includes("Deletes its home.") && (await foldOf(page, "oats-plan-details")).includes("Keeps its worktree, moved aside") && said.body.includes("Also delete the worktree Off") && said.focus === "oats-confirm-cancel",
+      `${at} the Retire dialog is the kernel's plan for ${name}: that it cannot be undone; what goes and what stays under Details; the worktree's choice; the focus on Cancel`,
       JSON.stringify(said),
     );
-    if (child !== null) check(said.body.includes(`Stops its 1 child instance first: ${words(child)}. They are kept, with their homes.`), `${at} its child is stopped first and kept`, said.body);
+    if (child !== null) check((await saysOf(page))[1] === `Also stops: ${words(child)}.`, `${at} its child is stopped too: the dialog's second line names it`, said.body);
     if (discard) {
       await page.evaluate(`document.querySelector('[data-testid="oats-plan-choice"] [role="switch"]').click()`);
       await page.until(`document.querySelector('[data-testid="oats-plan-warning"]') !== null`, 10);
@@ -248,7 +252,7 @@ export default async (run) => {
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 300);
     said = await dialog(page);
-    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept, at:") && said.body.includes("Its conversation stays readable in bb, archived."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
+    check(said.phase === "done" && said.body.includes(`${called} retired.`) && !said.body.includes("Home folder deleted.") && said.body.includes("Worktree kept, at:") === !discard && said.body.includes("Conversation archived in bb."), `${at} the dialog says what a person needs after the retire: ${discard ? "no worktree kept" : "where the worktree was kept"}, and the thread archived`, JSON.stringify(said));
     await until(`${name} to be gone from oats status`, () => (rowOf(name) === undefined ? true : undefined));
     const retire = recorded(["retire", name], ["--plan-revision"]);
     check(retire.argv.includes("--discard-worktree") === discard, `oats retire was asked ${discard ? "with" : "without"} --discard-worktree, under the plan's revision`, JSON.stringify(retire.argv));

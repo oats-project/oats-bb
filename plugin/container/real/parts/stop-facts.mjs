@@ -4,8 +4,8 @@
 // The kernel's plan carries `midTask: true` for every session that runs (reported activity: a
 // harness is loaded), an idle agent's too, and the dialog said of each "reports it is in the
 // middle of a task". It now says two facts, and nothing where there is neither:
-//   - "<Name> has uncommitted work in its home.": the plan's own observation of the work tree;
-//   - "<Name> is working on a turn now.": bb's word on the agent's thread.
+//   - "<Name> has uncommitted work.": the plan's own observation of the work tree;
+//   - "<Name> is mid-turn.": bb's word on the agent's thread.
 // In each view one agent of its own, on a worktree, is taken through the three cases, the dialog
 // opened from its row's menu each time:
 //   idle, its work tree clean     no box at all (the kernel's plan says midTask true all the same);
@@ -28,8 +28,8 @@ export default async (run) => {
     view += 1;
     const name = `stop-facts-${view}-helper`;
     const called = run.nameOf(name); // the instance name as the plugin draws it (scenario.mjs)
-    const WORK = `${called} has uncommitted work in its home.`;
-    const TURN = `${called} is working on a turn now.`;
+    const WORK = `${called} has uncommitted work.`;
+    const TURN = `${called} is mid-turn.`;
     step(`C stop-facts ${view}: ${name}, at ${at}: what the Stop dialog says before the confirmation, from facts`);
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, "Wait for instructions.\n");
@@ -51,7 +51,7 @@ export default async (run) => {
       const facts = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(rowSelector)})?.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? ""; return ${JSON.stringify(states)}.some((word) => facts.startsWith(word)) ? facts : ""; })()`, 60);
       check(Boolean(facts), `${at} ${called}'s row says ${states.join(" or ")}`, String(facts));
       check(await openRowMenu(page, viewport, threadId), `${at} its row's menu opens`);
-      check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed`);
+      check(await pick(page, "Stop (OATS)"), `${at} Stop (OATS) is pressed`);
       await page.until(phaseIs("ready"), 60);
       const said = await dialog(page);
       const attention = JSON.parse(await page.evaluate(`(() => { const box = document.querySelector('[data-testid="oats-plan-attention"]'); return JSON.stringify(box === null ? null : [...box.querySelectorAll("li")].map((line) => line.innerText.replace(/\\s+/g, " ").trim())); })()`));

@@ -471,8 +471,8 @@ export default [
           )
         : null;
       check(
-        dialogSays !== null && dialogSays.first && dialogSays.title === "To carry on its conversation, send it a message in its thread instead." && dialogSays.body.includes("Starts a new conversation. The current one stays readable in bb, archived."),
-        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to send a message in its thread to carry on, then that a start begins a new conversation`,
+        dialogSays !== null && dialogSays.first && dialogSays.title === "To continue its conversation, message it instead." && dialogSays.body.includes("Starts a new conversation.") && !dialogSays.body.includes("stays readable"),
+        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to message it instead to continue its conversation, then that a start begins a new conversation`,
         JSON.stringify(dialogSays),
       );
       await page.shot(`outside-${viewport.name}-three-3-start-dialog`, { targets: true });

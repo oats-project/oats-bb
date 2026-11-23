@@ -153,8 +153,9 @@ commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the tw
 `Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
 dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
 "Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
-`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). No place draws `AgentActs` yet: the
-instance panel and the agent's own page take it in their own change.
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). The instance panel places it in its
+header, under the agent's state: on the thread's OATS tab and on the agent's own page
+(`app/panel/Panel.tsx`).
 
 ## The home
 

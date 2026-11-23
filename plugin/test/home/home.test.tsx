@@ -833,6 +833,37 @@ test("the home's count of who needs you is the sidebar's: an agent on tmux that 
   expect(slot.getByTestId("oats-home-summary").textContent).toContain(" · 4 need you");
 });
 
+test("an agent that runs outside OATS is one of those that need you, in every place by one number: the badge, the heading, the summary; its card holds the notice with Stop and Start, and no choice and no reply", async () => {
+  // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`; app/outside).
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb, and OATS recorded this instance stopped: stop it with `oats instance stop weekly-digest-helper`, or start it from OATS" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, sessionEnd: "stopped", outsideOats: report } : agent));
+  const before = await badge({ rpc: handlers({}, fixtureAgents()) });
+  let n = 0;
+  await waitFor(() => {
+    const now = before();
+    expect(now === null || now === "unset").toBe(false);
+    n = (now as ExperimentalBadge).count as number;
+  });
+  resetApp();
+  const latest = await badge({ rpc: handlers({}, agents) });
+  await waitFor(() => expect(latest()).toMatchObject({ count: n + 1, tone: "warning" }));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  expect(heading(await slot.findByTestId("oats-home-needs"))).toBe(`Needs you${n + 1}`);
+  const summary = slot.getByTestId("oats-home-summary").textContent!;
+  expect(summary).toContain(` · ${n + 1} need you`);
+  expect(summary).not.toMatch(/outside/i); // counted once, among those that need you
+  const card = await cardOf(slot, "weekly-digest-helper");
+  expect(offerOf(card)).toBe("outside");
+  expect(within(card).getByTestId("oats-state").textContent).toBe("Running outside OATS");
+  const notice = within(card).getByTestId("oats-outside-warning");
+  expect(notice.textContent).toContain("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
+  expect(Array.from(notice.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop", "Start"]);
+  for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(notice).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+});
+
 // ---- what a card offers, by what its agent asks (the lead's ruling on the home's UX read)
 
 const offerOf = (card: HTMLElement) => card.dataset.offer;

@@ -1,6 +1,7 @@
 // The roster: the agents of `oats status --json`, as one cached snapshot for all clients.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { outsideOats } from "../kernel/outside.js";
 import { answer, hostRead } from "./shared.js";
 
 export const agent = z.object({
@@ -24,6 +25,10 @@ export const agent = z.object({
   waiting: z
     .object({ reason: z.string(), message: z.string().nullable(), since: z.string().nullable() })
     .nullable(),
+  /** How the session ended, as the kernel's row says it ("stopped", "lost", "exited"); absent where the row names none. */
+  sessionEnd: z.string().nullish(),
+  /** The kernel's report that a harness runs in a home OATS recorded stopped (kernel/outside.ts); absent where there is none. */
+  outsideOats: outsideOats.nullish(),
 });
 
 const raw = z.record(z.string(), z.unknown());

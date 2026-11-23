@@ -115,7 +115,7 @@ test("an agent that needs you: since when and its question, on its own thread", 
 test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
   // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
   const stopped = await render("thr_digest", fixtureAgents(), { panelEvents: () => ({ ...recordedEvents(), events: [] }) });
-  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("StoppedStartInstance panel");
+  expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
   // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
   expect(asked()).toEqual({ verb: "start", instance: "weekly-digest-helper" });
@@ -129,7 +129,7 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session endedRestartInstance panel");
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· Its session ended. Restart it, or send a message here.RestartInstance panel"); // the sentence of a failed agent on an open thread is the outside feature's (app/outside)
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // A person's words on the line; what the kernel said is one press away, under Details, never the line's words.
@@ -249,7 +249,7 @@ test("the soul is a link to its page where that page is shown, and its name alon
 
 test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
   const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
-  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}StartInstance panel`));
+  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
   slot.unmount();
   resetApp();
@@ -273,7 +273,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   });
   const line = () => slot.getByTestId("oats-status-line").textContent;
   const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").length;
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(1);
   // Started: the line is no longer the stopped one, and nothing more is asked.
   agents = digest({ running: true, runtimeState: "running", startedAt: started });
@@ -284,7 +284,7 @@ test("a stopped agent that was started and stopped again says the time of this s
   agents = digest({ startedAt: started });
   events = [{ ...stop, at: first }, { ...stop, at: second }];
   await slot.behavior.emitRealtime("oats/changed", { at: second });
-  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}StartInstance panel`));
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(asked()).toBe(2);
 });
 
@@ -293,7 +293,7 @@ test("events read before the session's start hold no time for this stop: the lin
   const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
 });
 
 // The settings can mend what Retry cannot (which machine holds the agents): the notice then has no
@@ -357,7 +357,8 @@ test("a stopped agent whose events cannot be read says Stopped, with no time and
   });
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
   await new Promise((resolve) => setTimeout(resolve, 30));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+  // (The sentence is the outside feature's, for a stopped agent whose thread is open in bb: no time before it, and no error.)
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
   expect(slot.queryByRole("alert")).toBeNull();
 });

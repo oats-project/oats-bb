@@ -98,10 +98,10 @@ test("each action shows only in the states it applies to", async () => {
   const with_ = (change: Partial<Agent>) => fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, ...change } : agent));
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
-  // A row the kernel calls not running with a word that is none of the known ones (a provider
-  // outside the kernel's table could print it): it reads Stopped, and is started, as its thread's
-  // own row offers. (The state's rule: test/model/view.test.ts.)
-  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["start", "retire"]);
+  // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
+  // is loaded) is IDLE, not stopped: the menu is an idle agent's, and the thread's own row says
+  // what a message and Start each do, with Start (app/outside; the state's rule: test/model/view.test.ts).
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "restart", "retire"]);
   expect(await by("thr_harvest", with_({ running: false, runtimeState: null }))).toEqual(["start", "retire"]);
   // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
   // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.
@@ -768,6 +768,22 @@ test("a command acts on the agent whose thread is in view: it opens the act's di
   await press("agent-stop", "thr_redesign");
   await ready(slot);
   expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
+});
+
+test("a command on an agent that runs outside OATS: Stop and Start open their dialogs; Restart says it cannot, and never that the agent is stopped", async () => {
+  // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`): its state is "Running outside OATS".
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, outsideOats: report } : agent));
+  const { slot, shown } = await menu("thr_digest", {}, agents);
+  expect(shown()).toEqual(["stop", "start", "retire"]);
+  const { asked, commands } = await import("../../app/lifecycle");
+  const press = (id: string) => commands.find((each) => each.id === id)!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  await press("agent-restart");
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Weekly digest helper can't be restarted now." });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/is stopped/);
+  expect(slot.queryByRole("dialog")).toBeNull();
+  await press("agent-stop");
+  expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {

@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
 import { claimOf } from "../../model/view";
+import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, LINK, plainClick } from "../ui";
@@ -74,11 +75,14 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const pluginId = usePluginId();
   const soulsShown = usePageShown("souls");
   const now = useNow();
+  const outside = outsideOf(oats);
   // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.
   const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now).state === "stopped";
+  // (An agent that runs outside OATS was recorded stopped too: the same event says since when.)
+  const recorded = mine === undefined ? null : agentStatus(mine.agent, mine.thread, now).state;
+  const stopped = recorded === "stopped" || recorded === "outside";
   const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
   // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
@@ -104,9 +108,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     );
   }
   const node = oats.nodeByThread.get(threadId);
-  if (node === undefined) return null; // not an OATS agent: take no space
+  // Not an agent the roster draws on this thread: nothing, unless it is the archived thread of one (the outside feature's row).
+  if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
+  // (The state, for the act that applies; the line itself, with a stopped agent's time, is AgentStatusLine's.)
   const status = agentStatus(agent, node.thread, now);
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
@@ -164,6 +170,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // The kernel has since refused this agent as one it does not know: the row says that, with no act,
   // as its row in the sidebar does, until the next roster is read.
   const gone = oats.gone.has(agent.instance);
+  // What happened to it outside OATS, if anything (app/outside): its sentence and its acts take the line's, and the kernel's report stands under it.
+  const said = gone ? null : outside.of(agent);
+  const saidActs = lineActs(said, agent.instance, held, status.state);
 
   // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
   // the act that applies (B2): the line's height does not change with the state.
@@ -176,24 +185,27 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
       {/* The one status line of an agent (the panel's header is to draw the same). The age of a roster kept as
-          last read is said by the one-line notice under it, so the line itself says no "as of". */}
+          last read is said by the one-line notice under it, so the line itself says no "as of". What happened to
+          the agent outside OATS (app/outside) takes the line's words where it has a reason for them. */}
       <AgentStatusLine
         agent={agent}
         thread={node.thread}
         now={now}
         events={events.data?.events}
         gone={gone}
+        parts={(own) => lineParts(said, own)}
         action={
           gone ? (
             panelButton
           ) : (
             <>
-              {act}
+              {saidActs === undefined ? act : saidActs}
               {panelButton}
             </>
           )
         }
       />
+      <OutsideWarning said={said} instance={agent.instance} held={held} />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
       <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">

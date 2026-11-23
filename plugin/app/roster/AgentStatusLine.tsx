@@ -3,7 +3,7 @@
 // applies, and under the line what the kernel itself says where it said more. One component, so
 // that a header says what the thread's row says (the panel read's F1: the question is in the header).
 import type { ReactNode } from "react";
-import type { Agent, BbThread } from "../../model/types";
+import type { Agent, AgentState, BbThread } from "../../model/types";
 import { KernelSays, StatusLine } from "../ui";
 import { readAge } from "../ui/words";
 import { agentStatus, rowState, stoppedSince } from "./status";
@@ -18,23 +18,29 @@ export type AgentStatusLineProps = {
   events?: readonly { kind: string; at: string; incarnation?: string }[] | undefined;
   /** When the roster this is drawn from was read, while OATS cannot be read again: the line says "as of <age>". */
   staleAt?: string | null;
-  /** A sentence that takes the place of the state's own question or reason (a feature that knows more of this agent says it); absent: the state's. */
-  detail?: string | null;
+  /**
+   * What a feature that knows more of this agent says after the state's word, in the place of the
+   * roster's own since-when and question or reason (app/outside `lineParts`: what happened to the
+   * agent outside OATS, and whether the line warns). Given the roster's own; absent: the roster's own.
+   */
+  parts?: (own: { state: AgentState; since: string | null; detail: string | null }) => { since: string | null; detail: string | null; tone?: "warning" | undefined };
   /** The kernel has since refused this agent as one it does not know: the line says that, and nothing of its state. */
   gone?: boolean;
   /** The act that applies, and the place's own buttons: buttons only (the line's frame clips a list). */
   action?: ReactNode;
 };
 
-export function AgentStatusLine({ agent, thread, now, events, staleAt = null, detail, gone = false, action }: AgentStatusLineProps) {
+export function AgentStatusLine({ agent, thread, now, events, staleAt = null, parts, gone = false, action }: AgentStatusLineProps) {
   const read = agentStatus(agent, thread, now);
-  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events, agent.startedAt ?? null, now) } : read;
+  // The time of a stop is the agent's last recorded "stopped": also for one that runs outside OATS, whose line says since when OATS has it recorded stopped.
+  const status = read.state === "stopped" || read.state === "outside" ? { ...read, since: stoppedSince(events, agent.startedAt ?? null, now) } : read;
+  const said = parts === undefined ? { since: status.since, detail: status.detail, tone: undefined } : parts(status);
   const age = staleAt === null ? null : readAge(staleAt, now);
   const asOf = age === null ? null : `as of ${age}`;
   if (gone) return <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={action} />;
   return (
     <>
-      <StatusLine state={status.state} since={status.since} detail={detail ?? status.detail} asOf={asOf} action={action} />
+      <StatusLine state={status.state} since={said.since} detail={said.detail} tone={said.tone} asOf={asOf} action={action} />
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
       <KernelSays text={status.kernel} />
     </>

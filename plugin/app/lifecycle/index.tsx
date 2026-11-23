@@ -39,7 +39,12 @@ export const ACTS: readonly {
   destructive: boolean;
   when: (state: AgentState, agent: Agent) => boolean;
 }[] = [
-  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, when: (state) => state === "working" || state === "idle" || state === "needs-you" },
+  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
+    // An agent that runs is stopped. So is one that runs outside OATS (the state "outside": OATS
+    // recorded it stopped and the kernel reports its harness running): Stop asks the provider to
+    // stop it again. README, "Outside OATS".
+    when: (state) => state === "working" || state === "idle" || state === "needs-you" || state === "outside",
+  },
   {
     verb: "start",
     button: "Start…",
@@ -54,7 +59,7 @@ export const ACTS: readonly {
     // same agents.
     when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped",
   },
-  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" },
+  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
@@ -142,7 +147,8 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
-  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you", known: state !== "unreachable" });
+  // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
+  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you" || state === "outside", known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);

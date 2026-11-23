@@ -439,7 +439,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
     bb("plugin", "config", "oats", "set", "pages", "home, automations, souls, capabilities, teams, machines");
   }
 }
-/** At both widths: the agent stays in the roster, as a row that says its bb thread is gone, and its soul's page says "thread missing", with Start and Retire. */
+/** At both widths: the agent stays in the roster, as a row that says its thread was deleted in bb, and its soul's page says "thread missing", with Start and Retire. */
 async function missingShots(scene, { instance, soul }) {
   for (const view of VIEWS) {
     const { viewport, suffix } = view;
@@ -454,10 +454,13 @@ async function missingShots(scene, { instance, soul }) {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
       // The agent stays in the roster (S3): a row of its own that says where it is in a word, its soul,
-      // and that its bb thread is gone. The read waits on that row.
+      // and the reason: bb has no thread of that id (app/outside). The read waits on that row's words
+      // (bb's own answer for the id arrives after the roster).
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
-      const facts = await page.until(`(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
-      check(typeof facts === "string" && facts.endsWith(`· ${soul} · its bb thread is gone`), `${at}: ${instance} stays in the roster: its state in a word, its soul, "its bb thread is gone"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+      const DELETED = "Stopped · deleted in bb"; // the reason takes the soul's place on the row
+      const facts = (await page.until(`(() => { const facts = ${factsNow}; return facts === ${JSON.stringify(DELETED)} ? facts : ""; })()`, 30)) || (await page.evaluate(factsNow));
+      check(facts === DELETED, `${at}: ${instance} stays in the roster: "Stopped", then the reason, "deleted in bb"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       show("row", facts);
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {

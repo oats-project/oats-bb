@@ -18,6 +18,8 @@ export const FILL: Record<Exclude<AgentState, "needs-you">, string> = {
   stopped: "bg-muted-foreground",
   error: "bg-destructive-text",
   unreachable: "bg-destructive-text",
+  // It runs where OATS does not see it: the warning tone (bb's token for coloured text holds 3:1 as a mark's fill on a row).
+  outside: "bg-warning-text",
 };
 
 /**
@@ -25,7 +27,7 @@ export const FILL: Record<Exclude<AgentState, "needs-you">, string> = {
  * place. Beside its word (`State`) it is hidden from assistive technology; alone it carries the
  * accessible name: the state's, or `name` where the caller says more ("Needs input: <reason>, since 14:03").
  */
-export function StateMark({ state, name, hidden = false }: { state: AgentState; name?: string; hidden?: boolean }) {
+export function StateMark({ state, name, hidden = false, tone }: { state: AgentState; name?: string; hidden?: boolean; /** "warning": the state needs a remedy (a stopped agent whose process may still run): the mark is drawn in the warning tone, the word stays the state's */ tone?: "warning" }) {
   const label = name ?? STATE[state].name;
   const says = hidden ? ({ "aria-hidden": true } as const) : ({ role: "img", "aria-label": label, title: label } as const);
   if (state === "needs-you") {
@@ -35,17 +37,17 @@ export function StateMark({ state, name, hidden = false }: { state: AgentState; 
       </span>
     );
   }
-  return <span {...says} data-mark="" data-state={state} className={`inline-block size-2 shrink-0 rounded-full ${FILL[state]}`} />;
+  return <span {...says} data-mark="" data-state={state} data-tone={tone} className={`inline-block size-2 shrink-0 rounded-full ${tone === "warning" ? "bg-warning-text" : FILL[state]}`} />;
 }
 
 /**
  * A state: its mark AND its word, always both. `word` is for a place whose words for the same
  * state are the Desktop's own ("Running", where the tree says "Working"): the mark stays the state's.
  */
-export function State({ state, word }: { state: AgentState; word?: string }) {
+export function State({ state, word, tone }: { state: AgentState; word?: string; tone?: "warning" }) {
   return (
-    <span data-testid="oats-state" data-state={state} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-      <StateMark state={state} hidden />
+    <span data-testid="oats-state" data-state={state} data-tone={tone} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+      <StateMark state={state} hidden tone={tone} />
       <span>{word ?? STATE[state].word}</span>
     </span>
   );
@@ -87,9 +89,13 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; action?: ReactNode }) {
-  // `asOf`: the line is drawn from a roster kept as last read; it says so, last ("as of 2 min ago").
-  const said = [since, detail, asOf].map((part) => shown(part)).filter((part) => part !== "");
+export function StatusLine({ state, word, since, detail, tone, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
+  const parts = [
+    { text: shown(since), tone: undefined },
+    { text: shown(detail), tone },
+    // `asOf`: the line is drawn from a roster kept as last read; it says so, last ("as of 2 min ago").
+    { text: shown(asOf), tone: undefined },
+  ].filter((part) => part.text !== "");
   // No line of it starts with a separator. Each part after the word carries its "·" in its own
   // left padding, and the row is pulled left by as much inside a frame that clips: a part that
   // wraps to the start of a line has its separator in the clipped strip, and the line starts
@@ -98,12 +104,12 @@ export function StatusLine({ state, word, since, detail, asOf, action }: { state
     <div data-testid="oats-status-line" data-state={state} className="-m-1 min-w-0 overflow-hidden p-1 text-sm text-foreground">
       <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
         <span className="pl-4 font-semibold">
-          <State state={state} word={word} />
+          <State state={state} word={word} tone={tone} />
         </span>
-        {said.map((part, index) => (
-          <span key={index} data-testid="oats-status-part" className="relative min-w-0 break-words pl-4 text-muted-foreground">
-            <span data-sep="" className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
-            {part}
+        {parts.map((part, index) => (
+          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words pl-4 ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
+            <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>
+            {part.text}
           </span>
         ))}
         {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2 pl-4">{action}</span>}

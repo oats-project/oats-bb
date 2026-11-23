@@ -30,7 +30,7 @@ describe("automations", () => {
   it("says what this OATS is, from the server's one version read", async () => {
     backend = await startBackend();
     const lists = await backend.rpc<Lists>("automations");
-    expect(lists.oats).toMatchObject({ version: "0.70.0", automationsApi: 1 });
+    expect(lists.oats).toMatchObject({ version: "0.70.5", automationsApi: 1 });
     expect(lists.oats!.features).toEqual(expect.arrayContaining(["automations", "automation-descriptions", "trigger-sources"]));
   });
 

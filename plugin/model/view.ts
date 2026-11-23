@@ -2,32 +2,29 @@
 import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
- * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
- * waiting-on-you.mjs `waitingClaim`, read at 95c7b43b3), so that the tree, the thread's row and
- * the instance panel say one thing.
- * - A row on a session provider (bb): the claim the kernel's row carries, unless the kernel calls
- *   the row stopped (`recordedStopped`: not running, beside the word "stopped" or no word): a home
- *   OATS stopped shows none, whatever it still carries. A row that is not running beside another
- *   word keeps its claim: one whose session failed, one the kernel cannot reach, and one whose
- *   session is there with no harness loaded ("unknown"), whose question still waits for a person.
- * - A tmux row: only while the kernel says it runs (`running === true`, and no `runtimeState`
- *   other than "running").
- * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
- */
-export function claimOf(agent: Agent): Agent["waiting"] {
-  if (agent.waiting === null) return null;
-  if (agent.backend === "tmux") return agent.running === true && (agent.runtimeState === null || agent.runtimeState === "running") ? agent.waiting : null;
-  return recordedStopped(agent) ? null : agent.waiting;
-}
-
-/**
  * Whether the kernel's row says the agent is STOPPED: not running, beside the word "stopped" or no
- * word at all. The one predicate of the claim's gate and of the state: a row that is not running
- * beside another word ("unknown": its session is there and no harness is loaded; "shell";
- * "unreachable") is not stopped, keeps its claim, and is told by its own state.
+ * word at all (what it prints for a tmux home whose window is gone). The one predicate of the
+ * claim's gate and of the state, for every backend: a row that is not running beside another word
+ * ("unknown": its session is there and no harness is loaded; "shell"; "unreachable") is not
+ * stopped, keeps its claim, and is told by its own state.
  */
 export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
   return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);
+}
+
+/**
+ * The claim an agent shows: what it waits on a person for, as the kernel's row carries it, or
+ * null. ONE gate (the Desktop's `waitingClaim` for a provider's agent; for a tmux agent it shows
+ * more than the Desktop, which asks that the kernel says it runs: WORDS.md), so that the tree, the thread's row, the home and
+ * the instance panel say one thing, and one rule for every backend (the spec's A2, as its author
+ * amended it on 2026-11-23): a claim is hidden only for an agent the kernel calls stopped
+ * (`recordedStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an
+ * agent that runs, one the kernel says nothing of, one whose harness ended in a shell, one that
+ * cannot be reached, on bb and on tmux alike.
+ * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
+ */
+export function claimOf(agent: Agent): Agent["waiting"] {
+  return agent.waiting === null || recordedStopped(agent) ? null : agent.waiting;
 }
 
 /** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */

@@ -7,19 +7,34 @@ import { fail, isObject } from "./errors.mjs";
 
 const CALL_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT = 32 * 1024 * 1024;
-// bb's own context variables: inside a bb thread they would aim a command at that thread.
-const CONTEXT_ENV = ["BB_THREAD_ID", "BB_PROJECT_ID", "BB_ENVIRONMENT_ID", "BB_SERVER_URL"];
+// How bb's CLI finds the host daemon of the machine it runs on: by this port alone (its
+// default is 38887), never from BB_SERVER_URL. A command that needs the local host (`bb
+// project create`, for one) goes to whatever daemon listens there: with a second bb on
+// this host that is another bb's, and the command is refused (`host_not_found`), or
+// nobody's ("Cannot reach local host daemon"). Seen at bb-app 0.50.1 (contract A23).
+const HOST_DAEMON_PORT_ENV = "BB_HOST_DAEMON_PORT";
+// What a bb call never inherits from the provider's caller. bb's own context variables:
+// inside a bb thread they would aim a command at that thread. And the host daemon's port:
+// which bb a call is for is the deployment's settings' to say, the server and the port
+// together; a caller that carries one bb's port must never be paired with another bb's
+// configured server.
+const CONTEXT_ENV = ["BB_THREAD_ID", "BB_PROJECT_ID", "BB_ENVIRONMENT_ID", "BB_SERVER_URL", HOST_DAEMON_PORT_ENV];
 
 /** One CLI call. Resolves, never rejects:
  *  { ok: true, value } | { ok: false, code, message, timedOut?, missing?, refused? }
  *  (`refused`: bb printed its own failure envelope).
  *  `code` is bb's own error code where it gave one (thread_not_found, invalid_request…),
- *  else `error`; `timeout` and `cli_missing` are this module's. */
-export function runBb(cli, args, { server, input, timeoutMs = CALL_TIMEOUT_MS, env = process.env, json = true } = {}) {
+ *  else `error`; `timeout` and `cli_missing` are this module's.
+ *  `hostDaemonPort` (settings.oats.bb.hostDaemonPort, a number or null): set, the call is
+ *  told this bb's host daemon port; unset, it is told none (bb's CLI then uses its own
+ *  default). Either way a BB_HOST_DAEMON_PORT the caller's environment carries does not
+ *  reach bb: the port comes from the setting alone. */
+export function runBb(cli, args, { server, hostDaemonPort = null, input, timeoutMs = CALL_TIMEOUT_MS, env = process.env, json = true } = {}) {
   return new Promise((resolve) => {
     const childEnv = { ...env };
     for (const name of CONTEXT_ENV) delete childEnv[name];
     if (server) childEnv.BB_SERVER_URL = server;
+    if (hostDaemonPort !== null && hostDaemonPort !== undefined) childEnv[HOST_DAEMON_PORT_ENV] = String(hostDaemonPort);
     let child;
     // In the provider's own process group, never one of its own: the kernel gives each
     // provider command a group and kills that group when it must end the command, so a
@@ -111,13 +126,14 @@ const INTERACTION_STATUSES = new Set(["pending", "resolving", "resolved", "inter
 /** The bb commands this provider uses, each against one server, under one deadline.
  *  A failure throws a ProviderError carrying `fallbackCode` (the caller's phase code),
  *  or E_BACKEND_UNREACHABLE when bb's server did not answer; `bb` on the error is the
- *  raw answer for callers that read bb's own code. */
-export function bbClient({ cli, server, deadline = Infinity, env = process.env, fallbackCode = "E_SESSION_UNAVAILABLE" }) {
+ *  raw answer for callers that read bb's own code. `hostDaemonPort`: the home's setting,
+ *  carried by every call (runBb). */
+export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infinity, env = process.env, fallbackCode = "E_SESSION_UNAVAILABLE" }) {
   const remaining = () => Math.min(CALL_TIMEOUT_MS, deadline - Date.now());
   const raw = async (args, options = {}) => {
     const timeoutMs = remaining();
     if (timeoutMs <= 0) return { ok: false, code: "timeout", timedOut: true, message: `no time left for bb ${args.slice(0, 2).join(" ")}` };
-    return runBb(cli, args, { server, env, ...options, timeoutMs: Math.min(timeoutMs, options.timeoutMs ?? timeoutMs) });
+    return runBb(cli, args, { server, hostDaemonPort, env, ...options, timeoutMs: Math.min(timeoutMs, options.timeoutMs ?? timeoutMs) });
   };
   const must = async (args, options) => {
     const answer = await raw(args, options);
@@ -155,6 +171,7 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
   const projectRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && Array.isArray(row.sources) && row.sources.every(sourceRow);
   const interactionRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && INTERACTION_STATUSES.has(row.status);
   const queuedRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "";
+  const hostRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string";
   // A variable of bb's env, by its name: a name is an argument to bb, and must never read
   // as an option. bb shows no value (`value: null, secret: true`), and none is read.
   const envRow = (row) => isObject(row) && typeof row.name === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(row.name);
@@ -214,6 +231,9 @@ export function bbClient({ cli, server, deadline = Infinity, env = process.env, 
     spawn(args, options) { return raw(["thread", "spawn", ...args, "--json"], options); },
     tell(id, text) { return raw(["thread", "tell", id, "--message-file", "-", "--mode", "auto", "--json"], { input: text }); },
     queueDelete(threadId, messageId) { return raw(["thread", "queue", "delete", threadId, messageId, "--json"]); },
+    /** The hosts bb's server has, each with its id and whether it is connected: what tells
+     *  whether a host daemon (its own /status says its host id) is one of this server's. */
+    async hosts() { return list(await must(["host", "list", "--json"]), "bb host list", hostRow); },
     stop(id, options) { return raw(["thread", "stop", id, "--json"], options); },
     archive(id) { return raw(["thread", "archive", id, "--json"]); },
   };

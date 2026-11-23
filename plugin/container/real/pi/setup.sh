@@ -27,7 +27,12 @@ fi
 OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY:-}
 
 echo "== pi $PI_VERSION"
-[ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || npm install -g --no-audit --no-fund "@earendil-works/pi-coding-agent@$PI_VERSION"
+# The install is given five minutes and tried again: a fetch from the registry was seen to stall for
+# an hour with nothing moving, and a run that waits on it says nothing until its job's limit.
+for attempt in 1 2 3; do
+  [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] && break
+  timeout 300 npm install -g --no-audit --no-fund "@earendil-works/pi-coding-agent@$PI_VERSION" || echo "pi setup: the install of pi did not finish (attempt $attempt of 3)" >&2
+done
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || { echo "pi setup: pi $PI_VERSION could not be installed" >&2; exit 1; }
 
 echo "== the OATS bridge for pi, @awebai/oats-pi@$OATS_PI_VERSION, in bb's pi configuration ($PI_AGENT_DIR)"

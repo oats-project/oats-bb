@@ -126,7 +126,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const gone = oats.gone.has(agent.instance);
   // What happened to it outside OATS, if anything (app/outside): its sentence and its acts take the line's, and the kernel's report stands under it.
   const said = gone ? null : outside.of(agent);
-  const saidActs = lineActs(said, agent.instance, held);
+  const saidActs = lineActs(said, agent.instance, held, status.state);
 
   // The way to the agent's panel says what it opens, and sits in the one row of buttons, beside
   // the act that applies (B2): the line's height does not change with the state.

@@ -254,6 +254,20 @@ test("bb holds a question on the thread of an agent OATS stopped: \"Needs you\",
   expect(within(host.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null]);
 });
 
+test("bb holds a question on the thread of an agent that is not loaded, or that stopped with the machine: the row and the line say \"Needs you\" and the roster's own words, with no reason made for another state and no act of this feature's", async () => {
+  const asking = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_digest" || thread.id === "thr_harvest" ? { ...thread, hasPendingInteraction: true } : thread)) };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
+  // The rows: the soul after "Needs you", never "Needs you · with the machine" or "Needs you · not loaded".
+  const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: asking });
+  const factsOf = (thread: string) => rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === thread)!);
+  expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Needs you · oats-expert", "Needs you · knowledge-harvester"]);
+  resetApp();
+  // The line of the one that is not loaded: bb's question, and no Start (the sentence that says what Start does is not on this line).
+  const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: asking });
+  await unloaded.findByTestId("oats-identity-row");
+  expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you", "bb shows its question in this thread"], []]);
+});
+
 // ---- the agent's own page (the instance panel's header)
 
 async function agentPage(instance: string, options: RenderSlotOptions<Contract>) {

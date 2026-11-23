@@ -40,19 +40,40 @@ export function OutsideActs({ instance, acts, held }: { instance: string; acts: 
   );
 }
 
+/** The state each reason is said after: `said()` reads the agent's state without bb's own question on its thread. */
+const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "stopped-host": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
+
+/**
+ * Whether a reason belongs on a line or a row that draws `state`: the reason follows ONE state,
+ * and `said()` reads the agent's state without bb's own question on its thread. Where bb holds one,
+ * the place says "Needs you", and a reason made for "Stopped" or "Idle" has no place after it. One
+ * reason holds there too: a stop that warns, whose warning is about a message typed in that thread.
+ */
+const follows = (said: Said, state: AgentState): boolean => AFTER[said.kind] === undefined || AFTER[said.kind] === state || said.kind === "stopped-open";
+
 /**
  * The acts of a status line where this feature has something to say of the agent: the buttons;
  * null where what is said carries its own acts (the kernel's report: they are in its notice);
- * undefined where the line keeps the roster's own act for the state.
+ * undefined where the line keeps the roster's own act for the state: this feature has no acts for
+ * it, or the line's state is not the one the reason follows (the sentence that names the act is
+ * then not on the line).
  */
-export function lineActs(said: Said | null, instance: string, held: boolean): ReactNode | null | undefined {
-  if (said === null || said.acts === null) return undefined;
+export function lineActs(said: Said | null, instance: string, held: boolean, state: AgentState): ReactNode | null | undefined {
+  if (said === null || said.acts === null || !follows(said, state)) return undefined;
   if (said.warning !== null) return null;
   return <OutsideActs instance={instance} acts={said.acts} held={held} />;
 }
 
-/** The state each reason is said after: `said()` reads the agent's state without bb's own question on its thread. */
-const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "stopped-host": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
+/**
+ * What a sidebar's row says after the state's word, in the soul's place, and whether its mark is in
+ * the warning tone: the reason, where the row's state is the one it follows; null (the soul, the
+ * state's own mark) where it is not ("Needs you · with the machine" is no sentence), and where this
+ * feature has nothing to say.
+ */
+export function rowParts(said: Said | null, state: AgentState): { note: string | null; tone: "warning" | undefined } {
+  if (said === null || !follows(said, state)) return { note: null, tone: undefined };
+  return { note: said.note, tone: said.rowTone === "warning" ? "warning" : undefined };
+}
 
 /**
  * What a status line says after the state's word, where this feature has a reason for it: the
@@ -62,7 +83,7 @@ const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stop
  *   is part of that fact and not of the state "Running outside OATS");
  * - any other reason, on a line whose state is the one the reason follows: the time first, then the sentence;
  * - a line whose state is another (bb holds a question on the thread, so it says "Needs you"): the
- *   roster's own words, which say what the agent asks. But for an operator's stop, where an answer
+ *   roster's own words, which say what the agent asks. But for a stop that warns, where an answer
  *   typed in the thread is the message that starts the agent without OATS: the warning, saying
  *   first what OATS recorded;
  * - none: the roster's own.

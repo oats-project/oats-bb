@@ -150,7 +150,8 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
-  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you", known: state !== "unreachable" });
+  // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
+  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you" || state === "outside", known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);

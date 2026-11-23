@@ -13,7 +13,6 @@ import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import * as automations from "./app/automations";
 import * as home from "./app/home";
 import * as lifecycle from "./app/lifecycle";
-import * as outside from "./app/outside";
 import * as panel from "./app/panel";
 import * as patterns from "./app/patterns";
 import * as roster from "./app/roster";
@@ -28,6 +27,5 @@ export default definePluginApp((app) => {
   lifecycle.register(app);
   automations.register(app);
   panel.register(app);
-  outside.register(app);
   patterns.register(app);
 });

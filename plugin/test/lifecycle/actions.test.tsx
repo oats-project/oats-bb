@@ -761,6 +761,22 @@ test("a command acts on the agent whose thread is in view: it opens the act's di
   expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
 });
 
+test("a command on an agent that runs outside OATS: Stop and Start open their dialogs; Restart says it cannot, and never that the agent is stopped", async () => {
+  // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`): its state is "Running outside OATS".
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, outsideOats: report } : agent));
+  const { slot, shown } = await menu("thr_digest", {}, agents);
+  expect(shown()).toEqual(["stop", "start", "retire"]);
+  const { asked, commands } = await import("../../app/lifecycle");
+  const press = (id: string) => commands.find((each) => each.id === id)!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  await press("agent-restart");
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Weekly digest helper can't be restarted now." });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/is stopped/);
+  expect(slot.queryByRole("dialog")).toBeNull();
+  await press("agent-stop");
+  expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+});
+
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const { slot } = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });

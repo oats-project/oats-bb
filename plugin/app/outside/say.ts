@@ -41,7 +41,7 @@ export type Kind =
   | "stopped-open"
   /** Stopped with the host, on a thread that is open: OATS starts it again by itself. */
   | "stopped-host"
-  /** Stopped by an operator, and bb has its thread archived: what a stop leaves once the provider archives at stop. */
+  /** Stopped (its session not lost), and bb has its thread archived: what a stop leaves once the provider archives at stop. */
   | "stopped-archived"
   /** OATS lost the session and bb has the thread archived: its process may still run. */
   | "lost-archived"
@@ -68,8 +68,8 @@ export type Said = {
   warning: OutsideOats | null;
   /**
    * The acts this feature itself offers, in order: the two of the kernel's report's notice (Stop,
-   * Start), Start on the line of an operator's stop and of an agent that is not loaded, Stop for
-   * a session lost to bb's Archive. null: the acts are the lifecycle's own for the agent's state (the line's own act;
+   * Start), Start on the line of a stop that warns and of an agent that is not loaded, Stop for a
+   * session lost to bb's Archive. null: the acts are the lifecycle's own for the agent's state (the line's own act;
    * `AgentActs` for an agent with no listed thread).
    */
   acts: readonly Act[] | null;

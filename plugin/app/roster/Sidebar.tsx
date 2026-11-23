@@ -20,7 +20,7 @@ import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
-import { outsideOf } from "../outside";
+import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -138,15 +138,17 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       // What happened to it outside OATS (app/outside): the reason takes the soul's place on the
       // row (a row is never three lines), and a stopped agent that needs a remedy has its mark in the warning tone.
       const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
+      // The reason only after the state it follows (bb's own question on the thread makes the row "Needs you": the soul then).
+      const reason = rowParts(said, status.state);
       return [
         threadRow(
           thread,
           INDENT[node.depth],
           "oats-agent-row",
           <>
-            <StateMark state={drawn.state} hidden tone={said?.rowTone === "warning" ? "warning" : undefined} />
+            <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, said?.note ?? shown(oats.soulOf(node.agent)))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, reason.note ?? shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -181,7 +183,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             onNavigate();
           }}
         >
-          <StateMark state={drawn.state} hidden tone={!gone.has(agent.instance) && said?.rowTone === "warning" ? "warning" : undefined} />
+          <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : rowParts(said, status.state).tone} />
           {lines(name, status.state === "needs-you", drawn.word, rest)}
         </button>
       </li>
@@ -255,7 +257,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           {view.detached.map((agent) => {
             // Where its thread is, by bb's own answer, in the soul's place; the soul until bb has answered.
             const said = outside.of(agent);
-            return threadlessRow(agent, said?.note ?? shown(oats.soulOf(agent)), said);
+            return threadlessRow(agent, rowParts(said, agentStatus(agent, null, now).state).note ?? shown(oats.soulOf(agent)), said);
           })}
           {view.elsewhere.map((agent) => threadlessRow(agent, `${shown(oats.soulOf(agent))} · runs in tmux`))}
         </ul>

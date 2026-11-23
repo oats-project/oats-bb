@@ -427,6 +427,8 @@ describe("acts", () => {
         },
         (error: { code?: string; message: string; issues?: unknown }) => ({ code: error.code, message: error.message, issues: error.issues, unconfirmed: isUnconfirmed(error) }),
       );
+    // SHAPED, not recorded (a rollback that fails cannot be made in the real run): the marker and the words are the
+    // kernel's, awebai/oats lib/core.mjs at v0.70.5: `unconfirmedSpawn` (3863-3865) and the note of line 5235.
     const refuse = (details: unknown) => fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present", details } }) } });
     await refuse({ unconfirmed: true, home: "/abs/home" });
     expect(await failure(rpc("spawn", input("spawn-1f0c9a7e")))).toEqual({

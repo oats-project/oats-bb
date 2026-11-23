@@ -224,7 +224,7 @@ describe("after the press, what is known decides what the form may offer", () =>
     // of test/fixtures/spawn/spawn-pi-refused.json.
     const left = "form-pi-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/form-pi-developer: still present";
     // The marker, with any code that does not say an instance exists: one the tables name as a refusal, one they name as unknown, one nobody classed, the plugin's own.
-    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_OUTCOME_UNKNOWN", "E_SPAWN_FAILED", "E_SOMETHING_NEW", "OATS_FAILED"]) {
+    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_OUTCOME_UNKNOWN", "E_SPAWN_FAILED", "E_SOMETHING_NEW", "OATS_FAILED", "PLUGIN_RPC_FAILED"]) {
       const problem = spawnProblem({ code, message: left, unconfirmed: true }, "spawn");
       expect([problem.outcome, problem.next, problem.code, problem.detail], code).toEqual(["unconfirmed", null, code, left]);
       expect(problem.sentence, code).toBe("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
@@ -245,8 +245,12 @@ describe("after the press, what is known decides what the form may offer", () =>
     // The form read these words while the plugin's envelope dropped the marker. It no longer does:
     // at the plugin's floor (OATS 0.70.5, lib/core.mjs at e5e7a2a4) every path of a spawn that
     // writes them sets details.unconfirmed (4630; 4802-4804; 4821-4823; 4861-4863; 5668-5669;
-    // 5235-5237 with 5675, and the homes kept by 5095, 5124 and 5152; 5678-5679), so a message
-    // with the words and no marker is no answer of a kernel the plugin runs on.
+    // 5235-5237 with 5675, and the homes kept by 5095, 5124 and 5152; 5678-5679), and the CLI
+    // prints the marker with them: lib/errors.mjs `spawnRefusalDetails` (54-90) drops an error's
+    // details only for seven codes of its table (E_CHILD_SPAWNS_DISABLED, E_BRANCH_EXISTS,
+    // E_BASE_UNKNOWN, E_DECISION_STALE, E_IDEMPOTENCY_CONFLICT, E_PLACEMENT_TAKEN,
+    // E_INSTANCE_NAME_TAKEN), each raised before any rollback (core.mjs, up to line 4603). So a
+    // message with the words and no marker is no answer of a kernel the plugin runs on.
     const words = "x was not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present";
     expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: words }, "spawn").outcome).toBe("refused");
     expect(spawnProblem({ code: "E_SOMETHING_NEW", message: words }, "spawn").outcome).toBe("unknown");

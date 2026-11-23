@@ -70,9 +70,10 @@ function soulOf(subPath: string): string {
 function reasonOf(cause: unknown): SpawnReason {
   const text = errorMessage(cause);
   const code = refusalCode(text);
-  if (code !== null) return { code, message: text.slice(code.length + 2), unconfirmed: isUnconfirmed(cause) };
+  const unconfirmed = isUnconfirmed(cause); // whatever the text leads with
+  if (code !== null) return { code, message: text.slice(code.length + 2), unconfirmed };
   const refused = typeof cause === "object" && cause !== null && (cause as { code?: unknown }).code === "invalid";
-  return { code: refused ? "INVALID_INPUT" : "PLUGIN_RPC_FAILED", message: text };
+  return { code: refused ? "INVALID_INPUT" : "PLUGIN_RPC_FAILED", message: text, unconfirmed };
 }
 
 // A spawn can take minutes, and goes on when its page is left: the window remembers the one in

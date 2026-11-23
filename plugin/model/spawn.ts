@@ -362,7 +362,11 @@ function outcomeOf(stage: "preview" | "spawn", code: string | null, unconfirmed:
   // The kernel's marker that it could not confirm what is left, whatever else the code is: never
   // "nothing was created". The marker alone says it: the kernel's words in the message
   // ("rollback INCOMPLETE") are not read, since every path of a spawn that writes them sets the
-  // marker (lib/core.mjs at v0.70.5: 4630, 4804, 4823, 4863, 5237 with 5675, 5669, 5679).
+  // marker (lib/core.mjs at v0.70.5: 4630, 4804, 4823, 4863, 5237 with 5675, 5669, 5679), and the
+  // CLI prints it for them: lib/errors.mjs `spawnRefusalDetails` (54-90) keeps `details.unconfirmed`
+  // for every code but the seven whose table entry builds details of its own (E_CHILD_SPAWNS_DISABLED,
+  // E_BRANCH_EXISTS, E_BASE_UNKNOWN, E_DECISION_STALE, E_IDEMPOTENCY_CONFLICT, E_PLACEMENT_TAKEN,
+  // E_INSTANCE_NAME_TAKEN), and those are raised before anything is rolled back (core.mjs, up to 4603).
   if (unconfirmed) return "unconfirmed";
   // The kernel, or the plugin, says the outcome is not known.
   if (named !== undefined && named.next === "check-result") return "unknown";

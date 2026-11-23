@@ -13,14 +13,14 @@ import type { Agent, AgentState, BbThread, Node, ThreadWhere } from "../../model
 import { claimOf, isListed } from "../../model/view";
 import { AgentActs } from "../lifecycle";
 import { agentStatus, stoppedAt } from "../roster/status";
-import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
+import { HELD, Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { agentName, readAge, waitingClock, waitingLabel } from "../ui/words";
+import { agentName, readAge, showingRead, waitingClock, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { CommandText, PathLine, SoulMark } from "./parts";
@@ -255,7 +255,9 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
       code={words === null ? code : null}
       // What to do in a sentence is one press away, over the refusal itself (as in the sidebar's notice).
       details={[words === null || isKernelCode(failure?.code ?? "") ? null : words.sentence, refusal]}
-      {...(read.data === undefined ? {} : { age: readAge(read.data.at, now) })}
+      // Where it is the ROSTER that is the last one read, the header's acts are off: the notice's one line says so
+      // beside the age, as the sidebar's and the thread's line do (an act that is off is never alone on the page).
+      {...(read.data === undefined || failure !== null ? {} : { age: readAge(read.data.at, now) })}
       actions={
         <>
           {words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : null}
@@ -267,7 +269,13 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
           ) : null}
         </>
       }
-    />
+    >
+      {failure === null || read.data === undefined ? null : (
+        <p className="text-xs text-muted-foreground">
+          {showingRead(readAge(read.data.at, now))} <span data-testid="oats-held">{HELD}</span>
+        </p>
+      )}
+    </Notice>
   );
 }
 

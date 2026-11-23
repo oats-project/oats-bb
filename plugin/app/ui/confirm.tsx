@@ -20,11 +20,11 @@ export type ConfirmProps = {
   shownFor: string | null;
   /**
    * What the act does, in view, under no heading: the ONE consequence line and at most one more
-   * (the lifecycle dialogs: the text audit of 23 Nov 2026). `saysDestructive`: the index of a line drawn in
-   * the destructive tone (what a tick deletes). Text from OATS is filtered here.
+   * (the lifecycle dialogs: the text audit of 23 Nov 2026). `saysWarns`: the first line is a warning,
+   * drawn in the warning tone. Text from OATS is filtered here.
    */
   says?: readonly string[];
-  saysDestructive?: number | null;
+  saysWarns?: boolean;
   /** "What will happen", as sentences about the named agent, under that heading; and what is kept. For a dialog that is not cut to one line. */
   happens?: readonly string[];
   kept?: readonly string[];
@@ -68,7 +68,7 @@ export type ConfirmProps = {
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, says = [], saysDestructive = null, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
@@ -154,7 +154,7 @@ export function Confirm({ title, about, shownFor, says = [], saysDestructive = n
             {says.length === 0 ? null : (
               <ul data-testid="oats-confirm-says" className="flex flex-col gap-1">
                 {says.map((line, index) => (
-                  <li key={index} {...(index === saysDestructive ? { role: "status", "data-testid": "oats-plan-warning", className: "break-words text-destructive-text" } : { className: "break-words" })}>
+                  <li key={index} {...(index === 0 && saysWarns ? { "data-tone": "warning", className: "break-words font-semibold text-warning-text" } : { className: "break-words" })}>
                     {shown(line)}
                   </li>
                 ))}

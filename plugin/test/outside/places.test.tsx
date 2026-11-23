@@ -537,11 +537,14 @@ test("on a roster that is the last one read the acts are held, on the archived t
     return { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:32:00.000Z", code: "OATS_TIMEOUT", message: "slow", machine: "falcon", last: { at: last.at, deployment: last.deployment, agents: last.agents } }) };
   };
   const archived = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped" } })) }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  // The lifecycle's buttons, held with their reason beside them.
+  // The lifecycle's buttons, held; no reason beside them: the row's one-line notice says "Acts are off.", with Retry.
   const held = within(await archived.findByTestId("oats-identity-row")).getByTestId("oats-agent-acts");
   expect(Array.from(held.querySelectorAll("button")).map((button) => [button.textContent, button.disabled])).toEqual([["Start…", true], ["Retire…", true]]);
-  expect(within(held).getByTestId("oats-disabled-reason").textContent).toBe("Comes back when OATS is read again");
-  expect(archived.getByTestId("oats-unreadable").getAttribute("data-compact")).toBe("");
+  expect(within(held).queryByTestId("oats-disabled-reason")).toBeNull();
+  const notice = within(archived.getByTestId("oats-identity-row")).getByTestId("oats-unreadable");
+  expect(notice.getAttribute("data-compact")).toBe("");
+  expect(notice.textContent).toContain("Acts are off.");
+  expect(within(notice).getByRole("button", { name: "Retry" })).toBeTruthy();
   resetApp();
   const open = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } })) }), sidebarThreads: sidebarThreads() });
   const buttons = within(await open.findByTestId("oats-outside-warning")).getAllByTestId("oats-status-act") as HTMLButtonElement[];

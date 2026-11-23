@@ -208,6 +208,8 @@ test("Stop opens a dialog titled with the act and the agent, says its one conseq
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
   // In view, under no heading: what a stop means for its thread (this provider does not archive it: the warning), then who else it stops.
   expect(says(slot)).toEqual(["A message in its thread starts it outside OATS.", "Also stops: Desktop mockups developer, Harvest knowledge helper."]);
+  // The warning keeps the warning tone; who else it stops is plain.
+  expect(Array.from(slot.getByTestId("oats-confirm-says").querySelectorAll("li")).map((line) => line.getAttribute("data-tone"))).toEqual(["warning", null]);
   plain(slot);
   // An agent with uncommitted work is said before the act (the plan's own observation), under no heading.
   // And who works on a turn now: bb's own word on each one's thread (the fixture's two are in a turn), after its work.
@@ -521,7 +523,7 @@ test("Retire opens a dialog that says it cannot be undone and who else it stops;
   await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel")));
 });
 
-test("Also delete the worktree: the tick puts what is lost in the dialog's second line, counted and said once, and the apply asks for it", async () => {
+test("Also delete the worktree: what is lost is said AT the tick, under its label, only while it is ticked, counted and said once; the dialog's lines stay; and the apply asks for it", async () => {
   const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), worktree: "removed" as const, movedTo: null }) });
   await pick("retire");
   await ready(slot);
@@ -530,11 +532,16 @@ test("Also delete the worktree: the tick puts what is lost in the dialog's secon
   expect(tick.getAttribute("aria-checked")).toBe("false");
   expect(slot.queryByTestId("oats-plan-warning")).toBeNull();
   fireEvent.click(tick);
-  // What the tick deletes is the second line, in the place of who else it stops (which moves under Details, first), in the destructive tone.
-  expect(says(slot)).toEqual(["This cannot be undone.", "Deletes 1 uncommitted change too (a copy is saved)."]);
+  // The dialog's lines stay: who else it stops is a safety fact, in view. What the tick deletes is the tick's own line, right under it, in the destructive tone.
+  expect(says(slot)).toEqual(["This cannot be undone.", "Also stops: Digest links helper."]);
   const warning = slot.getByTestId("oats-plan-warning");
   expect([warning.textContent, warning.getAttribute("role"), warning.className.includes("text-destructive-text")]).toEqual(["Deletes 1 uncommitted change too (a copy is saved).", "status", true]);
-  expect(under(slot, "oats-plan-details")).toEqual(["Also stops: Digest links helper.", "Deletes its home."]);
+  expect(warning.previousElementSibling).toBe(slot.getByTestId("oats-plan-choice"));
+  expect(under(slot, "oats-plan-details")).toEqual(["Deletes its home."]);
+  // Unticked again: the line goes with it.
+  fireEvent.click(tick);
+  expect(slot.queryByTestId("oats-plan-warning")).toBeNull();
+  fireEvent.click(tick);
   expect(slot.getByTestId("oats-confirm").textContent).not.toContain("Keeps its worktree");
   // Said once.
   expect(slot.getByTestId("oats-confirm").textContent!.split("uncommitted change").length - 1).toBe(1);
@@ -900,7 +907,7 @@ test("the model field suggests bb's own models for the harness that will run, an
   expect(asked).toEqual([{ hostId: "host_falcon", providerId: "claude-code", preferCached: true }, { hostId: "host_falcon", providerId: "pi", preferCached: true }]);
 });
 
-test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; the acts of its state for one on tmux, as for one on bb; held, with the reason, on a roster that is the last one read", async () => {
+test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; the acts of its state for one on tmux, as for one on bb; held on a roster that is the last one read", async () => {
   const { AgentActs } = await import("../../app/lifecycle");
   const acts = async (instance: string, over: Partial<Handlers> = {}, threads = fixtureThreads()) => {
     const slot = renderSlot<object, Contract>({ component: () => <AgentActs instance={instance} /> }, {}, { rpc: handlers(over), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
@@ -919,7 +926,7 @@ test("AgentActs offers the acts of an agent with no bb thread too: Start and Ret
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   expect(await acts("redesign-ui-lead", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) })).toEqual({
     labels: ["Stop… (off)", "Restart… (off)", "Retire… (off)"],
-    reason: "Comes back when OATS is read again",
+    reason: null, // off, with no reason of their own: the place that draws them draws the notice ("Acts are off.", Retry)
   });
 });
 
@@ -2140,7 +2147,7 @@ test("tmux, rule 3: one act per press: opening the dialog starts nothing, and a 
   expect(calls(slot, "start")).toHaveLength(1);
 });
 
-test("tmux, rule 4: on a roster kept as last read the acts of a tmux agent are held, with the reason, and its Start opens nothing", async () => {
+test("tmux, rule 4: on a roster kept as last read the acts of a tmux agent are held, with no reason of their own (the place that draws them draws the notice), and its Start opens nothing", async () => {
   const { AgentActs } = await import("../../app/lifecycle");
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: lostRoster() };
   const slot = renderSlot<object, Contract>(
@@ -2151,7 +2158,8 @@ test("tmux, rule 4: on a roster kept as last read the acts of a tmux agent are h
   await waitFor(() => expect(slot.queryByTestId("oats-agent-acts")).not.toBeNull());
   const buttons = Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button"));
   expect(buttons.map((each) => `${each.textContent}${each.disabled ? " (off)" : ""}`)).toEqual(["Start… (off)", "Retire… (off)"]);
-  expect(slot.getByTestId("oats-disabled-reason").textContent).toBe("Comes back when OATS is read again");
+  // No reason beside the acts (test/panel/panel.test.tsx and test/outside/places.test.tsx pin the notice of each place that draws them).
+  expect(slot.queryByTestId("oats-disabled-reason")).toBeNull();
   fireEvent.click(buttons[0]!);
   expect(slot.queryByRole("dialog")).toBeNull();
   expect(calls(slot as never, "startCheck", "start")).toEqual([]);

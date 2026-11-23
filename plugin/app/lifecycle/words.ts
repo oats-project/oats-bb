@@ -29,21 +29,21 @@ const names = (instances: readonly string[]) => instances.map(agentName).join(",
 
 export type PlanView = {
   /**
-   * What the dialog says before the act, in view: the act's ONE consequence line, then at most one
-   * more (who else is stopped; or, with the tick that deletes work on, what it deletes). A stop of
-   * an agent with no bb thread has no consequence line: the title says what it does.
+   * What the dialog says before the act, in view: the act's ONE consequence line, then, second
+   * and last, who else is stopped (a safety fact: it stays in view). A stop of an agent with no
+   * bb thread has no consequence line: the title says what it does.
    */
   says: string[];
-  /** `says[1]` is what the plan's tick deletes (drawn in the destructive tone, and brought on screen when the tick is turned on). */
-  deletes: boolean;
+  /** `says[0]` is a warning (a stop on a provider that leaves the thread open): drawn in the warning tone. */
+  warns: boolean;
   /** The facts that are a reason not to confirm, set apart: an agent with uncommitted work or in a turn, a work tree on another branch. Only what is true. */
   attention: string[];
   /** Under Details: everything else the dialog says before the act, as sentences. */
   details: string[];
   /** Under Details: the current state, plain values by label. */
   state: { label: string; value: string }[];
-  /** The plan's one tick, when it has one to offer. */
-  choice: { label: string; checked: boolean } | null;
+  /** The plan's one tick, when it has one to offer. `deletes`: what it deletes, drawn at the tick, under its label, only while it is ticked. */
+  choice: { label: string; checked: boolean; deletes: string | null } | null;
   /** Why the plan cannot be confirmed, naming what mends it; null when it can. */
   blocked: string | null;
   /** The primary button, named for the act. */
@@ -120,13 +120,13 @@ export function stopPlanView(plan: StopPlan, archives = false, working: Readonly
   const hasChildren = targets.length > 1 || plan.skipped.length > 0;
   return {
     says: [...(onBb ? [stopThreadLine(archives)] : []), ...(plan.recursive && others.length > 0 ? [alsoStops(others)] : [])],
-    deletes: false,
+    warns: onBb && !archives,
     attention: targets.flatMap((target) => [...(uncommitted(target.work) ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
     details: [NOTHING_DELETED, ...plan.ambiguous.map(ambiguous)],
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
-    choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive } : null,
+    choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive, deletes: null } : null,
     blocked: null,
     confirm: "Stop",
   };
@@ -188,24 +188,21 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
     if (plan.work.observed || tree.own) state.push({ label: "Uncommitted work", value: workText(plan) });
     if (plan.work.observed) state.push({ label: "Branch", value: plan.work.detached ? "Detached" : (plan.work.branch ?? "Unknown") });
   }
-  // What the tick deletes, said ONCE, as the dialog's second line while it is on: the work a person may not know is there.
+  // What the tick deletes, said ONCE, at the tick while it is on: the work a person may not know is there.
   let deletes: string | null = null;
   if (discardWorktree && !tree.notOwn) {
     const n = tree.unchecked || !plan.work.observed ? null : plan.work.changed + plan.work.untracked;
     deletes = n === null ? `Deletes any uncommitted changes too (a copy is saved).${tree.unchecked ? " It couldn't be checked." : ""}` : n > 0 ? `Deletes ${plural(n, "uncommitted change")} too (a copy is saved).` : "Deletes its worktree.";
   }
-  // Who else it stops: the second line, unless what the tick deletes stands there; then it is first under Details.
-  const children = plan.children.length > 0 ? alsoStops(plan.children) : null;
-  if (deletes !== null && children !== null) details.unshift(children);
   const blocked = refused !== null ? `OATS would refuse: remove ${refused} first.` : discardWorktree && !tree.own ? DISCARD_NOT_OWN : null;
   return {
-    says: [RETIRE_FOR_GOOD, ...(deletes !== null ? [deletes] : children !== null ? [children] : [])],
-    deletes: deletes !== null,
+    says: [RETIRE_FOR_GOOD, ...(plan.children.length > 0 ? [alsoStops(plan.children)] : [])],
+    warns: false,
     attention,
     details: [...details, ...plan.ambiguous.map(ambiguous)],
     state,
     // Offered for the agent's own tree; it stays while it is ticked, so that it can be undone.
-    choice: tree.own || discardWorktree ? { label: RETIRE_CHOICE, checked: discardWorktree } : null,
+    choice: tree.own || discardWorktree ? { label: RETIRE_CHOICE, checked: discardWorktree, deletes } : null,
     blocked,
     confirm: "Retire",
   };

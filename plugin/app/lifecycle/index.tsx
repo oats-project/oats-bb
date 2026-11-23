@@ -8,9 +8,9 @@ import type { Agent, AgentState, Node } from "../../model/types";
 import { state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
-import { failureWords, HELD_REASON } from "../roster/unreadable";
+import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
-import { Button, DisabledReason } from "../ui";
+import { Button } from "../ui";
 import { ActsOverlay, openAct } from "./acts";
 import { notify } from "../ui";
 import { agentName, STATE } from "../ui/words";
@@ -76,12 +76,12 @@ const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shif
  * for an agent on tmux as for one on bb (and for no other session provider's): its dialog starts it (bringing back a session that was
  * lost: `oats session start --resume`) or restarts it, opens no thread, and says where it runs.
  */
-export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: string | null }[] {
+export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: boolean }[] {
   if (oats.phase !== "ready") return [];
   const agent = oats.nodeByInstance.get(instance)?.agent ?? oats.agents.find((each) => each.instance === instance);
   if (agent === undefined) return [];
   const now = oats.nodeByInstance.get(instance)?.state ?? state(agent, null);
-  const held = oats.stale !== null ? HELD_REASON : null;
+  const held = oats.stale !== null;
   // Start and Restart are this plugin's for an agent on bb and for one on tmux; an agent of another session provider has neither.
   const starts = agent.backend === "bb" || agent.backend === "tmux";
   return ACTS.filter((act) => act.when(now, agent) && (starts || (act.verb !== "start" && act.verb !== "restart"))).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
@@ -89,8 +89,10 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
 
 /**
  * The acts of one agent as buttons, for a place that shows that agent (the instance panel, the
- * agent's own page): the ones that apply to its state, each opening its dialog; off, with the
- * reason beside them, while the roster is the last one read. It reads the roster itself and needs
+ * agent's own page): the ones that apply to its state, each opening its dialog; off while the
+ * roster is the last one read, with no reason of their own: every place that draws them draws
+ * the notice that says "Acts are off.", with Retry (the thread's line, the outside line, the
+ * panel's notice): an act that is off is never alone on a screen. It reads the roster itself and needs
  * nothing mounted above it (the dialogs are the app overlay's). Nothing where no act applies, and
  * for an agent the roster does not name.
  */
@@ -98,15 +100,13 @@ export function AgentActs({ instance }: { instance: string }) {
   const oats = useOats();
   const acts = actsFor(oats, instance);
   if (acts.length === 0) return null;
-  const held = acts[0]!.held;
   return (
     <div data-testid="oats-agent-acts" className="flex min-w-0 flex-wrap items-center gap-2">
       {acts.map((act) => (
-        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held !== null} onClick={() => openAct(act.verb, instance)}>
+        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held} onClick={() => openAct(act.verb, instance)}>
           {act.label}
         </Button>
       ))}
-      {held === null ? null : <DisabledReason>{held}</DisabledReason>}
     </div>
   );
 }

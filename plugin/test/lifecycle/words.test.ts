@@ -36,7 +36,7 @@ describe("a stop plan", () => {
     expect(stopPlanView(stopPlan(), true)).toEqual({
       // On a provider that archives the thread at stop (the pilot's): the one line; then, second and last, who else is stopped.
       says: ["Archives its thread.", "Also stops: Desktop mockups developer, Harvest knowledge helper."],
-      deletes: false,
+      warns: false,
       // From the plan's facts: the two whose work tree holds uncommitted work (the recorded plan: 2 changed, 1 untracked each). Not from its midTask.
       attention: ["Redesign ui lead has uncommitted work.", "Desktop mockups developer has uncommitted work."],
       details: ["Nothing is deleted."],
@@ -45,7 +45,7 @@ describe("a stop plan", () => {
         { label: "Desktop mockups developer", value: "Session running" },
         { label: "Harvest knowledge helper", value: "Session running" },
       ],
-      choice: { label: "Include child instances", checked: true },
+      choice: { label: "Include child instances", checked: true, deletes: null },
       blocked: null,
       confirm: "Stop",
     });
@@ -64,7 +64,7 @@ describe("a stop plan", () => {
     const plan = stopPlan();
     const view = stopPlanView({ ...plan, recursive: false, targets: plan.targets.slice(0, 1), skipped: plan.targets.slice(1).map((target) => target.instance) }, true);
     expect(view.says).toEqual(["Archives its thread."]);
-    expect(view.choice).toEqual({ label: "Include child instances", checked: false });
+    expect(view.choice).toEqual({ label: "Include child instances", checked: false, deletes: null });
   });
 
   it("an agent with no child has no tick; a session that could not be checked is said so, never as not running", () => {
@@ -83,7 +83,7 @@ describe("a retire plan", () => {
   it("says that it cannot be undone, then who else it stops; what goes and what stays is under Details, for the recorded plan of an agent on a worktree with a child", () => {
     expect(retirePlanView(retirePlan(), false)).toEqual({
       says: ["This cannot be undone.", "Also stops: Digest links helper."],
-      deletes: false,
+      warns: false,
       attention: [],
       details: ["Deletes its home.", "Keeps its worktree, moved aside, on branch agents/weekly-digest-helper."],
       state: [
@@ -91,24 +91,24 @@ describe("a retire plan", () => {
         { label: "Uncommitted work", value: "1 untracked" },
         { label: "Branch", value: "agents/weekly-digest-helper" },
       ],
-      choice: { label: "Also delete the worktree", checked: false },
+      choice: { label: "Also delete the worktree", checked: false, deletes: null },
       blocked: null,
       confirm: "Retire",
     });
   });
 
-  it("with the tick: what it deletes is the second line, counted, said ONCE; who else it stops moves under Details, first", () => {
+  it("with the tick: what it deletes is the TICK's own line, counted, said ONCE; the dialog's lines stay (who else it stops is a safety fact, in view)", () => {
     const view = retirePlanView(retirePlan(), true);
-    expect(view.says).toEqual(["This cannot be undone.", "Deletes 1 uncommitted change too (a copy is saved)."]);
-    expect(view.deletes).toBe(true);
-    expect(view.details).toEqual(["Also stops: Digest links helper.", "Deletes its home."]);
-    expect(view.choice).toEqual({ label: "Also delete the worktree", checked: true });
-    // Said once: nothing under Details repeats what the tick deletes.
-    expect(view.details.join(" ")).not.toMatch(/uncommitted|worktree/);
-    // A worktree with nothing uncommitted: the tick deletes the tree, and no change is counted.
+    expect(view.says).toEqual(["This cannot be undone.", "Also stops: Digest links helper."]);
+    expect(view.details).toEqual(["Deletes its home."]);
+    expect(view.choice).toEqual({ label: "Also delete the worktree", checked: true, deletes: "Deletes 1 uncommitted change too (a copy is saved)." });
+    // Said once: neither the dialog's lines nor Details repeat what the tick deletes.
+    expect([...view.says, ...view.details].join(" ")).not.toMatch(/uncommitted|worktree/);
+    // A worktree with nothing uncommitted: the tick deletes the tree, and no change is counted. Without children the same: the line is always the tick's.
     const plan = retirePlan();
-    expect(retirePlanView({ ...plan, children: [], work: { ...plan.work, changed: 0, untracked: 0 } }, true).says).toEqual(["This cannot be undone.", "Deletes its worktree."]);
-    expect(retirePlanView({ ...plan, children: [], work: { ...plan.work, changed: 2, untracked: 1 } }, true).says[1]).toBe("Deletes 3 uncommitted changes too (a copy is saved).");
+    const clean = retirePlanView({ ...plan, children: [], work: { ...plan.work, changed: 0, untracked: 0 } }, true);
+    expect([clean.says, clean.choice?.deletes]).toEqual([["This cannot be undone."], "Deletes its worktree."]);
+    expect(retirePlanView({ ...plan, children: [], work: { ...plan.work, changed: 2, untracked: 1 } }, true).choice?.deletes).toBe("Deletes 3 uncommitted changes too (a copy is saved).");
   });
 
   it("says one thing of every retire, on bb and off it; nothing of its session, of a child that won't stop, of branches and pull requests", () => {
@@ -128,8 +128,7 @@ describe("a retire plan", () => {
     expect(view.state).toEqual([{ label: "Session", value: "Not running" }]);
     // A tick set before the plan changed stays, to be undone, and the reason beside Retire names it; nothing is said to be deleted.
     const ticked = retirePlanView(retirePlan({ ownWorktree: false }), true);
-    expect(ticked.choice).toEqual({ label: "Also delete the worktree", checked: true });
-    expect(ticked.deletes).toBe(false);
+    expect(ticked.choice).toEqual({ label: "Also delete the worktree", checked: true, deletes: null });
     expect(ticked.blocked).toBe("Only an instance with its own worktree can delete it. Untick “Also delete the worktree”.");
   });
 
@@ -141,7 +140,7 @@ describe("a retire plan", () => {
   it("an own tree that could not be checked promises no tree and names no observed branch", () => {
     const unchecked = retirePlan({ children: [], work: { observed: false, branch: null, detached: false, drift: false, changed: 0, untracked: 0 } });
     expect(retirePlanView(unchecked, false).details[1]).toBe("Keeps its worktree, moved aside, if there is one. It couldn't be checked.");
-    expect(retirePlanView(unchecked, true).says[1]).toBe("Deletes any uncommitted changes too (a copy is saved). It couldn't be checked.");
+    expect(retirePlanView(unchecked, true).choice?.deletes).toBe("Deletes any uncommitted changes too (a copy is saved). It couldn't be checked.");
     expect(retirePlanView(unchecked, false).state[1]).toEqual({ label: "Uncommitted work", value: "Unknown (couldn't be checked)" });
   });
 
@@ -191,6 +190,8 @@ describe("a stop and the agent's thread", () => {
     expect(stopPlanView(stopPlan(), true).says[0]).toBe("Archives its thread.");
     // Not known to archive (the default): the plan keeps the line that warns.
     expect(stopPlanView(stopPlan()).says[0]).toBe("A message in its thread starts it outside OATS.");
+    // In the warning tone there, and only there.
+    expect([stopPlanView(stopPlan()).warns, stopPlanView(stopPlan(), true).warns]).toEqual([true, false]);
   });
 
   it("is said of an agent on bb, in the plan and in the result, and not of one with no thread; a result whose thread was archived is its title alone", () => {

@@ -425,8 +425,8 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   // focus on Cancel, and is confirmed only after "Review again" has read it once more.
   // A result with a warning of its own (a home that was kept) is read from that warning.
   useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? (state.outcome.warning === undefined ? "result" : "kept") : "top");
-  // What a choice would lose is said the moment it is turned on, as the dialog's second line: it is brought on screen with it.
-  useReveal(state.phase === "ready" && view?.deletes === true ? "warning" : null);
+  // What a choice would lose is said under it the moment it is turned on: it is brought on screen with it.
+  useReveal(state.phase === "ready" && view?.choice?.deletes ? "warning" : null);
   const changed = state.phase === "ready" ? state.changed : null;
   useEffect(() => {
     if (changed !== null) document.querySelector<HTMLElement>('[data-testid="oats-confirm-cancel"]')?.focus();
@@ -471,7 +471,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       // Once the act has an answer the plan gives way to it, a refusal as a result: what it would do, over
       // "wasn't stopped", would say in the future what did not happen. Review again brings the plan back.
       says={state.phase === "settled" ? [] : (view?.says ?? [])}
-      saysDestructive={view?.deletes === true ? 1 : null}
+      saysWarns={view?.warns === true}
       confirmLabel={view?.confirm ?? (verb === "stop" ? "Stop" : "Retire")}
       // Both acts end something a person may want running: the focus starts on Cancel for each.
       destructive
@@ -537,10 +537,17 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
           </Disclosure>
           {view.choice === null ? null : (
             // The plan's tick, drawn with the plugin's one pattern for a choice that is on or off: it says which it is in a word.
-            // (What it deletes, while it is on, is the dialog's second line.)
-            <span data-testid="oats-plan-choice" className="flex">
-              <Switch label={view.choice.label} checked={view.choice.checked} disabled={state.phase === "applying"} onChange={choose} />
-            </span>
+            // What it deletes is drawn AT the tick, under its label, only while it is ticked: never a line of the dialog's text.
+            <div className="flex flex-col gap-1">
+              <span data-testid="oats-plan-choice" className="flex">
+                <Switch label={view.choice.label} checked={view.choice.checked} disabled={state.phase === "applying"} onChange={choose} />
+              </span>
+              {view.choice.deletes === null ? null : (
+                <p role="status" data-testid="oats-plan-warning" className="break-words text-destructive-text">
+                  <Lines text={view.choice.deletes} />
+                </p>
+              )}
+            </div>
           )}
           {state.phase === "ready" ? (
             <p data-testid="oats-plan-observed" className="flex">

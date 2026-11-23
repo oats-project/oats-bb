@@ -23,6 +23,15 @@ const statusOf = async (page, state, want = null) => {
   return found ? JSON.parse(found) : null;
 };
 /** What the page shows of the thread's row when a read of it found nothing: for a failing check's line. */
+/**
+ * Every roster row of the sidebar measured: a row is at most three lines (the name on one or two,
+ * cut only after the second; the second block on ONE line, where only the soul may be cut). Counts
+ * only, never a name: `{ rows, over, wrapped, nameCut, soulCut, edgeCut }`.
+ */
+const rowLines = (page) =>
+  page.evaluate(
+    `(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const rows = [...s.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})].filter((r) => r.getClientRects().length > 0); const linesOf = (e) => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); let over = 0, wrapped = 0, nameCut = 0, soulCut = 0, edgeCut = 0; for (const row of rows) { const name = row.querySelector(${JSON.stringify(testId("oats-row-name"))}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const n = linesOf(name), f = linesOf(facts); if (n + f > 3 || n > 2) over += 1; if (f !== 1) wrapped += 1; if (name.scrollHeight > name.clientHeight + 1) nameCut += 1; const soul = facts.querySelector('[data-phrase="soul"]'); if (soul && soul.scrollWidth > soul.clientWidth + 1) soulCut += 1; const right = facts.getBoundingClientRect().right; if ([...facts.querySelectorAll('[data-phrase=""], [data-sep]')].some((p) => p.getBoundingClientRect().right > right + 1)) edgeCut += 1; } return JSON.stringify({ rows: rows.length, over, wrapped, nameCut, soulCut, edgeCut }); })()`,
+  );
 const rowText = (page) => page.evaluate(textOf(testId("oats-identity-row")));
 
 export default [
@@ -305,17 +314,26 @@ export default [
       const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
       const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);
       check(needs === `! ${waiting} need you` || needs === `${waiting} need you`, `${at} the foot counts every agent that waits, the ${waiting - 1} on tmux included: ${waiting}`, needs);
-      // A row's second line: no phrase that fits is broken across two lines or cut by the sidebar's edge, and
-      // NO LINE ENDS WITH A SEPARATOR: each "·" stands on the line of the phrase it is in front of.
-      const lines = await page.evaluate(`(() => { const s = document.querySelector(${side}); const edge = s.getBoundingClientRect().right; const top = (node) => { const r = document.createRange(); r.selectNodeContents(node); const rects = [...r.getClientRects()]; return rects.length ? Math.round(rects[0].top) : null; }; const tops = (node) => { const r = document.createRange(); r.selectNodeContents(node); return new Set([...r.getClientRects()].map((rect) => Math.round(rect.top))).size; }; const shown = (e) => e.getClientRects().length > 0; return JSON.stringify({ broken: [...s.querySelectorAll("[data-phrase]")].filter(shown).filter((p) => tops(p) > 1 || p.getBoundingClientRect().right > edge + 1).map((p) => p.innerText), dangling: [...s.querySelectorAll(${JSON.stringify(`${testId("oats-row-facts")} [data-sep]`)})].filter(shown).filter((sep) => top(sep) !== top(sep.nextElementSibling)).map((sep) => sep.parentElement.innerText), seps: s.querySelectorAll(${JSON.stringify(`${testId("oats-row-facts")} [data-sep]`)}).length }); })()`);
-      const read2 = JSON.parse(lines);
-      check(read2.broken.length === 0, `${at} no phrase of a row's second line is broken across two lines or cut by the sidebar's edge`, lines);
-      check(read2.dangling.length === 0 && read2.seps >= tmux.length * 2, `${at} no line of a row ends with a separator: each of the ${read2.seps} stands in front of its phrase, on its line`, lines);
+      // Every row is at most three lines: the name on one or two, the second block on ONE line, where only
+      // the soul gives way; the state's word and "tmux" are never cut.
+      const measured = await rowLines(page);
+      const rowsRead = JSON.parse(measured);
+      check(rowsRead.rows >= tmux.length + TMUX_ROSTER.bb.length && rowsRead.over === 0 && rowsRead.wrapped === 0, `${at} no row is over three lines, and no row's second block is on two`, measured);
+      check(rowsRead.edgeCut === 0, `${at} the state's word and where it runs are never cut: only a soul gives way (${rowsRead.soulCut} cut)`, measured);
       await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
       // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
       const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: r.height > 0, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
       check(reach === JSON.stringify({ last: true, foot: true }), `${at} with ${tmux.length + TMUX_ROSTER.bb.length} agents the last row and the count of who waits can be scrolled into view`, reach);
       await page.shot(`tmux-roster-${viewport.name}-sidebar-end`);
+      // A SELECTED row whose name takes two lines: the bb-thread agent with the long name, on its own thread.
+      const long = threads.get("thr_mockups");
+      await page.goto(`/projects/${long.projectId}/threads/${long.id}`);
+      check(await showSidebar(page, viewport), `${at} the sidebar is shown on the agent's thread`);
+      const selected = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${long.id}"]`)}); const name = row?.querySelector(${JSON.stringify(testId("oats-row-name"))}); if (!name) return ""; const lines = Math.round(name.getBoundingClientRect().height / parseFloat(getComputedStyle(name).lineHeight)); return lines === 2 ? JSON.stringify({ lines, text: name.innerText.replace(/\\s+/g, " ").trim(), cut: name.scrollHeight > name.clientHeight + 1 }) : ""; })()`, 20);
+      check(selected !== null && JSON.parse(selected).text === "Desktop mockups developer for the overnight redesign sweep", `${at} the open thread's row holds its long name on two lines, whole`, selected ?? (await rowLines(page)));
+      await page.shot(`tmux-roster-${viewport.name}-selected-two-line-name`, { targets: true });
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
       // A tmux row leads to its agent's own page, by its instance (never by the name drawn).
       const [instance] = tmux.find(([, , , how]) => how === "waiting");
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`)}).click()`);
@@ -329,18 +347,15 @@ export default [
     // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
     // is printed but counts; its images stay with whoever ran it.
     stage: "local-roster",
-    name: "a real deployment's roster, drawn from its own oats status: as it is, and with the name on two lines",
+    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const rows = await page.until(`(() => { const n = document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)}).length; return n > 0 ? String(n) : ""; })()`, 30);
-      const measure = `(() => { const names = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-row-name")}`)})]; const rowsOf = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return JSON.stringify({ names: names.length, cut: names.filter((n) => n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1).length, twoLines: names.filter((n) => n.getBoundingClientRect().height > 1.5 * parseFloat(getComputedStyle(n).lineHeight)).length, rowHeights: [...new Set(rowsOf.map((r) => Math.round(r.getBoundingClientRect().height)))].sort((a, b) => a - b) }); })()`;
-      check(Number(rows) > 0, `${at} the roster is drawn: ${rows} rows; as it is: ${await page.evaluate(measure)}`);
-      await page.shot(`local-roster-${viewport.name}-a-as-it-is`);
-      // The proposal: a name wraps to at most two lines and is cut only after the second.
-      await page.evaluate(`(() => { const style = document.createElement("style"); style.textContent = '[data-testid="oats-row-name"] { white-space: normal !important; overflow: hidden !important; display: -webkit-box !important; -webkit-box-orient: vertical !important; -webkit-line-clamp: 2 !important; overflow-wrap: anywhere; }'; document.head.append(style); })()`);
-      check(true, `${at} with the name on two lines: ${await page.evaluate(measure)}`);
-      await page.shot(`local-roster-${viewport.name}-b-name-two-lines`);
+      const measured = await rowLines(page);
+      const read = JSON.parse(measured);
+      check(Number(rows) > 0 && read.over === 0 && read.wrapped === 0 && read.edgeCut === 0, `${at} the roster is drawn: no row over three lines, no second block on two, only a soul cut: ${measured}`, measured);
+      await page.shot(`local-roster-${viewport.name}-sidebar`);
     },
   },
 ];

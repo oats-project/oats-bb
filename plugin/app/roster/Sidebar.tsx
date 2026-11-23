@@ -120,31 +120,31 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   );
 
   /** A row's two lines (D-063): the name, then where the agent is in a word, and its soul. */
+  /**
+   * A row's two blocks, at most three lines in all (the lead's ruling on the long names):
+   * - the NAME wraps to at most two lines and is cut with "…" only after the second (the whole name
+   *   is the row's title);
+   * - the second block (the state, the soul, where it runs) is ONE line, never wrapped: where it does
+   *   not fit, the SOUL is cut with "…", never the state's word and never where it runs. The whole
+   *   line is its title.
+   */
   const lines = (name: ReactNode, strong: boolean, word: string, rest: string) => (
     <span className="flex min-w-0 flex-1 flex-col">
-      <span data-testid="oats-row-name" className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
-      {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
-      {/* Each phrase after the first (the soul, where it runs) moves to the next line WITH its
-          separator in front of it, as one unit: no line ends with a separator, and a phrase that
-          fits the row is never broken. (The space before a unit is the place a line may break.) */}
-      <span data-testid="oats-row-facts" className="text-xs text-muted-foreground">
-        {`${word} · ${rest}`.split(" · ").map((phrase, index) =>
-          index === 0 ? (
-            <span key={index} data-phrase="" className="break-words">
+      <span data-testid="oats-row-name" className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
+      <span data-testid="oats-row-facts" title={`${word} · ${rest}`} className="flex min-w-0 whitespace-nowrap text-xs text-muted-foreground">
+        {`${word} · ${rest}`.split(" · ").map((phrase, index) => (
+          <Fragment key={index}>
+            {index === 0 ? null : (
+              <span data-sep="" className="shrink-0 whitespace-pre">
+                {" · "}
+              </span>
+            )}
+            {/* The second phrase is the soul: the one that gives way. */}
+            <span data-phrase={index === 1 ? "soul" : ""} className={index === 1 ? "min-w-0 truncate" : "shrink-0"}>
               {phrase}
             </span>
-          ) : (
-            <Fragment key={index}>
-              {" "}
-              <span className="inline-flex max-w-full align-top">
-                <span data-sep="" className="shrink-0 whitespace-pre">{"· "}</span>
-                <span data-phrase="" className="min-w-0 break-words">
-                  {phrase}
-                </span>
-              </span>
-            </Fragment>
-          ),
-        )}
+          </Fragment>
+        ))}
       </span>
     </span>
   );

@@ -254,6 +254,7 @@ function tmuxRoster(threads) {
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
   for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
+  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
   for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
     const row = structuredClone(model);
     Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
@@ -396,12 +397,15 @@ const BUILT_IN = {
   },
   "local-roster": {
     label: "LR",
+    // With the release's default pages: what a person of that deployment sees first.
     enter: async () => {
       const status = readFileSync(LOCAL_STATUS, "utf8");
       const agents = JSON.parse(status).agents.flatMap((group) => group.instances).length;
       fake({ status: { stdout: status } });
+      pages("home");
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === agents);
     },
+    leave: async () => pages(ALL_PAGES),
   },
   "pages-default": {
     label: "PG",

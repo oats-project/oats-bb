@@ -1,6 +1,8 @@
 // The agents of the live stage "tmux-roster" (live-ui.mjs `tmuxRoster` builds their rows; scenes/roster.mjs reads what is drawn of them).
 export const TMUX_ROSTER = {
   bb: ["release-070-maintainer", "redesign-ui-lead", "desktop-mockups-developer"],
+  // One agent on a bb thread carries a long name in this stage, so that a SELECTED row with a name on two lines is drawn.
+  renamed: { "desktop-mockups-developer": "desktop-mockups-developer-for-the-overnight-redesign-sweep" },
   tmux: [
     // [instance, soul, parent, "waiting" | "stopped" | "running"]
     ["kernel-fix-developer", "oats-developer", null, "running"],

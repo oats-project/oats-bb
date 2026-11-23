@@ -381,7 +381,7 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default pages: New agent is in the sidebar and opens the form, its first field the soul",
+    name: "the release's default pages: New agent is in the sidebar and on the home, and each opens the form, its first field the soul",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
@@ -391,6 +391,15 @@ export default [
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
+      // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
+      // the home's heading, can be pressed, and opens the same page. No image of its own: the home with its button is the
+      // home's own image of this stage, and where the press lands is the image above.
+      await page.goto("/plugins/oats/home");
+      const onHome = await page.until(`(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return b && ${visible(testId("oats-home-new-agent"))} ? JSON.stringify({ words: b.innerText.trim(), off: b.disabled, links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }) : ""; })()`, 30);
+      check(onHome === JSON.stringify({ words: "New agent", off: false, links: 0 }), `${at} with only the home shown, New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      await page.evaluate(click(testId("oats-home-new-agent")));
+      const fromHome = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
+      check(fromHome === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", focus: "oats-spawn-soul", shown: true }), `${at} pressed on the home, it opens the form's own page with the soul field first, and in focus`, fromHome ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
     },
   },
 ];

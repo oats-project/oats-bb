@@ -27,7 +27,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   kernel's code and its message under Details, is said in the same dialog.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.
-- **Spawn** with **New agent** (the sidebar's foot): the form's own page.
+- **Spawn** with **New agent** (the sidebar's foot, the home's heading): the form's own page.
   Choose the soul; the rest is optional: an opening instruction (empty: the agent starts and
   waits), the harness and the model (the defaults are the kernel's), a relationship to another
   agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will

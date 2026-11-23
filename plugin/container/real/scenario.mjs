@@ -319,8 +319,8 @@ function snapshotRow(instance) {
  * Freshness (the UX standard, section 6: "within 3 s of the kernel recording it"): how long after
  * the kernel recorded a change the plugin's own snapshot has it, read as a client reads it (no
  * refresh asked). What brings it is the watch on the event log, or the server's own reread behind a
- * snapshot older than its 15 s poll: this check holds the delay a client sees, not the watch by
- * itself (live.sh's L2 holds the watch, with the poll off). That the change reaches the tree and the
+ * snapshot older than its 15 s poll: this check measures the delay a client sees and holds the order
+ * of reads (below), not the watch by itself (live.sh's L2 holds the watch, with the poll off). That the change reaches the tree and the
  * home is the live scenes' (the fake).
  *
  * The delay runs from the kernel's own record: the time of the event the change wrote, as
@@ -353,6 +353,8 @@ function snapshotRow(instance) {
  * event of the kernel's to count from, the order cannot be told, and the check holds only that the
  * snapshot came to have the change; its line says so.
  */
+/** Every freshness measure of the run, for its summary: what changed, and the delay from the kernel's record (null: none to count from, or never seen). */
+const freshness = [];
 async function fresh(what, { instance, home, kind, since }, matches) {
   let seenAt = null;
   let shownBy = null; // the `at` of the snapshot that first had the change: its read's start
@@ -384,6 +386,7 @@ async function fresh(what, { instance, home, kind, since }, matches) {
       ? `${ms(fromCommand)} after the moment before the command`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
   const timed = `${counted}; the kernel's own oats status took ${statusMs} ms`;
+  freshness.push({ what, fromRecordMs: fromRecord, fromCommandMs: fromCommand, statusMs });
   if (seenAt === null) {
     fail(`freshness: the plugin's snapshot never had ${what} in 60 s`, timed);
   } else if (recorded === null) {
@@ -840,7 +843,7 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
-  // The stop is the plugin's own act: it rereads by itself afterwards, so this one holds that an act's result is on hand at once, not the watch.
+  // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
@@ -1152,6 +1155,13 @@ const SAMPLES = join(HERE, "..", "..", "test", "fixtures");
 fixtures.keep("roster/status.json", sampleStatus(readFileSync(join(SAMPLES, "roster", "status.json"), "utf8"), readFileSync(join(SAMPLES, "roster", "threads.json"), "utf8"), fixtures.kept("roster/status-recorded.json")));
 for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
+
+// The run's freshness, in one line a person finds, every run, pass or fail: the delays are measured
+// and fail nothing here (fresh(), above, asserts the order of reads), so a drift has to be SEEN. The
+// 3 s bar of the UX standard is asserted on a real host by the release's QA, not by this run.
+const delay = ({ fromRecordMs, fromCommandMs }) => (fromRecordMs !== null ? `${fromRecordMs} ms` : fromCommandMs !== null ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)` : "never seen");
+writeFileSync(join(OUT, "freshness.json"), `${JSON.stringify(freshness, null, 1)}\n`);
+say(`\n== freshness, measured from the kernel's record to the plugin's snapshot (printed, not asserted: the run asserts the order of reads): ${freshness.length === 0 ? "nothing measured" : freshness.map((one) => `${one.what} ${delay(one)}`).join(", ")}`);
 
 if (failures > 0) {
   say(`\n== real run: ${failures} check(s) failed${onProvider}`);

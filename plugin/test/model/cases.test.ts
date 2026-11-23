@@ -43,6 +43,7 @@ function threadOf(column: string): BbThread | null {
   const thread = (status: string): BbThread => ({ id: "thr_case", projectId: null, displayTitle: "case", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false, status, queuedWork: "none" }) as BbThread;
   if (column === "in a turn") return thread("active");
   if (column === "at rest") return thread("idle");
+  if (column === "at rest, a turn in line") return { ...thread("idle"), queuedWork: "waiting" } as BbThread;
   if (column === "archived" || column === "deleted" || column === "any") return null;
   throw new Error(`the table's thread column says ${JSON.stringify(column)}, which this test does not know`);
 }
@@ -53,7 +54,9 @@ describe("the shared case table of a provider home's row", () => {
   const table = cases();
 
   it("is in the README, with the rows the two functions must agree on, and names both", () => {
-    expect(table.length).toBeGreaterThanOrEqual(10);
+    expect(table.length).toBeGreaterThanOrEqual(12);
+    // A row with no recording still says a thread this test can build, and what the plugin's `threadWorks` says of it is the row's word.
+    for (const row of table.filter((each) => each.recorded === null && each.says === "Working")) expect(threadWorks(threadOf(row.thread)!), row.name).toBe(true);
     expect(README).toMatch(/`inspectAnswer`,\s+`oats-package\/capabilities\/oats-bb\/lib\/threads\.mjs`/);
     expect(README).toMatch(/`state` and `threadWorks`, `model\/view\.ts`/);
     // The state's word is always one of the plugin's set.

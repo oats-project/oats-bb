@@ -86,6 +86,8 @@ export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
 export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
+/** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
+const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
 /** What the Stop dialog says first of an agent with uncommitted work in its home (the plan's own observation of its work tree). */
 export const hasWork = (instance: string): string => `${agentName(instance)} has uncommitted work in its home.`;
 /** And of an agent on bb whose thread runs a turn now (bb's own word on the thread: the model's `threadWorks`). */
@@ -111,7 +113,7 @@ export function stopPlanView(plan: StopPlan, archives = false, working: Readonly
   return {
     happens,
     kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
-    attention: targets.flatMap((target) => [...(target.work.observed && target.work.changed + target.work.untracked > 0 ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
+    attention: targets.flatMap((target) => [...(uncommitted(target.work) ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
@@ -251,7 +253,7 @@ export const LEAVE = {
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
- * in it, whether each session runs, who has uncommitted work; for a retire also its work and
+ * in it, whether each session runs; for a retire also its work and
  * its children. Whether anything differs is decided from what the dialog DRAWS (the two views),
  * never from this list of facts: where the views differ and no sentence here says how, one line
  * says that what this would do has changed. Empty only when the two views are equal (the kernel's
@@ -268,9 +270,8 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
       if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
       else {
         if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
-        const [had, has] = [old.work.observed && old.work.changed + old.work.untracked > 0, target.work.observed && target.work.changed + target.work.untracked > 0];
-        if (!had && has) lines.push(`${agentName(instance)} now has uncommitted work in its home.`);
-        if (had && !has) lines.push(`${agentName(instance)} no longer has uncommitted work in its home.`);
+        // (Uncommitted work that came or went has no sentence of its own: the box below says what is so now, and
+        // where nothing else differs the one line for "what this would do has changed" stands, below.)
       }
     }
     for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);

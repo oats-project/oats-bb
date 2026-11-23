@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, PLAN_CHANGED, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -237,12 +237,16 @@ describe("what a stop says first, before the confirmation: from facts, never fro
 });
 
 describe("a plan that changed under the confirmation", () => {
-  it("says what differs, in sentences: who is in it, whose session runs, who has uncommitted work", () => {
+  it("says what differs, in sentences: who is in it, whose session runs; uncommitted work that came or went has no sentence of its own", () => {
     const before = stopPlan();
     // The recorded case: one child stopped by itself between the plan and its apply.
     const after = { ...before, targets: before.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target.instance === "desktop-mockups-developer" ? { ...target, midTask: false, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
-    expect(planChanges(before, after)).toEqual(["Desktop mockups developer no longer has uncommitted work in its home.", "Harvest knowledge helper: its session was running, and is now not running."]);
-    expect(planChanges(after, before)).toEqual(["Desktop mockups developer now has uncommitted work in its home.", "Harvest knowledge helper: its session was not running, and is now running."]);
+    expect(planChanges(before, after)).toEqual(["Harvest knowledge helper: its session was running, and is now not running."]);
+    expect(planChanges(after, before)).toEqual(["Harvest knowledge helper: its session was not running, and is now running."]);
+    // Its work alone came or went: the dialog draws another box, and the one line says that what this would do has changed.
+    const worked = { ...before, targets: before.targets.map((target) => (target.instance === "desktop-mockups-developer" ? { ...target, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
+    expect(planChanges(before, worked)).toEqual([PLAN_CHANGED]);
+    expect(planChanges(worked, before)).toEqual([PLAN_CHANGED]);
     // The plan's midTask alone is no fact a person is told: a change of it changes no line.
     expect(planChanges(before, { ...before, targets: before.targets.map((target) => ({ ...target, midTask: false as const })) })).toEqual([]);
     expect(planChanges(before, { ...before, targets: before.targets.slice(0, 2) })).toEqual(["Harvest knowledge helper is no longer in this plan."]);

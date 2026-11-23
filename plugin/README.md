@@ -223,9 +223,10 @@ of who needs a person):
   same predicate). A row that is not running beside `runtimeState: "unknown"` has its session there
   and no harness loaded (a reboot on a host that does not run `oats host run`, or bb let the
   harness exit): it is idle, and keeps a question it asked. (A tmux row that does not run is
-  stopped as before.) That row is shaped from the kernel's contract, not recorded: the bb session
-  provider prints it only from its next release, and until then an idle bb thread reads `running:
-  null` and says "Idle" with nothing after it.
+  stopped as before.) That row is recorded live
+  (`test/fixtures/outside/status-not-loaded.json`: the real run ends the thread's harness process
+  and reads the row), on the provider that scans its harness (oats-bb #40); with a provider before
+  it an idle bb thread reads `running: null` and says "Idle" with nothing after it.
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
 never a message), a stop with the machine (nothing to do: OATS resumes it), and no harness loaded
@@ -290,9 +291,10 @@ sidebar's foot does (`view.needing`).
 Not there yet: the one predicate the home's card, the Start dialog and this feature's lines share
 for "a message here is the designed resume" (the change after this one: until then the home's
 card of an agent that does not run refuses an answer for every such agent, and offers Start);
-the line of a thread that belonged to a RETIRED agent;
-the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
-come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
+the line of a thread that belonged to a RETIRED agent.
+The rows are recorded live and proven against the real run's kernel (0.70.5, the provider at
+oats-bb #40): `container/real/parts/outside.mjs` makes each state, keeps the kernel's row
+(`test/fixtures/outside/README.md`) and checks what the plugin says and that its Stop mends it.
 
 ### A provider home's row, case by case
 
@@ -302,9 +304,10 @@ One table for the two sides that must agree on it: the bb session provider, whic
 harness process it finds in the home), and the plugin, which says the state from the kernel's row
 and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
 endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
-agent works. Each row below that names a recording is the kernel's row as printed on that
-provider (OATS 0.70.5, the provider at oats-bb #40), and a test reads every recorded row against
-this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
+agent works. Each row below that names a recording is the kernel's row as printed: the five
+of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the two of
+`roster/status-recorded.json` on the earlier recording (OATS 0.70.0, the provider before #40:
+those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
 it with the thread as the column gives it. That test holds the plugin's side alone: the
 provider's `inspectAnswer` is named here, not checked: no test of the plugin calls it (the
 provider's own tests hold its side). A dash is a field the row does not carry.
@@ -312,7 +315,9 @@ provider's own tests hold its side). A dash is a field the row does not carry.
 | Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
 |---|---|---|---|---|---|---|---|
 | in a turn | true | unknown | - | - | in a turn | Working | `roster/status-recorded.json#working` |
+| a turn bb holds in line (a message waits to start: `queuedWork: "waiting"`) | true | unknown | - | - | at rest, a turn in line | Working | (no recording here: the real run's B1b makes it and checks the kernel's row) |
 | at rest, its harness loaded | true | unknown | - | - | at rest | Idle | `outside/status-at-rest.json` |
+| at rest, with a word for its queue the provider does not know | - | unknown | - | - | at rest | Idle | (no recording: bb 0.50.1 has no such word) |
 | at rest, no harness loaded (its process ended; a reboot without `oats host run`) | false | unknown | - | - | at rest | Idle | `outside/status-not-loaded.json` |
 | stopped with OATS; the provider archived its thread | false | stopped | stopped | - | archived | Stopped | `outside/status-stopped-archived.json` |
 | stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |

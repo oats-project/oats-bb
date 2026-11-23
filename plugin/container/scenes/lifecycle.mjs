@@ -234,6 +234,82 @@ export default [
   },
   {
     stage: "lifecycle",
+    name: "Stop, the states between the menu and the result: the plan being read, a plan that cannot be read, a result that is not confirmed and is asked again, a dialog that is left while the act runs",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const lead = threads.get(LEAD);
+      const shot = (name) => dialogShot({ page, at, viewport, check }, "stop", name);
+      const open = async () => {
+        await page.goto("/");
+        check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
+        check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
+      };
+      await page.clock(STOP_AT);
+      try {
+        // The plan being read: the kernel takes a while to answer it.
+        answers({ "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 5000 } });
+        await open();
+        await page.until(phaseIs("reading"), 10);
+        const reading = await dialog(page);
+        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking what stopping Redesign ui lead will do…") && reading.off === true, `${at} while the plan is read the dialog says what it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
+        await shot("reading");
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-cancel"));
+        await page.until(closed, 10);
+
+        // A plan that cannot be read: oats ends with no answer at all.
+        answers({ "instance stop --plan": { stdout: "", stderr: "oats: internal error", exit: 1 } });
+        await open();
+        await page.until(phaseIs("failed"), 30);
+        const unread = await dialog(page);
+        check(
+          unread.body.includes("Couldn't check what stopping Redesign ui lead will do") && unread.body.includes("Nothing was changed.") && unread.body.includes("Review again") && !/what will happen/i.test(unread.body),
+          `${at} a plan that cannot be read says so in a person's words, that nothing was changed, and offers to read it again; no plan is drawn`,
+          JSON.stringify(unread),
+        );
+        await shot("unreadable");
+        // Read again, and the kernel answers: the plan is there.
+        answers();
+        await page.evaluate(click("oats-act-review"));
+        check(Boolean(await page.until(phaseIs("ready"), 30)), `${at} Review again reads the plan, and it can be confirmed`);
+
+        // A result that is not confirmed: the apply's answer is lost (oats prints nothing the plugin can read).
+        answers({ "instance stop --apply": { stdout: "", exit: 0 } });
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
+        const lost = await dialog(page);
+        check(
+          lost.body.includes("Result not confirmed") && lost.body.includes("OATS didn't confirm the result. Check again before assuming nothing happened.") && lost.body.includes("Check again") && !lost.body.includes("wasn't stopped"),
+          `${at} an apply whose answer is lost is told as not confirmed, never as stopped and never as not stopped, with Check again`,
+          JSON.stringify(lost),
+        );
+        await shot("not-confirmed");
+        // Check again asks for the answer to the same apply: the kernel has it.
+        answers({ "instance stop --apply": { file: "lifecycle/stop-apply.json" } });
+        await page.evaluate(click("oats-act-check"));
+        await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "done"`, 30);
+        check((await dialog(page)).body.includes("3 sessions stopped."), `${at} Check again reads the result of that apply: stopped`);
+        await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // A dialog that is left while the act runs: the result comes through bb's toaster.
+        answers({ "instance stop --apply": { file: "lifecycle/stop-apply.json", sleepMs: 4000 } });
+        await open();
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("running"), 10);
+        await page.evaluate(click("oats-confirm-leave"));
+        check(Boolean(await page.until(closed, 10)), `${at} Close leaves the dialog while the stop runs`);
+        const told = await page.until(`(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped.")); return toast ? toast.innerText.replace(/\\s+/g, " ").trim() : null; })()`, 30);
+        check(Boolean(told), `${at} the result of a stop whose dialog was left is told through bb's toaster`, String(told));
+        await page.shot(`lifecycle-${viewport.name}-stop-left-toast`);
+      } finally {
+        answers();
+        await page.clock(null);
+      }
+    },
+  },
+  {
+    stage: "lifecycle",
     name: "Retire, from the thread's own menu: what goes and what stays, the worktree's choice, in progress, done; an agent that is gone; a cleanup that did not finish",
     run: async ({ page, at, viewport, threads, check }) => {
       const helper = threads.get(HELPER);

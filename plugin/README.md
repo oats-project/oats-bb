@@ -175,7 +175,7 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 | stopped, and not with the machine (`sessionEnd` "stopped", "exited" or none: every end but "lost") | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
 | stopped with the machine (`sessionEnd: "lost"`) | open | "Stopped · with the machine. OATS starts it again when the machine is back." No warning: OATS resumes it by itself. | "Stopped · with the machine" | Start |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
-| stopped by an operator | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | "Stopped · archived in bb" | Start…, Retire… |
+| stopped, its session not lost | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | "Stopped · archived in bb" | Start…, Retire… |
 | its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
 | stopped, or its session lost | deleted | "Stopped · Its conversation was deleted in bb. Start it from OATS for a new one.", on the agent's own page (it has no thread): the sentence in the warning tone, under the header's "Stopped" | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
 | recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · recorded stopped since 14:03", in the warning tone; under it a notice in a person's words: "<Name> is running in bb, but OATS recorded it as stopped." "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again." The kernel's own sentence and its code are behind Details. | "Running outside OATS" | Stop ("stops the harness that runs outside OATS"), Start ("starts it from OATS, in a new conversation") |
@@ -251,7 +251,8 @@ whether the tree draws it on its thread in; the reason, its tone, the row's word
 the kernel's report out), `outsideOf(oats)` that gives it its inputs from the caller's own roster,
 and its drawings (`OutsideWarning`: the notice; `OutsideThreadRow`: the thread's own row on a
 thread bb has archived; `OutsideAgent`: the block on the agent's page; `lineParts` and `lineActs`:
-what a status line says and offers). It registers no slot and has no read and no `oats` verb of
+what a status line says and offers; `rowParts`: what a sidebar's row says after its state, only
+where the reason follows that state). It registers no slot and has no read and no `oats` verb of
 its own: the roster's row and line (`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the instance
 panel (`app/panel/Panel.tsx`) call it. Whether the provider archives a stopped home's thread
 (`stopArchivesThread`, the lifecycle dialogs') changes no word here (an open thread under a
@@ -460,7 +461,7 @@ every layer, and the entry of a layer only composes them:
 | server | `server/<feature>.ts`: `handlers(core)`, one per verb of its `rpc` | `server.ts` | `server/core.ts` |
 | host | `host/<feature>.ts`: `handlers(core)`, one per verb of its `host` | `host.ts` | `host/core.ts` |
 | kernel | `kernel/<feature>.ts` (and `kernel/<feature>-*.ts`): `verbs(oats)`, the argv and the parser of each command | `kernel/index.ts` | `kernel/runner.ts`, `run.ts`, `envelope.ts`, `input.ts`, `result.ts`, `task-file.ts` |
-| app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
+| app | `app/<feature>/`: its components, and `register(app)` in its `index` where it registers a slot (`app/outside` has none) | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
 | model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts` |
 | unit tests | `test/<feature>/`, with `handlers.ts`: the slot tests' default answer of each of its RPC verbs | `test/helpers/render.ts` | `test/helpers/`, `test/support/` |
 | fixtures | `test/fixtures/<feature>/`, with `verbs.json`: each `oats` verb the fake answers, and its file | `container/fake-oats.mjs` | |

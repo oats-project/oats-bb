@@ -55,7 +55,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       await core.agentForAct(instance);
       // The provider's version beside the plan (the read every dialog shares). It is an optional fact: a version
       // that cannot be read, or is not read within a moment, fails and holds nothing: it is then not known, and
-      // the dialog says what is true of every provider released so far.
+      // the dialog keeps the sentence that warns.
       // Both are asked at once; the version is waited for only a moment AFTER the plan answered (one that came
       // while the kernel made its plan cost nothing, and is used).
       const version = providerVersionOf(core).catch(() => null);

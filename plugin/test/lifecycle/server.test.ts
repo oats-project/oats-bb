@@ -45,6 +45,21 @@ describe("stop", () => {
     expect(Date.now() - asked).toBeLessThan(8_000);
   }, 40_000);
 
+  it("the version is waited for a moment AFTER the kernel's plan answered, not from the call: one that came while the kernel made a slow plan is used", async () => {
+    const printed = JSON.parse(await readFile(join(FIXTURES, "spawn/capabilities-show-bb.json"), "utf8"));
+    // The plan takes 3.5 s and the provider's read 4.5 s: counted from the call the version would be given up at 3 s.
+    backend = await startBackend({ verbs: { "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 3_500 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 4_500 } } });
+    expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: (printed.result ?? printed).version });
+  }, 40_000);
+
+  it("a plan the kernel refuses reaches the dialog at once, while the read of the provider's version is still in flight", async () => {
+    const refusal = { schemaVersion: 1, ok: false, error: { code: "E_SESSION_UNKNOWN", message: "no instance named redesign-ui-lead" } };
+    backend = await startBackend({ verbs: { "instance stop --plan": { stdout: JSON.stringify(refusal), exit: 1 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 12_000 } } });
+    const asked = Date.now();
+    expect(await refusalOf(backend.rpc("stopPlan", { instance: "redesign-ui-lead" }))).toMatchObject({ message: expect.stringContaining("E_SESSION_UNKNOWN") });
+    expect(Date.now() - asked).toBeLessThan(3_000);
+  }, 40_000);
+
   it("answers the plan as the kernel's facts, applies it with its revision, and shows the kernel's refusal of a stale one unchanged", async () => {
     backend = await startBackend();
     const { rpc, fake } = backend;

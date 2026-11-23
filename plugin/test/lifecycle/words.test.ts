@@ -158,7 +158,7 @@ describe("a stop and the agent's thread", () => {
     expect(stopThreadSentence(true)).toBe("Its thread is archived. To talk to it again, start it.");
   });
 
-  it("the fact is read from the provider's version against the release that archives at stop; no release does yet, so no version does", () => {
+  it("the fact is read from the provider's version against the release that archives at stop, oats-bb 0.4.0", () => {
     // The provider archives the thread at stop from oats-bb v0.4.0 on (the release lane's number).
     expect(ARCHIVES_AT_STOP_FROM).toBe("0.4.0");
     expect(stopArchivesThread("0.3.0")).toBe(false);

@@ -515,6 +515,8 @@ export { FULL_MODE };
 export const START = {
   continues: "Continue in this instance’s existing home, with its identity, work and notes.",
   fresh: "This starts a new conversation using the saved briefing and state.",
+  /** A start of an agent on TMUX that did not finish (the kernel kept its session): it has no thread to open, and the command that attaches is under it. */
+  keptOnTmux: "Its session was kept. Refresh status before another try.",
   /**
    * For an agent that has a thread in bb: a start, and a restart, ALWAYS make a new bb thread; the
    * launch stops and archives the one it had (the bb session provider's launch:
@@ -566,6 +568,18 @@ export const modelHelp = (recorded: string | null): string =>
  * where a plain start begins fresh on its task. The words never promise what the kernel may not
  * give: before the press they are conditional; after it they say what the kernel answered.
  */
+/**
+ * What the dialog says a start or a restart does, before the press. On bb: a new thread (`begins`:
+ * what becomes of the conversation it has), in bb's full mode. On tmux: no thread and no full mode
+ * of bb's to speak of; a resume says what it tries, and no more (the result says which happened).
+ */
+export function startSays(verb: RunVerb, { onBb, resumes, harness, begins }: { onBb: boolean; resumes: boolean; harness: string | null; begins: string }): string[] {
+  const warning = verb === "restart" ? [START.restartWarning] : [];
+  if (onBb) return [...warning, begins, FULL_MODE];
+  if (resumes) return [RESUME.tries, ...(harness === "claude" ? [RESUME.claudeAsks] : [])];
+  return [...warning, START.fresh];
+}
+
 export const RESUME = {
   /** Final: the kernel has no preview of a resume for one agent, so nothing more is promised; the result says which happened. */
   tries: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
@@ -607,7 +621,7 @@ export function startOutcome(verb: RunVerb, instance: string, started: Started):
   // It did NOT come back in its conversation: said first and in the warning tone, then the kernel's reason in words
   // (one this has no words for is OATS's own, under its name).
   const reason = started.resume.reason;
-  const because = reason === null ? [] : FRESH_BECAUSE[reason] !== undefined ? [FRESH_BECAUSE[reason]!] : oatsSays(reason);
+  const because = reason === null ? [] : Object.hasOwn(FRESH_BECAUSE, reason) ? [FRESH_BECAUSE[reason]!] : oatsSays(reason); // (its own keys only: the reason is any string of the kernel's)
   return { ...done(`${name} ${RESUME.fresh}`, because), attention: true };
 }
 
@@ -620,7 +634,7 @@ const STARTED_NOTHING: Readonly<Record<string, string>> = {
 };
 
 /** A start or a restart that was refused, that stopped at a launch prompt, or whose answer was lost. */
-export function startRefused(verb: RunVerb, instance: string, refusal: Refusal): Outcome {
+export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, tmux = false): Outcome {
   const name = agentName(instance);
   const restart = verb === "restart";
   const nothing = restart ? "Nothing was stopped or started." : "Nothing was started.";
@@ -628,8 +642,9 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   const of = (tone: Outcome["tone"], title: string, lines: string[], offers: Outcome["offers"] = ["refresh"]): Outcome => ({ tone, title, lines, code: refusal.code, details: refusal.message, offers });
   const code = refusal.code;
   // The session is there, and what its start came to is not known: never "failed", never "started".
+  // An agent on tmux has no thread to open: the command that attaches to it is under the result.
   if (code === "E_SPAWN_INCOMPLETE") {
-    return of("unknown", `OATS could not confirm that ${name} finished starting`, ["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
+    return of("unknown", `OATS could not confirm that ${name} finished starting`, [tmux ? START.keptOnTmux : "Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
   }
   if (code === "NO_THREAD_NAMED") return of("unknown", `${name} was started, but its thread isn't ready yet`, ["Open it from its row when it is."], []);
   // A start the kernel refused AND marked unconfirmed: it cannot tell what is left, whatever the code. Never

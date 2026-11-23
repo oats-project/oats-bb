@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -605,6 +605,8 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
     expect(because("no-receipts")).toEqual(["OATS has no record of where its harness kept it."]);
     expect(because("resume-unproven")).toEqual(["OATS cannot yet bring a Codex conversation back."]);
     expect(because("a-later-reason")).toEqual(["OATS says: a-later-reason"]);
+    // A reason is any string of the kernel's: one that names a member every object has is still OATS's own word.
+    for (const odd of ["constructor", "toString", "__proto__", "hasOwnProperty"]) expect(because(odd)).toEqual([`OATS says: ${odd}`]);
     expect(because(null)).toEqual([]);
     // Never told by the toaster as a plain success: it is opened again, and in the warning tone, as the dialog draws it.
     expect(toasted("start", startOutcome("start", "kernel-fix-developer", fresh), true)).toEqual({ plain: false, tone: "unknown", title: "Kernel fix developer started fresh: its last conversation was not brought back.", lines: [] });
@@ -641,5 +643,27 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
       lines: ["Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.", "OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key"],
       offers: ["refresh"],
     });
+  });
+});
+
+describe("what a start says before the press, and a tmux start that did not finish", () => {
+  const begins = "Starts a new conversation. The current one stays readable in bb, archived.";
+  it("on bb: what becomes of the conversation, and bb's full mode; a restart warns first", () => {
+    expect(startSays("start", { onBb: true, resumes: false, harness: "claude", begins })).toEqual([begins, "Runs in bb's full mode: no sandbox."]);
+    expect(startSays("restart", { onBb: true, resumes: false, harness: "claude", begins })).toEqual(["Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.", begins, "Runs in bb's full mode: no sandbox."]);
+  });
+  it("on tmux: nothing of a bb thread or of bb's full mode; a resume says what it tries, with the line on Claude's question for a recorded claude alone", () => {
+    const fresh = "This starts a new conversation using the saved briefing and state.";
+    expect(startSays("start", { onBb: false, resumes: false, harness: "claude", begins })).toEqual([fresh]);
+    expect(startSays("restart", { onBb: false, resumes: false, harness: "claude", begins })).toEqual(["Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.", fresh]);
+    const tries = "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.";
+    expect(startSays("start", { onBb: false, resumes: true, harness: "claude", begins })).toEqual([tries, "Claude may first ask, in its terminal, how to load a long conversation."]);
+    expect(startSays("start", { onBb: false, resumes: true, harness: "pi", begins })).toEqual([tries]);
+    expect(startSays("start", { onBb: false, resumes: true, harness: null, begins })).toEqual([tries]);
+  });
+  it("a start the kernel kept unfinished: on bb its thread is where to read it; on tmux there is none, and the sentence names none", () => {
+    const kept = { code: "E_SPAWN_INCOMPLETE", message: "launch requires inspection" };
+    expect(startRefused("start", "dev-1", kept).lines).toEqual(["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
+    expect(startRefused("start", "dev-1", kept, true)).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting", lines: ["Its session was kept. Refresh status before another try."], offers: ["refresh"] });
   });
 });

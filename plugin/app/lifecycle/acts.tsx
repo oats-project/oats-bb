@@ -1,7 +1,9 @@
 // What the plugin does to an agent: Stop, Start, Restart and Retire, each through the plugin's
 // server and so through OATS, each in a dialog first: nothing runs on one press. Stop and Retire
 // show the kernel's plan as what will happen and what is kept, and ask once; Start and Restart
-// check the agent as the kernel has it now and offer the harness and the model of the start. The
+// check the agent as the kernel has it now and, for an agent on bb, offer the harness and the model
+// of the start (an agent on tmux starts with the launch its home recorded; one whose session was
+// lost is brought back in its last conversation). The
 // act in progress, its result and its refusal are said in the same dialog. The requests come from
 // thread menus, pages, the instance panel and the keyboard; one overlay per app window draws them.
 // The words are the OATS Desktop's (./words.ts).
@@ -47,6 +49,7 @@ import {
   retirePlanView,
   START,
   startOutcome,
+  startSays,
   startRefused,
   stopArchivesThread,
   stopOutcome,
@@ -112,7 +115,8 @@ function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, op
 export const askPlan = (verb: PlanVerb, instance: string): void => openAct(verb, instance);
 /**
  * Start or restart an agent: opens its dialog. Nothing is started on this call (the Desktop's
- * Start… and Restart…); the dialog starts it, and opens the thread the kernel answers with.
+ * Start… and Restart…); the dialog starts it, and opens the thread the kernel answers with
+ * (an agent on tmux has none: its result says where it runs).
  * The last two arguments are no longer read: the overlay has its own.
  */
 export async function run(verb: RunVerb, instance: string, _rpc?: unknown, _navigate?: unknown): Promise<void> {
@@ -710,7 +714,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           check();
           return;
         }
-        const outcome = startRefused(verb, checked.instance, refusal);
+        const outcome = startRefused(verb, checked.instance, refusal, checked.backend === "tmux");
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
         else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model, fresh }, null);
       },
@@ -779,8 +783,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
-      // On tmux there is no full mode of bb's to speak of; a resume says what it tries, and no more: the result says which happened.
-      happens={known === null || state.phase === "settled" ? [] : !onBb ? (resumes ? [RESUME.tries, ...(known.harness === "claude" ? [RESUME.claudeAsks] : [])] : verb === "restart" ? [START.restartWarning, START.fresh] : [START.fresh]) : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      happens={known === null || state.phase === "settled" ? [] : startSays(verb, { onBb, resumes, harness: known.harness, begins })}
       kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
@@ -817,6 +820,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           </Facts>
           {lost ? (
             // A tmux agent whose session was lost: Start brings it back; the plain start stays, on purpose, and says what it loses.
+            // (A choice made before the press: this block is not drawn beside a result; Refresh status brings the dialog back.)
             <div className="flex flex-col gap-1">
               <span data-testid="oats-start-fresh-choice" className="flex">
                 <Switch label={RESUME.freshChoice} checked={fresh} disabled={!editable} onChange={setFresh} />

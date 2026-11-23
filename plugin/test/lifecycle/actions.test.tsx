@@ -1914,6 +1914,8 @@ test("a resume refused because the launch settings changed names the tick that i
   const refused = slot.getByTestId("oats-result").textContent!;
   expect(refused).toContain("Its launch settings changed since it last ran. Tick “Start fresh on its task instead”.");
   expect(refused).toContain("OATS says: a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL");
+  // The choice is one made before a press: it is not drawn, off, beside the result that names it.
+  expect(slot.queryByTestId("oats-start-fresh-choice")).toBeNull();
   // Refresh status brings the dialog back, where the tick is; nothing is started until it is pressed again.
   fireEvent.click(button(slot, "oats-start-refresh"));
   await ready(slot);
@@ -2120,6 +2122,9 @@ test("a tmux start whose end is not known still says where it runs, with the com
   });
   fireEvent.click(button(slot, "oats-confirm-act"));
   await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  // The sentence names no thread (a tmux agent has none): the command that attaches is under it.
+  expect(slot.getByTestId("oats-result").textContent).toContain("Its session was kept. Refresh status before another try.");
+  expect(slot.getByTestId("oats-result").textContent).not.toContain("open its thread");
   expect(slot.getByTestId("oats-start-where").textContent).toContain(`oats session attach --home /abs/deployment/agents/oats-expert/instances/${TMUX}`);
   resetApp();
   // A start the kernel REFUSED started nothing: no place is said for it.
@@ -2146,4 +2151,31 @@ test("Start and Restart are for an agent on bb and for one on tmux: an agent of 
   };
   expect(await offered(other({}))).toEqual(["Stop…", "Retire…"]);
   expect(await offered(other({ running: false, runtimeState: null }))).toEqual(["Retire…"]);
+});
+
+test("a resume left while it runs that the kernel refuses because the session is not lost any more, and one whose end is not known: each toast stays with Show result, and the dialog again has what it offers", async () => {
+  const left = async (code: string) => {
+    let fail!: (cause: unknown) => void;
+    const held = new Promise<never>((_, reject) => (fail = reject));
+    const slot = await tmuxStart({ startCheck: () => lostCheck(), start: () => held });
+    const before = await leave(slot);
+    fail(Object.assign(new Error(`${code}: as the kernel says it`), { code: "conflict" }));
+    await waitFor(() => expect(notified().length).toBe(before + 1));
+    const toast = notified().at(-1)!;
+    expect(toast).toMatchObject({ stays: true, open: { label: "Show result" } });
+    act(() => toast.open!.run());
+    await waitFor(() => expect(slot.queryByTestId("oats-result")).not.toBeNull());
+    return { slot, toast };
+  };
+  // Not lost any more: told as not started, with the reason; Refresh status reads the row again.
+  const notLost = await left("E_RESUME_NOT_LOST");
+  expect(notLost.toast).toMatchObject({ tone: "failed", title: "Kernel fix developer wasn't started" });
+  expect(notLost.slot.getByTestId("oats-result").textContent).toContain("Its session is no longer lost, so there is no conversation to bring back. Read what Start does now.");
+  expect(notLost.slot.queryByTestId("oats-start-where")).toBeNull();
+  expect(button(notLost.slot, "oats-start-refresh")).toBeTruthy();
+  resetApp();
+  // Its end is not known: the session is or may be there, so where it runs is said.
+  const unknown = await left("E_SPAWN_INCOMPLETE");
+  expect(unknown.toast).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Kernel fix developer finished starting" });
+  expect(unknown.slot.getByTestId("oats-start-where").textContent).toContain("oats session attach --home");
 });

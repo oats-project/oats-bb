@@ -82,6 +82,8 @@ const startCheck = z.object({
   running: z.boolean().nullable(),
   runtimeState: z.string().nullable(),
   runtimeError: z.string().nullable(),
+  /** How the kernel's row says its session ended, where it says: "stopped" (an operator's stop) or "lost" (with the host, or its harness gone). */
+  sessionEnd: z.string().nullable(),
   /** The harnesses a start may name (the provider's declared list: contract/spawn.ts `spawnHarnesses`); with one or none, no choice is offered. */
   harnesses: z.array(z.string()),
 });

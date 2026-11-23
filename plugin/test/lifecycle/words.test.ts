@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, checkAgainRefused, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -390,5 +390,30 @@ describe("a key that cannot act says why", () => {
     expect(cannotAct("start", "dev-1", { running: false, known: true })).toBeNull();
     expect(cannotAct("restart", "dev-1", { running: true, known: true })).toBeNull();
     expect(cannotAct("retire", "dev-1", { running: false, known: false })).toBeNull();
+  });
+});
+
+describe("whether a start says that a message in the thread carries the conversation on", () => {
+  const thread = { status: "idle" };
+  it("says it of an agent OATS says does not run and no operator stopped, whose thread bb has and can take a message", () => {
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "lost" }, thread)).toBe(true);
+    expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(true);
+    expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: "lost" }, thread)).toBe(true);
+  });
+  it("never after an operator's stop, and never of a stopped row that does not say how its session ended", () => {
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "stopped" }, thread)).toBe(false);
+    expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: "stopped" }, thread)).toBe(false);
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: null }, thread)).toBe(false);
+  });
+  it("never of an agent that runs, or whose state is not known", () => {
+    expect(carriesOn({ running: true, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);
+    expect(carriesOn({ running: null, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);
+    expect(carriesOn({ running: null, runtimeState: "unreachable", sessionEnd: "lost" }, thread)).toBe(false);
+  });
+  it("never when the thread cannot take a message: bb shows none, or says it is in error", () => {
+    const lost = { running: false, runtimeState: "stopped", sessionEnd: "lost" };
+    expect(carriesOn(lost, null)).toBe(false);
+    expect(carriesOn(lost, { status: "error" })).toBe(false);
+    expect(carriesOn(lost, { status: "active" })).toBe(true);
   });
 });

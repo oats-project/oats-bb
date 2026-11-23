@@ -14,3 +14,28 @@
 Recorded on 2026-11-22 with the versions `../README.md` names, the same one substitution (the
 paths), and no other edit. Neither is a default answer of the fake (`verbs.json`): a test names
 the file for the verb it asks.
+
+## The rows of an agent that does not run (the Start dialog's "cut off" line)
+
+No file: the tests of `carriesOn` and of the Start dialog (`test/lifecycle/words.test.ts`,
+`actions.test.tsx`) name the three rows by their fields. Which is recorded, and which is shaped
+from a contract:
+
+- **An operator's stop**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "stopped"`.
+  RECORDED: `stoppedByOats` in `../roster/status-recorded.json` (the row of `flaky-ci-2-developer`),
+  and the same row under the sample's name `weekly-digest-helper` in `../roster/status.json`.
+- **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. The ROW is
+  RECORDED: `threadDeleted` in `../roster/status-recorded.json`, an agent whose thread was deleted
+  in bb; with no thread in bb it gets no line. What is SHAPED is only its pairing with a thread bb
+  still has: a home stopped with the host (`oats host run`'s shutdown; the kernel's
+  `lib/instance-listing.mjs` answers the same three fields for it). Its thread is not archived,
+  and a message in it carries the conversation on (confirmed by the kernel's side). The live scene
+  is that pairing: the same fields over the recorded roster, on a thread the run's bb has. A
+  thread in `error` whose harness is gone reads the same row; bb's status excludes it from the
+  line, which is harmless (it could take a message too) and kept.
+- **A thread at rest with no harness loaded**: `running: false`, `runtimeState: "unknown"`, no
+  `sessionEnd`. SHAPED from the bb session provider's A15(1) change (its harness scan answers
+  `running` for an idle thread: `inspectAnswer` in the provider's `lib/threads.mjs`, on its branch
+  and not on main); the provider on main answers `running: null` for that thread, so no kernel
+  prints this row yet. Such a thread takes a message: bb starts the harness and runs the turn on
+  the same conversation. To be recorded when that release is pinned.

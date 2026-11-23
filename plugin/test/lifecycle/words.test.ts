@@ -215,6 +215,13 @@ describe("a plan that changed under the confirmation", () => {
     expect(drawn(after)).not.toBe(drawn(before));
     expect(planChanges(before, after)).toEqual(CHANGED);
   });
+  it("draws each plan with its own answer on whether a stop archives the thread: a sentence that changed is a change", () => {
+    const stop = stopPlan();
+    // The earlier plan was drawn with "a message starts it again", the plan as it is now says "its thread is archived".
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, true, false)).toEqual(CHANGED);
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, true, true)).toEqual([]);
+    expect(planChanges(stop, { ...stop, revision: "another-revision" }, false)).toEqual([]);
+  });
   it("says nothing differs only when the dialog draws the two plans alike", () => {
     const before = retirePlan();
     expect(planChanges(before, { ...before, revision: "another-revision" })).toEqual([]);

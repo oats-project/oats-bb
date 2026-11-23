@@ -326,7 +326,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
   }, []);
 
-
   const read = useCallback(
     (why: string, withChildren: boolean, changedFrom: Plan | null = null) => {
       const mine = ++ticket.current;
@@ -335,7 +334,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       asked.then(
         (plan) => {
           // A new plan is a new intent: it gets its own idempotency key.
-          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, stopArchivesThread(versionOf(plan))) });
+          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, stopArchivesThread(versionOf(plan)), stopArchivesThread(versionOf(changedFrom))) });
         },
         (cause: unknown) => {
           const refusal = refusalOf(cause);

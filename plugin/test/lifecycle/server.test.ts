@@ -37,7 +37,13 @@ describe("stop", () => {
     await backend.dispose();
     backend = await startBackend({ verbs: { "capabilities show": { stdout: "", stderr: "oats: no such capability", exit: 1 } } });
     expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: null });
-  }, 20_000);
+    await backend.dispose();
+    // A read of the provider that hangs does not hold the plan the kernel answered: after a moment it is answered without the version.
+    backend = await startBackend({ verbs: { "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 12_000 } } });
+    const asked = Date.now();
+    expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: null });
+    expect(Date.now() - asked).toBeLessThan(8_000);
+  }, 40_000);
 
   it("answers the plan as the kernel's facts, applies it with its revision, and shows the kernel's refusal of a stale one unchanged", async () => {
     backend = await startBackend();

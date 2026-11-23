@@ -12,6 +12,17 @@ const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().
 const given = <Fields extends Record<string, unknown>>(fields: Fields): { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> } =>
   Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> };
 
+/** How long a stop plan waits for the provider's version before it answers without it. */
+const VERSION_WAIT_MS = 3_000;
+/** `asked`, or null when it has not answered within `ms` (its timer is cleared either way). */
+function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([asked, late]).finally(() => clearTimeout(timer));
+}
+
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /**
    * The retires this server sent, by their key: the instance and the plan's revision each was for.
@@ -42,11 +53,12 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   return {
     async stopPlan({ instance, recursive }, context) {
       await core.agentForAct(instance);
-      // The provider's version beside the plan (the read every dialog shares): a version that cannot be read fails
-      // nothing, it is then not known, and the dialog says what is true of every provider released so far.
+      // The provider's version beside the plan (the read every dialog shares). It is an optional fact: a version
+      // that cannot be read, or is not read within a moment, fails and holds nothing: it is then not known, and
+      // the dialog says what is true of every provider released so far.
       const [plan, providerVersion] = await Promise.all([
         core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal),
-        providerVersionOf(core).catch(() => null),
+        within(VERSION_WAIT_MS, providerVersionOf(core).catch(() => null)),
       ]);
       return { ...plan, providerVersion };
     },

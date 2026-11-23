@@ -238,7 +238,7 @@ export const PLAN_STALE = "Something changed since you opened this. Review it an
  * says that what this would do has changed. Empty only when the two views are equal (the kernel's
  * revision moved for a fact the plan does not draw): the notice then says so.
  */
-export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan, archives = false): string[] {
+export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | RetirePlan, archives = false, archivedBefore = archives): string[] {
   const lines: string[] = [];
   const was = (value: keyof typeof SESSION) => SESSION[value].toLowerCase();
   if (before.action === "stop" && after.action === "stop") {
@@ -261,7 +261,8 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
     for (const child of after.children) if (!before.children.includes(child)) lines.push(`${agentName(child)} is now one of its children.`);
     for (const child of before.children) if (!after.children.includes(child)) lines.push(`${agentName(child)} is no longer one of its children.`);
   }
-  if (lines.length === 0 && drawn(before, archives) !== drawn(after, archives)) lines.push(PLAN_CHANGED);
+  // Each plan is drawn with its own answer on whether a stop archives the thread (`archivedBefore`: the earlier plan's).
+  if (lines.length === 0 && drawn(before, archivedBefore) !== drawn(after, archives)) lines.push(PLAN_CHANGED);
   return lines;
 }
 /** Everything the dialog draws of a plan: its title's agent and its view (a retire's with its tick off and on). */

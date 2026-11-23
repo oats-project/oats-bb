@@ -69,17 +69,3 @@ Neither is a file, and neither was met by a run of ours to record:
   `result.session.endpoint.threadId` taken out, answered over a roster row changed to
   `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
   `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).
-
-## A start with `--resume` (a tmux home whose session was lost)
-
-`start-resume.json`, `start-resume-fresh.json`, `start-resume-waiting.json`: SHAPED, not recorded,
-from the kernel's doc at v0.70.5 (docs/desktop-cli-api.md, "Resume a lost session (`--resume`)":
-"the ordinary start answer plus one object", `resume: {resumed, reason, harness, sessionId,
-waiting}`). Each holds only the keys the plugin reads of a start's answer, for the sample roster's
-agent on tmux (`kernel-fix-developer`), and the `resume` object of one case: it continues the last
-conversation; it started fresh (`reason: "no-conversation"`); it continues and the harness waits
-for its person (`waiting: "resume-confirmation"`). `verbs.json` answers `session start --resume`
-with the first. The two refusals of a resume the dialog has words for (`E_RESUME_NOT_LOST`,
-`E_LAUNCH_ENV_CHANGED`) are shaped in the tests as envelopes of the kernel's form, with messages
-of ours. The real proof is the real run's, on a tmux home that lost its session; these files are
-replaced by its recordings when it has them.

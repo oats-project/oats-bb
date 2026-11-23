@@ -57,7 +57,6 @@ const started = z.object({
   harness: z.string().nullable(),
   model: z.string().nullable(),
   warnings: z.array(z.string()),
-  resume: z.object({ resumed: z.boolean(), reason: z.string().nullable(), waiting: z.string().nullable() }).nullable(),
 }) satisfies z.ZodType<Started>;
 
 /** A harness and a model as a caller may name them: kernel/spawn.ts checks each before any process (a harness the provider declares; a model that is no option). */
@@ -68,12 +67,6 @@ const instance = z.object({ instance: instanceName }).strict();
 const apply = { instance: instanceName, revision: z.string(), key };
 /** What a start may choose; left out, the home's recorded launch stands and nothing is passed. */
 const choices = { harness: harness.optional(), model: model.optional() };
-/**
- * A start alone may ask for a RESUME: the start of a home whose session was lost, in the harness's
- * own last conversation. Sent only as `true`, by a dialog that said so; never beside a harness or
- * a model (the kernel takes none with it).
- */
-const resume = { resume: z.literal(true).optional() };
 
 /**
  * What the Start and Restart dialogs show before the act ("Checking instance…"): the agent as the
@@ -92,13 +85,11 @@ const startCheck = z.object({
   runtimeError: z.string().nullable(),
   /** How the kernel's row says its session ended, where it says: "stopped" (an operator's stop) or "lost" (with the host, or its harness gone). */
   sessionEnd: z.string().nullable(),
-  /** Where its session runs, as the kernel's row says: "bb", "tmux". A start of a tmux home opens no bb thread, and one that was lost can be resumed. */
-  backend: z.string().nullable(),
   /** The harnesses a start may name (the provider's declared list: contract/spawn.ts `spawnHarnesses`); with one or none, no choice is offered. */
   harnesses: z.array(z.string()),
 });
-/** The thread the agent is in after the act (null for a home that is not on bb: it has none), and what the kernel said of the start. */
-const startedIn = started.extend({ threadId: z.string().nullable() });
+/** The thread the agent is in after the act, and what the kernel said of the start. */
+const startedIn = started.extend({ threadId: z.string() });
 
 /**
  * The retire plan as the dialog reads it: the kernel's plan, and the harness the kernel's own
@@ -119,7 +110,7 @@ export const rpc = defineRpcContract({
   stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlanRead },
   stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceipt },
   startCheck: { input: instance, output: startCheck },
-  start: { input: z.object({ instance: instanceName, ...choices, ...resume }).strict(), output: startedIn },
+  start: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
   restart: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
   retirePlan: { input: instance, output: retirePlanRead },
   retireApply: { input: z.object({ ...apply, discardWorktree: z.boolean().optional() }).strict(), output: retireReceipt },
@@ -130,7 +121,7 @@ const hostStart = z.object({ ...hostHome.shape, ...choices }).strict();
 export const host = defineRpcContract({
   stopPlan: { experimental_retryable: true, input: z.object({ ...hostInstance.shape, recursive: z.boolean().optional() }).strict(), output: answer(stopPlan) },
   stopApply: { input: z.object({ ...hostApply.shape, recursive: z.boolean().optional() }).strict(), output: answer(stopReceipt) },
-  start: { input: z.object({ ...hostStart.shape, ...resume }).strict(), output: answer(started) },
+  start: { input: hostStart, output: answer(started) },
   restart: { input: hostStart, output: answer(started) },
   /** Not retryable: each retire plan appends one `retire-planned` event to the workspace log. */
   retirePlan: { input: hostInstance, output: answer(retirePlan) },

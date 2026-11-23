@@ -11,7 +11,6 @@ import type { Handlers, HostCore } from "./core.js";
  * With no harness named nothing more is asked.
  */
 async function begin(oats: Oats, verb: "start" | "restart", home: string, choices: StartChoices, signal: AbortSignal) {
-  // (A resume names no harness: the kernel's argv refuses one beside it before any process.)
   if (choices.harness === undefined) return oats[verb](home, signal, choices);
   const declared = await oats.spawnHarnesses(signal);
   if (!declared.ok) return declared;
@@ -22,7 +21,7 @@ export const handlers = (core: HostCore): Handlers<typeof host> => ({
   stopPlan: ({ instance, recursive, ...base }, context) => core.run(base, context, (oats) => oats.stopPlan(instance, context.signal, recursive !== false)),
   stopApply: ({ instance, revision, key, recursive, ...base }, context) =>
     core.run(base, context, (oats) => oats.stopApply({ instance, revision, key, recursive: recursive !== false }, context.signal)),
-  start: ({ home, harness, model, resume, ...base }, context) => core.run(base, context, (oats) => begin(oats, "start", home, { harness, model, ...(resume === true ? { resume: true } : {}) }, context.signal)),
+  start: ({ home, harness, model, ...base }, context) => core.run(base, context, (oats) => begin(oats, "start", home, { harness, model }, context.signal)),
   restart: ({ home, harness, model, ...base }, context) => core.run(base, context, (oats) => begin(oats, "restart", home, { harness, model }, context.signal)),
   retirePlan: ({ instance, ...base }, context) => core.run(base, context, (oats) => oats.retirePlan(instance, context.signal)),
   retireApply: ({ instance, revision, key, discardWorktree, ...base }, context) =>

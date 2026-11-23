@@ -6,7 +6,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import type { Agent, ThreadWhere } from "../../model/types";
-import { useNow } from "../roster/now";
 import { attempt, onWindowReset } from "../store";
 
 /** bb's answer for an id that was asked: it has the thread archived, or it has no archived thread of that id. */
@@ -78,6 +77,33 @@ export function useArchived(ids: readonly string[], token: string): ReadonlyMap<
 
 const NO_ONE: readonly Agent[] = [];
 
+// The minute, ONE for the app window: every place that reads the roster asks with the same token,
+// so bb is asked once whatever number of places are drawn (each place's own clock would give each
+// its own minute for most of every minute, and one request per place). One interval, while a place listens.
+let minute = Math.floor(Date.now() / 60_000);
+const minuteListeners = new Set<() => void>();
+let minuteTimer: ReturnType<typeof setInterval> | null = null;
+function onMinute(listener: () => void): () => void {
+  minuteListeners.add(listener);
+  minuteTimer ??= setInterval(() => {
+    const now = Math.floor(Date.now() / 60_000);
+    if (now === minute) return;
+    minute = now;
+    for (const each of [...minuteListeners]) each();
+  }, 5_000);
+  return () => {
+    minuteListeners.delete(listener);
+    if (minuteListeners.size === 0 && minuteTimer !== null) {
+      clearInterval(minuteTimer);
+      minuteTimer = null;
+    }
+  };
+}
+const minuteNow = () => minute;
+onWindowReset(() => {
+  minute = Math.floor(Date.now() / 60_000);
+});
+
 /**
  * What bb says of the thread each agent's row names, for `useOats()`, which gives it to the one
  * state function and to `view()`: a function of the roster's `agents`, bb's `listed` threads by id
@@ -88,10 +114,10 @@ const NO_ONE: readonly Agent[] = [];
  * - one it does not list: "archived" or "missing" by bb's answer, "unknown" until it has answered.
  */
 export function useThreadWhere(agents: readonly Agent[] | undefined, listed: ReadonlyMap<string, { isArchived: boolean }>, at: string): (agent: Agent) => ThreadWhere {
-  const minute = Math.floor(useNow(60_000) / 60_000);
+  const minuteOfWindow = useSyncExternalStore(onMinute, minuteNow);
   const roster = agents ?? NO_ONE;
   const ids = useMemo(() => roster.flatMap((agent) => (agent.backend === "tmux" || agent.threadId === null || listed.has(agent.threadId) ? [] : [agent.threadId])), [roster, listed]);
-  const archived = useArchived(ids, `${at} ${minute}`);
+  const archived = useArchived(ids, `${at} ${minuteOfWindow}`);
   return useMemo(
     () => (agent: Agent) => {
       if (agent.backend === "tmux" || agent.threadId === null) return "none";

@@ -15,7 +15,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { run } from "../lifecycle/acts";
-import { lineActs, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
+import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button, KernelSays, LINK, plainClick, StatusLine } from "../ui";
@@ -61,7 +61,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // the instance panel reads too. Asked for this thread's agent alone, and only while it is
   // stopped; a hook, so it is called at every render, before any early return.
   const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  const stopped = mine !== undefined && agentStatus(mine.agent, mine.thread, now, "open").state === "stopped"; // drawn on its thread: bb lists it
+  // (An agent that runs outside OATS was recorded stopped too: the same event says since when.)
+  const recorded = mine === undefined ? null : agentStatus(mine.agent, mine.thread, now).state;
+  const stopped = recorded === "stopped" || recorded === "outside";
   const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
   // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
   // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
@@ -87,8 +89,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
-  const read = agentStatus(agent, node.thread, now, oats.whereOf(agent));
-  const status = read.state === "stopped" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
+  const read = agentStatus(agent, node.thread, now);
+  const status = read.state === "stopped" || read.state === "outside" ? { ...read, since: stoppedSince(events.data?.events, agent.startedAt ?? null, now) } : read;
   const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
   const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
   const children = oats.agents.filter((other) => other.parent === agent.instance).length;
@@ -141,9 +143,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       ) : (
         <StatusLine
           state={status.state}
-          since={status.since}
-          detail={said?.sentence ?? status.detail}
-          detailTone={said?.sentence != null && said.tone === "warning" ? "warning" : undefined}
+          {...lineParts(said, status)}
           action={
             <>
               {saidActs === undefined ? act : saidActs}

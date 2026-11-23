@@ -163,7 +163,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
   // bb thread has none to give it.
-  const status = agentStatus(agent, node?.thread ?? null, now, oats.whereOf(agent));
+  const status = agentStatus(agent, node?.thread ?? null, now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (
@@ -181,8 +181,6 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
           <KernelSays text={status.kernel} />
         </div>
-        {/* What happened to it outside OATS (app/outside): the kernel's report; and for an agent with no thread to carry them, what happened and its acts. */}
-        <OutsideAgent agent={agent} roster={oats} held={failure !== null} />
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
@@ -206,7 +204,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
       </div>
     </>
   );
@@ -258,12 +256,16 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
   );
 }
 
-function InstancePage({ oats, agent, read, now, state: readState, status }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState }) {
+function InstancePage({ oats, agent, read, now, state: readState, status, held }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean }) {
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
   return (
     <>
+      {/* What happened to it outside OATS (app/outside), first on the page and scrolling with it (the
+          header over the tabs does not scroll, and says the state): the kernel's report with its
+          acts; and for an agent with no thread to carry them, what happened and its acts. */}
+      <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">
           {/* The reason in words; how long it has waited is the header's to say, once. */}

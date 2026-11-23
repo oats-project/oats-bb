@@ -1,22 +1,48 @@
 // The words of what happened to an agent outside OATS (plugin/WORDS.md, "Outside OATS", holds each
-// with the fact it rests on). The state word comes first; then one sentence that names one remedy.
+// with the fact it rests on). The STATE word is one of the plugin's set (Needs you, Working, Idle,
+// Stopped, Failed, Unreachable, and "Running outside OATS": app/ui/words.ts); what is here is the
+// REASON after it: one sentence on the thread's line, with one remedy, and a few words on the
+// sidebar's row, where the reason takes the soul's place.
+import { agentName } from "../ui/words";
 
-/** A stopped agent whose thread bb has archived: the fact after "Stopped". */
-export const ARCHIVED_FACT = "Its conversation is archived in bb";
+// ---- a stopped agent
+
 /**
- * A stopped agent whose thread is OPEN: bb's composer is live under it, and a message typed there
- * starts the agent again without OATS knowing (OATS keeps saying "stopped"). The interim warning:
- * it stays for as long as a stop leaves the thread open, and after that for a home stopped before
- * the provider archived at stop, and for a thread a person unarchived.
+ * Stopped by an operator, its thread OPEN: bb's composer is live under it, and a message typed
+ * there starts the agent again without OATS knowing (OATS keeps saying "stopped"). The interim
+ * warning: it stays for as long as a stop leaves the thread open, and after that for a home stopped
+ * before the provider archived at stop, and for a thread a person unarchived.
  */
 export const STOPPED_OPEN = "A message sent here in bb starts it again without OATS. Use Start.";
+/**
+ * The same where the line's state is not "Stopped": bb holds a question on the thread of an agent
+ * OATS stopped, so the line says "Needs you", and an answer typed there is such a message. The
+ * sentence then says first what OATS recorded.
+ */
+export const STOPPED_OPEN_ASKING = `OATS recorded it stopped. ${STOPPED_OPEN}`;
+
 /**
  * Stopped WITH THE HOST (the machine went down, or `oats host run` stopped it as the machine
  * stopped): OATS resumes it by itself when the machine is back. No warning: nothing is wrong.
  */
 export const STOPPED_HOST = "with the machine. OATS starts it again when the machine is back.";
-/** The same on a sidebar's row, after the soul: it tells this row from an operator's stop, which says nothing there. */
 export const STOPPED_HOST_NOTE = "with the machine";
+
+/** Stopped by an operator, and bb has its thread archived (what a stop leaves once the provider archives at stop): the fact, and the row opens the conversation to read. */
+export const ARCHIVED_FACT = "Its conversation is archived in bb";
+/** The reason on a row, for every agent whose thread bb has archived. */
+export const ARCHIVED_NOTE = "archived in bb";
+
+/** OATS lost its session, and bb has the thread archived: bb's Archive never ends the harness. */
+export const LOST_ARCHIVED = "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.";
+
+/** bb has no thread of its id (deleted in bb), whether OATS stopped it or lost its session: bb's Delete ends the harness. */
+export const DELETED = "Its conversation was deleted in bb. Start it from OATS for a new one.";
+/** The reason on a row, for every agent whose thread bb no longer has. */
+export const DELETED_NOTE = "deleted in bb";
+
+// ---- an agent that is not stopped
+
 /**
  * Its session is there and no harness is loaded (a reboot on a host without `oats host run`, or bb
  * let the harness exit): an idle agent. A message in its thread carries the conversation on, and
@@ -24,30 +50,22 @@ export const STOPPED_HOST_NOTE = "with the machine";
  */
 export const NOT_LOADED = "not loaded. To carry on, send it a message here. Start begins a new conversation.";
 export const NOT_LOADED_NOTE = "not loaded";
-/** The same, as the few words a sidebar's row has room for. */
-export const ARCHIVED_NOTE = "its conversation is archived in bb";
-/** The link, on the agent's own page and in a notice, that opens the archived thread to read it. */
-export const READ_ARCHIVED = "Read it in bb";
-
-/** A session OATS lost because its thread was archived in bb (the state "archived", whose word is "Archived in bb": app/ui/words.ts): the sentence after it. */
-export const LOST_ARCHIVED = "OATS lost its session, and its process still runs. Stop it, then start it from OATS.";
-export const LOST_ARCHIVED_NOTE = "OATS lost its session";
-
-/** A session OATS lost because its thread was deleted in bb (the state "deleted", "Deleted in bb"): the sentence after it. */
-export const LOST_DELETED = "Its conversation is gone. Start it from OATS for a new one.";
-export const LOST_DELETED_NOTE = "its conversation is gone";
-
-/** A stopped agent whose thread was deleted in bb afterwards (no row of the kernel's says it: bb's answer alone). */
-export const STOPPED_DELETED = "Its conversation was deleted in bb. Start it from OATS for a new one.";
-export const DELETED_NOTE = "its conversation was deleted in bb";
 
 /** A failed agent (its session ended) on a thread that is open: a message there starts it again, and status then sees it. */
 export const FAILED_OPEN = "Its session ended. Restart it, or send a message here.";
 
-/** The kernel's `outsideOats` report: the notice's title and the row's few words; its sentence is the kernel's own message. */
-export const OUTSIDE_TITLE = "Running outside OATS";
-export const OUTSIDE_NOTE = "running outside OATS";
+// ---- the kernel's report: "Running outside OATS" is its state (app/ui/words.ts)
 
-/** An agent on a session provider that OATS names no thread for, or whose thread bb lists but does not show. */
-export const NO_THREAD_NOTE = "it has no bb thread";
-export const NOT_SHOWN_NOTE = "its bb thread is not shown";
+/** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
+export const OUTSIDE_RECORDED = "recorded stopped";
+/** The notice, in a person's words: what is so, what happened, what to do. The kernel's own sentence and its code are behind Details. */
+export const outsideTitle = (instance: string): string => `${agentName(instance)} is running in bb, but OATS recorded it as stopped.`;
+export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
+/** What each of the notice's two acts does here. */
+export const OUTSIDE_STOP = "stops the harness that runs outside OATS";
+export const OUTSIDE_START = "starts it from OATS, in a new conversation";
+
+// ---- a row the tree draws on no thread, in any other state: where its thread is
+
+export const NO_THREAD_NOTE = "no bb thread";
+export const NOT_SHOWN_NOTE = "thread not shown in bb";

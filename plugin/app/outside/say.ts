@@ -1,29 +1,32 @@
 // What the plugin says when something happened to an OATS agent outside OATS: ONE pure function of
 // the kernel's row and of bb's own answer for the row's thread. The sidebar's row, the thread's
-// line (and the home's card) draw what it answers, so they say one thing.
+// line and the instance panel's header draw what it answers, so they say one thing.
+//
+// The STATE is never named here. It is the one state function's (`state`, model/view.ts), and its
+// word is one of the plugin's set (app/ui/words.ts): Needs you, Working, Idle, Stopped, Failed,
+// Unreachable, and "Running outside OATS" for a row with the kernel's report. What this adds to a
+// state is the REASON: the sentence after it on the thread's line, the few words that take the
+// soul's place on the sidebar's row, whether it is said in the warning tone, and the acts.
 //
 // What it reads, and nothing else (nothing is derived from words):
 // - the agent's row of `oats status --json`, as the plugin's `Agent` holds it: `running`,
 //   `runtimeState`, `session.threadId`, `sessionEnd` and `outsideOats`;
-// - bb's answer for that thread id: open, archived, missing (deleted), or not known yet.
+// - bb's answer for that thread id (`Oats.whereOf`): open, archived, missing (deleted), or not known yet.
 // "Archived" is told from "deleted" by bb's answer alone, never by the kernel's message.
 import type { Agent, OutsideOats, ThreadWhere } from "../../model/types";
-import { state } from "../../model/view";
+import { recordedStopped, state } from "../../model/view";
 import {
   ARCHIVED_FACT,
   ARCHIVED_NOTE,
+  DELETED,
   DELETED_NOTE,
   FAILED_OPEN,
   LOST_ARCHIVED,
-  LOST_ARCHIVED_NOTE,
-  LOST_DELETED,
-  LOST_DELETED_NOTE,
   NO_THREAD_NOTE,
-  NOT_SHOWN_NOTE,
-  OUTSIDE_NOTE,
   NOT_LOADED,
   NOT_LOADED_NOTE,
-  STOPPED_DELETED,
+  NOT_SHOWN_NOTE,
+  OUTSIDE_RECORDED,
   STOPPED_HOST,
   STOPPED_HOST_NOTE,
   STOPPED_OPEN,
@@ -32,51 +35,51 @@ import {
 export type Act = "stop" | "start" | "retire";
 
 export type Kind =
-  /** OATS recorded it stopped and a harness runs in it: the kernel's own report. */
+  /** OATS recorded it stopped and a harness runs in it: the kernel's own report. Its state is "Running outside OATS". */
   | "outside"
   /** Stopped by an operator, on a thread that is open: a message there starts it again without OATS. */
   | "stopped-open"
   /** Stopped with the host, on a thread that is open: OATS starts it again by itself. */
   | "stopped-host"
+  /** Stopped by an operator, and bb has its thread archived: what a stop leaves once the provider archives at stop. */
+  | "stopped-archived"
+  /** OATS lost the session and bb has the thread archived: its process may still run. */
+  | "lost-archived"
+  /** bb has no thread of its id: deleted in bb, whether OATS stopped it or lost its session. */
+  | "deleted"
   /** Idle with no harness loaded, on a thread that is open: a message there carries the conversation on. */
   | "idle-unloaded"
-  /** Stopped, and bb has its thread archived: what a stop leaves once the provider archives at stop. */
-  | "stopped-archived"
-  /** Stopped, and its thread was deleted in bb. */
-  | "stopped-deleted"
-  /** OATS lost the session and bb has the thread archived: its process still runs. */
-  | "lost-archived"
-  /** OATS lost the session and bb has no such thread: bb ended the process with it. */
-  | "lost-deleted"
   /** Its session ended and its thread is open. */
   | "failed-open"
-  /** Not a state of its own: only where its thread is (a row with no thread to open). */
+  /** Not a reason of its own: only where its thread is (a row with no thread to open). */
   | "threadless";
 
 export type Said = {
   kind: Kind;
-  /** The sentence after the state word on the thread's line; null: the roster's own. */
+  /** The reason after the state word on the thread's line: one sentence, one remedy; null: the roster's own. */
   sentence: string | null;
-  /** "warning": the sentence warns of something a person may do by mistake (a message that starts a stopped agent without OATS), and is drawn in the warning tone; "plain": it says how things are. */
+  /** "warning": the line is said in the warning tone (the state's mark and the sentence): a remedy is needed, or a person may do the wrong thing; "plain": it says how things are. */
   tone: "warning" | "plain";
-  /** The few words after the soul on the sidebar's row; null: none. */
+  /** The reason on the sidebar's row, in the soul's place (a row is never three lines); "": nothing after the state's word; null: the soul. */
   note: string | null;
-  /** The kernel's report, said loudly (the warning tone) under the line; null: none. */
+  /** "warning": the row's mark is drawn in the warning tone (a stopped agent that needs a remedy); "plain": the state's own mark. */
+  rowTone: "warning" | "plain";
+  /** The kernel's report, for the notice under the line; null: none. */
   warning: OutsideOats | null;
   /**
    * The acts this feature itself offers, in order: the two of the kernel's report's notice (Stop,
-   * Start) and Start on the line of an agent that is not loaded. null: the acts are the
-   * lifecycle's own for the agent's state (the line's own act; `AgentActs` for an agent with no
-   * listed thread).
+   * Start), Start on the line of an operator's stop and of an agent that is not loaded, Stop for
+   * a session lost to bb's Archive. null: the acts are the lifecycle's own for the agent's state (the line's own act;
+   * `AgentActs` for an agent with no listed thread).
    */
   acts: readonly Act[] | null;
   /** Whether bb still has the conversation, archived, to read. */
   archived: boolean;
 };
 
-const base = { sentence: null, tone: "plain", note: null, warning: null, acts: null, archived: false } as const;
+const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false } as const;
 
-/** The note of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
+/** The reason of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {
   switch (where) {
     case "archived":
@@ -96,55 +99,58 @@ function whereNote(where: ThreadWhere): string | null {
  * What to say of one agent, or null where the roster's own words stand (an agent on tmux, one that
  * runs, one the kernel cannot reach).
  *
- * The STATE is never named here: it is the one state function's (`state`, model/view.ts), which
- * this reads with the same `where`. What this adds to a state is its sentence, the few words of its
- * row, the acts that mend it, and the kernel's report.
+ * `where` is bb's answer for the row's thread; `attached`: whether the roster draws the agent on
+ * its bb thread (a row that opens the thread). An agent it does not (its thread archived, deleted,
+ * hidden or another's) always gets a `note` that says where its thread is, once bb has answered.
  *
- * `where` is bb's answer for the row's thread (`Oats.whereOf`); `attached`: whether the roster
- * draws the agent on its bb thread (a row that opens the thread). An agent it does not (its thread
- * archived, deleted, hidden or another's) always gets a `note` that says where its thread is, once
- * bb has answered.
- *
- * First match wins:
- * 1. `outsideOats` on the row: the kernel's message, whatever bb says of the thread. Stop, Start.
- * 2. the state "archived" (a session lost, the thread archived in bb): to stop it, then start it.
- * 3. the state "deleted" (a session lost, no such thread in bb): to start it.
- * 4. the state "error" (its session ended in a shell) on an open thread: that a message there starts it again.
- * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted;
- *    on an open thread, by how the kernel says the session ended: an OPERATOR's stop
- *    (`sessionEnd: "stopped"`, and only that) takes the interim warning that a message there
- *    starts it without OATS; one stopped WITH THE HOST (`sessionEnd: "lost"`) says that OATS starts
- *    it again by itself.
- * 6. the state "idle" of a row the kernel calls not running (`running: false` beside
- *    `runtimeState: "unknown"`: no harness is loaded), on an open thread: that a message there
- *    carries the conversation on, and that Start begins a new one. Start.
+ * By the agent's state, as the one state function gives it (without bb's own question on its
+ * thread, which the roster says first):
+ * - "outside" (the kernel's report): that OATS recorded it stopped; the notice has Stop and Start.
+ * - "error" on an open thread: that a message there starts it again.
+ * - "stopped", by bb's answer and by how the kernel says the session ended:
+ *   - bb has no such thread: that it was deleted; to start it for a new one. A warning.
+ *   - bb has it archived, and OATS LOST the session (`sessionEnd: "lost"`): bb's Archive never
+ *     ends the harness, so its process may still run; to stop it, then start it. A warning, with Stop.
+ *   - bb has it archived, otherwise: the fact, and the way to it (what a stop leaves once the provider archives).
+ *   - its thread is open, and an OPERATOR stopped it (`sessionEnd: "stopped"`, and only that): the
+ *     interim warning that a message there starts it without OATS.
+ *   - its thread is open, and it stopped WITH THE HOST (`sessionEnd: "lost"`): that OATS starts it again by itself.
+ * - "idle" of a row the kernel calls not running (`running: false` beside `runtimeState:
+ *   "unknown"`: no harness is loaded), on an open thread: that a message there carries the
+ *   conversation on, and that Start begins a new one. Start.
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said | null {
   if (agent.backend === "tmux") return null;
   const note = attached ? null : whereNote(where);
   const archived = where === "archived";
-  if (agent.outsideOats != null) return { ...base, kind: "outside", tone: "warning", note: OUTSIDE_NOTE, warning: agent.outsideOats, acts: ["stop", "start"], archived };
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
-  // The agent's state without bb's own question on its thread (the roster says that first): what OATS and bb say of the session.
-  switch (state(agent, null, where)) {
-    case "archived":
-      return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, note: LOST_ARCHIVED_NOTE, archived };
-    case "deleted":
-      return { ...base, kind: "lost-deleted", sentence: LOST_DELETED, note: LOST_DELETED_NOTE };
+  switch (state(agent, null)) {
+    case "outside":
+      // Its row says the state alone: the words fill the row's one line, and say what is wrong.
+      // `outsideOats` is set (the state function's own test).
+      return { ...base, kind: "outside", sentence: OUTSIDE_RECORDED, tone: "warning", note: "", warning: agent.outsideOats ?? null, acts: ["stop", "start"], archived };
     case "error":
       return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
-    case "stopped":
-      if (where === "archived") return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, archived };
-      if (where === "missing") return { ...base, kind: "stopped-deleted", sentence: STOPPED_DELETED, note: DELETED_NOTE };
-      // THE GATE (the one place): whether the bb session provider archives the thread of a home it
-      // stops is `stopArchivesThread(providerVersion)` of app/lifecycle/words.ts, which is not on
-      // main yet. Until it is, and for every provider version, a stop leaves the thread open, and
-      // the warning is said of every stopped agent on an open thread. With it, the same sentence
-      // stays for exactly this case (a home stopped before the provider archived, or a thread a
-      // person unarchived): the gate then changes no word here, only what the stop's dialog says.
-      if (where === "open" && attached && agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning" };
-      if (where === "open" && attached && agent.sessionEnd === "lost") return { ...base, kind: "stopped-host", sentence: STOPPED_HOST, note: STOPPED_HOST_NOTE };
+    case "stopped": {
+      if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
+      const lost = agent.sessionEnd === "lost" && recordedStopped(agent);
+      if (where === "archived") {
+        if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
+        return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, archived };
+      }
+      if (where === "open" && attached) {
+        // THE GATE (the one place): whether the bb session provider archives the thread of a home
+        // it stops is `stopArchivesThread(providerVersion)` (app/lifecycle/words.ts). It changes no
+        // word here: before the provider archives at stop, every operator's stop leaves the thread
+        // open; after it, an open thread under a stopped agent is a home stopped before that
+        // release or a thread a person unarchived, and the warning stays for exactly that case.
+        // Start is this feature's on that line, so that the line has the act its sentence names
+        // whatever its state's word is (bb's own question on the thread makes it "Needs you").
+        if (agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning", acts: ["start"] };
+        if (lost) return { ...base, kind: "stopped-host", sentence: STOPPED_HOST, note: STOPPED_HOST_NOTE };
+      }
       return threadless;
+    }
     case "idle":
       // The kernel's own word that no harness runs: `running: false` (an idle agent whose harness may be loaded reads `null`).
       if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };

@@ -14,11 +14,11 @@ import { usePanelEvents } from "../panel/read";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
-import type { Agent, ThreadWhere } from "../../model/types";
+import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { OUTSIDE_TITLE } from "./words";
+import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
 
 const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
 
@@ -51,41 +51,74 @@ export function lineActs(said: Said | null, instance: string, held: boolean): Re
   return <OutsideActs instance={instance} acts={said.acts} held={held} />;
 }
 
+/** The state each reason is said after: `said()` reads the agent's state without bb's own question on its thread. */
+const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "stopped-host": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
+
+/**
+ * What a status line says after the state's word, where this feature has a reason for it: the
+ * fact or the sentence, since when, and whether the line warns. `status` is the roster's own
+ * (`agentStatus`, with the time of a stopped agent's last stop where the place read it).
+ * - the kernel's report: "recorded stopped since 14:03" (the time is of what OATS recorded, so it
+ *   is part of that fact and not of the state "Running outside OATS");
+ * - any other reason, on a line whose state is the one the reason follows: the time first, then the sentence;
+ * - a line whose state is another (bb holds a question on the thread, so it says "Needs you"): the
+ *   roster's own words, which say what the agent asks. But for an operator's stop, where an answer
+ *   typed in the thread is the message that starts the agent without OATS: the warning, saying
+ *   first what OATS recorded;
+ * - none: the roster's own.
+ */
+export function lineParts(said: Said | null, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined } {
+  const own = { since: status.since, detail: status.detail, tone: undefined };
+  if (said === null || said.sentence === null) return own;
+  const tone = said.tone === "warning" ? "warning" : undefined;
+  if (AFTER[said.kind] !== status.state) return said.kind === "stopped-open" ? { since: null, detail: STOPPED_OPEN_ASKING, tone } : own;
+  if (said.kind === "outside") return { since: null, detail: status.since === null ? said.sentence : `${said.sentence} ${status.since}`, tone };
+  return { since: status.since, detail: said.sentence, tone };
+}
+
 /**
  * The acts of an agent the roster draws on no thread (its thread archived or deleted in bb), for
  * the place that shows that agent (its archived thread's row, its own page): the lifecycle's own
- * buttons for its state (`AgentActs`: what mends it, and Retire). Where the kernel also reports it
- * running outside OATS, its Stop and Start are in the report's notice, and Retire alone is here.
+ * buttons for its state (`AgentActs`: Start and Retire for a stopped agent). Two rows read
+ * "stopped" to OATS while a process runs, and their acts are this feature's: a session lost to
+ * bb's Archive (Stop, then Retire; Start comes once it is stopped), and the kernel's report, whose
+ * Stop and Start are in its notice (Retire alone is here).
  */
 export function DetachedActs({ said, instance, held }: { said: Said | null; instance: string; held: boolean }) {
   if (said !== null && said.warning !== null) return <OutsideActs instance={instance} acts={["retire"]} held={held} />;
+  if (said !== null && said.kind === "lost-archived") return <OutsideActs instance={instance} acts={["stop", "retire"]} held={held} />;
   return <AgentActs instance={instance} />;
 }
 
 /**
- * The kernel's report that a harness runs in a home OATS recorded stopped, said loudly: a notice
- * in the warning tone, titled in a person's words, with the kernel's own message as its sentence
- * (through the display filter), its code after, and the two acts that mend it, Stop and Start.
- * Nothing where the kernel reports nothing.
+ * The kernel's report that a harness runs in a home OATS recorded stopped, as a notice in the
+ * warning tone, in a person's words: what is so (its title), what happened and what to do, and the
+ * two acts that mend it, each with what it does here. The kernel's own sentence and its code are
+ * one press away, under Details, through the display filter: no command is on screen where the two
+ * buttons do the same. Nothing where the kernel reports nothing.
  */
 export function OutsideWarning({ said, instance, held }: { said: Said | null; instance: string; held: boolean }) {
   if (said === null || said.warning === null) return null;
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
-      <Notice title={OUTSIDE_TITLE} tone="warning" code={said.warning.code} actions={<OutsideActs instance={instance} acts={said.acts ?? ["stop", "start"]} held={held} />}>
-        <p>{shown(said.warning.message)}</p>
+      <Notice title={outsideTitle(instance)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
+        <p>{OUTSIDE_WHAT}</p>
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {(
+            [
+              ["stop", OUTSIDE_STOP],
+              ["start", OUTSIDE_START],
+            ] as const
+          ).map(([act, does]) => (
+            <li key={act} data-testid="oats-outside-act" className="flex min-w-0 flex-wrap items-center gap-2">
+              <OutsideActs instance={instance} acts={[act]} held={held} />
+              <span className="min-w-0 break-words text-muted-foreground">{does}</span>
+            </li>
+          ))}
+        </ul>
       </Notice>
     </div>
   );
-}
-
-/**
- * The mark of the kernel's report on a row of the sidebar, where a notice has no room: a dot in the
- * warning tone (bb's token for coloured text, which holds 3:1 on a row, open or hovered, in both
- * themes), named by the notice's title. The row's words say it too.
- */
-export function OutsideMark() {
-  return <span role="img" aria-label={OUTSIDE_TITLE} title={OUTSIDE_TITLE} data-testid="oats-outside-mark" data-mark="" className="inline-block size-2 shrink-0 rounded-full bg-warning-text" />;
 }
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
@@ -100,18 +133,18 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const navigate = useBbNavigate();
   const now = useNow();
   const agent = outside.agentOn(threadId);
-  const status = agent === undefined || oats.phase !== "ready" ? null : agentStatus(agent, null, now, oats.whereOf(agent));
+  const status = agent === undefined || oats.phase !== "ready" ? null : agentStatus(agent, null, now);
   const said = agent === undefined ? null : outside.of(agent);
   // A stopped agent's time is its last recorded stop, as on the roster's own row: one read, for this
-  // agent, and only where its state is "stopped" (a lost session's state is what happened to it).
-  const timed = status?.state === "stopped";
+  // agent, where OATS recorded a stop (the kernel's report rests on one too).
+  const timed = status?.state === "stopped" || status?.state === "outside";
   const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
   const held = oats.stale !== null;
   // The thread's menu is bb's, and the lifecycle's entries in it are for a thread the roster draws
   // an agent on: this thread is none, so the agent's acts are here, Retire among them.
   const acts = <DetachedActs said={said} instance={agent.instance} held={held} />;
-  const since = timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null;
+  const parts = lineParts(said, { state: status.state, since: timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null, detail: status.detail });
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
       <span data-testid="oats-outside-agent" className="min-w-0 break-words font-semibold">
@@ -119,8 +152,9 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
       </span>
       <StatusLine
         state={status.state}
-        since={since}
-        detail={said?.sentence ?? status.detail}
+        since={parts.since}
+        detail={parts.detail}
+        tone={parts.tone}
         action={
           <>
             {acts}
@@ -139,8 +173,8 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
 }
 
 /**
- * For the place that shows ONE agent and is not its thread (the instance panel's header, on the
- * agent's own page and in the thread's tab), under its state:
+ * For the place that shows ONE agent and is not its thread (the instance panel: first on its
+ * Instance tab's page, under the header that says its state):
  * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
  *   happened in one sentence, and its acts, since it has no thread's line to carry them;
  * - of any agent: the kernel's report, with its acts.
@@ -154,7 +188,8 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   if (said === null || (attached && said.warning === null)) return null;
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
-      {attached || said.sentence === null ? null : <p className="m-0 min-w-0 break-words text-muted-foreground">{said.sentence}</p>}
+      {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}
+      {attached || said.sentence === null || said.warning !== null ? null : <p className="m-0 min-w-0 break-words text-muted-foreground">{said.sentence}</p>}
       {attached ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <DetachedActs said={said} instance={agent.instance} held={held} />

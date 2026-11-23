@@ -165,23 +165,23 @@ describe("A1 view(): the tree", () => {
 describe("A2 state(): first match wins", () => {
   const t = thread("t");
   test("one case per state, in order", () => {
-    expect(state(agent("a", { waiting: claim }), t, "open")).toBe("needs-you");
-    expect(state(agent("a", { runtimeState: "unreachable", running: true }), t, "open")).toBe("unreachable");
-    expect(state(agent("a", { runtimeState: "stopped", running: true }), t, "open")).toBe("stopped");
-    expect(state(agent("a", { runtimeState: "shell", running: true }), t, "open")).toBe("error");
-    expect(state(agent("a", { running: true }), t, "open")).toBe("working");
-    expect(state(agent("a", { running: null }), t, "open")).toBe("idle");
+    expect(state(agent("a", { waiting: claim }), t)).toBe("needs-you");
+    expect(state(agent("a", { runtimeState: "unreachable", running: true }), t)).toBe("unreachable");
+    expect(state(agent("a", { runtimeState: "stopped", running: true }), t)).toBe("stopped");
+    expect(state(agent("a", { runtimeState: "shell", running: true }), t)).toBe("error");
+    expect(state(agent("a", { running: true }), t)).toBe("working");
+    expect(state(agent("a", { running: null }), t)).toBe("idle");
     // A provider row the kernel calls not running beside the word "unknown": its session is there and no
     // harness is loaded. Not stopped (the spec's author, 2026-11-23): Stopped is said of a provider row
     // only when its word is "stopped" (test/outside/say.test.ts holds what the row then says).
-    expect(state(agent("a", { running: false }), t, "open")).toBe("idle");
+    expect(state(agent("a", { running: false }), t)).toBe("idle");
   });
   test("an unknown runtimeState word is idle", () => {
-    expect(state(agent("a", { runtimeState: "hibernating" }), t, "open")).toBe("idle");
-    expect(state(agent("a", { runtimeState: null }), t, "open")).toBe("idle");
+    expect(state(agent("a", { runtimeState: "hibernating" }), t)).toBe("idle");
+    expect(state(agent("a", { runtimeState: null }), t)).toBe("idle");
   });
   test("a pending interaction with no claim is needs-you", () => {
-    expect(state(agent("a"), thread("t", { hasPendingInteraction: true }), "open")).toBe("needs-you");
+    expect(state(agent("a"), thread("t", { hasPendingInteraction: true }))).toBe("needs-you");
   });
   // The gate is the Desktop's: awebai/oats packages/client/waiting-on-you.mjs `waitingClaim`, at 95c7b43b3.
   // This test held "a claim wins over stopped" until 2026-11-21, when the spec's author changed A2:
@@ -189,31 +189,45 @@ describe("A2 state(): first match wins", () => {
   // stopped case is a rule for the type, unseen in a real run.
   test("a claim wins over unreachable and error; a row the kernel calls stopped shows no claim, unless bb holds a question on its thread", () => {
     for (const runtimeState of ["unreachable", "shell"]) {
-      expect(state(agent("a", { waiting: claim, runtimeState, running: false }), t, "open")).toBe("needs-you");
+      expect(state(agent("a", { waiting: claim, runtimeState, running: false }), t)).toBe("needs-you");
     }
-    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), t, "open")).toBe("stopped");
-    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), thread("t", { hasPendingInteraction: true }), "open")).toBe("needs-you");
+    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), t)).toBe("stopped");
+    expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), thread("t", { hasPendingInteraction: true }))).toBe("needs-you");
   });
-  // The claim's gate and the state use ONE predicate for "the kernel calls this row stopped" (not
-  // running, beside the word "stopped" or no word). A provider's row that is not running beside
-  // "unknown" has its session there with no harness loaded (the kernel's contract for a provider
-  // home's row, v0.70.5; shaped, not recorded: the bb provider prints it from its next release):
-  // it is not stopped, so a question it asked before its harness went away still waits for a person.
-  test("a row that is not running beside \"unknown\" keeps its claim: it needs you, shows the claim, and is counted; beside \"stopped\" or no word it shows none", () => {
+  // The claim's gate and the state use ONE predicate for "the kernel calls this row stopped"
+  // (`recordedStopped`: not running, beside the word "stopped" or no word). A provider's row that is
+  // not running beside "unknown" has its session there with no harness loaded (the kernel's contract
+  // for a provider home's row, v0.70.5; shaped, not recorded: the bb provider prints it from its next
+  // release): it is not stopped, so a question it asked before its harness went away still waits for a person.
+  test("a provider's row that is not running beside \"unknown\" keeps its claim: it needs you, shows the claim, and is counted; beside \"stopped\" or no word it shows none", () => {
     const unloaded = agent("a", { waiting: claim, running: false, runtimeState: "unknown" });
     expect(claimOf(unloaded)).toBe(claim);
-    expect(state(unloaded, t, "open")).toBe("needs-you");
+    expect(state(unloaded, t)).toBe("needs-you");
     expect(view([unloaded], [thread("thr_a")]).needing).toEqual([unloaded]);
     expect(view([unloaded], []).needing).toEqual([unloaded]); // also with no thread listed
     for (const runtimeState of ["stopped", null]) {
       const stopped = agent("a", { waiting: claim, running: false, runtimeState });
       expect(claimOf(stopped)).toBeNull();
-      expect(state(stopped, t, "open")).toBe("stopped");
+      expect(state(stopped, t)).toBe("stopped");
       expect(view([stopped], [thread("thr_a")]).needing).toEqual([]);
     }
   });
+  // The one state that does not come from `running` and `runtimeState`: the kernel's report that a
+  // harness runs in a home OATS recorded stopped (`outsideOats`, feature provider-outside-oats).
+  test("a row with the kernel's outsideOats is \"outside\" before everything else, and is counted among the agents that need a person; a tmux row never is", () => {
+    const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in a on bb" };
+    const outside = agent("a", { running: false, runtimeState: "stopped", outsideOats: report });
+    expect(state(outside, t)).toBe("outside");
+    expect(state(outside, null)).toBe("outside");
+    expect(state({ ...outside, waiting: claim }, thread("t", { hasPendingInteraction: true }))).toBe("outside"); // one statement about it, also while bb holds a question
+    expect(view([outside], [thread("thr_a")]).needing).toEqual([outside]);
+    expect(view([outside], []).needing).toEqual([outside]);
+    expect(view([outside], [thread("thr_a")]).needsYou).toEqual([]); // it does not wait: it runs
+    expect(state({ ...outside, backend: "tmux" }, null)).toBe("stopped");
+    expect(state(agent("a", { running: false, runtimeState: "stopped", outsideOats: null }), t)).toBe("stopped");
+  });
   test("a tmux row shows its claim only while the kernel says it runs", () => {
-    const tmux = (over: Partial<Agent>) => state(agent("a", { backend: "tmux", waiting: claim, ...over }), null, "none");
+    const tmux = (over: Partial<Agent>) => state(agent("a", { backend: "tmux", waiting: claim, ...over }), null);
     expect(tmux({ running: true, runtimeState: null })).toBe("needs-you");
     expect(tmux({ running: true, runtimeState: "running" })).toBe("needs-you");
     expect(tmux({ running: true, runtimeState: "shell" })).toBe("error");
@@ -226,12 +240,12 @@ describe("A2 state(): first match wins", () => {
   // whose harness does not run: `{ running: false }` and no runtimeState (awebai/oats
   // lib/instance-listing.mjs:256, :261 at 95c7b43b3). It read "idle" until then.
   test("an agent the kernel calls not running, with no other word, is stopped: a tmux row as the kernel prints it; a failed or unreachable one is told first", () => {
-    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null }), null, "none")).toBe("stopped");
-    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null, waiting: claim }), null, "none")).toBe("stopped"); // and its claim is not shown
-    expect(state(agent("a", { running: false, runtimeState: null }), t, "open")).toBe("stopped");
-    expect(state(agent("a", { running: false, runtimeState: "shell" }), t, "open")).toBe("error");
-    expect(state(agent("a", { running: false, runtimeState: "unreachable" }), t, "open")).toBe("unreachable");
-    expect(state(agent("a", { running: null, runtimeState: null }), t, "open")).toBe("idle"); // nothing said: idle, as before
+    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null }), null)).toBe("stopped");
+    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null, waiting: claim }), null)).toBe("stopped"); // and its claim is not shown
+    expect(state(agent("a", { running: false, runtimeState: null }), t)).toBe("stopped");
+    expect(state(agent("a", { running: false, runtimeState: "shell" }), t)).toBe("error");
+    expect(state(agent("a", { running: false, runtimeState: "unreachable" }), t)).toBe("unreachable");
+    expect(state(agent("a", { running: null, runtimeState: null }), t)).toBe("idle"); // nothing said: idle, as before
   });
   test("the fixtures: three need you, two work, one is stopped, one is idle and unread", () => {
     const v = view(fixtureAgents(), fixtureThreads());

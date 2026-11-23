@@ -16,11 +16,11 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { Agent, Node, ThreadWhere } from "../../model/types";
+import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
 import { count, needsYouLabel } from "../format";
 import { useOats } from "../oats";
-import { OutsideMark, outsideOf } from "../outside";
+import { outsideOf } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -78,8 +78,6 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const oats = useOats();
   const now = useNow();
   const outside = outsideOf(oats);
-  // What bb says of the thread a row names: the state function reads it for every row.
-  const whereOf = (agent: Agent): ThreadWhere => (oats.phase === "ready" ? oats.whereOf(agent) : "unknown");
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
@@ -127,7 +125,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <span className="flex min-w-0 flex-1 flex-col">
       <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
       {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
-      <span data-testid="oats-row-facts" className="break-words text-xs text-muted-foreground">{`${word} · ${rest}`}</span>
+      <span data-testid="oats-row-facts" className="break-words text-xs text-muted-foreground">{rest === "" ? word : `${word} · ${rest}`}</span>
     </span>
   );
 
@@ -135,9 +133,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     nodes.flatMap((node) => {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
-      const status = agentStatus(node.agent, node.thread, now, whereOf(node.agent));
+      const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
-      // What happened to it outside OATS (app/outside): a few words after its soul, and the mark of the kernel's report.
+      // What happened to it outside OATS (app/outside): the reason takes the soul's place on the
+      // row (a row is never three lines), and a stopped agent that needs a remedy has its mark in the warning tone.
       const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
       return [
         threadRow(
@@ -145,10 +144,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           INDENT[node.depth],
           "oats-agent-row",
           <>
-            <StateMark state={drawn.state} hidden />
+            <StateMark state={drawn.state} hidden tone={said?.rowTone === "warning" ? "warning" : undefined} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, [shown(oats.soulOf(node.agent)), said?.note].filter(Boolean).join(" · "))}
-            {said?.warning ? <OutsideMark /> : null}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, said?.note ?? shown(oats.soulOf(node.agent)))}
           </>,
         ),
         ...agentRows(node.children),
@@ -159,12 +157,12 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * An agent OATS has that the tree draws on no bb thread: it runs in tmux, or bb has its thread
    * archived, deleted or hidden. It stays in the roster, with what it is in words, and opens its own
    * page (its soul's, where no feature gives agents a page), where its acts are; one whose
-   * conversation bb keeps archived opens that thread, to read it. `said` is what the outside
-   * feature says of it (app/outside): where its thread is, and what happened to it.
+   * conversation bb keeps archived opens that thread, to read it. `rest` is what follows the
+   * state's word; `said` is what the outside feature says of it (app/outside): where its thread is,
+   * and what happened to it.
    */
-  const threadlessRow = (agent: Agent, where: string | null, said: Said | null = null) => {
-    // Its state by the one function, with what bb says of its thread: a session lost to bb's Archive or Delete is a state of its own.
-    const status = agentStatus(agent, null, now, whereOf(agent));
+  const threadlessRow = (agent: Agent, rest: string, said: Said | null = null) => {
+    const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
     return (
@@ -183,9 +181,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             onNavigate();
           }}
         >
-          <StateMark state={drawn.state} hidden />
-          {lines(name, status.state === "needs-you", drawn.word, [shown(oats.soulOf(agent)), where].filter(Boolean).join(" · "))}
-          {said?.warning ? <OutsideMark /> : null}
+          <StateMark state={drawn.state} hidden tone={!gone.has(agent.instance) && said?.rowTone === "warning" ? "warning" : undefined} />
+          {lines(name, status.state === "needs-you", drawn.word, rest)}
         </button>
       </li>
     );
@@ -256,10 +253,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <ul data-testid="oats-tree" className="flex flex-col">
           {agentRows(view.roots)}
           {view.detached.map((agent) => {
+            // Where its thread is, by bb's own answer, in the soul's place; the soul until bb has answered.
             const said = outside.of(agent);
-            return threadlessRow(agent, said?.note ?? null, said);
+            return threadlessRow(agent, said?.note ?? shown(oats.soulOf(agent)), said);
           })}
-          {view.elsewhere.map((agent) => threadlessRow(agent, "runs in tmux"))}
+          {view.elsewhere.map((agent) => threadlessRow(agent, `${shown(oats.soulOf(agent))} · runs in tmux`))}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}

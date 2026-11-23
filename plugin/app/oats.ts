@@ -78,14 +78,14 @@ export function useOats(): Oats {
   const whereOf = useThreadWhere(roster?.agents, threadById, roster?.at ?? "");
   const joined = useMemo(() => {
     if (roster === undefined) return null;
-    const v = view(roster.agents, threads, whereOf);
+    const v = view(roster.agents, threads);
     const nodes = flatten(v.roots);
     return {
       view: v,
       nodeByThread: new Map(nodes.map((node) => [node.thread.id, node])),
       nodeByInstance: new Map(nodes.map((node) => [node.agent.instance, node])),
     };
-  }, [roster, threads, whereOf]);
+  }, [roster, threads]);
 
   const gone = useGone(roster?.at ?? null);
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);

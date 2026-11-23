@@ -43,11 +43,10 @@ export const ACTS: readonly {
   when: (state: AgentState, agent: Agent) => boolean;
 }[] = [
   { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
-    // An agent that runs is stopped. So is one OATS does not see running while its process does: a
-    // session OATS lost whose thread bb archived (the state "archived": bb's Archive leaves the
-    // harness loaded), and a home OATS recorded stopped that the kernel reports running outside
-    // OATS (`outsideOats`: Stop asks the provider to stop it again). README, "Outside OATS".
-    when: (state, agent) => state === "working" || state === "idle" || state === "needs-you" || state === "archived" || agent.outsideOats != null,
+    // An agent that runs is stopped. So is one that runs outside OATS (the state "outside": OATS
+    // recorded it stopped and the kernel reports its harness running): Stop asks the provider to
+    // stop it again. README, "Outside OATS".
+    when: (state) => state === "working" || state === "idle" || state === "needs-you" || state === "outside",
   },
   {
     verb: "start",
@@ -60,12 +59,10 @@ export const ACTS: readonly {
     // An agent that does not run can be started: one whose session ended, one that is stopped, and
     // one the kernel calls stopped while bb holds a question on its thread (it then counts as
     // needing you, so the kernel's word is asked too). The thread's own row offers Start for the
-    // same agents. And one whose thread was deleted in bb (the state "deleted": bb ended its
-    // harness with the thread), which Start gives a new thread. Not one whose thread bb archived
-    // (the state "archived"): its process still runs, and it is stopped first.
-    when: (state, agent) => state !== "archived" && (state === "error" || state === "stopped" || state === "deleted" || agent.runtimeState === "stopped"),
+    // same agents.
+    when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped",
   },
-  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "deleted" && state !== "archived" },
+  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
@@ -80,7 +77,7 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
   if (oats.phase !== "ready") return [];
   const agent = oats.nodeByInstance.get(instance)?.agent ?? oats.agents.find((each) => each.instance === instance);
   if (agent === undefined) return [];
-  const now = oats.nodeByInstance.get(instance)?.state ?? state(agent, null, oats.whereOf(agent));
+  const now = oats.nodeByInstance.get(instance)?.state ?? state(agent, null);
   const held = oats.stale !== null ? HELD_REASON : null;
   return ACTS.filter((act) => act.when(now, agent) && (agent.backend === "bb" || act.verb === "stop" || act.verb === "retire")).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
 }

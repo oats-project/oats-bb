@@ -1,5 +1,5 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, ThreadWhere, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
  * The claim a row may show, or null: the Desktop's gate (awebai/oats, packages/client/
@@ -44,22 +44,16 @@ export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">):
  * Calling it stopped would advise Start, which begins a new thread and leaves its conversation behind. A session that ended in a shell, or that the kernel cannot reach, is
  * told first. The one rule for the sidebar's rows, the thread's row and the instance panel.
  *
- * `where` is what bb itself says of the thread the row names (`Oats.whereOf(agent)`: "open" for
- * a thread bb lists, "unknown" until bb has answered for one it does not). It is REQUIRED, so
- * that no place can say "Stopped" of an agent the tree calls "Archived in bb": a caller that has
- * no answer of bb's says so ("unknown"). It tells two states of a session OATS LOST (a row the kernel records stopped
- * with `sessionEnd: "lost"`): "archived" when bb has the thread archived (bb's Archive never ends
- * the harness: the agent's process still runs, so it is not "stopped"), "deleted" when bb has no
- * such thread. By bb's answer alone, never by a message's words; with no answer, or a thread that
- * is open, the row is what the kernel calls it. An operator's stop is "stopped" wherever its thread is.
+ * "outside" comes before everything else: the kernel reports that a harness runs in a home OATS
+ * recorded stopped (`outsideOats` on the row, feature `provider-outside-oats`: a message sent in
+ * the provider's own product started it again). The row's other fields stay what OATS recorded
+ * (stopped, not running), and they would say "Stopped" of an agent that runs: ONE statement about
+ * it, "Running outside OATS", in every place.
  */
-export function state(agent: Agent, thread: BbThread | null, where: ThreadWhere): AgentState {
+export function state(agent: Agent, thread: BbThread | null): AgentState {
+  if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
-  if (agent.backend !== "tmux" && agent.sessionEnd === "lost" && recordedStopped(agent)) {
-    if (where === "archived") return "archived";
-    if (where === "missing") return "deleted";
-  }
   if (agent.runtimeState === "stopped") return "stopped";
   if (agent.runtimeState === "shell") return "error";
   if (agent.running === true) return "working";
@@ -78,8 +72,9 @@ const RANK: Record<AgentState, number> = {
   stopped: 2,
   error: 2,
   idle: 2,
-  archived: 2,
-  deleted: 2,
+  // An agent that runs outside OATS is listed with the ones a person must look at: after those
+  // that wait, before the rest.
+  outside: 1,
 };
 
 /** needs-you, then working, then the rest; each by the thread's `updatedAt`, newest first. */
@@ -124,16 +119,11 @@ export function flatten(roots: readonly Node[]): Node[] {
   return out;
 }
 
-/** `view()` with no answer of bb's for the threads it does not list: nothing is known of them. */
-const NOT_ASKED = (): ThreadWhere => "unknown";
-
 /**
  * Joins the kernel's agents to bb's threads, by `agent.threadId === thread.id` only (the ids are
  * the same strings in every bb API; never bb's environment id, which threads on one path share).
- * `where(agent)` is what bb says of the thread of an agent the tree draws on no thread (archived,
- * missing: `ThreadWhere`), so that the state of such an agent here is the state its row says.
  */
-export function view(agents: readonly Agent[], threads: readonly BbThread[], where: (agent: Agent) => ThreadWhere = NOT_ASKED): View {
+export function view(agents: readonly Agent[], threads: readonly BbThread[]): View {
   const threadById = new Map<string, BbThread>();
   for (const thread of threads) if (!threadById.has(thread.id)) threadById.set(thread.id, thread);
 
@@ -159,8 +149,7 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[], whe
       continue;
     }
     taken.add(thread.id);
-    // An agent drawn on its thread: bb lists that thread, open.
-    drawn.set(agent.instance, { agent, thread, state: state(agent, thread, "open"), depth: 0, children: [] });
+    drawn.set(agent.instance, { agent, thread, state: state(agent, thread), depth: 0, children: [] });
   }
 
   // The tree, by `parent`. A parent that is not drawn makes its child a root.
@@ -201,15 +190,14 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[], whe
     elsewhere,
     needsYou: pick((node) => node.state === "needs-you"),
     // Every agent that needs a person, whether bb has a thread for it or not: the ONE number a
-    // place says of who needs one. An agent that waits on a person; and one the kernel reports
-    // running outside OATS (`outsideOats`: OATS recorded it stopped and its harness runs), which
-    // only a person can stop or start again. The sidebar's foot reads it; the home and its badge
-    // still count `needsYou` (the agents with a thread) until their owner moves them to this. In
-    // the kernel's order.
+    // place says of who needs one. An agent that waits on a person; and one that runs outside OATS
+    // (the state "outside"), which only a person can stop or start again. The sidebar's foot reads
+    // it; the home and its badge still count `needsYou` (the agents with a thread) until their
+    // owner moves them to this. In the kernel's order.
     needing: agents.filter((agent) => {
-      if (agent.backend !== "tmux" && agent.outsideOats != null) return true;
       const node = drawn.get(agent.instance);
-      return (node !== undefined && node.agent === agent ? node.state : state(agent, null, where(agent))) === "needs-you";
+      const now = node !== undefined && node.agent === agent ? node.state : state(agent, null);
+      return now === "needs-you" || now === "outside";
     }),
     working: pick((node) => node.state === "working"),
     finished: pick((node) => node.state === "idle" && node.thread.isUnread),

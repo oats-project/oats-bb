@@ -68,11 +68,11 @@ export type BbThread = {
 };
 
 /**
- * `archived` and `deleted`: OATS lost the agent's session because its thread was archived, or
- * deleted, in bb (a row recorded stopped with `sessionEnd: "lost"`, and bb's own answer for the
- * thread). Not "stopped": after bb's Archive the agent's process still runs.
+ * `outside`: the kernel reports that a harness runs in a home OATS recorded stopped
+ * (`Agent.outsideOats`): "Running outside OATS". The one state that does not come from the row's
+ * `running` and `runtimeState`, which stay what OATS recorded.
  */
-export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle" | "archived" | "deleted";
+export type AgentState = "needs-you" | "unreachable" | "stopped" | "error" | "working" | "idle" | "outside";
 
 export type Node = {
   agent: Agent;

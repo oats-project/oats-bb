@@ -2,7 +2,7 @@
 // the line under a thread's header, the home and the instance panel print what this answers
 // (through `State` and `StatusLine`, app/ui.tsx), so they say the same thing. Pure.
 import { GONE_MARK, GONE_WORD } from "./gone";
-import type { Agent, AgentState, BbThread, ThreadWhere } from "../../model/types";
+import type { Agent, AgentState, BbThread } from "../../model/types";
 import { claimOf, state } from "../../model/view";
 import { STATE, waitingClock, waitingDetail, waitingSince } from "../ui/words";
 
@@ -31,14 +31,9 @@ export type AgentStatus = {
 /** The reason an unreachable agent's line says, in a person's words (the kernel's own text goes under Details). */
 export const UNREACHABLE = "OATS cannot reach its session";
 
-/**
- * `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now`
- * is the clock in epoch milliseconds; `where` is what bb says of the thread the row names
- * (`Oats.whereOf(agent)`), required of every caller: the state function tells a session lost to
- * bb's Archive or Delete by it (model/view.ts `state`), and every place must say the same state.
- */
-export function agentStatus(agent: Agent, thread: BbThread | null, now: number, where: ThreadWhere): AgentStatus {
-  const drawn = state(agent, thread, where);
+/** `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now` is the clock in epoch milliseconds. */
+export function agentStatus(agent: Agent, thread: BbThread | null, now: number): AgentStatus {
+  const drawn = state(agent, thread);
   const base = { state: drawn, word: STATE[drawn].word, kernel: null };
   switch (drawn) {
     case "needs-you": {

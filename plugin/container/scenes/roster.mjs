@@ -2,6 +2,7 @@
 // of the dot, and the sidebar while OATS cannot be read. (container/live-ui.mjs says what a scene is.)
 import { hostname } from "node:os";
 import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
+import { TMUX_ROSTER } from "../tmux-roster.mjs";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
 // host name, by which bb names its machine). A container started another way has no name set: the
@@ -266,6 +267,41 @@ export default [
         check(said === "This page is not shown in this release of the OATS plugin. Back to Home", `${at} /plugins/oats/${path} says it is not shown, with the way back`, said ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       }
       await page.shot(`pages-default-${viewport.name}-not-shown`, { targets: true });
+    },
+  },
+  {
+    stage: "tmux-roster",
+    name: "a deployment that is mostly tmux agents: every one a row that says where it runs, the count of who waits, no phrase broken, the last row reachable, and a row opens its agent's page",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const side = JSON.stringify(testId("oats-sidebar"));
+      const tmux = TMUX_ROSTER.tmux;
+      // Every tmux agent is a row, by its one name, and says its state, its soul and that it runs in tmux.
+      const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""])) : ""; })()`, 30);
+      const read = rows === null ? [] : JSON.parse(rows);
+      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · ${soul} · runs in tmux`]);
+      const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
+      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, "runs in tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // Who waits: the three on tmux that wait... every one that waits, with a thread or not, in ONE number.
+      const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
+      const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);
+      check(needs === `! ${waiting} need you` || needs === `${waiting} need you`, `${at} the foot counts every agent that waits, the ${waiting - 1} on tmux included: ${waiting}`, needs);
+      // No phrase of a row's second line is broken across two lines, and none is cut by the sidebar's edge.
+      const broken = await page.evaluate(`(() => { const s = document.querySelector(${side}); const edge = s.getBoundingClientRect().right; return JSON.stringify([...s.querySelectorAll("[data-phrase]")].filter((p) => p.getClientRects().length > 0).filter((p) => { const lines = new Set([...p.firstChild ? (() => { const r = document.createRange(); r.selectNodeContents(p); return [...r.getClientRects()]; })() : []].map((rect) => Math.round(rect.top))); return lines.size > 1 || p.getBoundingClientRect().right > edge + 1; }).map((p) => p.innerText)); })()`);
+      check(broken === "[]", `${at} no phrase of a row's second line is broken across two lines or cut by the sidebar's edge`, broken);
+      await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
+      // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
+      const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: r.height > 0, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
+      check(reach === JSON.stringify({ last: true, foot: true }), `${at} with ${tmux.length + TMUX_ROSTER.bb.length} agents the last row and the count of who waits can be scrolled into view`, reach);
+      await page.shot(`tmux-roster-${viewport.name}-sidebar-end`);
+      // A tmux row leads to its agent's own page, by its instance (never by the name drawn).
+      const [instance] = tmux.find(([, , , how]) => how === "waiting");
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`)}).click()`);
+      const opened = await page.until(`location.pathname.includes(${JSON.stringify(`/agent/${instance}`)}) ? location.pathname : ""`, 15);
+      check(Boolean(opened), `${at} the row of ${instance} opens that agent's own page`, opened ?? (await page.evaluate("location.pathname")));
+      await page.until(visible(testId("oats-panel")), 30);
+      await page.shot(`tmux-roster-${viewport.name}-agent-page`);
     },
   },
 ];

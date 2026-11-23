@@ -123,7 +123,16 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <span className="flex min-w-0 flex-1 flex-col">
       <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
       {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
-      <span data-testid="oats-row-facts" className="break-words text-xs text-muted-foreground">{`${word} · ${rest}`}</span>
+      {/* Each phrase (the state, the soul, where it runs) moves to the next line whole, with its
+          separator kept at the end of the phrase before it: a line never breaks in the middle of a
+          phrase that fits the row, and none starts with a separator. */}
+      <span data-testid="oats-row-facts" className="text-xs text-muted-foreground">
+        {`${word} · ${rest}`.split(" · ").map((phrase, index, all) => (
+          <span key={index} data-phrase="" className="inline-block max-w-full whitespace-pre-wrap break-words align-top">
+            {index < all.length - 1 ? `${phrase} · ` : phrase}
+          </span>
+        ))}
+      </span>
     </span>
   );
 

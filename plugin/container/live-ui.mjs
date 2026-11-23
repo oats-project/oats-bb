@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
+import { TMUX_ROSTER } from "./tmux-roster.mjs";
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = process.env.OUT ?? join(homedir(), "out");
@@ -232,6 +233,36 @@ function statusWithRealIds(threads, changes = {}) {
   return JSON.stringify(status);
 }
 
+/**
+ * A roster that is MOSTLY tmux agents, as a deployment that ran on tmux before bb has it: three
+ * agents on bb threads (one of them waiting) and nineteen on tmux, over a few souls, some waiting on
+ * the person, some stopped, some with a parent. The real run holds no tmux-backed agent, so these
+ * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
+ * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
+ * a waiting one carries the claim the kernel printed for release-070-maintainer; a stopped one is
+ * `{ running: false }` with no runtimeState, as the kernel prints a stopped tmux home (README).
+ */
+function tmuxRoster(threads) {
+  const status = JSON.parse(statusWithRealIds(threads));
+  const rows = status.agents.flatMap((group) => group.instances);
+  const model = rows.find((row) => row.instance === "kernel-fix-developer");
+  const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
+  for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
+  for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
+    const row = structuredClone(model);
+    Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
+    row.tmux = { ...model.tmux, window: instance };
+    if (row.identity) row.identity = { ...row.identity, alias: instance };
+    if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
+    if (how === "stopped") {
+      row.running = false;
+      delete row.runtimeState;
+    }
+    status.agents.find((group) => group.name === soul).instances.push(row);
+  }
+  return JSON.stringify(status);
+}
+
 async function untilSnapshot(matches, seconds = 30) {
   const deadline = Date.now() + seconds * 1000;
   let last;
@@ -347,6 +378,14 @@ const BUILT_IN = {
   // The release's default: only the home is a page that is shown. Every other stage runs with all
   // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
+  // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.
+  "tmux-roster": {
+    label: "TM",
+    enter: async ({ threads }) => {
+      fake({ status: { stdout: tmuxRoster(threads) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
+    },
+  },
   "pages-default": {
     label: "PG",
     enter: async ({ threads }) => {

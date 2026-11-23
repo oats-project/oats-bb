@@ -50,6 +50,13 @@ export const pendingInteraction = (threadId, id = "pint_m5byy7u9ux") => ({
   id, threadId, status: "pending", resolvedAt: null, providerId: "claude-code",
   payload: { kind: "approval", subject: { kind: "command", command: "echo SECRET-LOOKING-COMMAND" }, availableDecisions: ["allow_once", "deny"] },
 });
+/** One model of `bb provider models pi --json`, as bb-app 0.50.1 lists one (copied from a
+ *  real server's answer; test/contract/pi.test.mjs reads the real list): `id` and `model`
+ *  are `<pi provider>/<id>`, `routeProviderId` the pi provider. */
+export const piModelRow = (provider, id, extra = {}) => ({
+  id: `${provider}/${id}`, model: `${provider}/${id}`, displayName: id, routeProviderId: provider, description: "Non-reasoning model via Pi", reasoningDiscovery: "known",
+  supportedReasoningEfforts: [{ reasoningEffort: "none", description: "No extended thinking" }], defaultReasoningEffort: "none", isDefault: false, ...extra,
+});
 export const NOT_FOUND = { error: { code: "thread_not_found", message: "HTTP 404: Thread not found" } };
 export const QUEUE_GONE = { error: { code: "invalid_request", message: "HTTP 404: Queued message not found" } };
 export const UNREACHABLE = { error: { code: "error", message: "fetch failed: connect ECONNREFUSED 127.0.0.1:38886" } };

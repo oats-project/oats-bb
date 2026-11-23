@@ -5,8 +5,10 @@ import { sandboxDeny } from "./deny.mjs";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
-import { InDoubt, ProviderError, fail, isObject, someOf } from "./errors.mjs";
+import { InDoubt, ProviderError, bounded, fail, isObject, someOf } from "./errors.mjs";
 import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
+import { piModelsNarrowed } from "./pi-config.mjs";
+import { piModelFinding } from "./pi-model.mjs";
 import { backendProblems } from "./readiness.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, samePath } from "./threads.mjs";
@@ -20,6 +22,9 @@ const SPAWN_LOOK_MS = 1_000;
 // the kernel stopped the home before this start, so the thread is at rest already.
 const CLEANUP_GRACE_SECONDS = 5;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// The launch result is exactly {endpoint}, so what a launch must say beside it goes to the
+// command's stderr, as a stop's does (lib/stop.mjs).
+const warnOnStderr = (message) => { process.stderr.write(`oats bb: warning: ${bounded(message)}\n`); };
 function readInput(input) {
   if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
   const { home, instance, harness, model, promptFile, previous } = input;
@@ -44,7 +49,7 @@ function readInput(input) {
  *  A pi launch (`harness` "pi") is the same launch with bb's pi provider, and nothing of
  *  Claude's: no launch argument is carried, the mode is full, and the home's `.claude` is
  *  neither read nor written. */
-export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
+export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false, warn = warnOnStderr } = {}) {
   const { home, instance, harness, model, promptFile, previous } = readInput(input);
   const pi = harness === "pi";
   const mode = permissionMode(input.args, input.yolo, harness);
@@ -85,10 +90,18 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   const settingsToWrite = { env: launchEnv, unset, sandbox, deny };
   if (!pi) writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
-  const { problems, server } = await backendProblems(settings, { deadline, env, harness });
+  const { problems, server, bb: reader } = await backendProblems(settings, { deadline, env, harness });
   if (problems.length > 0) {
     const [first, ...rest] = problems;
     throw fail(first.code, rest.length ? `${first.message} (and ${rest.length} more: ${rest.map((problem) => problem.code).join(", ")}; see oats readiness)` : first.message);
+  }
+  // bb takes any model id at the spawn and resolves it only when the thread starts: one
+  // its pi cannot resolve is refused here, with nothing started (lib/pi-model.mjs). Where
+  // bb's list of pi's models cannot settle it, the launch goes on as it always did.
+  if (pi && model !== null) {
+    const finding = await piModelFinding(model, reader, { narrowed: piModelsNarrowed(settings.piAgentDir) });
+    if (finding?.problem) throw fail(finding.problem.code, finding.problem.message);
+    if (finding?.warning) warn(finding.warning.message);
   }
   const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
 

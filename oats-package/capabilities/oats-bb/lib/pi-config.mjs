@@ -80,6 +80,18 @@ export function readPiPackages(agentDir) {
   return { bridge: packages.some((entry) => names(entry, PI_BRIDGE)), listener: packages.some((entry) => names(entry, PI_AWEB_EXTENSION)) };
 }
 
+/** Whether the pi configuration at `agentDir` narrows the models pi offers to choose from
+ *  (pi's `enabledModels`: docs/settings.md of pi 1.5.2): bb then lists only those, while a
+ *  thread still starts on any model pi has (lib/pi-model.mjs). → true, false (no
+ *  settings.json, no `enabledModels`, or an empty one), or null where the file cannot be
+ *  read: nothing then says the list is whole. Anything else under that key counts as set. */
+export function piModelsNarrowed(agentDir) {
+  const { doc, unreadable } = readPiSettings(agentDir);
+  if (unreadable !== undefined) return null;
+  if (doc === null || doc.enabledModels === undefined || doc.enabledModels === null) return false;
+  return !(Array.isArray(doc.enabledModels) && doc.enabledModels.length === 0);
+}
+
 export const absolutePath = (value) => typeof value === "string" && isAbsolute(value) && !value.includes("\0");
 /** What a `piAgentDir` that is no absolute path is answered with: by every launch and every
  *  readiness read, as a setting of the wrong shape (the value is not shown). */

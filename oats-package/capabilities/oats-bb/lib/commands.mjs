@@ -10,8 +10,9 @@ import { stop } from "./stop.mjs";
 
 const withSettings = (run) => (input, rawSettings, options) => run(input, readSettings(rawSettings), options);
 
-/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox, trees?, protected?}`, there before
- *  every launch and absent on a plain readiness read. */
+/** The planned launch of a check input: `launch: {harness, yolo, args, sandbox, trees?, protected?, model?}`, there before
+ *  every launch and absent on a plain readiness read. (`model`: the launch's model, from a
+ *  kernel that hands the check one; a pi launch's is then checked as the launch checks it.) */
 function plannedLaunch(input) {
   const planned = input !== null && typeof input === "object" ? input.launch : null;
   return planned !== null && typeof planned === "object" && !Array.isArray(planned) ? planned : null;
@@ -43,7 +44,7 @@ export function sessionHandlers({ sandboxedModes = false } = {}) {
       // bb runs each harness with a provider of its own: the planned launch says whose state
       // must be ready. A harness the provider does not run is the planned launch's own finding.
       const harness = planned !== null && HARNESSES.includes(planned.harness) ? planned.harness : null;
-      const { result } = await readinessResult(settings, { ...options, harness, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
       // For a home, what its own settings say of the sandbox (a report only). Where no
       // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
       if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));

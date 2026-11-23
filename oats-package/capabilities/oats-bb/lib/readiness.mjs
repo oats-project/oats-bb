@@ -9,7 +9,8 @@ import { checkDataDir, sandboxDeny } from "./deny.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
-import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems } from "./pi-config.mjs";
+import { DELIVERY_VARIABLE, PI_AGENT_DIR_SHAPE, PI_AWEB_EXTENSION, absolutePath, piConfigurationProblems, piModelsNarrowed } from "./pi-config.mjs";
+import { isModelId, piModelFinding } from "./pi-model.mjs";
 import { gapList, missingRemedy, readSandbox, sandboxKeysOf } from "./local-settings.mjs";
 import { DEFAULT_DAEMON_PORT, TRUST_VALUES, isLoopbackHost, loopbackOrigin, portOf } from "./settings.mjs";
 import { isLive } from "./threads.mjs";
@@ -326,6 +327,15 @@ export async function readinessResult(settings, options = {}) {
   }
   for (const problem of options.extra?.problems ?? []) problems.push(problem);
   warnings.push(...(options.extra?.warnings ?? []));
+  // The model of a planned pi launch (`options.model`, where the kernel hands the check
+  // one): what the launch would refuse it for is a problem here, and a list that cannot
+  // settle it a warning (lib/pi-model.mjs). Asked last, and only of a launch nothing else
+  // refuses: one more read of bb, and none for another harness or a launch with no model.
+  if (options.harness === "pi" && isModelId(options.model) && problems.length === 0) {
+    const finding = await piModelFinding(options.model, bb, { narrowed: piModelsNarrowed(settings.piAgentDir) });
+    if (finding?.problem) problems.push(finding.problem);
+    if (finding?.warning) warnings.push(finding.warning);
+  }
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
   // Every line is cut to what the kernel relays.

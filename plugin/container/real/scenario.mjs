@@ -526,10 +526,12 @@ async function archivedShots(scene, { instance, soul, threadId }) {
 const ARCHIVED_IN_BB = "Its conversation is archived in bb. Start begins a new one.";
 /**
  * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
- * sidebar holds the real agent's row and who waits, and no link to a page that is not shown.
+ * sidebar holds the real agent's row and who waits, and no link to a page that is not shown. The
+ * setting is left as a fresh install has it, UNSET (bb's own `plugin config oats unset pages`),
+ * not set to "home": so this holds what an unset setting hides. All six are set again after.
  */
 async function defaultPagesShots(scene, { instance, threadId }) {
-  bb("plugin", "config", "oats", "set", "pages", "home");
+  bb("plugin", "config", "oats", "unset", "pages");
   try {
     for (const view of VIEWS) {
       const { viewport, suffix } = view;
@@ -541,7 +543,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
         const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`;
         // Waited for: the row, and the count of who waits as a button (it is one only once bb has given the settings).
         const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; const needs = s.querySelector(${JSON.stringify(testId("oats-needs-line"))}); if (needs?.tagName !== "BUTTON") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`, 30);
-        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the default pages the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
         await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
       } finally {
         await page.close();

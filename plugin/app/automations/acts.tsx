@@ -161,7 +161,8 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
         {soul}
         {account}
         <FireList test={test} />
-        {due === null ? null : <p className={LINE}>{`Next due ${due.label}`}</p>}
+        {/* Only what is so: a due time that has passed (a list kept, or the moment before the next tick) was due, it is not next. */}
+        {due === null ? null : <p className={LINE}>{`${Date.parse(test.nextDue ?? "") <= now ? "Was due" : "Next due"} ${due.label}`}</p>}
       </Card>
     );
   }

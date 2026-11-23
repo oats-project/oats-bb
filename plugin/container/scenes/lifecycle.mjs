@@ -176,7 +176,7 @@ export default [
           `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, what will happen, what is kept, the choice of its children`,
           JSON.stringify(before),
         );
-        check(before.body.includes("Redesign ui lead reports it is in the middle of a task.") && before.body.includes("Observed less than a minute ago"), `${at} it says who is in the middle of a task, and how old the plan is`, before.body);
+        check(before.body.includes("Redesign ui lead has uncommitted work in its home.") && !before.body.includes("in the middle of a task") && before.body.includes("Observed less than a minute ago"), `${at} it says who has uncommitted work, and how old the plan is`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
         check(before.body.includes("A message sent in its thread starts it again without OATS. To talk to it again, use Start."), `${at} it says what a stop means for the agent's thread`, before.body);
         await shot("before");

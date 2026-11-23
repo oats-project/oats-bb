@@ -1,5 +1,5 @@
-// The kernel's rows the outside feature's tests read, each as the kernel printed it (or, for
-// `outsideOats`, as its own test shapes it: test/fixtures/outside/README.md), through the plugin's
+// The kernel's rows the outside feature's tests read, each as the kernel printed it
+// (test/fixtures/outside/README.md), through the plugin's
 // own parser into the snapshot's `Agent`.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,7 +22,7 @@ const only = (agents: Agent[]): Agent => {
 /** One state of the real run's recording (test/fixtures/roster/status-recorded.json): OATS 0.70.0, which has no `provider-outside-oats`. */
 export const recorded = (state: "stoppedByOats" | "threadDeleted" | "working" | "idle"): Agent => only(agentsOf((read("roster/status-recorded.json") as Record<string, unknown>)[state]));
 
-/** The status of a home OATS stopped whose harness runs: shaped from the kernel's own test at v0.70.5, not recorded live. */
+/** The status of a home OATS stopped whose harness runs: recorded live by the real run (test/fixtures/outside/README.md). */
 export const OUTSIDE_STATUS = "outside/status-outside.json";
 type Document = { features?: string[]; agents: { instances: Record<string, unknown>[] }[] };
 /** `feature: false`: the same document as a kernel that does not list `provider-outside-oats` prints its features. */
@@ -31,6 +31,8 @@ export function outsideDocument(feature = true): Document {
   return feature ? document : { ...document, features: (document.features ?? []).filter((name) => name !== "provider-outside-oats") };
 }
 export const outside = (feature = true): Agent => only(agentsOf(outsideDocument(feature)));
+/** An agent idle with no harness loaded (`running: false` beside `runtimeState: "unknown"`), recorded live by the real run. */
+export const notLoaded = (): Agent => only(agentsOf(read("outside/status-not-loaded.json")));
 
 /** A row of the pinned sample (test/fixtures/roster/status.json), with fields replaced as the live scenes replace them for a state no recording holds. */
 export function sample(instance: string, change: Record<string, unknown> = {}): Agent {

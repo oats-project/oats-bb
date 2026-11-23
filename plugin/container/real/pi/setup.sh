@@ -16,6 +16,12 @@ REAL=${REAL:-/home/node/real}
 OUT=${OUT:-/home/node/out/real}
 # The version the bb session provider is checked against (the provider's README, "pi").
 PI_VERSION=${PI_VERSION:-1.5.2}
+# pi's own tarball, as the kernel's and the bridge's: its integrity, for that version (another
+# version: PI_INTEGRITY with it, or none for no check).
+if [ "$PI_VERSION" = 1.5.2 ]; then
+  PI_INTEGRITY=${PI_INTEGRITY-sha512-mUWI04rqF1Vd/m1q+Ps1XeWsTXEVvRUnsmRa83I3Dzua0Tx5bYS93imeqtIfrXf7PkkaR6ERz+AuQhIJlom5yA==}
+fi
+PI_INTEGRITY=${PI_INTEGRITY:-}
 PI_MOCK_PORT=9998
 PI_AGENT_DIR=$HOME/.pi/agent
 KERNEL_VERSION=$(oats version --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
@@ -29,9 +35,20 @@ OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY:-}
 echo "== pi $PI_VERSION"
 # The install is given five minutes and tried again: a fetch from the registry was seen to stall for
 # an hour with nothing moving, and a run that waits on it says nothing until its job's limit.
+# The registry's tarball is fetched once, what npm says of it is kept (pi.json), its integrity is the
+# one asked for, and THAT FILE is what is installed (its dependencies come from the registry).
 for attempt in 1 2 3; do
   [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] && break
-  timeout 300 npm install -g --no-audit --no-fund "@earendil-works/pi-coding-agent@$PI_VERSION" || echo "pi setup: the install of pi did not finish (attempt $attempt of 3)" >&2
+  if (cd "$REAL" && timeout 300 npm pack "@earendil-works/pi-coding-agent@$PI_VERSION" --json > "$OUT/pi.json"); then
+    PI_TARBALL=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0].filename' "$OUT/pi.json")
+    PI_TARBALL_INTEGRITY=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0].integrity' "$OUT/pi.json")
+    echo "pi tarball: @earendil-works/pi-coding-agent@$PI_VERSION, integrity $PI_TARBALL_INTEGRITY"
+    # A tarball that is not the one expected is not tried again: it fails the setup, loudly.
+    [ -z "$PI_INTEGRITY" ] || [ "$PI_TARBALL_INTEGRITY" = "$PI_INTEGRITY" ] || { echo "pi setup: the tarball of @earendil-works/pi-coding-agent@$PI_VERSION is not the one expected (PI_INTEGRITY $PI_INTEGRITY)" >&2; exit 1; }
+    timeout 300 npm install -g --no-audit --no-fund "$REAL/$PI_TARBALL" || echo "pi setup: the install of pi did not finish (attempt $attempt of 3)" >&2
+  else
+    echo "pi setup: the tarball of pi could not be fetched (attempt $attempt of 3)" >&2
+  fi
 done
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || { echo "pi setup: pi $PI_VERSION could not be installed" >&2; exit 1; }
 

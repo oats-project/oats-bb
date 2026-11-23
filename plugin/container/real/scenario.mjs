@@ -155,6 +155,18 @@ const untilRow = (instance, what, matches, seconds = 60) =>
     const row = rowOf(instance);
     return row !== undefined && matches(row) ? row : undefined;
   }, seconds);
+/**
+ * The same for a wait whose predicate asks bb whether the turn is over (`settled`): bb is asked
+ * after `oats status` was read, so the row that first matches may be from before the turn ended
+ * (its `running` still true, where the provider tells). The row is read once more, after bb said
+ * the turn was over, and that one is the answer: what the checks after the wait compare.
+ */
+const untilRest = async (instance, what, matches, seconds = 60) => {
+  const matched = await untilRow(instance, what, matches, seconds);
+  return matched === undefined ? matched : (rowOf(instance) ?? matched);
+};
+/** An agent at rest, for a part of the run: the kernel's row says it is there and not gone (`idleRunning`), and bb says its turn is over. */
+const atRest = (row) => row !== undefined && idleRunning(row) && settled(row);
 
 /** A held turn: the mock does not answer a conversation that names `MOCK-HOLD:<name>` while this file exists. */
 const hold = (name) => writeFileSync(join(HOLDS, name), "");
@@ -490,7 +502,7 @@ try {
 
   step("A5 the turn ends: idle");
   release(A.instance);
-  row = await untilRow(A.instance, "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
+  row = await untilRest(A.instance, "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
   show("oats status", brief(row));
   thread = bbThread(threadId);
   check(thread?.status === "idle", "bb: the thread is idle", JSON.stringify(thread));
@@ -556,7 +568,7 @@ try {
       await page.close();
     }
   }
-  row = await untilRow(A.instance, "no claim, its turn over", (r) => r.waitingOnYou == null && idleRunning(r) && settled(r));
+  row = await untilRest(A.instance, "no claim, its turn over", (r) => r.waitingOnYou == null && idleRunning(r) && settled(r));
   check(row !== undefined, "oats status: the claim is cleared once the question is answered, and the agent is idle", brief(rowOf(A.instance)));
   show("oats status", brief(row));
   const afterAnswer = snapshotRow(A.instance);
@@ -626,7 +638,7 @@ try {
   step("A10 start");
   const started = act("start", "start", { instance: A.instance });
   check(/^thr_/.test(started?.threadId ?? "") && started.threadId !== threadId, "start answers a new thread");
-  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === started.threadId && idleRunning(r) && settled(r));
+  row = await untilRest(A.instance, "its new thread, idle", (r) => r.session?.threadId === started.threadId && idleRunning(r) && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(threadId) && live(started.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
@@ -635,7 +647,7 @@ try {
   step("A11 restart");
   const restarted = act("restart", "restart", { instance: A.instance });
   check(/^thr_/.test(restarted?.threadId ?? "") && restarted.threadId !== threadId, "restart answers a new thread");
-  row = await untilRow(A.instance, "its new thread, idle", (r) => r.session?.threadId === restarted.threadId && idleRunning(r) && settled(r));
+  row = await untilRest(A.instance, "its new thread, idle", (r) => r.session?.threadId === restarted.threadId && idleRunning(r) && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(threadId) && live(restarted.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
@@ -649,7 +661,7 @@ try {
   agrees(A.instance, row);
   const resumed = act("start, after the archive", "start", { instance: A.instance });
   check(/^thr_/.test(resumed?.threadId ?? "") && resumed.threadId !== archived, "start answers a new thread");
-  row = await untilRow(A.instance, "its new thread", (r) => r.session?.threadId === resumed?.threadId && idleRunning(r) && settled(r));
+  row = await untilRest(A.instance, "its new thread", (r) => r.session?.threadId === resumed?.threadId && idleRunning(r) && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(archived) && live(resumed.threadId), "bb: the thread archived by hand is still archived, and the new one is there and live", threadsNow());
   agrees(A.instance, row);
@@ -729,7 +741,7 @@ try {
   // bb runs as many threads at once as the container has processors (2): the second child is
   // spawned once the first one's turn is over, so that both get their turn.
   const harvest = child("knowledge-harvester", "harvest-knowledge-helper", lead, "Harvest what the redesign learned.\n");
-  await untilRow("harvest-knowledge-helper", "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
+  await untilRest("harvest-knowledge-helper", "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
   const mockups = child("oats-desktop-developer", "desktop-mockups-developer", lead, taskOf("desktop-mockups-developer", "Draw the Desktop mockups."));
   await untilRow("desktop-mockups-developer", "working", (r) => r.running === true);
   for (const name of [lead, "desktop-mockups-developer", "harvest-knowledge-helper"]) show(name, brief(rowOf(name)));
@@ -795,8 +807,8 @@ try {
   const digest = "weekly-digest-helper";
   const digestSpawn = act("spawn the agent", "spawn", { soul: "oats-expert", name: digest, task: "Write the weekly digest.\n", key: "spawn-4d5e6f7a" });
   const links = child("oats-expert", "digest-links-helper", digest, "Check the digest's links.\n");
-  await untilRow("digest-links-helper", "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
-  await untilRow(digest, "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
+  await untilRest("digest-links-helper", "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
+  await untilRest(digest, "idle", (r) => idleRunning(r) && r.runtimeState === "unknown" && settled(r));
   const digestHome = rowOf(digest).home;
   writeFileSync(join(digestHome, "work", "digest-draft.md"), "a draft the agent has not committed\n");
   const digestStop = act("stop plan", "stopPlan", { instance: digest });
@@ -804,12 +816,12 @@ try {
   await untilRow(digest, "stopped", (r) => r.runtimeState === "stopped");
   const digestStart = act("start", "start", { instance: digest });
   fixtures.keep("lifecycle/start.json", recorded(["session", "start", "--home", digestHome]).stdout);
-  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestStart.threadId && idleRunning(r) && settled(r));
+  row = await untilRest(digest, "its new thread", (r) => r.session?.threadId === digestStart.threadId && idleRunning(r) && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(digestSpawn.threadId) && live(digestStart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   const digestRestart = act("restart", "restart", { instance: digest });
   fixtures.keep("lifecycle/restart.json", recorded(["session", "restart", "--home", digestHome]).stdout);
-  row = await untilRow(digest, "its new thread", (r) => r.session?.threadId === digestRestart.threadId && idleRunning(r) && settled(r));
+  row = await untilRest(digest, "its new thread", (r) => r.session?.threadId === digestRestart.threadId && idleRunning(r) && settled(r));
   show("oats status", brief(row));
   check(archivedInBb(digestStart.threadId) && live(digestRestart.threadId), "bb: the previous thread is archived, and the new one is there and live", threadsNow());
   const digestStop2 = act("stop plan, before the retire", "stopPlan", { instance: digest });
@@ -864,7 +876,7 @@ try {
       }
     }
   };
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, idleRunning, atRest, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

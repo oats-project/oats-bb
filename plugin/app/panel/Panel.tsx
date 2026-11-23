@@ -9,7 +9,7 @@ import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, Node } from "../../model/types";
-import { claimOf } from "../../model/view";
+import { claimOf, isListed } from "../../model/view";
 import { agentStatus } from "../roster/status";
 import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
@@ -164,7 +164,7 @@ function Pages({ oats, agent, node, tab, failure }: { oats: Roster; agent: Agent
   // caller remembered, there is no node: bb's own row of the thread is given (bb lists its threads
   // whatever OATS answers), since whether the agent works is what bb says of that thread.
   const listed = agent.threadId === null ? undefined : oats.threadById.get(agent.threadId);
-  const status = agentStatus(agent, node?.thread ?? (listed !== undefined && !listed.isArchived && !listed.isHidden ? listed : null), now);
+  const status = agentStatus(agent, node?.thread ?? (listed !== undefined && isListed(listed) ? listed : null), now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const soul = shown(oats.soulOf(agent));
   return (

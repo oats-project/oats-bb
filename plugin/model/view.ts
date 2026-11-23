@@ -27,11 +27,16 @@ export function claimOf(agent: Agent): Agent["waiting"] {
  * stopping) and its `queuedWork` (none, waiting, failed):
  * - a turn runs, is starting or is stopping ("active", "starting", "stopping"): it works;
  * - at rest ("pending", "idle", and "error": bb's last turn failed, the session is there) with
- *   work bb holds in line (`queuedWork` other than "none": the provider counts "failed" too): it
- *   works, the turn starts by itself; with nothing in line: idle;
+ *   work bb holds in line (`queuedWork` other than "none"): it works; with nothing in line: idle.
+ *   "waiting" is a message bb starts by itself. "failed" is a queued message that failed to send:
+ *   nothing starts by itself, and the row still says Working until a person clears it, BECAUSE
+ *   THE PROVIDER COUNTS IT AS IN LINE (`hasQueuedWork`): the two must say one thing, and whether
+ *   "failed" should count is the provider's to change, which this follows;
  * - a status this plugin does not know: idle, as bb's SDK says to treat one (the provider refuses
  *   such a thread; the plugin has to draw the row).
  */
+/** Whether bb lists a thread: one it has archived or hidden is not drawn, and its status is not read. */
+export const isListed = (thread: Pick<BbThread, "isArchived" | "isHidden">): boolean => !thread.isArchived && !thread.isHidden;
 const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
 const AT_REST: ReadonlySet<string> = new Set(["pending", "idle", "error"]);
 export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): boolean =>
@@ -135,8 +140,7 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     const thread = agent.threadId === null ? undefined : threadById.get(agent.threadId);
     if (
       thread === undefined ||
-      thread.isArchived ||
-      thread.isHidden ||
+      !isListed(thread) ||
       taken.has(thread.id) ||
       drawn.has(agent.instance)
     ) {
@@ -179,7 +183,7 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
   return {
     roots,
     others: threads
-      .filter((thread) => !taken.has(thread.id) && !thread.isArchived && !thread.isHidden)
+      .filter((thread) => !taken.has(thread.id) && isListed(thread))
       .sort((a, b) => b.updatedAt - a.updatedAt),
     detached,
     elsewhere,

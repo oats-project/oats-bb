@@ -43,7 +43,8 @@ export default async (run) => {
   }
   const row = await until(`${CHILD} to read idle with the board's claim in oats status`, () => {
     const now = rowOf(CHILD);
-    return now?.running === null && now.waitingOnYou?.producer === "oats.board" ? now : undefined;
+    // Idle: `running` null, or true from a provider that scans its harness (oats-bb #40): run.idleRunning, scenario.mjs.
+    return now !== undefined && run.idleRunning(now) && now.waitingOnYou?.producer === "oats.board" ? now : undefined;
   });
   rpc("refresh");
   const answer = act("the panel's facts of the child", "panelInstance", { instance: CHILD });

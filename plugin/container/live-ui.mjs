@@ -389,6 +389,8 @@ function record(threads, changes = {}) {
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
 // Every image of a thread shows a healthy one: its turn was answered and bb shows it idle.
+// A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
+rmSync(join(homedir(), "mock", "hold", "live-ui-working"), { force: true });
 const threads = await healthyThreads();
 // Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
 // rows with `running: true`, and the two threads bb's fixture calls active). An agent on a bb

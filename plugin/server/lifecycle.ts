@@ -80,7 +80,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     restart: (input) => begin("restart", input),
     async retirePlan({ instance }, context) {
       await core.agentForAct(instance);
-      return core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal);
+      // The harness is the kernel's status row's, not the plan's: the roster this act was admitted on holds it.
+      const [plan, { row }] = await Promise.all([core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal), core.rowOf(instance)]);
+      const read = launch.safeParse(row);
+      return { ...plan, harness: read.success ? (read.data.harness ?? null) : null };
     },
     async retireApply({ instance, revision, key, discardWorktree }) {
       const sent = retires.get(key);

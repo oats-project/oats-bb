@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -438,5 +438,33 @@ describe("a retire's warnings", () => {
     const outcome = retireOutcome(value(parseRetireApply(fixture("retire-apply.json"))), retirePlan());
     expect(outcome.lines.some((line) => line.startsWith("OATS says:"))).toBe(false);
     expect(outcome.details).toBeNull();
+  });
+});
+
+describe("a retire refused because a process still works in the home", () => {
+  // The kernel's refusal as its source words it (lib/core.mjs `unquiet`, lib/instance-listing.mjs `namedProcesses`); SHAPED, to be replaced by the pi run's recorded one.
+  const refusal = { code: "E_RUNTIME_QUIESCE_FAILED", message: "the bb session of dev-1 stopped, and a process works in its home (pid 4242 pi); stop it, then retire again. A shell named here may be your own: one whose working directory is in the home counts, and leaving the home's directory clears it" };
+  const WAIT = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+  it("for an agent that runs pi on bb says, after OATS's own line, that bb may still be listing models and to try again in a minute", () => {
+    const outcome = applyRefused("retire", "dev-1", refusal, piOnBb({ backend: "bb", harness: "pi" }));
+    expect(outcome).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired", code: "E_RUNTIME_QUIESCE_FAILED", offers: ["review"] });
+    expect(outcome.lines).toEqual(["OATS tried to end a session or a process and couldn't confirm that it ended.", `OATS says: ${refusal.message}`, WAIT]);
+  });
+  it("is decided from read facts alone: the code, the plan's backend, the row's harness; never from what the message names", () => {
+    expect(piOnBb({ backend: "bb", harness: "pi" })).toBe(true);
+    expect(piOnBb({ backend: "bb", harness: "claude" })).toBe(false);
+    expect(piOnBb({ backend: "tmux", harness: "pi" })).toBe(false);
+    expect(piOnBb({ backend: "bb", harness: null })).toBe(false);
+    expect(piOnBb({ backend: null, harness: "pi" })).toBe(false);
+    // The same message for an agent on another harness: the Desktop's sentence alone, as before.
+    expect(applyRefused("retire", "dev-1", refusal, false).lines).toEqual(["OATS tried to end a session or a process and couldn't confirm that it ended."]);
+    // A message that names no pi, for an agent that runs pi on bb: the line still stands (the message is not read).
+    expect(applyRefused("retire", "dev-1", { code: "E_RUNTIME_QUIESCE_FAILED", message: "could not establish that the bb session of dev-1 stopped" }, true).lines).toContain(WAIT);
+  });
+  it("only for that code, and only for a retire", () => {
+    expect(applyRefused("retire", "dev-1", { code: "E_CHILDREN_RUNNING", message: "m" }, true).lines).not.toContain(WAIT);
+    expect(applyRefused("stop", "dev-1", refusal, true).lines).not.toContain(WAIT);
+    // Asked again with the same key: the kernel's own answer settles it, with the same line.
+    expect(checkAgainRefused("retire", "dev-1", refusal, true).lines).toContain(WAIT);
   });
 });

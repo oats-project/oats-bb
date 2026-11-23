@@ -26,6 +26,7 @@ import {
   applying,
   carriesOn,
   LEAVE,
+  piOnBb,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -231,7 +232,7 @@ function CannotRead({ refusal, onRetry }: { refusal: Refusal; onRetry: () => voi
 
 // ---- Stop and Retire ----
 
-type Plan = StopPlan | RetirePlan;
+type Plan = StopPlan | Answer<"retirePlan">;
 type PlanState =
   /** `kept`: the plan under review stays on screen while a new one is read for a choice or a check. */
   | { phase: "reading"; kept: Plan | null; why: string }
@@ -314,9 +315,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         // The plan changed under the confirmation: back to review with the plan as it is now.
-        if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal), refusal);
+        const pi = plan.action === "retire" && piOnBb(plan);
+        if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
         else if (refusal.code === "E_PLAN_STALE" && live.current && current === request) read(checking(verb, instance), recursive, plan);
-        else settle(applyRefused(verb, plan.instance ?? instance, refusal), refusal);
+        else settle(applyRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
       },
     );
   };

@@ -91,13 +91,20 @@ const startCheck = z.object({
 /** The thread the agent is in after the act, and what the kernel said of the start. */
 const startedIn = started.extend({ threadId: z.string() });
 
+/**
+ * The retire plan as the dialog reads it: the kernel's plan, and the harness the kernel's own
+ * status row records for the agent (the plan does not say it), read beside it; null when the row
+ * records none.
+ */
+export const retirePlanRead = retirePlan.extend({ harness: z.string().nullable() });
+
 export const rpc = defineRpcContract({
   stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlan },
   stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceipt },
   startCheck: { input: instance, output: startCheck },
   start: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
   restart: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
-  retirePlan: { input: instance, output: retirePlan },
+  retirePlan: { input: instance, output: retirePlanRead },
   retireApply: { input: z.object({ ...apply, discardWorktree: z.boolean().optional() }).strict(), output: retireReceipt },
 });
 

@@ -414,14 +414,26 @@ export function planRefused(verb: PlanVerb, instance: string, refusal: Refusal, 
 }
 
 /** An apply that was refused, or whose answer was lost. */
-export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal): Outcome {
+/**
+ * After the kernel's line, when a RETIRE is refused because a process still works in the home
+ * (E_RUNTIME_QUIESCE_FAILED) and the agent runs pi on bb: opening a pi thread makes bb list its
+ * models with a pi of its own in the agent's home, which leaves by itself within a minute. The
+ * line claims nothing about which process the kernel met (its message is not read): it is true
+ * whichever it was, and says the one thing "stop it, then retire again" does not, that waiting
+ * is the remedy. Decided from read facts only: the code, the plan's backend, the row's harness.
+ */
+export const PI_LISTING = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+export const piOnBb = (plan: { backend: string | null; harness?: string | null }): boolean => plan.backend === "bb" && plan.harness === "pi";
+
+export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal, piListing = false): Outcome {
   const name = agentName(instance);
   if (refusal.code !== null && LOST.has(refusal.code)) {
     return { tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
-  const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED ? [sentence, ...oatsSays(refusal.message)] : [sentence];
+  const waits = verb === "retire" && refusal.code === "E_RUNTIME_QUIESCE_FAILED" && piListing;
+  const lines = refusal.code === "E_LIFECYCLE_BUSY" || sentence === UNDESCRIBED || waits ? [sentence, ...oatsSays(refusal.message), ...(waits ? [PI_LISTING] : [])] : [sentence];
   return { tone: "failed", title: `${name} wasn't ${verb === "retire" ? "retired" : "stopped"}`, lines, code: refusal.code, details: refusal.message, offers: ["review"] };
 }
 
@@ -432,9 +444,9 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal)
  * the call failed again) leaves what it was: not confirmed, with Check again. And a kernel that
  * answers "busy" to its own key is still doing the first: that is said, not "nothing was done".
  */
-export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Refusal): Outcome {
+export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Refusal, piListing = false): Outcome {
   const kernels = refusal.code !== null && /^E_[A-Z0-9_]+$/.test(refusal.code);
-  if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal);
+  if (kernels && refusal.code !== "E_LIFECYCLE_BUSY") return applyRefused(verb, instance, refusal, piListing);
   const still = `The ${verb === "retire" ? "removal" : "stop"} of ${agentName(instance)} is still running. Check again to read its result.`;
   return { tone: "unknown", title: "Result not confirmed", lines: [kernels ? still : "OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
 }

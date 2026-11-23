@@ -156,6 +156,16 @@ describe("start and restart", () => {
 });
 
 describe("retire", () => {
+  it("the retire plan is answered with the harness the kernel's own row records, which the plan does not say; null where the row records none", async () => {
+    // The roster the real kernel printed (the panel's recording), whose rows hold the harness.
+    backend = await startBackend({ verbs: { status: { file: "panel/status.json" } } });
+    expect(await backend.rpc("retirePlan", { instance: "panel-worktree-helper" })).toMatchObject({ action: "retire", harness: "claude" });
+    await backend.dispose();
+    // The pinned sample roster holds no harness for a row: never guessed.
+    backend = await startBackend();
+    expect(await backend.rpc("retirePlan", { instance: "weekly-digest-helper" })).toMatchObject({ action: "retire", harness: null });
+  }, 20_000);
+
   it("the answer of a retire that was sent can be asked again with its key after the retire removed the agent from the roster; any other key is a new act, and is refused", async () => {
     backend = await startBackend();
     const { rpc, fake } = backend;

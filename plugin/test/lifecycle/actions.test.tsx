@@ -1345,3 +1345,31 @@ test("a start that runs can be left as well: the dialog says so, and the start's
   // The person left: the new thread is offered, not opened under them.
   expect(slot.inspection.navigateCalls).toEqual([]);
 });
+
+// ---- a retire refused while bb lists a pi agent's models
+
+test("a retire of an agent that runs pi on bb, refused because a process works in its home, says to try again in a minute; for another harness it does not", async () => {
+  const refusal = "E_RUNTIME_QUIESCE_FAILED: the bb session of weekly-digest-helper stopped, and a process works in its home (pid 4242 pi); stop it, then retire again.";
+  const WAIT = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+  const refused = async (harness: string | null) => {
+    const { slot, pick } = await menu("thr_digest", {
+      retirePlan: () => retirePlanOf(undefined, harness),
+      retireApply: () => {
+        throw new Error(refusal);
+      },
+    });
+    await pick("retire");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "failed");
+    const text = slot.getByTestId("oats-result").textContent!;
+    resetApp();
+    return text;
+  };
+  const pi = await refused("pi");
+  expect(pi).toContain("OATS says: the bb session of weekly-digest-helper stopped, and a process works in its home (pid 4242 pi); stop it, then retire again.");
+  expect(pi).toContain(WAIT);
+  expect(pi.indexOf(WAIT)).toBeGreaterThan(pi.indexOf("OATS says:"));
+  expect(await refused("claude")).not.toContain(WAIT);
+  expect(await refused(null)).not.toContain(WAIT);
+});

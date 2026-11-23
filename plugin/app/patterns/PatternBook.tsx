@@ -82,6 +82,8 @@ export function PatternBook() {
         <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "question", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
+        {/* A detail that warns (a stopped agent's live composer): the sentence in the warning tone; the time beside it is not toned. */}
+        <StatusLine state="stopped" since="since 14:03" detail="A message sent here in bb starts it again without OATS. Use Start." detailTone="warning" action={<Button>Start</Button>} />
         <StatusLine state="unreachable" detail="OATS cannot reach its session" action={<Button>Retry</Button>} />
       </section>
 

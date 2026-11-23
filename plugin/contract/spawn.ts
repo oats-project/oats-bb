@@ -81,7 +81,7 @@ export const rpc = defineRpcContract({
    */
   spawnPlan: { input: spawnInput.strict(), output: plan },
   /**
-   * `revision` is the decision a person saw: the revision a `spawnPreview` of the same choices
+   * `revision` is the decision a person saw: the revision a `spawnPlan` of the same choices
    * answered. The kernel then refuses a spawn whose decision moved since (`E_DECISION_STALE`), and
    * nothing is created. Left out, the server reads the decision itself, right before the apply.
    */

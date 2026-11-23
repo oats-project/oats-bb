@@ -426,6 +426,68 @@ test("an outcome that is not known: the fields and Spawn are held, and the one a
   expect(submit(slot).textContent).toBe("Created");
 });
 
+test("a spawn that made an instance and did not finish (the kernel says so, or it named no thread) is said as created: the form stays held, with nothing to press but Close", async () => {
+  for (const [thrown, sentence, code] of [
+    ["E_SPAWN_INCOMPLETE: launched, not confirmed", "The instance was created but didn’t finish starting. Open it from the sidebar instead of spawning again.", "E_SPAWN_INCOMPLETE"],
+    ["NO_THREAD_NAMED: Spawned oats-developer-2, but the kernel named no bb thread for it", "The instance was created, but OATS named no bb thread for it. Open it from the sidebar instead of spawning again.", "NO_THREAD_NAMED"],
+  ] as const) {
+    const slot = await ready(
+      previews({
+        spawn: () => {
+          throw new Error(thrown);
+        },
+      }),
+    );
+    fireEvent.click(submit(slot));
+    const result = await slot.findByTestId("oats-result");
+    expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent, result.querySelector("p")!.textContent], code).toEqual(["unknown", "The agent was created, and its start is not complete", sentence]);
+    expect(Array.from(result.querySelectorAll(":scope > p")).at(-1)!.textContent).toBe(code);
+    // Never "not spawned" with the form free: with no name the kernel would number a second agent.
+    expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent], code).toEqual([true, "Spawn incomplete", true, "Close"]);
+    fireEvent.click(submit(slot));
+    fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
+    expect(calls(slot, "spawn"), code).toHaveLength(1);
+    slot.unmount();
+    resetApp();
+  }
+});
+
+test("a failure nobody classed is of unknown outcome, never 'not spawned': an answer the plugin cannot read, a hook's own code; and a Check result the plugin refuses before asking stays unknown", async () => {
+  for (const thrown of ["OATS_BAD_ANSWER: `oats spawn` answered a document the plugin cannot read", "OATS_OUTPUT_TOO_LARGE: more than 8 MB", "OATS_ABORTED: the call was ended", "E_HOOK_ENVIRONMENT_CONTRACT: oats.build set a variable it does not declare"]) {
+    const slot = await ready(
+      previews({
+        spawn: () => {
+          throw new Error(thrown);
+        },
+      }),
+    );
+    fireEvent.click(submit(slot));
+    const result = await slot.findByTestId("oats-result");
+    expect([result.querySelector("h3")!.textContent, result.querySelector("p")!.textContent], thrown).toEqual(["It is not known whether the agent was spawned", "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice."]);
+    expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled], thrown).toEqual([true, "Check result", false]);
+    slot.unmount();
+    resetApp();
+  }
+  // The replay is refused by the plugin's own check (the relation's anchor left the roster meanwhile): nothing was learned.
+  let asked = 0;
+  const slot = await ready(
+    previews({
+      spawn: () => {
+        asked += 1;
+        if (asked === 1) throw new Error("OATS_TIMEOUT: oats spawn did not answer");
+        throw Object.assign(new Error('"flaky-ci-developer" is not an agent of this OATS deployment\'s current snapshot'), { code: "invalid" });
+      },
+    }),
+  );
+  fireEvent.click(submit(slot));
+  await waitFor(() => expect(submit(slot).textContent).toBe("Check result"));
+  fireEvent.click(submit(slot));
+  await waitFor(() => expect(asked).toBe(2));
+  await waitFor(() => expect(submit(slot).textContent).toBe("Check result"));
+  expect((await slot.findByTestId("oats-result")).querySelector("h3")!.textContent).toBe("It is not known whether the agent was spawned");
+  expect(fieldset(slot).disabled).toBe(true);
+});
+
 test("a spawn that ends with no answer at all is of unknown outcome too; one the plugin refused before asking the kernel is not", async () => {
   const slot = await ready(
     previews({
@@ -560,6 +622,36 @@ test("a preview the provider refuses (from OATS 0.70.1 it refuses as the spawn d
   // Another harness, and the form is back.
   choose(slot, "oats-spawn-harness", "claude");
   await waitFor(() => expect(submit(slot).disabled).toBe(false));
+});
+
+test("Retry on a refused preview says it is reading, also where no preview was ever read", async () => {
+  const waiting: (() => void)[] = [];
+  let refuse = true;
+  const slot = await form("oats-developer", {
+    spawnPlan: (input) => {
+      if (refuse) throw new Error("E_MODEL_UNKNOWN: no entry usable by harness claude");
+      return new Promise((resolve) => waiting.push(() => resolve(answer(input))));
+    },
+  });
+  await waitFor(() => expect(column(slot).querySelector('[data-testid="oats-notice"][data-tone="error"]')).not.toBeNull());
+  expect(slot.queryByTestId("oats-spawn-updating")).toBeNull();
+  refuse = false;
+  fireEvent.click(slot.getByRole("button", { name: "Retry" }));
+  // The notice stays until the answer; the column's head says it is being read again.
+  expect(slot.getByTestId("oats-spawn-updating").textContent).toBe("Updating…");
+  expect(column(slot).getAttribute("aria-busy")).toBe("true");
+  await waitFor(() => expect(waiting).toHaveLength(1));
+  await act(async () => waiting[0]!());
+  await waitFor(() => expect(column(slot).textContent).toContain("numbered by the kernel"));
+  expect(slot.queryByTestId("oats-spawn-updating")).toBeNull();
+});
+
+test("what the kernel resolved goes through the display filter in the choices too: a model is a soul's own text", async () => {
+  const unsafe = { ...recorded, harness: "pi", model: "fable\u202E5 token=abc123" };
+  const slot = await ready({ spawnPlan: () => ({ facts: formFacts(unsafe), revision: REVISION }) });
+  const label = slot.getByTestId("oats-spawn-model").textContent!;
+  expect(label).toBe("Default · [withheld]▾");
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/token=abc123|\u202E/);
 });
 
 test("a soul that cannot be spawned says why under the soul, and Spawn is off; a soul the deployment does not list says so", async () => {

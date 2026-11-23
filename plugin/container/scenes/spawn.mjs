@@ -3,7 +3,8 @@
 // and before the buttons; the soul's and the harness's lists open; a name the form refuses and
 // one the kernel refuses; a model that is typed; a child of an agent; the preview while it is
 // read, with a press that starts nothing, then read, then read again after a change; Spawn
-// pressed (held, one spawn for three presses), then the agent's thread; a spawn that ended
+// pressed (held, one spawn for three presses; where it lands has no image here: the fake makes no
+// agent, and the created agent's thread is the real run's image); a spawn that ended
 // without an answer (held, Check result under the same key); a refused spawn; the form held while
 // OATS cannot be read; and the way in under the release's default pages. What the fake `oats`
 // answers is what the real kernel printed, recorded by the real run (test/fixtures/spawn/README.md).
@@ -262,7 +263,7 @@ export default [
   },
   {
     stage: "spawn-flight",
-    name: "the New agent form, Spawn pressed: held and saying Spawning…, a second press starts nothing; then the agent's thread",
+    name: "the New agent form, Spawn pressed: held and saying Spawning…, a second press starts nothing; then it leaves for the thread the kernel named",
     run: async ({ page, at, viewport, check, threads }) => {
       const since = Date.now();
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
@@ -280,7 +281,8 @@ export default [
       check(Boolean(opened), `${at} when the kernel answers, the form opens the thread the kernel named for the new agent; it does not stay filled with Spawn live`, opened ?? (await page.evaluate("location.pathname + ' ' + document.body.innerText.slice(0, 200)")));
       const keys = applied(since);
       check(keys.length === 1, `${at} and the three presses made one spawn: the kernel was asked to apply once`, JSON.stringify(keys));
-      await page.shot(`spawn-${viewport.name}-created`, { plugin: false });
+      // No image of where it lands: the fake has no kernel to make an agent, so the thread it names is one of the fixture's, and an
+      // image of it would read "Spawn took me to another agent". The created state is the unit tests' and the real run's to show.
     },
   },
   {

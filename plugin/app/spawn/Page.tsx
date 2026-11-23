@@ -318,7 +318,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const nameRefusal = refusal !== null && NAME_REFUSALS.has(refusal.code) ? refusal : null;
 
   // ---- the harness and the model ----
-  const resolved = preview?.facts.resolved ?? null;
+  // What the kernel resolved, through the display filter like every text of the kernel's: a model is a soul's own text.
+  const kernelResolved = preview?.facts.resolved ?? null;
+  const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
   const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
   const suggestions = useModelSuggestions(effectiveHarness);
   // The kernel resolved a harness and no model for it, and none is chosen: bb will start it on bb's own default.
@@ -329,7 +331,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // ---- Spawn ----
   // idle: the form can be changed. spawning: a spawn is in flight. created: it made the agent.
   // unknown: it ended without saying whether it did; only Check result can be pressed.
-  const [phase, setPhase] = useState<"idle" | "spawning" | "created" | "unknown">("idle");
+  // incomplete: an instance exists, and its start did not finish (or its thread is not known): nothing more to press here.
+  const [phase, setPhase] = useState<"idle" | "spawning" | "created" | "unknown" | "incomplete">("idle");
   const [failure, setFailure] = useState<SpawnProblem | null>(null);
   const [made, setMade] = useState<{ instance: string; threadId: string } | null>(null);
   /** The spawn that was pressed: the values and the decision the person saw, and the key that makes it one spawn however often it is asked. */
@@ -344,7 +347,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     };
   }, []);
 
-  const send = useCallback(() => {
+  const send = useCallback((replay: boolean) => {
     const asked = intent.current;
     if (asked === null) return;
     setPhase("spawning");
@@ -365,14 +368,20 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         (cause: unknown) => {
           setFlight(null);
           if (!alive.current) return;
-          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField });
+          // What is known decides what can be pressed next (model/spawn.ts `SpawnOutcome`).
+          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay });
           setFailure(problem);
-          if (problem.next === "check-result") {
+          if (problem.outcome === "unknown") {
             // Whether an agent was made is not known: the intent is kept, and only asking again under its key is offered.
             setPhase("unknown");
             return;
           }
           intent.current = null;
+          if (problem.outcome === "created") {
+            // An instance exists: the form stays held, so that no second one is made from it.
+            setPhase("incomplete");
+            return;
+          }
           setPhase("idle");
           // The decision moved, and nothing was created: the preview that was on screen is no longer
           // one to press, and what will be created is read again.
@@ -407,14 +416,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
-      send(); // Check result: the same key, the same decision
+      send(true); // Check result: the same key, the same decision
       return;
     }
     if (!canSpawn || preview === null || input === null) return;
     const of = `${preview.key}\n${preview.revision}`;
     if (pressed.current === null || pressed.current.of !== of) pressed.current = { of, key: newKey() };
     intent.current = { input, revision: preview.revision, key: pressed.current.key };
-    send();
+    send(false);
   };
   const cancel = () => window.history.back();
 
@@ -455,11 +464,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
   else if (settled !== null) column = <Created facts={settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
-  const updating = reading && chosen !== undefined && !held && settled !== null;
+  // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
+  const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
   /** The column holds the kernel's answer for the values on screen: only then is its foot true. */
   const resolvedNow = chosen !== undefined && (preview !== null || (held && settled !== null));
 
-  const spawnWord = phase === "spawning" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : W.SPAWN;
+  const spawnWord = phase === "spawning" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
   const harnessFailed = harnesses.status === "failed";
   return (
     <Page testId="oats-new-agent-page">
@@ -514,7 +524,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                     field="harness"
                     value={harnesses.choice ? harness : "\u0000"}
                     disabled={!harnesses.choice}
-                    placeholder={harnessFailed ? W.SOUL_DEFAULT_ONLY : W.READING_HARNESSES}
+                    placeholder={harnessFailed ? SOUL_DEFAULT : W.READING_HARNESSES}
                     filterLabel={W.FILTER_HARNESSES}
                     options={[
                       { id: "", label: resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null), detail: W.HARNESS_DEFAULT_DETAIL },
@@ -643,7 +653,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </Result>
             ) : null}
             {failure === null ? null : (
-              <Result title={failure.next === "check-result" ? W.SPAWN_UNKNOWN_TITLE : W.SPAWN_FAILED_TITLE} tone={failure.next === "check-result" ? "unknown" : "failed"} code={failure.code}>
+              <Result title={failure.outcome === "unknown" ? W.SPAWN_UNKNOWN_TITLE : failure.outcome === "created" ? W.SPAWN_INCOMPLETE_TITLE : W.SPAWN_FAILED_TITLE} tone={failure.outcome === "refused" ? "failed" : "unknown"} code={failure.code}>
                 <p>{failure.sentence}</p>
                 {failure.next === "review-again" && preview !== null ? <p data-testid="oats-spawn-reread">{W.READ_AGAIN}</p> : null}
                 {failure.detail === null ? null : (
@@ -659,7 +669,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button data-testid="oats-spawn-cancel" onClick={cancel} disabled={phase === "spawning"}>
-                {phase === "created" ? W.CLOSE : W.CANCEL}
+                {phase === "created" || phase === "incomplete" ? W.CLOSE : W.CANCEL}
               </Button>
               <Button
                 variant="primary"

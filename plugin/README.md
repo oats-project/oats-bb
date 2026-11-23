@@ -228,10 +228,16 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
 - On the press the button reads "Spawning…" and is held, with every field: one press makes one
   agent, however often the button or the key is pressed meanwhile. When the kernel answers the
   form says "Created <name>", stays held, and opens the new agent's thread.
-- Where the outcome is not known (the kernel's "could not confirm", a time limit, an `oats` or a
-  machine that ended without an answer) the fields stay held and the one act is **Check result**:
-  it asks again under the same idempotency key, so the kernel replays the spawn it made or makes
-  the one it did not, never a second.
+- After a press that did not answer "created", the form goes by what is KNOWN
+  (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
+  says nothing was created: a refusal of the kernel's that the tables name, or a call that never
+  reached the kernel. **Created**, where the kernel says an instance exists whose start did not
+  finish, or the spawn went through and named no thread: the form stays held, says so, and sends
+  the person to the sidebar. **Unknown** for everything else (the kernel's "could not confirm", a
+  time limit, an `oats`, a machine or a server that ended without an answer or with one the plugin
+  cannot read, a code nobody classed): rollback is never inferred. There the fields stay held and
+  the one act is **Check result**: it asks again under the same idempotency key, so the kernel
+  replays the spawn it made or makes the one it did not, never a second.
 - A refusal leads with a person's words (the Desktop's, `model/spawn.ts` `spawnProblem`), then the
   kernel's own message under Details, then its code; the values are kept. A sentence names only a
   control the form has.
@@ -259,6 +265,11 @@ from the home the same way); a home of another shape passes none.
 Every spawn is `--backend bb --yolo`: the form says so in one line by the button, "Runs in bb's
 full mode: no sandbox.", with no control, and the preview says what the kernel decided
 ([How it is built](#how-it-is-built)).
+
+The live checks show the form in flight and count the spawns the kernel was asked for; they take no
+image of the created agent's thread, because their `oats` is a fake that makes no agent (the thread
+it names is one of the fixture's). The created state is shown by the unit tests and by the real
+run, whose image is the new agent's own thread, new in the roster under its parent.
 
 A soul's page (the Souls page is not shown in a release's default) still holds the earlier form: a
 name, a task, Preview (`spawnPreview`, the kernel's preview as short lines) and Spawn in bb. It

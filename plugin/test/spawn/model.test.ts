@@ -82,7 +82,7 @@ describe("what will be created, from the kernel's preview", () => {
 
 describe("a refusal, in a person's words, with what to do", () => {
   it("at the preview: the Desktop's sentence, then the form's own words for what follows; the kernel's message for Details", () => {
-    expect(spawnProblem({ code: "E_INSTANCE_NAME_TAKEN", message: "instance flaky-ci-2-developer exists" })).toEqual({ sentence: "An instance with this name already exists. Choose another name.", next: null, code: "E_INSTANCE_NAME_TAKEN", detail: "instance flaky-ci-2-developer exists" });
+    expect(spawnProblem({ code: "E_INSTANCE_NAME_TAKEN", message: "instance flaky-ci-2-developer exists" })).toEqual({ sentence: "An instance with this name already exists. Choose another name.", next: null, code: "E_INSTANCE_NAME_TAKEN", detail: "instance flaky-ci-2-developer exists", outcome: "refused" });
     // The form has no Developer settings yet: no sentence names a control that is not there.
     expect(spawnProblem({ code: "E_BRANCH_EXISTS", message: null }).sentence).toBe("That branch already exists. Its name comes from the agent’s: choose another name.");
     expect(spawnProblem({ code: "E_BAD_ARGS", message: "x" }).sentence).toBe("Some of these values can’t be used. Check the values above.");
@@ -91,7 +91,7 @@ describe("a refusal, in a person's words, with what to do", () => {
       for (const stage of ["preview", "spawn"] as const) expect(spawnProblem({ code, message: null }, stage).sentence, code).not.toMatch(/Developer settings/);
     }
     // The bb session provider's own refusals, in the plugin's words.
-    expect(spawnProblem({ code: "E_BACKEND_HARNESS", message: "the bb session provider cannot launch codex" })).toEqual({ sentence: "bb can’t run the harness this soul would use. Pick one of the harnesses above.", next: "change-options", code: "E_BACKEND_HARNESS", detail: "the bb session provider cannot launch codex" });
+    expect(spawnProblem({ code: "E_BACKEND_HARNESS", message: "the bb session provider cannot launch codex" })).toEqual({ sentence: "bb can’t run the harness this soul would use. Pick one of the harnesses above.", next: "change-options", code: "E_BACKEND_HARNESS", detail: "the bb session provider cannot launch codex", outcome: "refused" });
     expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "bb reports its pi provider as not_installed" }, "spawn").sentence).toBe("bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs.");
     // As the real kernel printed it for a spawn on pi where bb has no pi provider: rolled back, and its words are the detail.
     const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
@@ -104,7 +104,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");
     expect(spawnProblem({ code: "E_PACKAGE_MISSING", message: null }).sentence).toBe("A package this soul uses isn’t installed yet. Run oats sync in the deployment, then try again.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }).sentence).toBe("OATS took too long to work out this soul’s defaults. Try again.");
-    expect(spawnProblem({ code: "E_SOMETHING_NEW", message: "what the kernel said" })).toEqual({ sentence: "OATS couldn’t work out this soul’s defaults. Try again, or see Details.", next: "details", code: "E_SOMETHING_NEW", detail: "what the kernel said" });
+    expect(spawnProblem({ code: "E_SOMETHING_NEW", message: "what the kernel said" })).toEqual({ sentence: "OATS couldn’t work out this soul’s defaults. Try again, or see Details.", next: "details", code: "E_SOMETHING_NEW", detail: "what the kernel said", outcome: "refused" });
   });
 
   it("a harness that is not installed is said as the kernel words it", () => {
@@ -123,7 +123,8 @@ describe("a refusal, in a person's words, with what to do", () => {
     // The same codes at the preview started nothing: the preview's general sentence.
     expect(spawnProblem({ code: "OATS_FAILED", message: "x" }, "preview").next).toBe("details");
     expect(spawnProblem({ code: "E_INTERRUPTED", message: "hook oats.build" }, "spawn").sentence).toBe("The spawn was interrupted while its worktree was being set up, and was rolled back. Nothing was created.");
-    expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS couldn’t complete the spawn. Try again, or see Details.", next: "details", code: "OATS_FAILED", detail: "boom" });
+    // A failure with no code at all says nothing of what the kernel did: not known.
+    expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result", code: "OATS_FAILED", detail: "boom", outcome: "unknown" });
     // A code the preview's table holds reads the same after the press.
     expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name.");
   });
@@ -186,3 +187,36 @@ describe("the form's own rows of the preview", () => {
   });
 });
 
+describe("after the press, what is known decides what the form may offer", () => {
+  const outcome = (code: string | null, options: { replay?: boolean } = {}) => spawnProblem({ code, message: "m" }, "spawn", options).outcome;
+
+  it("refused: only where something says nothing was created: the kernel's refusals the tables name, and a call that never reached the kernel", () => {
+    for (const code of ["E_DECISION_STALE", "E_PLACEMENT_TAKEN", "E_INSTANCE_NAME_TAKEN", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_BACKEND_NOT_READY", "E_MODEL_UNKNOWN", "E_BUSY", "INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]) expect(outcome(code), code).toBe("refused");
+  });
+
+  it("created: the kernel says an instance exists, or the spawn went through and named no thread: said as created, with where to open it", () => {
+    for (const code of ["E_SPAWN_INCOMPLETE", "NO_THREAD_NAMED", "E_INSTANCE_GONE"]) expect(outcome(code), code).toBe("created");
+    expect(spawnProblem({ code: "E_SPAWN_INCOMPLETE", message: "launched, not confirmed" }, "spawn").sentence).toBe("The instance was created but didn’t finish starting. Open it from the sidebar instead of spawning again.");
+    expect(spawnProblem({ code: "NO_THREAD_NAMED", message: "Spawned x, but the kernel named no bb thread for it" }, "spawn").sentence).toBe("The instance was created, but OATS named no bb thread for it. Open it from the sidebar instead of spawning again.");
+  });
+
+  it("unknown: everything else. Rollback is never inferred from a failure nobody classed", () => {
+    for (const code of ["E_OUTCOME_UNKNOWN", "E_INTENT_EXPIRED", "OATS_TIMEOUT", "OATS_FAILED", "OATS_NOT_JSON", "OATS_BAD_ANSWER", "OATS_OUTPUT_TOO_LARGE", "OATS_ABORTED", "HOST_UNREACHABLE", "PLUGIN_RPC_FAILED", "E_HOOK_ENVIRONMENT_CONTRACT", "E_SOMETHING_NEW", null]) {
+      const problem = spawnProblem({ code, message: "m" }, "spawn");
+      expect([problem.outcome, problem.next], String(code)).toEqual(["unknown", "check-result"]);
+      expect(problem.sentence, String(code)).toMatch(/Press Check result: it asks OATS again, and starts nothing twice\.$/);
+    }
+    expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
+  });
+
+  it("a Check result that the plugin refused before asking the kernel learned nothing: still unknown; one the kernel refuses by name is refused", () => {
+    expect(outcome("INVALID_INPUT", { replay: true })).toBe("unknown");
+    expect(outcome("OATS_NOT_FOUND", { replay: true })).toBe("unknown");
+    expect(outcome("E_DECISION_STALE", { replay: true })).toBe("refused");
+    expect(outcome("E_SPAWN_INCOMPLETE", { replay: true })).toBe("created");
+  });
+
+  it("a preview starts nothing: whatever its failure, nothing was created", () => {
+    for (const code of ["OATS_FAILED", "E_SOMETHING_NEW", "NO_THREAD_NAMED", null]) expect(spawnProblem({ code, message: "m" }, "preview").outcome, String(code)).toBe("refused");
+  });
+});

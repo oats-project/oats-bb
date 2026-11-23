@@ -33,6 +33,12 @@ export function agentsRootOf(agent: Pick<Agent, "home" | "soul" | "instance">): 
   return agent.home.startsWith("/") && agent.home.endsWith(tail) && agent.home.length > tail.length ? agent.home.slice(0, -tail.length) : null;
 }
 
+/** SHA-256 of a text, in hex: what a key is remembered by. */
+async function digest(text: string): Promise<string> {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 type Choices = z.infer<(typeof rpc)["spawnPlan"]["input"]>;
 type HostChoices = Omit<Choices, "relation"> & { relation?: NonNullable<Choices["relation"]> & { root?: string } };
 
@@ -83,7 +89,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     async spawn({ key, revision, ...input }) {
       const choices = await checked(input);
       // One key is one intent: the same choices, and the same decision when the caller names one.
-      const of = JSON.stringify([choices, revision ?? null]);
+      // Kept as a digest: a task may be 100 000 characters, and a caller has no login.
+      const of = await digest(JSON.stringify([choices, revision ?? null]));
       let decision = spawns.get(key);
       if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
       if (!decision) {

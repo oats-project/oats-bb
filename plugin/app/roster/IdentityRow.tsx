@@ -133,7 +133,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
-  const verb = status.state === "stopped" ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
+  // One that never ran (bb says its thread failed at its start: `status.bb`) is started, not restarted: nothing runs.
+  const verb = status.state === "stopped" || (status.state === "error" && status.bb !== undefined) ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
   const act =
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>

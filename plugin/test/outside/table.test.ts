@@ -8,7 +8,7 @@ import { refusal } from "../../app/home/board";
 import { carriesOn } from "../../app/lifecycle/words";
 import { said } from "../../app/outside/say";
 import { agentStatus } from "../../app/roster/status";
-import type { Agent } from "../../model/types";
+import type { Agent, BbThread } from "../../model/types";
 import { rest } from "../../model/rest";
 import { sample } from "./rows";
 
@@ -18,7 +18,9 @@ const listed = { status: "idle" };
 const row = (backend: "bb" | "tmux", running: boolean | null, runtimeState: string | null, sessionEnd?: string): Agent => ({ ...sample("harvest-knowledge-helper", { running, runtimeState }), backend, sessionEnd, waiting: null, ...(backend === "tmux" ? { threadId: null } : {}) });
 
 const failed = { status: "error" }; // bb's word for a thread whose last turn failed: the session is there
-const ROWS: [string, Agent, { status: string }?][] = [
+// bb's word that the thread failed AT ITS START (its events: app/outside/threads.ts), joined on the thread: the agent never ran.
+const neverStarted = { status: "error", startFailure: { message: "Command thread.start failed", detail: 'Failed to resolve Pi model "x"' } };
+const ROWS: [string, Agent, { status: string; startFailure?: object }?][] = [
   ["bb · an operator's stop", row("bb", false, "stopped", "stopped")],
   ["bb · stopped, no word how it ended", row("bb", false, "stopped")],
   ["bb · no word of the runtime's state", row("bb", false, null)],
@@ -31,6 +33,7 @@ const ROWS: [string, Agent, { status: string }?][] = [
   ["bb · session lost, on a thread whose last turn failed", row("bb", false, "stopped", "lost"), failed],
   ["bb · ended in a shell, on a thread whose last turn failed", row("bb", false, "shell"), failed],
   ["bb · an operator's stop, on a thread whose last turn failed", row("bb", false, "stopped", "stopped"), failed],
+  ["bb · session lost, on a thread that failed at its start", row("bb", false, "stopped", "lost"), neverStarted],
   ["bb · the kernel cannot reach it (the kernel's row)", row("bb", null, "unreachable")],
   ["bb · runs (a harness is loaded)", row("bb", true, "unknown")],
   ["tmux · stopped with OATS (recorded)", row("tmux", false, "shell", "stopped")],
@@ -41,11 +44,13 @@ const ROWS: [string, Agent, { status: string }?][] = [
 
 test("the table of every row, from the one function", () => {
   const table = ROWS.map(([name, agent, thread = listed]) => {
-    const on = agent.backend === "tmux" ? said(agent, "none", false) : said(agent, "open", true);
+    const on = agent.backend === "tmux" ? said(agent, "none", false) : said(agent, "open", true, thread);
+    // The state reads bb's thread for one fact here: whether it failed at its start.
+    const drawnOn = "startFailure" in thread ? (thread as never as BbThread) : null;
     return {
       row: name,
-      rest: rest(agent),
-      state: agentStatus(agent, null, NOW).word,
+      rest: rest(agent, agent.backend === "tmux" ? null : thread),
+      state: agentStatus(agent, drawnOn, NOW).word,
       reason: on === null ? "—" : on.note ?? (on.tone === "warning" ? "(the stop's warning)" : on.kind),
       card: rest(agent) === "runs" ? "—" : (refusal(agent, agent.backend === "tmux" ? null : thread) ?? "answers").replace(/^(stopped|unreachable)$/, "refuses ($1)"),
       dialog: carriesOn({ running: agent.running, runtimeState: agent.runtimeState, sessionEnd: agent.sessionEnd ?? null }, agent.backend === "tmux" ? null : thread) ? "a message carries it on" : "—",
@@ -66,6 +71,8 @@ test("the table of every row, from the one function", () => {
     ["bb · session lost, on a thread whose last turn failed", "lost", "Stopped", "session lost", "answers", "a message carries it on"],
     ["bb · ended in a shell, on a thread whose last turn failed", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
     ["bb · an operator's stop, on a thread whose last turn failed", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
+    // It never ran: failed, nothing of a lost session, no message.
+    ["bb · session lost, on a thread that failed at its start", "never-started", "Failed", "—", "refuses (stopped)", "—"],
     ["bb · the kernel cannot reach it (the kernel's row)", "unreachable", "Unreachable", "—", "refuses (unreachable)", "—"],
     ["bb · runs (a harness is loaded)", "runs", "Idle", "—", "—", "—"],
     ["tmux · stopped with OATS (recorded)", "stopped", "Stopped", "—", "refuses (stopped)", "—"],

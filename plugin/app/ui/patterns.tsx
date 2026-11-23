@@ -168,12 +168,13 @@ export function Disclosure({ summary, children, open, onToggle, testId = "oats-d
  * raw URL or an errno): one press away, under Details, never the line's words. The one drawing, for
  * the thread's row and the instance panel's header. Nothing for no text.
  */
-export function KernelSays({ text }: { text: string | null }) {
+export function KernelSays({ text, bb }: { text: string | null; /** bb's own reason for a thread that failed at its start, in the kernel's text's place. */ bb?: string | undefined }) {
   const said = text === null ? "" : shown(text);
-  if (said === "") return null;
+  const bbSaid = bb === undefined ? "" : shown(bb);
+  if (said === "" && bbSaid === "") return null;
   return (
-    <Disclosure summary="Details" testId="oats-status-kernel">
-      <p className="text-xs text-muted-foreground">{`OATS says: ${said}`}</p>
+    <Disclosure summary="Details" testId={said === "" ? "oats-status-bb" : "oats-status-kernel"}>
+      <p className="text-xs text-muted-foreground">{said === "" ? `bb says: ${bbSaid}` : `OATS says: ${said}`}</p>
     </Disclosure>
   );
 }

@@ -221,10 +221,11 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */
-export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
-  const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
+export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent; thread?: { startFailure?: unknown } }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
+  const node = roster.nodeByInstance.get(agent.instance);
+  const attached = node?.agent === agent;
   const where = roster.whereOf(agent);
-  const said = sayOf(agent, where, attached);
+  const said = sayOf(agent, where, attached, attached ? (node?.thread ?? null) : null);
   const now = useNow();
   const started = agent.startedAt == null ? "" : waitingClock(agent.startedAt, now);
   // The header's own acts for this agent now (`AgentActs` draws exactly these).

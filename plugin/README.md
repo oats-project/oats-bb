@@ -187,6 +187,7 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 |---|---|---|---|---|
 | stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
 | its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation." No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| any row that does not run, where bb says the thread FAILED AT ITS START (below) | open, in "error" | "Failed", and nothing after it; bb's own reason under Details ("bb says: …") | "Failed · <soul>" | Start on the line; Start… and Retire… on its page and in the thread's menu. No Restart, and the Start dialog has no carry-on line |
 | its session lost, on TMUX (no thread in bb) | none | on its page: "Its session ended without OATS stopping it. Nobody stopped it." and "Last started <time>" where the row has it; "Start tries to continue its last conversation." after the first only where the lifecycle offers Start for that agent | "Stopped · session lost · tmux" | the header's (the lifecycle's) |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped, its session not lost | archived | "Stopped · since when · Its conversation is archived in bb. Start begins a new one." (so that nobody expects the archived one to continue). The row opens the archived thread, which bb shows to read (no composer). | "Stopped · <soul>", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
@@ -300,6 +301,29 @@ sidebar's foot does (`view.needing`).
 Not there yet: the line of a thread that belonged to a RETIRED agent;
 the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
 come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
+
+### A thread that failed at its start
+
+A spawn whose thread fails at its start inside bb (a model the harness cannot resolve, a harness
+that is not installed) is refused by nobody: OATS reads the home `running: false`, `runtimeState:
+"stopped"`, `sessionEnd: "lost"`, which is the row of a session that ran and was lost, and bb's
+record of the thread and its sidebar say `status: "error"`, which is also what they say of a thread
+whose later turn failed. Only bb's EVENTS of the thread tell them apart, so for each agent whose
+listed thread is in "error" the plugin asks bb for them (`sdk.threads.events.list`, from the page;
+app/outside/threads.ts): **a `system/error` event and never a `turn/started`** is a thread that
+failed at its start (`startFailureOf`). The answer is joined on the thread (`BbThread.startFailure`,
+in `useOats()`), and every place reads that one fact: the state is "Failed" (`state`), how it is at
+rest is "never-started" (`rest(agent, thread)`: no message carries it on, the home's card does not
+answer it, the Start dialog has no carry-on line), bb's reason (the event's `data.detail`, else its
+`data.message`) is under Details, and the acts are Start and Retire, never Restart.
+
+- The read is ALWAYS by type, one type and one event at a time (whether a turn ever started; bb's
+  last error): the thread's whole log holds its environment (`provider.env-resolved`: its
+  variables' values), which must not come into the page.
+- It is asked again at each roster read and each minute, as the archived threads are; a thread
+  that has started a turn is not asked about again in the app window.
+- Until bb has answered, and where it cannot, the row says what it says without the answer.
+- Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
 
 ## The home
 

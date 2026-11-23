@@ -92,10 +92,25 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * (stopped, not running), and they would say "Stopped" of an agent that runs: ONE statement about
  * it, "Running outside OATS", in every place.
  */
+/**
+ * Whether the agent NEVER RAN: bb says its thread failed at its start (`BbThread.startFailure`),
+ * and the kernel does not say that it runs (`running` is not false beside a word that is not
+ * "stopped": an agent started again since). The one test, for the state and for how it is at rest (model/rest.ts).
+ */
+export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null }, thread: object | null | undefined): boolean {
+  // (Any row of the thread: only one that carries bb's word of its start says so.)
+  if (agent.backend === "tmux" || (thread as { startFailure?: unknown } | null | undefined)?.startFailure == null) return false;
+  return agent.running === false || agent.runtimeState === "stopped";
+}
+
 export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
+  // Its thread FAILED AT ITS START (bb's own events, joined on the thread: `startFailure`): it never
+  // ran, whatever the row says of how its session ended (the kernel reads such a home "stopped",
+  // its session "lost"). Failed, in every place. Not of a row the kernel does not call at rest.
+  if (failedAtStart(agent, thread)) return "error";
   // A row that does not run and says how its session ended: that decides (`recordedStopped`): an
   // operator's stop and a lost session are stopped beside any word; a harness that ended by itself failed.
   if (recordedStopped(agent)) return "stopped";

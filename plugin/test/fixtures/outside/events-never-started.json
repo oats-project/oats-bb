@@ -1,0 +1,17 @@
+[
+ {
+  "id": "evt_ngwy8q6672",
+  "scope": {
+   "kind": "thread"
+  },
+  "threadId": "thr_e7cpq288sp",
+  "seq": 9,
+  "createdAt": 1795462209258,
+  "type": "system/error",
+  "data": {
+   "code": "thread_command_failed",
+   "message": "Command thread.start failed",
+   "detail": "Failed to resolve Pi model \"nosuchmodel\""
+  }
+ }
+]

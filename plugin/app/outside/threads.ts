@@ -5,7 +5,7 @@
 // whatever number of places ask.
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
-import type { Agent, ThreadWhere } from "../../model/types";
+import type { Agent, BbThread, StartFailure, ThreadWhere } from "../../model/types";
 import { attempt, onWindowReset } from "../store";
 
 /** bb's answer for an id that was asked: it has the thread archived, or it has no archived thread of that id. */
@@ -73,6 +73,113 @@ export function useArchived(ids: readonly string[], token: string): ReadonlyMap<
     },
     () => answers,
   );
+}
+
+/**
+ * Whether a thread FAILED AT ITS START, from bb's answers for its events: bb recorded an error
+ * (`system/error`) and never the start of a turn (`turn/started`). The thread's record and bb's
+ * sidebar say "error" alike for such a thread and for one whose later turn failed; only its events
+ * tell them apart. null: a turn started, or bb recorded no error. Pure.
+ * (The error's own fields are under the event's `data`.)
+ */
+export function startFailureOf(turns: readonly unknown[], errors: readonly { seq?: number; data?: unknown }[]): StartFailure | null {
+  if (turns.length > 0 || errors.length === 0) return null;
+  const last = errors.reduce((a, b) => ((b.seq ?? 0) >= (a.seq ?? 0) ? b : a));
+  const data = (typeof last.data === "object" && last.data !== null ? last.data : {}) as { message?: unknown; detail?: unknown };
+  return { message: typeof data.message === "string" ? data.message : "", detail: typeof data.detail === "string" && data.detail !== "" ? data.detail : null };
+}
+
+/** The two types of event the rule reads, each in a read of its own that asks bb for ONE event. */
+export const STARTED = "turn/started";
+export const ERRORED = "system/error";
+
+/** An id with a failure: it failed at its start; with null: bb answered, and it did not; with no entry: not answered. */
+const NO_FAILURES: ReadonlyMap<string, StartFailure | null> = new Map();
+let failures: ReadonlyMap<string, StartFailure | null> = NO_FAILURES;
+/** The threads bb answered a started turn for: that never changes, so they are not asked again in this window. */
+const started = new Set<string>();
+let failuresAsked = "";
+const failureListeners = new Set<() => void>();
+onWindowReset(() => {
+  failures = NO_FAILURES;
+  started.clear();
+  failuresAsked = "";
+  failureListeners.clear();
+});
+
+/**
+ * Whether each of `ids` (threads bb lists in "error") failed at its start, by id. Asked again
+ * whenever the ids or `token` change, as `useArchived` is: a thread that failed at its start may
+ * be started since. One that has started a turn is not asked again.
+ */
+export function useStartFailures(ids: readonly string[], token: string): ReadonlyMap<string, StartFailure | null> {
+  const sdk = useSdk();
+  const idsKey = [...new Set(ids)].sort().join(" ");
+  useEffect(() => {
+    const key = `${token}\n${idsKey}`;
+    if (key === failuresAsked) return;
+    failuresAsked = key;
+    const wanted = idsKey === "" ? [] : idsKey.split(" ");
+    const publish = (next: ReadonlyMap<string, StartFailure | null>) => {
+      if (next.size === 0 && failures.size === 0) return;
+      failures = next;
+      for (const listener of [...failureListeners]) listener();
+    };
+    if (wanted.length === 0) return publish(NO_FAILURES);
+    // ALWAYS a read by type, never the thread's whole log: the log holds the thread's environment
+    // (`provider.env-resolved`: its variables' values), which must not come into the page. Two
+    // reads, each of one type and one event: whether a turn ever started, and bb's last error.
+    const ask = (threadId: string) =>
+      started.has(threadId)
+        ? Promise.resolve(null)
+        : Promise.all([
+            attempt(() => sdk.threads.events.list({ threadId, types: [STARTED], order: "asc", limit: "1" })),
+            attempt(() => sdk.threads.events.list({ threadId, types: [ERRORED], order: "desc", limit: "1" })),
+          ]).then(([turns, errors]) => {
+            if (turns.length > 0) started.add(threadId);
+            return startFailureOf(turns, errors);
+          });
+    // Each thread by itself: one bb cannot answer for is left out (nothing is claimed of it), and asked again at the next change.
+    Promise.allSettled(wanted.map(ask)).then((answers) => {
+      if (failuresAsked !== key) return; // a newer question is out
+      const next = new Map<string, StartFailure | null>();
+      answers.forEach((answer, index) => {
+        if (answer.status === "fulfilled") next.set(wanted[index]!, answer.value);
+      });
+      if (next.size < wanted.length) failuresAsked = "";
+      publish(next);
+    });
+  }, [sdk, idsKey, token]);
+  return useSyncExternalStore(
+    (listener) => {
+      failureListeners.add(listener);
+      return () => failureListeners.delete(listener);
+    },
+    () => failures,
+  );
+}
+
+/**
+ * bb's threads with what bb's events say of the ones in "error" that an agent's row names
+ * (`BbThread.startFailure`), for `useOats()`: every place then reads ONE fact (the state, the
+ * line, the acts, the home). Until bb has answered, and where it cannot, a thread is as bb's
+ * sidebar gives it, and its row says what it says without this. Asked again at each roster read
+ * (`at`) and each minute.
+ */
+export function useStartedThreads<T extends BbThread>(agents: readonly Agent[] | undefined, threads: readonly T[], at: string): readonly T[] {
+  const minuteOfWindow = useSyncExternalStore(onMinute, minuteNow);
+  const ids = useMemo(() => {
+    const named = new Set((agents ?? NO_ONE).flatMap((agent) => (agent.backend === "tmux" || agent.threadId === null ? [] : [agent.threadId])));
+    return threads.filter((thread) => thread.status === "error" && named.has(thread.id)).map((thread) => thread.id);
+  }, [agents, threads]);
+  const answered = useStartFailures(ids, `${at} ${minuteOfWindow}`);
+  return useMemo(() => {
+    if (!threads.some((thread) => thread.status === "error" && answered.get(thread.id) != null)) return threads;
+    return threads.map((thread) => {
+      const failure = thread.status === "error" ? answered.get(thread.id) : undefined;
+      return failure == null ? thread : { ...thread, startFailure: failure };
+    });
+  }, [threads, answered]);
 }
 
 const NO_ONE: readonly Agent[] = [];

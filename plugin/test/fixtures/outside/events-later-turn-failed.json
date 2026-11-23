@@ -1,0 +1,30 @@
+[
+ {
+  "id": "evt_ammcuvyan2",
+  "scope": {
+   "kind": "turn",
+   "turnId": "daa09777f3-t1"
+  },
+  "threadId": "thr_um4hhp2zu5",
+  "seq": 11,
+  "createdAt": 1795462223629,
+  "type": "turn/started",
+  "data": {
+   "providerThreadId": "pi_1099ab6f-a664-49d5-b7b8-4bbaaec6e066"
+  }
+ },
+ {
+  "id": "evt_dpgibnurud",
+  "scope": {
+   "kind": "turn",
+   "turnId": "daa09777f3-t2"
+  },
+  "threadId": "thr_um4hhp2zu5",
+  "seq": 22,
+  "createdAt": 1795462255481,
+  "type": "turn/started",
+  "data": {
+   "providerThreadId": "pi_1099ab6f-a664-49d5-b7b8-4bbaaec6e066"
+  }
+ }
+]

@@ -550,6 +550,18 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   also told through bb's own toaster (`notify`, `app/ui/notify.ts`), with "Open <name>": it stays
   when the thread opens, and reaches a person who left the form while it spawned (a failure is
   told there the same way, and stays until dismissed).
+- "Created" is said once the new thread is past its start in bb, not when the kernel answers: the
+  kernel says "launched" before bb has started the thread, and a thread can fail at its start (a
+  model the harness cannot resolve). So the form stays busy ("Spawning…") until bb's own status of
+  the thread is no longer "starting" or "pending", for 10 s at most (`startOutcome`,
+  app/outside/threads.ts: `sdk.threads.get`, then the rule of "A thread that failed at its start").
+  Where the thread failed at its start the result is **<Name> did not start**, in the failed tone,
+  with bb's own reason under Details and one button, **Open** (the agent's own page, whose Start
+  offers the harness and the model); the form stays held (an instance exists), nothing navigates,
+  and nothing says "Created". A person who left the form is told the same by a notification that
+  stays, with Open. Nothing is said of the model: the form does not guess. A thread still starting
+  after 10 s, and one bb cannot answer for, are "Created" as before (the agent's row then says
+  "Failed" by the same rule if it failed).
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, whose rollback the

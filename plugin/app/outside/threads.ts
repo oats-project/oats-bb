@@ -93,6 +93,48 @@ export function startFailureOf(turns: readonly unknown[], errors: readonly { seq
 export const STARTED = "turn/started";
 export const ERRORED = "system/error";
 
+type Sdk = ReturnType<typeof useSdk>;
+/**
+ * The two reads of the rule for one thread. ALWAYS a read by type, never the thread's whole log:
+ * the log holds the thread's environment (`provider.env-resolved`: its variables' values), which
+ * must not come into the page. Each read is of one type and one event: whether a turn ever
+ * started, and bb's last error.
+ */
+const readStart = (sdk: Sdk, threadId: string) =>
+  Promise.all([
+    attempt(() => sdk.threads.events.list({ threadId, types: [STARTED], order: "asc", limit: "1" })),
+    attempt(() => sdk.threads.events.list({ threadId, types: [ERRORED], order: "desc", limit: "1" })),
+  ]);
+
+/** How long a place waits for a thread it just made to leave its start, and how often it asks bb meanwhile. */
+export const START_WAIT_MS = 10_000;
+const START_ASK_MS = 500;
+
+/**
+ * For the place that just made a thread (the New agent form): whether the thread FAILED AT ITS
+ * START, once bb's own status of it is no longer one of a thread that has not begun ("starting",
+ * or "pending": in line to start), or after `START_WAIT_MS`. null: it did not (it runs, it is at
+ * rest, or it failed later), bb could not say, or it had not left its start in that time: the
+ * place then says what it says without this.
+ */
+export async function startOutcome(sdk: Sdk, threadId: string): Promise<StartFailure | null> {
+  try {
+    for (const deadline = Date.now() + START_WAIT_MS; ; ) {
+      const { status } = await attempt(() => sdk.threads.get({ threadId }));
+      if (status !== "starting" && status !== "pending") {
+        if (status !== "error") return null;
+        const [turns, errors] = await readStart(sdk, threadId);
+        return startFailureOf(turns, errors);
+      }
+      if (Date.now() + START_ASK_MS > deadline) return null;
+      await new Promise((resolve) => setTimeout(resolve, START_ASK_MS));
+    }
+  } catch {
+    // bb could not say: nothing is claimed of the thread.
+    return null;
+  }
+}
+
 /** An id with a failure: it failed at its start; with null: bb answered, and it did not; with no entry: not answered. */
 const NO_FAILURES: ReadonlyMap<string, StartFailure | null> = new Map();
 let failures: ReadonlyMap<string, StartFailure | null> = NO_FAILURES;
@@ -126,16 +168,10 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
       for (const listener of [...failureListeners]) listener();
     };
     if (wanted.length === 0) return publish(NO_FAILURES);
-    // ALWAYS a read by type, never the thread's whole log: the log holds the thread's environment
-    // (`provider.env-resolved`: its variables' values), which must not come into the page. Two
-    // reads, each of one type and one event: whether a turn ever started, and bb's last error.
     const ask = (threadId: string) =>
       started.has(threadId)
         ? Promise.resolve(null)
-        : Promise.all([
-            attempt(() => sdk.threads.events.list({ threadId, types: [STARTED], order: "asc", limit: "1" })),
-            attempt(() => sdk.threads.events.list({ threadId, types: [ERRORED], order: "desc", limit: "1" })),
-          ]).then(([turns, errors]) => {
+        : readStart(sdk, threadId).then(([turns, errors]) => {
             if (turns.length > 0) started.add(threadId);
             return startFailureOf(turns, errors);
           });

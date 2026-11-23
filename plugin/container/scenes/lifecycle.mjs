@@ -470,6 +470,43 @@ export default [
     },
   },
   {
+    stage: "lifecycle-running",
+    name: "Restart, of an agent whose session was lost after its menu opened: first, that a message in its thread carries its conversation on, with the way there",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const helper = threads.get(HELPER);
+      const shot = (name) => dialogShot({ page, at, viewport, check }, "restart", name);
+      try {
+        await page.goto(threadPath(helper));
+        check(await openThreadMenu(page), `${at} the thread's own menu opens on a running agent's thread`);
+        // A menu offers Restart for an agent that runs. Its session is lost with the host before Restart is pressed:
+        // the dialog reads the kernel's row again, and it is the lost one (not running, stopped, not by an operator).
+        changes = { "weekly-digest-helper": { running: false, runtimeState: "stopped", sessionEnd: "lost" } };
+        answers();
+        check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed in the thread's menu`);
+        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Restart dialog of an agent whose session was lost points at its thread`);
+        const said = JSON.parse(
+          await page.evaluate(
+            `(() => { const confirm = document.querySelector(${JSON.stringify(confirm)}); const notice = confirm.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ first: confirm.firstElementChild === notice, title: notice?.querySelector("h3")?.innerText ?? null, open: document.querySelector(${JSON.stringify(testId("oats-start-thread"))})?.innerText ?? null, next: notice?.nextElementSibling?.innerText ?? "" }); })()`,
+          ),
+        );
+        check(
+          said.first && said.title === "To carry on its conversation, send it a message in its thread instead." && said.open === "Open Weekly digest helper" && said.next.includes("Starts a new conversation. The current one stays readable in bb, archived."),
+          `${at} the dialog says FIRST to send a message in its thread to carry on, with Open Weekly digest helper, and then that a restart begins a new conversation`,
+          JSON.stringify(said),
+        );
+        const before = await dialog(page);
+        check(before.title === "Restart Weekly digest helper" && before.act === "Restart" && before.off === false, `${at} Restart stays possible`, JSON.stringify(before));
+        await shot("cut-off");
+        await page.evaluate(click("oats-start-thread"));
+        check(Boolean(await page.until(`${closed} && location.pathname.endsWith("/threads/${helper.id}")`, 15)), `${at} Open Weekly digest helper closes the dialog on the agent's thread, and restarts nothing`);
+      } finally {
+        // (the stage's own roster: the agent runs)
+        changes = { "weekly-digest-helper": { running: true, runtimeState: "unknown", sessionEnd: null } };
+        answers();
+      }
+    },
+  },
+  {
     stage: "detached",
     name: "Retire, from a soul's page, of an agent whose thread bb does not have: the same dialog",
     run: async ({ page, at, viewport, check }) => {

@@ -477,8 +477,8 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
   say so before the act ("Starts a new conversation. The current one stays readable in bb,
   archived."), and the result opens the new thread. For an agent that was cut off the Start
-  dialog says first that a message in its thread carries its conversation on, with a button to
-  that thread; Start stays possible. Cut off is two facts, both read: the kernel's row says the
+  and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
+  that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
   harness: `running: false`, `sessionEnd: "lost"`; from the bb provider's next release also a
   thread at rest with no harness loaded: `running: false` with a runtime state that is not

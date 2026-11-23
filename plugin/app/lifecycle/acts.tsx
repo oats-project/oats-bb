@@ -183,13 +183,14 @@ function useKeepFocus(): void {
  * line that says the act runs, the result or the refusal when it arrives; and a plan, or a notice
  * above it, is read from its top. `what` names the moment; it moves nothing while it stays the same.
  */
-function useReveal(what: "top" | "running" | "result" | "warning" | "kept" | null): void {
+function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "kept" | null): void {
   useEffect(() => {
     if (what === null) return;
     const reveal = () => {
       const dialog = document.querySelector<HTMLElement>('[data-testid="oats-confirm"]');
       if (dialog === null) return;
-      if (what === "top") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
+      // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
+      if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
       else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-loading" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
@@ -534,8 +535,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             ...answer,
             // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
             begins: thread === null ? START.fresh : START.newThread,
-            // Cut off, with a thread that can take a message: said first, with the way to that thread; Start stays possible.
-            carryOn: verb === "start" && thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
+            // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
+            // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
+            carryOn: thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
           },
         });
       },
@@ -610,7 +612,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               );
   const editable = state.phase === "ready";
   useFocusWhenReady(editable);
-  useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : "top");
+  // A dialog that says first to send a message instead is read from that line, whatever field takes the focus.
+  useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : state.phase === "ready" && state.check.carryOn !== null ? "first" : "top");
   useKeepFocus();
   const recorded = known?.harness ?? null;
   const begins = known?.begins ?? START.fresh;

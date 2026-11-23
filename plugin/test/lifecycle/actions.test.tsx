@@ -1217,7 +1217,7 @@ test.each([
   expect(calls(slot, "start", "restart")).toEqual([]);
 });
 
-test("the cut-off line is for that state alone: never after an operator's stop, never for a row that does not say how its session ended, never on a Restart, never for a state that is not known", async () => {
+test("the cut-off line is for that state alone: never after an operator's stop, never for a row that does not say how its session ended, never for an agent that runs or whose state is not known", async () => {
   const pointed = async (verb: "start" | "restart", thread: string, change: Parameters<typeof startCheckOf>[1]) => {
     const { slot, pick } = await menu(thread, { startCheck: ({ instance }) => startCheckOf(instance, change) });
     await pick(verb);
@@ -1231,7 +1231,31 @@ test("the cut-off line is for that state alone: never after an operator's stop, 
   expect(await pointed("start", "thr_digest", { running: false, runtimeState: "unknown", sessionEnd: "stopped" })).toBe(false);
   expect(await pointed("start", "thr_digest", { running: false, runtimeState: "stopped", sessionEnd: null })).toBe(false);
   expect(await pointed("start", "thr_digest", { running: null, runtimeState: "unknown", sessionEnd: null })).toBe(false);
-  expect(await pointed("restart", "thr_redesign", LOST)).toBe(false);
+  // Restart says it under the same condition (below), and not otherwise.
+  expect(await pointed("restart", "thr_redesign", OPERATOR_STOP)).toBe(false);
+  expect(await pointed("restart", "thr_redesign", { running: true, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+  expect(await pointed("restart", "thr_redesign", { running: null, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+});
+
+test.each([
+  ["whose session was lost", LOST],
+  ["whose thread is at rest with no harness loaded", AT_REST],
+])("Restart of an agent that was cut off (%s) says the same line first: a restart loses its place in the conversation as a start does; Restart stays possible", async (_, row) => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, row), restart: () => startedIn("thr_redesign_2") });
+  await pick("restart");
+  await ready(slot);
+  const confirm = slot.getByTestId("oats-confirm");
+  const notice = within(confirm).getByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("To carry on its conversation, send it a message in its thread instead.");
+  expect(confirm.firstElementChild).toBe(notice);
+  expect(notice.nextElementSibling!.textContent).toContain("What will happen");
+  expect(button(slot, "oats-start-thread").textContent).toBe("Open Redesign ui lead");
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  expect(button(slot, "oats-confirm-act").textContent).toBe("Restart");
+  fireEvent.click(button(slot, "oats-start-thread"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_redesign" }]);
+  expect(calls(slot, "start", "restart")).toEqual([]);
 });
 
 test("a cut-off agent whose thread cannot take a message gets no line: bb says its thread is in error, or shows none", async () => {

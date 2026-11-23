@@ -439,7 +439,7 @@ export const START = {
   newThread: "Starts a new conversation. The current one stays readable in bb, archived.",
   /**
    * For an agent that was cut off (`carriesOn`): a message in its thread carries its conversation
-   * on, which a start does not. Said first; Start stays possible.
+   * on, which a start does not, and neither does a restart. Said first in both dialogs; the act stays possible.
    */
   carryOn: "To carry on its conversation, send it a message in its thread instead.",
   checking: "Checking instance…",
@@ -455,7 +455,7 @@ export const START = {
   unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
 } as const;
 /**
- * Whether the Start dialog says first that a message in the agent's thread carries its
+ * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
  * conversation on. Two facts, both read, neither inferred:
  * - the kernel's row says the agent does NOT run and that no operator stopped it: its session was
  *   lost (`running: false`, "stopped", `sessionEnd: "lost"`: with the host, or its harness gone),

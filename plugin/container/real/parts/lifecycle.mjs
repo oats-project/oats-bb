@@ -27,14 +27,15 @@ const words = (instance) => {
 
 /** What the Stop dialog says a stop means for the agent's bb thread (app/lifecycle/words.ts `stopThreadSentence`). */
 const stopSentence = (archives) => (archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+/** The plugin's own threshold and its shape of a release (app/lifecycle/words.ts `ARCHIVES_AT_STOP_FROM`, `RELEASE`): restated here, a run cannot read the app's code; they move together. */
+const ARCHIVES_AT_STOP_FROM = "0.4.0";
+const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 /**
  * Whether a provider of this version archives the thread of a home it stops, compared as the
  * plugin compares it (app/lifecycle/words.ts `stopArchivesThread`): a release from 0.4.0 on,
  * numerically, part by part; a pre-release of 0.4.0 itself, a version that is no release (a commit,
  * for a provider pinned by one) and none at all do not.
  */
-const ARCHIVES_AT_STOP_FROM = "0.4.0";
-const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 function archivesByVersion(version) {
   const [have, need] = [typeof version === "string" ? RELEASE.exec(version) : null, RELEASE.exec(ARCHIVES_AT_STOP_FROM)];
   if (have === null || need === null) return false;
@@ -63,7 +64,7 @@ export default async (run) => {
   }
   check(shown.exit === 0 && providerVersion !== null, "oats capabilities show oats.bb --json names the provider's version", shown.stdout.slice(0, 300) || shown.stderr);
   const saysArchives = archivesByVersion(providerVersion);
-  note(`the bb session provider's version, as the kernel prints it: ${JSON.stringify(providerVersion)}: the Stop dialog's confirmation ${saysArchives ? "says the thread is archived (a release from " + ARCHIVES_AT_STOP_FROM + ")" : "warns that a message in the thread starts the agent again (no release from " + ARCHIVES_AT_STOP_FROM + ": below it, a pre-release of it, or a commit)"}; its result says what the stop did (${run.stopArchives() ? "archived" : "kept"})`);
+  note(`the bb session provider's version, as the kernel prints it: ${JSON.stringify(providerVersion)}: the Stop dialog's confirmation ${saysArchives ? "says the thread is archived (a release from " + ARCHIVES_AT_STOP_FROM + ")" : "warns that a message in the thread starts the agent again (no release from " + ARCHIVES_AT_STOP_FROM + ": below it, a pre-release of it, or a commit)"}; its result says what the stop did (${run.stopArchives() === null ? "not read: no stop of this run yet" : run.stopArchives() ? "archived" : "kept"})`);
 
   /** An agent of its own, spawned on the command line as the plugin's spawn does it (full mode, on bb). */
   const spawn = (name, parent) => {

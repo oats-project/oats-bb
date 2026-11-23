@@ -45,8 +45,11 @@ try { bbVersion = readFileSync(join(repoRoot, "bb-version"), "utf8").trim(); }
 catch (error) { report("bb-version", `unreadable (${error.message})`); }
 if (bbVersion !== null && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(bbVersion)) report("bb-version", "must hold one bb-app version");
 
-// The floor: the OATS that lists `session-providers`. An older kernel would compose the
-// capability and ignore `sessionProviders`, failing only at `--backend bb`.
+// The floor: an OATS release, ">=<version>". It is the release whose host shutdown marks
+// its stop (`reason: "host"`, contract r25, A16): with an older kernel the provider's stop
+// would archive a home the kernel means to resume. (Session providers themselves are in
+// OATS since 0.70.0: an older kernel would compose the capability and ignore
+// `sessionProviders`, failing only at `--backend bb`.)
 function floor(manifest, at) {
   if (!isObject(manifest.compatibility) || typeof manifest.compatibility.oats !== "string" || !/^>=\d+\.\d+\.\d+$/.test(manifest.compatibility.oats)) report(at, 'compatibility.oats must be a floor, ">=<version>"');
 }

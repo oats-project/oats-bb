@@ -2,9 +2,10 @@
 // functions below the app: the kernel adapters make a source's own words display lines on the
 // machine, before they leave it, and the app draws through the same functions (app/ui/text.ts
 // re-exports every name here, and says where the filter comes from). Moved from app/ui/text.ts
-// with no line changed. This file is the shared UI's, like app/ui/text.ts (the roster's
-// developer's): a change of the filter goes through its owner. Pure: no bb, no React, no DOM, no
-// import from kernel/ or app/; never throws.
+// with no line changed. It is the OATS Desktop's filter (packages/client/display-text.mjs of
+// awebai/oats; app/ui/text.ts names the commit it was read at). This file is the shared UI's,
+// like app/ui/text.ts (the roster's developer's): a change of the filter goes through its owner.
+// Pure: no bb, no React, no DOM, no import from kernel/ or app/; never throws.
 /**
  * Not text a one-line note may hold, an exact set (the kernel's rule for a waiting message):
  * control characters (Cc: C0, DEL, C1), the line and paragraph separators, the bidi embeddings and

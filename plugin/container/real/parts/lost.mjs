@@ -45,7 +45,7 @@ import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 /** The row and the page say a tmux agent's stop and its loss by the row's sessionEnd (the one-predicate PR is on main). */
 const WORDS = false;
 /** Start and Restart are offered for an agent on tmux, and a lost one's Start resumes (the dialogs' PR for tmux is on main). */
-const ACTS = false;
+const ACTS = true;
 
 const NAME = "lost-tmux-developer";
 const SOUL = "oats-developer";

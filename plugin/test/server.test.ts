@@ -335,6 +335,27 @@ describe("the event path", () => {
     expect(confirmed.agents).toEqual(first.agents);
   }, 60_000);
 
+  // The app acts once per token (the payload's `at`: app/store.ts). A patch leaves the snapshot's
+  // `at` as it is, so each publish must carry a token the app has not seen.
+  it("two patches and the status read between them publish three different tokens: the app acts on each", async () => {
+    const first = await rpc<Shown>("snapshot");
+    await fake.behave({ status: { sleepMs: 1_200 }, [EVENTS]: { stdout: claimed() } });
+    const published = server.harness.realtimeSignals.length;
+    const tokens = () => server.harness.realtimeSignals.slice(published).map((signal) => (signal.payload as { at: string }).at);
+    await named(); // patch 1: the claim, over the first status read
+    await until(() => tokens().length === 1, "the first patch is published");
+    await until(() => tokens().length === 2, "the status read after it is published (the fake's roster has no claim: a change)");
+    const between = await rpc<Shown>("snapshot");
+    expect(lead(between).waiting).toBeNull();
+    await named(); // patch 2: the claim again, over that status read
+    await until(() => tokens().length === 3, "the second patch is published");
+    const [one, two, three] = tokens() as [string, string, string];
+    expect(new Set([first.at, one, two, three]).size).toBe(4); // each a token no client has acted on
+    expect(two).toBe(between.at); // a status read's token is its snapshot's `at`, as before
+    const patched = await rpc<Shown>("snapshot");
+    expect([patched.at, lead(patched).waiting !== null]).toEqual([between.at, true]); // a patch's token is not the snapshot's `at`
+  }, 60_000);
+
   it("a status answer OLDER than the patch never removes it: the read that was in flight when the events were read keeps the claim", async () => {
     const first = await rpc<Shown>("snapshot");
     await fake.behave({ status: { sleepMs: 1_500 }, [EVENTS]: { stdout: claimed() } });

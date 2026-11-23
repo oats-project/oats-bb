@@ -4,6 +4,91 @@
 
 ### The session provider
 
+- **A stop archives the thread: an agent OATS stopped stays stopped.** bb starts a
+  stopped thread's agent again at the next message to it, in the same conversation, so a
+  message typed in bb's composer restarted an agent OATS had stopped, behind OATS's back.
+  bb refuses every message to an archived thread. The provider's stop now archives the
+  thread once it has seen it stopped (`bb thread archive`), for pi and for Claude.
+  - Nothing of the conversation is lost: it stays in bb as an archived thread (bb's
+    thread list under Archived; `bb thread list --archived --project <id>`). A start was
+    already a new thread.
+  - A stop with no endpoint (the kernel's cleanup after a launch whose answer was lost)
+    archives what it archived before: the threads bb made at or after the time the launch
+    was sent. A thread that may be a person's is stopped and never archived.
+  - An archive bb refuses fails no stop: the answer is `{stopped: true}`, and the
+    provider's command writes one warning line on its standard error naming the thread
+    (the wire's stop result has no place for it). The next start archives that thread or
+    refuses, naming it.
+  - A thread a person unarchives in bb takes messages again, and the next one starts its
+    agent outside OATS; stop it or start it with OATS.
+  - A stop with the host is not archived: where the stop input carries `reason: "host"`
+    (the kernel's word for `oats host run`'s shutdown), the thread is stopped and left
+    live, since the kernel resumes such a home by an input to that thread. Such a stop
+    answers once the thread's harness has left the home, so the home never reads as
+    running right after it.
+  - A bb agent's resume after a reboot depends on `oats host run`. Where it runs (the team
+    container does), its shutdown stops each bb home with the host and its sweep resumes
+    them, within about a minute of its start. Where it doesn't (a laptop may not), after a
+    reboot a bb home reads idle and present, not lost: no sweep resumes it, and its next
+    input, a message or a wake, starts its harness again on the same conversation. On a
+    host without `oats host run`, an agent cut off mid-turn by a reboot does not carry on by
+    itself: it waits for its next message or wake, so send it one. (Seen with a bb-app
+    restart standing in for a reboot, bb-app 0.50.1; not yet with a real reboot.) To carry
+    on, send it a message. Don't press Start unless you want a fresh conversation: a Start is
+    a new thread and leaves the cut conversation behind.
+  - **The OATS floor rises to 0.70.5** (`compatibility.oats`), the OATS release that
+    sends `reason: "host"`, so that no supported pairing loses a reboot's resume. Update
+    OATS to 0.70.5 or later before pinning this release: an older kernel refuses the
+    package (`E_CAPABILITY_INCOMPATIBLE`). The team image pins `@awebai/oats-pi`
+    0.70.5, and the pi contract test and the kernel run (`npm run test:kernel:pi`) run
+    with OATS 0.70.5. With an older kernel (a trial), the key is absent and every stop archives: bb then refuses the input
+    the kernel resumes a host-stopped home by, the home is not resumed when the host
+    starts again, and `oats session start` gives it a new thread.
+  - The window: a host-stopped home's thread is live and unarchived from the host's
+    shutdown until the first resume sweep after it is back (the time the host is off,
+    plus up to about a minute after boot). A message in it lands in a home OATS means to
+    run.
+  - **Upgrade: close the homes that are already stopped, once.** A home OATS stopped
+    with an earlier oats.bb still has its thread live in bb, and a message there starts
+    its agent again. A home also runs the provider from its own copy of the package, so a
+    home spawned before this release stops with the old provider until its copy moves.
+    After pinning this release and `oats sync`, for each bb home: stop it if it runs
+    (`oats instance stop <name>`), move its copy (`oats instance upgrade <name>`), then
+    run `oats instance stop <name>` once more. The kernel asks the provider to stop a home
+    it already holds stopped, by its recorded thread, and that stop archives it
+    (`test/contract/kernel/pi-run.mjs` pins it under a real kernel). It archives the
+    home's own recorded thread and no other thread of its bb project. Nothing is archived
+    by a status read.
+  - **inspect says whether a thread at rest runs.** For a thread bb shows `idle` or
+    `pending` with nothing in line, `running` was `null`. It is now read from this host's
+    processes: `true` where the harness bb started for the thread is at work in the home
+    (a process named `pi` or `claude` that carries the thread's id, has the home as its
+    working directory and is a child of bb's own runner for that provider), `false` where
+    it is not, as after `bb thread stop`. A process that only carries the thread's id
+    never counts, nor a `pi` or a `claude` the agent itself started and left running
+    detached (false at the pinned bb version, `null` at another, where it cannot be told): an agent's own detached processes outlive a stop of its thread, and
+    `oats instance stop` does not end them. The rule reads bb-app's own process layout
+    (its bridge worker's file name), pinned by the contract tests at every bb bump. OATS needs it to tell a home stopped with the host from one
+    whose harness came back. On a host without `/proc` (macOS) it stays `null`: there a
+    harness started again from bb in a stopped home goes unseen, and the stop's archive
+    is what keeps it from starting. A thread in `error` whose harness is still loaded
+    reads the same way (`true` where it works in the home; it was `null`); one whose
+    harness is gone is a lost session, as before. A thread whose row says
+    `queuedWork: "failed"` (a queued message whose dispatch failed) no longer reads
+    `running: true` for that alone: the word does not say a turn will start, and the
+    thread reads by its harness (bb may still retry such a message by itself: the answer
+    then corrects itself); only a message that
+    waits to start (`waiting`) reads `true` without a look, and a queue word the provider
+    does not know reads `null`.
+  - The retire hook's receipt (`capabilityMeta` of oats.bb) says what bb holds of the
+    home when the hook ends. `archived` lists every thread of the home that is archived
+    in bb then: the ones the hook archived, then the ones it found archived already (by
+    the stop inside the retire, which archives the home's thread; by a person; by an
+    earlier start). `retired: true` wherever bb has a thread of the home and none is left
+    live. `{retired: false, reason: "nothing-to-delete"}` is now only for a home bb has
+    no thread of at all (and no env to remove), such as one that never ran on bb. Before,
+    `archived` held only what the hook itself archived.
+
 - **`settings.oats.bb.hostDaemonPort`: a bb whose host daemon is not on bb's default
   port.** Set it, in `oats-local.yaml` only (the key is host-only, as `server` is), when
   a workspace's bb-app runs on other ports than bb's defaults, as the second bb of a host

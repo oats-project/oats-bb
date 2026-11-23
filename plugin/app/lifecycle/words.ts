@@ -58,18 +58,27 @@ export const stopThreadSentence = (archives: boolean): string =>
   archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
 /**
  * The fact, read from the provider's VERSION (the `version` of `oats capabilities show oats.bb
- * --json`, the read the harness list makes): the provider archives at stop from the release named
- * here on. No release does yet (null): the answer is then "does not archive" for every version,
- * and for a version that is not known.
+ * --json`, the read the harness list makes): the bb session provider archives the thread at stop
+ * from oats-bb v0.4.0 on (fixed by the release lane). The compare is numeric, part by part.
+ * Everything that is not known to archive answers false, so that the dialog keeps the sentence
+ * that warns ("a message sent in its thread starts it again without OATS"):
+ * - a version below it;
+ * - a version that is not a release's `major.minor.patch` (a commit, for a provider taken from a
+ *   repository; an empty or partial one), and none at all;
+ * - a PRE-RELEASE of the threshold itself (`0.4.0-rc.1`): by semver it comes before 0.4.0, and
+ *   nothing says that a candidate already archives. A pre-release of a later version is later.
  */
-export const ARCHIVES_AT_STOP_FROM: string | null = null;
+export const ARCHIVES_AT_STOP_FROM: string | null = "0.4.0";
+const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 export function stopArchivesThread(providerVersion: string | null, from: string | null = ARCHIVES_AT_STOP_FROM): boolean {
-  if (from === null || providerVersion === null) return false;
-  const parts = (version: string) => version.split(/[.+-]/).slice(0, 3).map((part) => Number.parseInt(part, 10));
-  const [have, need] = [parts(providerVersion), parts(from)];
-  if (have.length < 3 || have.some((part) => !Number.isFinite(part))) return false;
-  for (let index = 0; index < 3; index += 1) if (have[index]! !== need[index]!) return have[index]! > need[index]!;
-  return true;
+  const [have, need] = [providerVersion === null ? null : RELEASE.exec(providerVersion), from === null ? null : RELEASE.exec(from)];
+  if (have === null || need === null) return false;
+  for (const part of [1, 2, 3]) {
+    const [mine, theirs] = [Number(have[part]), Number(need[part])];
+    if (mine !== theirs) return mine > theirs;
+  }
+  // The same release: a pre-release of it comes before it.
+  return have[4] === undefined;
 }
 
 export const STOP_CHOICE = "Include child instances";

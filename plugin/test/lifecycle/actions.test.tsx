@@ -1610,13 +1610,38 @@ test("a stop's result does not wait on bb's word of the thread beyond a moment: 
 
 // ---- the provider's version reaches the one function that decides what a stop says of the thread
 
-test("the Stop dialog reads the provider's version from the plan: no release archives at stop yet, so every version, a commit and none say that a message starts the agent again", async () => {
+test("the Stop dialog says what the provider's version says a stop does to the thread: archived from oats-bb 0.4.0 on; a message starts it again below it, for a commit, and for none", async () => {
   const MESSAGE = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
-  for (const version of ["0.9.0", "99.0.0", "9b95a56f237ff4006a69545963d5130d6eb4ddc5", null]) {
-    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, version) });
+  const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
+  for (const [version, sentence, other] of [
+    ["0.3.0", MESSAGE, ARCHIVED],
+    ["0.4.0", ARCHIVED, MESSAGE],
+    ["0.10.0", ARCHIVED, MESSAGE],
+    ["0.4.0-rc.1", MESSAGE, ARCHIVED],
+    ["9b95a56f237ff4006a69545963d5130d6eb4ddc5", MESSAGE, ARCHIVED],
+    [null, MESSAGE, ARCHIVED],
+  ] as const) {
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, version), stopApply: () => stopReceiptOf() });
     await pick("stop");
     await ready(slot);
-    expect(slot.getByTestId("oats-confirm").textContent, String(version)).toContain(MESSAGE);
+    const said = slot.getByTestId("oats-confirm").textContent!;
+    expect(said, String(version)).toContain(sentence);
+    expect(said, String(version)).not.toContain(other);
+    // The result, where bb cannot be asked for the thread (this test gives it no such read): the same sentence.
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "done");
+    expect(slot.getByTestId("oats-result").textContent, String(version)).toContain(sentence);
     resetApp();
   }
+});
+
+test("on a provider that archives at stop, the result still says what bb SHOWS: a thread bb holds live is told as one a message starts", async () => {
+  const sdk = { ...modelsSdk(), threads: { get: async ({ threadId }: { threadId: string }) => ({ id: threadId, archivedAt: null }) } };
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, "0.4.0"), stopApply: () => stopReceiptOf() }, undefined, sdk);
+  await pick("stop");
+  await ready(slot);
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Its thread is archived. To talk to it again, start it.");
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(slot.getByTestId("oats-result").textContent).toContain("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
 });

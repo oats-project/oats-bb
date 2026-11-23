@@ -12,7 +12,7 @@ const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().
 const given = <Fields extends Record<string, unknown>>(fields: Fields): { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> } =>
   Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> };
 
-/** How long a stop plan waits for the provider's version before it answers without it. */
+/** How long a stop plan the kernel has answered waits for the provider's version before it goes without it. */
 const VERSION_WAIT_MS = 3_000;
 /** `asked`, or null when it has not answered within `ms` (its timer is cleared either way). */
 function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | null> {
@@ -56,11 +56,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // The provider's version beside the plan (the read every dialog shares). It is an optional fact: a version
       // that cannot be read, or is not read within a moment, fails and holds nothing: it is then not known, and
       // the dialog says what is true of every provider released so far.
-      const [plan, providerVersion] = await Promise.all([
-        core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal),
-        within(VERSION_WAIT_MS, providerVersionOf(core).catch(() => null)),
-      ]);
-      return { ...plan, providerVersion };
+      // Both are asked at once; the version is waited for only a moment AFTER the plan answered (one that came
+      // while the kernel made its plan cost nothing, and is used).
+      const version = providerVersionOf(core).catch(() => null);
+      const plan = await core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal);
+      return { ...plan, providerVersion: await within(VERSION_WAIT_MS, version) };
     },
     async stopApply({ instance, revision, key, recursive }) {
       await core.agentForAct(instance);

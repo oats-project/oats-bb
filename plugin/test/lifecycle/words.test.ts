@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -159,10 +159,25 @@ describe("a stop and the agent's thread", () => {
   });
 
   it("the fact is read from the provider's version against the release that archives at stop; no release does yet, so no version does", () => {
-    for (const version of ["0.3.0", "1.0.0", "99.0.0", null]) expect(stopArchivesThread(version)).toBe(false);
-    // With the release named, that one and every later archive; an earlier one, and a version that cannot be read, do not.
-    expect(["0.4.0", "0.4.1", "0.10.0", "1.0.0", "0.4.0-rc.1"].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([true, true, true, true, true]);
-    expect(["0.3.9", "0.3.10", "", "next", "0.4", null].map((version) => stopArchivesThread(version, "0.4.0"))).toEqual([false, false, false, false, false, false]);
+    // The provider archives the thread at stop from oats-bb v0.4.0 on (the release lane's number).
+    expect(ARCHIVES_AT_STOP_FROM).toBe("0.4.0");
+    expect(stopArchivesThread("0.3.0")).toBe(false);
+    expect(stopArchivesThread("0.4.0")).toBe(true);
+    expect(stopArchivesThread("0.4.1")).toBe(true);
+    // Numeric, part by part: 0.10.0 is after 0.4.0 (a compare of strings would put it before), and 0.3.10 before.
+    expect(stopArchivesThread("0.10.0")).toBe(true);
+    expect(stopArchivesThread("0.3.10")).toBe(false);
+    expect(stopArchivesThread("1.0.0")).toBe(true);
+    // A pre-release of 0.4.0 comes BEFORE it (semver), and nothing says a candidate archives: not known, so false,
+    // and the dialog keeps the sentence that warns. A pre-release of a later version is later.
+    expect(stopArchivesThread("0.4.0-rc.1")).toBe(false);
+    expect(stopArchivesThread("0.4.1-rc.1")).toBe(true);
+    expect(stopArchivesThread("0.4.0+build.7")).toBe(true); // build metadata is not a pre-release
+    // A version that cannot be read as a release: none, a commit (a provider taken from a repository), a partial or a foreign one.
+    for (const version of [null, "9b95a56f237ff4006a69545963d5130d6eb4ddc5", "", "next", "0.4", "v0.4.0", "0.4.0.1", "4abc.0.0", " 0.4.0"]) expect(stopArchivesThread(version), String(version)).toBe(false);
+    // Another threshold, and none: the function is of the fact, the constant is the release lane's.
+    expect(["0.4.0", "0.5.0", "0.5.1"].map((version) => stopArchivesThread(version, "0.5.0"))).toEqual([false, true, true]);
+    expect(stopArchivesThread("99.0.0", null)).toBe(false);
     expect(stopPlanView(stopPlan(), true).happens).toContain("Its thread is archived. To talk to it again, start it.");
   });
 

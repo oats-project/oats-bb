@@ -234,6 +234,24 @@ describe("A2 state(): first match wins", () => {
     expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), t)).toBe("stopped");
     expect(state(agent("a", { waiting: claim, runtimeState: "stopped", running: false }), thread("t", { hasPendingInteraction: true }))).toBe("needs-you");
   });
+  // The spec's author amended A2 again on 2026-11-23: ONE claim rule for both backends. A claim is
+  // hidden only for an agent the kernel calls stopped (its word "stopped", or not running with no
+  // word); shown in every other case. The pairs are every pair the TYPE allows that matters, shaped by
+  // hand, not recorded: today's kernel prints a claim only on a row it says runs (tmux) or does not
+  // call not-running (a provider), so for the rows it prints now the rule changes nothing; it is
+  // the rule for a row a later kernel prints (awebai/oats lib/instance-listing.mjs at 95c7b43b3).
+  test("one claim rule for bb and tmux: hidden only for a row the kernel calls stopped, shown for every other pair of (running, runtimeState)", () => {
+    for (const backend of ["bb", "tmux"]) {
+      const shows = (over: Partial<Agent>) => claimOf(agent("a", { backend, waiting: claim, ...over })) !== null;
+      // Hidden: the kernel calls it stopped.
+      expect(shows({ running: false, runtimeState: "stopped" }), `${backend} stopped`).toBe(false);
+      expect(shows({ running: false, runtimeState: null }), `${backend} not running, no word`).toBe(false);
+      // Shown: it runs, the kernel says nothing of it, its harness ended in a shell, it cannot be reached, no harness is loaded.
+      for (const [running, runtimeState] of [[true, null], [true, "running"], [true, "unknown"], [null, null], [null, "unknown"], [true, "shell"], [false, "shell"], [null, "unreachable"], [false, "unreachable"], [false, "unknown"], [null, "unsupported"]] as const) {
+        expect(shows({ running, runtimeState }), `${backend} (${running}, ${runtimeState})`).toBe(true);
+      }
+    }
+  });
   // The claim's gate and the state use ONE predicate for "the kernel calls this row stopped"
   // (`recordedStopped`: not running, beside the word "stopped" or no word). A provider's row that is
   // not running beside "unknown" has its session there with no harness loaded (the kernel's contract
@@ -266,13 +284,14 @@ describe("A2 state(): first match wins", () => {
     expect(state({ ...outside, backend: "tmux" }, null)).toBe("stopped");
     expect(state(agent("a", { running: false, runtimeState: "stopped", outsideOats: null }), t)).toBe("stopped");
   });
-  test("a tmux row shows its claim only while the kernel says it runs", () => {
+  test("a tmux row with a claim: the claim wins over a shell and over a session that cannot be reached, as on bb; a stopped one shows none", () => {
     const tmux = (over: Partial<Agent>) => state(agent("a", { backend: "tmux", waiting: claim, ...over }), null);
     expect(tmux({ running: true, runtimeState: null })).toBe("needs-you");
     expect(tmux({ running: true, runtimeState: "running" })).toBe("needs-you");
-    expect(tmux({ running: true, runtimeState: "shell" })).toBe("error");
-    expect(tmux({ running: null, runtimeState: "unreachable" })).toBe("unreachable");
-    expect(tmux({ running: null, runtimeState: null })).toBe("idle");
+    expect(tmux({ running: true, runtimeState: "shell" })).toBe("needs-you");
+    expect(tmux({ running: null, runtimeState: "unreachable" })).toBe("needs-you");
+    expect(tmux({ running: null, runtimeState: null })).toBe("needs-you");
+    expect(tmux({ running: false, runtimeState: null })).toBe("stopped");
     expect(tmux({ running: false, runtimeState: "stopped" })).toBe("stopped");
   });
   // The spec's author amended A2 on 2026-11-22: an agent the kernel calls not running, with no

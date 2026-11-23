@@ -89,10 +89,12 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, tone, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
+export function StatusLine({ state, word, since, detail, tone, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
   const parts = [
     { text: shown(since), tone: undefined },
     { text: shown(detail), tone },
+    // `asOf`: the line is drawn from a roster kept as last read; it says so, last ("as of 2 min ago").
+    { text: shown(asOf), tone: undefined },
   ].filter((part) => part.text !== "");
   // No line of it starts with a separator. Each part after the word carries its "·" in its own
   // left padding, and the row is pulled left by as much inside a frame that clips: a part that

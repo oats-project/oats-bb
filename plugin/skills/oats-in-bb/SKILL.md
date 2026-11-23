@@ -74,8 +74,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - When something happened to an agent outside OATS, its row and its thread's line say the state,
-  then the reason and what to do: "Stopped · archived in bb" (Start makes a new thread, and its
-  row opens the old one to read; in the warning tone its process may still run: Stop it, then
+  then the reason and what to do: a stopped agent whose row opens an archived thread (Start makes a
+  new thread; the old one stays to read); "Stopped · archived in bb" in the warning tone (it was
+  archived while it ran, and its process may still run: Stop it, then
   Start it); "Stopped · deleted in bb" (Start it for a new thread); "Stopped · with the machine"
   (nothing to do: OATS starts it again); "Idle · not loaded" (send it a message in its thread to
   carry on; Start begins a new conversation); "Running outside OATS" (OATS recorded it stopped and

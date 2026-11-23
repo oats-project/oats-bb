@@ -137,7 +137,10 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       const lost = agent.sessionEnd === "lost" && recordedStopped(agent);
       if (where === "archived") {
         if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
-        return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, archived };
+        // The row keeps the soul beside "Stopped", in the plain tone: once the provider archives at
+        // stop this is EVERY stopped agent, and nothing is wrong with it (the spec's author's ruling).
+        // The row opens the archived thread, whose own row says since when and that it is archived.
+        return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, archived };
       }
       if (where === "open" && attached) {
         // THE GATE (the one place): whether the bb session provider archives the thread of a home

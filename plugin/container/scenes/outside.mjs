@@ -206,7 +206,8 @@ export default [
       const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       // The reason takes the soul's place on a row: each of these rows' second line is ONE line, never two.
-      check(same(rows.digest, { facts: "Stopped · archived in bb", state: "stopped", tone: null, lines: 1 }), `${at} stopped, its thread archived in bb: "Stopped · archived in bb", on one line`, JSON.stringify(rows.digest));
+      const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
+      check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Running outside OATS", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, alone on its line, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
       check(same(rows.ranker, { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
       check(same(rows.flaky, { facts: "Stopped · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));

@@ -173,6 +173,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           type="button"
           data-testid="oats-agent-row-threadless"
           data-instance={agent.instance}
+          data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
           className={`${ROW} w-full pl-2 text-left`}
           onClick={() => {

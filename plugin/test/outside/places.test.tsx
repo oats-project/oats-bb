@@ -50,11 +50,12 @@ const markOf = (row: HTMLElement) => [row.querySelector("[data-mark]")!.getAttri
 
 // ---- the sidebar's row
 
-test("stopped, its thread archived in bb: the row says so, never \"its bb thread is gone\", and opens the archived conversation", async () => {
+test("stopped, its thread archived in bb: the row says \"Stopped\" and the soul, in the plain tone, never \"its bb thread is gone\", and opens the archived conversation", async () => {
   const { asked, sdk } = bb(["thr_digest"]);
   const { slot, navigated } = await sidebar({ rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk });
-  // The reason takes the soul's place: a row is never three lines.
-  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped · archived in bb"));
+  // Nothing is wrong with it (a provider that archives at stop leaves every stopped agent so): the soul, and no warning.
+  await waitFor(() => expect(threadless(slot).getAttribute("data-opens")).toBe("thread")); // bb has answered
+  expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert");
   expect(markOf(threadless(slot))).toEqual(["stopped", null]);
   // bb is asked once, by id, for the archived threads alone, hidden ones included.
   expect(asked).toEqual([{ threadIds: ["thr_digest"], archived: true, includeHidden: true }]);

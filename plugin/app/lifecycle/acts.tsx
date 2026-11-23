@@ -592,6 +592,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : "top");
   useKeepFocus();
   const recorded = known?.harness ?? null;
+  // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
+  const begins = rowThread === null ? START.fresh : START.newThread;
+  // Cut off: its session is there and no harness is loaded (after a reboot). A message in its thread carries its
+  // conversation on; a start begins another. Said first, with the way to that thread; Start stays possible.
+  const cutOff = verb === "start" && state.phase === "ready" && rowThread !== null && known !== null && known.running === false && known.runtimeState === "unknown";
 
   return (
     <Confirm
@@ -600,10 +605,22 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
-      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, START.fresh, FULL_MODE] : [START.fresh, FULL_MODE]}
+      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
       kept={known === null ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (badModel ? START.badModel : null)}
+      notice={
+        cutOff ? (
+          <Notice
+            title={START.carryOn}
+            actions={
+              <Button data-testid="oats-start-thread" onClick={() => openThread(rowThread)}>
+                {`Open ${agentName(name)}`}
+              </Button>
+            }
+          />
+        ) : null
+      }
       phase={phase}
       onConfirm={start}
       onClose={close}

@@ -332,7 +332,7 @@ export default [
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("This starts a new conversation using the saved briefing and state.") && before.body.includes("Continue in this instance’s existing home, with its identity, work and notes.") && before.body.includes("Machine") && before.body.includes("Home") && before.body.includes("Ready to start."),
+          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && !before.body.includes("carry on its conversation") && before.body.includes("Continue in this instance’s existing home, with its identity, work and notes.") && before.body.includes("Machine") && before.body.includes("Home") && before.body.includes("Ready to start."),
           `${at} Start opens its dialog and starts nothing: titled with the agent as the kernel's roster names it now, what will happen, what is kept, its machine and home`,
           JSON.stringify(before),
         );
@@ -385,6 +385,41 @@ export default [
     },
   },
   {
+    stage: "lifecycle",
+    name: "Start, of an agent that was cut off (its session is there, no harness loaded): first, that a message in its thread carries its conversation on, with the way there",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const helper = threads.get(HELPER);
+      const shot = (name) => dialogShot({ page, at, viewport, check }, "start", name);
+      try {
+        // The kernel's row after a reboot: not running, and a runtime state it cannot tell.
+        changes = { "weekly-digest-helper": { running: false, runtimeState: "unknown", sessionEnd: null } };
+        answers();
+        await page.goto("/");
+        check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
+        check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
+        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Start dialog of a cut-off agent points at its thread`);
+        const said = JSON.parse(
+          await page.evaluate(
+            `(() => { const confirm = document.querySelector(${JSON.stringify(confirm)}); const notice = confirm.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ first: confirm.firstElementChild === notice, title: notice?.querySelector("h3")?.innerText ?? null, open: document.querySelector(${JSON.stringify(testId("oats-start-thread"))})?.innerText ?? null, next: notice?.nextElementSibling?.innerText ?? "" }); })()`,
+          ),
+        );
+        check(
+          said.first && said.title === "To carry on its conversation, send it a message in its thread instead." && said.open === "Open Weekly digest helper" && said.next.includes("Starts a new conversation. The current one stays readable in bb, archived."),
+          `${at} the dialog says FIRST to send a message in its thread to carry on, with Open Weekly digest helper, and then that a start begins a new conversation`,
+          JSON.stringify(said),
+        );
+        const before = await dialog(page);
+        check(before.act === "Start" && before.off === false, `${at} Start stays possible`, JSON.stringify(before));
+        await shot("cut-off");
+        await page.evaluate(click("oats-start-thread"));
+        check(Boolean(await page.until(`${closed} && location.pathname.endsWith("/threads/${helper.id}")`, 15)), `${at} Open Weekly digest helper closes the dialog on the agent's thread, and starts nothing`);
+      } finally {
+        changes = {};
+        answers();
+      }
+    },
+  },
+  {
     stage: "lifecycle-running",
     name: "Restart, from the thread's own menu: a dialog first, with the Desktop's warning, its focus order; restarted; a refusal",
     run: async ({ page, at, viewport, threads, check }) => {
@@ -399,7 +434,7 @@ export default [
         check(await pick(page, "Restart agent (OATS)"), `${at} Restart agent (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
-        check(before.title === "Restart Weekly digest helper" && before.body.includes("Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.") && before.body.includes("Runs in bb's full mode: no sandbox.") && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: it says that the current harness is stopped first, and that it runs in bb's full mode`, JSON.stringify(before));
+        check(before.title === "Restart Weekly digest helper" && before.body.includes("Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.") && before.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && before.body.includes("Runs in bb's full mode: no sandbox.") && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: it says that the current harness is stopped first, that it starts a new conversation and the current one stays in bb, archived, and that it runs in bb's full mode`, JSON.stringify(before));
         check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);

@@ -431,6 +431,17 @@ export { FULL_MODE };
 export const START = {
   continues: "Continue in this instance’s existing home, with its identity, work and notes.",
   fresh: "This starts a new conversation using the saved briefing and state.",
+  /**
+   * For an agent that has a thread in bb: a start, and a restart, ALWAYS make a new bb thread; the
+   * launch stops and archives the one it had (the kernel's lib/launch.mjs). Said in place of `fresh`.
+   */
+  newThread: "Starts a new conversation. The current one stays readable in bb, archived.",
+  /**
+   * For an agent that was cut off (its session is there and no harness is loaded, as after a
+   * reboot: the kernel's `running: false` with runtimeState "unknown"): a message in its thread
+   * carries its conversation on, which a start does not. Said first; Start stays possible.
+   */
+  carryOn: "To carry on its conversation, send it a message in its thread instead.",
   checking: "Checking instance…",
   ready: "Ready to start.",
   restartWarning: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",

@@ -557,7 +557,11 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(calls(slot, "start", "restart")).toEqual([]);
   expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
   expect(texts(slot.getByTestId("oats-start"), "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
-  expect(dialog.textContent).toContain("This starts a new conversation using the saved briefing and state.");
+  // A start always makes a NEW bb thread and archives the one the agent had: said in place of the Desktop's sentence.
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual(["Starts a new conversation. The current one stays readable in bb, archived.", "Runs in bb's full mode: no sandbox."]);
+  expect(dialog.textContent).not.toContain("This starts a new conversation using the saved briefing and state.");
+  // Not cut off (the kernel says stopped): nothing points at its thread.
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // A start from bb runs in bb's full mode: there is no control for it, and one line says so before the act.
   expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toContain("Runs in bb's full mode: no sandbox.");
   expect(dialog.textContent).toContain("Continue in this instance’s existing home, with its identity, work and notes.");
@@ -1157,4 +1161,67 @@ test("a start the lock blocks says OATS's own line under the sentence that point
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: /abs/home/.oats/start.lock is held by pid 4242");
+});
+
+// ---- a start begins a new conversation (the lead's pilot condition)
+
+test("Restart says, with the Desktop's warning, that it starts a new conversation and that the current one stays readable in bb, archived", async () => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }) });
+  await pick("restart");
+  await ready(slot);
+  expect(texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li")).toEqual([
+    "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
+    "Starts a new conversation. The current one stays readable in bb, archived.",
+    "Runs in bb's full mode: no sandbox.",
+  ]);
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+});
+
+test("an agent with no thread in bb has no conversation to archive: its Start says the Desktop's sentence", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, threadId: "thr_not_in_bb" } : agent));
+  const { slot } = await menu("thr_plain", { startCheck: ({ instance }) => startCheckOf(instance) }, agents);
+  const { openAct } = await import("../../app/lifecycle");
+  openAct("start", "weekly-digest-helper");
+  await ready(slot);
+  const happens = texts(slot.getByTestId("oats-confirm").querySelector(":scope > section") as HTMLElement, "li");
+  expect(happens).toEqual(["This starts a new conversation using the saved briefing and state.", "Runs in bb's full mode: no sandbox."]);
+  expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+});
+
+test("an agent that was cut off (its session is there, no harness loaded): Start says first to send a message in its thread to carry on, with the way there; Start stays possible", async () => {
+  const cutOff = { running: false, runtimeState: "unknown" } as const;
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, cutOff), start: () => startedIn("thr_digest_2") });
+  await pick("start");
+  await ready(slot);
+  const confirm = slot.getByTestId("oats-confirm");
+  const notice = within(confirm).getByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("To carry on its conversation, send it a message in its thread instead.");
+  // Said FIRST: before what the start will do.
+  expect(confirm.firstElementChild).toBe(notice);
+  expect(notice.nextElementSibling!.textContent).toContain("What will happen");
+  expect(button(slot, "oats-start-thread").textContent).toBe("Open Weekly digest helper");
+  // Start stays possible, and still says that it begins a new conversation.
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  expect(confirm.textContent).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
+  // The way there: the dialog closes on the agent's thread, and nothing was started.
+  fireEvent.click(button(slot, "oats-start-thread"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+  expect(calls(slot, "start", "restart")).toEqual([]);
+});
+
+test("the cut-off line is for that state alone: not for a stopped agent, not for one whose state is not known, and not on a Restart", async () => {
+  const pointed = async (verb: "start" | "restart", thread: string, change: Parameters<typeof startCheckOf>[1]) => {
+    const { slot, pick } = await menu(thread, { startCheck: ({ instance }) => startCheckOf(instance, change) });
+    await pick(verb);
+    await ready(slot);
+    const there = slot.queryByTestId("oats-start-thread") !== null;
+    resetApp();
+    return there;
+  };
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "unknown" })).toBe(true);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "stopped" })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: null })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: null, runtimeState: "unknown" })).toBe(false);
+  expect(await pointed("restart", "thr_redesign", { running: false, runtimeState: "unknown" })).toBe(false);
 });

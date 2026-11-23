@@ -472,6 +472,13 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
+- **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
+  launch stops and archives the one the agent had (the kernel's `lib/launch.mjs`). Both dialogs
+  say so before the act ("Starts a new conversation. The current one stays readable in bb,
+  archived."), and the result opens the new thread. For an agent that was cut off (its session is
+  there and no harness is loaded, as after a reboot: the kernel's `running: false` with
+  runtimeState `unknown`) the Start dialog says first that a message in its thread carries its
+  conversation on, with a button to that thread; Start stays possible.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
   (`--expect-decision`), so Spawn reads the kernel's preview and applies exactly that decision with
   the key; asked again with the same key, it replays the same spawn. A spawn or a retire that runs

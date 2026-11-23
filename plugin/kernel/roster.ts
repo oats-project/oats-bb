@@ -93,7 +93,7 @@ function toAgent(group: { name: string }, source: z.output<typeof row>, features
     running: source.running ?? null,
     runtimeState: source.runtimeState ?? null,
     runtimeError: source.runtimeError ?? null,
-    // When the session started, where the kernel's row says it (a row of a kernel that does not is left without).
+    // The last start OATS made, where the kernel's row says it (a row of a kernel that does not is left without).
     ...(source.startedAt ? { startedAt: source.startedAt } : {}),
     // How the session ended, and the kernel's report of a harness that runs in a home it recorded
     // stopped: each only where the row has it. The report is read only where the document's own

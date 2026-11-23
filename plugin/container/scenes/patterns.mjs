@@ -4,6 +4,15 @@
 // checked at every image (`targets: true` on each shot).
 import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 
+/**
+ * A read that follows a key press and asserts a state the app draws in answer (a selection, a
+ * closed menu with the focus back, a dialog's phase): WAITED for, never read at once. `expr` is a
+ * page expression that answers a JSON string; `holds` is the source of a function of its parsed
+ * value. When the wait runs out the value is read as it is, for the failing check to print.
+ */
+const readWhen = async (page, expr, holds, seconds = 10) =>
+  (await page.until(`(() => { const value = ${expr}; return (${holds})(JSON.parse(value)) ? value : ""; })()`, seconds)) ?? (await page.evaluate(expr));
+
 // A pattern, read INSIDE the pattern book only. The same patterns are drawn around it (the sidebar
 // says "Reading OATS…" under the id "oats-status-line" until its first read answers, and the
 // instance panel, when it is open, has a status line, notices and tabs of its own), so a read of
@@ -124,7 +133,7 @@ export default [
       // The tabs: the arrow keys move the selection and the focus.
       await page.evaluate(`document.querySelector('${book("oats-tab-schedules")}').focus()`);
       await page.press("ArrowRight");
-      const tabs = JSON.parse(await page.evaluate(`JSON.stringify({ selected: [...document.querySelectorAll('${testId("oats-patterns-page")} [role="tab"]')].map((e) => e.getAttribute("aria-selected")), focus: ${FOCUSED} })`));
+      const tabs = JSON.parse(await readWhen(page, `JSON.stringify({ selected: [...document.querySelectorAll('${testId("oats-patterns-page")} [role="tab"]')].map((e) => e.getAttribute("aria-selected")), focus: ${FOCUSED} })`, `(read) => read.selected[1] === "true" && read.focus === "oats-tab-triggers"`));
       check(JSON.stringify(tabs.selected) === '["false","true","false"]' && tabs.focus === "oats-tab-triggers", `${at} Right on the tabs selects the next tab and moves the focus to it`, JSON.stringify(tabs));
       await page.shot(`patterns-${viewport.name}-controls`, { targets: true });
       // The row's menu, open: its button is named, the focus is on its first item, an item that is off says why.
@@ -140,7 +149,7 @@ export default [
       );
       await page.shot(`patterns-${viewport.name}-menu-open`, { targets: true });
       await page.press("Escape");
-      const closed = await page.evaluate(`JSON.stringify({ menu: document.querySelector('[role="menu"]') === null, focus: ${FOCUSED} })`);
+      const closed = await readWhen(page, `JSON.stringify({ menu: document.querySelector('[role="menu"]') === null, focus: ${FOCUSED} })`, `(read) => read.menu === true && read.focus === "Actions for Weekly digest helper"`);
       check(closed === JSON.stringify({ menu: true, focus: "Actions for Weekly digest helper" }), `${at} Escape closes the menu and the focus is back on its button`, closed);
       await page.evaluate(into("oats-patterns-form"));
       // Each control's accessible name is its label's own words; the hint and the refusal describe it.
@@ -216,6 +225,7 @@ export default [
       check(JSON.stringify(order) === JSON.stringify(["oats-confirm-act", "oats-confirm-cancel", "oats-confirm-act"]), `${at} Tab walks Cancel, Retire and round again: the focus stays in the dialog`, JSON.stringify(order));
       await page.shot(`patterns-${viewport.name}-confirm-before`, { targets: true });
       await page.press("Enter"); // Retire
+      await page.until(`document.querySelector('${testId("oats-confirm")}')?.getAttribute("data-phase") === "running"`, 10); // the phase the press brings, waited for
       const running = JSON.parse(await dialog());
       await page.press("Escape");
       const still = JSON.parse(await dialog());

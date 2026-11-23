@@ -28,6 +28,8 @@ const thread = (id: string, over: Partial<BbThread> = {}): BbThread => ({
   projectId: null,
   displayTitle: id,
   updatedAt: clock--, // earlier calls are newer, so the default order is the order written
+  status: "idle", // bb's own status of the thread, and whether it holds a turn in line: what says whether its agent works
+  queuedWork: "none",
   isUnread: false,
   isArchived: false,
   isHidden: false,
@@ -112,7 +114,8 @@ describe("A1 view(): the tree", () => {
     };
     const v = view(
       agents,
-      agents.map((a) => thread(a.threadId!, { updatedAt: at[a.instance]! })),
+      // bb says which threads have a turn running: an agent works when its thread does, whatever the kernel's `running`.
+      agents.map((a) => thread(a.threadId!, { updatedAt: at[a.instance]!, status: a.instance.includes("working") ? "active" : "idle" })),
     );
     expect(names(v.roots)).toEqual([
       "needs-new",
@@ -169,12 +172,49 @@ describe("A2 state(): first match wins", () => {
     expect(state(agent("a", { runtimeState: "unreachable", running: true }), t)).toBe("unreachable");
     expect(state(agent("a", { runtimeState: "stopped", running: true }), t)).toBe("stopped");
     expect(state(agent("a", { runtimeState: "shell", running: true }), t)).toBe("error");
-    expect(state(agent("a", { running: true }), t)).toBe("working");
+    expect(state(agent("a", { running: true }), thread("t", { status: "active" }))).toBe("working");
     expect(state(agent("a", { running: null }), t)).toBe("idle");
     // A provider row the kernel calls not running beside the word "unknown": its session is there and no
     // harness is loaded. Not stopped (the spec's author, 2026-11-23): Stopped is said of a provider row
     // only when its word is "stopped" (test/outside/say.test.ts holds what the row then says).
     expect(state(agent("a", { running: false }), t)).toBe("idle");
+  });
+  // WORKING and IDLE of an agent on a bb thread are bb's own status of that thread. The kernel's
+  // `running` is endpoint activity: a provider answers true for an idle agent whose harness is
+  // loaded (docs/desktop-cli-api.md, "session-inspect-running"), so it does not say that the agent works.
+  test("an agent on a bb thread works when bb says its thread does, whatever the kernel's running: every status of bb's, a turn in line, and a status bb adds later", () => {
+    const on = (status: string, running: boolean | null, queuedWork = "none") => state(agent("a", { running }), thread("t", { status, queuedWork }));
+    for (const running of [true, null]) {
+      // A turn runs, is starting or is stopping.
+      for (const status of ["active", "starting", "stopping"]) expect(on(status, running), `${status}, running ${running}`).toBe("working");
+      // At rest: idle, or accepted and not started ("pending"), with nothing in line; bb's failed turn; a status of a later bb.
+      for (const status of ["idle", "pending", "error", "hibernating", ""]) expect(on(status, running), `${status}, running ${running}`).toBe("idle");
+      // At rest (idle, pending, bb's failed turn) with work bb will start by itself ("waiting"): the agent works.
+      for (const status of ["idle", "pending", "error"]) expect(on(status, running, "waiting"), `${status} with a message waiting, running ${running}`).toBe("working");
+      // A queued message that failed to send starts nothing: at rest (the provider's rule from oats-bb #40).
+      for (const status of ["idle", "pending", "error"]) expect(on(status, running, "failed"), `${status} with a failed message, running ${running}`).toBe("idle");
+      // A turn in progress works, whatever is in line behind it.
+      for (const status of ["active", "starting", "stopping"]) for (const queuedWork of ["waiting", "failed"]) expect(on(status, running, queuedWork), `${status} with ${queuedWork} behind it, running ${running}`).toBe("working");
+      // A queue word the plugin does not know is not work it can count: at rest.
+      for (const status of ["idle", "pending", "error"]) expect(on(status, running, "retrying"), `${status} with an unknown queue word, running ${running}`).toBe("idle");
+      expect(on("hibernating", running, "failed")).toBe("idle");
+      // A status the plugin does not know is idle, work in line or not.
+      expect(on("hibernating", running, "waiting")).toBe("idle");
+    }
+    // A row the kernel calls STOPPED (not running, beside the word "stopped" or no word: `recordedStopped`) is stopped, whatever bb's status says of the thread.
+    for (const runtimeState of ["stopped", null]) for (const status of ["active", "idle"]) expect(state(agent("a", { running: false, runtimeState }), thread("t", { status })), `${status}, not running beside ${runtimeState}`).toBe("stopped");
+    // Not running beside "unknown" (its session is there, no harness loaded) is not stopped: it reads as bb says of its thread.
+    expect(on("active", false)).toBe("working");
+    expect(on("idle", false)).toBe("idle");
+  });
+  test("a tmux agent's activity is the kernel's own word; a provider's agent whose thread bb does not list is idle, a loaded harness or not", () => {
+    expect(state(agent("a", { backend: "tmux", running: true, runtimeState: null }), null)).toBe("working");
+    expect(state(agent("a", { backend: "tmux", running: null, runtimeState: null }), null)).toBe("idle");
+    expect(state(agent("a", { backend: "tmux", running: false, runtimeState: null }), null)).toBe("stopped");
+    expect(state(agent("a", { running: true }), null)).toBe("idle");
+    expect(state(agent("a", { running: null }), null)).toBe("idle");
+    expect(state(agent("a", { running: false }), null)).toBe("idle"); // beside "unknown": there, not loaded, and not stopped
+    for (const runtimeState of ["stopped", null]) expect(state(agent("a", { running: false, runtimeState }), null)).toBe("stopped");
   });
   test("an unknown runtimeState word is idle", () => {
     expect(state(agent("a", { runtimeState: "hibernating" }), t)).toBe("idle");

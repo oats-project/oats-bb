@@ -20,8 +20,12 @@ function agentsOf(state: keyof Recorded): Agent[] {
   if (!status.ok) throw new Error(`${state}: ${status.error.code}: ${status.error.message}`);
   return status.value.agents;
 }
-/** bb's thread of an agent, as the sidebar gives it: live, read, with nothing pending. */
-const threadOf = (agent: Agent): BbThread => ({
+/**
+ * bb's thread of an agent, as the sidebar gives it: live, read, with nothing pending. `status` is
+ * bb's own (not part of the kernel's recording): "active" while a turn runs, which is when the
+ * kernel's row of that state was recorded with `running: true`.
+ */
+const threadOf = (agent: Agent, status = "idle"): BbThread => ({
   id: agent.threadId!,
   projectId: null,
   displayTitle: agent.instance,
@@ -30,6 +34,8 @@ const threadOf = (agent: Agent): BbThread => ({
   isArchived: false,
   isHidden: false,
   hasPendingInteraction: false,
+  status,
+  queuedWork: "none",
 });
 
 const home = "/abs/deployment/agents/oats-developer/instances/flaky-ci-2-developer";
@@ -107,9 +113,18 @@ describe("a real kernel's status, read by the parser", () => {
 });
 
 describe("a real kernel's status, joined to bb's threads by the model", () => {
+  /**
+   * The roster of a recorded state, with bb's threads. Which threads bb had a turn running on is
+   * part of the state that was recorded, named here by state and instance, never read from the
+   * row's `running` (a provider answers true for an idle agent whose harness is loaded).
+   */
+  const ACTIVE: Partial<Record<keyof Recorded, readonly string[]>> = {
+    working: ["flaky-ci-2-developer"],
+    parentWithTwoChildren: ["redesign-ui-lead", "desktop-mockups-developer"],
+  };
   const drawn = (state: keyof Recorded) => {
     const agents = agentsOf(state);
-    return view(agents, agents.map(threadOf));
+    return view(agents, agents.map((agent) => threadOf(agent, ACTIVE[state]?.includes(agent.instance) ? "active" : "idle")));
   };
 
   it.each([

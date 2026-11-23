@@ -157,7 +157,9 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       return threadless;
     }
     case "idle":
-      // The kernel's own word that no harness runs: `running: false` (an idle agent whose harness may be loaded reads `null`).
+      // The kernel's own word that no harness runs: `running: false`. (With no thread given, the state
+      // function answers "idle" for every provider row that is not stopped, failed or unreachable:
+      // one whose harness is loaded reads `true`, one the provider cannot tell reads `null`.)
       if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };
       return threadless;
     default:

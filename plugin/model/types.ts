@@ -19,9 +19,9 @@ export type Agent = {
   projectId: string | null;
   /** the row's session.threadId, null on a tmux row */
   threadId: string | null;
-  /** The kernel's word. Never inferred. */
+  /** The kernel's word, never inferred: endpoint activity (true: a harness is loaded; false: it is gone; null: the provider cannot tell). Not whether the agent works. */
   running: true | false | null;
-  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `running` decides */
+  /** "unknown" | "shell" | "stopped" | "unreachable"; any other word has no meaning of its own: `state()` goes on to `running` and bb's thread */
   runtimeState: string | null;
   runtimeError: string | null;
   /** The row's startedAt: when the session started. Absent or null where the kernel's row names none. */
@@ -65,6 +65,17 @@ export type BbThread = {
   isArchived: boolean;
   isHidden: boolean;
   hasPendingInteraction: boolean;
+  /**
+   * bb's own execution status of the thread, as bb gives it ("active", "starting", "stopping",
+   * "pending", "idle", "error"; a later bb may add one): what says whether an agent on this thread
+   * works (model/view.ts `state`).
+   */
+  status: string;
+  /**
+   * Whether bb holds a turn in line for the thread, as bb gives it ("waiting": it will start it by
+   * itself; "none"; "failed"): a thread at rest with a turn in line is one whose agent works.
+   */
+  queuedWork: string;
 };
 
 /**

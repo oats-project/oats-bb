@@ -2,12 +2,12 @@
 import type { Agent, AgentState, BbThread, Node, View } from "./types";
 
 /**
- * Whether the kernel calls an agent STOPPED: its word is "stopped", or it says the agent does not
- * run and gives no word (what it prints for a tmux home whose window is gone). One rule, for
+ * Whether the kernel records an agent STOPPED: it says the agent does not run, and its word is
+ * "stopped" or it gives none (what it prints for a tmux home whose window is gone). One rule, for
  * every backend, read by the claim gate below (and the state's "stopped").
  */
-export function calledStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
-  return agent.runtimeState === "stopped" || (agent.running === false && agent.runtimeState === null);
+export function recordedStopped(agent: Pick<Agent, "running" | "runtimeState">): boolean {
+  return agent.running === false && (agent.runtimeState === "stopped" || agent.runtimeState === null);
 }
 
 /**
@@ -15,13 +15,13 @@ export function calledStopped(agent: Pick<Agent, "running" | "runtimeState">): b
  * null. ONE gate (the Desktop's `waitingClaim`), so that the tree, the thread's row, the home and
  * the instance panel say one thing, and one rule for every backend (the spec's A2, as its author
  * amended it on 2026-11-23): a claim is hidden only for an agent the kernel calls stopped
- * (`calledStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an
+ * (`recordedStopped`): nobody is there to wait. In every other case it shows ("a claim wins"): an
  * agent that runs, one the kernel says nothing of, one whose harness ended in a shell, one that
  * cannot be reached, on bb and on tmux alike.
  * A question bb itself holds on a thread is not a claim: it is bb's own fact, and `state()` counts it.
  */
 export function claimOf(agent: Agent): Agent["waiting"] {
-  return agent.waiting === null || calledStopped(agent) ? null : agent.waiting;
+  return agent.waiting === null || recordedStopped(agent) ? null : agent.waiting;
 }
 
 /**

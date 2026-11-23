@@ -834,9 +834,12 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   read asked for while another is in flight (a change that read may not have seen) starts with no
   pause when that one ends, if it answered within 2 s (`FOLLOW_UP_WITHIN_MS`, `server/core.ts`), and
   only once: a change during that second read waits the pause again. So a change that lands in the
-  middle of a read is on screen after about two reads: within 3 s where one `oats status` takes up
-  to 1.5 s (the pilot's host took 1.05 to 1.52 s under load, 2026-11-23; with the pause it was 3.3
-  to 4.3 s). The cost is in a sustained burst: a kernel that answers in t spends 2t of every
+  FIRST read of such a pair is on screen after about two reads: 2.1 to 3.04 s on the pilot's host,
+  where one `oats status` took 1.05 to 1.52 s under load (2026-11-23; with the pause it was 3.3 to
+  4.3 s), so at its slow end still at the 3 s, not under it. A change that lands in the SECOND read
+  (the clear after a set, the second event of one act) still waits that read, the pause and the
+  next, as before: no read is later than it was, the worst case is not shorter, the common one is.
+  The cost is in a sustained burst: a kernel that answers in t spends 2t of every
   2t + max(1 s, t) on status (63 % at 0.85 s, 67 % from 1 s to 2 s); a kernel slower than 2 s keeps
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule

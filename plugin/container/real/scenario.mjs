@@ -304,9 +304,11 @@ function snapshotRow(instance) {
  * either one over 3 s even where the check passes.
  *
  * 3 s at most on a kernel whose `oats status` answers in under a second; the status's own time is
- * measured and said beside the delay. A kernel slower than that cannot be shown in 3 s by the pause
- * rule itself (the gap between two reads is the time the last one took): it is given twice its
- * status time and the pause, so a slow kernel is told apart from a slow plugin.
+ * measured and said beside the delay. A kernel slower than that is given twice its status time and
+ * 2 s: a change that lands in a read is shown after that read and one more (the read at once,
+ * server/core.ts FOLLOW_UP_WITHIN_MS), and one that lands in a read at once after that read, the
+ * pause (the time a read took) and the next: the limit covers both while a status takes up to
+ * 2 s, so a slow kernel is told apart from a slow plugin.
  */
 async function fresh(what, { instance, home, kind, since }, matches) {
   let seenAt = null;
@@ -478,52 +480,75 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
  * The server's pacing (server/core.ts, FOLLOW_UP_WITHIN_MS): a read asked for while another is in
  * flight starts AT ONCE when that one ends, if it answered within 2 s, and only once. Shown with the
  * plugin's own `oats status` calls, as the wrapper recorded them (when each started and how long it
- * took): the agent sets a claim (its event starts a read) and clears it while that read is in
- * flight (each status is held 700 ms for that), and the read that follows must start sooner after
- * the first ended than the pause allows any other read (1 s at least, counted by the server from a
- * moment after the kernel's exit: so a gap under 1 s between two calls is a read at once, and
- * nothing else makes one). Never two such gaps in a row. Whether the second change lands in the
- * first read is a matter of timing, so the pair is tried up to four times, and every try is said.
- * No limit on elapsed time is asserted: only which rule the reads took.
+ * took, the time it is held here included):
+ * - the agent sets a claim (its event starts a read) and clears it while that read is in flight
+ *   (each status is held 400 ms for that): the read that follows must start sooner after the first
+ *   ended than the pause allows any other read. The server counts its pause (1 s at least) from a
+ *   moment after the kernel's exit, and the next call's start is after the server's own, so a gap
+ *   under 1 s between two calls is a read at once, and nothing else makes one (no reload of the
+ *   plugin and no change of its settings happens inside this step);
+ * - once that first read is seen to have ended, the agent sets a claim again: it lands in the read
+ *   at once, and the read IT asks for must wait the pause (a gap of 1 s or more): never two reads
+ *   at once in a row.
+ * Whether each change lands in the read it is meant for is timing, so the three are tried up to
+ * four times, and every try is printed with its reads and their times. What the run cannot show it
+ * says, and does not pass or fail on: a kernel so slow here that the first read of every try took
+ * about the limit or more (the server then rightly waits the pause: a NOTE), and a pair after which
+ * no third read came (a NOTE: "never two" is then not shown by this run). No limit on elapsed time
+ * is asserted: only which rule the reads took.
  */
 const statusReads = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status" && record.exit === 0);
 async function followedAtOnce(asInstance) {
   const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
   const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
+  const NEAR_MS = 1500; // a first read this long, with the host call around it, is at about the limit for the server
+  const HELD_MS = 400;
+  const ended = (read) => Date.parse(read.at) + read.ms;
   const tries = [];
-  let pair = null;
-  let twice = null;
-  for (let attempt = 1; attempt <= 4 && pair === null; attempt += 1) {
-    wrapper({ delays: { status: 700 } });
+  let pair = null; // { first, second, gap, after }: `after` is the gap to the read after the pair, or null
+  let slow = 0;
+  for (let attempt = 1; attempt <= 4 && (pair === null || pair.after === null); attempt += 1) {
+    wrapper({ delays: { status: HELD_MS } });
     // Quiet first: no `oats status` of the plugin's ended in the last 3 s (the last read and its
     // pause are over), so the claim's event starts a read with no wait.
-    await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - (Date.parse(read.at) + read.ms) > 3000), 60);
+    await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - ended(read) > 3000), 60);
     const before = records().length;
     const set = asInstance("instance", "attention", "--message", `Pacing check ${attempt}`);
     const cleared = asInstance("instance", "attention", "--clear"); // lands while the read the claim started is in flight
-    // The reads the two changes ask for, waited for: two at least, and then none for 3 s.
-    await until("the reads the two changes ask for have ended", () => {
+    // The first read has ended (its record is written at its end): the read at once, if there is one, is in flight now.
+    await until("the read the claim started has ended", () => statusReads(before).length >= 1, 60);
+    const again = asInstance("instance", "attention", "--message", `Pacing check ${attempt}, again`); // lands in the second read
+    // The reads the three changes ask for, waited for: two at least, and then none for 3 s.
+    await until("the reads the changes ask for have ended", () => {
       const since = statusReads(before);
-      return since.length >= 2 && since.every((read) => Date.now() - (Date.parse(read.at) + read.ms) > 3000);
+      return since.length >= 2 && since.every((read) => Date.now() - ended(read) > 3000);
     }, 60);
     wrapper({});
     const reads = statusReads(before);
-    const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - (Date.parse(reads[index].at) + reads[index].ms) }));
+    const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - ended(reads[index]) }));
     const said = gaps.map(({ first, second, gap }) => `a read of ${first.ms} ms, then ${gap} ms, then a read of ${second.ms} ms`).join("; ");
-    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
-    pair = gaps.find(({ first, gap }) => gap < PAUSE_MS && first.ms <= LIMIT_MS) ?? null;
-    const at = gaps.findIndex(({ gap }, index) => index > 0 && gap < PAUSE_MS && gaps[index - 1].gap < PAUSE_MS);
-    if (at !== -1) twice = said;
+    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status}, attention ${again.status}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
+    if (reads.length > 0 && reads[0].ms >= NEAR_MS) slow += 1;
+    const at = gaps.findIndex(({ first, gap }) => gap < PAUSE_MS && first.ms <= LIMIT_MS);
+    if (at !== -1 && (pair === null || pair.after === null)) pair = { ...gaps[at], after: gaps[at + 1]?.gap ?? null };
+    // The claim of this try is cleared before the next, and before the steps after this one.
+    check(asInstance("instance", "attention", "--clear").status === 0, `pacing: the claim of try ${attempt} is cleared`);
+  }
+  for (const line of tries) show("pacing", line);
+  if (pair === null && slow === tries.length) {
+    note(`pacing: NOT SHOWN in this run: the first read of every try took ${NEAR_MS} ms or more with the ${HELD_MS} ms it is held here, which is about the server's limit of ${LIMIT_MS} ms or over it, so the server rightly waited the pause: ${tries.join(" | ")}`);
+    return;
   }
   check(
     pair !== null,
     pair === null
       ? "pacing: a change that landed while a read was in flight was read at once"
-      : `pacing: a change that landed while a read was in flight was read at once: the first read took ${pair.first.ms} ms (the 700 ms it is held here among them), the next started ${pair.gap} ms after it ended (under the ${PAUSE_MS} ms no other read goes below) and took ${pair.second.ms} ms`,
+      : `pacing: a change that landed while a read was in flight was read at once: the first read took ${pair.first.ms} ms (the ${HELD_MS} ms it is held here among them), the next started ${pair.gap} ms after it ended (under the ${PAUSE_MS} ms no other read goes below) and took ${pair.second.ms} ms`,
     tries.join(" | "),
   );
-  check(twice === null, "pacing: never two reads at once in a row (the read after the pair waited the pause)", twice ?? "");
-  for (const line of tries) show("pacing", line);
+  if (pair === null) return;
+  if (pair.after === null) note(`pacing: "never two reads at once in a row" is NOT SHOWN in this run: no read followed the pair in any try (the third change did not land in the second read): ${tries.join(" | ")}`);
+  else check(pair.after >= PAUSE_MS, `pacing: never two reads at once in a row: the read after the pair started ${pair.after} ms after the pair's second read ended (the pause: ${PAUSE_MS} ms at least)`, tries.join(" | "));
 }
 const wrapper = (settings) => writeFileSync(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
 

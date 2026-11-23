@@ -102,11 +102,14 @@ the kernel's own record: the time of the event the change wrote, read from `oats
 said beside it, with the delay from before the command; a NOTE reports either delay over 3 s). It
 shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
 plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
-while the read the claim started is in flight (each status is held 700 ms for that), and the next
-read must start under 1 s after the first ended, which no other read does; never two such in a
-row. It asserts which rule the reads took, not how long anything took, tries the pair up to four
-times (whether the second change lands in the first read is timing), and prints every try's reads
-and their times. And
+while the read the claim started is in flight (each status is held 400 ms for that), and the next
+read must start under 1 s after the first ended, which no other read does; then it sets a claim
+again, in that second read, and the read after it must have waited the pause (1 s or more): never
+two reads at once in a row. It tries the three up to four times (whether each change lands in the
+read it is meant for is timing) and prints every try's reads and their times. It depends on the
+kernel's speed in one way, and says so: where the first read of every try took about the server's
+2 s limit or more, the server rightly waits the pause, and the run prints a NOTE that the read at
+once is NOT SHOWN, in place of a pass or a failure; and a NOTE where no read followed a pair. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
 

@@ -49,6 +49,7 @@ export const retireReceipt = z.object({
   children: z.array(stoppedRow),
   incomplete: z.array(z.string()),
   compensation: z.object({ branch: z.string(), deleted: z.boolean(), reason: z.string().nullable() }).nullable(),
+  warnings: z.array(z.string()),
 }) satisfies z.ZodType<RetireReceipt>;
 const started = z.object({
   threadId: z.string().nullable(),

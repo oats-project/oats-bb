@@ -279,6 +279,7 @@ describe("retire", () => {
     children: [{ instance: "digest-links-helper", ok: true, alreadyIdle: true, code: null, stillRunning: null, detail: null }],
     incomplete: [],
     compensation: null,
+    warnings: [], // the recorded receipt has none
   };
   it("applies the plan and reads the receipt: the first answer is the receipt itself, a replay is an envelope", async () => {
     const apply = { instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" };
@@ -320,6 +321,18 @@ describe("retire", () => {
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { ...printed, replayed: true } }) } });
     const replayed = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
     expect(replayed.ok && applied.ok && replayed.value).toEqual(applied.ok && { ...applied.value, replayed: true });
+  });
+
+  it("reads the receipt's warnings, the kernel's and its hooks' own lines; a receipt with none has none", async () => {
+    // The recorded receipts carry no `warnings` (the kernel prints the key only with something to say).
+    const printed = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-apply.json"), "utf8"));
+    expect("warnings" in printed).toBe(false);
+    expect(receipt.warnings).toEqual([]);
+    // Shaped from the kernel's source (lib/core.mjs: `warnings` of the retire's result): strings, in its order.
+    const warnings = ["the bb thread of weekly-digest-helper could only be archived: its harness did not stop", "retire hook oats.aweb: the alias is held"];
+    await fake.behave({ retire: { stdout: JSON.stringify({ ...printed, warnings: [...warnings, "", 7, null] }) } });
+    const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });
+    expect(applied.ok && applied.value.warnings).toEqual(warnings);
   });
 
   it("does not read a home as kept from a receipt that does not say: a retire that ran answers `removedDir`, or the answer cannot be read", async () => {

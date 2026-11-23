@@ -39,3 +39,10 @@ from a contract:
   and not on main); the provider on main answers `running: null` for that thread, so no kernel
   prints this row yet. Such a thread takes a message: bb starts the harness and runs the turn on
   the same conversation. To be recorded when that release is pinned.
+
+## A retire receipt's `warnings`
+
+No recorded receipt carries the key: the kernel prints it only with something to say. The tests
+that read warnings (`test/lifecycle/kernel.test.ts`, `words.test.ts`) add strings to the recorded
+`retire-apply.json`, SHAPED from the kernel's source (`lib/core.mjs` of awebai/oats: `warnings` of
+the retire's result is an array of strings). To be recorded when a run produces one.

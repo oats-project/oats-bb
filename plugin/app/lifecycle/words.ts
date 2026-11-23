@@ -324,13 +324,17 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     lines.push(deleted ? `Branch ${branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${branch} kept: ${reason ?? "no reason given"}`);
   }
   if (receipt.incomplete.length > 0) lines.push("Cleanup didn't finish.");
-  if (complete) return { tone: "done", title: `${name} retired.`, lines: [...lines, ...replay], code: null, details: null, offers: [] };
+  // What the kernel, or a capability's retire hook, warns of (why a retire could only archive, a
+  // tree that was not the agent's own): each under its name, its first line; all of it under Details.
+  const warned = receipt.warnings.flatMap(oatsSays);
+  const warnings = receipt.warnings.join("\n");
+  if (complete) return { tone: "done", title: `${name} retired.`, lines: [...lines, ...warned, ...replay], code: null, details: warnings || null, offers: [] };
   return {
     tone: "failed",
     title: "Retirement didn't finish",
-    lines: ["Retirement didn't finish. Some steps ran:", ...lines, "Check what was kept before trying again.", ...replay],
+    lines: ["Retirement didn't finish. Some steps ran:", ...lines, ...warned, "Check what was kept before trying again.", ...replay],
     code: "RETIRE_INCOMPLETE",
-    details: receipt.incomplete.join("\n") || null,
+    details: [...receipt.incomplete, ...receipt.warnings].join("\n") || null,
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };

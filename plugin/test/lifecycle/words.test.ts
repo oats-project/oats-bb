@@ -417,3 +417,26 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn(lost, { status: "active" })).toBe(true);
   });
 });
+
+describe("a retire's warnings", () => {
+  const warnings = ["the bb thread of weekly-digest-helper could only be archived: its harness did not stop\nsecond line of the same warning", "retire hook oats.aweb: the alias is held"];
+  it("stand in the result of a retire that finished, each under OATS's name, with all of it under Details", () => {
+    const outcome = retireOutcome({ ...value(parseRetireApply(fixture("retire-apply.json"))), warnings }, retirePlan());
+    expect(outcome.tone).toBe("done");
+    expect(outcome.lines).toContain("OATS says: the bb thread of weekly-digest-helper could only be archived: its harness did not stop");
+    expect(outcome.lines).toContain("OATS says: retire hook oats.aweb: the alias is held");
+    expect(outcome.details).toBe(warnings.join("\n"));
+  });
+  it("stand in the result of a retire that did not finish, after its steps, and under Details after what the cleanup left", () => {
+    const incomplete = value(parseRetireApply(fixture("retire-incomplete.json")));
+    const outcome = retireOutcome({ ...incomplete, warnings: [warnings[1]!] }, retirePlan());
+    expect(outcome.tone).toBe("failed");
+    expect(outcome.lines.indexOf("OATS says: retire hook oats.aweb: the alias is held")).toBeGreaterThan(outcome.lines.indexOf("Cleanup didn't finish."));
+    expect(outcome.details).toBe([...incomplete.incomplete, warnings[1]].join("\n"));
+  });
+  it("a receipt with none says nothing of them, and a finished retire has no Details", () => {
+    const outcome = retireOutcome(value(parseRetireApply(fixture("retire-apply.json"))), retirePlan());
+    expect(outcome.lines.some((line) => line.startsWith("OATS says:"))).toBe(false);
+    expect(outcome.details).toBeNull();
+  });
+});

@@ -86,6 +86,7 @@ A time is said only where the kernel recorded one; the plugin invents none.
 
 | Thing | The Desktop says | The plugin says | Why |
 |---|---|---|---|
+| The acts on an agent, in its panel | a toolbar in the panel's header: Start, Stop, Restart, Remove | **Stop…**, **Start…**, **Restart…**, **Retire…** under the header's state: the lifecycle's own buttons and dialogs (their words are that feature's rows) | One drawing of the acts for every place; the panel places it. |
 | An agent on tmux, on its own page (Session) | the Desktop opens its terminal in a tab | "Runs in tmux on <machine>. Attach from a terminal:" and `oats session attach --home <its home>` to copy | bb has no terminal and the plugin never types into a session: the page gives the way there, in the kernel's own command (the home's card of such an agent gives the same one). |
 | An inspection the installed OATS answered and the reader cannot read (the Soul tab, `app/panel/refusal-words.ts`) | "The installed OATS CLI returned an inspection this Desktop cannot read. Update OATS and retry." | "The installed OATS CLI returned an inspection this plugin cannot read. Update OATS and retry." | It is the plugin that reads it, not the Desktop. |
 | A running agent, in the panel's header (R2) | "Running · 12h" | **Working**, the word its row and its thread say; "Started 12 h ago" is a fact of its Session ("Last started" for one that does not run) | One state word everywhere; since when it runs is a labelled fact. |

@@ -23,7 +23,8 @@ async function withdraw(bb, threadId) {
 
 /** Stop one thread and confirm it: returns once bb has acknowledged a stop (or has no
  *  such thread), shows the thread settled, holds nothing in line for it, and shows it
- *  settled again after that last look at its queue. Anything else by the end of the grace
+ *  settled again after that last look at its queue. → "settled", or "gone" where bb has
+ *  no such thread any more (missing or deleted): nothing is left of it to archive. Anything else by the end of the grace
  *  (or the command's deadline) throws E_SESSION_STOP_FAILED, saying what is still there.
  *
  *  The order matters. A message found in line after the thread settled is withdrawn, but
@@ -39,7 +40,7 @@ export async function confirmStop(bb, threadId, { deadline = Infinity, grace, no
     // What waits in line first, so that nothing starts while the thread is being stopped.
     await withdraw(bb, threadId);
     const asked = await bb.stop(threadId, stopCallTimeoutMs === undefined ? {} : { timeoutMs: stopCallTimeoutMs });
-    if (!asked.ok && asked.code === "thread_not_found") return;
+    if (!asked.ok && asked.code === "thread_not_found") return "gone";
     // bb's stop may wait for the thread to settle, longer than one bb call gets here: a
     // stop cut off by time has still been asked, and it is asked again once the thread is
     // settled, when it answers at once. Any other failure is bb's no.
@@ -48,7 +49,7 @@ export async function confirmStop(bb, threadId, { deadline = Infinity, grace, no
     if (until === null) until = Math.min(now() + grace * 1000, deadline);
     for (;;) {
       const thread = await bb.thread(threadId);
-      if (thread === null || thread.deletedAt) return;
+      if (thread === null || thread.deletedAt) return "gone";
       if (isSettled(thread)) {
         const inLine = await bb.queue(threadId);
         if (inLine.length > 0) { last = `${thread.status}, with ${inLine.length} message${inLine.length > 1 ? "s" : ""} bb still holds in line for it`; break; } // withdraw, stop and look again
@@ -56,7 +57,8 @@ export async function confirmStop(bb, threadId, { deadline = Infinity, grace, no
         // The queue was empty AFTER the thread was seen settled; one more look tells
         // whether a turn started in between.
         const again = await bb.thread(threadId);
-        if (again === null || again.deletedAt || isSettled(again)) return;
+        if (again === null || again.deletedAt) return "gone";
+        if (isSettled(again)) return "settled";
         last = again.status;
       } else last = thread.status;
       if (now() + POLL_MS >= until) throw fail("E_SESSION_STOP_FAILED", `bb thread ${threadId} is still ${last} ${grace} s after bb thread stop`);

@@ -14,7 +14,8 @@ It is not part of `ci.sh all`: CI runs it as a job of its own (`.github/workflow
 `pi`), so the main run's time does not grow. It changes nothing of the main run: it records no
 fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/` (or
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
-are the images, `answers/` (what the kernel printed for the form's preview and spawn),
+are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the
+two refusals the run makes),
 `kernel.json` and `bridge.json` (what npm says of the two tarballs), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
 
@@ -89,7 +90,13 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   card: bb has no pending interaction left, pi's tool gets `true`, the claim is gone, the agent is
   idle.
 - **P5** The plugin stops the agent and retires it, each from its plan: the plan's facts (what the
-  dialogs word) name the pi agent, its soul, its home and bb, and no other agent.
+  dialogs word) name the pi agent, its soul, its home and bb, and no other agent. Between the two,
+  where a pi of bb's own still works in the home (below, "What the run found"), the retire is
+  asked at once: the kernel refuses it (`E_RUNTIME_QUIESCE_FAILED`, naming that pi), the plugin
+  shows the refusal unchanged, nothing is removed, and the kernel's answer is kept as
+  `answers/retire-pi-refused.json`, with the call's argv, exit code, stdout and stderr in
+  `answers/retire-pi-refused.call.json`. With no such pi in the home the run says so in a NOTE and
+  keeps neither file.
 
 Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 390x800:
 `real-pi-form-…-preview` (and `-fields` at the phone's width, where the form is two screens),
@@ -107,7 +114,8 @@ Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 3
   pi thread makes bb list its models, for which bb starts a pi of its own in the agent's home; no
   stop ends it, and it leaves by itself. The kernel refuses to retire a home a process works in
   (`E_RUNTIME_QUIESCE_FAILED: … a process works in its home (pid … pi)`), and the retire succeeds
-  when asked again. It is the provider's documented limit (its README, "Stopping"). The run waits
-  for that pi to leave before it retires, and prints how long it waited (53 s in the first run).
+  when asked again. It is the provider's documented limit (its README, "Stopping"). The run asks
+  once while that pi is there, keeps the refusal (P5), waits for the pi to leave and retires; it
+  prints how long it waited (33 to 55 s).
 - **The claim of a dialog reads `running: true`** in `oats status` while the dialog is open (the
   thread is in its turn), as the question Claude Code asks does in the main run.

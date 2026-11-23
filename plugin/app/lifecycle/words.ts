@@ -68,6 +68,8 @@ export const stopThreadSentence = (archives: boolean): string =>
  * - a PRE-RELEASE of the threshold itself (`0.4.0-rc.1`): by semver it comes before 0.4.0, and
  *   nothing says that a candidate already archives. A pre-release of a later version is later.
  */
+// (The real run restates this number and the comparison, since it cannot import this file:
+// container/real/parts/lifecycle.mjs `archivesByVersion`, once it is on main. Change both together.)
 export const ARCHIVES_AT_STOP_FROM: string | null = "0.4.0";
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 export function stopArchivesThread(providerVersion: string | null, from: string | null = ARCHIVES_AT_STOP_FROM): boolean {

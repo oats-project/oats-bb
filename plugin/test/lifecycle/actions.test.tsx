@@ -1314,9 +1314,22 @@ test("while a stop runs the dialog says it can be closed and that stopping conti
   expect(notified().length).toBe(before); // nothing is said before there is a result
   answer(stopReceiptOf());
   await waitFor(() => expect(notified().length).toBe(before + 1));
-  expect(notified().at(-1)).toMatchObject({ tone: "done" });
-  expect(notified().at(-1)!.title).toMatch(/stopped\.$/);
+  // A stop that is done is told whole, with the way to the agent, and may leave by itself: a toast can hold it.
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "done", title: "3 sessions stopped.", open: { label: "Open Redesign ui lead" } });
+  expect(toast.stays).toBeUndefined();
+  expect(toast.lines).toEqual(["Harvest knowledge helper: Was already stopped", "Desktop mockups developer: Stopped", "Redesign ui lead: Stopped", "A message sent in its thread starts it again without OATS. To talk to it again, use Start."]);
   expect(calls(slot, "stopApply")).toHaveLength(1);
+});
+
+test("a restart that runs says that it can be closed and that restarting continues", async () => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }), restart: () => new Promise(() => undefined) });
+  await pick("restart");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; restarting continues.");
+  expect(button(slot, "oats-confirm-leave").disabled).toBe(false);
 });
 
 test("Escape leaves a running dialog too, and a refusal that arrives after it is told as a failure, never lost", async () => {

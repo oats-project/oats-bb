@@ -332,10 +332,11 @@ export default [
         await page.until(phaseIs("failed"), 10);
         const shown = await dialog(page);
         check(shown.body.includes("Redesign ui lead wasn't stopped") && shown.body.includes("Review again") && shown.body.includes("Details"), `${at} Show result opens the dialog again on that refusal, with Review again and Details`, JSON.stringify(shown));
+        // bb takes the toast away once its button was pressed: the result is shown once, in the dialog.
+        check(Boolean(await page.until(`${refusedToast} === undefined`, 10)), `${at} the toast leaves once its result is shown`);
         await shot("left-refused-shown");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
-        await page.evaluate(`${refusedToast}?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
       } finally {
         answers();
         await page.clock(null);

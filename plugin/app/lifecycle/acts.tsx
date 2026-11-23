@@ -586,11 +586,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   useEffect(() => {
     threadNow.current = thread;
   }, [thread]);
-  const resumed = request.resume !== undefined && "start" in request.resume ? request.resume.start : null;
+  // Opened again on a result (the toaster's "Show result"): that result and what the person had chosen.
+  const kept = request.resume !== undefined && "start" in request.resume ? request.resume : null;
+  const resumed = kept?.start ?? null;
   const [state, setState] = useState<StartState>(resumed ?? { phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
-  const [harness, setHarness] = useState(request.resume !== undefined && "start" in request.resume ? request.resume.harness : "");
-  const [model, setModel] = useState(request.resume !== undefined && "start" in request.resume ? request.resume.model : "");
+  const [harness, setHarness] = useState(kept?.harness ?? "");
+  const [model, setModel] = useState(kept?.model ?? "");
   const live = useRef(true);
   const ticket = useRef(0);
   useEffect(() => {

@@ -199,7 +199,13 @@ describe("retire", () => {
     // The pinned sample roster holds no harness for a row: never guessed.
     backend = await startBackend();
     expect(await backend.rpc("retirePlan", { instance: "weekly-digest-helper" })).toMatchObject({ action: "retire", harness: null });
-  }, 20_000);
+    await backend.dispose();
+    // A row whose harness cannot be read (not a string) fails no plan the kernel answered: the harness is then not known.
+    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
+    for (const group of roster.agents) for (const row of group.instances) if (row.instance === "weekly-digest-helper") row.harness = 7;
+    backend = await startBackend({ verbs: { status: { stdout: JSON.stringify(roster) } } });
+    expect(await backend.rpc("retirePlan", { instance: "weekly-digest-helper" })).toMatchObject({ action: "retire", instance: "weekly-digest-helper", harness: null });
+  }, 30_000);
 
   it("the answer of a retire that was sent can be asked again with its key after the retire removed the agent from the roster; any other key is a new act, and is refused", async () => {
     backend = await startBackend();

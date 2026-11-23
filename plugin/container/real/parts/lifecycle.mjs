@@ -113,10 +113,26 @@ export default async (run) => {
     await shot("stop-done");
     check(await close(), `${at} Close closes the dialog`);
 
-    // ---- Start, from the row's menu
-    check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
-    check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
-    check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
+    // ---- Start: from the row's menu, or, where the provider archived the thread at the stop, from the archived thread's own row
+    check(run.stoppedThread(spawnedOn), `bb: the stop left the thread as this run's provider leaves one (${run.stopArchives() ? "archived" : "kept, and no longer active"})`, JSON.stringify(run.bbJson("thread", "list", "--include-archived").find((thread) => thread.id === spawnedOn) ?? null));
+    if (!run.stopArchives()) {
+      check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
+      check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
+      check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
+    } else {
+      // bb lists no archived thread: the agent keeps a row of the roster on no thread, which opens its
+      // archived conversation, and that thread's own row has the acts (scenario.mjs, archivedShots).
+      rpc("refresh");
+      await page.goto("/");
+      await showSidebar(page, viewport);
+      const kept = `document.querySelector('[data-testid="oats-agent-row-threadless"][data-instance="${name}"][data-opens="thread"]')`;
+      check(Boolean(await page.until(`${kept} !== null`, 60)), `${at} the stopped agent keeps its row, which opens its archived thread`, await page.evaluate(`(document.querySelector('[data-testid="oats-sidebar"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`));
+      await page.evaluate(`${kept}?.click()`);
+      const start = `document.querySelector('[data-testid="oats-identity-row"][data-outside="stopped-archived"] [data-testid="oats-agent-act-start"]')`;
+      const offered = await page.until(`location.pathname.endsWith("/threads/${spawnedOn}") && ${start} !== null && ${start}.disabled === false && ${start}.innerText.trim()`, 60);
+      check(offered === "Start…", `${at} the row opens the archived thread, whose own row offers Start…`, `${offered}; at ${await page.evaluate("location.pathname")}: ${await page.evaluate(`(document.querySelector('[data-testid="oats-identity-row"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`)}`);
+      await page.evaluate(`${start}?.click()`);
+    }
     await ready();
     said = await dialog(page);
     check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));

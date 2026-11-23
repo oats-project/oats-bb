@@ -28,7 +28,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 
 | File | Runs | Does |
 |---|---|---|
-| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser) and procps; no bb and no npm package |
+| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend); no bb and no npm package |
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
 | `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |

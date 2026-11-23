@@ -898,13 +898,15 @@ plugin/container/ci.sh            # the image, the installs, typecheck, unit tes
 plugin/container/ci.sh unit       # typecheck, unit tests and the build
 plugin/container/ci.sh live       # the live tests only (bb-app, the plugin installed, a fake oats)
 plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, the bb session provider)
+plugin/container/ci.sh pi         # the pi run only: a pi agent launched from the New agent form (container/real/pi/README.md)
 ```
 
 `plugin/container/README.md` says what each script does and how to keep a container for a session
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`):
+CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`),
+and the pi run as a fourth (`ci.sh pi`):
 `.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`

@@ -945,6 +945,9 @@ const more = [
       await page.until(visible(inPanel("oats-panel-session")), 30);
       const session = await page.evaluate(factsOf("oats-panel-session"));
       check(session.includes("Runs in: tmux session oats-agents"), `${at} Session: where an agent on tmux runs`, session);
+      // Where its session is and how to reach it: one sentence, and the kernel's own command to copy.
+      const attach = await page.evaluate(`(() => { const part = document.querySelector(${JSON.stringify(inPanel("oats-panel-attach"))}); return part ? JSON.stringify({ says: part.querySelector("p").innerText.trim(), command: part.querySelector('[data-testid="oats-command"]')?.innerText.replace(/\\s+/g, " ").trim() ?? null, copy: part.querySelector('[data-testid="oats-copy"]') !== null }) : ""; })()`);
+      check(attach !== "" && /^Runs in tmux on \S.*\. Attach from a terminal:$/.test(JSON.parse(attach).says) && /^oats session attach --home \S+\/panel-tmux-helper$/.test(JSON.parse(attach).command ?? "") && JSON.parse(attach).copy === true, `${at} and how to reach its session: the machine, and the attach command to copy`, attach);
       {
         const read = await page.evaluate(textOf(testId("oats-agent-back")));
         check(read === "Back to Home", `${at} with no thread to go back to, the way back is Home`, read);

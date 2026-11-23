@@ -6,6 +6,7 @@ import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import { InstancePanel, showPanelTab } from "../../app/panel/Panel";
+import { attachCommand } from "../../app/panel/words";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import type { Agent } from "../../model/types";
 import { handlers, loadApp, resetApp } from "../helpers/render";
@@ -285,6 +286,26 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux sessionoats-agents");
   expect(stateOf(slot)).toBe("Working· session started 18:13");
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
+  // Where its session is and how to reach it: one sentence, and the command to copy (the one function the home's card uses).
+  const attach = slot.getByTestId("oats-panel-attach");
+  expect(text(attach.querySelector("p")!)).toBe("Runs in tmux on falcon. Attach from a terminal:");
+  expect(text(within(attach).getByTestId("oats-command"))).toBe(attachCommand(instanceAnswer(CHILD).facts.home));
+  expect(text(within(attach).getByTestId("oats-command"))).toMatch(/^oats session attach --home \S+$/);
+  expect(within(attach).getByRole("button", { name: "Copy the attach command" })).toBeTruthy();
+});
+
+test("the attach command is for an agent on tmux that runs: none for a stopped one, none for an agent on a session provider", async () => {
+  const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, backend: "tmux", threadId: null, running: false, runtimeState: "stopped", waiting: null } : agent));
+  const stopped = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
+    rpc: handlers({ snapshot: () => panelSnapshot(agents), panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, backend: "tmux", threadId: null, tmuxSession: "oats-agents" })) }),
+    sidebarThreads: panelThreads(agents),
+  });
+  await stopped.findByTestId("oats-panel-session-line");
+  expect(stopped.queryByTestId("oats-panel-attach")).toBeNull();
+  stopped.unmount();
+  const onBb = panel();
+  await onBb.findByTestId("oats-panel-session-line");
+  expect(onBb.queryByTestId("oats-panel-attach")).toBeNull();
 });
 
 test("a thread that is no agent's, and a name the roster does not hold, draw nothing", async () => {

@@ -23,6 +23,7 @@ import { Button, Card, Code, CopyButton, DisabledReason, Disclosure, Empty, Fact
 import { refusalCode, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
 import { CommandText } from "../panel/parts";
+import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
@@ -33,7 +34,7 @@ import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
   NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, THREAD_GONE, WORKING, WORKING_SHOWN,
-  answeredWith, attachCommand, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
+  answeredWith, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";

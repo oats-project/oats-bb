@@ -15,23 +15,23 @@ import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable"
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
-import { Button, Card, Chip, Code, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
+import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
 import { agentName, readAge, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
-import { PathLine, SoulMark } from "./parts";
+import { CommandText, PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
 import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, attachCommand, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { /** the machine OATS is read on, by the name bb gives it; null while none is known */ machine: string | null; nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -107,6 +107,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     soulOf: oats.soulOf,
     threadById: oats.threadById,
     retry: oats.retry,
+    machine: oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null,
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
@@ -413,6 +414,16 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
                 </Fact>
               )}
             </Facts>
+            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while it runs: a stopped one has no session. */}
+            {where?.where === "tmux session" && runs ? (
+              <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
+                <p className="m-0">{attachWhere(oats.machine === null ? null : shown(oats.machine))}</p>
+                <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
+                  <CommandText command={attachCommand(facts.home)} />
+                  <CopyButton text={attachCommand(facts.home)} name="Copy the attach command" />
+                </p>
+              </div>
+            ) : null}
           </Card>
         </Section>
       )}

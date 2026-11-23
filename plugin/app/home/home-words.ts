@@ -73,10 +73,6 @@ export const MESSAGE_INSTEAD = "Write a message instead";
 export const MESSAGE_NOT_ANSWER = "A message does not answer its request: it grants nothing, and the request stays open.";
 /** An agent on tmux: where its terminal is. */
 export const tmuxWhere = (machine: string): string => `It runs in tmux on ${machine}, where bb cannot write to it. Answer it in its terminal there:`;
-/** A path as one word of a shell command: as it is when it has nothing a shell reads, else in single quotes. */
-const shellWord = (text: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text) ? text : `'${text.replaceAll("'", `'\\''`)}'`);
-/** The kernel's own way into an agent's session, by its home (docs/execution-targets.md, "Attach"): it runs from any directory of that machine. */
-export const attachCommand = (home: string): string => `oats session attach --home ${shellWord(home)}`;
 export const THREAD_GONE = "Its bb thread is gone, so nothing can be sent to it from here.";
 /** Where Open leads for an agent with no thread. */
 export const PAGE_LEADS = "Open its page shows who it is and how it runs.";

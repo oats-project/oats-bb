@@ -2,7 +2,8 @@
 // function for a state.
 import { describe, expect, it } from "vitest";
 import { board } from "../../app/home/board";
-import { attachCommand, startedBy, summaryLine, tileCount } from "../../app/home/home-words";
+import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
+import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
 import { view } from "../../model/view";
 

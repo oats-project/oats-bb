@@ -335,13 +335,15 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
 | its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
 | its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
-| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session lost, its thread open | false | stopped | lost | - | at rest | Stopped | (no recording) |
 | its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
 | its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
-this section; this one holds only what the two functions must agree on. An agent on tmux is not
+this section; this one holds only what the two functions must agree on. One row is the plugin's
+own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
+lost, its thread open", and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
 in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
 for whether it works.
 

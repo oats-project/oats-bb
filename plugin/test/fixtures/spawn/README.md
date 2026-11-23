@@ -37,10 +37,21 @@ edit. `../README.md` says how the first two were recorded.
   These seven were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
   npm); the live checks' stages (`container/scenes/spawn.mjs`, `stages`) answer them.
 
-No file here is shaped. The one answer of a spawn that is shaped is made where it is used, and says
+No file above is shaped. One answer of a spawn that is shaped is made where it is used, and says
 so there: a spawn the kernel refused and could not roll back completely (`details.unconfirmed`),
 which the real run cannot make (the kernel's own removal of the home would have to fail). The live
 stage `spawn-unconfirmed` (`container/scenes/spawn.mjs`, `rollbackIncomplete`) builds it from
 `spawn-pi-refused.json` with the words and the marker the kernel writes on that path, and the unit
 tests (`test/spawn/model.test.ts`, `kernel.test.ts`, `page.test.tsx`, `test/host.test.ts`,
 `test/server.test.ts`) cite the lines of awebai/oats `lib/core.mjs` at v0.70.5 they follow.
+
+One file here IS shaped, and says so: `spawn-preview-soul-launch.json`, the preview of a soul that
+declares its own launch (`launch: { harness: pi, model: claude-fable-5.1 }`), which the kernel
+resolves whole from the soul (`harness`, `model`, `modelSource: "soul preference"`, `launch.from:
+"soul"`). It has the shape of a real answer of OATS 0.70.4 on 2026-11-23 (`oats spawn <soul>
+--preview --json` in a deployment whose souls declare that launch; no `--backend`, so its backend
+is tmux), member for member, with every name invented (the soul, the workspace, the capabilities,
+the paths, the revisions): the real answer is of a private workspace and is not in the repository.
+The form's tests read from it that such a soul's harness and model are the soul's, with no model
+asked of the person.
+

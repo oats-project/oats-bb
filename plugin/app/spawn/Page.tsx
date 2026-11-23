@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
+import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { useOats } from "../oats";
@@ -327,8 +327,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
   const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
   const suggestions = useModelSuggestions(effectiveHarness);
-  // The kernel resolved a harness and no model for it, and none is chosen: bb will start it on bb's own default.
-  const unsetModel = model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
+  // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
+  // harness the person chose, and it must be one bb serves exactly once where bb lists its models by provider.
+  // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, picked: model !== "" ? model : null, resolved: kernelResolved, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
+  const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
   const notReady = harnessState(effectiveHarness);
 
@@ -431,7 +435,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 : W.OFF.refused
               : preview === null
                 ? W.READING
-                : null;
+                : modelHeld.held; // the Model field's own words: it is marked with them too
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
@@ -572,6 +576,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
+              error={preview === null ? null : modelHeld.held}
               hint={
                 unsetModel === null && suggestions.note === null ? null : (
                   <>
@@ -589,7 +594,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 filterLabel={W.FILTER_MODELS}
                 options={[
                   { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
-                  ...suggestions.models.map((option) => ({ id: option.id, label: shown(option.label) })),
+                  // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
+                  ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
                   ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),
                   { id: CUSTOM, label: W.MODEL_CUSTOM, detail: W.MODEL_CUSTOM_PLACEHOLDER },

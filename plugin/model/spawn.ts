@@ -167,7 +167,45 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 export type FormFacts = Omit<PreviewFacts, "prompts">;
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
-export function formFacts(preview: unknown, options: { name?: string | null } = {}): FormFacts {
+
+// ---- the Model field: whether a spawn may go with the model it would send ----
+
+/** Why Spawn is held for the model: the field's mark and the reason beside the button, two words at most. */
+export const MODEL_HELD = { required: "Required", missing: "Not found", ambiguous: "Pick provider" } as const;
+export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof typeof MODEL_HELD]; /** the listed ids that serve the bare one, to pick from */ offers: string[] };
+/**
+ * The ONE rule of the form's Model field: may a spawn go with the model it would send?
+ *
+ * - `chosenHarness`: the harness the person chose in the form; null while it is the soul's own
+ *   (the first entry: nothing is passed, the kernel resolves it).
+ * - `picked`: the model the person picked or typed; null while it is "Default" (none is passed).
+ * - `resolved`: what the kernel's preview resolved for the values on screen; null before it answered.
+ * - `listed`: the ids bb lists for the harness the spawn would run on; null when bb's list was not
+ *   read or cannot be (the kernel's answer then stands).
+ *
+ * The model the spawn WOULD SEND is the one picked, else the one the kernel resolved from the soul.
+ * 1. None at all, for a harness the person chose (not the soul's own): REQUIRED. The soul's model
+ *    is another harness's, the kernel resolves none, and nothing says what the agent would run on.
+ *    (The soul's own harness with no model declared is the soul's decision: it goes, on bb's default.)
+ * 2. bb must serve it exactly once, where bb lists its models BY PROVIDER (an id is
+ *    `<provider>/<model>`: pi's list; Claude Code's ids have no provider, and the rule does not
+ *    apply to such a list). An id that is listed as it is: served. A bare id that exactly one
+ *    listed id ends in (`<provider>/<bare>`): served, and the harness resolves it. Served by none:
+ *    NOT FOUND. By more than one: PICK PROVIDER, with the ids that serve it. Nobody else refuses
+ *    these: the preview and the spawn pass, and the thread then fails at its start inside bb.
+ */
+export function modelCheck({ chosenHarness, picked, resolved, listed }: { chosenHarness: string | null; picked: string | null; resolved: { harness: string | null; model: string | null } | null; listed: readonly string[] | null }): ModelCheck {
+  const sent = picked ?? resolved?.model ?? null;
+  if (sent === null) return chosenHarness !== null && resolved !== null ? { held: MODEL_HELD.required, offers: [] } : { held: null };
+  if (listed === null || !listed.some((id) => id.includes("/"))) return { held: null };
+  if (listed.includes(sent)) return { held: null };
+  const serving = listed.filter((id) => id.slice(id.indexOf("/") + 1) === sent);
+  if (serving.length === 1) return { held: null };
+  return serving.length === 0 ? { held: MODEL_HELD.missing, offers: [] } : { held: MODEL_HELD.ambiguous, offers: serving };
+}
+
+/** `harnessChosen`: the person chose the harness in the form (it is not the soul's own). */
+export function formFacts(preview: unknown, options: { name?: string | null; harnessChosen?: boolean } = {}): FormFacts {
   const { prompts: _later, ...facts } = previewFacts(preview, options);
   const data: Json = record(preview) ? preview : {};
   const rows = [...facts.facts];
@@ -175,13 +213,14 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
     const at = rows.findIndex((fact) => fact.label === label);
     rows.splice(at === -1 ? rows.length : at + 1, 0, row);
   };
-  // No model for the harness (the soul's launch names another harness's, and none was chosen): the bb
-  // session provider passes none, and bb starts the harness on bb's own default. Said as that, never
-  // as an empty value.
+  // No model for the harness, on bb. Where the harness is the soul's own, the provider passes none
+  // and bb starts the harness on bb's own default: said as that, never as an empty value. Where the
+  // person CHOSE the harness (the soul's model is another harness's), the form holds Spawn until a
+  // model is picked (`modelCheck`), so the row names the harness alone: no default is promised.
   const harness = text(data.harness);
   if (harness !== null && text(data.model) === null && text(data.backend) === "bb") {
     const at = rows.findIndex((fact) => fact.label === "Harness");
-    if (at !== -1) rows[at] = { label: "Harness", parts: [{ text: `${harnessLabel(harness)} · ${bbDefaultModel(harness)}` }, ...rows[at]!.parts.slice(1)] };
+    if (at !== -1) rows[at] = { label: "Harness", parts: [{ text: options.harnessChosen === true ? harnessLabel(harness) : `${harnessLabel(harness)} · ${bbDefaultModel(harness)}` }, ...rows[at]!.parts.slice(1)] };
   }
   const soul = text(data.agent);
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });

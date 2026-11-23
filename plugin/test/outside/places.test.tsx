@@ -277,17 +277,17 @@ test("bb holds a question on the thread of an agent OATS stopped: \"Needs you\",
   expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual(["warning"]);
   expect(acts(slot)).toEqual(["Start"]);
   resetApp();
-  // Stopped with the machine: OATS resumes it, and its question is what the line says, as the roster has it.
+  // Its session was lost: a message carries it on, and its question is what the line says, as the roster has it.
   const host = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: asking });
   await host.findByTestId("oats-identity-row");
   expect(words(host)).toEqual(["!Needs you", "bb shows its question in this thread"]);
   expect(within(host.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null]);
 });
 
-test("bb holds a question on the thread of an agent that is not loaded, or that stopped with the machine: the row and the line say \"Needs you\" and the roster's own words, with no reason made for another state and no act of this feature's", async () => {
+test("bb holds a question on the thread of an agent that is not loaded, or whose session was lost: the row and the line say \"Needs you\" and the roster's own words, with no reason made for another state and no act of this feature's", async () => {
   const asking = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_digest" || thread.id === "thr_harvest" ? { ...thread, hasPendingInteraction: true } : thread)) };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
-  // The rows: the soul after "Needs you", never "Needs you · with the machine" or "Needs you · not loaded".
+  // The rows: the soul after "Needs you", never "Needs you · session lost" or "Needs you · not loaded".
   const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: asking });
   const factsOf = (thread: string) => rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === thread)!);
   expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Needs you · oats-expert", "Needs you · knowledge-harvester"]);
@@ -296,6 +296,37 @@ test("bb holds a question on the thread of an agent that is not loaded, or that 
   const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: asking });
   await unloaded.findByTestId("oats-identity-row");
   expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you", "bb shows its question in this thread"], []]);
+});
+
+test("a lost session says \"session lost\" on bb and on tmux, side by side; an agent on tmux that OATS stopped reads \"Stopped\", never \"Failed\"", async () => {
+  // The rows as the kernel prints them: on bb "stopped" beside sessionEnd "lost"; on tmux (recorded, the real run) no word
+  // beside "lost" for a lost session, and "shell" beside "stopped" for a stop with OATS.
+  const TMUX = "kernel-fix-developer";
+  const rows = (tmux: Partial<Agent>) => fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === TMUX ? { ...agent, waiting: null, ...tmux } : agent));
+  const lostRows = rows({ running: false, runtimeState: null, sessionEnd: "lost", startedAt: "2026-11-21T10:00:00.000Z" });
+  const { slot } = await sidebar({ rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
+  const onBb = () => rowFacts(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!);
+  const onTmux = (from: typeof slot) => from.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === TMUX)!;
+  await waitFor(() => expect([onBb(), rowFacts(onTmux(slot))]).toEqual(["Stopped · session lost", "Stopped · session lost · tmux"]));
+  expect(markOf(onTmux(slot))).toEqual(["stopped", null]); // plain: nobody did anything wrong
+  resetApp();
+  // The bb agent's line: nobody stopped it, a message there carries it on; no time (the kernel records none of the loss), no cause, no promise.
+  const bbLine = await line("thr_digest", { rpc: handlers(noEvents, lostRows), sidebarThreads: sidebarThreads() });
+  await bbLine.findByTestId("oats-identity-row");
+  await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation."]));
+  expect(acts(bbLine)).toEqual(["Start"]);
+  resetApp();
+  // The tmux agent's page: what is so, and when it last started; no "Start" named, since the lifecycle offers none for an agent on tmux.
+  const page = await agentPage(TMUX, { rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(header(page).kind).toBe("lost-tmux"));
+  expect(header(page)).toMatchObject({ state: "Stopped", sentence: "Its session ended without OATS stopping it. Nobody stopped it.", tone: null, acts: [] });
+  expect(page.getByTestId("oats-outside-last-started").textContent).toMatch(/^Last started (\w+ \d+, )?\d\d:\d\d$/);
+  expect(header(page).headed).not.toContain("Start…");
+  resetApp();
+  // Stopped with OATS, on tmux: "Stopped" and its soul, and nothing of this feature's.
+  const stopped = await sidebar({ rpc: handlers({}, rows({ running: false, runtimeState: "shell", sessionEnd: "stopped" })), sidebarThreads: sidebarThreads() });
+  await waitFor(() => expect(rowFacts(onTmux(stopped.slot))).toBe("Stopped · oats-developer · tmux"));
+  expect(markOf(onTmux(stopped.slot))).toEqual(["stopped", null]);
 });
 
 test("an agent that is not loaded, on a thread bb says works (a turn runs): the row and the line say \"Working\", with no \"not loaded\" and no Start", async () => {

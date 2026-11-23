@@ -16,7 +16,7 @@ import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName, waitingClock } from "../ui/words";
 import type { Agent, AgentState, ThreadWhere } from "../../model/types";
-import { said as sayOf } from "./say";
+import { said as sayOf, sentenceOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
 import { lastStarted, OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
@@ -237,7 +237,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
       {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}
       {attached || said.sentence === null || said.warning !== null ? null : (
         <p data-testid="oats-outside-reason" data-tone={said.tone === "warning" ? "warning" : undefined} className={`m-0 min-w-0 break-words ${said.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
-          {said.sentence}
+          {sentenceOf(said, headed.includes("start"))}
         </p>
       )}
       {/* A lost tmux session: the time of the start whose session was lost, where the row has it (the kernel records no time of the loss). */}

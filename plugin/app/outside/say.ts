@@ -31,6 +31,7 @@ import {
   LOST_NOTE,
   LOST_OPEN,
   LOST_TMUX,
+  LOST_TMUX_START,
   STOPPED_OPEN,
 } from "./words";
 
@@ -84,6 +85,15 @@ export type Said = {
 };
 
 const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false } as const;
+
+/**
+ * The sentence of a reason as a place says it, given whether the lifecycle offers Start for the
+ * agent there (`actsFor`): a lost session on tmux adds what Start does only where Start can be
+ * pressed. Every other reason is its own sentence.
+ */
+export function sentenceOf(said: Said, startOffered: boolean): string | null {
+  return said.kind === "lost-tmux" && startOffered ? `${said.sentence} ${LOST_TMUX_START}` : said.sentence;
+}
 
 /** The reason of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {

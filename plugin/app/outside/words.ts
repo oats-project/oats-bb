@@ -32,8 +32,10 @@ export const STOPPED_OPEN_ASKING = `OATS recorded it stopped. ${STOPPED_OPEN}`;
 export const LOST_NOTE = "session lost";
 /** On bb, its thread open: a message there is how it comes back (the Start dialog says the same first). */
 export const LOST_OPEN = "Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation.";
-/** On tmux: bb cannot write to it; Start is the way (it resumes: the lifecycle's dialog says what happened after). */
-export const LOST_TMUX = "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.";
+/** On tmux: bb cannot write to it. What is so, in every case. */
+export const LOST_TMUX = "Its session ended without OATS stopping it. Nobody stopped it.";
+/** After it, ONLY where the lifecycle offers Start for that agent (`actsFor`): "Start" is never named with nothing to press. Start resumes a lost tmux session; its dialog says what happened after. */
+export const LOST_TMUX_START = "Start tries to continue its last conversation.";
 /** After it, where the row has the time of its last start: the start whose session was lost. Never "lost since": the kernel records no time of the loss. */
 export const lastStarted = (when: string): string => `Last started ${when}`;
 

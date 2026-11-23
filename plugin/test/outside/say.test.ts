@@ -3,7 +3,7 @@
 // reason the plugin says after it (app/outside/say.ts), from the kernel's row as recorded and bb's
 // answer for its thread.
 import { describe, expect, it } from "vitest";
-import { said, type Said } from "../../app/outside/say";
+import { said, sentenceOf, type Said } from "../../app/outside/say";
 import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
 import type { Agent, ThreadWhere } from "../../model/types";
@@ -188,7 +188,13 @@ describe("an agent on tmux: the three recorded rows (OATS 0.70.5, the real run)"
   it("its session lost (its window killed): \"Stopped\", the reason \"session lost\", and that Start tries to continue its last conversation; nobody stopped it", () => {
     const lostTmux = tmuxRow("tmux-row-lost.json");
     expect([lostTmux.backend, word(lostTmux)]).toEqual(["tmux", "Stopped"]);
-    expect(said(lostTmux, "none", false)).toEqual({ ...PLAIN, kind: "lost-tmux", sentence: "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.", note: "session lost" });
+    const lostSaid = said(lostTmux, "none", false)!;
+    expect(lostSaid).toEqual({ ...PLAIN, kind: "lost-tmux", sentence: "Its session ended without OATS stopping it. Nobody stopped it.", note: "session lost" });
+    // What Start does is said only where the lifecycle offers Start for the agent: never "Start" with nothing to press.
+    expect(sentenceOf(lostSaid, false)).toBe("Its session ended without OATS stopping it. Nobody stopped it.");
+    expect(sentenceOf(lostSaid, true)).toBe("Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.");
+    // Every other reason is its own sentence, offered or not.
+    expect([sentenceOf(said(lost, "open", true)!, false), sentenceOf(said(lost, "open", true)!, true)]).toEqual([said(lost, "open", true)!.sentence, said(lost, "open", true)!.sentence]);
   });
   it("stopped with OATS (its window left at a shell): \"Stopped\", never \"Failed\", and nothing of this feature's: an operator stopped it", () => {
     const stoppedTmux = tmuxRow("tmux-row-stopped.json");

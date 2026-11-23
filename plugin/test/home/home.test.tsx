@@ -650,7 +650,7 @@ test("a workspace with no agent says what OATS does in two lines, and New agent 
   expect(slot.queryByTestId("oats-home-needs")).toBeNull();
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-home-new-agent"));
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]); // the form's own page (app/spawn)
 });
 
 test("while what is shown is the roster as last read, a card's answers and its reply are held, and it says why; Open still opens", async () => {
@@ -799,7 +799,7 @@ test("behind the card New agent is off, and says why", async () => {
   expect(slot.inspection.navigateCalls).toEqual([]);
 });
 
-test("the release's default shows the home alone: the Agents tile only, no count read for a page that is not shown, and no New agent with nowhere to open", async () => {
+test("the release's default shows the home alone: the Agents tile only, no count read for a page that is not shown, and New agent, which opens the form", async () => {
   const slot = await homePage({ settings: { pages: "home" } });
   await slot.findByTestId("oats-home-needs");
   expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-agents"]);
@@ -812,7 +812,9 @@ test("the release's default shows the home alone: the Agents tile only, no count
   some.unmount();
   const empty = await homePage({ rpc: handlers({}, []), sidebarThreads: calm(), settings: { pages: "home" } });
   await empty.findByTestId("oats-empty");
-  expect(empty.queryByTestId("oats-home-new-agent")).toBeNull();
+  // The way to start an agent survives the hidden pages: the form is a page of its own (app/spawn), not one a release leaves out.
+  fireEvent.click(empty.getByTestId("oats-home-new-agent"));
+  expect(empty.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
 });
 
 test("the home's count of who needs you is the sidebar's: an agent on tmux that asks is in the badge, the heading and the summary", async () => {
@@ -1078,7 +1080,7 @@ test("New agent is on every home, in the heading's row: with agents too, on the 
   // above everything else of the home
   expect(head.compareDocumentPosition(slot.getByTestId("oats-home-needs")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(slot.getByTestId("oats-home-new-agent"));
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]); // the form's own page (app/spawn)
   slot.unmount();
   // Home › Agents keeps it
   const app = await loadApp();
@@ -1100,11 +1102,26 @@ test("New agent is on every home, in the heading's row: with agents too, on the 
   expect((stale.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(true);
   expect(within(stale.getByTestId("oats-home-head")).getByTestId("oats-disabled-reason").textContent).toBe("Held until OATS is read again: what is shown may have changed.");
   stale.unmount();
+  // under the release's default pages it is still there, and opens the form: the spawn feature names its page whatever is shown
+  const pilot = await homePage({ settings: { pages: "home" } });
+  await pilot.findByTestId("oats-home-needs");
+  expect(pilot.getByTestId("oats-home-head").textContent).toBe("HomeNew agent");
+  fireEvent.click(pilot.getByTestId("oats-home-new-agent"));
+  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
+  pilot.unmount();
   // where New agent has nowhere to open (the default pages, and no form's page named), it is not drawn
-  const nowhere = await homePage({ settings: { pages: "home" } });
-  await nowhere.findByTestId("oats-home-needs");
-  expect(nowhere.queryByTestId("oats-home-new-agent")).toBeNull();
-  expect(nowhere.getByTestId("oats-home-head").textContent).toBe("Home");
+  const { setNewAgent } = await import("../../app/workspace/pages");
+  const { openNewAgent } = await import("../../app/spawn");
+  const loaded = await loadApp(); // the app's register names the form's page: taken away after it, for this case alone
+  setNewAgent(null);
+  try {
+    const nowhere = renderSlot<{ subPath: string }, Contract>(loaded.navPanels.find((candidate) => candidate.id === "home")!, { subPath: "" }, { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS, settings: { pages: "home" } });
+    await nowhere.findByTestId("oats-home-needs");
+    expect(nowhere.queryByTestId("oats-home-new-agent")).toBeNull();
+    expect(nowhere.getByTestId("oats-home-head").textContent).toBe("Home");
+  } finally {
+    setNewAgent(openNewAgent); // as the spawn feature's register left it
+  }
 });
 
 test("the home's one more try of the version waits for the roster: none while the roster is not read, one once it is", async () => {

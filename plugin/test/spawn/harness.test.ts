@@ -19,15 +19,20 @@ afterEach(async () => {
 describe("the harnesses the bb session provider declares", () => {
   it("are read with one command, from the capability as the deployment resolves it", () => {
     expect(harnessListArgv()).toEqual(["capabilities", "show", "oats.bb", "--json"]);
-    expect(parseHarnessList(recorded.result)).toEqual({ ok: true, value: { harnesses: ["claude", "pi"] } });
+    // With the provider's own version, as the kernel printed it (here a commit: the real run takes the provider from its repository).
+    expect(parseHarnessList(recorded.result)).toEqual({ ok: true, value: { harnesses: ["claude", "pi"], version: "9b95a56f237ff4006a69545963d5130d6eb4ddc5" } });
+    expect((recorded.result as { version: unknown }).version).toBe("9b95a56f237ff4006a69545963d5130d6eb4ddc5");
+    for (const [printed, read] of [["1.4.0", "1.4.0"], ["0.3.0-rc.1+build", "0.3.0-rc.1+build"], ["--yolo", null], ["1.0 beta", null], ["", null], [3, null], [undefined, null]] as const) {
+      expect(parseHarnessList({ version: printed, sessionProviders: { bb: { harnesses: ["claude"] } } }), String(printed)).toEqual({ ok: true, value: { harnesses: ["claude"], version: read } });
+    }
   });
 
   it("a provider from before the list declares none; an id that is no harness's is left out, each is listed once", () => {
-    expect(parseHarnessList({ sessionProviders: { bb: {} } })).toEqual({ ok: true, value: { harnesses: [] } });
-    expect(parseHarnessList({ sessionProviders: {} })).toEqual({ ok: true, value: { harnesses: [] } });
-    expect(parseHarnessList({})).toEqual({ ok: true, value: { harnesses: [] } });
-    expect(parseHarnessList({ sessionProviders: { bb: { harnesses: ["claude", "claude", "--yolo", "../x", 3, "Pi", "pi"] } } })).toEqual({ ok: true, value: { harnesses: ["claude", "pi"] } });
-    expect(parseHarnessList({ sessionProviders: { bb: { harnesses: "claude" } } })).toEqual({ ok: true, value: { harnesses: [] } });
+    expect(parseHarnessList({ sessionProviders: { bb: {} } })).toEqual({ ok: true, value: { harnesses: [], version: null } });
+    expect(parseHarnessList({ sessionProviders: {} })).toEqual({ ok: true, value: { harnesses: [], version: null } });
+    expect(parseHarnessList({})).toEqual({ ok: true, value: { harnesses: [], version: null } });
+    expect(parseHarnessList({ sessionProviders: { bb: { harnesses: ["claude", "claude", "--yolo", "../x", 3, "Pi", "pi"] } } })).toEqual({ ok: true, value: { harnesses: ["claude", "pi"], version: null } });
+    expect(parseHarnessList({ sessionProviders: { bb: { harnesses: "claude" } } })).toEqual({ ok: true, value: { harnesses: [], version: null } });
     expect(parseHarnessList([])).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });
   });
 

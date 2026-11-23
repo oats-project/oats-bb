@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { below, compat, compatibility, DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
+import { compat, compatibility, DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
 import { parseVersion } from "../kernel/roster";
 import { FIXTURES } from "./support/fake-oats.js";
 
@@ -15,18 +15,16 @@ test("the tested minor is the minor of the kernel the real run pins, and the flo
   expect(compatibility(pinned)).toBe("tested");
 });
 
-test("the plugin's floor is not below the floor of the bb session provider it ships beside", () => {
+test("the plugin's floor is the floor of the bb session provider it ships beside", () => {
   // The provider's two manifests (oats-package/, beside plugin/ in the repository; container/ci.sh
   // copies them beside the plugin in the test container). Each says `compatibility.oats: ">=<version>"`.
-  const mine = versionParts(OATS_FLOOR)!;
   for (const manifest of ["oats-package.json", join("capabilities", "oats-bb", "oats.json")]) {
     const file = join(__dirname, "..", "..", "oats-package", manifest);
     const declared: unknown = JSON.parse(readFileSync(file, "utf8")).compatibility?.oats;
     const floor = typeof declared === "string" ? /^>=(\d+\.\d+\.\d+)$/.exec(declared)?.[1] : undefined;
     expect(floor, `${file} declares compatibility.oats as ">=<version>" (it says ${JSON.stringify(declared)})`).toBeTruthy();
-    // NOT BELOW, while main's manifests are behind the plugin's floor. Once the provider's floor is
-    // the plugin's (oats-bb#40 raises it to 0.70.5), this line becomes: expect(floor).toBe(OATS_FLOOR).
-    expect(below(mine, versionParts(floor!)!), `the plugin's floor ${OATS_FLOOR} is not below the provider's ${floor} (${manifest})`).toBe(false);
+    // One floor for the two that ship together (the provider's is 0.70.5 since oats-bb#40): whoever moves one moves the other.
+    expect(floor, `the provider's floor (${manifest}) is the plugin's, ${OATS_FLOOR}`).toBe(OATS_FLOOR);
   }
 });
 

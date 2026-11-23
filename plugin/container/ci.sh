@@ -74,6 +74,9 @@ if [ -n "${LOCAL_STATUS:-}" ]; then
 fi
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+# The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
+# the plugin's OATS floor against theirs (test/kernel-compat.test.ts).
+(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

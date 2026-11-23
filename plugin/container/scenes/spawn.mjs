@@ -392,14 +392,20 @@ export default [
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
-      // the home's heading, can be pressed, and opens the same page. No image of its own: the home with its button is the
-      // home's own image of this stage, and where the press lands is the image above.
+      // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here
+      // (the home's own image of this stage is of its summary and its one tile, further down), and where the press lands
+      // is the image above.
       await page.goto("/plugins/oats/home");
-      const onHome = await page.until(`(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return b && ${visible(testId("oats-home-new-agent"))} ? JSON.stringify({ words: b.innerText.trim(), off: b.disabled, links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }) : ""; })()`, 30);
-      check(onHome === JSON.stringify({ words: "New agent", off: false, links: 0 }), `${at} with only the home shown, New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      // Read once the home itself says the default has drawn: its tiles are the Agents tile alone, counted (as the home's own
+      // scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
+      const HOME = `(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return JSON.stringify({ words: b?.innerText.trim() ?? null, off: b?.disabled ?? null, tiles: [...document.querySelectorAll(${q("oats-home-tiles")} + " button")].map((tile) => tile.getAttribute("data-testid")), links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`;
+      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && (() => { const tiles = [...document.querySelectorAll(${q("oats-home-tiles")} + " button")]; return tiles.length === 1 && /\\d$/.test(tiles[0].innerText.trim()); })() && ${HOME}`, 30);
+      check(onHome === JSON.stringify({ words: "New agent", off: false, tiles: ["oats-tile-agents"], links: 0 }), `${at} with only the home shown (its one tile is Agents), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
       await page.evaluate(click(testId("oats-home-new-agent")));
-      const fromHome = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
-      check(fromHome === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", focus: "oats-spawn-soul", shown: true }), `${at} pressed on the home, it opens the form's own page with the soul field first, and in focus`, fromHome ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      // The form takes the focus in an effect after it is drawn: the wait is for the focus too, and a wait that ends without it prints where it was.
+      const LANDED = `JSON.stringify({ path: location.pathname, first: document.querySelector(${q("oats-spawn-form")}) ? ${FIRST} : null, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`;
+      const fromHome = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && ${FOCUSED} === "oats-spawn-soul" && ${LANDED}`, 30);
+      check(fromHome === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", focus: "oats-spawn-soul", shown: true }), `${at} pressed on the home, it opens the form's own page with the soul field first, and in focus`, fromHome ?? (await page.evaluate(LANDED)));
     },
   },
 ];

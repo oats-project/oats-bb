@@ -487,7 +487,8 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     the thread's directory and lists from its own); and the id does not end in a date
     (with a slash or without: a bare id may itself hold one, so an id that looks full
     may be a held-back model's bare id). Two listed models with the bare
-    id are refused whatever is held back. One listed and a second held back passes, and
+    id are refused whatever is held back, unless the id holds a slash (it may be a
+    held-back model's exact `<provider>/<id>`, which bb takes first): then the warning. One listed and a second held back passes, and
     bb refuses it at the thread's start, as before.
   - **Nor on a list that may be older than pi's configuration.** bb's server serves the
     list it fetched for 60 s as it is (bb-app 0.50.1), and the thread starts by what pi

@@ -317,6 +317,13 @@ test("the rule on bb's list, by itself: the full id first, then the bare id; one
   const both = [piModelRow("openrouter", "anthropic/claude-opus-5-5"), piModelRow("anthropic", "claude-opus-5-5"), piModelRow("other", "anthropic/claude-opus-5-5")];
   assert.deepEqual(piModelVerdict("anthropic/claude-opus-5-5", both), { ok: true });
   assert.deepEqual(piModelVerdict("claude-opus-5-5", both), { ok: true });
+  // An id with a slash that two listed models have as their bare id, where the list may not be whole: it may be
+  // the exact id of a model the list holds back, which bb takes first. Not refused there; refused on a whole list.
+  const slashed = [piModelRow("openrouter", "openai/gpt-x"), piModelRow("vercel-ai-gateway", "openai/gpt-x")];
+  assert.deepEqual(piModelVerdict("openai/gpt-x", slashed, { partial: "the list may not be whole" }), { unchecked: "the list may not be whole" });
+  assert.deepEqual(piModelVerdict("openai/gpt-x", slashed), { refused: 'pi model "openai/gpt-x" is served by openrouter and vercel-ai-gateway: use openrouter/openai/gpt-x or vercel-ai-gateway/openai/gpt-x (if you just changed that in pi, try again in a minute)' });
+  // A bare id with no slash is nobody's exact id: two listed models with it are refused whatever is held back.
+  assert.equal(piModelVerdict("gpt-6-astra", LIST, { partial: "the list may not be whole" }).refused !== undefined, true);
   // Where the list may not be whole, nothing is refused for a model that is not listed.
   assert.deepEqual(piModelVerdict("claude-fable-9", LIST, { partial: "the list may not be whole" }), { unchecked: "the list may not be whole" });
   // Where it may be older than pi's configuration, neither refusal is given; a listed model still passes.

@@ -24,7 +24,8 @@
 // (The first two seen against bb-app 0.50.1 and pi 1.5.2: such a model starts a thread and
 // is not in the list. lib/pi-config.mjs piListMayBePartial says when the list is whole.) In those cases, and wherever the list cannot be read, nothing is refused:
 // the launch goes on as it did before this check, with a warning. Two listed models with
-// the id are two models whatever else is held back, so that refusal stands there. One
+// the id are two models whatever else is held back, so that refusal stands there (but for
+// an id with a slash, which may be a held-back model's exact `<provider>/<id>`). One
 // listed and a second held back passes here, and bb refuses it at the thread's start.
 //
 // And bb's list may be OLDER than pi's configuration: bb's server serves a list it fetched
@@ -80,6 +81,10 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (serving.length === 1) return { ok: true };
   if (serving.length > 1) {
     if (old !== null) return { unchecked: old };
+    // An id with a slash may also be the exact `<provider>/<id>` of a model the list holds
+    // back, which bb takes before it looks at bare ids: where the list may not be whole,
+    // two listed models with that bare id do not show that bb would find it ambiguous.
+    if (partial !== null && model.includes("/")) return { unchecked: partial };
     return { refused: `pi model ${JSON.stringify(model)} is served by ${listed(serving.map((row) => row.provider))}: use ${listed(serving.map((row) => row.id), "or")} (if you just changed that in pi, ${RETRY})` };
   }
   if (rows.length === 0) return { unchecked: "the list is empty" };

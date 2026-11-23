@@ -570,7 +570,9 @@ cases where bb lists fewer models than its pi resolves (the first two seen at bb
 - where the pi configuration bb's server runs with sets `enabledModels`
   (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
   a thread still starts on any other model pi has. A model that is not listed is then
-  not checked. Two listed models with the id are still refused. bb's pi keeps the
+  not checked. Two listed models with the id are still refused (a bare id with no
+  slash: one with a slash may be a held-back model's exact `<provider>/<id>`, and is
+  not checked). bb's pi keeps the
   setting it started with: after `enabledModels` is removed, bb goes on listing only
   those models, at least while its pi is in use. So a model that is not listed is refused only
   where that `settings.json` sets no `enabledModels` **and has not changed since bb

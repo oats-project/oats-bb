@@ -189,7 +189,11 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
       {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}
-      {attached || said.sentence === null || said.warning !== null ? null : <p className="m-0 min-w-0 break-words text-muted-foreground">{said.sentence}</p>}
+      {attached || said.sentence === null || said.warning !== null ? null : (
+        <p data-testid="oats-outside-reason" data-tone={said.tone === "warning" ? "warning" : undefined} className={`m-0 min-w-0 break-words ${said.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
+          {said.sentence}
+        </p>
+      )}
       {attached ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <DetachedActs said={said} instance={agent.instance} held={held} />

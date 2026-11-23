@@ -189,7 +189,7 @@ export default [
       check(Boolean(words), `${at} in the sidebar the two rows say "Unreachable" and "Failed", each beside its mark`, words ?? (await page.evaluate(`JSON.stringify([${factsOf(unreachable.id)}, ${factsOf(failed.id)}])`)));
       // And the agent whose bb thread is gone stays in the roster (S3): bb has no thread of its id, and the row says so (the outside feature's words).
       const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
-      check(gone === "Stopped · oats-expert · its conversation was deleted in bb", `${at} the agent whose bb thread is gone stays in the roster, and says that its conversation was deleted in bb`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
+      check(gone === "Stopped · deleted in bb", `${at} the agent whose bb thread is gone stays in the roster, and says "Stopped", then the reason, "deleted in bb"`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
       // At 1280 the image of the failed thread already shows the sidebar's rows; at 390 they are in bb's drawer.
       if (viewport.mobile) await page.shot(`a16-${viewport.name}-states`);
     },

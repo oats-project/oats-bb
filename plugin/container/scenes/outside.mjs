@@ -319,12 +319,12 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
-        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(`[role="tabpanel"] > ${testId("oats-outside-agent-block")}:first-child`)}); if (!head || !block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat) }); })()`,
+        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(`[role="tabpanel"] > ${testId("oats-outside-agent-block")}:first-child`)}); if (!head || !block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), tone: block.querySelector(":scope > p")?.getAttribute("data-tone") ?? null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat) }); })()`,
         30,
       );
       check(
-        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] }),
-        `${at} its page says "Stopped", that its conversation was deleted in bb, and has the lifecycle's Start… and Retire…`,
+        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: ["Start…", "Retire…"] }),
+        `${at} its page says "Stopped", that its conversation was deleted in bb (in the warning tone), and has the lifecycle's Start… and Retire…`,
         read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
       );
       await page.shot(`outside-${viewport.name}-agent-deleted`, { targets: true });
@@ -420,7 +420,7 @@ export default [
   },
   {
     stage: "outside-question",
-    name: "bb has a question open for an agent OATS recorded stopped: its thread says \"Needs you\", and the kernel's report under it",
+    name: "bb has a question open for an agent that runs outside OATS: its thread still says \"Running outside OATS\", one statement, with the notice under it",
     run: async ({ page, at, viewport, threads, check }) => {
       const thread = threads.get("thr_harvest");
       check(question?.payload?.kind === "user_question", `${at} bb has a question open on the thread of the agent OATS recorded stopped`, JSON.stringify(question ?? null));

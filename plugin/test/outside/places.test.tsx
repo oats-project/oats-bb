@@ -286,6 +286,7 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
     state: within(within(head).getByTestId("oats-panel-state")).getByTestId("oats-state").textContent,
     kind: block?.getAttribute("data-outside") ?? null,
     sentence: block?.querySelector(":scope > p")?.textContent ?? null,
+    tone: block?.querySelector(":scope > p")?.getAttribute("data-tone") ?? null,
     acts: block === null ? [] : actsIn(block),
     block,
   };
@@ -294,7 +295,7 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
 test("an agent whose thread was deleted in bb: its own page says \"Stopped\", what happened, and has Start and Retire", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("deleted"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] });
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: ["Start…", "Retire…"] });
   fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Start…" }));
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
@@ -302,13 +303,13 @@ test("an agent whose thread was deleted in bb: its own page says \"Stopped\", wh
 test("an agent whose session OATS lost and whose thread bb archived: its own page has Stop and Retire under what happened", async () => {
   const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(slot).kind).toBe("lost-archived"));
-  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", acts: ["Stop", "Retire"] });
+  expect(header(slot)).toMatchObject({ state: "Stopped", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", tone: "warning", acts: ["Stop", "Retire"] });
 });
 
 test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire", async () => {
   const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
-  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", acts: ["Start…", "Retire…"] });
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", tone: null, acts: ["Start…", "Retire…"] }); // a fact, with no remedy needed: not toned
   resetApp();
   const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(deleted).kind).toBe("deleted"));

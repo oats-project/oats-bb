@@ -52,7 +52,7 @@ export type Oats = {
       /**
        * What bb itself says of the thread an agent's row names: "open" for a thread bb lists; for
        * one it does not, bb's answer by id (archived, or no such thread), "unknown" until bb has
-       * answered (app/outside/threads.ts). The one state function and `view()` read it.
+       * answered (app/outside/threads.ts). The outside feature's reasons read it (app/outside/say.ts); the state function does not.
        */
       whereOf(agent: Agent): ThreadWhere;
       /** Every drawn node by its thread id, and by its instance. */

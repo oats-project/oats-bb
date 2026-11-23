@@ -400,13 +400,13 @@ async function missingShots(scene, { instance, soul }) {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is still drawn`);
       // The agent stays in the roster (S3): a row of its own that says where it is in a word, its soul,
-      // and what happened: OATS lost its session, and bb has no thread of that id (app/outside). The read waits on that row's words
+      // and the reason: bb has no thread of that id (app/outside). The read waits on that row's words
       // (bb's own answer for the id arrives after the roster).
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
       const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
-      const DELETED = `Deleted in bb · ${soul} · its conversation is gone`;
+      const DELETED = "Stopped · deleted in bb"; // the reason takes the soul's place on the row
       const facts = (await page.until(`(() => { const facts = ${factsNow}; return facts === ${JSON.stringify(DELETED)} ? facts : ""; })()`, 30)) || (await page.evaluate(factsNow));
-      check(facts === DELETED, `${at}: ${instance} stays in the roster: "Deleted in bb", its soul, "its conversation is gone"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(facts === DELETED, `${at}: ${instance} stays in the roster: "Stopped", then the reason, "deleted in bb"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       show("row", facts);
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {

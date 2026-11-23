@@ -23,7 +23,7 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
 REPOSITORY=$(dirname "$PLUGIN")
-# Unset: the release the fixtures were recorded at. Set and empty: a tree from KERNEL_REPO.
+# Unset: the release the run pins (the plugin's floor). Set and empty: a tree from KERNEL_REPO.
 KERNEL_NPM=${KERNEL_NPM-0.70.5}
 if [ "$KERNEL_NPM" = 0.70.5 ]; then
   KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==}

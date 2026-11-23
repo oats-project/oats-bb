@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { compat, compatibility, DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
+import { below, compat, compatibility, DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR, versionParts } from "../kernel/compat";
 import { parseVersion } from "../kernel/roster";
 import { FIXTURES } from "./support/fake-oats.js";
 
@@ -18,7 +18,6 @@ test("the tested minor is the minor of the kernel the real run pins, and the flo
 test("the plugin's floor is not below the floor of the bb session provider it ships beside", () => {
   // The provider's two manifests (oats-package/, beside plugin/ in the repository; container/ci.sh
   // copies them beside the plugin in the test container). Each says `compatibility.oats: ">=<version>"`.
-  const below = (a: readonly number[], b: readonly number[]) => a[0]! < b[0]! || (a[0] === b[0] && (a[1]! < b[1]! || (a[1] === b[1] && a[2]! < b[2]!)));
   const mine = versionParts(OATS_FLOOR)!;
   for (const manifest of ["oats-package.json", join("capabilities", "oats-bb", "oats.json")]) {
     const file = join(__dirname, "..", "..", "oats-package", manifest);

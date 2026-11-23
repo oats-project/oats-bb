@@ -111,7 +111,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
   `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state, its soul and "runs in tmux"; the foot counts
+  holds: every one is a row that says its state, its soul and "tmux"; the foot counts
   every agent that waits; no phrase of a row's second line is broken or cut; the last row and the
   foot can be scrolled into view; a row opens its agent's own page.
 - **A14** with `oats` removed after it was read: the roster stays as last read under the notice

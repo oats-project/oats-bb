@@ -1,6 +1,7 @@
 // The sidebar's thread list (experimental_threadList): the workspace line, the roster (every agent
 // OATS has, as a tree), at its foot who waits and New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
+import { Fragment } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -123,15 +124,27 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <span className="flex min-w-0 flex-1 flex-col">
       <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
       {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
-      {/* Each phrase (the state, the soul, where it runs) moves to the next line whole, with its
-          separator kept at the end of the phrase before it: a line never breaks in the middle of a
-          phrase that fits the row, and none starts with a separator. */}
+      {/* Each phrase after the first (the soul, where it runs) moves to the next line WITH its
+          separator in front of it, as one unit: no line ends with a separator, and a phrase that
+          fits the row is never broken. (The space before a unit is the place a line may break.) */}
       <span data-testid="oats-row-facts" className="text-xs text-muted-foreground">
-        {`${word} · ${rest}`.split(" · ").map((phrase, index, all) => (
-          <span key={index} data-phrase="" className="inline-block max-w-full whitespace-pre-wrap break-words align-top">
-            {index < all.length - 1 ? `${phrase} · ` : phrase}
-          </span>
-        ))}
+        {`${word} · ${rest}`.split(" · ").map((phrase, index) =>
+          index === 0 ? (
+            <span key={index} data-phrase="" className="break-words">
+              {phrase}
+            </span>
+          ) : (
+            <Fragment key={index}>
+              {" "}
+              <span className="inline-flex max-w-full align-top">
+                <span data-sep="" className="shrink-0 whitespace-pre">{"· "}</span>
+                <span data-phrase="" className="min-w-0 break-words">
+                  {phrase}
+                </span>
+              </span>
+            </Fragment>
+          ),
+        )}
       </span>
     </span>
   );
@@ -255,7 +268,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <ul data-testid="oats-tree" className="flex flex-col">
           {agentRows(view.roots)}
           {view.detached.map((agent) => threadlessRow(agent, "its bb thread is gone"))}
-          {view.elsewhere.map((agent) => threadlessRow(agent, "runs in tmux"))}
+          {view.elsewhere.map((agent) => threadlessRow(agent, "tmux"))}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}

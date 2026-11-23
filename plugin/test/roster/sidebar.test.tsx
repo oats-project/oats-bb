@@ -79,7 +79,7 @@ test("an agent with no bb thread stays in the roster: one that runs in tmux, and
   const rows = await slot.findAllByTestId("oats-agent-row-threadless");
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
     ["weekly-digest-helper", "Stopped · oats-expert · its bb thread is gone"],
-    ["kernel-fix-developer", "Working · oats-developer · runs in tmux"],
+    ["kernel-fix-developer", "Working · oats-developer · tmux"],
   ]);
   expect(rows[1]!.textContent).toContain("Kernel fix developer");
   // The count of the workspace line is the count of rows.
@@ -418,7 +418,7 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
     { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: sidebarThreads() },
   );
   const row = (await slot.findAllByTestId("oats-agent-row-threadless")).find((candidate) => candidate.getAttribute("data-instance") === "kernel-fix-developer")!;
-  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Stopped · oats-developer · runs in tmux");
+  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Stopped · oats-developer · tmux");
   expect(row.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("stopped");
   const header = await slot.findByTestId("oats-panel-state");
   expect(header.querySelector("[data-state]")!.getAttribute("data-state")).toBe("stopped");
@@ -499,7 +499,7 @@ test("the foot counts every agent that waits, the ones with no bb thread include
   await slot.findByTestId("oats-tree");
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // three in the tree, and the one on tmux
   const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
-  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · runs in tmux");
+  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · tmux");
 });
 
 // On a deployment that shows more than the default, a page opened by its path must not say "not

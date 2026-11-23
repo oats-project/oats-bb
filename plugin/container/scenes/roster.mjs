@@ -48,7 +48,7 @@ export default [
       const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
       const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable) · \S/;
       check(
-        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · oats-developer · runs in tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"]),
+        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · oats-developer · tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"]),
         `${at} eight agents, eight rows: each its mark, its state in a word and its soul, the one in tmux among them; then who waits, New agent and the pages`,
         JSON.stringify(drawn),
       );
@@ -295,19 +295,22 @@ export default [
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const side = JSON.stringify(testId("oats-sidebar"));
       const tmux = TMUX_ROSTER.tmux;
-      // Every tmux agent is a row, by its one name, and says its state, its soul and that it runs in tmux.
+      // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
-      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · ${soul} · runs in tmux`]);
+      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · ${soul} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
-      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, "runs in tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // Who waits: the three on tmux that wait... every one that waits, with a thread or not, in ONE number.
       const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
       const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);
       check(needs === `! ${waiting} need you` || needs === `${waiting} need you`, `${at} the foot counts every agent that waits, the ${waiting - 1} on tmux included: ${waiting}`, needs);
-      // No phrase of a row's second line is broken across two lines, and none is cut by the sidebar's edge.
-      const broken = await page.evaluate(`(() => { const s = document.querySelector(${side}); const edge = s.getBoundingClientRect().right; return JSON.stringify([...s.querySelectorAll("[data-phrase]")].filter((p) => p.getClientRects().length > 0).filter((p) => { const lines = new Set([...p.firstChild ? (() => { const r = document.createRange(); r.selectNodeContents(p); return [...r.getClientRects()]; })() : []].map((rect) => Math.round(rect.top))); return lines.size > 1 || p.getBoundingClientRect().right > edge + 1; }).map((p) => p.innerText)); })()`);
-      check(broken === "[]", `${at} no phrase of a row's second line is broken across two lines or cut by the sidebar's edge`, broken);
+      // A row's second line: no phrase that fits is broken across two lines or cut by the sidebar's edge, and
+      // NO LINE ENDS WITH A SEPARATOR: each "·" stands on the line of the phrase it is in front of.
+      const lines = await page.evaluate(`(() => { const s = document.querySelector(${side}); const edge = s.getBoundingClientRect().right; const top = (node) => { const r = document.createRange(); r.selectNodeContents(node); const rects = [...r.getClientRects()]; return rects.length ? Math.round(rects[0].top) : null; }; const tops = (node) => { const r = document.createRange(); r.selectNodeContents(node); return new Set([...r.getClientRects()].map((rect) => Math.round(rect.top))).size; }; const shown = (e) => e.getClientRects().length > 0; return JSON.stringify({ broken: [...s.querySelectorAll("[data-phrase]")].filter(shown).filter((p) => tops(p) > 1 || p.getBoundingClientRect().right > edge + 1).map((p) => p.innerText), dangling: [...s.querySelectorAll(${JSON.stringify(`${testId("oats-row-facts")} [data-sep]`)})].filter(shown).filter((sep) => top(sep) !== top(sep.nextElementSibling)).map((sep) => sep.parentElement.innerText), seps: s.querySelectorAll(${JSON.stringify(`${testId("oats-row-facts")} [data-sep]`)}).length }); })()`);
+      const read2 = JSON.parse(lines);
+      check(read2.broken.length === 0, `${at} no phrase of a row's second line is broken across two lines or cut by the sidebar's edge`, lines);
+      check(read2.dangling.length === 0 && read2.seps >= tmux.length * 2, `${at} no line of a row ends with a separator: each of the ${read2.seps} stands in front of its phrase, on its line`, lines);
       await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
       // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
       const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: r.height > 0, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);

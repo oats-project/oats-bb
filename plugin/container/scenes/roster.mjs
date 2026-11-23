@@ -363,7 +363,7 @@ export default [
       const rows = await page.until(`(() => { const n = document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)}).length; return n > 0 ? String(n) : ""; })()`, 30);
       const measured = await rowLines(page);
       const read = JSON.parse(measured);
-      check(Number(rows) > 0 && read.over === 0 && read.wrapped === 0 && read.edgeCut === 0, `${at} the roster is drawn: no row over three lines, no second block on two, only a soul cut: ${measured}`, measured);
+      check(Number(rows) > 0 && read.over === 0 && read.wrapped === 0 && read.edgeCut === 0 && read.soulGone === 0 && read.untitled === 0, `${at} the roster is drawn: no row over three lines, no second block on two, nothing past a row's edge, no soul squeezed to nothing, every name whole in its title (a soul, or the last phrase of a row whose thread is gone, may be cut): ${measured}`, measured);
       await page.shot(`local-roster-${viewport.name}-sidebar`);
     },
   },

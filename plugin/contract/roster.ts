@@ -19,7 +19,7 @@ export const agent = z.object({
   running: z.boolean().nullable(),
   runtimeState: z.string().nullable(),
   runtimeError: z.string().nullable(),
-  /** When the agent's session started, as the kernel's row says it; absent where the row names none. */
+  /** The last time OATS started the agent, as the kernel's row says it (`startedAt`); absent where the row names none. */
   startedAt: z.string().nullish(),
   waiting: z
     .object({ reason: z.string(), message: z.string().nullable(), since: z.string().nullable() })

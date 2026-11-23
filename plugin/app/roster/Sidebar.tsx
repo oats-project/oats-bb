@@ -123,31 +123,39 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * A row's two blocks, at most three lines in all (the lead's ruling on the long names):
    * - the NAME wraps to at most two lines and is cut with "…" only after the second; the whole
    *   name (`full`: the instance as the kernel names it) is the name's title on every row;
-   * - the second block (the state, the soul, where it runs) is ONE line, never wrapped. Where it
-   *   does not fit, the SOUL gives way first, down to room for its "…"; only then does the last
-   *   phrase ("its bb thread is gone") give way too. The state's word is never cut. The whole line
-   *   is its title.
+   * - the second block is ONE line, never wrapped: the state's word, the soul, and for an agent
+   *   with no bb thread where it is (`where`). The state's word is never cut. Where the line does
+   *   not fit, the SOUL gives way first, down to room for its "…". A short `where` ("tmux") is
+   *   never cut; a long one (`whereGives`: "its bb thread is gone") gives way after the soul.
+   *   Nothing is drawn past the row (the block clips), and the whole line is its title.
    */
-  const lines = (name: ReactNode, strong: boolean, word: string, rest: string, full?: string) => (
-    <span className="flex min-w-0 flex-1 flex-col">
-      <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
-      <span data-testid="oats-row-facts" title={`${word} · ${rest}`} className="flex min-w-0 whitespace-nowrap text-xs text-muted-foreground">
-        {`${word} · ${rest}`.split(" · ").map((phrase, index) => (
-          <Fragment key={index}>
-            {index === 0 ? null : (
-              <span data-sep="" className="shrink-0 whitespace-pre">
-                {" · "}
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; where?: string; whereGives?: boolean }, full: string) => {
+    const parts: { kind: "state" | "soul" | "where"; text: string; className: string }[] = [
+      { kind: "state", text: phrases.state, className: "shrink-0" },
+      // The soul gives way first (shrink-[1000]) and keeps room for its "…".
+      { kind: "soul", text: phrases.soul, className: "min-w-[1.5em] shrink-[1000] truncate" },
+      ...(phrases.where === undefined ? [] : [{ kind: "where" as const, text: phrases.where, className: phrases.whereGives === true ? "min-w-0 truncate" : "shrink-0" }]),
+    ];
+    return (
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
+        <span data-testid="oats-row-facts" title={parts.map((part) => part.text).join(" · ")} className="flex min-w-0 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+          {parts.map((part, index) => (
+            <Fragment key={part.kind}>
+              {index === 0 ? null : (
+                <span data-sep="" className="shrink-0 whitespace-pre">
+                  {" · "}
+                </span>
+              )}
+              <span data-phrase={part.kind} className={part.className}>
+                {part.text}
               </span>
-            )}
-            {/* The second phrase is the soul: it gives way first (shrink-[1000]) and keeps room for its "…". */}
-            <span data-phrase={index === 1 ? "soul" : index === 0 ? "state" : "where"} className={index === 0 ? "shrink-0" : index === 1 ? "min-w-[1.5em] shrink-[1000] truncate" : "min-w-0 truncate"}>
-              {phrase}
-            </span>
-          </Fragment>
-        ))}
+            </Fragment>
+          ))}
+        </span>
       </span>
-    </span>
-  );
+    );
+  };
 
   const agentRows = (nodes: readonly Node[]): ReactNode[] =>
     nodes.flatMap((node) => {
@@ -163,7 +171,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, drawn.word, shown(oats.soulOf(node.agent)), shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)) }, shown(node.agent.instance))}
           </>,
         ),
         ...agentRows(node.children),
@@ -175,7 +183,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * in the roster, with what it is in words, and opens its own page (its soul's, where no feature
    * gives agents a page), where its acts are.
    */
-  const threadlessRow = (agent: Agent, where: string) => {
+  const threadlessRow = (agent: Agent, where: string, whereGives: boolean) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
@@ -194,7 +202,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden />
-          {lines(name, status.state === "needs-you", drawn.word, `${shown(oats.soulOf(agent))} · ${where}`, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), where, whereGives }, shown(agent.instance))}
         </button>
       </li>
     );
@@ -267,8 +275,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
           {agentRows(view.roots)}
-          {view.detached.map((agent) => threadlessRow(agent, "its bb thread is gone"))}
-          {view.elsewhere.map((agent) => threadlessRow(agent, "tmux"))}
+          {view.detached.map((agent) => threadlessRow(agent, "its bb thread is gone", true))}
+          {view.elsewhere.map((agent) => threadlessRow(agent, "tmux", false))}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}

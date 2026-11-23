@@ -41,7 +41,7 @@ test("the tree: every bb agent has a row with both data-sidebar-thread-* attribu
   }
 });
 
-test("a row is two lines: its name, then its state in a word and its soul; the mark sits beside the word, and no ? or new", async () => {
+test("a row is two blocks: its name, then on one line its state in a word and its soul; the mark sits beside the word, and no ? or new", async () => {
   const { slot } = await sidebar();
   const rows = await slot.findAllByTestId("oats-agent-row");
   const row = (id: string) => rows.find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === id)!;

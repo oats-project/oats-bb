@@ -175,7 +175,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
 
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
-      {/* The one status line of an agent (the panel's header draws the same). The age of a roster kept as
+      {/* The one status line of an agent (the panel's header is to draw the same). The age of a roster kept as
           last read is said by the one-line notice under it, so the line itself says no "as of". */}
       <AgentStatusLine
         agent={agent}

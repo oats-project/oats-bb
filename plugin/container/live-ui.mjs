@@ -157,6 +157,8 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
 // "local-roster" from that file; without it that stage is skipped. The file is never part of the
 // repository, and its scene prints counts only, never a name (container/README.md).
 const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
+/** The bb threads the local stage archived for its image, to put back when it leaves. */
+const archivedForLocal = [];
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
 const AGAIN_SECONDS = 180;
 // To PROVE the path a stuck thread takes (not part of a normal run): LIVE_UI_PROVE_STUCK=1 makes
@@ -410,7 +412,10 @@ const BUILT_IN = {
       } catch {
         throw new Error(`the status file at ${LOCAL_STATUS} is not an oats status --json answer`);
       }
-      for (const thread of threads.values()) bb("thread", "archive", thread.id);
+      for (const thread of threads.values()) {
+        bb("thread", "archive", thread.id);
+        archivedForLocal.push(thread.id);
+      }
       fake({ status: { stdout: status } });
       pages("home");
       const deadline = Date.now() + 60_000;
@@ -428,9 +433,10 @@ const BUILT_IN = {
         await sleep(1500);
       }
     },
-    leave: async ({ threads }) => {
+    // Only what `enter` archived is put back: a stage that failed before it archived anything leaves bb as it was.
+    leave: async () => {
       pages(ALL_PAGES);
-      for (const thread of threads.values()) bb("thread", "unarchive", thread.id);
+      for (const id of archivedForLocal.splice(0)) bb("thread", "unarchive", id);
     },
   },
   "pages-default": {

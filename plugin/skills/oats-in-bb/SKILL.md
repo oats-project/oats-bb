@@ -11,11 +11,13 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Rules
 
-- **Stop an OATS agent with "Stop agent (OATS)"** in the thread's menu, never with bb's own Stop,
-  Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
+- **Stop an OATS agent with "Stop agent (OATS)"** in the thread's menu, or with **Stop** on the
+  OATS status line under the thread's header (both open the same dialog), never with bb's own Stop
+  (the composer's, which ends a turn), Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
   buttons leave OATS thinking the agent should run.
 - **Start, Restart and Retire** are in the same menu and in bb's command palette; the thread's
-  status line also has Start (an agent that does not run) or Restart (one whose session ended).
+  status line also has Start (an agent that does not run) or Restart (one whose session ended), and
+  Answer on an agent that waits for you (it opens the instance panel at what it asks).
   The palette has "OATS: Stop agent…" (Alt+Shift+X), Restart (R), Start (S) and Retire (D), each
   rebound in bb's Keyboard settings. Each opens a dialog first and acts only on its own button.
   Stop and Retire show the kernel's plan as what will happen and what is kept. A stopped agent's

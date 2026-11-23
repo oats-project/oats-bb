@@ -1,5 +1,5 @@
-// Where ONE agent is, whole, for every place that says it of one agent (the thread's row, the
-// instance panel's header): the state's word, since when, the question or the reason, the act that
+// Where ONE agent is, whole, for every place that says it of one agent (the thread's row; the
+// instance panel's header will take it, and draws the shared StatusLine itself until then): the state's word, since when, the question or the reason, the act that
 // applies, and under the line what the kernel itself says where it said more. One component, so
 // that a header says what the thread's row says (the panel read's F1: the question is in the header).
 import type { ReactNode } from "react";

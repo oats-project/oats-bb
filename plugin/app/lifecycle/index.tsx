@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, Node } from "../../model/types";
+import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
@@ -22,6 +23,14 @@ export type { Verb } from "./words";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
 const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "Trash2", oats: "Bot" } as const;
+
+/**
+ * The kernel says that no harness is loaded for it (`running: false` beside a session that is
+ * there): the row's "not loaded". It does not run. The plugin's one reading of the row (`rest`,
+ * model/rest.ts), not the drawn state: an agent with no harness loaded that also carries a claim
+ * is drawn "Needs you", and it does not run either.
+ */
+const unloaded = (agent: Agent): boolean => rest(agent) === "unloaded";
 
 /**
  * The four acts, in the order every place lists them: the name on a button (the Desktop's, with
@@ -56,9 +65,11 @@ export const ACTS: readonly {
     // An agent that does not run can be started: one whose session ended, one that is stopped, and
     // one the kernel calls stopped while bb holds a question on its thread (it then counts as
     // needing you, so the kernel's word is asked too). The thread's own row offers Start for the
-    // same agents.
+    // same agents. And one that is IDLE WITH NO HARNESS LOADED (the kernel's own word, `running:
+    // false`, beside a session that is there: "Idle · not loaded"): its row says that it does not
+    // run, so Start opens, and the dialog says that it begins a new conversation.
     // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
-    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped",
+    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || unloaded(agent),
   },
   { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
@@ -149,7 +160,8 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
   // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
-  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you" || state === "outside", known: state !== "unreachable" });
+  // And never "is already running" of a row that says no harness is loaded.
+  const why = cannotAct(verb, agent.instance, { running: (state === "working" || state === "idle" || state === "needs-you" || state === "outside") && !unloaded(agent), known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);

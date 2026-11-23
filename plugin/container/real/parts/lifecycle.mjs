@@ -176,9 +176,11 @@ export default async (run) => {
     }
     await ready();
     said = await dialog(page);
-    // What the dialog says a start begins (app/lifecycle/words.ts START): for an agent bb lists a thread of, that the
-    // current conversation stays readable, archived; for one whose conversation is archived already (bb lists none), a new one.
-    const begins = run.stopArchives() ? "This starts a new conversation using the saved briefing and state." : "Starts a new conversation. The current one stays readable in bb, archived.";
+    // What the dialog says a start begins (app/lifecycle/words.ts START), decided from the agent's RECORDED bb
+    // thread: one bb lists, or one bb has archived (it is asked for that one thread): on both providers, the one
+    // that leaves a stopped agent's thread open and the one that archives it at the stop, the conversation stays
+    // readable in bb, archived.
+    const begins = "Starts a new conversation. The current one stays readable in bb, archived.";
     check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes(begins) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);

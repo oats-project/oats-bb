@@ -965,12 +965,13 @@ const BB_ASKS = {
 
 test.each([
   ["OATS has it stopped", { running: false as const, runtimeState: "stopped" }, "Which shard do I rerun?"],
-  // An agent whose session ended keeps its claim (the model's one rule, `claimOf`): the card says what it last asked.
-  ["its session ended in a shell", { running: false as const, runtimeState: "shell" }, "needs your permission to use Bash"],
+  // An operator's stop that says so (`sessionEnd: "stopped"`), and the stale stop beside "unknown": the stop wins.
+  ["an operator stopped it", { running: false as const, runtimeState: "stopped", sessionEnd: "stopped" }, "Which shard do I rerun?"],
+  ["it still says an operator stopped it, beside \"unknown\"", { running: false as const, runtimeState: "unknown", sessionEnd: "stopped" }, "Which shard do I rerun?"],
   ["the kernel's word is stopped, with no word on whether it runs", { running: null, runtimeState: "stopped" }, null],
-  // Whatever else the kernel says of it, an agent it says does not run is not answered from the home.
+  // Where nobody can tell whether a message reaches it, the home does not send one.
   ["it does not run, and the kernel cannot reach its session", { running: false as const, runtimeState: "unreachable" }, "needs your permission to use Bash"],
-])("an agent the kernel says does not run (%s) while bb holds a request on its thread: no answer and no message on its card, which says so and offers Start", async (_what, change, question) => {
+])("an agent the kernel calls stopped, or cannot reach (%s) while bb holds a request on its thread: no answer and no message on its card, which says so and offers Start", async (_what, change, question) => {
   // An answer or a message to that thread would start the agent's harness again behind OATS's back: a stopped agent stays stopped.
   const { asked } = await import("../../app/lifecycle");
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change } : agent));
@@ -1158,20 +1159,24 @@ test("the home's one more try of the version waits for the roster: none while th
   expect(asked()).toBe(2);
 });
 
-test("an agent whose session ended and that needs the person by the claim it still carries (bb holds no request): its card has no reply either", async () => {
-  // Without the rule its card was the reply (or the answer in the thread, with the fold): a message to it would start it outside OATS.
-  for (const reason of ["attention", "permission"]) {
-    const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "shell", waiting: { reason, message: "Which branch do I use?", since: "2026-11-19T12:20:00.000Z" } } : agent));
+test("an agent nobody stopped (its session ended in a shell, was lost, or no harness is loaded) is answered from its card, on a thread bb lists: a message there is how it comes back", async () => {
+  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line reads too. It
+  // narrows what the card refused before (every agent the kernel says does not run): only a STOP is refused, and an
+  // agent the kernel cannot reach.
+  for (const [what, change] of [
+    ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
+    ["its session ended in a shell, on a row that says it was lost", { running: false as const, runtimeState: "shell", sessionEnd: "lost" }],
+    ["no harness is loaded", { running: false as const, runtimeState: "unknown" }],
+  ] as const) {
+    const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));
     const slot = await homePage({ rpc: handlers({}, agents), sidebarThreads: calm() });
     const card = await cardOf(slot, "flaky-ci-developer");
-    expect(card.dataset.offer, reason).toBe("stopped");
+    expect(card.dataset.offer, what).toBe("reply");
     expect(within(card).getByTestId("oats-needs-question").textContent).toBe("Which branch do I use?");
-    expect(within(card).queryByTestId("oats-reply")).toBeNull();
-    expect(within(card).queryByTestId("oats-reply-send")).toBeNull();
-    expect(within(card).queryByTestId("oats-needs-message")).toBeNull();
-    expect(within(card).queryByTestId("oats-needs-in-thread")).toBeNull();
-    expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open thread", "Start…"]);
+    expect(within(card).getByTestId("oats-reply-send")).toBeTruthy();
+    expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
     slot.unmount();
+    resetApp();
   }
 });
 

@@ -1,7 +1,7 @@
 // The home's board and its words: grouped from the roster the sidebar shows, counted by the one
 // function for a state.
 import { describe, expect, it } from "vitest";
-import { board, mayAnswer, notRunning } from "../../app/home/board";
+import { board, mayAnswer, notRunning, refuses } from "../../app/home/board";
 import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
 import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
@@ -82,20 +82,35 @@ describe("the order of what needs the person", () => {
 
 describe("what the home may send to an agent's thread", () => {
   // What a card offers follows it, and its handlers ask it again of the roster the server holds at the press.
-  it("never to an agent the kernel says does not run, and never while the roster is the last one read", () => {
-    const runs = { running: true as const, runtimeState: "unknown" };
-    expect([notRunning(runs), mayAnswer(runs, false), mayAnswer(runs, true)]).toEqual([false, true, false]);
+  it("never to an agent the kernel calls stopped, and never while the roster is the last one read; an agent whose session was lost, or that has no harness loaded, is answered on a thread bb lists", () => {
+    const listed = { status: "idle" };
+    const runs = { running: true as const, runtimeState: "unknown", backend: "bb" };
+    expect([notRunning(runs), mayAnswer(runs, listed, false), mayAnswer(runs, listed, true)]).toEqual([false, true, false]);
     // on bb the kernel says neither yes nor no of an agent that waits between turns: it may be answered
-    expect(mayAnswer({ running: null, runtimeState: "unknown" }, false)).toBe(true);
+    expect(mayAnswer({ running: null, runtimeState: "unknown", backend: "bb" }, listed, false)).toBe(true);
+    // A stop: refused (an answer or a message would start it outside OATS).
     for (const stopped of [
-      { running: false as const, runtimeState: "stopped" },
-      { running: false as const, runtimeState: "shell" },
-      { running: null, runtimeState: "stopped" },
-      { running: false as const, runtimeState: null },
+      { running: false as const, runtimeState: "stopped", sessionEnd: "stopped", backend: "bb" },
+      { running: false as const, runtimeState: "stopped", backend: "bb" },
+      { running: null, runtimeState: "stopped", backend: "bb" },
+      { running: false as const, runtimeState: null, backend: "bb" },
+      { running: false as const, runtimeState: "unknown", sessionEnd: "stopped", backend: "bb" },
     ]) {
       expect(notRunning(stopped), JSON.stringify(stopped)).toBe(true);
-      expect(mayAnswer(stopped, false), JSON.stringify(stopped)).toBe(false);
+      expect([refuses(stopped, listed), mayAnswer(stopped, listed, false)], JSON.stringify(stopped)).toEqual([true, false]);
     }
+    // Nobody stopped it: a message in its thread is how it comes back. Answered, on a thread bb lists and does not call failed.
+    for (const resumable of [
+      { running: false as const, runtimeState: "stopped", sessionEnd: "lost", backend: "bb" },
+      { running: false as const, runtimeState: "unknown", backend: "bb" },
+      { running: false as const, runtimeState: "shell", backend: "bb" },
+    ]) {
+      expect(notRunning(resumable), JSON.stringify(resumable)).toBe(true);
+      expect([refuses(resumable, listed), mayAnswer(resumable, listed, false), mayAnswer(resumable, listed, true)], JSON.stringify(resumable)).toEqual([false, true, false]);
+      expect([refuses(resumable, null), refuses(resumable, { status: "error" })], JSON.stringify(resumable)).toEqual([true, true]);
+    }
+    // An agent on tmux is never written to from bb.
+    expect(refuses({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe(true);
   });
 });
 

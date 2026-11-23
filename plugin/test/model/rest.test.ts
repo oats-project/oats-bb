@@ -37,7 +37,11 @@ describe("messageResumes(): a message in the thread is the designed way to carry
   test("yes for a session that was lost and for one with no harness loaded, on a thread bb lists", () => {
     expect(messageResumes(row(false, "stopped", "lost"), listed)).toBe(true);
     expect(messageResumes(row(false, "unknown"), listed)).toBe(true);
-    expect(messageResumes(row(false, "shell"), listed)).toBe(true);
+    expect(messageResumes(row(false, "shell"), listed)).toBe(true); // its session ended in a shell: a message starts it, and status sees it
+  });
+  test("never where nobody can tell: the kernel cannot reach its session", () => {
+    expect(messageResumes(row(false, "unreachable"), listed)).toBe(false);
+    expect(messageResumes(row(false, "unreachable", "lost"), listed)).toBe(false);
   });
   test("never for a stop: an operator's, one that does not say how it ended, a row with no word, and the stale stop", () => {
     for (const agent of [row(false, "stopped", "stopped"), row(false, "stopped"), row(false, "stopped", "exited"), row(false, null), row(false, null, "exited"), row(false, "unknown", "stopped")]) expect(messageResumes(agent, listed), JSON.stringify(agent)).toBe(false);

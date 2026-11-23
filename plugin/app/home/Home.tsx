@@ -30,7 +30,7 @@ import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
-import { board, mayAnswer, notRunning } from "./board";
+import { board, mayAnswer, refuses } from "./board";
 import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
@@ -260,7 +260,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
    * the press. Nothing goes to bb unless that roster reads and says the agent runs.
    */
   const act = (kind: "answer" | "send", run: () => Promise<unknown>, done: () => void) => {
-    if (busy !== null || !mayAnswer(entry.agent, held)) return;
+    if (busy !== null || !mayAnswer(entry.agent, entry.thread, held)) return;
     setBusy(kind);
     setFailure(null);
     setSaid(null);
@@ -269,7 +269,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       if (!now.ok) throw new Error(NOT_NOW_UNREAD);
       const agent = now.agents.find((each) => each.instance === entry.agent.instance);
       if (agent === undefined) throw new Error(NOT_NOW_GONE);
-      if (notRunning(agent)) throw new Error(NOT_NOW_STOPPED);
+      if (refuses(agent, entry.thread)) throw new Error(NOT_NOW_STOPPED);
       return run();
     }).then(
       () => {
@@ -304,12 +304,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== message ? asked.title : null;
-  // The kernel says the agent does not run (it is stopped, or its session ended), and it needs the
-  // person all the same (bb still holds a request on its thread, or it still carries its claim): an
-  // answer or a message to its thread would start its harness again behind OATS's back (a stopped
-  // agent stays stopped). The card then offers neither: it says so, and offers Start, the
-  // lifecycle's own act, which starts it through OATS.
-  const stopped = notRunning(entry.agent);
+  // The kernel says the agent is STOPPED (an operator's stop, or a stop that does not say how its
+  // session ended), and it needs the person all the same (bb still holds a request on its thread,
+  // or it still carries its claim): an answer or a message to its thread would start its harness
+  // again behind OATS's back (a stopped agent stays stopped). The card then offers neither: it
+  // says so, and offers Start, the lifecycle's own act, which starts it through OATS. An agent
+  // whose session was LOST, or that has no harness loaded, is answered as any other: a message in
+  // its thread is how it comes back (`refuses`, board.ts: the Start dialog's own reading).
+  const stopped = refuses(entry.agent, entry.thread);
   const offer: Offer =
     thread === undefined ? "elsewhere" : stopped ? "stopped" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;

@@ -5,7 +5,7 @@
 import type { Agent } from "./types";
 import { recordedStopped } from "./view";
 
-type Row = Pick<Agent, "running" | "runtimeState" | "backend"> & { sessionEnd?: string | null };
+type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; sessionEnd?: string | null };
 
 /**
  * - "runs": the kernel does not say the agent does not run (`running` is not false, and its word
@@ -29,15 +29,21 @@ export function rest(agent: Row): Rest {
 }
 
 /**
- * Whether a message a person sends in the agent's bb thread is the DESIGNED way to carry it on:
- * the kernel says it does not run (`running: false`) and that nobody stopped it (its session was
- * lost, or no harness is loaded for it), and it is an agent on bb whose thread bb lists (not
- * archived, not hidden) and does not call failed. Then an answer or a message reaches a session
- * the provider brings back, and OATS reads it running at its next read. Never for a stop (the
- * message would start it outside OATS), and never for an agent on tmux (bb cannot write to it).
+ * Whether a message a person sends in the agent's bb thread is the DESIGNED way to carry it on.
+ * THE RULE (the spec's author's, 23 Nov 2026): a message is refused only for an agent an OPERATOR
+ * stopped, or that is stopped with no word that its session was lost (the kernel's stop: the
+ * message would start its harness outside OATS), and where nobody can tell (the kernel cannot
+ * reach its session). Everything else that does not run (`running: false`: its session was lost,
+ * no harness is loaded for it, or its session ended in a shell) and is an agent on bb whose thread
+ * bb lists (not archived, not hidden) and does not call failed carries on by a message: the
+ * provider brings its session back, and OATS reads it running at its next read (the kernel's
+ * contract for a provider home, docs/desktop-cli-api.md at v0.70.5: a session that a message
+ * started reads running at the next status; `outsideOats` is reported only against a recorded
+ * stop). Never for an agent on tmux (bb cannot write to it).
  * `thread` is bb's own row of the thread the roster draws the agent on, or null.
  */
 export function messageResumes(agent: Row, thread: { status: string } | null): boolean {
   const how = rest(agent);
-  return agent.running === false && (how === "lost" || how === "unloaded") && agent.backend !== "tmux" && thread !== null && thread.status !== "error";
+  if (agent.running !== false || agent.runtimeState === "unreachable" || agent.backend === "tmux") return false;
+  return (how === "lost" || how === "unloaded") && thread !== null && thread.status !== "error";
 }

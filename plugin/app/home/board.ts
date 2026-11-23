@@ -4,6 +4,7 @@
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
 import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
+import { messageResumes, rest } from "../../model/rest";
 import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";
 
@@ -57,11 +58,18 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
 
 /**
  * Whether the kernel says the agent does not run: it is stopped (`runtimeState: "stopped"`), or its
- * word on whether it runs is no (`running: false`: stopped, or its session ended). An answer or a
- * message in bb to the thread of such an agent starts its harness again behind OATS's back (a
- * stopped agent stays stopped), so the home offers and makes neither. (When the plugin has one
- * shared predicate for "the kernel calls it stopped", this is that one.)
+ * word on whether it runs is no (`running: false`: stopped, its session lost or ended, or no
+ * harness loaded). The plugin's one reading of the row (`rest`, model/rest.ts).
  */
-export const notRunning = (agent: Pick<Agent, "running" | "runtimeState">): boolean => agent.running === false || agent.runtimeState === "stopped";
-/** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent the kernel says does not run. The card's handlers ask this, whatever drew the control that was pressed. */
-export const mayAnswer = (agent: Pick<Agent, "running" | "runtimeState">, held: boolean): boolean => !held && !notRunning(agent);
+export const notRunning = (agent: Pick<Agent, "running" | "runtimeState"> & { sessionEnd?: string | null }): boolean => rest(agent) !== "runs";
+/**
+ * Whether the home REFUSES an answer or a message to the agent: the kernel says it does not run,
+ * and a message in its thread is not the designed way to carry it on (`messageResumes`: the same
+ * reading as the Start dialog's and the thread's own line). An operator's stop, and a stopped row
+ * that does not say how its session ended: refused, since the message would start its harness
+ * behind OATS's back; the card offers Start. A session that was LOST, or an agent with no harness
+ * loaded, on a thread bb lists: answered, since a message there is how it comes back.
+ */
+export const refuses = (agent: Pick<Agent, "running" | "runtimeState" | "backend"> & { sessionEnd?: string | null }, thread: { status: string } | null): boolean => notRunning(agent) && !messageResumes(agent, thread);
+/** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent it refuses (above). The card's handlers ask this, whatever drew the control that was pressed. */
+export const mayAnswer = (agent: Pick<Agent, "running" | "runtimeState" | "backend"> & { sessionEnd?: string | null }, thread: { status: string } | null, held: boolean): boolean => !held && !refuses(agent, thread);

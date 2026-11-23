@@ -386,8 +386,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       title={titleOf(verb, shownFor, plan !== null, state.phase === "settled" && state.sent !== null)}
       about={instance}
       shownFor={shownFor}
-      happens={view?.happens ?? []}
-      kept={view?.kept ?? []}
+      // Once the act has an answer the plan gives way to it, a refusal as a result: "What will happen" over
+      // "wasn't stopped" would say in the future what did not happen. Review again brings the plan back.
+      happens={state.phase === "settled" ? [] : (view?.happens ?? [])}
+      kept={state.phase === "settled" ? [] : (view?.kept ?? [])}
       confirmLabel={view?.confirm ?? (verb === "stop" ? "Stop" : "Retire")}
       // Both acts end something a person may want running: the focus starts on Cancel for each.
       destructive
@@ -419,13 +421,18 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
-            <ul data-testid="oats-plan-attention" className="flex flex-col gap-1 text-foreground">
-              {view.attention.map((line, index) => (
-                <li key={index} className="break-words font-semibold">
-                  <Lines text={line} />
-                </li>
-              ))}
-            </ul>
+            // What a person should see before confirming (an agent in the middle of a task, no way back): set apart
+            // in the attention tone, under a heading of its own, never as more of "What is kept".
+            <section data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Before you confirm</h3>
+              <ul className="flex flex-col gap-1">
+                {view.attention.map((line, index) => (
+                  <li key={index} className="break-words font-semibold">
+                    <Lines text={line} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           <section className="flex flex-col gap-1">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current state</h3>
@@ -629,8 +636,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
-      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
-      kept={known === null ? [] : [START.continues]}
+      // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
+      happens={known === null || state.phase === "settled" ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (badModel ? START.badModel : null)}
       notice={

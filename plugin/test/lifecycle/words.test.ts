@@ -42,9 +42,9 @@ describe("a stop plan", () => {
       kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
       attention: ["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."],
       state: [
-        { label: "Redesign ui lead", value: "Running" },
-        { label: "Desktop mockups developer", value: "Running" },
-        { label: "Harvest knowledge helper", value: "Running" },
+        { label: "Redesign ui lead", value: "Session running" },
+        { label: "Desktop mockups developer", value: "Session running" },
+        { label: "Harvest knowledge helper", value: "Session running" },
       ],
       notes: [],
       choice: { label: "Include child instances", checked: true, warning: null },
@@ -69,7 +69,7 @@ describe("a stop plan", () => {
     const plan = stopPlan();
     const view = stopPlanView({ ...plan, targets: [{ ...plan.targets[0]!, session: "unknown", midTask: "unknown" }], ambiguous: ["lost-child"] });
     expect(view.choice).toBeNull();
-    expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Unknown (couldn't be checked)" }]);
+    expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Session unknown (couldn't be checked)" }]);
     expect(view.attention).toEqual([]);
     expect(view.notes).toEqual(["Not included: Lost child (another instance has the same parent name, so OATS can't tell whose child it is)."]);
   });
@@ -261,8 +261,10 @@ describe("a result", () => {
       lines: [
         "1 child instance stopped and kept.",
         "Home folder deleted.",
-        "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
-        "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+        "Worktree kept, at:",
+        "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
+        "Recovery copy saved at:",
+        "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
         "Its conversation stays readable in bb, archived.",
       ],
       code: null,
@@ -277,7 +279,8 @@ describe("a result", () => {
   it("a retire whose cleanup did not finish: what ran, that the home is kept, the kernel's lines under Details", () => {
     const outcome = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
     expect(outcome).toMatchObject({ tone: "failed", title: "Retirement didn't finish", code: "RETIRE_INCOMPLETE", offers: ["review"] });
-    expect(outcome.lines).toContain("Home folder kept at /abs/deployment/agents/oats-expert/instances/weekly-digest-helper.");
+    // A path stands on its own line: no full stop glued to it.
+    expect(outcome.lines.slice(outcome.lines.indexOf("Home folder kept, at:"), outcome.lines.indexOf("Home folder kept, at:") + 2)).toEqual(["Home folder kept, at:", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
     expect(outcome.lines).toContain("Cleanup didn't finish.");
     expect(outcome.details).toBe("retire hook oats.aweb: the team certificate of weekly-digest-helper could not be removed (exit 1)");
     // The home was kept: on bb the agent can come back with no OATS around it. That is a warning of its own,

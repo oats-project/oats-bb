@@ -518,8 +518,10 @@ test("Retire without the tick applies the plan and keeps the worktree; the resul
   expect(texts(result, "p")).toEqual([
     "1 child instance stopped and kept.",
     "Home folder deleted.",
-    "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
-    "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+    "Worktree kept, at:",
+    "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
+    "Recovery copy saved at:",
+    "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
     "Its conversation stays readable in bb, archived.",
   ]);
   expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });

@@ -44,6 +44,8 @@ export type PlanView = {
 };
 
 const SESSION = { there: "Running", none: "Not running", unknown: "Unknown (couldn't be checked)" } as const;
+/** The same, in a row labelled with an agent's name and not with "Session". */
+const SESSION_OF = { there: "Session running", none: "Session not running", unknown: "Session unknown (couldn't be checked)" } as const;
 const ambiguous = (instance: string) => `Not included: ${agentName(instance)} (another instance has the same parent name, so OATS can't tell whose child it is).`;
 
 /**
@@ -91,7 +93,9 @@ export function stopPlanView(plan: StopPlan, archives = false): PlanView {
     happens,
     kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
     attention: targets.filter((target) => target.midTask === true).map((target) => `${agentName(target.instance)} reports it is in the middle of a task.`),
-    state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION[target.session] })),
+    // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
+    // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
+    state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
     notes: plan.ambiguous.map(ambiguous),
     choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive, warning: null } : null,
     blocked: null,
@@ -320,10 +324,12 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const lines: string[] = [];
   if (complete && plan.session === "there") lines.push("Session stopped.");
   if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child instance")} stopped and kept.`);
-  lines.push(receipt.removedDir ? "Home folder deleted." : `Home folder kept${receipt.retainedHome ? ` at ${receipt.retainedHome}` : ""}.`);
-  if (receipt.worktree === "retained") lines.push(`Worktree kept${receipt.movedTo ? ` at ${receipt.movedTo}` : ""}.`);
+  // A path stands on a line of its own, as the Desktop sets it apart: no full stop is glued to it, and it can be selected whole.
+  const at = (sentence: string, path: string | null) => (path ? [`${sentence}, at:`, path] : [`${sentence}.`]);
+  lines.push(...(receipt.removedDir ? ["Home folder deleted."] : at("Home folder kept", receipt.retainedHome)));
+  if (receipt.worktree === "retained") lines.push(...at("Worktree kept", receipt.movedTo));
   if (receipt.worktree === "removed") lines.push("Worktree deleted.");
-  if (receipt.recoveryPath !== null) lines.push(`Recovery copy saved at ${receipt.recoveryPath}`);
+  if (receipt.recoveryPath !== null) lines.push("Recovery copy saved at:", receipt.recoveryPath);
   // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
   if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
   // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.

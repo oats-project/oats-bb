@@ -184,7 +184,7 @@ export default async (run) => {
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 300);
     said = await dialog(page);
-    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept at") && said.body.includes("Its conversation stays readable in bb, archived."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
+    check(said.phase === "done" && said.body.includes(`${called} retired.`) && said.body.includes("Home folder deleted.") && said.body.includes(discard ? "Worktree deleted." : "Worktree kept, at:") && said.body.includes("Its conversation stays readable in bb, archived."), `${at} the dialog says what the retire did: the home, the worktree ${discard ? "deleted" : "kept"}, and the thread archived`, JSON.stringify(said));
     await until(`${name} to be gone from oats status`, () => (rowOf(name) === undefined ? true : undefined));
     const retire = recorded(["retire", name], ["--plan-revision"]);
     check(retire.argv.includes("--discard-worktree") === discard, `oats retire was asked ${discard ? "with" : "without"} --discard-worktree, under the plan's revision`, JSON.stringify(retire.argv));

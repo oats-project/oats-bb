@@ -581,6 +581,18 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
+- **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
+  launch stops and archives the one the agent had (the bb session provider's
+  `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
+  say so before the act ("Starts a new conversation. The current one stays readable in bb,
+  archived."), and the result opens the new thread. For an agent that was cut off the Start
+  and the Restart dialog say first that a message in its thread carries its conversation on, with a button to
+  that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
+  agent does not run and that no operator stopped it (a session lost with the host or with its
+  harness: `running: false`, `sessionEnd: "lost"`; or a thread at rest with no harness loaded:
+  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
+  gets the line. The sentence under "What will happen" is decided once, when the check answers:
+  the launch archives the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
   (`--expect-decision`), so Spawn reads the kernel's preview and applies exactly that decision with
   the key; asked again with the same key, it replays the same spawn. A spawn or a retire that runs
@@ -654,13 +666,14 @@ plugin/container/ci.sh real       # the real run only (bb-app, OATS from npm, th
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same command: `.github/workflows/plugin.yml`.
+CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`):
+`.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`
 puts bb-app, a real OATS kernel, the bb session provider and Claude Code on a mock model in one
 container, drives the plugin through its RPC (spawn, stop, start, restart, retire, and the
 refusals), and records what the kernel printed; `test/fixtures/README.md` says which fixtures are
-those recordings, and at which versions. It is the last stage of `ci.sh`, so CI runs it too
+those recordings, and at which versions. It is the last stage of `ci.sh`, and a job of its own in CI
 (`plugin/container/real/README.md`).
 
 The bb version the tests run is the repository's pin: the one line of `bb-version` at the

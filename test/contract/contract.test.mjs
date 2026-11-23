@@ -793,7 +793,8 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
     assert.deepEqual((await provider("input", { home, endpoint: made, text: "SECOND-BB marker" }, second)).result, { submitted: true, verified: true });
     await waitFor("the told turn", async () => (await landed("SECOND-BB")) === 1, { timeoutMs: 90_000 });
     // bb's fact, by its own CLI: only what makes a project or a thread needs the local
-    // daemon, and so the port. Reading, telling and stopping a thread go to the server
+    // daemon, and so the port. Reading, listing, telling, stopping, archiving and
+    // unarchiving a thread, and reading and changing a project's env, go to the server
     // alone: with the other bb's port, and with a port nothing listens on. So a home is
     // still read and stopped whatever port the deployment's settings name.
     for (const port of [38887, 1]) {
@@ -806,7 +807,11 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
       await waitFor("the thread to be idle", async () => (JSON.parse(await sh(`BB_SERVER_URL=${SECOND} bb thread show ${made.threadId} --json`))).thread.status === "idle", { timeoutMs: 120_000 });
       // (An idle thread: what is shown is that the CLI's stop asks no local daemon.)
       assert.equal(JSON.parse(await cli(`thread stop ${made.threadId}`)).ok, true, `stop with port ${port}`);
-      assert.ok(Array.isArray(JSON.parse(await cli(`machine env list --project ${made.projectId}`)).variables), `machine env list with port ${port}`);
+      assert.deepEqual(JSON.parse(await cli(`thread list --project ${made.projectId} --include-hidden`)).map((thread) => thread.id), [made.threadId], `thread list with port ${port}`);
+      await sh(`BB_HOST_DAEMON_PORT=${port} BB_SERVER_URL=${SECOND} bb machine env set CONTRACT_PORT_PROBE --project ${made.projectId} --json >/dev/null`, { input: "a value" });
+      assert.deepEqual(JSON.parse(await cli(`machine env list --project ${made.projectId}`)).variables.map((variable) => variable.name), ["CONTRACT_PORT_PROBE"], `machine env set and list with port ${port}`);
+      await cli(`machine env unset CONTRACT_PORT_PROBE --project ${made.projectId}`);
+      assert.deepEqual(JSON.parse(await cli(`machine env list --project ${made.projectId}`)).variables, [], `machine env unset with port ${port}`);
       assert.equal(JSON.parse(await cli(`thread archive ${made.threadId}`)).ok, true, `archive with port ${port}`);
       assert.equal(JSON.parse(await cli(`thread unarchive ${made.threadId}`)).ok, true, `unarchive with port ${port}`);
     }

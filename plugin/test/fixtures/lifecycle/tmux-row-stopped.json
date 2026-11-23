@@ -1,0 +1,480 @@
+{
+ "agent": "oats-developer",
+ "kind": "persistent",
+ "instance": "lost-tmux-developer",
+ "home": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+ "soulDir": "/abs/deployment/agents/oats-developer/souls/b89db0bf6804",
+ "repo": "/abs/deployment",
+ "work": "directory",
+ "harness": "claude",
+ "model": "claude-opus-5-5",
+ "modelFrom": "soul",
+ "launchFrom": "soul",
+ "launchAt": "local//abs/real/src/oats-real:souls/oats-developer/soul.yaml#/launch",
+ "launchDeclared": {
+  "harness": "claude",
+  "model": "claude-opus-5-5"
+ },
+ "spawnOrigin": "operator",
+ "spawnedBy": null,
+ "policy": {
+  "childSpawns": {
+   "allowed": true,
+   "origin": {
+    "kind": "default",
+    "detail": "no spawn option: children allowed"
+   }
+  }
+ },
+ "dialogClaims": {
+  "oats.core": "reported"
+ },
+ "capabilities": [
+  {
+   "id": "oats.bb",
+   "command": "bb",
+   "origin": "package:oats.bb@9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+   "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+   "settings": {
+    "server": "http://127.0.0.1:38886",
+    "daemon": "http://127.0.0.1:38887",
+    "version": "0.50.1",
+    "cli": "bb",
+    "trust": "container"
+   },
+   "settingsOrigins": {
+    "/server": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/server/default"
+    },
+    "/daemon": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/daemon/default"
+    },
+    "/cli": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/cli/default"
+    },
+    "/trust": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    },
+    "/version": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    }
+   },
+   "provenance": [
+    "package oats.bb v9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+   ],
+   "skills": [],
+   "hooks": [
+    "launch",
+    "retire"
+   ],
+   "trusted": true
+  },
+  {
+   "id": "oats.core",
+   "origin": "package:oats.framework@1.26.0",
+   "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+   "settings": {},
+   "settingsOrigins": {},
+   "provenance": [
+    "package oats.framework v1.26.0"
+   ],
+   "skills": [
+    "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills/oats-operate",
+    "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills/oats-souls",
+    "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills/oats-token-saving"
+   ],
+   "hooks": [
+    "spawn",
+    "launch",
+    "upgrade"
+   ],
+   "trusted": true
+  }
+ ],
+ "skills": [
+  {
+   "name": "oats-operate",
+   "source": "module:oats.core"
+  },
+  {
+   "name": "oats-souls",
+   "source": "module:oats.core"
+  },
+  {
+   "name": "oats-token-saving",
+   "source": "module:oats.core"
+  }
+ ],
+ "instructions": [
+  {
+   "source": "capability:oats.core",
+   "file": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/injects/oats.md"
+  },
+  {
+   "source": "kernel:instance-boundary",
+   "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+  },
+  {
+   "source": "work-mode:directory",
+   "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+  }
+ ],
+ "composition": {
+  "expected": [
+   {
+    "type": "skill-tree",
+    "source": "oats.core",
+    "declared": "skills/oats-operate",
+    "resolved": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills",
+    "origin": "package:oats.framework@1.26.0",
+    "deferred": "materialize"
+   },
+   {
+    "type": "skill-tree",
+    "source": "oats.core",
+    "declared": "skills/oats-souls",
+    "resolved": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills",
+    "origin": "package:oats.framework@1.26.0",
+    "deferred": "materialize"
+   },
+   {
+    "type": "skill-tree",
+    "source": "oats.core",
+    "declared": "skills/oats-token-saving",
+    "resolved": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills",
+    "origin": "package:oats.framework@1.26.0",
+    "deferred": "materialize"
+   },
+   {
+    "type": "injection",
+    "source": "oats.core",
+    "declared": "injects/oats.md",
+    "resolved": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/injects/oats.md",
+    "origin": "package:oats.framework@1.26.0",
+    "deferred": "materialize"
+   },
+   {
+    "type": "instruction-block",
+    "source": "capability:oats.core",
+    "declared": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/injects/oats.md",
+    "resolved": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/injects/oats.md"
+   },
+   {
+    "type": "instruction-block",
+    "source": "kernel:instance-boundary",
+    "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+    "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+   },
+   {
+    "type": "instruction-block",
+    "source": "work-mode:directory",
+    "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md",
+    "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+   }
+  ],
+  "materialized": {
+   "skills": [
+    {
+     "name": "oats-operate",
+     "source": "module:oats.core",
+     "from": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/skills/oats-operate"
+    },
+    {
+     "name": "oats-souls",
+     "source": "module:oats.core",
+     "from": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/skills/oats-souls"
+    },
+    {
+     "name": "oats-token-saving",
+     "source": "module:oats.core",
+     "from": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/skills/oats-token-saving"
+    }
+   ],
+   "instructions": [
+    {
+     "source": "capability:oats.core",
+     "file": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/injects/oats.md"
+    },
+    {
+     "source": "kernel:instance-boundary",
+     "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+    },
+    {
+     "source": "work-mode:directory",
+     "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-directory.md"
+    }
+   ],
+   "harnessPackages": [],
+   "harnessPosture": {
+    "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+    "ambient": [
+     "user skills",
+     "project and ancestor skills to the repository root",
+     "user and project plugins",
+     "user and project settings",
+     "user and ancestor CLAUDE.md"
+    ],
+    "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+   },
+   "canonicalSkillTree": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.agents/skills",
+   "skillAlias": {
+    "path": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.claude/skills",
+    "target": "../.agents/skills"
+   }
+  }
+ },
+ "capabilityRuntime": [
+  {
+   "id": "oats.bb",
+   "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+   "settings": {
+    "server": "http://127.0.0.1:38886",
+    "daemon": "http://127.0.0.1:38887",
+    "version": "0.50.1",
+    "cli": "bb",
+    "trust": "container"
+   },
+   "settingsOrigins": {
+    "/server": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/server/default"
+    },
+    "/daemon": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/daemon/default"
+    },
+    "/cli": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/cli/default"
+    },
+    "/trust": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    },
+    "/version": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.bb"
+    }
+   },
+   "hooks": {
+    "launch": "node '/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.bb/bin/oats-bb.mjs' launch-hook",
+    "retire": "node '/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.bb/bin/oats-bb.mjs' retire-hook"
+   },
+   "requiredHooks": [],
+   "environment": [],
+   "environmentNamespaces": [],
+   "missingRequires": [],
+   "trust": {
+    "trusted": true,
+    "reason": "declared workspace package"
+   },
+   "executable": true
+  },
+  {
+   "id": "oats.core",
+   "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+   "settings": {},
+   "settingsOrigins": {},
+   "hooks": {
+    "spawn": "node '/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/bin/oats-core.mjs' spawn",
+    "launch": "node '/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/bin/oats-core.mjs' launch",
+    "upgrade": "node '/abs/deployment/agents/oats-developer/instances/lost-tmux-developer/.oats/modules/oats.core/bin/oats-core.mjs' upgrade"
+   },
+   "requiredHooks": [],
+   "environment": [],
+   "environmentNamespaces": [],
+   "missingRequires": [],
+   "trust": {
+    "trusted": true,
+    "reason": "declared workspace package"
+   },
+   "executable": false
+  }
+ ],
+ "tmux": {
+  "session": "oats-agents",
+  "window": "lost-tmux-developer",
+  "socket": "/tmp/tmux-1000/oats"
+ },
+ "launch": {
+  "version": 2,
+  "harness": "claude",
+  "launchConfig": null,
+  "launchConfigSource": null,
+  "executable": "/abs/home/.npm-global/bin/claude",
+  "executableDeclared": null,
+  "executableResolvedFrom": "PATH",
+  "args": [],
+  "env": {},
+  "model": "claude-opus-5-5",
+  "hooks": {
+   "launch": {},
+   "env": {},
+   "contributions": [
+    {
+     "capability": "oats.bb",
+     "layer": null,
+     "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+     "settings": {
+      "server": "http://127.0.0.1:38886",
+      "daemon": "http://127.0.0.1:38887",
+      "version": "0.50.1",
+      "cli": "bb",
+      "trust": "container"
+     },
+     "settingsOrigins": {
+      "/server": {
+       "kind": "manifest-default",
+       "at": "oats.json#/settings/server/default"
+      },
+      "/daemon": {
+       "kind": "manifest-default",
+       "at": "oats.json#/settings/daemon/default"
+      },
+      "/cli": {
+       "kind": "manifest-default",
+       "at": "oats.json#/settings/cli/default"
+      },
+      "/trust": {
+       "kind": "host",
+       "at": "oats-local.yaml#/settings/oats.bb"
+      },
+      "/version": {
+       "kind": "host",
+       "at": "oats-local.yaml#/settings/oats.bb"
+      }
+     },
+     "trust": {
+      "trusted": true,
+      "integrity": null
+     },
+     "launch": {},
+     "env": [],
+     "source": "launch-hook"
+    },
+    {
+     "capability": "oats.core",
+     "layer": null,
+     "level": "/abs/deployment/agents/oats-developer/instances/lost-tmux-developer",
+     "settings": {},
+     "settingsOrigins": {},
+     "trust": {
+      "trusted": true,
+      "integrity": null
+     },
+     "launch": {},
+     "env": [],
+     "source": "launch-hook"
+    }
+   ]
+  },
+  "prompt": {
+   "kind": "task-file",
+   "file": "TASK.md"
+  }
+ },
+ "command": "OATS_INSTANCE='lost-tmux-developer' OATS_INSTANCE_HOME='/abs/deployment/agents/oats-developer/instances/lost-tmux-developer' '/abs/home/.npm-global/bin/claude' --model 'claude-opus-5-5' -- '@TASK.md'",
+ "createdAt": "2026-11-23T14:38:54.359Z",
+ "modules": [
+  {
+   "name": "oats.bb",
+   "from": {
+    "kind": "package",
+    "package": "oats.bb",
+    "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+    "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+    "integrity": "sha256-4a53ac378a3f1b52acf1fe0219adf6b9cb82c888d87bb2f1a5c3387e9e32234e",
+    "repoKey": "local//abs/real/oats-bb.git"
+   },
+   "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+   "current": {
+    "commit": "9b95a56f237ff4006a69545963d5130d6eb4ddc5",
+    "version": "9b95a56f237ff4006a69545963d5130d6eb4ddc5"
+   },
+   "status": "current"
+  },
+  {
+   "name": "oats.core",
+   "from": {
+    "kind": "package",
+    "package": "oats.framework",
+    "version": "1.26.0",
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+    "repoKey": "github.com/awebai/oats"
+   },
+   "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+   "current": {
+    "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+    "version": "1.26.0"
+   },
+   "status": "current"
+  }
+ ],
+ "providers": {
+  "oats.bb": {
+   "server": "http://127.0.0.1:38886",
+   "daemon": "http://127.0.0.1:38887",
+   "version": "0.50.1",
+   "cli": "bb",
+   "trust": "container"
+  },
+  "oats.core": {}
+ },
+ "workspace": {
+  "key": "local//abs/real/src/oats-real",
+  "name": "bbreal",
+  "deployment": "/abs/deployment",
+  "commit": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+  "resolution": "40d9a7dfdb0d55d00b9935cf",
+  "standalone": false,
+  "soul": {
+   "id": "local//abs/real/src/oats-real#oats-developer",
+   "repoKey": "local//abs/real/src/oats-real",
+   "commit": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938"
+  },
+  "layers": {
+   "knowledge": null,
+   "messaging": null,
+   "tasks": null
+  }
+ },
+ "teams": [],
+ "defaultTeam": null,
+ "launched": true,
+ "startId": "20a10145-1a78-4491-bd9e-965b3273bdff",
+ "launchPrompts": {
+  "status": "not-engaged",
+  "startId": "20a10145-1a78-4491-bd9e-965b3273bdff",
+  "at": "2026-11-23T14:39:41.810Z"
+ },
+ "restarts": [
+  {
+   "startedAt": "2026-11-23T14:39:41.810Z",
+   "model": "claude-opus-5-5",
+   "reused": "pane"
+  }
+ ],
+ "restartCount": 1,
+ "backend": "tmux",
+ "startedAt": "2026-11-23T14:39:41.810Z",
+ "identityAddress": null,
+ "attributedHuman": null,
+ "color": null,
+ "running": false,
+ "runtimeState": "shell",
+ "sessionEnd": "stopped",
+ "waitingOnYou": null,
+ "board": null,
+ "soul": {
+  "repoKey": "local//abs/real/src/oats-real",
+  "commit": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+  "current": "b89db0bf6804f8b49e930d0c9fed8724ed5ed938",
+  "status": "current"
+ }
+}

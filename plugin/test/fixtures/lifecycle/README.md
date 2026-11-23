@@ -69,3 +69,34 @@ Neither is a file, and neither was met by a run of ours to record:
   `result.session.endpoint.threadId` taken out, answered over a roster row changed to
   `running: true`, `runtimeState: "unknown"` and no `session`: the plugin's own code
   `NO_THREAD_NAMED` then (the kernel named no thread, and the next roster names none).
+
+## An agent on tmux: its rows, and the kernel's answers for a start, a resume and a restart
+
+Recorded by the lost session's part of the real run (`container/real/parts/lost.mjs`) on 2026-11-23,
+OATS 0.70.5 from npm, on ONE agent on the tmux backend (`lost-tmux-developer` of `oats-developer`,
+Claude Code on the run's mock model in a window of the OATS tmux server), with the one substitution
+(the paths) and no other edit. Each is what the kernel printed for the command named, made on the
+command line (the plugin offers no Start and no Restart for an agent on tmux yet); `<home>` is
+`/abs/deployment/agents/oats-developer/instances/lost-tmux-developer`. None is a default answer of
+the fake (`verbs.json`): a test names the file for the verb it asks.
+
+- `tmux-row-running.json`, `tmux-row-stopped.json`, `tmux-row-lost.json`: the agent's ROW of `oats
+  status --json` (one member of `agents[].instances[]`, not the whole document) while it runs
+  (`running: true`, no `runtimeState`, no `sessionEnd`); after the plugin's own Stop
+  (`running: false`, `runtimeState: "shell"`, `sessionEnd: "stopped"`: an OATS stop leaves the
+  agent's tmux window at a shell); and LOST, its tmux window killed as a crash ends it
+  (`running: false`, `sessionEnd: "lost"`, no `runtimeState`; the row carries no time of the loss
+  and no cause).
+- `tmux-start-resume.json`: `oats session start --resume --home <home> --json` on the lost home:
+  started, with `resume: {resumed: true, harness: "claude", sessionId}` and `reused: "new"` (a new
+  window); `target` names the tmux session, the window and the socket. No `waiting` member: Claude
+  Code asked nothing before resuming this short conversation.
+- `tmux-start.json`: `oats session start --home <home> --json`, a plain start, after the agent was
+  stopped with OATS: started, `reused: "pane"` (the window the stop left), no `resume` member.
+- `tmux-restart.json`: `oats session restart --home <home> --json` while it runs: restarted in its
+  pane, with the `stop` it made first.
+- `tmux-resume-not-lost.json`: `--resume` on the home stopped with OATS: `E_RESUME_NOT_LOST`
+  ("… did not lose its session (it stopped) … nothing was started").
+- `tmux-resume-running.json`: `--resume` on the home while it runs: `E_SESSION_RUNNING` ("… is
+  running (unknown); nothing was started"), not `E_RESUME_NOT_LOST`.
+

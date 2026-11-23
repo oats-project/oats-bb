@@ -135,8 +135,11 @@ export default async (run) => {
       check(Boolean(read) && new RegExp(`Name ${NAME} Home .*Soul ${SOUL} Works in .*Runs on .*Harness Claude Code · .*Session bb thread Access full mode: no sandbox Team .*Relationship child of Harvest knowledge helper`).test(read ?? "") && /Resolved by the installed CLI/.test(read ?? ""), `${at} What will be created, from the kernel's preview of these values: the name, the home, the soul, where it works and on which machine, the harness and the model, a bb thread in full mode, the team, and whose child it is`, read ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
       await page.evaluate(`document.querySelector(${q("oats-spawn-task")}).scrollIntoView({ block: "center" })`);
       await shot("filled");
-      await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).scrollIntoView({ block: "end" })`);
-      await shot("preview");
+      // On a phone the column is under the fields: its own image, down to the buttons. (On a wide page it is beside them, in the image above.)
+      if (viewport.mobile) {
+        await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).scrollIntoView({ block: "end" })`);
+        await shot("preview");
+      }
       if (!pi) return;
       // A refusal, the real one: harness pi, which bb here has not installed. The form says it at the choice, and the kernel refuses the spawn.
       check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} harness pi is picked`, await page.evaluate(textOf(testId("oats-spawn-form"))));

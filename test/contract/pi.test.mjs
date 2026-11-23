@@ -812,10 +812,13 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     // (bb learns the narrowing a moment after its pi starts: until then it lists every model.)
     await waitFor("bb to list only the enabled model", async () => JSON.stringify(await listedIds()) === JSON.stringify(["mock/echo"]), { timeoutMs: 60_000, everyMs: 1_000 });
     const NARROWED = "pi's enabledModels setting narrows the list to the models it names";
+    const RECENT = "pi's configuration changed a moment ago, and bb's list may be older than it";
     const planned = await checkModel("claude-fable-5.1");
     assert.equal(planned.status, "ready");
     assert.deepEqual(planned.problems, []);
-    assert.deepEqual(await unchecked("claude-fable-5.1"), [sentence("claude-fable-5.1", NARROWED)]);
+    const warned = await unchecked("claude-fable-5.1");
+    // (Which of the two reasons it gives depends on how long ago the settings were written: the unit tests hold each.)
+    assert.ok([[sentence("claude-fable-5.1", NARROWED)], [sentence("claude-fable-5.1", RECENT)]].some((expected) => JSON.stringify(expected) === JSON.stringify(warned)), JSON.stringify(warned));
     // bb resolves it all the same: the launch is taken, and the thread runs its first turn.
     const { endpoint, since } = await launched("model-narrowed", { model: "claude-fable-5.1" });
     assert.match((await turns())[since].lastText, /TASK-model-narrowed say hi\./);
@@ -833,7 +836,12 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     const after = await checkModel("claude-fable-5.1");
     assert.equal(after.status, "ready");
     assert.deepEqual(after.problems, []);
-    assert.deepEqual(await unchecked("claude-fable-5.1"), [sentence("claude-fable-5.1", STALE)]);
+    const warnedAfter = await unchecked("claude-fable-5.1");
+    assert.ok([[sentence("claude-fable-5.1", STALE)], [sentence("claude-fable-5.1", RECENT)]].some((expected) => JSON.stringify(expected) === JSON.stringify(warnedAfter)), JSON.stringify(warnedAfter));
+    // And still none once the change is no longer "a moment ago": the settings are newer than bb.
+    await waitFor("the warning to be for settings newer than bb", async () => JSON.stringify(await unchecked("claude-fable-5.1")) === JSON.stringify([sentence("claude-fable-5.1", STALE)]), { timeoutMs: 180_000, everyMs: 3_000 });
+    assert.deepEqual(await listedIds(), ["mock/echo"], "bb's list is still the narrowed one");
+    assert.deepEqual((await checkModel("claude-fable-5.1")).problems, []);
     const again = await launched("model-narrowed-stale", { model: "claude-fable-5.1" });
     assert.equal(await threadStatus(again.endpoint.threadId), "idle");
 

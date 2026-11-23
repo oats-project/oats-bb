@@ -89,7 +89,7 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   question with Yes and No, and the thread's status line says it. The last view presses Yes on the
   card: bb has no pending interaction left, pi's tool gets `true`, the claim is gone, the agent is
   idle.
-- **P5** The plugin stops the agent and retires it, each from its plan: the plan's facts (what the
+- **P5** The plugin stops the agent and retires it (the stop leaves the pi thread as the provider leaves one: archived, from the provider that archives at stop, or open and not active; the run says which), each from its plan: the plan's facts (what the
   dialogs word) name the pi agent, its soul, its home and bb, and no other agent. Between the two,
   where a pi of bb's own still works in the home (below, "What the run found"), the retire is
   asked at once: the kernel refuses it (`E_RUNTIME_QUIESCE_FAILED`, naming that pi), the plugin

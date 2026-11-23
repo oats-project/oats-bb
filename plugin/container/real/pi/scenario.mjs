@@ -398,6 +398,10 @@ try {
   act("stop apply", "stopApply", { instance: NAME, revision: stopPlan?.revision, key: "stop-a1b2c3d4e5f6" });
   row = await untilRow(NAME, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   show("oats status", brief(row));
+  // What the stop left of the pi thread, by provider (../scenario.mjs, stopLeft): archived (a provider that archives at stop), or there and not active.
+  const stoppedOn = bbThread(threadId);
+  const stopLeft = stoppedOn === undefined ? "gone" : stoppedOn.archivedAt != null ? "archived" : stoppedOn.status === "active" ? "active" : "kept";
+  check(stopLeft === "archived" || stopLeft === "kept", `bb: the stopped pi agent's thread is ${stopLeft}: one of the two a stop leaves (archived, or kept and no longer active)`, JSON.stringify(stoppedOn && { id: stoppedOn.id, status: stoppedOn.status, archivedAt: stoppedOn.archivedAt }));
   // A stop ends the thread's pi. One pi can outlive it by about a minute: bb starts a pi of its
   // own in the home to list the thread's models when the thread is opened in bb (the provider's
   // README, "Stopping"), and the kernel refuses a retire while a process works in the home. The

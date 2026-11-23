@@ -582,7 +582,6 @@ export const RESUME = {
   /** The result's title, in the warning tone, when the kernel says it started fresh instead (`<Name> started fresh: …`); the reason follows. */
   fresh: "started fresh: its last conversation was not brought back.",
   waiting: "It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.",
-  /** Names the tick that is the remedy: a resume the kernel refuses for its launch settings has no other. */
   /** The kernel refuses to resume with launch settings that changed. The dialog comes back, on Refresh status, with the plain start chosen. */
   envChanged: "Its launch settings changed, so it can only start fresh.",
   notLost: "Its session is no longer lost, so there is no conversation to bring back. Read what Start does now.",

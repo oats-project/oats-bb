@@ -8,7 +8,7 @@ import { agentName } from "../ui/words";
 // ---- a stopped agent
 
 /**
- * Stopped by an operator, its thread OPEN: bb's composer is live under it, and a message typed
+ * Stopped, and not with the host, its thread OPEN: bb's composer is live under it, and a message typed
  * there starts the agent again without OATS knowing (OATS keeps saying "stopped"). The interim
  * warning: it stays for as long as a stop leaves the thread open, and after that for a home stopped
  * before the provider archived at stop, and for a thread a person unarchived.

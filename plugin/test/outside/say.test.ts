@@ -45,8 +45,22 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
   it("on its open thread: the interim warning, in the warning tone, with the Start it names; the row says nothing after the soul", () => {
     expect(said(operator, "open", true)).toEqual({ ...PLAIN, kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", tone: "warning", note: null, acts: ["start"] });
   });
-  it("the warning is for an operator's stop and only that: not for a row that names no end of its session", () => {
-    expect(said({ ...operator, sessionEnd: undefined }, "open", true)).toBeNull();
+  // The spec's author's ruling of 23 Nov 2026 (it reversed "an operator's stop, and only that"): a
+  // safety sentence fails closed. One case per value the kernel gives `sessionEnd` (docs/desktop-cli-api.md
+  // at v0.70.5, `row-session-end`), on a row the kernel calls stopped whose thread is open.
+  for (const [sessionEnd, why] of [
+    ["stopped", "an operator's stop"],
+    ["exited", "a harness that ended by itself"],
+    [undefined, "a row that names none (a retire pending, a rollback incomplete, a spawn in progress)"],
+    [null, "a row whose sessionEnd is null"],
+    ["something-new", "a word this plugin does not know"],
+  ] as const) {
+    it(`sessionEnd ${JSON.stringify(sessionEnd) ?? "absent"} (${why}): the warning, with Start`, () => {
+      expect(said({ ...operator, sessionEnd }, "open", true)).toEqual({ ...PLAIN, kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", tone: "warning", note: null, acts: ["start"] });
+    });
+  }
+  it("sessionEnd \"lost\" (stopped with the machine: OATS resumes it) is the one stop that is spared the warning", () => {
+    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "stopped-host", tone: "plain", acts: null });
   });
   it("with its thread archived in bb: the fact, the row's reason in the soul's place, and the way to it; no warning", () => {
     expect(said(operator, "archived", false)).toEqual({ ...PLAIN, kind: "stopped-archived", sentence: "Its conversation is archived in bb", note: "archived in bb", archived: true });

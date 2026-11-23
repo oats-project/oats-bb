@@ -172,7 +172,7 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 
 | What OATS says | What bb says of its thread | The thread's line | The sidebar's row | Acts |
 |---|---|---|---|---|
-| stopped by an operator (`sessionEnd: "stopped"`, and only that) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
+| stopped, and not with the machine (`sessionEnd` "stopped", "exited" or none: every end but "lost") | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
 | stopped with the machine (`sessionEnd: "lost"`) | open | "Stopped · with the machine. OATS starts it again when the machine is back." No warning: OATS resumes it by itself. | "Stopped · with the machine" | Start |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped by an operator | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | "Stopped · archived in bb" | Start…, Retire… |
@@ -216,10 +216,15 @@ never a message), a stop with the machine (nothing to do: OATS resumes it), and 
 the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
 sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
-alone: the sentence does. One row is knowingly left with "Stopped" and nothing after it: a
-stopped row on an open thread whose `sessionEnd` is neither `stopped` nor `lost` (the kernel gives
-none to a home with a retire pending or a spawn in progress, and `exited` to a harness that ended
-by itself): the operator's sentence is said of an operator's stop and only that.
+alone: the sentence does.
+
+**The warning fails closed.** A stopped agent on an open thread gets the operator's sentence for
+EVERY end of its session but one: `sessionEnd: "stopped"` (an operator's stop), `"exited"` (a
+harness that ended by itself), and none at all (the kernel gives none while a retire is pending, a
+rollback is incomplete or a spawn is in progress). In each, a message in bb would start a harness
+OATS does not expect. Only `sessionEnd: "lost"` (stopped with the machine: OATS resumes it) is
+spared it. The spec's author's ruling of 23 Nov 2026, which reversed "an operator's stop, and only
+that". `outsideOats` stays what the kernel says: only an operator's stop carries it.
 
 `outsideOats` is read by the roster's parser (`kernel/roster.ts`, with `kernel/outside.ts`) only
 where the status document's own `features` lists `provider-outside-oats` (OATS 0.70.5; `features`

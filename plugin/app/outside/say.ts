@@ -37,7 +37,7 @@ export type Act = "stop" | "start" | "retire";
 export type Kind =
   /** OATS recorded it stopped and a harness runs in it: the kernel's own report. Its state is "Running outside OATS". */
   | "outside"
-  /** Stopped by an operator, on a thread that is open: a message there starts it again without OATS. */
+  /** Stopped, and not with the host, on a thread that is open: a message there starts it again without OATS. */
   | "stopped-open"
   /** Stopped with the host, on a thread that is open: OATS starts it again by itself. */
   | "stopped-host"
@@ -112,9 +112,10 @@ function whereNote(where: ThreadWhere): string | null {
  *   - bb has it archived, and OATS LOST the session (`sessionEnd: "lost"`): bb's Archive never
  *     ends the harness, so its process may still run; to stop it, then start it. A warning, with Stop.
  *   - bb has it archived, otherwise: the fact, and the way to it (what a stop leaves once the provider archives).
- *   - its thread is open, and an OPERATOR stopped it (`sessionEnd: "stopped"`, and only that): the
- *     interim warning that a message there starts it without OATS.
  *   - its thread is open, and it stopped WITH THE HOST (`sessionEnd: "lost"`): that OATS starts it again by itself.
+ *   - its thread is open, for EVERY OTHER end of its session (an operator's stop, "exited", none):
+ *     the interim warning that a message there starts it without OATS. The spec's author's ruling
+ *     of 23 Nov 2026: the warning is the default, and only a stop with the host is spared it.
  * - "idle" of a row the kernel calls not running (`running: false` beside `runtimeState:
  *   "unknown"`: no harness is loaded), on an open thread: that a message there carries the
  *   conversation on, and that Start begins a new one. Start.
@@ -146,8 +147,12 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
         // release or a thread a person unarchived, and the warning stays for exactly that case.
         // Start is this feature's on that line, so that the line has the act its sentence names
         // whatever its state's word is (bb's own question on the thread makes it "Needs you").
-        if (agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning", acts: ["start"] };
         if (lost) return { ...base, kind: "stopped-host", sentence: STOPPED_HOST, note: STOPPED_HOST_NOTE };
+        // Every other stop warns: a safety sentence fails CLOSED. An operator's stop (`sessionEnd:
+        // "stopped"`), a harness that ended by itself ("exited"), and a row that names no end of
+        // its session (the kernel gives none while a retire is pending, a rollback is incomplete or
+        // a spawn is in progress): in each, a message in bb starts a harness OATS does not expect.
+        return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning", acts: ["start"] };
       }
       return threadless;
     }

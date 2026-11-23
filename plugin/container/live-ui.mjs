@@ -388,7 +388,8 @@ function record(threads, changes = {}) {
 // person does by walking through it. (A setting of bb's own; nothing of the plugin depends on it.)
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
 
-const WORK_HOLD_FILE = join(homedir(), "mock", "hold", "live-ui-working");
+const WORK_HOLD = "live-ui-working";
+const WORK_HOLD_FILE = join(homedir(), "mock", "hold", WORK_HOLD);
 // A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
 rmSync(WORK_HOLD_FILE, { force: true });
 // At this point every thread is a healthy one: its turn was answered and bb shows it idle. (Two are then given a turn that is held, below.)
@@ -406,7 +407,7 @@ try {
   // (Inside the `try` whose `finally` lifts the hold: whatever throws from here on, no turn stays held.)
   mkdirSync(dirname(WORK_HOLD_FILE), { recursive: true });
   writeFileSync(WORK_HOLD_FILE, "");
-  for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, "carry on MOCK-HOLD:live-ui-working");
+  for (const id of WORKING_THREADS) bb("thread", "tell", threads.get(id).id, `carry on MOCK-HOLD:${WORK_HOLD}`);
   {
     const deadline = Date.now() + 90_000;
     let seen = [];

@@ -71,7 +71,11 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **Healthy threads.** `live.sh` gives bb a provider it can run: Claude Code, at the real run's
   version, on the real run's mock model (`real/mock-anthropic.mjs`; no login, nothing spent). The
   fixture threads are made on it, and the run checks that each one's turn was answered and bb
-  shows it idle before any image is taken: an image of a thread shows a healthy one. Each thread
+  shows it idle before any image is taken: an image of a thread shows a healthy one. Two of them
+  are then given a turn that the mock model holds open for the whole run (`MOCK-HOLD:live-ui-working`):
+  the threads of the fixtures' two working agents (`thr_redesign`, `thr_mockups`), since an agent
+  on a bb thread works when bb has a turn running on it. A scene on either sees bb "active", and a
+  message told to one is not answered; the hold is lifted in `live-ui.mjs`'s `finally`. Each thread
   is waited for by name. bb starts the eight turns at once on a cold Claude Code, and a thread
   has been seen to stay "pending" (a turn in bb's queue) with the others long idle; why is not
   known. One that is not idle after 120 s is reported (a `NOTE`,

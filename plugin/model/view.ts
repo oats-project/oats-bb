@@ -23,20 +23,21 @@ export function claimOf(agent: Agent): Agent["waiting"] {
 export const isListed = (thread: Pick<BbThread, "isArchived" | "isHidden">): boolean => !thread.isArchived && !thread.isHidden;
 
 /**
- * Whether bb says the agent on a thread WORKS, read as the bb session provider itself reads a
- * thread (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`, `isSettled`,
- * `hasQueuedWork`), cell for cell, so that the plugin and the provider agree. bb's statuses
+ * Whether bb says the agent on a thread WORKS. The rule is the bb session provider's own reading
+ * of a thread (oats-package/capabilities/oats-bb/lib/threads.mjs `inspectAnswer`), so that OATS
+ * and the plugin say one thing, with two differences named below. bb's statuses
  * (@get-bb/plugin-sdk `threadStatusSchema`, 0.6.157: active, error, idle, pending, starting,
  * stopping) and its `queuedWork` (none, waiting, failed):
  * - a turn runs, is starting or is stopping ("active", "starting", "stopping"): it works;
- * - at rest ("pending", "idle", and "error": bb's last turn failed, the session is there) with
- *   work bb will start by itself (`queuedWork: "waiting"`): it works; with nothing in line: idle.
- *   A queued message that FAILED to send (`queuedWork: "failed"`) is at rest: nothing starts by
- *   itself. (The provider on main counts "failed" as in line, `hasQueuedWork`; the kernel side
- *   changes that with oats-bb #40, so that only work bb starts by itself holds a thread as
- *   working: this is the rule it changes to.)
- * - a status this plugin does not know: idle, as bb's SDK says to treat one (the provider refuses
- *   such a thread; the plugin has to draw the row).
+ * - at rest ("pending", "idle", and "error": bb's last turn failed, the session is there) with a
+ *   message bb will start by itself (`queuedWork: "waiting"`): it works; with nothing in line: idle;
+ * - at rest with `queuedWork: "failed"`, or a queue word this plugin does not know: idle. This is
+ *   the provider's rule from the release that scans its harness (oats-bb #40, b4f1eeb3: "failed"
+ *   and "none" are at rest, an unknown word cannot be told); the provider before it counted
+ *   "failed" as in line (three cells: pending, idle, error). "failed" may be a message bb is
+ *   retrying, or stand over a waiting one: such an agent can turn Working by itself;
+ * - a status this plugin does not know: idle, as bb's SDK says to treat one. The provider refuses
+ *   such a thread; the plugin has to draw the row.
  */
 const TURN_IN_PROGRESS: ReadonlySet<string> = new Set(["active", "starting", "stopping"]);
 const AT_REST: ReadonlySet<string> = new Set(["pending", "idle", "error"]);

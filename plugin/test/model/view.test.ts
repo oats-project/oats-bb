@@ -190,6 +190,11 @@ describe("A2 state(): first match wins", () => {
       for (const status of ["idle", "pending", "error"]) expect(on(status, running, "waiting"), `${status} with a message waiting, running ${running}`).toBe("working");
       // A queued message that failed to send starts nothing: at rest (the provider's rule from oats-bb #40).
       for (const status of ["idle", "pending", "error"]) expect(on(status, running, "failed"), `${status} with a failed message, running ${running}`).toBe("idle");
+      // A turn in progress works, whatever is in line behind it.
+      for (const status of ["active", "starting", "stopping"]) for (const queuedWork of ["waiting", "failed"]) expect(on(status, running, queuedWork), `${status} with ${queuedWork} behind it, running ${running}`).toBe("working");
+      // A queue word the plugin does not know is not work it can count: at rest.
+      for (const status of ["idle", "pending", "error"]) expect(on(status, running, "retrying"), `${status} with an unknown queue word, running ${running}`).toBe("idle");
+      expect(on("hibernating", running, "failed")).toBe("idle");
       // A status the plugin does not know is idle, work in line or not.
       expect(on("hibernating", running, "waiting")).toBe("idle");
     }

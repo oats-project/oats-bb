@@ -12,10 +12,12 @@ plugin/container/ci.sh pi         # the pi run: a pi agent launched from the New
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the three stages of the first line as three jobs side by side,
-each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
-stage, `plugin-real`), and the pi run as a fourth (`plugin-pi`), so each line after the first
-installs and builds what it needs by itself.
+they run from any directory. CI runs the stages of the first line as jobs side by side, each on a
+runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`; the live stage as two, `test` in
+bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the pi run as one more
+(`plugin-pi`), so each line after the first installs and builds what it needs by itself.
+`LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
+does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to

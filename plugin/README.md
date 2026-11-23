@@ -295,13 +295,18 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   told there the same way, and stays until dismissed).
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
-  says nothing was created: a refusal of the kernel's that the tables name, or a call that never
-  reached the kernel. **Created**, where the kernel says an instance exists whose start did not
+  says nothing was created: a refusal of the kernel's that the tables name, whose rollback the
+  kernel finished, or a call that never reached the kernel. Where the kernel says its rollback is
+  INCOMPLETE, part of the instance may still be there whatever the code: the form stays held,
+  says so, and the kernel's message under Details names what to clean up. (The kernel's marker
+  for this is `error.details.unconfirmed`; the plugin's envelope carries the code and the message
+  only, so the form reads the kernel's own words for it in the message, "rollback INCOMPLETE",
+  which every such path of the kernel writes: `model/spawn.ts` says where.) **Created**, where the kernel says an instance exists whose start did not
   finish, or the spawn went through and named no thread: the form stays held, says so, and sends
   the person to the sidebar. **Unknown** for everything else (the kernel's "could not confirm", a
   time limit, an `oats`, a machine or a server that ended without an answer or with one the plugin
   cannot read, a code nobody classed): rollback is never inferred. There the fields stay held and
-  the one act is **Check result**: it asks again under the same idempotency key, so the kernel
+  the one act is **Check result** (held like the acts while OATS cannot be read): it asks again under the same idempotency key, so the kernel
   replays the spawn it made or makes the one it did not, never a second.
 - A refusal leads with a person's words (the Desktop's, `model/spawn.ts` `spawnProblem`), then the
   kernel's own message under Details, then its code; the values are kept. A sentence names only a

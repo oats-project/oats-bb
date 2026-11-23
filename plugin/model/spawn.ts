@@ -312,11 +312,15 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
   E_SANDBOX_PLACEMENT: ["details", "Details says what to do instead."],
 };
 
-/** A refusal as the form says it: the sentence (what happened, then what to do), its code, and the kernel's own message for Details. */
 /**
  * What is KNOWN after a spawn did not answer "created", which is what the form holds itself to:
  *   - `refused`: nothing was created. Only where something says so: the kernel's refusals the
- *     tables name, and the plugin's own for a call that never reached the kernel;
+ *     tables name (the kernel compensates an error raised after the home exists, and says when it
+ *     could not: see `unconfirmed`), and the plugin's own for a call that never reached the kernel;
+ *   - `unconfirmed`: the kernel refused AND says its rollback is incomplete: part of the instance
+ *     may still be there (its home, quarantined or whole). Never "nothing was created", whatever
+ *     the code; the form stays held, with nothing to press: the kernel's message, under Details,
+ *     names what to clean up (the Desktop makes this outcome final too);
  *   - `created`: an instance exists (the kernel says so, or the spawn went through and only its
  *     thread is not known): the form stays held, and says where to open it;
  *   - `unknown`: anything else: a code nobody classed, an `oats` that ended with no answer or one
@@ -325,12 +329,23 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
  *     offers Check result, which asks again under the same key.
  * A preview starts nothing: its outcome is always `refused`.
  */
-export type SpawnOutcome = "refused" | "created" | "unknown";
+export type SpawnOutcome = "refused" | "unconfirmed" | "created" | "unknown";
+/** A refusal as the form says it: the sentence (what happened, then what to do), the act that follows, its code, the kernel's own message for Details, and what is known of the instance. */
 export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; detail: string | null; outcome: SpawnOutcome };
 const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
 /** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
 const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
 const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
+/**
+ * The kernel's own word that a spawn's rollback did not finish. Its contract's marker is
+ * `error.details.unconfirmed` (docs/desktop-cli-api.md "Spawn errors": "A code says nothing about
+ * how far the spawn got: details.unconfirmed does"), which the plugin's shared envelope does not
+ * carry (kernel/envelope.ts keeps the code and the message). On every path that sets the marker
+ * for a rollback the kernel also says so in the message, in these words (awebai/oats lib/core.mjs
+ * at 3d834aa3c: "— rollback INCOMPLETE, …"): read here until the envelope carries the marker.
+ */
+const ROLLBACK_INCOMPLETE = /rollback INCOMPLETE/;
+const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
 /**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
@@ -371,14 +386,16 @@ export function spawnProblem(
   const outcome: SpawnOutcome =
     stage === "preview"
       ? "refused"
-      : reason.code !== null && CREATED.has(code)
+      : ROLLBACK_INCOMPLETE.test(message)
+        ? "unconfirmed"
+        : reason.code !== null && CREATED.has(code)
         ? "created"
         : named !== undefined && named.next === "check-result"
           ? "unknown"
           : named !== undefined || (reason.code !== null && NEVER_RAN.has(code) && !replay)
             ? "refused"
             : "unknown";
-  const words = outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
+  const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;

@@ -460,6 +460,60 @@ test("a spawn that made an instance and did not finish (the kernel says so, or i
   }
 });
 
+test("a refusal whose rollback the kernel could not finish is never 'nothing was created': the form stays held, with what to clean up under Details and nothing to press but Close", async () => {
+  const left = "oats-developer-2 was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/oats-developer-2: still present";
+  const slot = await ready(
+    previews({
+      spawn: () => {
+        throw new Error(`E_BACKEND_NOT_READY: ${left}`);
+      },
+    }),
+  );
+  fireEvent.click(submit(slot));
+  const result = await slot.findByTestId("oats-result");
+  expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent, result.querySelector("p")!.textContent]).toEqual([
+    "failed",
+    "The spawn was refused, and could not be undone completely",
+    "OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.",
+  ]);
+  expect(slot.getByTestId("oats-spawn-details").textContent).toContain("rollback INCOMPLETE, clean up manually");
+  expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, "Spawn incomplete", true, "Close"]);
+  fireEvent.click(submit(slot));
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
+  expect(calls(slot, "spawn")).toHaveLength(1);
+});
+
+test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  let stale = false;
+  const live = handlers().snapshot;
+  const slot = await ready(
+    previews({
+      snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+      spawn: () => {
+        throw new Error("OATS_TIMEOUT: oats spawn did not answer");
+      },
+    }),
+  );
+  // A relation: its instance is known only while the roster is.
+  fireEvent.click(slot.getByRole("radio", { name: "Child of" }));
+  choose(slot, "oats-spawn-relative", "flaky-ci-developer");
+  await waitFor(() => expect(submit(slot).disabled).toBe(false));
+  fireEvent.click(submit(slot));
+  await waitFor(() => expect(submit(slot).textContent).toBe("Check result"));
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("It is not known whether the agent was spawned");
+  // OATS cannot be read: the roster's notice, and Check result off with the acts' reason; a press and the key ask nothing.
+  stale = true;
+  await slot.behavior.emitRealtime("oats/changed", { at: new Date().toISOString() });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect([submit(slot).textContent, submit(slot).disabled, reason(slot)]).toEqual(["Check result", true, "Comes back when OATS is read again"]);
+  fireEvent.click(submit(slot));
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
+  expect(calls(slot, "spawn")).toHaveLength(1);
+  // And what the form is held for is still said.
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("It is not known whether the agent was spawned");
+});
+
 test("a failure nobody classed is of unknown outcome, never 'not spawned': an answer the plugin cannot read, a hook's own code; and a Check result the plugin refuses before asking stays unknown", async () => {
   for (const thrown of ["OATS_BAD_ANSWER: `oats spawn` answered a document the plugin cannot read", "OATS_OUTPUT_TOO_LARGE: more than 8 MB", "OATS_ABORTED: the call was ended", "E_HOOK_ENVIRONMENT_CONTRACT: oats.build set a variable it does not declare"]) {
     const slot = await ready(
@@ -700,6 +754,36 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
   fireEvent.click(submit(slot));
   fireEvent.keyDown(slot.getByTestId("oats-spawn-form"), { key: "Enter", ctrlKey: true });
   expect(calls(slot, "spawn")).toEqual([]);
+});
+
+test("held, the column keeps only the facts of the values on screen: those read for other values are not drawn as theirs, nor is the foot", async () => {
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  let stale = false;
+  const live = handlers().snapshot;
+  const slot = await ready({
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+    spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
+  });
+  // Held with the preview of the values on screen: its facts and its foot stay.
+  stale = true;
+  await slot.behavior.emitRealtime("oats/changed", { at: new Date().toISOString() });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect(column(slot).textContent).toContain("numbered by the kernel");
+  expect(column(slot).textContent).toContain("Resolved by the installed CLI.");
+  slot.unmount();
+  resetApp();
+  // Held while the values on screen have no preview of their own: nothing of another's is drawn.
+  stale = false;
+  const other = await ready({
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+    spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
+  });
+  set(other, "oats-spawn-name", "ranker-v4-probe");
+  await waitFor(() => expect(other.queryByTestId("oats-spawn-updating")).not.toBeNull());
+  stale = true;
+  await other.behavior.emitRealtime("oats/changed", { at: new Date().toISOString() });
+  await waitFor(() => expect(other.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect(column(other).textContent).toBe("What will be created");
 });
 
 test("Mod+Enter spawns from any field; Enter alone spawns nothing; the Desktop's Mod+digit chords are not the form's, and nothing on screen offers them", async () => {

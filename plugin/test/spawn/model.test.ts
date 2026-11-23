@@ -218,6 +218,21 @@ describe("after the press, what is known decides what the form may offer", () =>
     expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
   });
 
+  it("unconfirmed: the kernel refused and says its rollback is incomplete: never 'nothing was created', whatever the code", () => {
+    const left = "form-pi-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/form-pi-developer: still present";
+    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_SOMETHING_NEW"]) {
+      const problem = spawnProblem({ code, message: left }, "spawn");
+      expect([problem.outcome, problem.next, problem.code, problem.detail], code).toEqual(["unconfirmed", null, code, left]);
+      expect(problem.sentence, code).toBe("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+      expect(problem.sentence, code).not.toMatch(/Nothing was created|rolled back/);
+    }
+    // The same codes with a rollback the kernel finished are refusals: it says "spawn rolled back", and sets no marker.
+    expect(outcome("E_BACKEND_NOT_READY")).toBe("refused");
+    expect(spawnProblem({ code: "E_REQUIRED_HOOK_FAILED", message: "the hook exited 2 — spawn rolled back" }, "spawn").outcome).toBe("refused");
+    // A preview starts nothing, whatever its words.
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: left }, "preview").outcome).toBe("refused");
+  });
+
   it("a Check result that the plugin refused before asking the kernel learned nothing: still unknown; one the kernel refuses by name is refused", () => {
     expect(outcome("INVALID_INPUT", { replay: true })).toBe("unknown");
     expect(outcome("OATS_NOT_FOUND", { replay: true })).toBe("unknown");

@@ -382,7 +382,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay, line: kernelLine });
           if (!alive.current) {
             // The person left the form: what became of the spawn is told where they are, and stays until dismissed.
-            notify({ tone: problem.outcome === "refused" ? "failed" : "unknown", title: problem.outcome === "unknown" ? W.SPAWN_UNKNOWN_TITLE : problem.outcome === "created" ? W.SPAWN_INCOMPLETE_TITLE : W.SPAWN_FAILED_TITLE, lines: [problem.outcome === "unknown" ? W.UNKNOWN_AWAY : problem.sentence, problem.code] });
+            notify({ tone: problem.outcome === "refused" || problem.outcome === "unconfirmed" ? "failed" : "unknown", title: W.FAILURE_TITLE[problem.outcome], lines: [problem.outcome === "unknown" ? W.UNKNOWN_AWAY : problem.sentence, problem.code] });
             return;
           }
           setFailure(problem);
@@ -392,8 +392,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             return;
           }
           intent.current = null;
-          if (problem.outcome === "created") {
-            // An instance exists: the form stays held, so that no second one is made from it.
+          if (problem.outcome === "created" || problem.outcome === "unconfirmed") {
+            // An instance exists, or part of one may: the form stays held, so that no second one is made from it.
             setPhase("incomplete");
             return;
           }
@@ -409,13 +409,20 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   }, [rpc, navigate]);
 
   // A refusal about the values that were on screen goes when they change.
-  useEffect(() => setFailure(null), [key]);
+  // Only while the form can be changed: held, the values can vanish for a moment (the roster being read again) without anyone changing them.
+  const phaseNow = useRef(phase);
+  phaseNow.current = phase;
+  useEffect(() => {
+    if (phaseNow.current === "idle") setFailure(null);
+  }, [key]);
 
   const fieldsHeld = held || phase !== "idle";
   const reason =
-    phase !== "idle"
-      ? null
-      : held
+    phase === "unknown" && held
+      ? HELD_REASON // Check result is an act: held like the acts while OATS cannot be read
+      : phase !== "idle"
+        ? null
+        : held
         ? HELD_REASON
         : inFlight !== null
           ? W.inProgress(shown(inFlight.soul))
@@ -431,7 +438,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
-      send(true); // Check result: the same key, the same decision
+      if (!held) send(true); // Check result: the same key, the same decision
       return;
     }
     if (!canSpawn || preview === null || input === null) return;
@@ -467,7 +474,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const title = chosen === undefined ? W.TITLE : W.titleFor(shown(chosen.name), oats.phase === "ready" ? shown(oats.deployment.workspace) : null);
   let column: ReactNode;
   if (chosen === undefined) column = <p className="text-sm text-muted-foreground">{W.COLUMN_NO_SOUL}</p>;
-  else if (held) column = settled === null ? null : <Created facts={settled.facts} machine={machine} />;
+  // Held: only the facts of the values on screen stay; those of other values are not drawn as theirs.
+  else if (held) column = preview === null ? null : <Created facts={preview.facts} machine={machine} />;
   else if (refusal !== null && nameRefusal === null)
     column = (
       <Notice title={W.REFUSED_TITLE} tone="error" code={refusal.code} details={refusal.detail} actions={<Button onClick={() => setAgain((n) => n + 1)}>Retry</Button>}>
@@ -482,7 +490,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
   const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
   /** The column holds the kernel's answer for the values on screen: only then is its foot true. */
-  const resolvedNow = chosen !== undefined && (preview !== null || (held && settled !== null));
+  const resolvedNow = chosen !== undefined && preview !== null;
 
   const spawnWord = phase === "spawning" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
   const harnessFailed = harnesses.status === "failed";
@@ -668,7 +676,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </Result>
             ) : null}
             {failure === null ? null : (
-              <Result title={failure.outcome === "unknown" ? W.SPAWN_UNKNOWN_TITLE : failure.outcome === "created" ? W.SPAWN_INCOMPLETE_TITLE : W.SPAWN_FAILED_TITLE} tone={failure.outcome === "refused" ? "failed" : "unknown"} code={failure.code}>
+              <Result title={W.FAILURE_TITLE[failure.outcome]} tone={failure.outcome === "refused" || failure.outcome === "unconfirmed" ? "failed" : "unknown"} code={failure.code}>
                 <p>{failure.sentence}</p>
                 {failure.next === "review-again" && preview !== null ? <p data-testid="oats-spawn-reread">{W.READ_AGAIN}</p> : null}
                 {failure.detail === null ? null : (
@@ -691,7 +699,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 data-testid="oats-spawn-submit"
                 aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
                 aria-busy={phase === "spawning"}
-                disabled={!(canSpawn || phase === "unknown")}
+                disabled={!(canSpawn || (phase === "unknown" && !held))}
                 onClick={press}
               >
                 {spawnWord}

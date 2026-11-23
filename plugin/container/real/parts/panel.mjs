@@ -130,4 +130,25 @@ export default async (run) => {
   const claimed = JSON.parse(withClaim.stdout).agents.flatMap((group) => group.instances).find((each) => each.instance === CHILD)?.waitingOnYou;
   check(claimed?.since === kernelEvents.waitingOnYou?.since && claimed?.producer === kernelEvents.waitingOnYou?.producer, "at one moment the roster's claim for the agent is the claim its activity names", JSON.stringify([claimed, kernelEvents.waitingOnYou]));
   fixtures.keep("panel/status-board.json", withClaim.stdout);
+
+  // The panel's own screens on the run's real agent, for the image set: the agent's page (where the
+  // panel is at a phone's width and for an agent with no bb thread), its Instance tab and its Soul tab.
+  // The child waits with a question on its board: the header says so, with since when.
+  step("C panel 5: the panel of the real child, as a person sees it");
+  const at = (id) => `[data-testid="oats-panel"] [data-testid="${id}"]`;
+  const read = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+  await run.views("real-panel", async ({ page, at: where, shot }) => {
+    await page.goto(`/plugins/oats/agent/${CHILD}`);
+    const header = await page.until(`(() => { const name = ${read(at("oats-panel-name"))}; const state = ${read(at("oats-panel-state"))}; return name !== "" && /Needs you/.test(state) && document.querySelector(${JSON.stringify(at("oats-panel-work"))}) !== null ? name + " | " + state : ""; })()`, 40);
+    check(typeof header === "string" && header.startsWith("Panel worktree helper | ") && /Needs you . waiting /.test(header), `${where}: the panel names the real child in words and says it needs the person, since when`, header ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
+    const asks = await page.until(`(() => { const text = ${read(at("oats-panel-waiting"))}; return text.includes("Which base branch?") ? text : ""; })()`, 20);
+    check(Boolean(asks), `${where}: and what it asks, as the kernel recorded it`, asks ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
+    await page.until(`document.getAnimations().every((animation) => animation.playState !== "running")`, 5);
+    await shot("instance");
+    await page.evaluate(`document.querySelector('[data-testid="oats-tab-soul"]').click()`);
+    const soul = await page.until(`(() => { const name = ${read(at("oats-panel-soul-name"))}; const body = ${read(at("oats-panel-soul-body"))}; return name !== "" && body !== "" ? name : ""; })()`, 40);
+    check(soul === "oats-expert", `${where}: the Soul tab names the soul the real child was spawned from, with its body read`, soul ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
+    await page.until(`document.getAnimations().every((animation) => animation.playState !== "running")`, 5);
+    await shot("soul");
+  });
 };

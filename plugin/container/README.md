@@ -12,7 +12,10 @@ plugin/container/ci.sh pi         # the pi run: a pi agent launched from the New
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the first line (`.github/workflows/plugin.yml`).
+they run from any directory. CI runs the three stages of the first line as three jobs side by side,
+each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
+stage, `plugin-real`), and the pi run as a fourth (`plugin-pi`), so each line after the first
+installs and builds what it needs by itself.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -35,7 +38,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
 | `scenes/<feature>.mjs` | by `live-ui.mjs` | each feature's live scenes: what a page is asked and where its screenshots are taken (below) |
 | `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
-| `real/pi/` | that container, started with `REAL_PI=1` | the pi run: the same setup on the kernel a pi deployment runs, with pi, the OATS bridge for pi and a mock model, and a pi agent launched from the New agent form (`real/pi/README.md`) |
+| `real/pi/` | that container, started with `REAL_PI=1` | the pi run: the same setup and kernel, with pi, the OATS bridge for pi and a mock model, and a pi agent launched from the New agent form (`real/pi/README.md`) |
 | `images.mjs` | by `live-ui.mjs` and the real run | finds the images of a run that are the same image: none may be in the live checks; in the real run, only two of one state |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked and logs each call; the verbs it knows and their files are each feature's `test/fixtures/<feature>/verbs.json`; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
@@ -167,6 +170,11 @@ docker exec -u node -w /home/node/plugin bb-plugin-dev npx vitest run test/kerne
 docker exec -u node -w /home/node/plugin bb-plugin-dev bash container/live.sh
 docker rm -f bb-plugin-dev
 ```
+
+`ci.sh` also copies the bb session provider's two manifests (`oats-package/oats-package.json`,
+`oats-package/capabilities/oats-bb/oats.json`) beside the plugin, to `/home/node/oats-package/`:
+`test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
+needs them there too.
 
 ## Against a real kernel
 

@@ -14,9 +14,9 @@
 #                              inside the container (a trial); by default such a run fails
 #   UPDATE_FIXTURES=1          copy the recorded answers over plugin/test/fixtures/ afterwards
 #   REAL_PI=1                  the pi run instead (pi/README.md; `ci.sh pi`): the same container and
-#                              setup, with pi, its OATS bridge and a mock model for it, on the kernel
-#                              a pi deployment runs, and pi/scenario.mjs in place of
-#                              scenario.mjs. Its artefacts go to real/pi/out/; it records no fixture.
+#                              setup and the same kernel, with pi, its OATS bridge and a mock model
+#                              for it, and pi/scenario.mjs in place of scenario.mjs. Its artefacts
+#                              go to real/pi/out/; it records no fixture.
 #   KEEP=1, NAME, IMAGE, DOCKER_RUN_ARGS   as container/ci.sh
 #
 # The provider is this checkout's own (oats-package/, as committed at HEAD). This checkout (and the
@@ -27,17 +27,14 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(dirname "$(dirname "$HERE")")
 REPOSITORY=$(dirname "$PLUGIN")
-# Unset: the release the fixtures were recorded at. Set and empty: a tree from KERNEL_REPO.
+# Unset: the release the run pins (the plugin's floor). Set and empty: a tree from KERNEL_REPO.
+# The pi run (REAL_PI=1) is on the same kernel: one pin for both.
 REAL_PI=${REAL_PI:-0}
 [ "$REAL_PI" != 1 ] || [ "${UPDATE_FIXTURES:-0}" != 1 ] || { echo "real: the pi run records no fixture: UPDATE_FIXTURES is the main run's" >&2; exit 2; }
-# The pi run's kernel, where none is named. (The next line stays as it is, alone on its line: it
-# is the main run's pin, and test/kernel-compat.test.ts reads it.)
-[ "$REAL_PI" != 1 ] || KERNEL_NPM=${KERNEL_NPM-0.70.5}
-KERNEL_NPM=${KERNEL_NPM-0.70.0}
-case "$KERNEL_NPM" in
-  0.70.0) KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-DeVGFZi1ev2ClxF3p/UV0OBc4XwAWuLjEckJ56rz7UVCg8deavPAOHPjeIuyIvg5l4g52rzRBtoe3aVsxQrxrQ==} ;;
-  0.70.5) KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==} ;;
-esac
+KERNEL_NPM=${KERNEL_NPM-0.70.5}
+if [ "$KERNEL_NPM" = 0.70.5 ]; then
+  KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==}
+fi
 KERNEL_INTEGRITY=${KERNEL_INTEGRITY:-}
 REQUIRE_REAL_FLOOR=${REQUIRE_REAL_FLOOR:-1}
 IMAGE=${IMAGE:-bb-plugin-oats-test}

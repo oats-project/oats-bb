@@ -164,6 +164,31 @@ test("the soul is read again when the instance was started again, and not when n
   await waitFor(() => expect(calls(slot, "panelSoul")).toHaveLength(2));
 });
 
+test("the soul is read again when the instance was started again while the Soul tab was off the page", async () => {
+  // What a read depends on can change while its part is not drawn: the part that is shown again
+  // (a mount) reads again, as one that stayed on the page does.
+  let startedAt = "2026-11-21T18:13:36.478Z";
+  const slot = await soulTab({ panelInstance: ({ instance }) => instanceAnswer(instance, (answer) => ({ ...answer, startedAt })) });
+  await slot.findByTestId("oats-panel-spawned-from");
+  expect(calls(slot, "panelSoul")).toHaveLength(1);
+  fireEvent.click(slot.getByTestId("oats-tab-instance"));
+  await slot.findByTestId("oats-panel-work");
+  startedAt = "2026-11-21T18:31:00.000Z";
+  const before = calls(slot, "panelInstance").length;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:05.000Z" }));
+  await waitFor(() => expect(calls(slot, "panelInstance").length).toBeGreaterThan(before));
+  expect(calls(slot, "panelSoul")).toHaveLength(1); // the Soul tab is not drawn: nothing of it is read
+  fireEvent.click(slot.getByTestId("oats-tab-soul"));
+  await waitFor(() => expect(calls(slot, "panelSoul")).toHaveLength(2));
+  // and a tab turned back to once more, with nothing changed, reads nothing
+  fireEvent.click(slot.getByTestId("oats-tab-instance"));
+  await slot.findByTestId("oats-panel-work");
+  fireEvent.click(slot.getByTestId("oats-tab-soul"));
+  await slot.findByTestId("oats-panel-spawned-from");
+  await act(async () => {});
+  expect(calls(slot, "panelSoul")).toHaveLength(2);
+});
+
 // ---- the recorded activity
 
 test("the activity is read only when a person asks: Load activity, then the rows newest first with their facts, and Refresh activity", async () => {

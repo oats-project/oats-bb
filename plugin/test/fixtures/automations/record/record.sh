@@ -15,9 +15,10 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(cd "$HERE/../../../.." && pwd)
 REPOSITORY=$(dirname "$PLUGIN")
-KERNEL_NPM=${KERNEL_NPM:-0.70.0}
-if [ "$KERNEL_NPM" = 0.70.0 ]; then
-  KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-DeVGFZi1ev2ClxF3p/UV0OBc4XwAWuLjEckJ56rz7UVCg8deavPAOHPjeIuyIvg5l4g52rzRBtoe3aVsxQrxrQ==}
+# The kernel the real run pins (container/real/run.sh): the provider's floor must admit it.
+KERNEL_NPM=${KERNEL_NPM:-0.70.5}
+if [ "$KERNEL_NPM" = 0.70.5 ]; then
+  KERNEL_INTEGRITY=${KERNEL_INTEGRITY-sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==}
 fi
 KERNEL_INTEGRITY=${KERNEL_INTEGRITY:-}
 IMAGE=${IMAGE:-bb-plugin-oats-test}

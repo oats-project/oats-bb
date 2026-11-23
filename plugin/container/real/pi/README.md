@@ -1,17 +1,17 @@
 # The pi run: a pi agent, launched from the New agent form
 
-The real run (`../README.md`) launches Claude Code only, on the kernel the fixtures were recorded
-at. This directory is a second run, for one question: **can a person launch a pi agent on bb from
+The real run (`../README.md`) launches Claude Code only. This directory is a second run, for one question: **can a person launch a pi agent on bb from
 the plugin's New agent form, and does the plugin then show what that agent needs?** It runs in the
-same container, with the same setup and workspace, on the kernel a pi deployment runs, with what
-pi needs added.
+same container, with the same setup and workspace and on the same kernel, with what pi needs
+added.
 
 ```sh
 plugin/container/ci.sh pi         # or: REAL_PI=1 plugin/container/real/run.sh
 ```
 
 It is not part of `ci.sh all`: CI runs it as a job of its own (`.github/workflows/plugin.yml`,
-`pi`), so the main run's time does not grow. It changes nothing of the main run: it records no
+`plugin-pi`, the fourth beside `plugin-unit`, `test` and `plugin-real`), so the main run's time does
+not grow. It changes nothing of the main run: it records no
 fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/` (or
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
 are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the
@@ -25,15 +25,15 @@ The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
 provider of this checkout, no aweb. Its first runs, the same day, were on 0.70.3: the first runs of
 the plugin against a kernel newer than 0.70.0.
 
-To move it to another release: in `../run.sh`, the pi run's default (`[ "$REAL_PI" != 1 ] ||
-KERNEL_NPM=${KERNEL_NPM-<version>}`) and the kernel tarball's integrity in the `case` below it; in
-`setup.sh` here, the bridge tarball's integrity for that version; and the versions named in this
-file and in `../README.md`. Or, for one run, with no edit: `KERNEL_NPM=<version> KERNEL_INTEGRITY=…
+Its kernel is the real run's: one pin, in `../run.sh` (`KERNEL_NPM`, `KERNEL_INTEGRITY`). When that
+pin moves, one thing moves here: in `setup.sh`, the bridge tarball's integrity for that version
+(the bridge's version follows the kernel's by itself), with the versions named in this file. For
+one run on another release, with no edit: `KERNEL_NPM=<version> KERNEL_INTEGRITY=…
 OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `KERNEL_NPM`, `KERNEL_INTEGRITY` | `0.70.5`, that tarball's integrity | as the main run's; the kernel of this run |
+| `KERNEL_NPM`, `KERNEL_INTEGRITY` | the main run's (`0.70.5`, that tarball's integrity) | the kernel of this run: the same pin |
 | `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.5`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
 | `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against |
 | the others | as the main run | `REQUIRE_REAL_FLOOR`, `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` |

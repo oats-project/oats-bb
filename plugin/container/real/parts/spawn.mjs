@@ -75,7 +75,8 @@ export default async (run) => {
       check(kernel?.code === "E_BACKEND_NOT_READY" || kernel?.code === "E_HARNESS_UNAVAILABLE" || kernel?.code === "E_BACKEND_HARNESS", `the refusal is the kernel's or the provider's word that pi cannot be launched here (${kernel?.code})`, spawned.message);
       check(kernel !== undefined && spawned.message.endsWith(`${kernel.code}: ${kernel.message}`), `this container cannot launch pi (${pi.ok ? "refused at the spawn" : "refused at the preview"}), and the plugin shows the kernel's refusal unchanged (${kernel?.code})`, spawned.message);
       check(rowOf("form-pi-developer") === undefined || rowOf("form-pi-developer")?.running !== true, "and no pi agent runs");
-      if (kernel !== undefined) fixtures.keep("spawn/spawn-pi-refused.json", refusedCall.stdout);
+      // Kept by where the kernel refused: at the preview (from OATS 0.70.1, which asks the provider's own check there) or at the spawn (0.70.0).
+      if (kernel !== undefined) fixtures.keep(pi.ok ? "spawn/spawn-pi-refused.json" : "spawn/spawn-preview-pi-refused.json", refusedCall.stdout);
       note("NO SPAWN WITH HARNESS pi IN THIS RUN: bb in this container has no pi provider it can launch; the refusal above is what the form shows");
     }
   }

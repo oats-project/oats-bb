@@ -12,8 +12,8 @@
 # that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
 # `real` is the run against a real OATS kernel and the bb session provider, in a container of its
 # own (real/run.sh, real/README.md; its artefacts go to container/real/out/); `all` ends with it.
-# `pi` is the pi run (real/pi/README.md): that container with pi, on the kernel a pi deployment
-# runs; not part of `all` (its artefacts go to container/real/pi/out/).
+# `pi` is the pi run (real/pi/README.md): that container and kernel, with pi; not part of `all`
+# (its artefacts go to container/real/pi/out/).
 set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -68,6 +68,9 @@ if [ -f "$PLUGIN/../bb-version" ]; then
 fi
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+# The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
+# the plugin's OATS floor against theirs (test/kernel-compat.test.ts).
+(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

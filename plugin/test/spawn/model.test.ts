@@ -5,17 +5,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DETAIL_WITHHELD, displayLine } from "../../app/ui/text";
 import { formFacts, harnessLabel, homeText, launchFromText, moduleSourceText, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
 
 const recorded = (name: string): Record<string, unknown> => (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn", name), "utf8")) as { result: Record<string, unknown> }).result;
 const preview = recorded("spawn-preview.json");
-
-/** The display filter as the form hands it to the model: a line it may show, or null. */
-const line = (text: string): string | null => {
-  const shown = displayLine(text);
-  return shown === null || shown === "" || shown === DETAIL_WITHHELD ? null : shown;
-};
 
 describe("what will be created, from the kernel's preview", () => {
   it("says the name and the home, where it works, the harness and model with where they came from, and the team", () => {
@@ -106,6 +99,10 @@ describe("a refusal, in a person's words, with what to do", () => {
     expect([problem.code, problem.sentence]).toEqual(["E_BACKEND_NOT_READY", "bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."]);
     expect(problem.detail).toMatch(/bb reports its pi provider as not_installed.*spawn rolled back$/);
     // From OATS 0.70.1 the PREVIEW refuses with the same code (the provider's own check): a refusal in a person's words, not a failed read.
+    // As the real kernel (0.70.5) printed it at the preview: nothing was started.
+    const atPreview = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-pi-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+    expect(atPreview.message).toMatch(/would not be launched.*nothing was created$/);
+    expect(spawnProblem(atPreview, "preview")).toMatchObject({ code: "E_BACKEND_NOT_READY", outcome: "refused", sentence: "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above.", detail: atPreview.message });
     expect(spawnProblem(refused, "preview")).toMatchObject({ code: "E_BACKEND_NOT_READY", next: "change-options", sentence: "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above." });
     expect(spawnProblem(refused, "preview", { harnessField: false }).sentence).toBe("bb isn’t ready to launch this agent as chosen. Details says what bb needs.");
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");
@@ -115,10 +112,8 @@ describe("a refusal, in a person's words, with what to do", () => {
   });
 
   it("a harness that is not installed is said as the kernel words it", () => {
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed: npm i -g @mariozechner/pi" }, "preview", { line }).sentence).toBe("pi is not installed: npm i -g @mariozechner/pi Install it, or pick another harness above.");
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: null }, "preview", { line }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
-    // The kernel's words are said only through the drawer's filter: with none given, the table's sentence stands.
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed: npm i -g @mariozechner/pi" }).sentence).toBe("pi is not installed: npm i -g @mariozechner/pi Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: null }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
   });
 
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
@@ -135,7 +130,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     // A failure with no code at all says nothing of what the kernel did: not known.
     expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result", code: "OATS_FAILED", detail: "boom", outcome: "unknown" });
     // A code the preview's table holds reads the same after the press.
-    expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name.");
+    expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name.");
   });
 
   it("sends a person to the Harness field only where the form has one", () => {
@@ -144,7 +139,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     expect(spawnProblem({ code: "E_LAUNCH_EXECUTABLE", message: "x" }, "preview", one).sentence).toBe("The chosen launch configuration can’t start on this machine. See Details.");
     expect(spawnProblem({ code: "E_LAUNCH_CONFIG_AMBIGUOUS", message: "x" }, "preview", one).sentence).toBe("This machine has more than one launch configuration for this soul’s harness, and none is the default. Make one of them the default with oats launch-config on that machine.");
     expect(spawnProblem({ code: "E_LAUNCH_PREFERENCE_UNMATCHED", message: "x" }, "preview", one).sentence).toMatch(/Correct the preference \(Details\)\.$/);
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }, "preview", { ...one, line }).sentence).toBe("pi is not installed Install it on that machine.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }, "preview", one).sentence).toBe("pi is not installed Install it on that machine.");
     for (const code of ["E_BACKEND_HARNESS", "E_HARNESS_UNAVAILABLE", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_ENV_MISSING", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_LAUNCH_PREFERENCE_UNMATCHED"]) {
       expect(spawnProblem({ code, message: null }, "preview", one).sentence, code).not.toMatch(/harness above|harnesses above/);
       expect(spawnProblem({ code, message: null }, "preview").sentence, code).toMatch(/harness above|harnesses above/);
@@ -155,11 +150,11 @@ describe("a refusal, in a person's words, with what to do", () => {
 
   it("the kernel's words for a harness that is not installed go through the display filter; where it leaves nothing, the table's sentence stands", () => {
     const unsafe = "harness pi not found\u202E at /opt/x; set token=abc123 in env\nsecond line";
-    const said = spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: unsafe }, "preview", { line });
+    const said = spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: unsafe });
     expect(said.sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
     expect(said.sentence).not.toMatch(/token|\u202E|\n/);
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is\nnot on PATH" }, "preview", { line }).sentence).toBe("pi is not on PATH Install it, or pick another harness above.");
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "" }, "preview", { line }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is\nnot on PATH" }).sentence).toBe("pi is not on PATH Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "" }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
   });
 });
 
@@ -218,6 +213,28 @@ describe("after the press, what is known decides what the form may offer", () =>
     expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
   });
 
+  it("unconfirmed: the kernel refused and says its rollback is incomplete: never 'nothing was created', whatever the code", () => {
+    // SHAPED, not recorded: a rollback that fails cannot be made in the real run (the kernel's own
+    // removal of the home would have to fail). The words are the kernel's, from awebai/oats
+    // lib/core.mjs at 3d834aa3c, line 5231: `note = incomplete.length ? " — rollback INCOMPLETE,
+    // clean up manually: " + incomplete.join("; ") : " — spawn rolled back"`, with the entry of line
+    // 5230 ("instance home <home>: still present"); `unconfirmedSpawn` (3859-3861) sets
+    // error.details.unconfirmed on the same path. The lead of the message is the recorded one of
+    // test/fixtures/spawn/spawn-pi-refused.json.
+    const left = "form-pi-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/form-pi-developer: still present";
+    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_SOMETHING_NEW"]) {
+      const problem = spawnProblem({ code, message: left }, "spawn");
+      expect([problem.outcome, problem.next, problem.code, problem.detail], code).toEqual(["unconfirmed", null, code, left]);
+      expect(problem.sentence, code).toBe("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+      expect(problem.sentence, code).not.toMatch(/Nothing was created|rolled back/);
+    }
+    // The same codes with a rollback the kernel finished are refusals: it says "spawn rolled back", and sets no marker.
+    expect(outcome("E_BACKEND_NOT_READY")).toBe("refused");
+    expect(spawnProblem({ code: "E_REQUIRED_HOOK_FAILED", message: "the hook exited 2 — spawn rolled back" }, "spawn").outcome).toBe("refused");
+    // A preview starts nothing, whatever its words.
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: left }, "preview").outcome).toBe("refused");
+  });
+
   it("a Check result that the plugin refused before asking the kernel learned nothing: still unknown; one the kernel refuses by name is refused", () => {
     expect(outcome("INVALID_INPUT", { replay: true })).toBe("unknown");
     expect(outcome("OATS_NOT_FOUND", { replay: true })).toBe("unknown");
@@ -231,12 +248,11 @@ describe("after the press, what is known decides what the form may offer", () =>
 });
 
 describe("model/spawn.ts stands on nothing of app/", () => {
-  it("imports no module of the app: what it answers is filtered by whoever draws it", () => {
+  it("imports the plugin's one display filter from model/, and nothing else", () => {
     const source = readFileSync(join(process.cwd(), "model/spawn.ts"), "utf8");
-    expect(source.match(/^import .*$/gm) ?? []).toEqual([]);
+    expect(source.match(/^import .*$/gm) ?? []).toEqual(['import { DETAIL_WITHHELD, displayLine } from "./text.js";']);
     // A capability's name in the Setup row comes as the kernel printed it; the column draws it through the filter.
     const hooked = { ...preview, worktreeHooks: [{ capability: "oats.build\u202E", required: true }] };
     expect(previewFacts(hooked).facts.find((fact) => fact.label === "Setup")!.parts[0]!.text).toBe("oats.build\u202E (required)");
   });
 });
-

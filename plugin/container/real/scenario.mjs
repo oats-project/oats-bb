@@ -541,6 +541,10 @@ try {
       await page.shot(`real-question-${viewport.name}-home${suffix}`);
       if (view !== VIEWS[VIEWS.length - 1]) continue;
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
+      // The card says what was answered, until the agent goes on and its card leaves (asked by the home: the lead's ruling on its UX read).
+      const said = await page.until(`(() => { const c = ${card}; return c?.querySelector('[data-testid="oats-needs-answered"]')?.innerText.trim() ?? ""; })()`, 15);
+      check(said === "Answered: Retry. Waiting for the agent to go on.", `${at}: the card says what was answered`, said ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
+      await page.shot(`real-question-${viewport.name}-home-answered${suffix}`);
       const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
       check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));
     } finally {

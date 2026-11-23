@@ -4,8 +4,11 @@
 // `previewFacts`, packages/client/spawn-messages.mjs `spawnProblem`, and the Desktop's own words
 // for the act that follows in packages/desktop/renderer/spawn-words.mjs), ported as they are; where
 // a sentence names one of the Desktop's controls, the plugin names its own. Pure: no bb, no React,
-// and nothing of app/: what it answers is the kernel's text as it came, and whoever draws it
-// puts it through the display filter (app/ui/text.ts), as for every text of the kernel's.
+// and nothing of app/: the display filter it uses is the model's own (model/text.ts, the one
+// filter of the plugin). The facts it answers carry the kernel's text as it came: whoever draws
+// them filters them, as every text of the kernel's; the one SENTENCE that is the kernel's own
+// words is filtered here, where it is chosen.
+import { DETAIL_WITHHELD, displayLine } from "./text.js";
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -223,7 +226,8 @@ const COMMON_FACTS: Record<string, Said> = {
   E_HARNESS_UNAVAILABLE: said("The harness this soul would run isn’t installed on this machine.", "change-options"),
   E_LAUNCH_PREFERENCE_UNMATCHED: said("This machine’s launch preferences name a soul this workspace doesn’t offer, so OATS won’t choose a launch for this soul.", "change-options"),
   E_MODEL_UNKNOWN: said("That model isn’t available for this harness. Pick another model, or keep the default."),
-  E_INSTANCE_NAME_INVALID: said("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name."),
+  // The Desktop says "at most 64 characters"; the plugin's own limit, checked before any process, is 63 (contract/shared.ts): one number for one field.
+  E_INSTANCE_NAME_INVALID: said("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name."),
   E_INSTANCE_NAME_TAKEN: said("An instance with this name already exists. Choose another name."),
   E_PACKAGE_MISSING: said("A package this soul uses isn’t installed yet.", "sync-workspace"),
   E_PACKAGE_INTEGRITY: said("A package this soul uses no longer matches the lock.", "sync-workspace"),
@@ -312,11 +316,15 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
   E_SANDBOX_PLACEMENT: ["details", "Details says what to do instead."],
 };
 
-/** A refusal as the form says it: the sentence (what happened, then what to do), its code, and the kernel's own message for Details. */
 /**
  * What is KNOWN after a spawn did not answer "created", which is what the form holds itself to:
  *   - `refused`: nothing was created. Only where something says so: the kernel's refusals the
- *     tables name, and the plugin's own for a call that never reached the kernel;
+ *     tables name (the kernel compensates an error raised after the home exists, and says when it
+ *     could not: see `unconfirmed`), and the plugin's own for a call that never reached the kernel;
+ *   - `unconfirmed`: the kernel refused AND says its rollback is incomplete: part of the instance
+ *     may still be there (its home, quarantined or whole). Never "nothing was created", whatever
+ *     the code; the form stays held, with nothing to press: the kernel's message, under Details,
+ *     names what to clean up (the Desktop makes this outcome final too);
  *   - `created`: an instance exists (the kernel says so, or the spawn went through and only its
  *     thread is not known): the form stays held, and says where to open it;
  *   - `unknown`: anything else: a code nobody classed, an `oats` that ended with no answer or one
@@ -325,60 +333,66 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
  *     offers Check result, which asks again under the same key.
  * A preview starts nothing: its outcome is always `refused`.
  */
-export type SpawnOutcome = "refused" | "created" | "unknown";
+export type SpawnOutcome = "refused" | "unconfirmed" | "created" | "unknown";
+/** A refusal as the form says it: the sentence (what happened, then what to do), the act that follows, its code, the kernel's own message for Details, and what is known of the instance. */
 export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; detail: string | null; outcome: SpawnOutcome };
 const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
 /** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
 const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
 const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
 /**
+ * The kernel's own word that a spawn's rollback did not finish. Its contract's marker is
+ * `error.details.unconfirmed` (docs/desktop-cli-api.md "Spawn errors": "A code says nothing about
+ * how far the spawn got: details.unconfirmed does"), which the plugin's shared envelope does not
+ * carry (kernel/envelope.ts keeps the code and the message). On every path that sets the marker
+ * for a rollback the kernel also says so in the message, in these words (awebai/oats lib/core.mjs
+ * at 3d834aa3c: "— rollback INCOMPLETE, …"): read here until the envelope carries the marker.
+ */
+const ROLLBACK_INCOMPLETE = /rollback INCOMPLETE/;
+const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+/**
+ * What is known of the instance after a failure, in the order the safety rule is read (`SpawnOutcome`):
+ * `code` is the failure's own (null when it has none), `named` what the tables say of it.
+ */
+function outcomeOf(stage: "preview" | "spawn", code: string | null, message: string, named: Said | undefined, replay: boolean): SpawnOutcome {
+  // A preview starts nothing.
+  if (stage === "preview") return "refused";
+  // The kernel's own word that its rollback did not finish comes first, whatever the code.
+  if (ROLLBACK_INCOMPLETE.test(message)) return "unconfirmed";
+  // An instance exists.
+  if (code !== null && CREATED.has(code)) return "created";
+  // The kernel, or the plugin, says the outcome is not known.
+  if (named !== undefined && named.next === "check-result") return "unknown";
+  // A refusal the tables name: the kernel refused before it made anything, or undid what it made.
+  if (named !== undefined) return "refused";
+  // A call that never reached the kernel made nothing; but a Check result the plugin refused before asking learned nothing.
+  if (code !== null && NEVER_RAN.has(code) && !replay) return "refused";
+  // Anything else: rollback is never inferred.
+  return "unknown";
+}
+
+/**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
- * installed is said as the kernel words it, through the drawer's display filter (`line`; the
- * table's sentence when the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
+ * installed is said as the kernel words it, through the display filter (the table's sentence when
+ * the filter leaves nothing of it, or withholds it). `harnessField`: whether the form shows a
  * Harness field (the provider declares several): a sentence sends a person there only when it does.
  */
 export function spawnProblem(
   reason: { code: string | null; message: string | null },
   stage: "preview" | "spawn" = "preview",
-  {
-    harnessField = true,
-    replay = false,
-    line,
-  }: {
-    harnessField?: boolean;
-    /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */
-    replay?: boolean;
-    /**
-     * The drawer's display filter for one line of the kernel's text: the line as it may be shown,
-     * or null where none of it may (nothing left, or withheld). The one sentence that is the
-     * kernel's own words (a harness that is not installed) is said only through it; without it,
-     * the table's sentence stands.
-     */
-    line?: (text: string) => string | null;
-  } = {},
+  { harnessField = true, replay = false }: { harnessField?: boolean; /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */ replay?: boolean } = {},
 ): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelLine = code === "E_HARNESS_UNAVAILABLE" && line !== undefined && message !== "" ? line(message) : null;
-  const kernelWords = kernelLine !== null && kernelLine !== "" ? said(kernelLine, "change-options") : null;
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
   const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
-  // After the press, what is known: created, refused (a refusal the tables name, or a call that
-  // never ran; but a Check result that the plugin refused before asking learned nothing), else unknown.
-  const outcome: SpawnOutcome =
-    stage === "preview"
-      ? "refused"
-      : reason.code !== null && CREATED.has(code)
-        ? "created"
-        : named !== undefined && named.next === "check-result"
-          ? "unknown"
-          : named !== undefined || (reason.code !== null && NEVER_RAN.has(code) && !replay)
-            ? "refused"
-            : "unknown";
-  const words = outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
+  const outcome = outcomeOf(stage, reason.code, message, named, replay);
+  const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;

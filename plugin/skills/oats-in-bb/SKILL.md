@@ -50,8 +50,20 @@ agents, their homes, identities and mail are OATS's and aweb's.
 - Under an agent's thread header, one line of chips: soul, instance, aweb alias, parent (a link
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
-  a tab in a thread's side panel): Needs you, Working, Finished and not looked at. On the page, a
-  reply box sends a message to the agent you pick, through bb's own send.
+  the OATS tab of a thread that is no agent's): **Needs you** first, one card per agent that waits
+  (who, since when, what it asks), then a summary line ("8 agents · 3 working · 3 need you · …"),
+  tiles for Agents and the pages this release shows, **Working** and **Finished, not looked at**.
+  A card offers the answer the request takes: bb's choices as buttons (an approval, a question
+  with options); a reply box that writes to that agent through bb's own send, for an agent that
+  asks in its own words; "open its thread" where the answer is in the thread; for an agent on
+  tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
+  A message never grants an approval: beside choices it is behind "Write a message instead".
+  The card of an agent that is not running offers neither an answer nor a message (either would
+  start it outside OATS): it offers Start….
+  **New agent** is in the heading's row of every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
+  with no bb thread among them, with its state and who started it. While OATS cannot be read the
+  cards' choices and replies are held until it is read again. The home also says when the
+  installed `oats` is older than the plugin works with, or newer than it reads.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
   to copy), its harness, model and thread, its messaging id, its parent, whether it is ready

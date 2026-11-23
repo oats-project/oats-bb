@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { AutomationKind, AutomationRow, AutomationScheduler, AutomationTest, AutomationTestSource, ScheduleReconciled, ScheduleRunReceipt } from "../contract/automations.js";
 import { automationRowOf, checkAutomationId, counted, eventLabel, list, record, refusedEvents, runOf, skippedItems, sourceCheck, sourceSays, text, type Json } from "./automations.js";
-import { displayLine } from "../app/ui/text.js";
+import { displayLine } from "../model/text.js";
 import { DESCRIPTION_RULE, descriptionValid } from "../model/automations.js";
 import { shaped } from "./envelope.js";
 import { codes, err, ok, type Result } from "./result.js";

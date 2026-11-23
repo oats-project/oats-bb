@@ -20,7 +20,12 @@ edit. `../README.md` says how the first two were recorded.
   preview a person saw and their press. Nothing is created.
 - `spawn-pi-refused.json`: the kernel's refusal of a spawn with `--harness pi` where bb has no pi
   provider it can launch (`E_BACKEND_NOT_READY`, the bb session provider's; the spawn is rolled
-  back). The preview of the same choices answers: the provider is asked at the launch.
+  back), as OATS 0.70.0 printed it: there the preview of the same choices answers, and the
+  provider is asked at the launch.
+- `spawn-preview-pi-refused.json`: the same refusal one step earlier, as OATS 0.70.5 printed it on
+  2026-11-23: from 0.70.1 a preview asks the provider's own check, so the PREVIEW with
+  `--harness pi` is refused ("… would not be launched … nothing was created") and no spawn is
+  asked. The real run keeps whichever of the two its kernel answers.
 - `spawn-preview-named.json`, `spawn-preview-child.json`: the preview of the form filled (a soul,
   an instruction, the name `form-spawned-developer`), independent and as a child of
   `harvest-knowledge-helper` (`--relation child --relative-to … --relative-root …`): the second

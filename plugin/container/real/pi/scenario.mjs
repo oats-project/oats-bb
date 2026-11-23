@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The pi run (README.md beside this file), inside the container once ../setup.sh has finished
-// with REAL_PI=1: bb-app, the OATS kernel a pi deployment runs, the bb session provider, pi with
+// with REAL_PI=1: bb-app, the OATS kernel the real run pins, the bb session provider, pi with
 // the OATS bridge on a mock model, and the plugin installed from the checkout with `oatsBin` set
 // to the recording wrapper (../oats-record.mjs).
 //

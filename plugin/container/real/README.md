@@ -113,7 +113,8 @@ shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/c
 plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
 while the read the claim started is in flight (each status is held 600 ms for that, and the clear is
 made the moment the plugin's `oats status` is seen running in the process list), and the next
-read must start under 1 s after the first ended, which no other read does; then it sets a claim
+read must start under 1 s after the first ended, which no other read does (and never before it
+ended: two calls alive at once fail the step); then it sets a claim
 again, in that second read, and the read after it must have waited the pause (1 s or more): never
 two reads at once in a row. It tries the three up to four times (whether each change lands in the
 read it is meant for is timing) and prints every try's reads and their times. It depends on the

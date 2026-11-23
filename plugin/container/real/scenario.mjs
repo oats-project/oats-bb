@@ -594,28 +594,40 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
  * - the agent sets a claim (its event starts a read) and clears it while that read is in flight
  *   (each status is held 600 ms for that, and the clear is run the moment the plugin's `oats
  *   status` is SEEN running, in the process list: not after a guess of when it started): the read
- *   that follows must start sooner after the first ended than the pause allows any other read. The server counts its pause (1 s at least) from a
- *   moment after the kernel's exit, and the next call's start is after the server's own, so a gap
- *   under 1 s between two calls is a read at once, and nothing else makes one (no reload of the
- *   plugin and no change of its settings happens inside this step);
- * - once that first read is seen to have ended, the agent sets a claim again: it lands in the read
- *   at once, and the read IT asks for must wait the pause (a gap of 1 s or more): never two reads
- *   at once in a row.
- * Whether each change lands in the read it is meant for is timing, so the three are tried up to
- * four times, and every try is printed with its reads and their times. What the run cannot show it
- * says, and does not pass or fail on: a kernel so slow here that the first read of every try took
- * about the limit or more (the server then rightly waits the pause: a NOTE), and a pair after which
- * no third read came (a NOTE: "never two" is then not shown by this run). No limit on elapsed time
- * is asserted: only which rule the reads took.
+ *   that follows must start sooner after the first ended than the pause allows any other read.
+ *   The server counts its pause (1 s at least) from a moment after the kernel's exit, and the
+ *   next call's start is after the server's own, so a gap under 1 s between two calls is a read
+ *   at once, and nothing else makes one (no reload of the plugin and no change of its settings
+ *   happens inside this step). A gap BELOW ZERO is two calls alive at once, which the server
+ *   must never make: it fails the step, and is never taken for a read at once;
+ * - once that first read's record exists and a status is seen running again, the agent sets a
+ *   claim again: it lands in the read at once, and the read IT asks for must wait the pause (a gap
+ *   of 1 s or more to the plugin's next status call, whatever its exit): never two reads at once
+ *   in a row.
+ * Why the first form of this step failed a run by chance: the host's watch is debounced (250 ms),
+ * and `oats instance attention` is quick; with the clear run straight after the set, the two events
+ * were about one debounce apart: under it they reached the server as ONE signal, before any read
+ * had started, and no change landed in a read. The clear was too EARLY, never too late: hence the
+ * wait on a status seen running.
+ * The three changes are tried up to four times, and every try is printed with its reads and their
+ * times. What the run cannot show it says, and does not pass or fail on: a kernel so slow here
+ * that the first read of every try took the server's limit or more, the host call around it
+ * counted (the server then rightly waits the pause: a NOTE), and a pair after which no call came
+ * (a NOTE: "never two" is then not shown by this run). No limit on elapsed time is asserted: only
+ * which rule the reads took.
  */
-const statusReads = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status" && record.exit === 0);
+const statusCalls = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status");
+const statusReads = (from = 0) => statusCalls(from).filter((record) => record.exit === 0);
 async function followedAtOnce(asInstance) {
   const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
   const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
-  const NEAR_MS = 1500; // a first read this long, with the host call around it, is at about the limit for the server
+  // The wrapper's `ms` (its hold included) from which the server's own measure, which holds the host
+  // call around it too (some tens of ms), is at the limit or over it: under this mark the server
+  // must read at once, and a miss is a failure, not a slow kernel.
+  const NEAR_MS = LIMIT_MS - 150;
   const HELD_MS = 600;
   /** Whether an `oats status` of the plugin's is running now: the wrapper's own process (it holds the call HELD_MS before it starts the kernel). */
-  const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record/.test(line) && /\sstatus(\s|$)/.test(line));
+  const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record\s+status(\s|$)/.test(line));
   /** Waits, looking every 25 ms, until `seen()`; false when it did not come in `seconds`. */
   const soon = async (seen, seconds = 15) => {
     const deadline = Date.now() + seconds * 1000;
@@ -629,6 +641,7 @@ async function followedAtOnce(asInstance) {
   const tries = [];
   let pair = null; // { first, second, gap, after }: `after` is the gap to the read after the pair, or null
   let slow = 0;
+  const overlapped = []; // tries in which two status calls of the plugin's were alive at once
   for (let attempt = 1; attempt <= 4 && (pair === null || pair.after === null); attempt += 1) {
     wrapper({ delays: { status: HELD_MS } });
     // Quiet first: no `oats status` of the plugin's ended in the last 3 s (the last read and its
@@ -649,19 +662,24 @@ async function followedAtOnce(asInstance) {
       return since.length >= 2 && since.every((read) => Date.now() - ended(read) > 3000);
     }, 60);
     wrapper({});
-    const reads = statusReads(before);
+    // Every status call of the plugin's since the claim, whatever its exit, in the order they started.
+    const reads = statusCalls(before);
     const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - ended(reads[index]) }));
-    const said = gaps.map(({ first, second, gap }) => `a read of ${first.ms} ms, then ${gap} ms, then a read of ${second.ms} ms`).join("; ");
+    const of = (read) => `a read of ${read.ms} ms${read.exit === 0 ? "" : ` (exit ${read.exit})`}`;
+    const said = gaps.map(({ first, second, gap }) => `${of(first)}, then ${gap} ms, then ${of(second)}`).join("; ");
+    if (gaps.some(({ gap }) => gap < 0)) overlapped.push(`try ${attempt}: ${said}`);
     tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status} ${first ? "with a status seen running" : "with NO status seen running"}, attention ${again.status} ${second ? "with the next status seen running" : "with no next status seen running"}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
     if (reads.length > 0 && reads[0].ms >= NEAR_MS) slow += 1;
-    const at = gaps.findIndex(({ first, gap }) => gap < PAUSE_MS && first.ms <= LIMIT_MS);
+    // A read at once: two calls that ANSWERED, the second started after the first ended and under the pause after it.
+    const at = gaps.findIndex(({ first, second, gap }) => gap >= 0 && gap < PAUSE_MS && first.exit === 0 && second.exit === 0 && first.ms <= LIMIT_MS);
     if (at !== -1 && (pair === null || pair.after === null)) pair = { ...gaps[at], after: gaps[at + 1]?.gap ?? null };
     // The claim of this try is cleared before the next, and before the steps after this one.
     check(asInstance("instance", "attention", "--clear").status === 0, `pacing: the claim of try ${attempt} is cleared`);
   }
   for (const line of tries) show("pacing", line);
+  check(overlapped.length === 0, "pacing: no two oats status calls of the plugin's were alive at once", overlapped.join(" | "));
   if (pair === null && slow === tries.length) {
-    note(`pacing: NOT SHOWN in this run: the first read of every try took ${NEAR_MS} ms or more with the ${HELD_MS} ms it is held here, which is about the server's limit of ${LIMIT_MS} ms or over it, so the server rightly waited the pause: ${tries.join(" | ")}`);
+    note(`pacing: NOT SHOWN in this run: the first read of every try took ${NEAR_MS} ms or more with the ${HELD_MS} ms it is held here, which with the host call around it is the server's limit of ${LIMIT_MS} ms or over it, so the server rightly waited the pause: ${tries.join(" | ")}`);
     return;
   }
   check(

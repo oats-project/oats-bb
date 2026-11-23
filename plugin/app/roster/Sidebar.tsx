@@ -260,7 +260,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             const said = outside.of(agent);
             return threadlessRow(agent, rowParts(said, agentStatus(agent, null, now).state).note ?? shown(oats.soulOf(agent)), said);
           })}
-          {view.elsewhere.map((agent) => threadlessRow(agent, `${shown(oats.soulOf(agent))} · runs in tmux`))}
+          {view.elsewhere.map((agent) => {
+            // An agent on tmux whose session was lost says so in the soul's place ("Stopped · session lost · tmux"): nobody stopped it.
+            const lost = rowParts(outside.of(agent), agentStatus(agent, null, now).state).note;
+            return threadlessRow(agent, lost === null ? `${shown(oats.soulOf(agent))} · runs in tmux` : `${lost} · tmux`);
+          })}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. */}

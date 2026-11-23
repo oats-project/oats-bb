@@ -8,7 +8,7 @@ import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
 import type { Agent, ThreadWhere } from "../../model/types";
 import { state } from "../../model/view";
-import { outside, recorded, sample } from "./rows";
+import { outside, recorded, sample, tmuxRow } from "./rows";
 
 const WHERES: ThreadWhere[] = ["open", "archived", "missing", "none", "unknown"];
 const NOW = Date.parse("2026-11-21T16:00:00.000Z");
@@ -63,8 +63,8 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
     expect(word(exited)).toBe("Failed");
     expect(said(exited, "open", true)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "Its session ended. Restart it, or send a message here.", note: null });
   });
-  it("sessionEnd \"lost\" (stopped with the machine: OATS resumes it) is the one stop that is spared the warning", () => {
-    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "stopped-host", tone: "plain", acts: null });
+  it("sessionEnd \"lost\" (its session ended without OATS stopping it) is the one stop that is spared the warning", () => {
+    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "lost-open", tone: "plain", acts: ["start"] });
   });
   it("with its thread archived in bb: the fact, the row's reason in the soul's place, and the way to it; no warning", () => {
     expect(said(operator, "archived", false)).toEqual({ ...PLAIN, kind: "stopped-archived", sentence: "Its conversation is archived in bb. Start begins a new one.", note: null, archived: true }); // the soul stays on its row
@@ -94,8 +94,9 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
     const kinds = (agent: Agent) => (["archived", "missing"] as const).map((where) => said(agent, where, false)!.kind);
     expect([kinds(lost), kinds(operator)]).toEqual([["lost-archived", "deleted"], ["stopped-archived", "deleted"]]);
   });
-  it("on a thread that is open it stopped with the machine: that OATS starts it again by itself; no warning, and never the operator's sentence", () => {
-    expect(said(lost, "open", true)).toEqual({ ...PLAIN, kind: "stopped-host", sentence: "with the machine. OATS starts it again when the machine is back.", note: "with the machine" });
+  it("on a thread that is open: that nobody stopped it and a message there carries it on; no cause guessed, nothing promised, no warning, and never the operator's sentence", () => {
+    expect(said(lost, "open", true)).toEqual({ ...PLAIN, kind: "lost-open", sentence: "Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation.", note: "session lost", acts: ["start"] });
+    expect(said(lost, "open", true)!.sentence).not.toMatch(/machine|when|again by itself/);
     expect(said(lost, "unknown", false)).toBeNull();
   });
 });
@@ -178,8 +179,24 @@ describe("the three rows that read \"not running\" are never confused", () => {
   });
   it("the three sentences and the three rows' reasons differ, and only the operator's stop says \"without OATS\"", () => {
     expect(new Set(rows.map((row) => row.sentence)).size).toBe(3);
-    expect(rows.map((row) => row.note)).toEqual([null, "with the machine", "not loaded"]);
-    expect(rows.map((row) => /without OATS/.test(row.sentence ?? ""))).toEqual([true, false, false]);
+    expect(rows.map((row) => row.note)).toEqual([null, "session lost", "not loaded"]);
+    expect(rows.map((row) => /starts it again without OATS/.test(row.sentence ?? ""))).toEqual([true, false, false]);
+  });
+});
+
+describe("an agent on tmux: the three recorded rows (OATS 0.70.5, the real run)", () => {
+  it("its session lost (its window killed): \"Stopped\", the reason \"session lost\", and that Start tries to continue its last conversation; nobody stopped it", () => {
+    const lostTmux = tmuxRow("tmux-row-lost.json");
+    expect([lostTmux.backend, word(lostTmux)]).toEqual(["tmux", "Stopped"]);
+    expect(said(lostTmux, "none", false)).toEqual({ ...PLAIN, kind: "lost-tmux", sentence: "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.", note: "session lost" });
+  });
+  it("stopped with OATS (its window left at a shell): \"Stopped\", never \"Failed\", and nothing of this feature's: an operator stopped it", () => {
+    const stoppedTmux = tmuxRow("tmux-row-stopped.json");
+    expect([word(stoppedTmux), said(stoppedTmux, "none", false)]).toEqual(["Stopped", null]);
+  });
+  it("running: nothing", () => {
+    const runningTmux = tmuxRow("tmux-row-running.json");
+    expect([word(runningTmux), said(runningTmux, "none", false)]).toEqual(["Working", null]);
   });
 });
 

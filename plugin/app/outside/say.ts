@@ -14,6 +14,7 @@
 // - bb's answer for that thread id (`Oats.whereOf`): open, archived, missing (deleted), or not known yet.
 // "Archived" is told from "deleted" by bb's answer alone, never by the kernel's message.
 import type { Agent, OutsideOats, ThreadWhere } from "../../model/types";
+import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import {
   ARCHIVED_FACT,
@@ -27,8 +28,9 @@ import {
   NOT_LOADED_NOTE,
   NOT_SHOWN_NOTE,
   OUTSIDE_RECORDED,
-  STOPPED_HOST,
-  STOPPED_HOST_NOTE,
+  LOST_NOTE,
+  LOST_OPEN,
+  LOST_TMUX,
   STOPPED_OPEN,
 } from "./words";
 
@@ -39,8 +41,10 @@ export type Kind =
   | "outside"
   /** Stopped, and not with the host, on a thread that is open: a message there starts it again without OATS. */
   | "stopped-open"
-  /** Stopped with the host, on a thread that is open: OATS starts it again by itself. */
-  | "stopped-host"
+  /** Its session was lost, on bb, on a thread that is open: a message there carries it on. */
+  | "lost-open"
+  /** Its session was lost, on tmux: Start tries to continue its last conversation. */
+  | "lost-tmux"
   /** Stopped (its session not lost), and bb has its thread archived: what a stop leaves once the provider archives at stop. */
   | "stopped-archived"
   /** OATS lost the session and bb has the thread archived: its process may still run. */
@@ -123,7 +127,9 @@ function whereNote(where: ThreadWhere): string | null {
  *   conversation on, and that Start begins a new one. Start.
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said | null {
-  if (agent.backend === "tmux") return null;
+  // An agent on tmux has no thread in bb: this feature says one thing of it, that its session was
+  // lost (the one reading of the row, model/rest.ts), so that it never reads as stopped by a person.
+  if (agent.backend === "tmux") return rest(agent) === "lost" ? { ...base, kind: "lost-tmux", sentence: LOST_TMUX, note: LOST_NOTE } : null;
   const note = attached ? null : whereNote(where);
   const archived = where === "archived";
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
@@ -162,7 +168,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
         // release or a thread a person unarchived, and the warning stays for exactly that case.
         // Start is this feature's on that line, so that the line has the act its sentence names
         // whatever its state's word is (bb's own question on the thread makes it "Needs you").
-        if (lost) return { ...base, kind: "stopped-host", sentence: STOPPED_HOST, note: STOPPED_HOST_NOTE };
+        if (lost) return { ...base, kind: "lost-open", sentence: LOST_OPEN, note: LOST_NOTE, acts: ["start"] };
         // Every other stop warns: a safety sentence fails CLOSED. An operator's stop (`sessionEnd:
         // "stopped"`), a harness that ended by itself ("exited"), and a row that names no end of
         // its session (the kernel gives none while a retire is pending, a rollback is incomplete or

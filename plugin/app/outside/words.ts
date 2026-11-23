@@ -22,11 +22,20 @@ export const STOPPED_OPEN = "A message sent here in bb starts it again without O
 export const STOPPED_OPEN_ASKING = `OATS recorded it stopped. ${STOPPED_OPEN}`;
 
 /**
- * Stopped WITH THE HOST (the machine went down, or `oats host run` stopped it as the machine
- * stopped): OATS resumes it by itself when the machine is back. No warning: nothing is wrong.
+ * Its session was LOST (`sessionEnd: "lost"`): it ended without OATS stopping it. The kernel
+ * names no cause and no time of the loss (the host went down, its harness was killed, a tmux
+ * window died), so the plugin guesses none, and promises nothing the kernel may not do (nothing
+ * brings a lost session back by itself on a host that does not run `oats host run`). ONE reason
+ * word on the row, for an agent on bb and on tmux; two sentences, because what a person does
+ * differs. No warning: nobody did anything wrong.
  */
-export const STOPPED_HOST = "with the machine. OATS starts it again when the machine is back.";
-export const STOPPED_HOST_NOTE = "with the machine";
+export const LOST_NOTE = "session lost";
+/** On bb, its thread open: a message there is how it comes back (the Start dialog says the same first). */
+export const LOST_OPEN = "Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation.";
+/** On tmux: bb cannot write to it; Start is the way (it resumes: the lifecycle's dialog says what happened after). */
+export const LOST_TMUX = "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.";
+/** After it, where the row has the time of its last start: the start whose session was lost. Never "lost since": the kernel records no time of the loss. */
+export const lastStarted = (when: string): string => `Last started ${when}`;
 
 /** Stopped (its session not lost), and bb has its thread archived (what a stop leaves once the provider archives at stop): the fact, and the row opens the conversation to read. */
 export const ARCHIVED_FACT = "Its conversation is archived in bb. Start begins a new one.";

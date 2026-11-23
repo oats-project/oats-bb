@@ -14,12 +14,12 @@ import { HELD_REASON, Unreadable } from "../roster/unreadable";
 import { usePanelEvents } from "../panel/read";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
-import { agentName } from "../ui/words";
+import { agentName, waitingClock } from "../ui/words";
 import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
+import { lastStarted, OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
 
 const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
 
@@ -42,7 +42,7 @@ export function OutsideActs({ instance, acts, held }: { instance: string; acts: 
 }
 
 /** The state each reason is said after: `said()` reads the agent's state without bb's own question on its thread. */
-const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "stopped-host": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
+const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "lost-open": "stopped", "lost-tmux": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
 
 /**
  * Whether a reason belongs on a line or a row that draws `state`: the reason follows ONE state,
@@ -96,6 +96,8 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
   if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
   if (!follows(said, status.state)) return own;
   if (said.kind === "outside") return { since: null, detail: status.since === null ? said.sentence : `${said.sentence} ${status.since}`, tone };
+  // A lost session has no time: the kernel records none of the loss (never "lost since").
+  if (said.kind === "lost-open" || said.kind === "lost-tmux") return { since: null, detail: said.sentence, tone };
   return { since: status.since, detail: said.sentence, tone };
 }
 
@@ -223,6 +225,8 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const where = roster.whereOf(agent);
   const said = sayOf(agent, where, attached);
+  const now = useNow();
+  const started = agent.startedAt == null ? "" : waitingClock(agent.startedAt, now);
   // The header's own acts for this agent now (`AgentActs` draws exactly these).
   const headed = actsFor(useOats(), agent.instance).map((act) => act.verb);
   // Nothing to draw: an agent on its thread with no report; and one with no sentence and no report
@@ -236,6 +240,12 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
           {said.sentence}
         </p>
       )}
+      {/* A lost tmux session: the time of the start whose session was lost, where the row has it (the kernel records no time of the loss). */}
+      {said.kind === "lost-tmux" && started !== "" ? (
+        <p data-testid="oats-outside-last-started" className="m-0 min-w-0 break-words text-muted-foreground">
+          {lastStarted(started)}
+        </p>
+      ) : null}
       {/* The panel's header has the lifecycle's acts for the agent's state (`AgentActs`). One act is not among
           them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here, under its sentence. */}
       {attached || said.kind !== "lost-archived" ? null : (

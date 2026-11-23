@@ -2,7 +2,7 @@
   "package": "oats.bb",
   "version": "0.3.0",
   "compatibility": {
-    "oats": ">=0.70.0"
+    "oats": ">=0.70.5"
   },
   "description": "OATS on bb: the bb session provider (an instance as one bb thread).",
   "capabilities": [

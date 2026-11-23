@@ -78,6 +78,12 @@ async function modelRequests() {
 }
 /** How many model requests introduced the text: it is in the request's last message. */
 const landed = async (marker) => (await modelRequests()).filter((r) => r.lastText.includes(marker)).length;
+/** Whether the turn that `marker` opened was sent with `earlier` in its conversation: the
+ *  whole request, as the mock kept it. The same conversation, not only the same thread id. */
+const carried = async (marker, earlier) => {
+  const [request] = (await modelRequests()).filter((r) => r.lastText.includes(marker));
+  return request !== undefined && (await sh(`grep -c '${earlier}' mock-req-${request.n}.json || true`)).trim() !== "0";
+};
 const armTool = (command) => sh("cat > mock-next-cmd", { input: command });
 
 /** A fresh home in the container, as the kernel leaves one: TASK.md, and Claude's project
@@ -108,6 +114,11 @@ const processesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do 
 const claudesIn = async (home) => Number((await sh(`for p in /proc/[0-9]*; do case "$(readlink $p/cwd 2>/dev/null)" in ${home}*) tr '\\0' ' ' < $p/cmdline | grep -c 'bin/claude ' ;; esac; done | grep -c 1 || true`)).trim());
 /** The names of the processes that carry the thread's id (bb's BB_THREAD_ID). */
 const carriers = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then cat $p/comm; fi; done 2>/dev/null || true`)).split("\n").filter(Boolean);
+
+/** The parents of the processes named `name` that carry the thread's id: each one's
+ *  command line, word by word. (bb's process tree, which the provider reads to tell the
+ *  harness bb started for a thread from one its agent left running: lib/processes.mjs.) */
+const harnessParents = async (threadId, name) => (await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "${name}" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then tr '\\0' ' ' < /proc/$(awk '{print $4}' $p/stat)/cmdline; echo; fi; done`)).split("\n").filter(Boolean).map((line) => line.trim().split(" "));
 
 // The threads the tests launched, stopped after each test: bb keeps a thread's Claude
 // loaded while it is idle, and a dozen of them starve the bb servers that later tests
@@ -258,11 +269,27 @@ test("T1 launch: the thread exists in a project rooted at the home, and a hook s
   // request's body).
   assert.notEqual((await sh("grep -l 'TASK-t1 say hi' mock-req-*.json | head -1")).trim(), "");
 
+  // bb's process tree, which `running` rests on (seen at bb-app 0.50.1; a bb that moves it
+  // fails here, and the provider would then read every thread at rest as not running): the
+  // thread's Claude is a direct child of bb-app's bridge worker, run by node under this
+  // file name, with the provider it runs as a word of its own. Nothing of it names the thread.
+  const parents = await harnessParents(endpoint.threadId, "claude");
+  assert.equal(parents.length, 1, JSON.stringify(parents));
+  assert.ok(parents[0].some((word) => word.endsWith("/bb-app/host-daemon/dist/bb-provider-bridge-worker.mjs")), parents[0].join(" "));
+  assert.ok(parents[0].includes("provider-claude-code"), parents[0].join(" "));
+  assert.ok(!parents[0].join(" ").includes(endpoint.threadId), "bb's runner names the thread now: the provider could ask for this thread's runner");
+  // Idle after its turn, its Claude still loaded in the home: it runs. (bb says `idle` of a
+  // stopped thread too: `running` is read from the home's own harness process.)
   const inspect = await provider("inspect", { home, endpoint });
-  assert.deepEqual(inspect.result, { present: true, state: "unknown", running: null, open: { label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+  assert.deepEqual(inspect.result, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
-test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers sent and lands once", async () => {
+// Changed with contract r24, A15(1). This test said "input to a stopped thread answers sent
+// and lands once": a tell restarted a thread OATS had stopped, which is what a message in
+// bb's composer did behind OATS's back. The provider's stop now archives the thread, and
+// the stopped step says what follows: the tell is refused and nothing restarts, and the
+// restart bb makes at a tell (still bb's fact, still pinned) is reached by unarchiving first.
+test("T2 input to an idle, a mid-tool and an errored thread answers sent and lands once; a thread OATS stopped is archived: a tell to it is refused and restarts nothing, until a person unarchives it", async () => {
   const { home, endpoint } = await launched("t2");
   const id = endpoint.threadId;
   await waitStatus(id, "idle");
@@ -283,11 +310,81 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   await tell("T2-IDLE marker");
   await once("T2-IDLE");
 
-  // stopped by the provider: bb shows idle again, and a tell restarts the thread
+  // stopped by the provider: the thread is settled and archived, and no Claude is left in the home
   assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
   assert.equal(await threadStatus(id), "idle");
-  await tell("T2-STOPPED marker");
-  await once("T2-STOPPED");
+  assert.notEqual((await bbJson(`thread show ${id}`)).thread.archivedAt, null, "the stop archived the thread");
+  await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
+  // the conversation is still bb's, readable, among the project's archived threads
+  assert.deepEqual((await bbJson(`thread list --archived --project ${endpoint.projectId}`)).map((thread) => thread.id), [id]);
+  // a message to it, as bb's composer or a person's `bb thread tell` sends one: bb refuses
+  // it, in its own words (a bb that takes it again fails here: the stop's archive rests on it)
+  const raw = JSON.parse(await sh(`bb thread tell ${id} 'T2-STOPPED-RAW marker' --json`, { ok: false }));
+  assert.equal(raw.ok, false, JSON.stringify(raw));
+  assert.match(raw.error.message, /archived/i);
+  // and through the provider: refused, nothing sent
+  const refused = await provider("input", { home, endpoint, text: "T2-STOPPED marker" });
+  assert.equal(refused.error?.code, "E_SESSION_INPUT_FAILED", JSON.stringify(refused));
+  assert.match(refused.error.message, /archived/i);
+  // nothing restarted: no turn reached the model, no harness process in the home, and the
+  // provider reads the home's session as gone
+  await sleep(6_000);
+  assert.equal(await landed("T2-STOPPED"), 0, "a tell to a thread OATS stopped reached the model");
+  assert.equal(await processesIn(home), 0, "a tell to a thread OATS stopped started a process in the home");
+  assert.deepEqual(await carriers(id), []);
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
+  // unarchived by hand (a person's act in bb, outside OATS): bb's own restart at a tell
+  // is still there. The tell answers sent, Claude starts again on the same conversation
+  // and runs the turn once, and the provider reads the thread present
+  await sh(`bb thread unarchive ${id} --json`);
+  assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null);
+  await tell("T2-UNARCHIVED marker");
+  await once("T2-UNARCHIVED");
+  assert.equal(await carried("T2-UNARCHIVED", "T2-IDLE"), true, "the restarted turn carries the conversation from before the stop");
+  assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.present, true);
+  assert.equal(await landed("T2-STOPPED"), 0);
+
+  // stopped with the host (`reason: "host"`, the kernel's word for `oats host run`'s
+  // shutdown): a loss the kernel undoes by an input to this same thread. The thread is
+  // stopped and NOT archived, and the input starts Claude again on the same conversation
+  // Before it, the agent starts a claude of its own in its home and leaves it running
+  // detached (here a process that goes by that name): it inherits the thread's id, and
+  // outlives every stop of the thread. It is not the harness bb started for the thread.
+  await armTool("setsid nohup bash -c 'exec -a claude sleep 900' >/dev/null 2>&1 & echo started");
+  await tell("T2-DETACH run the tool");
+  await once("T2-DETACH");
+  const detached = async () => (await sh(`for p in /proc/[0-9]*; do if tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${id}' && [ "$(tr '\\0' ' ' < $p/cmdline)" = "claude 900 " ]; then readlink $p/cwd; fi; done`)).trim();
+  assert.equal(await detached(), home, "the detached process carries the thread's id, is named claude and works in the home");
+  // (and the thread is idle after a turn, its Claude loaded in the home, and reads running)
+  assert.equal(await threadStatus(id), "idle");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "an idle thread whose harness is loaded in the home runs");
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [true]);
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10, reason: "host" })).result, { stopped: true });
+  // At once, with no wait: the stop answered only when the harness had left the home, and
+  // what the agent left running there (it is still there) is not taken for it. A home
+  // stopped with the host is never read as one that came back.
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false, "right after a stop with the host the home read as running");
+  assert.equal(await detached(), home, "the detached process outlived the stop");
+  assert.ok(!(await carriers(id)).includes("claude"), "the thread's own Claude is gone");
+  // That `false` is said at the bb the provider is pinned to, where bb's runner is known.
+  // Against another pin (as after a bb bump, where bb may have moved its runner) the same
+  // process cannot be told from a harness, and reads null: never true, and never a refusal.
+  const elsewherePinned = await provider("inspect", { home, endpoint }, { ...SETTINGS, version: "0.0.1" });
+  assert.equal(elsewherePinned.ok, true, JSON.stringify(elsewherePinned));
+  assert.equal(elsewherePinned.result.running, null);
+  assert.equal((await bbJson(`thread show ${id}`)).thread.archivedAt ?? null, null, "a stop with the host archived the thread: the kernel's resume would be refused");
+  const hostStopped = await provider("inspect", { home, endpoint });
+  // The same thread, still `idle` for bb and still live: its harness is gone, and it reads
+  // so. This is what tells the kernel a home stopped with the host from one that came back.
+  assert.deepEqual({ present: hostStopped.result.present, state: hostStopped.result.state, running: hostStopped.result.running }, { present: true, state: "unknown", running: false });
+  assert.deepEqual((await provider("inspectMany", { homes: [{ home, endpoint }] })).result.results.map((result) => result.running), [false]);
+  await tell("T2-HOST-RESUMED marker");
+  await once("T2-HOST-RESUMED");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true, "and it runs again");
+  assert.equal(await carried("T2-HOST-RESUMED", "T2-IDLE"), true, "the resumed turn carries the conversation from before the stop");
+  assert.ok((await claudesIn(home)) >= 1, "the thread's Claude runs again");
+  await sh("pkill -f '^claude 900' || true");
 
   // mid-tool: a turn that runs an 8 s tool; the tell is steered into the turn
   await armTool("node -e \"setTimeout(()=>console.log('T2-SLEPT'),8000)\"");
@@ -316,7 +413,8 @@ test("T2 input to an idle, a stopped, a mid-tool and an errored thread answers s
   assert.ok((await claudesIn(home)) >= 1, "bb released the Claude of a thread whose turn failed: the error rule may no longer be needed for Claude");
   assert.ok((await carriers(id)).includes("claude"), "the thread's Claude carries BB_THREAD_ID, under the name the provider looks for");
   const errored = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: null });
+  // (`running` is read from the processes, as for an idle thread: its Claude works in the home.)
+  assert.deepEqual({ present: errored.result.present, state: errored.result.state, running: errored.result.running }, { present: true, state: "unknown", running: true });
   await sh("rm mock-error");
   await tell("T2-ERROR marker");
   await once("T2-ERROR");
@@ -424,7 +522,10 @@ test("T4 a queued tell is withdrawn: INPUT_QUEUED, and nothing lands later", asy
   await waitFor("T4-AGAIN to land", async () => (await landed("T4-AGAIN")) === 1);
 });
 
-test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's stoppedAt is what refuses (provider half)", async () => {
+// Changed with contract r24, A15(1): after the stop the thread was live and at rest, and
+// only the retire hook archived it. The stop archives it now, so what the provider says
+// of a stopped thread is "gone" from the stop on, and the retire finds nothing live.
+test("T5 stop, then inspect and input: the stop archives the thread, so the provider reads it gone and bb refuses a tell (provider half; the kernel's stoppedAt refuses before either)", async () => {
   const { home, endpoint } = await launched("t5");
   await waitStatus(endpoint.threadId, "idle");
   await armTool("node -e \"setTimeout(()=>console.log('T5-SLEPT'),30000)\"");
@@ -432,32 +533,138 @@ test("T5 stop, then inspect and input: bb has no stopped state, so the kernel's 
   await waitStatus(endpoint.threadId, "active");
   await waitFor("the tool to be running", async () => (await sh("cat mock-next-cmd 2>/dev/null || true")) === "");
 
+  // bb's fact that the stop's order rests on (stop and confirm, archive, stop and confirm
+  // again): bb archives a thread that is in a turn, and the turn goes on in the archived
+  // thread. So an archive alone stops nothing, and a turn that starts just before it must
+  // be stopped after it.
+  const midTurn = JSON.parse(await sh(`bb thread archive ${endpoint.threadId} --json`, { ok: false }));
+  assert.equal(midTurn.ok, true, JSON.stringify(midTurn));
+  assert.equal(await threadStatus(endpoint.threadId), "active", "bb ended the turn of a thread it archived: the stop after the archive may no longer be needed");
+  assert.ok((await claudesIn(home)) >= 1);
+  await sh(`bb thread unarchive ${endpoint.threadId} --json`);
+
   const stopped = await provider("stop", { home, endpoint, graceSeconds: 10 });
   assert.deepEqual(stopped.result, { stopped: true });
   // After the stop no process works in the home: bb released the thread's Claude and the
   // tool it ran (the kernel scans the home for such processes before it retires it).
   const working = async () => (await sh(`for p in /proc/[0-9]*; do readlink $p/cwd 2>/dev/null; done | grep -c '^${home}' || true`)).trim();
   await waitFor("no process to work in the home", async () => (await working()) === "0", { timeoutMs: 20_000 });
-  // What the provider can say of a stopped thread is bb's word: settled, running unknown.
-  // "stopped, input refused" is the kernel's answer from its own stoppedAt, without calling
-  // the provider (contract item 1; spec K1 T4).
-  const inspect = await provider("inspect", { home, endpoint });
-  assert.deepEqual({ present: inspect.result.present, state: inspect.result.state, running: inspect.result.running }, { present: true, state: "unknown", running: null });
-  // The retire hook then archives the thread; after that nothing live runs in the home.
+  // The stop archived the thread (bb has no stopped state: it reads idle, archived).
+  const shown = (await bbJson(`thread show ${endpoint.threadId}`)).thread;
+  assert.equal(shown.status, "idle");
+  assert.notEqual(shown.archivedAt, null);
+  // An archived thread is no longer the home's session: bb refuses a tell to it, so the
+  // provider reads it as missing (a person archiving it in bb's UI gives the same).
+  // "stopped, input refused" is also the kernel's answer from its own stoppedAt, without
+  // calling the provider (contract item 1; spec K1 T4).
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
   // A stop with no endpoint (the kernel after a launch whose answer was lost) finds the
-  // home's thread by itself, and has nothing left to stop.
+  // home's threads by itself, and has nothing live left to stop; nor has the retire hook
+  // anything left to archive. Its receipt still says what bb holds of the home: retired,
+  // and the thread the stop archived (the retire of a running agent is this sequence: the
+  // kernel's stop, then the hook).
   assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10 })).result, { stopped: true });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
   assert.deepEqual(retired, { meta: { retired: true, archived: [endpoint.threadId] } });
-  assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
-  // An archived thread is no longer the home's session: bb refuses a tell to it, so the
-  // provider reads it as missing (a person archiving it in bb's UI gives the same).
-  assert.deepEqual((await provider("inspect", { home, endpoint })).result, { present: false, state: "stopped", running: false });
+  // A home bb has no thread of at all (it never ran on bb) is the one that answers "nothing-to-delete".
+  const never = JSON.parse((await sh(`OATS_INSTANCE_HOME=/home/node/homes/t5-never-on-bb OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
+  assert.deepEqual(never, { meta: { retired: false, reason: "nothing-to-delete" } });
   const told = await provider("input", { home, endpoint, text: "T5-ARCHIVED marker" });
   assert.equal(told.ok, false);
   assert.equal(told.error.code, "E_SESSION_INPUT_FAILED");
   assert.match(told.error.message, /archived/i);
   assert.equal(await landed("T5-ARCHIVED"), 0);
+});
+
+// The kernel sends the homes OATS stopped in the same inspectMany as the running ones
+// (contract r28, A19). So a thread that is stopped and archived, or deleted, is answered in
+// its own entry, and never fails the call: a failed call would send every running home of
+// that call back to an inspect of its own, at every status read.
+test("inspectMany answers a running, a stopped-and-archived and a deleted thread entry by entry, in one call that is ok", async () => {
+  const running = await launched("many-running");
+  const stopped = await launched("many-stopped");
+  const deleted = await launched("many-deleted");
+  for (const { endpoint } of [running, stopped, deleted]) await waitStatus(endpoint.threadId, "idle");
+  // The second home is stopped by the provider, which archives its thread.
+  assert.deepEqual((await provider("stop", { home: stopped.home, endpoint: stopped.endpoint, graceSeconds: 10 })).result, { stopped: true });
+  assert.notEqual((await bbJson(`thread show ${stopped.endpoint.threadId}`)).thread.archivedAt, null);
+  // The third home's thread is deleted in bb (stopped first: bb keeps a deleted thread's Claude otherwise).
+  await sh(`bb thread stop ${deleted.endpoint.threadId} --json >/dev/null && bb thread delete --yes ${deleted.endpoint.threadId} --json`);
+  const gone = JSON.parse(await sh(`bb thread show ${deleted.endpoint.threadId} --json`, { ok: false }));
+  assert.ok(gone.ok === false || gone.thread?.deletedAt, `bb still shows the deleted thread: ${JSON.stringify(gone).slice(0, 200)}`);
+
+  const open = (endpoint) => ({ label: "Open in bb", url: `${SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` });
+  const answer = await provider("inspectMany", { homes: [running, stopped, deleted].map(({ home, endpoint }) => ({ home, endpoint })) });
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  assert.deepEqual(answer.result, { results: [
+    { present: true, state: "unknown", running: true, open: open(running.endpoint) },
+    { present: false, state: "stopped", running: false },
+    { present: false, state: "stopped", running: false },
+  ] });
+  // And in any order, among entries that are another matter: a home bb never saw; a
+  // record that names a thread of another project than its own (answered from that
+  // thread: it is live, and its harness does not work in this home); and a record whose
+  // project holds another home's live thread (that entry's own error, "one home is one
+  // thread", and nobody else's).
+  const mixed = await provider("inspectMany", { homes: [
+    { home: deleted.home, endpoint: deleted.endpoint },
+    { home: "/home/node/homes/many-never", endpoint: { server: SERVER, projectId: "proj_never0000", threadId: "thr_never0000" } },
+    { home: stopped.home, endpoint: { ...stopped.endpoint, threadId: running.endpoint.threadId } },
+    { home: stopped.home, endpoint: { ...stopped.endpoint, projectId: running.endpoint.projectId } },
+    { home: running.home, endpoint: running.endpoint },
+  ] });
+  assert.equal(mixed.ok, true, JSON.stringify(mixed));
+  assert.deepEqual(mixed.result.results.map((result) => (result.error ? result.error.code : [result.present, result.state, result.running])),
+    [[false, "stopped", false], [false, "stopped", false], [true, "unknown", false], "E_SESSION_UNAVAILABLE", [true, "unknown", true]]);
+  // The single inspect of each agrees.
+  for (const [subject, present] of [[running, true], [stopped, false], [deleted, false]]) {
+    assert.equal((await provider("inspect", { home: subject.home, endpoint: subject.endpoint })).result.present, present);
+  }
+});
+
+// Contract r24, A15(1), its safety edge: the stop archives the home's own thread, and
+// never a thread a person opened in the home's bb project for other work.
+test("a person's own thread in the home's bb project is never archived by the provider's stop, with or without an endpoint", async () => {
+  const { home, endpoint } = await launched("person");
+  await waitStatus(endpoint.threadId, "idle");
+  // A person's own thread, made with bb's own spawn in that project: nothing of the provider's.
+  // (A first turn's prompt is not the last message of its model request: it is counted, not searched for.)
+  const since = (await modelRequests()).length;
+  const own = await bbJson(`thread spawn --project ${endpoint.projectId} --provider claude-code --model ${MODEL} --permission-mode full --prompt 'MARK-PERSON-OWN say hi' --title 'A person own thread'`);
+  started.push(own.id);
+  await waitFor("the person's thread's first turn", async () => (await modelRequests()).length > since, { timeoutMs: 120_000 });
+  await waitStatus(own.id, "idle");
+  const asItIs = async () => {
+    const { thread } = await bbJson(`thread show ${own.id}`);
+    return { status: thread.status, archivedAt: thread.archivedAt ?? null, deletedAt: thread.deletedAt ?? null, title: thread.title, projectId: thread.projectId };
+  };
+  const before = await asItIs();
+  assert.deepEqual(before, { status: "idle", archivedAt: null, deletedAt: null, title: "A person own thread", projectId: endpoint.projectId });
+  const live = async () => (await bbJson(`thread list --project ${endpoint.projectId} --include-hidden`)).map((thread) => thread.id).sort();
+  assert.deepEqual(await live(), [endpoint.threadId, own.id].sort());
+
+  // A stop with the home's endpoint: that thread is stopped and archived, and the person's
+  // is as it was: not archived, and not stopped either (its agent is still loaded).
+  assert.deepEqual((await provider("stop", { home, endpoint, graceSeconds: 10 })).result, { stopped: true });
+  assert.notEqual((await bbJson(`thread show ${endpoint.threadId}`)).thread.archivedAt, null);
+  assert.deepEqual(await asItIs(), before);
+  assert.deepEqual(await live(), [own.id]);
+  assert.ok((await carriers(own.id)).includes("claude"), "a stop with an endpoint touched a thread that is not the home's");
+
+  // A stop with no endpoint stops every live thread that runs in the home, as it did
+  // before (the kernel sends it when a launch may have started a thread nobody recorded),
+  // and archives only one bb made at or after the time that launch was sent: with no time,
+  // and with a time after the person's thread was made, theirs is stopped and never archived.
+  for (const extra of [{}, { launchSent: new Date().toISOString() }]) {
+    assert.deepEqual((await provider("stop", { home, endpoint: null, graceSeconds: 10, ...extra })).result, { stopped: true });
+    assert.deepEqual(await asItIs(), before, JSON.stringify(extra));
+    assert.deepEqual(await live(), [own.id]);
+  }
+  await waitFor("the person's thread's agent to be gone", async () => !(await carriers(own.id)).includes("claude"), { timeoutMs: 20_000 });
+  // It is still theirs to use: bb takes a message to it, and runs the turn.
+  await sh(`bb thread tell ${own.id} 'MARK-PERSON-AGAIN' >/dev/null`);
+  await waitFor("the person's next turn", async () => (await landed("MARK-PERSON-AGAIN")) === 1, { timeoutMs: 90_000 });
+  await waitStatus(own.id, "idle");
 });
 
 // What the kernel relies on after a spawn that died while the launch ran: its receipt says
@@ -512,7 +719,9 @@ test("a launch whose caller is killed mid-launch: stop with no endpoint finds th
   assert.equal(started.ok, true, JSON.stringify(started));
   await waitStatus(started.result.endpoint.threadId, "idle");
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId] } });
+  // The receipt names every thread of the home archived in bb now: the one the hook
+  // archived first, then the one found archived already (the killed launch's).
+  assert.deepEqual(retired, { meta: { retired: true, archived: [started.result.endpoint.threadId, thread.id] } });
   assert.deepEqual(await live(), []);
 });
 
@@ -539,7 +748,8 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
 
     // A second home is launched behind it: bb makes the thread and holds its first turn.
     const held = await launched("queue-held");
-    const row = async () => (await bbJson("thread list --include-hidden")).find((thread) => thread.id === held.endpoint.threadId);
+    // (Archived threads included: the stop below archives this one, contract r24, A15(1).)
+    const row = async () => (await bbJson("thread list --include-hidden --include-archived")).find((thread) => thread.id === held.endpoint.threadId);
     await waitFor("bb to hold the second home's turn in line", async () => (await row()).queuedWork === "waiting");
     assert.equal((await row()).status, "pending");
     const queue = await bbJson(`thread queue list ${held.endpoint.threadId}`);
@@ -552,6 +762,7 @@ test("a turn bb holds in line: inspect reads the thread running, and a stop or a
     assert.deepEqual((await provider("stop", { home: held.home, endpoint: held.endpoint, graceSeconds: 10 })).result, { stopped: true });
     assert.deepEqual(await bbJson(`thread queue list ${held.endpoint.threadId}`), [], "the held turn was withdrawn");
     assert.equal((await row()).queuedWork, "none");
+    assert.notEqual((await row()).archivedAt, null, "and the stopped thread is archived");
 
     // A third home, held the same way, is retired instead of stopped: the retire hook
     // withdraws its held turn before it archives the thread.
@@ -618,7 +829,8 @@ test("a thread archived in bb keeps its Claude: a start, a stop and a retire eac
   await sh(`bb thread archive ${fourth.result.endpoint.threadId} --json`);
   await waitFor("one Claude in the home", async () => (await claudesIn(home)) === 1, { timeoutMs: 20_000 });
   const retired = JSON.parse((await sh(`OATS_INSTANCE_HOME=${home} OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} retire-hook`)).trim().split("\n").pop());
-  assert.deepEqual(retired, { meta: { retired: false, reason: "nothing-to-delete" } }, "nothing live to archive");
+  // Nothing live to archive; the receipt names the home's four threads, all archived in bb.
+  assert.deepEqual({ ...retired.meta, archived: [...retired.meta.archived].sort() }, { retired: true, archived: [first.endpoint.threadId, second.result.endpoint.threadId, third.result.endpoint.threadId, fourth.result.endpoint.threadId].sort() });
   await waitFor("no process to work in the home", async () => (await processesIn(home)) === 0, { timeoutMs: 20_000 });
 });
 
@@ -849,4 +1061,33 @@ test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", a
   assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:48886 bb thread list --json")), [], "no thread was started on the exposed server");
   // The first server, on loopback, still reads ready.
   assert.equal((await check()).result.status, "ready");
+});
+
+// What becomes of a thread's harness when bb's host daemon ends under it (seen at bb-app
+// 0.50.1, recorded here; test/contract/pi.test.mjs has the same for pi): bb-app starts the
+// daemon again, the harness is gone with the old one (no process is left that carries the
+// thread's id: none reparented, so the provider's "a child of bb's runner" has no orphan
+// to miss), the thread still reads idle, and the provider reads it as not running. A tell
+// starts a harness under the new daemon's runner. Last in the file: it ends bb's daemon.
+test("bb's host daemon ended while a thread's Claude is loaded: the Claude goes with it, the thread reads idle and not running, and a tell starts it again", async () => {
+  const { home, endpoint } = await launched("daemon");
+  await waitStatus(endpoint.threadId, "idle");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
+  // The daemon of the thread's bb alone: the parent of the thread's runner (another bb
+  // an earlier test started in this container has a daemon of its own).
+  const [daemon] = await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = "claude" ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${endpoint.threadId}'; then runner=$(awk '{print $4}' $p/stat); awk '{print $4}' /proc/$runner/stat; fi; done`).then((out) => out.trim().split("\n"));
+  assert.match(await sh(`tr '\\0' ' ' < /proc/${daemon}/cmdline`), /\/host-daemon\/dist\/daemon-bundle\.mjs $/, "the runner's parent is bb's host daemon");
+  await sh(`kill -KILL ${daemon}`);
+  await waitFor("the thread's Claude to be gone", async () => (await carriers(endpoint.threadId)).length === 0, { timeoutMs: 30_000 });
+  await waitFor("bb to be ready with a new daemon", async () => (await check()).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
+  assert.equal(await threadStatus(endpoint.threadId), "idle", "bb's word did not change");
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, false);
+  assert.deepEqual((await provider("input", { home, endpoint, text: "DAEMON-AFTER marker" })).result, { submitted: true, verified: true });
+  await waitFor("the turn after the daemon's restart", async () => (await landed("DAEMON-AFTER")) === 1, { timeoutMs: 90_000 });
+  await waitStatus(endpoint.threadId, "idle");
+  // Every Claude of the thread is a child of bb's runner for its provider, under the new
+  // daemon. (Seen once after such a restart: two of them for a moment, each under a runner.)
+  const parents = await harnessParents(endpoint.threadId, "claude");
+  assert.ok(parents.length >= 1 && parents.every((words) => words.some((word) => word.endsWith("/bb-provider-bridge-worker.mjs")) && words.includes("provider-claude-code")), JSON.stringify(parents));
+  assert.deepEqual((await provider("inspect", { home, endpoint })).result.running, true);
 });

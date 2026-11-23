@@ -7,7 +7,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
 import { firstLine, THREADS_FAILED } from "../oats";
-import { onWindowReset } from "../store";
 import type { Oats } from "../oats";
 import { useNow } from "./now";
 import { Button, LINK, Notice, TARGET } from "../ui";

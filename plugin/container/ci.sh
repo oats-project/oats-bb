@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs on the host (a developer's machine or a CI runner) and does everything else in a container:
-#   container/ci.sh [all|unit|live|real]   (default: all)
+#   container/ci.sh [all|unit|live|real|pi]   (default: all)
 # The container gets 2 CPUs and 6 GB, no mount, no port, no Docker socket and nothing of the host's
 # home: the checkout is copied in with tar, and the artefacts (test output, logs, screenshots) are
 # copied out to container/out/ (or, when that holds another's artefacts, container/out.<owner>/:
@@ -8,18 +8,35 @@
 #   KEEP=1            leave the container running afterwards, to work in it (docker exec -it …)
 #   NAME=<name>       the container's name (default: bb-plugin-oats-ci-<pid>)
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
+#   LIVE_THEMES       the themes the live stage draws: "light", "dark" or "light,dark" (default: both;
+#                     CI's two live jobs name one each)
 # The bb version is the repository's pin: the one line of bb-version at the repository's root when
 # that file exists, else devDependencies["bb-app"] of the plugin's package.json (setup.sh).
 # `real` is the run against a real OATS kernel and the bb session provider, in a container of its
 # own (real/run.sh, real/README.md; its artefacts go to container/real/out/); `all` ends with it.
+# `pi` is the pi run (real/pi/README.md): that container and kernel, with pi; not part of `all`
+# (its artefacts go to container/real/pi/out/).
 set -eu
 STAGE=${1:-all}
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$STAGE" in
-  all | unit | live) ;;
+  all | live)
+    # A wrong LIVE_THEMES is refused here, before anything starts; unset or empty is both themes.
+    # live-ui.mjs, which reads it, refuses it too. It also takes spaces around a name; this
+    # does not.
+    case "${LIVE_THEMES:-light,dark}" in
+      light | dark | light,dark | dark,light) ;;
+      *)
+        echo "ci: LIVE_THEMES is \"${LIVE_THEMES}\": it names the themes the live stage draws, light, dark or light,dark" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  unit) ;;
   real) exec sh "$HERE/real/run.sh" ;;
+  pi) REAL_PI=1 exec sh "$HERE/real/run.sh" ;;
   *)
-    echo "usage: container/ci.sh [all|unit|live|real]" >&2
+    echo "usage: container/ci.sh [all|unit|live|real|pi]" >&2
     exit 2
     ;;
 esac
@@ -72,8 +89,9 @@ if [ -n "${LOCAL_STATUS:-}" ]; then
   docker exec -u root "$NAME" chown node /tmp/local-status.json
   LOCAL_ENV="-e LIVE_UI_STATUS_FILE=/tmp/local-status.json"
 fi
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
+# LIVE_THEMES is passed by name: only when it is set here, so that one left unset draws both themes.
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 # The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts).
 (cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json) | docker exec -i -u node "$NAME" tar -x -C /home/node

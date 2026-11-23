@@ -19,9 +19,15 @@ import { checkHarness, checkModel } from "./spawn.js";
 export type SessionFact = "there" | "none" | "unknown";
 /** The Git observation of a work tree, summarized; `observed: false` when there was none to make. */
 export type WorkFact = { observed: boolean; branch: string | null; detached: boolean; drift: boolean; changed: number; untracked: number };
-/** `midTask` is the kernel's `true`, `false` or `"unknown"` (a provider that reports no activity). */
+/**
+ * `midTask` is the kernel's `true`, `false` or `"unknown"` (a provider that reports no activity).
+ * True is REPORTED ACTIVITY: a session that runs (a harness is loaded: an idle agent reads true
+ * too) or uncommitted work; never "it runs a turn". What a person is told comes from the facts
+ * (`work`, and bb's own word on the thread), not from this (app/lifecycle/words.ts `stopPlanView`).
+ * `work` is the target's work tree as the plan observed it.
+ */
 /** `backend` is where the session runs, as the kernel names it ("bb", "tmux"); null when it does not say. */
-export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; backend: string | null; midTask: boolean | "unknown" };
+export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; backend: string | null; midTask: boolean | "unknown"; work: WorkFact };
 /** `instance` is the agent the KERNEL's plan is for, as its answer names it (null when it names none): what a confirmation is titled with, never the name that was asked for. */
 export type StopPlan = {
   action: "stop";
@@ -85,7 +91,12 @@ export type RetireReceipt = {
   worktree: "retained" | "removed" | "absent" | null;
   movedTo: string | null;
   recoveryPath: string | null;
-  /** The bb threads the provider archived with the home (`capabilityMeta["oats.bb"].archived`). */
+  /**
+   * The bb threads of the home that are archived in bb when the retire ends
+   * (`capabilityMeta["oats.bb"].archived`): those the retire hook archived itself and, from the
+   * provider that archives at stop, those it found archived already (the stop's). A home at a path
+   * an earlier home used lists that home's archived threads too (the kernel side's known edge).
+   */
   threadsArchived: number;
   children: StoppedRow[];
   /** What the kernel says its cleanup left (`rollbackIncomplete`); empty when it finished. */
@@ -111,9 +122,23 @@ export type Started = {
   harness: string | null;
   model: string | null;
   warnings: string[];
+  /**
+   * What a start with `--resume` answers of the conversation (the kernel's `resume` object); null
+   * for a start that asked for none. `resumed`: it continues the harness's last conversation; else
+   * it started fresh on the task, and `reason` is the kernel's word for why (`no-conversation`,
+   * `no-receipts`, `resume-unproven`, or one this plugin does not know). `waiting`: the kernel's
+   * word when the start succeeded and the harness waits for its person in its terminal
+   * (`resume-confirmation`).
+   */
+  resume: { resumed: boolean; reason: string | null; waiting: string | null } | null;
 };
-/** What a start may choose: nothing (the recorded launch), or a harness the provider declares and a model id. */
-export type StartChoices = { harness?: string | undefined; model?: string | undefined };
+/**
+ * What a start may choose: nothing (the recorded launch), or a harness the provider declares and
+ * a model id. Or `resume`: the start of a home whose session was LOST, in the harness's own last
+ * conversation (`oats session start --resume`), which takes no other choice: the kernel refuses a
+ * harness or a model beside it.
+ */
+export type StartChoices = { harness?: string | undefined; model?: string | undefined; resume?: boolean | undefined };
 type Apply = { instance: string; revision: string; key: string };
 
 // ---- reading the kernel's documents ----
@@ -178,7 +203,7 @@ const stopPlan = z.looseObject({
   planRevision: z.string().min(1),
   at: text,
   recursive: z.boolean().nullish(),
-  targets: z.array(z.looseObject({ instance: z.string(), agent: text, depth: z.number().nullish(), session, midTask: z.unknown() })),
+  targets: z.array(z.looseObject({ instance: z.string(), agent: text, depth: z.number().nullish(), session, midTask: z.unknown(), work })),
   skipped: z.array(named).nullish(),
   ambiguous: z.array(named).nullish(),
 });
@@ -197,6 +222,7 @@ export function parseStopPlan(document: unknown): Result<StopPlan> {
       session: sessionFact(target.session),
       backend: target.session?.backend ?? null,
       midTask: target.midTask === true ? true : target.midTask === false ? false : "unknown",
+      work: workFact(target.work),
     }));
   // The agent the plan is for: the kernel's own target at depth 0.
   const root = targets.find((target) => target.depth === 0);
@@ -231,6 +257,11 @@ function sessionArgv(verb: "start" | "restart", home: string, choices: StartChoi
   const checked = checkHome(home);
   if (!checked.ok) return checked;
   const argv = ["session", verb, "--home", checked.value];
+  if (choices.resume === true) {
+    // A resume is a start alone, with the launch the home recorded: nothing else is passed, and nothing else is taken.
+    if (verb !== "start" || choices.harness !== undefined || choices.model !== undefined) return err(codes.invalidInput, "a resume is a start with no harness and no model: it comes back with the ones it had");
+    return ok([...argv, "--resume", "--json"]);
+  }
   if (choices.harness !== undefined) {
     // One the bb session provider declares (kernel/spawn.ts, the one rule for a spawn, a start and a restart).
     const harness = checkHarness(choices.harness, declared);
@@ -258,6 +289,8 @@ const started = z.looseObject({
   model: text,
   session: z.looseObject({ endpoint: z.looseObject({ threadId: text }).nullish() }).nullish(),
   warnings: z.array(z.unknown()).nullish(),
+  // Only in the answer of a start with `--resume`; what it says is read, never guessed: `resumed` must be there.
+  resume: z.looseObject({ resumed: z.boolean(), reason: text, waiting: text }).nullish(),
 });
 
 export function parseSessionStart(document: unknown, verb: "start" | "restart" = "start"): Result<Started> {
@@ -270,6 +303,7 @@ export function parseSessionStart(document: unknown, verb: "start" | "restart" =
     harness: value.harness ?? null,
     model: value.model ?? null,
     warnings: (value.warnings ?? []).filter((warning): warning is string => typeof warning === "string"),
+    resume: value.resume ? { resumed: value.resume.resumed, reason: value.resume.reason ?? null, waiting: value.resume.waiting ?? null } : null,
   });
 }
 

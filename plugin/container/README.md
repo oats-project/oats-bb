@@ -116,8 +116,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
 - **OUT**, **OUTQ** (`scenes/outside.mjs`, two stages of its own on one roster) every row of the table of "Outside OATS"
-  (`../README.md`) in one roster, on the sidebar's rows and on each thread's line, and the home's
-  card: stopped with its thread archived, stopped on an open thread, the kernel's `outsideOats`, a
+  (`../README.md`) in one roster, on the sidebar's rows and on each thread's line: stopped with its thread archived, stopped on an open thread, the kernel's `outsideOats`, a
   session lost with its thread archived and with its thread deleted, failed, unreachable. What bb
   says of a thread is true in bb: the stage archives the threads it says are archived (and
   unarchives them when it ends), and the deleted one is an id bb has no thread of. bb's question

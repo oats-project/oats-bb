@@ -23,11 +23,11 @@ const NO_ONE: readonly Agent[] = [];
  * `oats` is the caller's own `useOats()`: the roster the place draws, so that what is said of an
  * agent is said of the row the place holds (and the roster is read once per place).
  */
-export function useOutside(oats: Oats): Outside {
-  const read = useRead("outsideFacts");
+export function useOutside(oats: Oats, { enabled = true }: { /** false: read nothing now (a place that is not shown, a hidden tab) */ enabled?: boolean } = {}): Outside {
+  const read = useRead("outsideFacts", { enabled });
   // Asked of bb again at each roster read and each minute: bb tells nobody when an archived thread is deleted.
   const minute = Math.floor(useNow(60_000) / 60_000);
-  const detached = oats.phase === "ready" ? oats.view.detached : NO_ONE;
+  const detached = enabled && oats.phase === "ready" ? oats.view.detached : NO_ONE;
   const ids = useMemo(() => detached.flatMap((agent) => (agent.threadId === null ? [] : [agent.threadId])), [detached]);
   const archived = useArchived(ids, `${oats.phase === "ready" ? (oats.stale?.at ?? read.data?.at ?? "") : ""} ${minute}`);
   const facts = useMemo(() => new Map<string, RowFacts>((read.data?.rows ?? []).map((row) => [row.instance, { sessionEnd: row.sessionEnd, outsideOats: row.outsideOats }])), [read.data]);

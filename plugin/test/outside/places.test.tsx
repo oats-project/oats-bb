@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The places that say what happened to an agent outside OATS: the sidebar's row, the thread's
-// line (on an open thread and on an archived one) and the home's card. Each from the kernel's row
+// The places that say what happened to an agent outside OATS: the sidebar's row and the thread's
+// line (on an open thread and on an archived one). Each from the kernel's row
 // (the snapshot's `Agent` and the facts of `outsideFacts`) and bb's own answer for the thread.
 import { afterEach, expect, test, vi } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
@@ -221,20 +221,4 @@ test("on a roster that is the last one read the acts are held, on the archived t
   const open = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale, ...facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }) }), sidebarThreads: sidebarThreads() });
   const buttons = within(await open.findByTestId("oats-outside-warning")).getAllByTestId("oats-status-act") as HTMLButtonElement[];
   expect(buttons.map((button) => [button.textContent, button.disabled])).toEqual([["Stop", true], ["Start", true]]);
-});
-
-// ---- the home's card
-
-test("the home's card of an agent OATS stopped that bb has a question open for says the kernel's report too", async () => {
-  const app = await loadApp();
-  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
-  const threads = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, hasPendingInteraction: true } : thread)) };
-  const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } })), sidebarThreads: threads, sdk: bb([]).sdk });
-  const warning = await slot.findByTestId("oats-outside-warning");
-  expect(warning.getAttribute("data-instance")).toBe(DIGEST);
-  expect(warning.closest('[data-testid="oats-needs-card"]')).not.toBeNull();
-  expect(warning.textContent).toContain(MESSAGE);
-  expect(within(warning).getAllByTestId("oats-status-act").map((button) => button.textContent)).toEqual(["Stop", "Start"]);
-  // No other card has one.
-  expect(slot.getAllByTestId("oats-outside-warning")).toHaveLength(1);
 });

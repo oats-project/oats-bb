@@ -1,6 +1,6 @@
 // What the plugin says when something happened to an OATS agent outside OATS: ONE pure function of
 // the kernel's row and of bb's own answer for the row's thread. The sidebar's row, the thread's
-// line and the home's card draw what it answers, so they say one thing.
+// line (and the home's card) draw what it answers, so they say one thing.
 //
 // What it reads, and nothing else (nothing is derived from words):
 // - the agent's row of `oats status --json`: `running`, `runtimeState`, `session.threadId` (the

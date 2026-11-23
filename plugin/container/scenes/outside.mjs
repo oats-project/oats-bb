@@ -1,8 +1,8 @@
-// The outside feature's live scenes: what the sidebar's row, the thread's line and the home's card
+// The outside feature's live scenes: what the sidebar's row and the thread's line
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Two stages of its own on one roster, every row of the feature's table at once:
 // `outside`, and `outside-question`, the same while bb holds a question on the thread of the agent
-// OATS recorded stopped (the home's card). What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
+// OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
 //
@@ -265,21 +265,12 @@ export default [
   },
   {
     stage: "outside-question",
-    name: "the home's card of an agent OATS stopped that bb has a question open for says the kernel's report",
+    name: "bb has a question open for an agent OATS recorded stopped: its thread says \"Needs you\", and the kernel's report under it",
     run: async ({ page, at, viewport, threads, check }) => {
       const thread = threads.get("thr_harvest");
       check(question?.payload?.kind === "user_question", `${at} bb has a question open on the thread of the agent OATS recorded stopped`, JSON.stringify(question ?? null));
-      await page.goto("/plugins/oats/home");
-      const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.querySelector(${JSON.stringify(`${testId("oats-outside-warning")}[data-instance="${OUTSIDE}"]`)}))`;
-      const read = await page.until(`(() => { const flat = ${flat}; const card = ${card}; const notice = card?.querySelector(${JSON.stringify(testId("oats-notice"))}); if (!notice) return ""; notice.scrollIntoView({ block: "center" }); return JSON.stringify({ tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: [...notice.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), asked: flat(card.querySelector(${JSON.stringify(testId("oats-needs-question"))})), warnings: document.querySelectorAll(${JSON.stringify(testId("oats-outside-warning"))}).length }); })()`, 30);
-      const said = read ? JSON.parse(read) : null;
-      check(
-        said !== null && said.tone === "warning" && said.title === "Running outside OATS" && said.text.includes(MESSAGE) && same(said.acts, ["Stop", "Start"]) && said.asked === QUESTION && said.warnings === 1,
-        `${at} the home's card of that agent has bb's question, and says the kernel's message in the warning tone, with Stop and Start; no other card does`,
-        read ?? (await page.evaluate(textOf(testId("oats-home-needs")))),
-      );
-      await page.shot(`outside-${viewport.name}-home-card`);
-      // The thread itself: bb's question makes it "Needs you", and the report stands under the line.
+      // bb's question makes the thread "Needs you" (the roster's rule), and the report stands under the line.
+      // (The home's card of such an agent carries the same notice once the rebuilt home calls it: README, "Outside OATS".)
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       const line = await lineOf(page, /^! Needs you · /);
       check(line !== null && line.words === "! Needs you · bb shows its question in this thread" && line.warning?.title === "Running outside OATS" && same(line.warning.acts, ["Stop", "Start"]), `${at} on its thread: "Needs you" for bb's question, and the kernel's report under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));

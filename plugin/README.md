@@ -99,7 +99,7 @@ a thread was deleted.
 bb's own acts reach an OATS agent without OATS: a message typed in bb's composer starts an agent
 OATS stopped, bb's Archive takes a running agent's thread away and leaves its process running, and
 bb's Delete ends it. The plugin cannot hide those acts. It says what happened, on the sidebar's
-row, on the thread's own line and on the home's card, with the one act that mends it; the state's
+row and on the thread's own line, with the one act that mends it; the state's
 word comes first.
 
 | What OATS says | What bb says of its thread | The row and the thread's line say | Acts |
@@ -107,7 +107,7 @@ word comes first.
 | stopped | archived | "Stopped · Its conversation is archived in bb". The row opens the archived thread, which bb shows to read (no composer). | Start |
 | stopped | open | the roster's own line | Start |
 | stopped | deleted | "Stopped · Its conversation was deleted in bb. Start it from OATS for a new one." | Start |
-| recorded stopped, with the kernel's `outsideOats` | any | under the state OATS recorded, a notice in the warning tone: "Running outside OATS", the kernel's own message, its code. On the sidebar's row: "running outside OATS" and a warning mark. The home's card of such an agent (bb has a question open for it) carries the same notice. | Stop, Start |
+| recorded stopped, with the kernel's `outsideOats` | any | under the state OATS recorded, a notice in the warning tone: "Running outside OATS", the kernel's own message, its code. On the sidebar's row: "running outside OATS" and a warning mark. | Stop, Start |
 | its session lost | archived | "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS." | Stop (then Start) |
 | its session lost | deleted | "Deleted in bb · Its conversation is gone. Start it from OATS for a new one." | Start |
 | failed (its session ended) | open | "Failed · Its session ended. Restart it, or send a message here." No warning: status sees a message that starts it. | Restart |
@@ -134,11 +134,15 @@ one pure function (`said`, `app/outside/say.ts`: a row and bb's answer in, what 
 that gives it its two inputs (`useOutside(oats)`), and three drawings (`OutsideWarning`: the
 notice; `OutsideMark`: the row's mark; `OutsideThreadRow`: the thread's own row on a thread bb has
 archived, which the roster draws on no thread). It registers no slot: the roster's row and line
-(`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the home's card (`app/home/Home.tsx`) call it.
+(`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) call it. A place that is not shown passes
+`{ enabled: false }` and nothing is read.
 Its one read, `outsideFacts`, starts no process: the server answers the two facts of each row from
 the one status read it keeps, and the feature from the one version read.
 
-Not there yet: the line of a thread that belonged to a RETIRED agent (the roster no longer names
+Not there yet: the home's card of an agent OATS recorded stopped that bb has a question open for
+will carry the same notice (`<OutsideWarning said={outside.of(agent)} … />`, one line in the
+rebuilt home's card, agreed with its owner: it lands with whichever of the two changes is second);
+the line of a thread that belonged to a RETIRED agent (the roster no longer names
 the instance a thread was); the row of `outsideOats` recorded live, and the proof against a real
 kernel at 0.70.5 (they come with the kernel floor: `test/fixtures/outside/README.md` says what is
 shaped meanwhile).

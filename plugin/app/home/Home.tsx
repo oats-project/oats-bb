@@ -2,7 +2,6 @@
 // phone's page and the target of "N need you") and, on desktop, the same view in a thread's fixed
 // tab. Answering is the person's act through bb's SDK; the plugin never types into a session.
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import {
   ThreadTitle,
   experimental_useTabVisible as useTabVisible,
@@ -17,7 +16,6 @@ import { forgetAgent, forgetAgents, getAgentTab, rememberAgent, rememberedAgent 
 import { question } from "./interactions";
 import type { Choice, Interaction, Question } from "./interactions";
 import { failureLine, useOats } from "../oats";
-import { OutsideWarning, useOutside } from "../outside";
 import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
 import type { Oats } from "../oats";
@@ -51,7 +49,7 @@ function useOpenThread(): (thread: PluginSidebarThread) => { href: string; onCli
 }
 
 /** One agent that needs the person: the question, and where bb lists choices, the answer in place. */
-function NeedsYouCard({ node, thread, soul, now, warning }: { node: Node; thread: PluginSidebarThread; soul: string; now: number; warning?: ReactNode }) {
+function NeedsYouCard({ node, thread, soul, now }: { node: Node; thread: PluginSidebarThread; soul: string; now: number }) {
   const sdk = useSdk();
   const open = useOpenThread()(thread);
   const [asked, setAsked] = useState<Question | null>(null);
@@ -135,8 +133,6 @@ function NeedsYouCard({ node, thread, soul, now, warning }: { node: Node; thread
           Open
         </a>
       </div>
-      {/* A harness that runs in a home OATS recorded stopped (bb has a question open for an agent OATS stopped): the kernel's report, loudly. */}
-      {warning}
       {error === null ? null : <ErrorLine>{error}</ErrorLine>}
     </li>
   );
@@ -286,14 +282,11 @@ function Workspace({ oats, visible }: { oats: Ready; visible: boolean }) {
 
 function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab"; visible: boolean }) {
   const now = useNow();
-  // What happened to an agent outside OATS (app/outside): a card says the kernel's report of its agent.
-  const outside = useOutside(oats);
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is.
   if (oats.phase === "loading") return <Loading>Reading your agents…</Loading>;
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   const { view } = oats;
-  const held = oats.stale !== null;
   return (
     <>
       {oats.stale === null ? null : <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
@@ -305,7 +298,7 @@ function Sections({ oats, where, visible }: { oats: Oats; where: "page" | "tab";
           <ul className="flex flex-col gap-2">
             {view.needsYou.flatMap((node) => {
               const thread = oats.threadById.get(node.thread.id);
-              return thread === undefined ? [] : [<NeedsYouCard key={thread.id} node={node} thread={thread} soul={oats.soulOf(node.agent)} now={now} warning={<OutsideWarning said={outside.of(node.agent)} instance={node.agent.instance} held={held} />} />];
+              return thread === undefined ? [] : [<NeedsYouCard key={thread.id} node={node} thread={thread} soul={oats.soulOf(node.agent)} now={now} />];
             })}
           </ul>
         )}

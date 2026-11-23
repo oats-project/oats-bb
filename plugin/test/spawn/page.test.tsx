@@ -8,6 +8,7 @@ import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { notified } from "../../app/ui";
+import { UNCONFIRMED_ISSUE } from "../../contract/shared";
 import { openNewAgent } from "../../app/workspace/pages";
 import { formFacts } from "../../model/spawn";
 import { agentName } from "../../app/ui/words";
@@ -466,7 +467,8 @@ test("a refusal whose rollback the kernel could not finish is never 'nothing was
   const slot = await ready(
     previews({
       spawn: () => {
-        throw new Error(`E_BACKEND_NOT_READY: ${left}`);
+        // The refusal as the plugin's server words it (server/core.ts `refusal`): the code and the message, and the kernel's marker as its one issue.
+        throw Object.assign(new Error(`E_BACKEND_NOT_READY: ${left}`), { code: "conflict", issues: [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }] });
       },
     }),
   );
@@ -482,6 +484,23 @@ test("a refusal whose rollback the kernel could not finish is never 'nothing was
   fireEvent.click(submit(slot));
   fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
   expect(calls(slot, "spawn")).toHaveLength(1);
+});
+
+test("the same refusal without the kernel's marker is what its code says, whatever its words: refused, the values free again", async () => {
+  // The words alone decide nothing (test/spawn/model.test.ts says why): only the marker holds the form.
+  const left = "oats-developer-2 was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/oats-developer-2: still present";
+  const slot = await ready(
+    previews({
+      spawn: () => {
+        throw Object.assign(new Error(`E_BACKEND_NOT_READY: ${left}`), { code: "conflict" });
+      },
+    }),
+  );
+  fireEvent.click(submit(slot));
+  const result = await slot.findByTestId("oats-result");
+  expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent]).toEqual(["failed", "The agent was not spawned"]);
+  expect(result.querySelector("p")!.textContent).toMatch(/^bb isn’t ready to launch this agent, so the spawn was rolled back\. Nothing was created\./);
+  await waitFor(() => expect([fieldset(slot).disabled, submit(slot).textContent]).toEqual([false, "Spawn"]));
 });
 
 test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {

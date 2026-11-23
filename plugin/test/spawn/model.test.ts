@@ -213,26 +213,53 @@ describe("after the press, what is known decides what the form may offer", () =>
     expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
   });
 
-  it("unconfirmed: the kernel refused and says its rollback is incomplete: never 'nothing was created', whatever the code", () => {
+  it("unconfirmed: the kernel refused and marks that it could not confirm what is left: never 'nothing was created', whatever the code", () => {
     // SHAPED, not recorded: a rollback that fails cannot be made in the real run (the kernel's own
-    // removal of the home would have to fail). The words are the kernel's, from awebai/oats
-    // lib/core.mjs at 3d834aa3c, line 5231: `note = incomplete.length ? " — rollback INCOMPLETE,
-    // clean up manually: " + incomplete.join("; ") : " — spawn rolled back"`, with the entry of line
-    // 5230 ("instance home <home>: still present"); `unconfirmedSpawn` (3859-3861) sets
-    // error.details.unconfirmed on the same path. The lead of the message is the recorded one of
-    // test/fixtures/spawn/spawn-pi-refused.json.
+    // removal of the home would have to fail). The marker and the words are the kernel's, from
+    // awebai/oats lib/core.mjs at v0.70.5 (e5e7a2a4): `unconfirmedSpawn` (3863-3865) sets
+    // error.details.unconfirmed = true; the message is the note of line 5235, `note =
+    // incomplete.length ? " — rollback INCOMPLETE, clean up manually: " + incomplete.join("; ") :
+    // " — spawn rolled back"`, with the entry of line 5234 ("instance home <home>: still present"),
+    // and 5237 with 5675 sets the marker on that path. The lead of the message is the recorded one
+    // of test/fixtures/spawn/spawn-pi-refused.json.
     const left = "form-pi-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/form-pi-developer: still present";
-    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_SOMETHING_NEW"]) {
-      const problem = spawnProblem({ code, message: left }, "spawn");
+    // The marker, with any code that does not say an instance exists: one the tables name as a refusal, one they name as unknown, one nobody classed, the plugin's own.
+    for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_OUTCOME_UNKNOWN", "E_SPAWN_FAILED", "E_SOMETHING_NEW", "OATS_FAILED"]) {
+      const problem = spawnProblem({ code, message: left, unconfirmed: true }, "spawn");
       expect([problem.outcome, problem.next, problem.code, problem.detail], code).toEqual(["unconfirmed", null, code, left]);
       expect(problem.sentence, code).toBe("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
       expect(problem.sentence, code).not.toMatch(/Nothing was created|rolled back/);
     }
-    // The same codes with a rollback the kernel finished are refusals: it says "spawn rolled back", and sets no marker.
+    // The marker alone says it: the message need not hold the kernel's words.
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "m", unconfirmed: true }, "spawn").outcome).toBe("unconfirmed");
+    // The same codes without the marker are what the tables say: a rollback the kernel finished is a refusal ("spawn rolled back").
     expect(outcome("E_BACKEND_NOT_READY")).toBe("refused");
     expect(spawnProblem({ code: "E_REQUIRED_HOOK_FAILED", message: "the hook exited 2 — spawn rolled back" }, "spawn").outcome).toBe("refused");
-    // A preview starts nothing, whatever its words.
-    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: left }, "preview").outcome).toBe("refused");
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: "m", unconfirmed: false }, "spawn").outcome).toBe("refused");
+    expect(outcome("E_SOMETHING_NEW")).toBe("unknown");
+    // A preview starts nothing, whatever it carries.
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: left, unconfirmed: true }, "preview").outcome).toBe("refused");
+  });
+
+  it("the kernel's words 'rollback INCOMPLETE' without its marker decide nothing: the code is read as the tables say", () => {
+    // The form read these words while the plugin's envelope dropped the marker. It no longer does:
+    // at the plugin's floor (OATS 0.70.5, lib/core.mjs at e5e7a2a4) every path of a spawn that
+    // writes them sets details.unconfirmed (4630; 4802-4804; 4821-4823; 4861-4863; 5668-5669;
+    // 5235-5237 with 5675, and the homes kept by 5095, 5124 and 5152; 5678-5679), so a message
+    // with the words and no marker is no answer of a kernel the plugin runs on.
+    const words = "x was not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present";
+    expect(spawnProblem({ code: "E_BACKEND_NOT_READY", message: words }, "spawn").outcome).toBe("refused");
+    expect(spawnProblem({ code: "E_SOMETHING_NEW", message: words }, "spawn").outcome).toBe("unknown");
+    expect(spawnProblem({ code: "E_SOMETHING_NEW", message: words }, "spawn").next).toBe("check-result");
+  });
+
+  it("an instance that exists is said as created, with the marker too: the kernel marks E_SPAWN_INCOMPLETE unconfirmed, and nothing of it was rolled back", () => {
+    // lib/core.mjs at v0.70.5: 512 (`retainedPromptError`: "home and pane retained", details
+    // { retained: true, unconfirmed: true, … }) and 4016 (the replay of a key whose spawn did not
+    // complete, through `unconfirmedSpawn`). The Desktop reads the code first too
+    // (packages/client/spawn-apply.mjs `interpret`, 135-146).
+    for (const code of ["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]) expect(spawnProblem({ code, message: "m", unconfirmed: true }, "spawn").outcome, code).toBe("created");
+    expect(spawnProblem({ code: "E_SPAWN_INCOMPLETE", message: "the screen never settled; home and pane retained: inspect /abs/home", unconfirmed: true }, "spawn").sentence).toBe("The instance was created but didn’t finish starting. Open it from the sidebar instead of spawning again.");
   });
 
   it("a Check result that the plugin refused before asking the kernel learned nothing: still unknown; one the kernel refuses by name is refused", () => {

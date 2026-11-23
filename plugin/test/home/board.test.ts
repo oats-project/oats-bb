@@ -12,7 +12,7 @@ const agent = (instance: string, change: Partial<Agent> = {}): Agent => ({
   instance, soul: "oats-expert", home: `/abs/${instance}`, parent: null, human: null, alias: null, team: null, address: null, backend: "bb", server: null, projectId: "proj",
   threadId: `thr_${instance}`, running: null, runtimeState: "unknown", runtimeError: null, waiting: null, ...change,
 });
-const thread = (id: string, change: Partial<BbThread> = {}): BbThread => ({ id, projectId: "proj", displayTitle: id, updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false, ...change });
+const thread = (id: string, change: Partial<BbThread> = {}): BbThread => ({ id, projectId: "proj", displayTitle: id, updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false, status: "idle", queuedWork: "none", ...change });
 
 const agents = [
   agent("lead", { running: true }),
@@ -24,7 +24,10 @@ const agents = [
   agent("gone-thread", { threadId: "thr_nowhere", running: false, runtimeState: "stopped" }),
   agent("on-tmux", { backend: "tmux", threadId: null, running: true, runtimeState: "running", human: "Ana" }),
 ];
-const threads = ["lead", "asks-early", "asks-late", "idle-unread", "stopped", "failed"].map((name) => thread(`thr_${name}`, name === "idle-unread" ? { isUnread: true } : {}));
+const threads = ["lead", "asks-early", "asks-late", "idle-unread", "stopped", "failed"].map((name) =>
+  // bb has a turn running on the lead's thread: that, not the kernel's `running`, is what says a bb agent works.
+  thread(`thr_${name}`, name === "idle-unread" ? { isUnread: true } : name === "lead" ? { status: "active" } : {}),
+);
 
 describe("the home's board", () => {
   const made = board(view(agents, threads), NOW);
@@ -47,6 +50,15 @@ describe("the home's board", () => {
     expect(names(made.needsYou)).toEqual(["asks-late", "asks-early"]);
     expect(names(made.working)).toEqual(["lead", "on-tmux"]);
     expect(names(made.finished)).toEqual(["idle-unread"]);
+  });
+
+  // The kernel's `running` says that a harness is loaded, not that the agent works: a provider answers
+  // true for an idle agent. The home counts by the one state function, so it follows bb's thread.
+  it("counts an agent on bb as working by what bb says of its thread, never by the kernel's running: a loaded harness at rest is idle, a turn in line works", () => {
+    const loaded = [agent("at-rest", { running: true }), agent("in-turn", { running: null }), agent("queued", { running: true }), agent("no-thread", { threadId: "thr_none", running: true })];
+    const made = board(view(loaded, [thread("thr_at-rest"), thread("thr_in-turn", { status: "active" }), thread("thr_queued", { status: "pending", queuedWork: "waiting" })]), NOW);
+    expect(made.counts).toEqual({ "needs-you": 0, working: 2, idle: 2, stopped: 0, error: 0, unreachable: 0 });
+    expect(names(made.working)).toEqual(["in-turn", "queued"]);
   });
 
   it("an agent that needs the person for a question bb shows has no instant: it comes after the ones that have", () => {

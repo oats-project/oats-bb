@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { harnessLabel, homeText, launchFromText, moduleSourceText, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
+import { formFacts, harnessLabel, homeText, launchFromText, moduleSourceText, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
 
 const recorded = (name: string): Record<string, unknown> => (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn", name), "utf8")) as { result: Record<string, unknown> }).result;
 const preview = recorded("spawn-preview.json");
@@ -98,6 +98,9 @@ describe("a refusal, in a person's words, with what to do", () => {
     const problem = spawnProblem(refused, "spawn");
     expect([problem.code, problem.sentence]).toEqual(["E_BACKEND_NOT_READY", "bb isn’t ready to launch this agent, so the spawn was rolled back. Nothing was created. Details says what bb needs."]);
     expect(problem.detail).toMatch(/bb reports its pi provider as not_installed.*spawn rolled back$/);
+    // From OATS 0.70.1 the PREVIEW refuses with the same code (the provider's own check): a refusal in a person's words, not a failed read.
+    expect(spawnProblem(refused, "preview")).toMatchObject({ code: "E_BACKEND_NOT_READY", next: "change-options", sentence: "bb isn’t ready to launch this agent as chosen. Details says what bb needs; or pick another harness above." });
+    expect(spawnProblem(refused, "preview", { harnessField: false }).sentence).toBe("bb isn’t ready to launch this agent as chosen. Details says what bb needs.");
     expect(spawnProblem({ code: "E_CLONE_MISSING", message: "git clone …" }).sentence).toBe("This soul’s repository isn’t cloned on this machine yet. Clone it, then try again — Details shows how.");
     expect(spawnProblem({ code: "E_PACKAGE_MISSING", message: null }).sentence).toBe("A package this soul uses isn’t installed yet. Run oats sync in the deployment, then try again.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }).sentence).toBe("OATS took too long to work out this soul’s defaults. Try again.");
@@ -112,11 +115,74 @@ describe("a refusal, in a person's words, with what to do", () => {
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
     expect(spawnProblem({ code: "E_DECISION_STALE", message: null }, "spawn").sentence).toBe("Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.");
     expect(spawnProblem({ code: "E_PLACEMENT_TAKEN", message: null }, "spawn").sentence).toBe("Another spawn just took this name. Nothing was created — check the new name and press Spawn again.");
-    expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Check the agents in the sidebar before spawning again.");
-    expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Check the agents in the sidebar before spawning again.", next: "check-result" });
+    expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.");
+    expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result" });
+    // A spawn whose oats, machine or server ended with no answer: whether the instance was made is not known either.
+    for (const code of ["OATS_FAILED", "OATS_NOT_JSON", "HOST_UNREACHABLE", "PLUGIN_RPC_FAILED"]) expect(spawnProblem({ code, message: "x" }, "spawn").next, code).toBe("check-result");
+    expect(spawnProblem({ code: "OATS_FAILED", message: "oats: crashed" }, "spawn").sentence).toBe("OATS ended without saying whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.");
+    // The same codes at the preview started nothing: the preview's general sentence.
+    expect(spawnProblem({ code: "OATS_FAILED", message: "x" }, "preview").next).toBe("details");
     expect(spawnProblem({ code: "E_INTERRUPTED", message: "hook oats.build" }, "spawn").sentence).toBe("The spawn was interrupted while its worktree was being set up, and was rolled back. Nothing was created.");
     expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS couldn’t complete the spawn. Try again, or see Details.", next: "details", code: "OATS_FAILED", detail: "boom" });
     // A code the preview's table holds reads the same after the press.
     expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name.");
   });
+
+  it("sends a person to the Harness field only where the form has one", () => {
+    const one = { harnessField: false };
+    expect(spawnProblem({ code: "E_BACKEND_HARNESS", message: "x" }, "preview", one).sentence).toBe("bb can’t run the harness this soul would use. See Details.");
+    expect(spawnProblem({ code: "E_LAUNCH_EXECUTABLE", message: "x" }, "preview", one).sentence).toBe("The chosen launch configuration can’t start on this machine. See Details.");
+    expect(spawnProblem({ code: "E_LAUNCH_CONFIG_AMBIGUOUS", message: "x" }, "preview", one).sentence).toBe("This machine has more than one launch configuration for this soul’s harness, and none is the default. Make one of them the default with oats launch-config on that machine.");
+    expect(spawnProblem({ code: "E_LAUNCH_PREFERENCE_UNMATCHED", message: "x" }, "preview", one).sentence).toMatch(/Correct the preference \(Details\)\.$/);
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }, "preview", one).sentence).toBe("pi is not installed Install it on that machine.");
+    for (const code of ["E_BACKEND_HARNESS", "E_HARNESS_UNAVAILABLE", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_ENV_MISSING", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_LAUNCH_PREFERENCE_UNMATCHED"]) {
+      expect(spawnProblem({ code, message: null }, "preview", one).sentence, code).not.toMatch(/harness above|harnesses above/);
+      expect(spawnProblem({ code, message: null }, "preview").sentence, code).toMatch(/harness above|harnesses above/);
+    }
+    // A tail that names another control is the same with or without the field.
+    expect(spawnProblem({ code: "E_BAD_ARGS", message: "x" }, "preview", one).sentence).toBe("Some of these values can’t be used. Check the values above.");
+  });
+
+  it("the kernel's words for a harness that is not installed go through the display filter; where it leaves nothing, the table's sentence stands", () => {
+    const unsafe = "harness pi not found\u202E at /opt/x; set token=abc123 in env\nsecond line";
+    const said = spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: unsafe });
+    expect(said.sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+    expect(said.sentence).not.toMatch(/token|\u202E|\n/);
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is\nnot on PATH" }).sentence).toBe("pi is not on PATH Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "" }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+  });
 });
+
+describe("the form's own rows of the preview", () => {
+  it("adds the soul, that the session is a bb thread and the access the kernel decided, each read from the answer; the launch-prompt note is not the form's yet", () => {
+    const facts = formFacts(preview, { name: "flaky-ci-2-developer" });
+    expect(facts.facts.map((fact) => [fact.label, fact.parts.filter((part) => part.sub !== true).map((part) => part.text).join("")])).toEqual([
+      ["Soul", "oats-developer"],
+      ["Works in", "worktree · branch agents/flaky-ci-2-developer from github.com/awebai/oats"],
+      ["Harness", "pi · github-copilot/claude-fable-5.1"],
+      ["Session", "bb thread"],
+      ["Access", "full mode: no sandbox"],
+      ["Team", "oats · default"],
+    ]);
+    expect("prompts" in facts).toBe(false);
+    expect(facts.identity).toEqual(previewFacts(preview, { name: "flaky-ci-2-developer" }).identity);
+    // What the answer does not say is not said: no row is made up.
+    expect(formFacts({}).facts).toEqual([]);
+    expect(formFacts({ ...preview, backend: "tmux", decision: { effective: { yolo: false } } }).facts.filter((fact) => ["Session", "Access"].includes(fact.label)).map((fact) => fact.parts[0]!.text)).toEqual(["tmux", "the harness asks before it acts"]);
+  });
+
+  it("a harness with no model resolved, on bb: the row says bb's default for it, never an empty value nor another harness's model", () => {
+    const unset = { ...preview, harness: "pi", model: null, modelSource: null };
+    expect(formFacts(unset).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · bb’s default for pi" });
+    expect(formFacts(unset).resolved).toEqual({ harness: "pi", model: null });
+    // Where the kernel resolved one, it is the one said; and off bb nothing is said of bb.
+    expect(formFacts(preview).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · github-copilot/claude-fable-5.1" });
+    expect(formFacts({ ...unset, backend: "tmux" }).facts.find((fact) => fact.label === "Harness")!.parts[0]).toEqual({ text: "pi · default model" });
+  });
+
+  it("says the relationship the kernel bound, with its anchor", () => {
+    const related = { ...preview, relation: "child", decision: { effective: { relation: { anchor: { instance: "flaky-ci-developer" } }, yolo: true } } };
+    expect(formFacts(related).facts.find((fact) => fact.label === "Relationship")).toEqual({ label: "Relationship", parts: [{ text: "child of flaky-ci-developer" }] });
+  });
+});
+

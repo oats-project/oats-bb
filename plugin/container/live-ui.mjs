@@ -346,7 +346,7 @@ const BUILT_IN = {
   },
   // The release's default: only the home is a page that is shown. Every other stage runs with all
   // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
-  // scene that needs another set: it changes the setting and waits until the sidebar has it.
+  // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
   "pages-default": {
     label: "PG",
     enter: async ({ threads }) => {

@@ -46,13 +46,17 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
+| `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. Not behind the setting yet, each its owner's to close: the home's Workspace tiles and the panel's "Open soul page" still lead to a hidden page (which answers "not shown"), and the home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words, what to do, the code, the plugin's or the kernel's own message
 under Details, Retry, and Open settings where a setting mends it. Where OATS was read before, the
-roster stays as last read, marked with its age ("Last observation — <age>"), and its acts stay,
-each "as of <age>": an act goes to the kernel, which answers for what it knows now. Where it never
-was, bb's threads are listed as usual under the notice. The notice's code:
+roster stays as last read under that notice, which says its age once ("Showing what was read
+<age>."), and the OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start,
+Restart and Retire stay in their place, off, each with the reason, the notice says so in one
+sentence with Retry first, and the plugin's server takes no act meanwhile. What a place still
+shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
 |---|---|
@@ -99,7 +103,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS says: …"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"; for an unreachable agent what OATS itself says is one press away, under Details), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page** (off, with the reason beside it, for a soul OATS does not list); the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
@@ -181,75 +185,95 @@ Another feature opens the panel on one of its tabs with
 
 ## The New agent form
 
-**New agent** (at the roster's foot in the sidebar, and on the home of a workspace with no agent
-yet) opens the form: a page of its own, `/plugins/oats/new-agent`, or
-`/new-agent/<soul>` with that soul chosen. It is the OATS Desktop's Spawn dialog, in its order and
-its words, and it is not one of the pages the setting `pages` can leave out: whatever a release
-shows, an agent can be started.
+**New agent** (at the roster's foot in the sidebar) opens the form: a page of its own,
+`/plugins/oats/new-agent`, or `/new-agent/<soul>` with that soul chosen. It is the OATS Desktop's
+Spawn dialog, in its order and its words, and it is not one of the pages the setting `pages` can
+leave out: whatever a release shows, an agent can be started.
 
 | Field | What it is |
 |---|---|
-| **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned says why under the field. |
+| **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned is drawn apart in the list and says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
-| **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. With one harness declared there is no field. |
-| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…** with a typed model id. |
-| **Relationship** | Independent, Child of, Sibling of or Parent of, then which instance: one of the roster's, by its name as words with its soul. |
+| **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the field says what to do: bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default. |
+| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. |
+| **Relationship** | Independent, Child of, Sibling of or Parent of, then **Which instance**: one of the roster's, by its name as words with its soul. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent. A name that cannot be used says its fault under the field. |
 
-Beside the fields (under them on a phone) stands **What will be created**: the kernel's own
-preview (`oats spawn … --preview --json`) of exactly the values on screen, in a person's words: the
-name and the home, where it works, the harness and the model and where they came from, the team,
-the relationship, the core capabilities and the capabilities. So nothing is defaulted in silence:
-the team the agent joins and where it will work are lines of it, read from the kernel's answer. It is read again 0.4 s after the
-last change; meanwhile the last facts stay, marked "Updating…" ("Reading defaults…" before the
-first), and an answer for values that are no longer on screen is never drawn. A warning is drawn
-only where the kernel gives one, as a warning. The form reads `spawnPlan`, which never answers the
-kernel's preview whole: the host entry answers these facts and the decision's revision
-(`contract/spawn.ts` `spawnFacts`, `model/spawn.ts` `previewFacts`). A preview that is no decision
-a spawn could apply (a launch with a problem, checks that did not finish, a backend that is not
-installed) is a refusal there, with the kernel's code.
+**What will be created** stands beside the fields, and on a phone between the fields and the
+buttons, so that it is read before the press. It is the kernel's own preview (`oats spawn …
+--preview --json`) of exactly the values on screen, in a person's words, one fact under the other:
+the name and the home, the soul, where it works (the work mode, the branch and its base) and on
+which machine, the harness and the model and where they came from, that its session is a bb thread,
+the access it runs with ("full mode: no sandbox"), the team it joins, who it is started under, what
+sets up its work tree, the core capabilities and the capabilities. Nothing is defaulted in silence:
+each line is read from the kernel's answer (the machine from the roster), and a line the answer
+does not carry is not drawn. It is read again 0.4 s after the last change; meanwhile the last
+facts stay, marked "Updating…" ("Reading defaults…" before the first), and an answer for values
+that are no longer on screen is never drawn. A warning is drawn only where the kernel gives one,
+as a warning. A path or a branch breaks after "/" and "-", never inside a word. The form reads
+`spawnPlan`, which never answers the kernel's preview whole: the host entry answers these facts
+and the decision's revision (`contract/spawn.ts` `spawnFacts`, `model/spawn.ts` `formFacts`). A
+preview that is no decision a spawn could apply (a launch with a problem, checks that did not
+finish, a backend that is not installed) is a refusal there, with the kernel's code.
 
-**Spawn** applies the decision that preview showed (its revision goes with the call), so "Spawn
-refuses if this changes before you confirm" is true: a decision that moved is refused by the
-kernel, nothing is created, and the column is read again. The button is off only with its reason
-beside it ("Choose a soul first.", "The name can’t be used: its field says why.", …). Pressed
-before the preview of the values on screen answered, the press is kept and goes on when it does
-("Checking…"); if the values change meanwhile, "Changed: press Spawn again". While it spawns the
-button says "Spawning…" and the fields are held; then the new agent's thread opens. A refusal leads
-with a person's words (the Desktop's, `model/spawn.ts` `spawnProblem`), the kernel's code after,
-and the kernel's own message under Details; where the outcome is not known the button becomes
-"Check result", which asks again under the same key, so that nothing is spawned twice. A spawn
-goes on when its page is left: the form, opened again meanwhile, says "A spawn of <soul> is in
-progress." and starts no second one.
+**Spawn** is held to what the screen shows:
 
-While OATS cannot be read the form is held like the acts: the roster's own notice, the fields and
-Spawn off with the acts' reason, and nothing asked of the kernel.
+- It is off, with its reason beside it, until the preview of the values on screen is drawn
+  ("Reading defaults…", "Choose a soul first.", "The name can’t be used: its field says why.", …).
+  The same holds for its key.
+- It applies the decision that preview showed (its revision goes with the call), so "Spawn refuses
+  if this changes before you confirm" is true: a decision that moved is refused by the kernel,
+  nothing is created, the preview that was on screen can no longer be pressed, and the column is
+  read again and says so.
+- On the press the button reads "Spawning…" and is held, with every field: one press makes one
+  agent, however often the button or the key is pressed meanwhile. When the kernel answers the
+  form says "Created <name>", stays held, and opens the new agent's thread.
+- Where the outcome is not known (the kernel's "could not confirm", a time limit, an `oats` or a
+  machine that ended without an answer) the fields stay held and the one act is **Check result**:
+  it asks again under the same idempotency key, so the kernel replays the spawn it made or makes
+  the one it did not, never a second.
+- A refusal leads with a person's words (the Desktop's, `model/spawn.ts` `spawnProblem`), then the
+  kernel's own message under Details, then its code; the values are kept. A sentence names only a
+  control the form has.
+- A spawn goes on when its page is left: the form, opened again meanwhile, says "A spawn of <soul>
+  is in progress." and starts no second one.
 
-Mod+Enter spawns from any field (⌘ on a Mac, Ctrl elsewhere), as in the Desktop's dialog. The
-Desktop's Mod+1 to Mod+7, which go to a field, are not built: in a browser tab the browser keeps
-Ctrl or ⌘ with a digit for its own tabs, and a hint for a chord that does not fire would mislead.
-Tab walks the fields in the form's order.
+While OATS cannot be read the form is held like the acts: the roster's own notice (with the age of
+what is shown), the fields and Spawn off with the acts' reason, and nothing asked of the kernel.
+
+Mod+Enter spawns from any field (⌘ on a Mac, Ctrl elsewhere), as in the Desktop's dialog, and is
+said beside the button; Enter alone spawns nothing. The Desktop's Mod+1 to Mod+7, which go to a
+field, are not built: in a browser tab the browser keeps Ctrl or ⌘ with a digit for its own tabs,
+and a hint for a chord that does not fire would mislead. Tab walks the fields in the form's order.
 
 The soul, the harness, the model and the instance are each a field that opens a list
-(`app/spawn/Choice.tsx`: the WAI-ARIA combobox that only selects, in the shared look of a field):
-the form's own for now, offered to `app/ui` afterwards.
+(`app/spawn/Choice.tsx`: the WAI-ARIA combobox that only selects, in the shared look of a field;
+opening it moves the page no further than it takes to show the whole list): the form's own for
+now, offered to `app/ui` afterwards.
 
 A relation names its anchor with `--relation <kind> --relative-to <instance> --relative-root <agents
 root>`: the root is the anchor's home, as the roster's row names it, without its
-`<agent>/instances/<instance>` (the kernel's status names no agents root on a row); a home of
-another shape passes none.
+`<agent>/instances/<instance>` (the kernel's status names no agents root on a row, and derives it
+from the home the same way); a home of another shape passes none.
 
-Every spawn is `--backend bb --yolo`: the form says so in one line, "Runs in bb's full mode: no
-sandbox.", with no control ([How it is built](#how-it-is-built)).
+Every spawn is `--backend bb --yolo`: the form says so in one line by the button, "Runs in bb's
+full mode: no sandbox.", with no control, and the preview says what the kernel decided
+([How it is built](#how-it-is-built)).
 
 A soul's page (the Souls page is not shown in a release's default) still holds the earlier form: a
 name, a task, Preview (`spawnPreview`, the kernel's preview as short lines) and Spawn in bb. It
 goes when the workspace's pages are rebuilt.
 
-Not in the form yet (a later change): teams to join, Run in background, the developer settings
-(work area, launch configuration, messaging identity), the Setup and Launch prompts of the
-preview, a failed spawn kept with Reopen and the draft kept, a name from the task, a wake-up
-at spawn, and the Desktop's keys to a field.
+Not in the form yet (a later change), by the Desktop's rows: where to run, on another machine
+(D-242, D-263: the agent runs on the machine that holds the deployment, which the preview names);
+teams to join (D-245); a name suggested from the task (D-247); Run in background (D-248); the
+developer settings: work area, launch configuration, messaging identity (D-249 to D-253); the
+session backend as a choice (D-254: it is always a bb thread, and the preview says so); a wake-up
+at spawn (D-255, D-264); the Launch prompts of the preview (D-256; what sets up the work tree is
+shown); "Changed: press Spawn again" (D-257: Spawn is off while the values on screen have no
+preview, so a press is never for other values); the keys to a field (D-258); "Show its row" for a
+spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept (D-265). New
+agent on the home is the home's own change.
 
 ## Automations
 
@@ -397,9 +421,20 @@ What the features share, beyond the entries:
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
   on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
-  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's "Instance panel"
   button opens it at the phone's width, and an agent with no bb thread opens it from its row in the sidebar and from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+- **Whether a page is shown** (the setting `pages`). A page's `navPanel` component is
+  `shownPage("<id>", Page)` (`app/workspace/pages.ts`): it draws the page where the release shows
+  it, the "not shown" line where it does not, and nothing while bb is still reading the settings.
+  A place that links to a page asks `usePageShown("<id>")` (or `usePagesShown()` for several) and
+  draws plain text, or nothing, where the page is not shown. A feature tests both cases: a slot
+  rendered with no settings stands for every page shown (`test/helpers/render.ts`), and a test
+  of the default names `settings: { pages: "home" }`.
+- **"New agent".** The form's feature names how to open it, once, in its `register`:
+  `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
+  "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
+  page where that page is shown, and is absent where it is not.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.

@@ -16,6 +16,10 @@ export const FILTER_SOULS = "Filter souls";
 export const FILTER_HARNESSES = "Filter harnesses";
 export const FILTER_INSTANCES = "Filter instances";
 export const FILTER_MODELS = "Filter models";
+/** The harness list could not be read: nothing can be chosen, the soul's default still spawns, and Retry reads it again. */
+export const harnessesFailed = (code: string | null): string => `The harnesses bb can run could not be read${code === null ? "" : ` (${code})`}. A spawn uses the soul’s default until they are.`;
+export const SOUL_DEFAULT_ONLY = "The soul's default";
+export const RETRY_HARNESSES = "Read the harnesses again";
 /** Under the harness's first entry (the Desktop's detail). */
 export const HARNESS_DEFAULT_DETAIL = "What this soul launches with unless you choose";
 export const NO_SOULS = "This workspace lists no soul to spawn.";
@@ -27,6 +31,8 @@ export const TASK_PLACEHOLDER = "What should this instance do? Empty starts it w
 
 export const HARNESS_LABEL = "Harness";
 export const MODEL_LABEL = "Model";
+/** Under the model, when the kernel resolved none for the harness: bb decides, unless a person does. */
+export const modelUnset = (harness: string): string => `No model is set for ${harness} here, so bb starts it on its own default. Choose one to decide it.`;
 export const MODEL_CUSTOM = "Custom…";
 export const MODEL_CUSTOM_LABEL = "Model ID";
 export const MODEL_CUSTOM_PLACEHOLDER = "Type a model ID";
@@ -41,6 +47,7 @@ export const RELATIONS: readonly { id: RelationKind; label: string }[] = [
   { id: "sibling", label: "Sibling of" },
   { id: "parent", label: "Parent of" },
 ];
+export const WHICH_INSTANCE = "Which instance";
 export const CHOOSE_INSTANCE = "Choose an instance…";
 /** The accessible name of the instance choice: "Child of which instance?". */
 export const whichInstance = (kind: RelationKind): string => (kind === "unrelated" ? "Which instance" : `${kind[0]!.toUpperCase()}${kind.slice(1)} of which instance?`);
@@ -72,6 +79,8 @@ export const nameSent = (typed: string): string => typed.trim().toLowerCase();
 
 export const MODE_LINE = "Runs in bb's full mode: no sandbox.";
 
+/** The machine the agent runs on: the Desktop's fact (its "Where to run" is a control; here it is the machine that holds the deployment). */
+export const RUNS_ON = "Runs on";
 export const COLUMN_TITLE = "What will be created";
 export const COLUMN_NO_SOUL = "Choose a soul to see what will be created.";
 export const COLUMN_FIX_FIRST = "Shown once the values above can be used.";
@@ -82,11 +91,17 @@ export const REFUSED_TITLE = "This can’t be spawned as it is";
 
 export const SPAWN = "Spawn";
 export const SPAWNING = "Spawning…";
-export const CHECKING = "Checking…";
 export const CHECK_RESULT = "Check result";
 export const CANCEL = "Cancel";
-export const CHANGED = "Changed: press Spawn again";
-export const created = (name: string): string => `Created ${name}. Opening its thread…`;
+/** The button once the agent is made (the Desktop's). */
+export const CREATED = "Created";
+export const createdTitle = (name: string): string => `Created ${name}`;
+export const OPENING = "Opening its thread…";
+export const openAgent = (name: string): string => `Open ${name}`;
+/** Cancel's word once the agent is made: there is nothing left to cancel. */
+export const CLOSE = "Close";
+/** In a refusal that says the values moved, once the preview was read again. */
+export const READ_AGAIN = "“What will be created” was read again: it shows the values as they are now.";
 export const inProgress = (soul: string): string => `A spawn of ${soul} is in progress.`;
 export const SPAWN_FAILED_TITLE = "The agent was not spawned";
 export const SPAWN_UNKNOWN_TITLE = "It is not known whether the agent was spawned";

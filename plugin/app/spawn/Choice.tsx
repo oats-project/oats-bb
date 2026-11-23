@@ -4,11 +4,12 @@
 // an arrow opens it; the arrows, Home and End move; Enter chooses; Escape and Tab close it, and
 // the focus is back on the button. In the shared look of a field (INPUT), on bb's tokens.
 // The form's own for now (the pilot path); offered to app/ui as the shared one afterwards.
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { INPUT, TARGET } from "../ui";
 
-export type ChoiceOption = { id: string; label: string; detail?: string | undefined; disabled?: boolean | undefined };
+/** `unavailable`: an option a person can still choose, to read why it will not do (a soul that cannot be spawned, a harness bb has not installed): drawn muted. */
+export type ChoiceOption = { id: string; label: string; detail?: string | undefined; disabled?: boolean | undefined; unavailable?: boolean | undefined };
 
 /** From this many options on, the list has a filter. */
 export const FILTER_FROM = 8;
@@ -47,6 +48,7 @@ export function Choice({
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
   const filter = useRef<HTMLInputElement>(null);
   const listId = useId();
   const chosen = options.find((option) => option.id === value);
@@ -60,11 +62,11 @@ export function Choice({
     return -1;
   };
 
-  const close = (refocus: boolean) => {
+  const close = useCallback((refocus: boolean) => {
     setOpen(false);
     setQuery("");
     if (refocus) button.current?.focus();
-  };
+  }, []);
   const show = () => {
     if (disabled) return;
     const at = options.findIndex((option) => option.id === value && option.disabled !== true);
@@ -86,11 +88,18 @@ export function Choice({
     };
     document.addEventListener("mousedown", outside);
     return () => document.removeEventListener("mousedown", outside);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `close` only sets state
-  }, [open]);
-  // The option the keys are on is in view.
+  }, [open, close]);
+  // Once per opening: the whole list in view, by the smallest move of the page (none when it already is).
   useLayoutEffect(() => {
-    if (open) list.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView?.({ block: "nearest" });
+    if (open) popup.current?.scrollIntoView?.({ block: "nearest" });
+  }, [open]);
+  // The option the keys are on is in view, by scrolling the LIST alone: the page stays where it is.
+  useLayoutEffect(() => {
+    const box = list.current;
+    const on = box?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!open || box === null || on === null || on === undefined) return;
+    // Where it is not whole in the list's window it goes to the window's top: no option is left cut above it.
+    if (on.offsetTop < box.scrollTop || on.offsetTop + on.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = on.offsetTop;
   }, [open, active, shown]);
 
   const onKeys = (event: KeyboardEvent) => {
@@ -141,14 +150,13 @@ export function Choice({
           show();
         }}
       >
-        <span className={`min-w-0 flex-1 break-words ${chosen === undefined ? "text-subtle-foreground" : ""}`}>{chosen === undefined ? placeholder : chosen.label}</span>
+        <span className={`min-w-0 flex-1 break-words ${chosen === undefined ? "text-subtle-foreground" : chosen.unavailable === true ? "text-muted-foreground" : ""}`}>{chosen === undefined ? placeholder : chosen.label}</span>
         <span aria-hidden="true" className="shrink-0 text-muted-foreground">
           ▾
         </span>
       </button>
       {open ? (
-        // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the list's keys, from its filter or from the list itself
-        <div className="absolute left-0 right-0 top-full z-40 mt-1 flex max-h-72 flex-col rounded-md border border-border bg-background text-sm text-foreground shadow-lg" onKeyDown={onKeys}>
+        <div ref={popup} role="presentation" className="absolute left-0 right-0 top-full z-40 mt-1 flex max-h-72 flex-col rounded-md border border-border bg-background text-sm text-foreground shadow-lg" onKeyDown={onKeys}>
           {filtered ? (
             <div className="border-b border-border p-1">
               <input
@@ -179,7 +187,7 @@ export function Choice({
             aria-label={described["aria-label"] ?? filterLabel}
             aria-activedescendant={shown[active] === undefined ? undefined : optionId(active)}
             data-testid={`${testId}-options`}
-            className="m-0 min-h-0 flex-1 list-none overflow-y-auto p-1 outline-none"
+            className="relative m-0 min-h-0 flex-1 list-none overflow-y-auto p-1 outline-none"
           >
             {shown.length === 0 ? (
               <li role="presentation" className="px-3 py-2 text-muted-foreground">
@@ -196,7 +204,8 @@ export function Choice({
                 data-testid={`${testId}-option`}
                 data-value={option.id}
                 data-active={index === active}
-                className={`${TARGET} flex cursor-pointer flex-col justify-center rounded px-3 py-1 ${index === active ? "bg-accent" : ""} ${option.disabled === true ? "cursor-not-allowed text-muted-foreground" : ""}`}
+                className={`${TARGET} flex cursor-pointer flex-col justify-center rounded px-3 py-1 ${index === active ? "bg-accent" : ""} ${option.disabled === true ? "cursor-not-allowed text-muted-foreground" : option.unavailable === true ? "text-muted-foreground" : ""}`}
+                data-unavailable={option.unavailable === true ? "" : undefined}
                 onMouseEnter={() => {
                   if (option.disabled !== true) setActive(index);
                 }}

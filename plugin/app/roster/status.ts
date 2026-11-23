@@ -74,11 +74,16 @@ export function sessionStarted(startedAt: string | null, now: number): string | 
 /**
  * "since 14:03" for an agent OATS stopped: the time of its last "stopped" event, from the
  * instance's recorded events (`oats instance events`: read for the one agent whose thread or panel
- * is open, never for the roster). null when the events hold none, or none that can be read.
+ * is open, never for the roster). null when the events hold none, or none that can be read; and
+ * when the last one is older than the session's start the roster names (`startedAt`): the events
+ * held were read before this stop, and an earlier stop's time is not this one's.
  */
-export function stoppedSince(events: readonly { kind: string; at: string }[] | undefined, now: number): string | null {
-  const last = (events ?? []).filter((event) => event.kind === "stopped").at(-1);
+export function stoppedSince(events: readonly { kind: string; at: string; incarnation?: string }[] | undefined, startedAt: string | null, now: number): string | null {
+  // The events are the address's history: a stop of an EARLIER instance of the same name (retired, then spawned again) is not this one's.
+  const last = (events ?? []).filter((event) => event.kind === "stopped" && event.incarnation !== "earlier").at(-1);
   if (last === undefined) return null;
+  const [stoppedAt, started] = [Date.parse(last.at), startedAt === null ? NaN : Date.parse(startedAt)];
+  if (!Number.isNaN(started) && !Number.isNaN(stoppedAt) && stoppedAt < started) return null;
   const clock = waitingClock(last.at, now);
   return clock === "" ? null : `since ${clock}`;
 }

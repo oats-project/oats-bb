@@ -109,3 +109,61 @@ export function useModelSuggestions(harness: string | null): ModelSuggestions {
   if (answer === null || answer.of !== of) return { status: "loading", models: [], note: null };
   return { status: "ready", models: answer.models, note: answer.models.length === 0 ? NO_SUGGESTIONS : null };
 }
+
+// ---- whether bb can run a harness here ----
+// The provider declares the harnesses it can launch; whether bb on this machine HAS the bb provider
+// a harness runs on (installed, signed in) is bb's own fact: `sdk.system.providerStates`, the state
+// bb shows in its own settings. The bb session provider refuses a launch on a provider bb reports
+// as not ready (E_BACKEND_NOT_READY), after the spawn was decided: the form says it at the choice.
+// Read, never guessed: while bb has not answered, or for a state the plugin does not know, nothing is said.
+
+/** What bb says of a harness's bb provider when it is not ready to run; null when it is ready, or not known. */
+export type HarnessState = { mark: string; sentence: string } | null;
+const NOT_READY: Record<string, (name: string) => { mark: string; sentence: string }> = {
+  not_installed: (name) => ({ mark: "not installed in bb", sentence: `bb has not installed ${name} on this machine, so a spawn on it is refused. Install it in bb’s settings, or pick another harness.` }),
+  unauthenticated: (name) => ({ mark: "not signed in in bb", sentence: `bb is not signed in to ${name} on this machine, so a spawn on it is refused. Sign in to it in bb’s settings, or pick another harness.` }),
+  expired: (name) => ({ mark: "sign-in expired in bb", sentence: `bb’s sign-in to ${name} has expired on this machine, so a spawn on it is refused. Sign in to it again in bb’s settings, or pick another harness.` }),
+  unsupported_version: (name) => ({ mark: "too old for bb", sentence: `bb needs a newer ${name} than the one on this machine, so a spawn on it is refused. Update it in bb’s settings, or pick another harness.` }),
+};
+/** bb's answer as a state per bb provider id; a provider bb does not list, or a state it calls ready or unknown, has none. */
+export function providerStates(answer: unknown): Map<string, string> {
+  const listed = typeof answer === "object" && answer !== null && Array.isArray((answer as { providers?: unknown }).providers) ? (answer as { providers: unknown[] }).providers : [];
+  const states = new Map<string, string>();
+  for (const entry of listed) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { providerId, status } = entry as { providerId?: unknown; status?: unknown };
+    if (typeof providerId === "string" && typeof status === "string") states.set(providerId, status);
+  }
+  return states;
+}
+/**
+ * For each harness, what bb says when its bb provider is not ready on the machine that holds the
+ * deployment: `stateOf(harness)`. Asked once the machine is known; a failed or pending read says nothing.
+ */
+export function useHarnessStates(): (harness: string | null) => HarnessState {
+  const sdk = useSdk();
+  const list = useRead("spawnHarnesses", { live: false });
+  const hostId = list.data?.hostId ?? null;
+  const [answer, setAnswer] = useState<{ of: string; states: Map<string, string> } | null>(null);
+  useEffect(() => {
+    if (hostId === null) return;
+    let current = true;
+    Promise.resolve()
+      .then(() => sdk.system.providerStates({ hostId }))
+      .then(
+        (states) => {
+          if (current) setAnswer({ of: hostId, states: providerStates(states) });
+        },
+        () => undefined, // bb did not say: nothing is marked
+      );
+    return () => {
+      current = false;
+    };
+  }, [sdk, hostId]);
+  return (harness) => {
+    if (harness === null || answer === null || answer.of !== hostId) return null;
+    const providerId = BB_PROVIDER[harness];
+    const status = providerId === undefined ? undefined : answer.states.get(providerId);
+    return status !== undefined && Object.hasOwn(NOT_READY, status) ? NOT_READY[status]!(harnessLabel(harness)) : null;
+  };
+}

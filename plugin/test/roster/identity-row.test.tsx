@@ -237,3 +237,51 @@ test("a stopped agent says since when from its last recorded \"stopped\" event, 
   await working.findByTestId("oats-status-line");
   expect(working.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(false);
 });
+
+// The events read runs once and bb keeps its answer: an agent stopped, started and stopped again
+// in one window must say the time of THIS stop, never the earlier one's (round 1 of the second pass).
+test("a stopped agent that was started and stopped again says the time of this stop: the events are read again each time it turns stopped", async () => {
+  const [first, started, second] = ["2026-11-21T10:00:00.000Z", "2026-11-21T12:00:00.000Z", "2026-11-21T16:00:00.000Z"];
+  const digest = (over: Partial<ReturnType<typeof fixtureAgents>[number]>) => fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, ...over } : agent));
+  const stop = recordedEvents().events.find((event) => event.kind === "stopped")!;
+  let agents = digest({ startedAt: "2026-11-21T09:00:00.000Z" });
+  let events = [{ ...stop, at: first }];
+  const slot = await render("thr_digest", fixtureAgents(), {
+    snapshot: (input) => handlers({}, agents).snapshot(input),
+    panelEvents: () => ({ ...recordedEvents(), events }),
+  });
+  const line = () => slot.getByTestId("oats-status-line").textContent;
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").length;
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(first)}StartInstance panel`));
+  expect(asked()).toBe(1);
+  // Started: the line is no longer the stopped one, and nothing more is asked.
+  agents = digest({ running: true, runtimeState: "running", startedAt: started });
+  await slot.behavior.emitRealtime("oats/changed", { at: started });
+  await vi.waitFor(() => expect(line()).not.toContain("Stopped"));
+  expect(asked()).toBe(1);
+  // Stopped again: the kernel has recorded a second "stopped". The events held are from before it.
+  agents = digest({ startedAt: started });
+  events = [{ ...stop, at: first }, { ...stop, at: second }];
+  await slot.behavior.emitRealtime("oats/changed", { at: second });
+  await vi.waitFor(() => expect(line()).toBe(`Stopped· since ${waitingClock(second)}StartInstance panel`));
+  expect(asked()).toBe(2);
+});
+
+test("events read before the session's start hold no time for this stop: the line says none, never an earlier stop's", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-22T08:00:00.000Z" } : agent));
+  const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
+  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+});
+
+// The settings can mend what Retry cannot (which machine holds the agents): the notice then has no
+// Retry, and its sentence names what it does have.
+test("on the last roster read with no Retry to offer, the one-line notice names the settings and links to them", async () => {
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "CHOOSE_HOST", message: "This bb server has 2 machines", last }) });
+  const stale = await slot.findByTestId("oats-unreadable");
+  expect(stale.textContent).toBe("Choose the machine that holds your agentsShowing what was read 2 min ago. Open settings: Stop, Start, Restart and Retire come back when OATS is read again.Open settings");
+  expect(within(stale).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(within(stale).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBe("/settings/plugins/test-plugin");
+});

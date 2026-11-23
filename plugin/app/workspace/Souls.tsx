@@ -6,7 +6,7 @@ import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
-import { RosterNotice } from "../roster/unreadable";
+import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
@@ -44,6 +44,8 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
   const mine = oats.agents.filter((agent) => agent.soul === soul.agent);
   if (mine.length === 0) return <Note>No agent of this soul in this deployment.</Note>;
   const detached = new Set(oats.view.detached);
+  // On the last roster read the OATS acts are held: each stays in its place, off, with the reason.
+  const held = oats.stale !== null;
   return (
     <ul data-testid="oats-soul-agents" className="flex flex-col gap-1">
       {mine.map((agent) => {
@@ -76,10 +78,10 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
             <li key={agent.instance} data-testid="oats-soul-agent-detached" data-instance={agent.instance} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
               <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
               <span className="text-xs text-muted-foreground">thread missing</span>
-              <Button data-testid="oats-detached-start" onClick={() => void run("start", agent.instance, rpc, navigate)}>
+              <Button data-testid="oats-detached-start" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
                 Start
               </Button>
-              <Button data-testid="oats-detached-retire" onClick={() => askPlan("retire", agent.instance)}>
+              <Button data-testid="oats-detached-retire" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => askPlan("retire", agent.instance)}>
                 Retire
               </Button>
             </li>

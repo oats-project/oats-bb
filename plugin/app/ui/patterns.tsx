@@ -84,6 +84,8 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * the question or the reason, and the act that applies, as a button. The thread's identity row,
  * the panel's header and the home's rows draw this one. `since` and `detail` are text from OATS or
  * an agent and go through the display filter here; the line wraps, and nothing in it is cut.
+ * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
+ * with a separator), and a list that opens from the line would be cut.
  */
 export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
   const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
@@ -151,6 +153,21 @@ export function Disclosure({ summary, children, open, onToggle, testId = "oats-d
       </summary>
       <div className="flex min-w-0 flex-col gap-1 break-words pt-1">{children}</div>
     </details>
+  );
+}
+
+/**
+ * What the kernel itself says behind a status line's words (of a session it cannot reach: often a
+ * raw URL or an errno): one press away, under Details, never the line's words. The one drawing, for
+ * the thread's row and the instance panel's header. Nothing for no text.
+ */
+export function KernelSays({ text }: { text: string | null }) {
+  const said = text === null ? "" : shown(text);
+  if (said === "") return null;
+  return (
+    <Disclosure summary="Details" testId="oats-status-kernel">
+      <p className="text-xs text-muted-foreground">{`OATS says: ${said}`}</p>
+    </Disclosure>
   );
 }
 

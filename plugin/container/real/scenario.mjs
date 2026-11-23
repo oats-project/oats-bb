@@ -180,7 +180,8 @@ const untilRest = async (instance, what, matches, seconds = 60) => {
 const stopLeft = (of) => {
   // Given the thread's id, or the thread as bb answered it (so that what a check prints is what it judged).
   const thread = typeof of === "string" ? bbThread(of) : of;
-  if (thread === undefined || thread === null) return "gone";
+  // Anything that is not a thread of bb's (none, or a value that is no thread) is no thread kept.
+  if (thread === undefined || thread === null || typeof thread !== "object" || typeof thread.id !== "string") return "gone";
   if (thread.archivedAt != null) return "archived";
   return thread.status === "active" ? "active" : "kept";
 };

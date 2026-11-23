@@ -46,7 +46,7 @@ test("an agent that waits says since when and what about; the others say only wh
   expect(agentStatus({ ...waiting, waiting: null }, { ...thread, hasPendingInteraction: true }, now)).toEqual({ state: "needs-you", word: "Needs you", since: null, detail: "bb shows its question in this thread", kernel: null });
   // The gate: a row the kernel calls stopped shows no claim, whatever it still carries.
   expect(agentStatus({ ...waiting, running: false, runtimeState: "stopped", waiting: claim }, { ...thread, hasPendingInteraction: false }, now)).toEqual({ state: "stopped", word: "Stopped", since: null, detail: null, kernel: null });
-  const working = agents.find((agent) => agent.running === true && agent.waiting === null)!;
+  const working = agents.find((agent) => agent.instance === "desktop-mockups-developer")! // one of the two whose thread bb's fixture calls active, named: `running` does not say that an agent works;
   const quiet = { ...of(working.instance).thread, hasPendingInteraction: false };
   expect(agentStatus(working, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
   expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, quiet, now)).toEqual({ state: "error", word: "Failed", since: null, detail: "Its session ended", kernel: null });
@@ -63,7 +63,7 @@ test("an agent that waits says since when and what about; the others say only wh
 // for Idle, Failed and Unreachable.
 test("a working agent says when its session started, as that; with no start in the kernel's row, no time", () => {
   const now = new Date(2026, 10, 21, 14, 30).getTime();
-  const working = fixtureAgents().find((agent) => agent.running === true && agent.waiting === null)!;
+  const working = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")! // named, not picked by `running`;
   const thread = of(working.instance).thread; // bb has a turn running on it
   expect(agentStatus({ ...working, startedAt: new Date(2026, 10, 21, 14, 3).toISOString() }, thread, now)).toMatchObject({ state: "working", since: "session started 14:03", detail: null });
   expect(agentStatus({ ...working, startedAt: null }, thread, now)).toMatchObject({ state: "working", since: null });

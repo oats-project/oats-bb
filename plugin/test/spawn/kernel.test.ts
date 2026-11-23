@@ -3,10 +3,11 @@
 // with a space, a slash, an upper-case letter or a leading dash, are refused before any process
 // starts; the task file is 0600 and gone after the call, on success and on failure.
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { codes, createOats, Processes, type Oats } from "../../kernel/index.js";
-import { installFakeOats, type FakeOats } from "../support/fake-oats.js";
+import { FIXTURES, installFakeOats, type FakeOats } from "../support/fake-oats.js";
 
 let fake: FakeOats;
 let processes: Processes;
@@ -176,6 +177,22 @@ describe("the choices of the New agent form, as arguments", () => {
     const chosen = ["--harness", "claude", "--model", "anthropic/claude-opus-5-5", "--relation", "child", "--relative-to", "flaky-ci-developer", "--relative-root", "/abs/deployment/agents"];
     expect(preview!.argv).toEqual([...shared, preview!.taskFile!.path, ...chosen, "--preview", "--json"]);
     expect(apply!.argv).toEqual([...shared, apply!.taskFile!.path, ...chosen, "--expect-decision", "c557d8ec9a272ba1c1739dc3", "--idempotency-key", "spawn-1f0c9a7e", "--json"]);
+  });
+
+  it("a harness with no model resolved: the facts promise bb's default only where the harness is the soul's own, not where the call named it", async () => {
+    // The recorded preview with the harness and no model, as the kernel answers where the soul's model is another harness's.
+    const answer = JSON.parse(await readFile(join(FIXTURES, "spawn/spawn-preview.json"), "utf8"));
+    Object.assign(answer.result, { harness: "pi", model: null, modelSource: null });
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(answer) } });
+    const harnessOf = async (input: { harness?: string }) => {
+      const preview = await oats.spawnPreview({ soul: "oats-developer", task: "t", ...input }, context());
+      if (!preview.ok) throw new Error(preview.error.message);
+      return preview.value.facts.facts.find((fact) => fact.label === "Harness")!.parts[0]!.text;
+    };
+    // No harness named: the soul's own, which bb starts on its own default.
+    expect(await harnessOf({})).toBe("pi · bb’s default for pi");
+    // A harness named by the call (the person chose it): the harness alone; the form holds Spawn until a model is picked.
+    expect(await harnessOf({ harness: "pi" })).toBe("pi");
   });
 
   it("refuses a harness, a model or a relation that could be read as anything else, before any process starts", async () => {

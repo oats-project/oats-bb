@@ -250,7 +250,7 @@ export const verbs = (oats: Runner) => ({
   ): Promise<Result<SpawnPreview>> {
     const checked = checkSpawn(input, context.knownSouls);
     if (!checked.ok) return checked;
-    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name, checked.value.harness !== undefined), oats.timeouts.preview, signal);
+    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name, checked.value.harness !== null), oats.timeouts.preview, signal);
     return hasTask(input.task) ? withTaskFile(context.tempDir, input.task, run) : run(null);
   },
 

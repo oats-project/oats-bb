@@ -7,7 +7,7 @@
 // The words are the OATS Desktop's (./words.ts).
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
@@ -241,8 +241,26 @@ type PlanState =
   | { phase: "applying"; plan: Plan; key: string }
   | { phase: "settled"; outcome: Outcome; refusal: Refusal | null; sent: { plan: Plan; key: string } | null };
 
+/**
+ * Whether bb holds the thread archived NOW, as bb itself answers (`sdk.threads.get`): true or
+ * false; null when bb cannot be asked or does not say. Read after a stop, for what its result
+ * says of the thread: the provider's release decides whether a stop archives, and what a person
+ * is told is what happened, not what a version number promises.
+ */
+async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string): Promise<boolean | null> {
+  try {
+    const thread: unknown = await sdk.threads.get({ threadId });
+    if (typeof thread !== "object" || thread === null || !("archivedAt" in thread)) return null;
+    return thread.archivedAt !== null && thread.archivedAt !== undefined;
+  } catch {
+    // bb could not be asked (or this bb has no such read): not known, and the result says what the confirmation said.
+    return null;
+  }
+}
+
 function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const rpc = useRpc<Contract>();
+  const sdk = useSdk();
   const navigate = useBbNavigate();
   const oats = useOats();
   const { verb, instance } = request;
@@ -308,7 +326,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
     const answered =
       plan.action === "stop"
-        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then((receipt) => stopOutcome(receipt, plan.instance ?? instance, plan.targets.some((target) => target.backend === "bb"), archives))
+        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then(async (receipt) => {
+            const onBb = plan.targets.some((target) => target.backend === "bb");
+            // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
+            const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
+            return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? archives);
+          })
         : rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard }).then((receipt) => retireOutcome(receipt, plan));
     answered.then(
       (outcome) => settle(outcome, null),

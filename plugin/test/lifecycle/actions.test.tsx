@@ -36,7 +36,7 @@ const target = (id: string): PluginThreadActionTarget => {
  * What bb does with the plugin's registrations: calls each `useData` in the plugin's scope, asks
  * each `item` for one thread, and mounts the plugin's overlay once per app window.
  */
-async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Agent[]) {
+async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Agent[], sdk: object = modelsSdk()) {
   const app = await loadApp();
   expect(app.threadActions.map((action) => [action.id, action.group])).toEqual([
     ["stop", "4_lifecycle"],
@@ -63,7 +63,7 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
       },
     },
     {},
-    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
+    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads(), sdk: sdk as never },
   );
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1374,4 +1374,52 @@ test("a retire of an agent that runs pi on bb, refused because a process works i
   expect(pi.indexOf(WAIT)).toBeGreaterThan(pi.indexOf("OATS says:"));
   expect(await refused("claude")).not.toContain(WAIT);
   expect(await refused(null)).not.toContain(WAIT);
+});
+
+// ---- what a stop's result says of the thread is what bb shows of it
+
+test("a stop's result says of the agent's thread what bb shows after the stop: archived, or still taking messages; where bb cannot be asked, what the confirmation said", async () => {
+  const MESSAGE = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+  const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
+  const stopped = async (get: (args: { threadId: string }) => Promise<unknown>) => {
+    const asked: string[] = [];
+    const sdk = { ...modelsSdk(), threads: { get: (args: { threadId: string }) => (asked.push(args.threadId), get(args)) } };
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => stopReceiptOf() }, undefined, sdk);
+    await pick("stop");
+    await ready(slot);
+    // Before the act the dialog says what the provider's version says: today, that a message starts it again.
+    expect(slot.getByTestId("oats-confirm").textContent).toContain(MESSAGE);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "done");
+    const text = slot.getByTestId("oats-result").textContent!;
+    resetApp();
+    return { text, asked };
+  };
+  // bb shows the thread archived (a provider that archives at stop): the result says so, whatever the confirmation said.
+  const archived = await stopped(async ({ threadId }) => ({ id: threadId, archivedAt: 1_763_000_000_000 }));
+  expect(archived.asked).toEqual(["thr_redesign"]); // bb is asked once, for the agent's own thread, after the stop
+  expect(archived.text).toContain(ARCHIVED);
+  expect(archived.text).not.toContain(MESSAGE);
+  // bb shows it as it was: a message there still starts the agent.
+  const live = await stopped(async ({ threadId }) => ({ id: threadId, archivedAt: null }));
+  expect(live.text).toContain(MESSAGE);
+  expect(live.text).not.toContain(ARCHIVED);
+  // bb cannot be asked, or answers nothing of it: not known, and the result keeps the confirmation's sentence.
+  for (const get of [async () => Promise.reject(new Error("bb did not answer")), async () => ({ id: "thr_redesign" }), async () => null]) {
+    const unknown = await stopped(get);
+    expect(unknown.text).toContain(MESSAGE);
+    expect(unknown.text).not.toContain(ARCHIVED);
+  }
+});
+
+test("bb is not asked about the thread after a stop that did not stop every session", async () => {
+  const asked: string[] = [];
+  const sdk = { ...modelsSdk(), threads: { get: async (args: { threadId: string }) => (asked.push(args.threadId), { archivedAt: null }) } };
+  const failed = { ...stopReceiptOf(), ok: false };
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => failed }, undefined, sdk);
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(asked).toEqual([]);
 });

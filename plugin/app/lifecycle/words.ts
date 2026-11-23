@@ -303,7 +303,11 @@ export function stoppedRowText(row: StoppedRow): string {
 const rowLines = (rows: readonly StoppedRow[]) => rows.map((row) => `${agentName(row.instance)}: ${stoppedRowText(row)}`);
 const quotes = (rows: readonly StoppedRow[]) => rows.flatMap((row) => (row.detail === null ? [] : [`${row.instance}: ${row.detail}`]));
 
-/** `onBb`: some session of the plan runs on bb, so the result says what a stop means for its thread (`archives`: as for the plan). */
+/**
+ * `onBb`: some session of the plan runs on bb, so the result says what the stop means for its
+ * thread. `archived`: whether bb shows the thread archived after the stop, where bb answered;
+ * else what the confirmation said of it (`stopArchivesThread`).
+ */
 export function stopOutcome(receipt: StopReceipt, instance: string, onBb = false, archives = false): Outcome {
   const replay = receipt.replayed ? [REPLAYED] : [];
   const details = quotes(receipt.results).join("\n") || null;

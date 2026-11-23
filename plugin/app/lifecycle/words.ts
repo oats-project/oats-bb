@@ -68,8 +68,6 @@ export const stopThreadSentence = (archives: boolean): string =>
  * - a PRE-RELEASE of the threshold itself (`0.4.0-rc.1`): by semver it comes before 0.4.0, and
  *   nothing says that a candidate already archives. A pre-release of a later version is later.
  */
-// (The real run restates this number and the comparison, since it cannot import this file:
-// container/real/parts/lifecycle.mjs `archivesByVersion`, once it is on main. Change both together.)
 export const ARCHIVES_AT_STOP_FROM: string | null = "0.4.0";
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 export function stopArchivesThread(providerVersion: string | null, from: string | null = ARCHIVES_AT_STOP_FROM): boolean {
@@ -634,6 +632,8 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   if (code === "NO_THREAD_NAMED") return of("unknown", `${name} was started, but its thread isn't ready yet`, ["Open it from its row when it is."], []);
   // A start the kernel refused AND marked unconfirmed: it cannot tell what is left, whatever the code. Never
   // "wasn't started": not confirmed, with OATS's own line, and what a result that is not confirmed offers here (Refresh status).
+  // ONE code is decided before it, above: E_SPAWN_INCOMPLETE, which the kernel marks too and of which more is
+  // known (the session is there). Its sentence is as unsure, says more, and offers the same Refresh status.
   if (refusal.unconfirmed === true) return of("unknown", "Result not confirmed", [`OATS could not confirm what the ${act} left. Refresh its status before another try.`, ...oatsSays(refusal.message)]);
   // A resume the kernel refused: its session is not lost any more (the row changed after the check), or the
   // launch settings changed since it last ran (the remedy is a plain start, fresh: one more press).

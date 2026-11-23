@@ -18,6 +18,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
+import { lineParts, outsideOf, OutsideWarning } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -174,6 +175,36 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
  * Beside choices or a request answered in the thread, a message is not offered as an equal: it is
  * behind "Write a message instead", with what a message does not do.
  */
+/**
+ * The card of an agent that runs outside OATS (app/outside: OATS recorded it stopped, and the
+ * kernel reports its harness running). It needs the person, and not for an answer: the card holds
+ * that feature's notice, with its Stop and Start (the lifecycle's own dialogs), and the way to its
+ * thread. No choice and no reply: a message is what put it outside OATS.
+ */
+function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  const open = useOpen(oats)(entry);
+  const name = agentName(entry.agent.instance);
+  const said = outsideOf(oats).of(entry.agent);
+  const paged = entry.thread === null || !oats.threadById.has(entry.thread.id);
+  return (
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer="outside">
+      <Card testId="oats-needs-card-body">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
+            <span className="break-words text-xs text-muted-foreground">{soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine)}</span>
+          </div>
+          <Button data-testid="oats-needs-open" aria-label={`${paged ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
+            {paged ? OPEN_PAGE : OPEN_THREAD}
+          </Button>
+        </div>
+        <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} />
+        <OutsideWarning said={said} instance={entry.agent.instance} held={held} />
+      </Card>
+    </li>
+  );
+}
+
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
@@ -662,7 +693,7 @@ function Sections({ oats, visible, agents, title, onAgents, onBack }: { oats: Oa
           </p>
         ) : (
           <Cropped items={made.needsYou} shown={NEEDS_YOU_SHOWN} more={showAll} testId="oats-home-needs-all">
-            {(entry) => <NeedsYouCard key={entry.agent.instance} entry={entry} oats={oats} held={held} />}
+            {(entry) => (entry.status.state === "outside" ? <OutsideCard key={entry.agent.instance} entry={entry} oats={oats} held={held} /> : <NeedsYouCard key={entry.agent.instance} entry={entry} oats={oats} held={held} />)}
           </Cropped>
         )}
       </Section>

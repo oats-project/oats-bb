@@ -115,3 +115,13 @@ the fake (`verbs.json`): a test names the file for the verb it asks.
   ("… did not lose its session (it stopped) … nothing was started").
 - `tmux-resume-running.json`: `--resume` on the home while it runs: `E_SESSION_RUNNING` ("… is
   running (unknown); nothing was started"), not `E_RESUME_NOT_LOST`.
+
+## An act refused with the kernel's marker (shaped, no file)
+
+The four refusals that carry the kernel's marker that it cannot confirm what is left
+(`error.details.unconfirmed: true` in its envelope, which the plugin's server hands on as
+`UNCONFIRMED_ISSUE`, `contract/shared.ts`) are SHAPED in the tests, not recorded: no real kernel
+was made to give one for a stop, a start, a restart or a retire. The envelope's form and the
+codes are the kernel's; that it marks them, and the messages, are ours. The tests: `test/lifecycle/words.test.ts` ("an act
+the kernel refused and marked unconfirmed…", one case per verb, and "only with the marker") and
+`test/lifecycle/actions.test.tsx` (the retire's dialog; the stop's and the start's).

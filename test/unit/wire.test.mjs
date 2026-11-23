@@ -105,7 +105,8 @@ test("bb runs against the server given, without the caller's own bb thread conte
   const env = { ...process.env, ...bb.env, BB_SERVER_URL: "http://127.0.0.1:1", BB_THREAD_ID: "thr_caller", BB_PROJECT_ID: "proj_caller" };
   const answer = await runBb(bb.cli, ["thread", "list", "--json"], { server: SERVER, env });
   assert.deepEqual(answer, { ok: true, value: [] });
-  assert.deepEqual(bb.calls()[0], { argv: ["thread", "list", "--json"], stdin: "", server: SERVER, context: null });
+  // (And no host daemon port: none was given, and the provider says nothing of it. test/unit/host-daemon-port.test.mjs.)
+  assert.deepEqual(bb.calls()[0], { argv: ["thread", "list", "--json"], stdin: "", server: SERVER, context: null, hostDaemonPort: null });
 });
 
 test("a bb call that outlives its time is killed and reported as a timeout", async (t) => {

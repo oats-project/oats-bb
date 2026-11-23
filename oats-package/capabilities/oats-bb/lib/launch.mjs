@@ -90,7 +90,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     const [first, ...rest] = problems;
     throw fail(first.code, rest.length ? `${first.message} (and ${rest.length} more: ${rest.map((problem) => problem.code).join(", ")}; see oats readiness)` : first.message);
   }
-  const bb = bbClient({ cli: settings.cli, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
+  const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
 
   // One thread per home: the home's project may hold the thread this launch replaces
   // (stopped by OATS, so settled), and nothing else alive.

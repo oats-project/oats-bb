@@ -54,7 +54,7 @@ for (const [status, word] of [["not_installed", "not_installed"], ["unauthentica
     const answer = await run();
     assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
     assert.match(answer.error.message, new RegExp(`bb reports its pi provider as ${word}`));
-    assert.deepEqual(verbs(bb), ["--version"]);
+    assert.deepEqual(verbs(bb), ["--version", "host list"], "bb was only read");
   });
 }
 

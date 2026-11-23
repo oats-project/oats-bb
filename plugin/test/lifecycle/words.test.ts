@@ -534,6 +534,11 @@ describe("an act the kernel refused and marked unconfirmed", () => {
   // SHAPED, from the envelope's form (the kernel's `error.details.unconfirmed: true`, which the plugin's server
   // hands on beside the refusal's text; #52's fixtures hold the form): no run of ours has met one for these acts.
   const marked = { code: "E_RETIRE_INCOMPLETE", message: "the home was moved aside and the retire hooks did not answer\nmore of it", unconfirmed: true };
+  it("one code keeps its own sentence though the kernel marks it too: a start that did not finish (its session is there), with the same Refresh status", () => {
+    const own = { tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting", lines: ["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."], offers: ["refresh"] };
+    expect(startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m", unconfirmed: true })).toMatchObject(own);
+    expect(startRefused("start", "dev-1", { code: "E_SPAWN_INCOMPLETE", message: "m" })).toMatchObject(own);
+  });
   it("a retire: not confirmed, OATS's own line, the code, Check again; never \"wasn't retired\"", () => {
     expect(applyRefused("retire", "dev-1", marked)).toEqual({
       tone: "unknown",

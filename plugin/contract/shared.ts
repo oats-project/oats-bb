@@ -21,12 +21,16 @@ const kernelError = z.object({ code: z.string(), message: z.string(), unconfirme
 /**
  * How the kernel's marker reaches the app. bb's RPC refusal carries a code, a message and `issues`:
  * the server adds this one issue to the refusal of an error the kernel marked unconfirmed
- * (server/core.ts `refusal`), and a place that needs the marker reads it with `unconfirmedOf`. The
+ * (server/core.ts `refusal`), and a place that needs the marker reads it with `isUnconfirmed`. The
  * refusal's message stays `<code>: <message>`.
  */
 export const UNCONFIRMED_ISSUE = { message: "unconfirmed", path: ["details", "unconfirmed"] } as const;
-/** Whether a failed call is the refusal of an error the kernel marked unconfirmed. */
-export function unconfirmedOf(cause: unknown): boolean {
+/**
+ * Whether a failed call is the refusal of an error the kernel marked unconfirmed: the one reader of
+ * the marker, for every place of the app that needs it. Nothing draws a refusal's issues: no place
+ * of the plugin reads them but this, and bb's app (0.50.1) only copies them onto the call's error.
+ */
+export function isUnconfirmed(cause: unknown): boolean {
   const issues = typeof cause === "object" && cause !== null ? (cause as { issues?: unknown }).issues : undefined;
   return (
     Array.isArray(issues) &&

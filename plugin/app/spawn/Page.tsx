@@ -18,7 +18,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
-import { unconfirmedOf } from "../../contract/shared";
+import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
 import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
@@ -65,12 +65,12 @@ function soulOf(subPath: string): string {
  * `<code>: <message>`. A refusal with no such code is the plugin's own "this input cannot be
  * used" (bb's code `invalid`: nothing was asked of the kernel); a call that failed with neither
  * never reached an answer, and what it did is not known. The kernel's marker that it could not
- * confirm what is left comes with the refusal, beside its text (contract/shared.ts `unconfirmedOf`).
+ * confirm what is left comes with the refusal, beside its text (contract/shared.ts `isUnconfirmed`).
  */
 function reasonOf(cause: unknown): SpawnReason {
   const text = errorMessage(cause);
   const code = refusalCode(text);
-  if (code !== null) return { code, message: text.slice(code.length + 2), unconfirmed: unconfirmedOf(cause) };
+  if (code !== null) return { code, message: text.slice(code.length + 2), unconfirmed: isUnconfirmed(cause) };
   const refused = typeof cause === "object" && cause !== null && (cause as { code?: unknown }).code === "invalid";
   return { code: refused ? "INVALID_INPUT" : "PLUGIN_RPC_FAILED", message: text };
 }

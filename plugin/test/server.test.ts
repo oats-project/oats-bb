@@ -12,7 +12,7 @@ import { host as spawnHost } from "../contract/spawn.js";
 import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
-import { unconfirmedOf } from "../contract/shared.js";
+import { isUnconfirmed } from "../contract/shared.js";
 import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
 import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
@@ -425,7 +425,7 @@ describe("acts", () => {
         () => {
           throw new Error("expected a refusal");
         },
-        (error: { code?: string; message: string; issues?: unknown }) => ({ code: error.code, message: error.message, issues: error.issues, unconfirmed: unconfirmedOf(error) }),
+        (error: { code?: string; message: string; issues?: unknown }) => ({ code: error.code, message: error.message, issues: error.issues, unconfirmed: isUnconfirmed(error) }),
       );
     const refuse = (details: unknown) => fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_NOT_READY", message: "not launched — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present", details } }) } });
     await refuse({ unconfirmed: true, home: "/abs/home" });

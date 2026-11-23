@@ -389,7 +389,7 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   message (`kernel/envelope.ts`, `KernelError.unconfirmed`; nothing else of an error's `details`
   passes, and a `details.unconfirmed` that is not the literal `true` is no marker), and the
   server's refusal carries it to the app as the refusal's one issue (`server/core.ts` `refusal`,
-  `contract/shared.ts` `unconfirmedOf`). **Created**, where the kernel says an instance exists whose start did not
+  `contract/shared.ts` `isUnconfirmed`). **Created**, where the kernel says an instance exists whose start did not
   finish, or the spawn went through and named no thread: the form stays held, says so, and sends
   the person to the sidebar; this is read before the marker, which the kernel also sets on an
   instance it kept (`E_SPAWN_INCOMPLETE`). **Unknown** for everything else (the kernel's "could not confirm", a

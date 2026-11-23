@@ -266,7 +266,7 @@ export default [
       if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
       const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null }) : ""; })()`, 15);
       check(oneLine !== null && new RegExp(`^\\{"line":"Last observation — ${AGE} Retry","full":false\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Last observation — <age>" and Retry`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
-      await page.shot(`a14-${viewport.name}-home-sidebar-line`);
+      // (The home's image, below, holds the sidebar's one line beside the page's notice.)
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
     },

@@ -24,7 +24,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
+import { showSidebar, testId, textOf, texts, visible, textsNamed } from "../browser.mjs";
 
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const bbJson = (...args) => JSON.parse(bb(...args, "--json"));
@@ -228,7 +228,7 @@ export default [
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // bb's own answer arrives after the roster: the rows are waited for, by what they say.
-      const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
       const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       // The reason follows the state's word on a row (no soul): each of these rows' second line is ONE line, never two.
@@ -425,7 +425,7 @@ export default [
       // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
       const settled = await page.until(`(() => { const now = ${all}; return /with the machine/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(

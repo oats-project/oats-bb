@@ -120,6 +120,19 @@ test("unset: no bb call of any verb, hook or the doctor is told a port, also whe
   }
 });
 
+// What every deployment had before the key: no port. Its launch asks bb exactly what it
+// asked then, in the same order (the other unit tests run with a port, as the fake
+// backend's daemon is not on bb's default one).
+test("unset: a launch runs the same bb commands, in the same order, as before the key", async (t) => {
+  const d = await deployment(t, null);
+  const launched = await call("launch", { home: d.home, instance: "dev-a", harness: "claude", model: "claude-opus-5-5", yolo: true, env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: d.home, source: "kernel" }], args: [], promptFile: join(d.home, "TASK.md"), previous: d.endpoint }, { settings: d.settings, bb: d.bb });
+  assert.equal(launched.ok, true, JSON.stringify(launched));
+  const verbs = d.bb.calls().map((c) => (c.argv[0] === "--version" ? "--version" : c.argv[1] === "list" && c.argv.includes("--archived") ? "thread list --archived" : c.argv[0] === "thread" && c.argv[1] === "queue" ? "thread queue list" : c.argv.slice(0, 2).join(" ")));
+  // (The home's previous thread is live and at rest: the launch stops it, confirms it and archives it before the spawn. lib/launch.mjs is not changed by the key.)
+  assert.deepEqual(verbs, ["--version", "project list", "thread list", "thread list --archived", "thread queue list", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "machine env", "thread spawn"]);
+  assert.deepEqual(d.bb.calls().filter((c) => c.hostDaemonPort !== null), []);
+});
+
 test("a value that is no port is refused by every command, naming the key and bb-app's flag: never dropped", async (t) => {
   const { dir, home } = scratch(t);
   const backend = await fakeBackend(t);
@@ -158,7 +171,7 @@ test("the key is host-only, as `server` is: the kernel takes it from oats-local.
 });
 
 test("the daemon's address follows the port where only the port is set; the two together must name one port", () => {
-  assert.deepEqual([readSettings({}).daemon, readSettings({}).daemonKey], ["http://127.0.0.1:38887", "daemon"]);
+  assert.deepEqual([readSettings({}).daemon, readSettings({}).daemonKey], ["http://127.0.0.1:38887", null], "neither set: bb's default address, decided by no setting");
   assert.deepEqual([readSettings({ hostDaemonPort: 39012 }).daemon, readSettings({ hostDaemonPort: 39012 }).daemonKey], ["http://127.0.0.1:39012", "hostDaemonPort"]);
   assert.deepEqual([readSettings({ daemon: "http://localhost:39012" }).daemon, readSettings({ daemon: "http://localhost:39012" }).hostDaemonPort], ["http://localhost:39012", null], "a daemon address alone tells bb's CLI nothing, as before the key");
   const both = readSettings({ hostDaemonPort: 39012, daemon: "http://localhost:39012" });
@@ -180,16 +193,42 @@ test("readiness asks the daemon at the port, and its findings name the key", asy
   assert.deepEqual(backend.daemonRequests, ["/status"]);
   assert.deepEqual(ready.result.warnings.map((warning) => warning.code), ["session-provider-full-mode-only"]);
   // Another bb's daemon port: its daemon serves another server, and the finding names the key and bb-app's flag.
+  const PORT_KEY = "settings\\.oats\\.bb\\.hostDaemonPort \\(the port bb-app was started with: its --host-daemon-port\\)";
   const wrong = await check({ hostDaemonPort: other.daemonPort });
   assert.deepEqual(wrong.result.problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"]);
-  assert.match(wrong.result.problems[0].message, new RegExp(`the host daemon at http://127\\.0\\.0\\.1:${other.daemonPort} serves http://127\\.0\\.0\\.1:${other.serverPort}, not settings\\.oats\\.bb\\.server .*settings\\.oats\\.bb\\.hostDaemonPort, the port that bb-app was started with: its --host-daemon-port`));
+  assert.match(wrong.result.problems[0].message, new RegExp(`^the host daemon at http://127\\.0\\.0\\.1:${other.daemonPort} serves http://127\\.0\\.0\\.1:${other.serverPort}, not settings\\.oats\\.bb\\.server \\S+: point both at one bb, settings\\.oats\\.bb\\.server and ${PORT_KEY}$`));
   // A port nothing listens on.
   const dead = await check({ hostDaemonPort: await deadPort(t) });
   assert.deepEqual(dead.result.problems.map((problem) => problem.code), ["E_BACKEND_UNREACHABLE"]);
-  assert.match(dead.result.problems[0].message, /does not answer .*set settings\.oats\.bb\.hostDaemonPort to the port bb-app was started with \(its --host-daemon-port\)$/);
+  assert.match(dead.result.problems[0].message, new RegExp(`does not answer .*: start bb-app, or set ${PORT_KEY}$`));
   // With `daemon` given and no port, the words name `daemon`, as before.
   const asBefore = await check({ daemon: `http://127.0.0.1:${other.daemonPort}` });
-  assert.match(asBefore.result.problems[0].message, /settings\.oats\.bb\.daemon\)$/);
+  assert.match(asBefore.result.problems[0].message, /point both at one bb, settings\.oats\.bb\.server and settings\.oats\.bb\.daemon$/);
+});
+
+// The likeliest mistake with a second bb: `server` is set to it, and neither `daemon` nor
+// `hostDaemonPort`. The daemon then asked is bb's default one: the first bb's, which
+// serves another server, or nobody's. What to set is `hostDaemonPort`, which also tells
+// bb's CLI (`daemon` would only move this check, and leave the launch refused).
+test("a server on other ports with neither daemon nor hostDaemonPort: the finding tells to set hostDaemonPort", async (t) => {
+  const { dir } = scratch(t);
+  const second = await fakeBackend(t);
+  const bb = fakeBbIn(dir, { "--version": { stdout: `${VERSION}\n` }, "project list": { stdout: [] }, "thread list": { stdout: [] } });
+  const { server, version, trust, dataDir, piAgentDir } = second.settings();
+  // In process, with the provider's own reads: the default daemon address (127.0.0.1:38887) is whatever this host has there, so its answer is given here.
+  const { backendProblems } = await import("../../oats-package/capabilities/oats-bb/lib/readiness.mjs");
+  const settings = readSettings({ server, version, trust, dataDir, piAgentDir, cli: bb.cli });
+  assert.deepEqual([settings.daemon, settings.daemonKey, settings.hostDaemonPort], ["http://127.0.0.1:38887", null, null]);
+  const answering = (status) => async (url, timeoutMs) => (url === "http://127.0.0.1:38887/status" ? status
+    : fetch(url, { signal: AbortSignal.timeout(timeoutMs) }).then(async (response) => ({ ok: response.ok, value: await response.json() }), (error) => ({ ok: false, message: error.message })));
+  const problemsWith = async (status) => (await backendProblems(settings, { env: { ...process.env, ...bb.env }, http: answering(status), exposure: async () => [] })).problems;
+  const PORT_KEY = "settings.oats.bb.hostDaemonPort (the port bb-app was started with: its --host-daemon-port) where this bb's host daemon is not on bb's default port";
+  // The first bb's daemon is on the default port: it serves the first bb's server.
+  const others = await problemsWith({ ok: true, value: { hostId: "host_first", connected: true, serverUrl: "http://127.0.0.1:38886" } });
+  assert.deepEqual(others.map((problem) => [problem.code, problem.message]), [["E_BACKEND_NOT_READY", `the host daemon at http://127.0.0.1:38887 serves http://127.0.0.1:38886, not settings.oats.bb.server ${server}: point both at one bb, settings.oats.bb.server and ${PORT_KEY}`]]);
+  // Nothing is on the default port.
+  const nobody = await problemsWith({ ok: false, message: "connect ECONNREFUSED 127.0.0.1:38887" });
+  assert.deepEqual(nobody.map((problem) => [problem.code, problem.message]), [["E_BACKEND_UNREACHABLE", `bb's host daemon at http://127.0.0.1:38887 does not answer (connect ECONNREFUSED 127.0.0.1:38887): start bb-app, or set ${PORT_KEY}`]]);
 });
 
 // "The daemon answers at the port" is not "it is this bb's daemon": another bb's daemon
@@ -203,7 +242,7 @@ test("with the port set, readiness asks bb's server for its hosts: the daemon mu
   const bb = fakeBbIn(dir, script());
   const check = () => call("check", { home, soul: null }, { settings: backend.settings(), bb });
   const host = (id, status = "connected") => ({ id, name: "a host", type: "persistent", status, lifecycle: { phase: "active" }, maxPermissionMode: "full", lastSeenAt: 1 });
-  const named = new RegExp(`point settings\\.oats\\.bb\\.server \\(${backend.server}\\) and settings\\.oats\\.bb\\.hostDaemonPort \\(${backend.daemonPort}, the port that bb-app was started with: its --host-daemon-port\\) at one bb$`);
+  const named = new RegExp(`^settings\\.oats\\.bb\\.server \\(${backend.server}\\) and settings\\.oats\\.bb\\.hostDaemonPort \\(${backend.daemonPort}, the port bb-app was started with: its --host-daemon-port\\) must name one bb, and `);
   // The daemon (host_1 by its own /status) is one of the server's hosts, connected: ready, and the server was asked once.
   const ready = await check();
   assert.equal(ready.result.status, "ready", JSON.stringify(ready.result));
@@ -213,29 +252,43 @@ test("with the port set, readiness asks bb's server for its hosts: the daemon mu
   const foreign = await check();
   assert.deepEqual(foreign.result.problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"]);
   assert.equal(foreign.result.status, "needs-configuration");
-  assert.match(foreign.result.problems[0].message, new RegExp(`^the host daemon at ${backend.daemon} is host host_1, which bb's server at ${backend.server} does not have \\(its hosts: host_of_another_bb, host_2\\): it is another bb's daemon: `));
   assert.match(foreign.result.problems[0].message, named);
+  assert.match(foreign.result.problems[0].message, new RegExp(`must name one bb, and they do not: the host daemon at ${backend.daemon} is host host_1, which that server does not have \\(its hosts: host_of_another_bb, host_2\\)\\. It is another bb's daemon$`));
   bb.setScript(script({ stdout: [] }));
-  assert.match((await check()).result.problems[0].message, /does not have \(its hosts: none\): it is another bb's daemon/);
+  assert.match((await check()).result.problems[0].message, /does not have \(its hosts: none\)\. It is another bb's daemon$/);
   // The server has it, and not connected.
   bb.setScript(script({ stdout: [host("host_1", "disconnected")] }));
   const away = await check();
   assert.deepEqual([away.result.status, away.result.problems.map((problem) => problem.code)], ["unavailable", ["E_BACKEND_NOT_READY"]]);
-  assert.match(away.result.problems[0].message, /is host host_1, which bb's server at \S+ shows as "disconnected", not connected: /);
+  assert.match(away.result.problems[0].message, named);
+  assert.match(away.result.problems[0].message, /is host host_1, which that server shows as "disconnected", not connected$/);
   // The server's hosts cannot be read, or are no list a host can be found in: nothing shows it, so not ready.
   for (const unreadable of [{ error: { code: "error", message: "HTTP 500: boom" } }, { stdout: { hosts: [] } }, { stdout: [{ name: "no id" }] }]) {
     bb.setScript(script(unreadable));
     const unknown = await check();
     assert.deepEqual([unknown.result.status, unknown.result.problems.map((problem) => problem.code)], ["unavailable", ["E_BACKEND_NOT_READY"]], JSON.stringify(unreadable));
-    assert.match(unknown.result.problems[0].message, /^the hosts of bb's server at \S+ could not be read \(.*\), so nothing shows that the host daemon at \S+ \(host host_1\) is one of them: /);
     assert.match(unknown.result.problems[0].message, named);
+    assert.match(unknown.result.problems[0].message, /must name one bb, and nothing shows they do: the host daemon at \S+ is host host_1, and the hosts of that server could not be read \(.*\)$/);
   }
+  // bb's own words may be long: what to change comes first, so the cut the kernel's relay makes falls in them.
+  bb.setScript(script({ error: { code: "error", message: `HTTP 500: ${"a long word of bb's ".repeat(30)}` } }));
+  const long = (await check()).result.problems[0].message;
+  assert.ok(long.length <= 480, String(long.length));
+  assert.match(long, named);
+  assert.match(long, /…$/);
+  // A server with many hosts: the remedy and the daemon's host are before the list.
+  bb.setScript(script({ stdout: Array.from({ length: 30 }, (_, index) => host(`host_${"x".repeat(20)}_${index}`)) }));
+  const many = (await check()).result.problems[0].message;
+  assert.ok(many.length <= 480);
+  assert.match(many, named);
+  assert.match(many, /is host host_1, which that server does not have \(its hosts: /);
   // A daemon that does not say which host it is.
   bb.setScript(script());
   backend.state.daemonStatus = { connected: true, protocolVersion: 268, serverUrl: backend.server, platform: "linux" };
   const anonymous = await check();
   assert.deepEqual([anonymous.result.status, anonymous.result.problems.map((problem) => problem.code)], ["unavailable", ["E_BACKEND_NOT_READY"]]);
-  assert.match(anonymous.result.problems[0].message, /answered a \/status that does not say which host it is \(no "hostId"\)/);
+  assert.match(anonymous.result.problems[0].message, named);
+  assert.match(anonymous.result.problems[0].message, /nothing shows they do: bb's host daemon at \S+ answered a \/status that does not say which host it is \(no "hostId"\)$/);
   // Without the port (the daemon's address alone, as before the key), the server is not asked for its hosts.
   backend.state.daemonStatus = null;
   const before = bb.calls().length;

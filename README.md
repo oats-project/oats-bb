@@ -592,7 +592,7 @@ launch checks first:
 | `server` or `daemon` is not a loopback address; bb's port answers on an address of this host that is not loopback | `E_BACKEND_EXPOSED` |
 | a setting has the wrong shape | `E_BACKEND_SETTINGS` |
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
-| the host daemon is not connected yet, or serves another server; bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
+| the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
@@ -703,7 +703,11 @@ both against real bb). `oats bb doctor` prints the port bb's CLI is told
 other bb's daemon, so readiness checks what bb itself does: the daemon there says which
 host it is and which server it serves (its `/status`), and the server must list that
 host, connected (`bb host list`). Where it does not, the finding names the daemon, the
-server and the setting. A `daemon` address on
+server and the setting. Only two of bb's commands need the local daemon, and so the
+port: `bb project create` and `bb thread spawn`, which a launch runs. The others the
+provider runs (reading, telling, stopping and archiving a thread, a project's env) go to
+the server alone, so a home is still read and stopped whatever port is set (pinned by the
+contract test). A `daemon` address on
 another port than 38887 with no `hostDaemonPort` is a readiness warning
 (`session-provider-host-daemon-port`): every check passes there and the first launch
 would not.

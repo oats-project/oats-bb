@@ -63,7 +63,8 @@ export function portOf(origin) {
  *  is told to find it at (BB_HOST_DAEMON_PORT), and the address its /status is read at.
  *  Where only the port is set, the address is that port on 127.0.0.1; where both are set
  *  and name different ports, that is refused. `daemonKey` is the setting that decided the
- *  address, for a message that must name what to change. */
+ *  address, for a message that must name what to change: "daemon", "hostDaemonPort", or
+ *  null where neither is set and the address is bb's default. */
 export function readSettings(raw) {
   if (raw !== undefined && raw !== null && !isObject(raw)) throw fail("E_BACKEND_SETTINGS", "settings.oats.bb must be a map");
   const given = raw ?? {};
@@ -97,7 +98,7 @@ export function readSettings(raw) {
   return {
     server: text("server", DEFAULT_SERVER),
     daemon: daemonGiven ?? (hostDaemonPort !== null ? `http://127.0.0.1:${hostDaemonPort}` : DEFAULT_DAEMON),
-    daemonKey: daemonGiven !== null ? "daemon" : hostDaemonPort !== null ? "hostDaemonPort" : "daemon",
+    daemonKey: daemonGiven !== null ? "daemon" : hostDaemonPort !== null ? "hostDaemonPort" : null,
     hostDaemonPort,
     version: text("version", null),
     trust: text("trust", null),

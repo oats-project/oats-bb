@@ -112,7 +112,8 @@ async function main(argv) {
     const { result, credential } = await readinessResult(settings);
     result.warnings.push({ ...FULL_MODE_ONLY });
     // Which host daemon port bb's CLI is told (settings.oats.bb.hostDaemonPort), or that it
-    // is told none: bb's CLI then uses its own default, or what its environment carries.
+    // is told none: bb's CLI then uses its own default (a port in this command's
+    // environment never reaches it).
     if (doctor.json) print({ ...result, credential, hostDaemonPort: settings.hostDaemonPort });
     else {
       process.stdout.write(`bb session provider: ${result.status}\n`);

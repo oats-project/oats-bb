@@ -344,7 +344,10 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   with the second bb's port a launch makes its project and thread there alone; without
   it bb refuses the project (`host_not_found`) and nothing is made. With the setting,
   readiness also runs `bb host list`: the daemon at the port (its `/status`: `hostId`,
-  `serverUrl`) must be a connected host of the configured server.
+  `serverUrl`) must be a connected host of the configured server. Of the commands the
+  provider runs, `bb project create` and `bb thread spawn` are the two that need the local
+  daemon and so the port; `bb thread show`, `list`, `queue list`, `interactions list`,
+  `tell`, `stop`, `archive` and `bb machine env` go to the server alone, with any port.
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn` (with `--title`), `bb thread tell`, `bb thread interactions list`,

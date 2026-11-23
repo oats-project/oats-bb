@@ -792,6 +792,24 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
     assert.equal((await provider("inspect", { home, endpoint: made }, second)).result.present, true);
     assert.deepEqual((await provider("input", { home, endpoint: made, text: "SECOND-BB marker" }, second)).result, { submitted: true, verified: true });
     await waitFor("the told turn", async () => (await landed("SECOND-BB")) === 1, { timeoutMs: 90_000 });
+    // bb's fact, by its own CLI: only what makes a project or a thread needs the local
+    // daemon, and so the port. Reading, telling and stopping a thread go to the server
+    // alone: with the other bb's port, and with a port nothing listens on. So a home is
+    // still read and stopped whatever port the deployment's settings name.
+    for (const port of [38887, 1]) {
+      const cli = (command) => sh(`BB_HOST_DAEMON_PORT=${port} BB_SERVER_URL=${SECOND} bb ${command} --json`);
+      assert.equal(JSON.parse(await cli(`thread show ${made.threadId}`)).thread.id, made.threadId, `show with port ${port}`);
+      assert.deepEqual(JSON.parse(await cli(`thread queue list ${made.threadId}`)), []);
+      assert.deepEqual(JSON.parse(await cli(`thread interactions list ${made.threadId}`)), []);
+      assert.equal(JSON.parse(await cli(`thread tell ${made.threadId} 'SECOND-PORT-${port} marker' --mode auto`)).delivery, "sent", `tell with port ${port}`);
+      await waitFor("that turn", async () => (await landed(`SECOND-PORT-${port}`)) === 1, { timeoutMs: 90_000 });
+      await waitFor("the thread to be idle", async () => (JSON.parse(await sh(`BB_SERVER_URL=${SECOND} bb thread show ${made.threadId} --json`))).thread.status === "idle", { timeoutMs: 120_000 });
+      assert.equal(JSON.parse(await cli(`thread stop ${made.threadId}`)).ok, true, `stop with port ${port}`);
+    }
+    // And through the provider, with settings that name the other bb's port for this endpoint's server (a workspace moved to another bb, its homes still on the old one).
+    const moved = { ...SETTINGS, hostDaemonPort: 38887 };
+    assert.equal((await provider("inspect", { home, endpoint: made }, moved)).result.present, true);
+    assert.deepEqual((await provider("stop", { home, endpoint: made, graceSeconds: 10 }, moved)).result, { stopped: true });
     assert.deepEqual((await provider("stop", { home, endpoint: made, graceSeconds: 10 }, second)).result, { stopped: true });
     assert.deepEqual(await of(FIRST), before.first);
   } finally {

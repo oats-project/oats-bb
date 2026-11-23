@@ -12,10 +12,12 @@ plugin/container/ci.sh pi         # the pi run: a pi agent launched from the New
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the three stages of the first line as three jobs side by side,
-each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
-stage, `plugin-real`), and the pi run as a fourth (`plugin-pi`), so each line after the first
-installs and builds what it needs by itself.
+they run from any directory. CI runs the stages of the first line as jobs side by side, each on a
+runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`; the live stage as two, `test` in
+bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the pi run as one more
+(`plugin-pi`), so each line after the first installs and builds what it needs by itself.
+`LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
+does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -104,7 +106,10 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **`record(changes)`** makes a change as the kernel records one (the fake's status with
   `changes` by instance, and a line in the deployment's event log) and answers when: the freshness
   scenes time from it to the row or the count on screen, 3 s at most.
-- **No two images of a run are the same image** (`images.mjs`), checked at the end.
+- **No two images of a run are the same image** (`images.mjs`), checked at the end. A run that
+  draws one theme (`LIVE_THEMES`, as each of CI's two live jobs does) compares that theme's images
+  with each other: a light image is then never compared with a dark one. That the theme asked for
+  is the one bb draws is checked at every screenshot.
 
 Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plugins/oats/patterns`,
 `../README.md`, "The patterns: one component each"): every pattern in each of its states, the menu

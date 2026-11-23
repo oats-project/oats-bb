@@ -510,15 +510,22 @@ test("while the roster cannot be read the tab keeps the view of the agent it sho
 });
 
 test("while OATS cannot be read after it was, the home keeps what it showed, under the same notice as the sidebar's, with its age", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const slot = await homePage({
-    rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
-  });
-  const notice = await slot.findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
-  expect(notice.textContent).toContain("Showing what was read 2 min ago.");
-  expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
-  expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
+  // A clock of its own: the age it asserts is of a time it names, not of however long the test took.
+  const NOW = Date.parse("2026-11-20T10:00:00.000Z");
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  try {
+    const last = { at: new Date(NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+    const slot = await homePage({
+      rpc: handlers({ snapshot: () => ({ ok: false, at: new Date(NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
+    });
+    const notice = await slot.findByRole("alert");
+    expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
+    expect(notice.textContent).toContain("Showing what was read 2 min ago.");
+    expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
+    expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // ---- Home › Agents, the empty workspace, the agents with no bb thread, what is held while stale

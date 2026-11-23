@@ -18,6 +18,7 @@ import { refusalCode } from "../../app/ui/text";
 import { fixtureSnapshot } from "../helpers/fixtures";
 import { FIXTURES } from "../support/fake-oats.js";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { modelsSdk, startCheckOf, stopPlanOf } from "../lifecycle/handlers";
 import type { Contract, Handlers } from "../helpers/render";
 
 afterEach(resetApp);
@@ -50,7 +51,7 @@ async function places(over: Partial<Handlers>) {
     } as never,
     { activeThreadId: THREAD, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
     // (The agent's events hold no "stopped": its row says no time, so the lines read below are whole.)
-    { rpc: handlers({ panelEvents: () => ({ ...recordedEvents(), events: [] }), ...over }), sidebarThreads: sidebarThreads() },
+    { rpc: handlers({ panelEvents: () => ({ ...recordedEvents(), events: [] }), ...over }), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
   );
   await slot.findByTestId("oats-tree");
   const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === THREAD)!).getByTestId("oats-row-facts").textContent;
@@ -107,40 +108,50 @@ for (const [name, verb, key] of [
   ["Start", "start", "start"],
   ["Restart", "restart", "restart"],
 ] as const) {
-  test(`${name} on a home that is gone: the kernel's refusal as it is, Try again, and the rows are not marked`, async () => {
-    const { slot, ask, facts } = await places({ [verb]: refuse(kernelSays(key)) } as Partial<Handlers>);
+  test(`${name} on a home that is gone: the kernel's refusal as it is, Refresh status, and the rows are not marked`, async () => {
+    const { slot, ask, facts } = await places({ startCheck: () => startCheckOf(INSTANCE), [verb]: refuse(kernelSays(key)) } as Partial<Handlers>);
     act(() => ask().run(verb));
     const dialog = await slot.findByRole("dialog");
-    expect(dialog.querySelector("h2")!.textContent).toBe(`${name} did not happen`); // no agent named from the row
-    await waitFor(() => expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain("directory instance home was removed or exchanged"));
-    expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain(`OATS was asked to ${verb} Weekly digest helper.`);
-    expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain("E_WORK_INSPECTION_FAILED");
-    expect(within(dialog).getByTestId("oats-act-again")).toBeTruthy();
+    await waitFor(() => expect((within(dialog).getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(false));
+    expect(dialog.querySelector("h2")!.textContent).toBe(`${name} Weekly digest helper`); // named from the kernel's own row, read for the dialog
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    const result = await within(dialog).findByTestId("oats-result");
+    expect(result.querySelector("h3")!.textContent).toBe(`OATS refused to ${verb} Weekly digest helper`);
+    expect(within(dialog).getByTestId("oats-act-details").textContent).toContain("directory instance home was removed or exchanged");
+    expect(result.textContent).toContain("E_WORK_INSPECTION_FAILED");
+    expect(result.textContent).not.toContain("not in OATS any more");
+    expect(within(dialog).getByTestId("oats-start-refresh")).toBeTruthy();
     expect(facts()).toBe("Stopped · oats-expert");
   });
 }
 
 test("a session whose state cannot be established (the same code as a name the kernel does not know) is not 'gone' on a Start", async () => {
-  const { slot, ask, facts } = await places({ start: refuse("E_SESSION_UNKNOWN: cannot establish whether weekly-digest-helper is running, so nothing was started") });
+  const { slot, ask, facts } = await places({ startCheck: () => startCheckOf(INSTANCE), start: refuse("E_SESSION_UNKNOWN: cannot establish whether weekly-digest-helper is running, so nothing was started") });
   act(() => ask().run("start"));
   const dialog = await slot.findByRole("dialog");
-  await waitFor(() => expect(within(dialog).getByTestId("oats-act-failed").textContent).toContain("cannot establish whether weekly-digest-helper is running"));
-  expect(within(dialog).queryByRole("alert")!.textContent).not.toContain("not in OATS any more");
-  expect(within(dialog).getByTestId("oats-act-again")).toBeTruthy();
+  await waitFor(() => expect((within(dialog).getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+  const result = await within(dialog).findByTestId("oats-result");
+  expect(within(dialog).getByTestId("oats-act-details").textContent).toContain("cannot establish whether weekly-digest-helper is running");
+  expect(result.textContent).not.toContain("not in OATS any more");
+  expect(within(dialog).getByTestId("oats-start-refresh")).toBeTruthy();
   expect(facts()).toBe("Stopped · oats-expert");
 });
 
 test("an apply the kernel refuses because the agent went after its plan was read: the refusal stays in the confirmation, and the rows are not marked", async () => {
   const { slot, ask, facts } = await places({
-    stopPlan: () => ({ revision: "r1", lines: ["Stop weekly-digest-helper: not running"], instance: INSTANCE }),
+    stopPlan: () => stopPlanOf(INSTANCE),
     stopApply: refuse(kernelSays("stopApply")),
   });
   act(() => ask().plan("stop"));
   const dialog = await slot.findByRole("dialog");
-  await waitFor(() => expect((within(dialog).getByTestId("oats-plan-confirm") as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(within(dialog).getByTestId("oats-plan-confirm"));
-  await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toContain('no instance "flaky-ci-2-developer"'));
-  expect(within(dialog).getByTestId("oats-plan-reread")).toBeTruthy(); // reading the plan again is what then says the agent is gone
+  await waitFor(() => expect((within(dialog).getByTestId("oats-confirm-act") as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+  const result = await within(dialog).findByTestId("oats-result");
+  expect(within(dialog).getByTestId("oats-act-details").textContent).toContain('no instance "flaky-ci-2-developer"');
+  expect(result.textContent).toContain("E_SESSION_UNKNOWN");
+  expect(result.textContent).not.toContain("not in OATS any more");
+  expect(within(dialog).getByTestId("oats-act-review")).toBeTruthy(); // reading the plan again is what then says the agent is gone
   expect(facts()).toBe("Stopped · oats-expert");
 });
 
@@ -149,12 +160,12 @@ test("an act asked while OATS itself cannot be read: the confirmation opens on t
   const { slot, ask } = await places({
     stopPlan: () => {
       if (fail) throw new Error("OATS_NOT_FOUND: oats was not found on falcon: install OATS there");
-      return { revision: "r1", lines: ["Stop weekly-digest-helper: not running"], instance: INSTANCE };
+      return stopPlanOf(INSTANCE);
     },
   });
   act(() => ask().plan("stop"));
   const dialog = await slot.findByRole("dialog");
-  const notice = await within(dialog).findByRole("alert");
+  const notice = within(await within(dialog).findByTestId("oats-unreadable")).getByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(notice.textContent!.indexOf("OATS_NOT_FOUND")).toBeGreaterThan(notice.textContent!.indexOf("Install OATS there"));
   fail = false;

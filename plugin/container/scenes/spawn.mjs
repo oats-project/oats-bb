@@ -384,13 +384,15 @@ export default [
       // A press, by the button or by the key, asks the kernel nothing more: the one spawn stays the one.
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
-      const keys = applied(since);
-      check(keys.length === 1, `${at} and a press starts nothing: the kernel was asked to spawn once`, JSON.stringify(keys));
       await page.evaluate(show("oats-result"));
       await page.shot(`spawn-${viewport.name}-unconfirmed`, { targets: true });
       await page.evaluate(click(`${testId("oats-spawn-details")} summary`));
       const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(`${testId("oats-spawn-details")} p`)}`, 10);
       check(/rollback INCOMPLETE, clean up manually: instance home .+: still present$/.test(details ?? ""), `${at} Details opens to the kernel's own message, which names what is left`, String(details));
+      // An absence is not read at once: a second spawn would be in the fake's log well within two seconds of its press (the one made is there in under one).
+      await page.until("false", 2);
+      const keys = applied(since);
+      check(keys.length === 1, `${at} and a press started nothing: the kernel was asked to spawn once`, JSON.stringify(keys));
     },
   },
   {
@@ -401,10 +403,11 @@ export default [
       const held = await page.until(`(() => { const n = document.querySelector(${q("oats-new-agent-page")} + " " + ${q("oats-unreadable")}); const f = ${FIELDS}; return n && f ? JSON.stringify({ title: n.querySelector("h3").innerText, age: /Showing what was read .+ ago\\./.test(n.innerText), held: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-held")}).length, notices: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-notice")}).length, foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
       check(/^\{"title":"OATS is not installed on [^"]+","age":true,"held":1,"notices":1,"foot":\{"button":"Spawn","off":true,"reason":"Comes back when OATS is read again","fields":true\}\}$/.test(held ?? ""), `${at} the roster's one notice (what is wrong, the age of what is shown, the acts held, Retry), every field and Spawn off with the acts' own reason, and no second notice`, held ?? (await whole(page)));
       // A press, by the button or by the key, starts nothing.
-      const since = Date.now();
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
-      check((await page.evaluate("location.pathname")).startsWith(FORM) && (await page.evaluate(`${SPAWN}.innerText.trim()`)) === "Spawn", `${at} and a press starts nothing`, String(since));
+      // An absence is not read at once: the form is given the time a press takes to show (the button reads "Spawning…" in the same tick), and must not have moved.
+      const moved = await page.until(`!location.pathname.startsWith(${JSON.stringify(FORM)}) || ${SPAWN}.innerText.trim() !== "Spawn" ? JSON.stringify({ path: location.pathname, button: ${SPAWN}.innerText.trim() }) : ""`, 2);
+      check(!moved, `${at} and a press starts nothing`, String(moved));
       await page.shot(`spawn-${viewport.name}-held`, { targets: true });
     },
   },

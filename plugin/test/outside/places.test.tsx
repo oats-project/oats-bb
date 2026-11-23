@@ -503,7 +503,7 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   // An agent on bb is named both, in every state (the cases above): Start is the lifecycle's for it.
   const onBb = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(named(onBb)).toEqual(["Stop…stops the harness that runs outside OATS", "Start…starts it from OATS, in a new conversation"]);
+  expect(named(onBb)).toEqual(["Stopstops the harness that runs outside OATS", "Startstarts it from OATS, in a new conversation"]);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {

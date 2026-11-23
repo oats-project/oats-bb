@@ -362,6 +362,8 @@ test("while OATS cannot be read after it was, the tree stays as last read under 
   // "New agent" is held with the acts: in its place, off, with the reason, and it opens nothing.
   const newAgent = slot.getByTestId("oats-new-agent") as HTMLButtonElement;
   expect([newAgent.disabled, newAgent.title]).toEqual([true, "Comes back when OATS is read again"]);
+  // The reason is words under the button too: a phone has no hover.
+  expect(slot.getByTestId("oats-new-agent-held").textContent).toBe("Comes back when OATS is read again");
   fireEvent.click(newAgent);
   expect(slot.inspection.navigateCalls).toEqual([]);
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");

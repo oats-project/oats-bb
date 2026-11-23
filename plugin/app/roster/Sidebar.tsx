@@ -311,6 +311,12 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           >
             New agent
           </Button>
+          {/* The reason as words under the button, not only as its title: a phone has no hover (the lead's ruling). */}
+          {oats.stale === null ? null : (
+            <p data-testid="oats-new-agent-held" className="pt-1 text-xs text-muted-foreground">
+              {HELD_REASON}
+            </p>
+          )}
         </div>
       ) : null}
 

@@ -23,6 +23,23 @@ let projects: unknown[];
 
 const rpc = <Value = any>(method: string, input: unknown = null) => server.harness.callRpc(method, input) as Promise<Value>;
 const verbs = async () => (await fake.calls()).map((call) => call.verb);
+/**
+ * A change sent WHILE the server's read number `nth` is in flight, with no race against the
+ * time that read is held: the wait is on the server's own call to the host (it is in this
+ * process), and the signal is sent in the same turn the call is seen in, so the read's end
+ * cannot be handled between the two, however long this process was stalled before.
+ */
+const changeDuringRead = async (nth: number) => {
+  const asked = () => server.harness.experimental_hostRpcCalls.filter((call) => call.method === "status").length;
+  const deadline = Date.now() + 20_000;
+  while (asked() < nth) {
+    if (Date.now() > deadline) throw new Error(`the server's read ${nth} did not start: ${asked()} status calls`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  expect(asked()).toBe(nth);
+  const sent = server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // sent before anything is awaited
+  await sent;
+};
 /** What the server said of each read asked for while another was in flight (its debug log, server/core.ts `reread`). */
 const readAgain = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("oats status is read again")).map((entry) => entry.message);
 const refusalOf = (promise: Promise<unknown>) =>
@@ -127,21 +144,24 @@ describe("snapshot", () => {
   // read before it (the read starts in the same turn that read ended in: no wait stands between).
   it("a change during a read is read at once when that read ends, and a change during THAT read waits the pause: one read at once, never two", async () => {
     const statuses = async () => (await verbs()).filter((verb) => verb === "status").length;
-    /** The start of the read after the one that started at `last`: the snapshot's `at`, once it has moved on. */
+    /** The start of the read after the one that started at `last`: the `at` of the first snapshot that has moved on. */
     const startAfter = async (last: string) => {
-      await expect.poll(async () => (await rpc<{ at: string }>("snapshot")).at, { timeout: 20_000 }).not.toBe(last);
-      return (await rpc<{ at: string }>("snapshot")).at;
+      const deadline = Date.now() + 20_000;
+      for (;;) {
+        const { at } = await rpc<{ at: string }>("snapshot");
+        if (at !== last) return at;
+        if (Date.now() > deadline) throw new Error(`no read after the one that started at ${last}`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
     };
     await rpc("snapshot"); // read 1, ended: nothing in flight
     expect(readAgain()).toEqual([]);
     const HELD_MS = 1_000; // long enough in flight for a change to land in it
     await fake.behave({ status: { sleepMs: HELD_MS } });
     const second = rpc<{ at: string }>("refresh"); // read 2: after the pause, then a second in flight
-    await expect.poll(statuses, { timeout: 15_000 }).toBe(2);
-    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // a change, mid-read
+    await changeDuringRead(2); // a change, mid-read
     const secondAt = (await second).at;
-    await expect.poll(statuses, { timeout: 15_000 }).toBe(3); // read 3 started
-    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // a change during read 3
+    await changeDuringRead(3); // a change during read 3
     const thirdAt = await startAfter(secondAt);
     await expect.poll(statuses, { timeout: 20_000 }).toBe(4);
     const fourthAt = await startAfter(thirdAt);
@@ -154,8 +174,9 @@ describe("snapshot", () => {
     const between = (later: string, earlier: string) => Date.parse(later) - Date.parse(earlier);
     if (answered <= FOLLOW_UP_WITHIN_MS) {
       expect(third).toBe(`oats status is read again at once: asked for while a read was in flight, which answered in ${answered} ms`);
-      // What it said, it did: read 3 started when read 2 ended, not a pause later.
-      expect(between(thirdAt, secondAt)).toBeLessThan(answered + MIN_INTERVAL_MS);
+      // What it said, it did: read 3 started when read 2 ended (in the same turn: nothing is awaited
+      // between the two), not a pause later (the pause is a second at least: half of it tells them apart).
+      expect(between(thirdAt, secondAt)).toBeLessThan(answered + MIN_INTERVAL_MS / 2);
       // Read 4 was asked for during the read at once: it says the pause, and it WAITED it: no sooner
       // than read 3's own time in flight and the floor after it.
       expect(fourth).toBe("oats status is read again after the pause: asked for while a read was in flight, which was itself read at once");
@@ -172,8 +193,7 @@ describe("snapshot", () => {
   it("a read that failed is not followed at once: the read asked for during it waits the floor", async () => {
     await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 400 } });
     const first = rpc<{ ok: boolean; at: string }>("snapshot"); // in flight, and it fails
-    await expect.poll(async () => (await verbs()).length, { timeout: 15_000 }).toBe(1);
-    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" });
+    await changeDuringRead(1);
     const failed = await first;
     expect(failed.ok).toBe(false);
     await expect.poll(async () => (await rpc<{ at: string }>("snapshot")).at, { timeout: 20_000 }).not.toBe(failed.at);

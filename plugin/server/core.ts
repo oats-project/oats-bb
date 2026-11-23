@@ -163,7 +163,7 @@ export function createCore(bb: BbPluginApi) {
   let lastRoster: Extract<Snapshot, { ok: true }> | null = null;
   let comparable = "";
   let lastStart = 0;
-  /** When the last read ended, and how long it took: what the pause before the next is counted from. */
+  /** When the last read ended: what the pause before the next is counted from. */
   let lastEnd = 0;
   /**
    * How long the last read took when it answered; null when it gave no answer to count: it failed

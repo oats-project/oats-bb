@@ -5,7 +5,8 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
-import { AgentActs, openAct } from "../lifecycle";
+import { AgentActs, actsFor, openAct } from "../lifecycle";
+import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus, stoppedSince } from "../roster/status";
@@ -201,7 +202,10 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
  *   happened in one sentence (its acts are the header's, the lifecycle's own; Stop for a session
  *   OATS lost is here, since the header offers none for an agent that reads stopped);
- * - of any agent: the kernel's report, with its acts.
+ * - of any agent: the kernel's report. Its Stop and Start are the header's where the header has
+ *   them, and the notice then says what each does; where the header has none (no roster is read
+ *   just now, so the lifecycle offers nothing), the notice keeps its own two buttons: a person
+ *   never reads "Stop" and "Start" with nothing to press.
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */
@@ -209,6 +213,8 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const where = roster.whereOf(agent);
   const said = sayOf(agent, where, attached);
+  // The header's own acts for this agent now (`AgentActs` draws exactly these).
+  const headed = actsFor(useOats(), agent.instance).map((act) => act.verb);
   // Nothing to draw: an agent on its thread with no report; and one with no sentence and no report
   // (a row that says only where its thread is: that is the sidebar's, and the acts are the header's).
   if (said === null || (attached && said.warning === null) || (said.sentence === null && said.warning === null)) return null;
@@ -227,8 +233,8 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
           <OutsideActs instance={agent.instance} acts={["stop"]} held={held} />
         </div>
       )}
-      {/* (Its Stop and Start are the header's, over this block: the notice says what each does.) */}
-      <OutsideWarning said={said} instance={agent.instance} held={held} acts="above" />
+      {/* (Its Stop and Start are the header's, over this block, where the header has both: the notice says what each does.) */}
+      <OutsideWarning said={said} instance={agent.instance} held={held} acts={headed.includes("stop") && headed.includes("start") ? "above" : "own"} />
     </div>
   );
 }

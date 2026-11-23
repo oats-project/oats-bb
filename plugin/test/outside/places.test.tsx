@@ -404,8 +404,10 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   expect(header(runs)).toMatchObject({ acts: [], tone: "warning", sentence: "Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS." });
   resetApp();
   // A row that says only where its thread is (failed, its thread archived): no block of this feature's; the acts are the header's.
-  const failed = await agentPage(HARVEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: false, runtimeState: "shell", waiting: null } : agent))), sidebarThreads: threads, sdk: bb(["thr_harvest"]).sdk });
+  const answer = bb(["thr_harvest"]);
+  const failed = await agentPage(HARVEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: false, runtimeState: "shell", waiting: null } : agent))), sidebarThreads: threads, sdk: answer.sdk });
   await waitFor(() => expect(header(failed).state).toBe("Failed"));
+  await waitFor(() => expect(answer.asked).toHaveLength(1)); // bb has been asked where the thread is: the row is the one that says only that
   await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a block to be drawn, if one were)
   expect(header(failed)).toMatchObject({ kind: null, acts: [] });
   once(verbs(failed));
@@ -414,6 +416,45 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   const outside = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(outside).kind).toBe("outside"));
   expect(verbs(outside)).toEqual(["Stop", "Start", "Retire"]);
+});
+
+test("while no roster is read the lifecycle offers no act: the notice of an agent that runs outside OATS keeps its own Stop and Start, so that neither is named with nothing to press", async () => {
+  // The panel holds the agent it showed while the roster is not read (bb cannot list its threads: `Oats` is "failed"),
+  // and its header's `AgentActs` then draws nothing. The block is drawn as the panel draws it, with what the panel holds then.
+  await loadApp();
+  const { OutsideAgent } = await import("../../app/outside");
+  const { AgentActs } = await import("../../app/lifecycle");
+  const agent: Agent = { ...fixtureAgents().find((each) => each.instance === DIGEST)!, sessionEnd: "stopped", outsideOats: REPORT };
+  const drawn = (threads: RenderSlotOptions<Contract>["sidebarThreads"]) =>
+    renderSlot<object, Contract>(
+      {
+        component: function Held() {
+          return (
+            <>
+              <div data-testid="header-acts">
+                <AgentActs instance={DIGEST} />
+              </div>
+              <OutsideAgent agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} held={false} />
+            </>
+          );
+        },
+      },
+      {},
+      { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: threads },
+    );
+  const unread = drawn({ status: "error", threads: [] });
+  const block = await unread.findByTestId("oats-outside-agent-block");
+  expect(actsIn(unread.getByTestId("header-acts"))).toEqual([]);
+  expect(actsIn(block)).toEqual(["Stop", "Start"]);
+  fireEvent.click(within(block).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
+  unread.unmount();
+  resetApp();
+  // With the roster read, the header has them, and the notice draws none.
+  await loadApp();
+  const read = drawn(sidebarThreads());
+  await waitFor(() => expect(actsIn(read.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
+  expect(actsIn(read.getByTestId("oats-outside-agent-block"))).toEqual([]);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {

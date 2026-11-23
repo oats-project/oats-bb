@@ -278,8 +278,9 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
   return (
     <>
       {/* What happened to it outside OATS (app/outside), first on the page and scrolling with it (the
-          header over the tabs does not scroll, and says the state): the kernel's report with its
-          acts; and for an agent with no thread to carry them, what happened and its acts. */}
+          header over the tabs does not scroll, and says the state): the kernel's report, and
+          for an agent the roster draws on no thread, what happened. The acts are the header's
+          (`AgentActs`, above); the block adds one only where the header offers none. */}
       <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">

@@ -386,8 +386,8 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       // The header over the tabs does not scroll (who the agent is stays in view), so what stands in it
       // takes its height from every tab: the block is on the Instance tab's page, first, and scrolls
-      // with it. The largest it gets: an agent whose thread bb has archived (its Retire is there) that
-      // the kernel also reports running outside OATS (the notice, with its two acts).
+      // with it. The largest it gets: an agent whose thread bb has archived that the kernel also
+      // reports running outside OATS (the notice; its Stop, Start and Retire are the header's).
       const INSTANCE = "weekly-digest-helper";
       const report = { code: "running-outside-oats", backend: "bb", message: MESSAGE.replaceAll(OUTSIDE, INSTANCE) };
       const reported = (snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === INSTANCE && agent.outsideOats != null);
@@ -398,12 +398,12 @@ export default [
         await untilRoster(reported);
         await page.goto(`/plugins/oats/agent/${INSTANCE}`);
         const read = await page.until(
-          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const block = panel?.querySelector(${JSON.stringify(`:scope > ${testId("oats-outside-agent-block")}[data-outside="outside"]:first-child`)}); const title = block?.querySelector("h3"); if (!head || !tabs || !block || !title) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), inHeader: head.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), notice: flat(title), header: box(head), tabs: box(tabs), title: box(title), window: innerHeight }); })()`,
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const block = panel?.querySelector(${JSON.stringify(`:scope > ${testId("oats-outside-agent-block")}[data-outside="outside"]:first-child`)}); const title = block?.querySelector("h3"); if (!head || !tabs || !block || !title) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), inHeader: head.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat), notice: flat(title), header: box(head), tabs: box(tabs), title: box(title), window: innerHeight }); })()`,
           30,
         );
         const drawn = read ? JSON.parse(read) : null;
         check(
-          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, []) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
+          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, []) && same(drawn.headed, ["Stop…", "Start…", "Retire…"]) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
           `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with the notice's title in view, and no second button (Stop, Start and Retire are the header's)`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );

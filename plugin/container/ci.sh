@@ -8,6 +8,8 @@
 #   KEEP=1            leave the container running afterwards, to work in it (docker exec -it …)
 #   NAME=<name>       the container's name (default: bb-plugin-oats-ci-<pid>)
 #   DOCKER_RUN_ARGS   extra arguments for docker run (for example "--dns 1.1.1.1")
+#   LIVE_PILOT_IMAGES=1  by hand only: the live stage takes the images of the pilot's six screens with the
+#                     plugin's `pages` at its default, the home alone (container/live-ui.mjs says what that pass is)
 #   LIVE_THEMES       the themes the live stage draws: "light", "dark" or "light,dark" (default: both;
 #                     CI's two live jobs name one each)
 # The bb version is the repository's pin: the one line of bb-version at the repository's root when
@@ -90,7 +92,7 @@ if [ -n "${LOCAL_STATUS:-}" ]; then
   LOCAL_ENV="-e LIVE_UI_STATUS_FILE=/tmp/local-status.json"
 fi
 # LIVE_THEMES is passed by name: only when it is set here, so that one left unset draws both themes.
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES -e LIVE_PILOT_IMAGES $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 # The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts).

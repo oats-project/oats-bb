@@ -74,8 +74,20 @@ function rpc(method) {
 const fake = (verbs = {}) =>
   writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
-/** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. */
-const ALL_PAGES = "home, automations, souls, capabilities, teams, machines";
+/**
+ * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
+ * a fresh install shows them: the plugin's `pages` stays at its DEFAULT (the home alone) through
+ * every stage, so no image holds the "Workspace" block of the five other pages, and only the
+ * scenes of the six screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
+ * reaches its screen as a person does then (an agent with no bb thread from its row in the
+ * sidebar, not from its soul's page). Its checks that assert a page link or a tile of another page
+ * do not hold in this pass and are not counted against it: the pass is for images; the gate is
+ * the run without it.
+ */
+const PILOT = process.env.LIVE_PILOT_IMAGES === "1";
+const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
+/** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
+const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
 const pages = (value) => void bb("plugin", "config", "oats", "set", "pages", value);
 
 const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
@@ -357,7 +369,7 @@ const SCENES = join(PLUGIN, "container", "scenes");
 
 async function loadScenes() {
   const files = readdirSync(SCENES).filter((file) => file.endsWith(".mjs")).map((file) => file.slice(0, -4));
-  const order = [...FEATURES.filter((feature) => files.includes(feature)), ...files.filter((feature) => !FEATURES.includes(feature)).sort()];
+  const order = [...FEATURES.filter((feature) => files.includes(feature)), ...files.filter((feature) => !FEATURES.includes(feature)).sort()].filter((feature) => !PILOT || PILOT_FEATURES.includes(feature));
   const scenes = [];
   const stages = {};
   for (const feature of order) {
@@ -541,6 +553,7 @@ let stages;
 try {
   // (Everything that takes the hold is inside the `try` whose `finally` lifts it: whatever throws, no turn stays held.)
   ({ scenes, stages } = await loadScenes());
+  if (PILOT) pages(ALL_PAGES); // live.sh showed every page for its own checks: the default from here on
   browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
@@ -557,7 +570,7 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes) });
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes) });
           } finally {
             await page.close();
           }

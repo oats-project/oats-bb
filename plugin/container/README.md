@@ -18,6 +18,10 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 (`plugin-pi`), so each line after the first installs and builds what it needs by itself.
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
+`LIVE_PILOT_IMAGES=1`, by hand only and never in CI, takes the images of the pilot's six screens as a
+fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
+stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
+page's link or tile does not hold in it, and the gate is the run without it.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to

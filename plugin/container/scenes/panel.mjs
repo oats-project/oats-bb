@@ -295,8 +295,8 @@ const first = [
       check(/^\{"text":"since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d Which base branch\?","headings":0,"head":false,"first":true\}$/.test(asks), `${at} what the agent asks is first on the page, under no heading: since when, then its message; no sentence for the reason`, asks);
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "worktree · agents/panel-worktree-helper", `${at} Work: the mode as a fact, with its branch`, work);
-      const session = await page.evaluate(textOf(inPanel("oats-panel-session")));
-      check(/^Session Harness Claude Model claude-opus-5-5 Runs in bb thread Started \S.*$/.test(session) && !session.includes(threads.get(CHILD.thread).id) && !session.includes("the soul's choice"), `${at} Session: the harness, the model, where it runs in a word, since when, each a labelled fact; no id and no "where the model came from" on its face`, session);
+      const session = await page.evaluate(textOf(inPanel("oats-panel-session"))); // (the heading is drawn in capitals: innerText reads what is drawn)
+      check(/^SESSION Harness Claude Model claude-opus-5-5 Runs in bb thread Started \S.*$/.test(session) && !session.includes(threads.get(CHILD.thread).id) && !session.includes("the soul's choice"), `${at} Session: the harness, the model, where it runs in a word, since when, each a labelled fact; no id and no "where the model came from" on its face`, session);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-lineage")));
         check(read.includes("Parent Redesign ui lead"), `${at} Lineage: the parent, by its name as words`, read);

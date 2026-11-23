@@ -603,8 +603,8 @@ test("one act at a time: no Refresh while the first read runs, and none beside a
 });
 
 test("the roster and the activity are read at two moments: an activity that names a newer claim than the roster's asks for the roster again, once, and the header then says the newer claim", async () => {
-  // The roster was read at 18:16 (the agent waits since 18:14 for its first question). Since then the agent was
-  // started again and asked something new: the activity, read now, names a claim since 18:23.
+  // The roster was read while the agent waited for its first question (since 12:14:33). Since then the agent was
+  // started again and asked something new: the activity, read now, names a claim since 12:15:20.
   let refreshed = 0;
   const older = panelAgents();
   const newer = older.map((agent) => (agent.instance === CHILD ? { ...agent, waiting: { reason: "attention", message: "Which base branch?", since: "2026-11-23T12:15:20.913Z" } } : agent));
@@ -641,7 +641,7 @@ test("an activity whose standing claim is the roster's asks for nothing", async 
       refreshed += 1;
       return { at: "2026-11-23T12:30:31.000Z" };
     },
-    // the claim the recorded roster holds for the agent: since 18:14:12.916Z
+    // the claim the recorded roster holds for the agent: since 12:14:33.506Z
     panelEvents: () => ({ ...events, waitingOnYou: { producer: "oats.board", since: "2026-11-23T12:14:33.506Z", message: "How should I merge the pull request?" } }),
   });
   fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));

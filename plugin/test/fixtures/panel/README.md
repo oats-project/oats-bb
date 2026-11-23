@@ -8,7 +8,7 @@ literals.
 
 Recorded on 2026-11-23 by ONE real run (`plugin/container/ci.sh real`, its scenario and every check
 passed), all eight from that run and none edited after it: this repository's `main` at
-f4f07d8f33a1 (the plugin and the real run's own scripts), bb-app 0.50.1, OATS 0.70.5 from npm
+f4f07d8f488f4e052a6c73a82d59867b0e138f05 (the plugin and the real run's own scripts), bb-app 0.50.1, OATS 0.70.5 from npm
 (`@awebai/oats@0.70.5`, gitHead e5e7a2a48db42140718948553e8272fb4e8e3ed4), the plugin's floor; the
 bb session provider as the run's lock pins it (`oats.bb` at
 9b95a56f237ff4006a69545963d5130d6eb4ddc5, the commit every `oats.bb` origin in these files names),
@@ -34,7 +34,8 @@ visible in them:
   provider runs this launch (backend bb), with no OATS pane: claude folder trust is not read for
   it …"), from OATS 0.70.4; at 0.70.0 it was `unknown` with the file it had read. The panel says
   the kernel's word on the item's line, as the Desktop does ("launch · not-applicable · optional"),
-  and names a configuration file only where the kernel does.
+  and names a configuration file only where the kernel does: `readiness-soul.json`, where no
+  session provider is known yet, still holds that item as `unknown` with the file it read.
 
 In the deployment the scenario left (`redesign-ui-lead` of `oats-product-expert`, stopped through
 OATS by the scenario's last stop), one more agent

@@ -183,8 +183,11 @@ describe("readiness' words", () => {
     expect(itemFacts(home.checks[0]!.items[0]!)[1]).toEqual({ label: "Origin", value: "package oats.bb 9b95a56", whole: "package oats.bb 9b95a56f237ff4006a69545963d5130d6eb4ddc5 @ 9b95a56" });
     // the recorded launch item: a session provider runs the launch, so the kernel reads no folder trust for it and names no file
     expect(itemFacts(home.checks[1]!.items[0]!).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code"]);
-    // where the kernel did read one (a harness OATS launches itself), the file it read is a fact, after the code
-    expect(itemFacts({ ...home.checks[1]!.items[0]!, file: "/abs/home/.claude.json" }).map((fact) => `${fact.label}: ${fact.value}`).slice(2)).toEqual(["Code: harness-trust", "Configuration file: /abs/home/.claude.json"]);
+    // the soul's recorded readiness, where no session provider is known yet: the kernel did read the harness' folder trust, and the file it read is a fact, after the code
+    const ofSoul = recordedReadiness("soul").checks.find((check) => check.key === "configured")!.items[0]!;
+    expect(itemLine(ofSoul)).toBe("launch · unknown · optional");
+    expect(itemFacts(ofSoul).map((fact) => fact.label)).toEqual(["Producer", "Reason", "Code", "Configuration file"]);
+    expect(itemFacts(ofSoul).at(-1)).toEqual({ label: "Configuration file", value: "/abs/home/.claude.json", whole: null });
     const provider = home.checks[3]!.items[0]!.provider!;
     expect(providerSays(provider.status)).toBe("The provider says: ready.");
     expect(warningLine(provider.warnings[1]!)).toMatch(/^Warning: the bb backend launches in bb's full mode only .* \(session-provider-full-mode-only\)$/);

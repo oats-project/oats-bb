@@ -22,7 +22,7 @@ afterEach(() => {
 
 const CHILD = "panel-worktree-helper";
 const CHILD_THREAD = "thr_fg4rks2zkp";
-/** A quarter of an hour after the recorded agent's board asked its question (18:14:12Z). */
+/** A quarter of an hour after the recorded agent's board asked its question (12:14:33Z). */
 const NOW = Date.parse("2026-11-23T12:30:30.000Z");
 
 type Change = { agent?: (agent: Agent) => Agent; facts?: (facts: PanelInstance) => PanelInstance };

@@ -391,6 +391,33 @@ async function shots(scene, { instance, soul, threadId, state }) {
     }
   }
 }
+/**
+ * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
+ * sidebar holds the real agent's row and who waits, and no link to a page that is not shown.
+ */
+async function defaultPagesShots(scene, { instance, threadId }) {
+  bb("plugin", "config", "oats", "set", "pages", "home");
+  try {
+    for (const view of VIEWS) {
+      const { viewport, suffix } = view;
+      const at = `${scene} ${view.theme} ${viewport.name}`;
+      const page = await viewPage(browser, view, at);
+      try {
+        await page.goto("/");
+        check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
+        const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`;
+        // Waited for: the row, and the count of who waits as a button (it is one only once bb has given the settings).
+        const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; const needs = s.querySelector(${JSON.stringify(testId("oats-needs-line"))}); if (needs?.tagName !== "BUTTON") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`, 30);
+        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the default pages the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    bb("plugin", "config", "oats", "set", "pages", "home, automations, souls, capabilities, teams, machines");
+  }
+}
 /** At both widths: the agent stays in the roster, as a row that says its bb thread is gone, and its soul's page says "thread missing", with Start and Retire. */
 async function missingShots(scene, { instance, soul }) {
   for (const view of VIEWS) {
@@ -478,6 +505,7 @@ try {
   agrees(A.instance, row);
   keepStatus("working", { [A.instance]: (r) => r.running === true && r.runtimeState === "unknown" && r.session?.threadId === threadId });
   await shots("real-working", { ...A, threadId, state: "working" });
+  await defaultPagesShots("real-default", { ...A, threadId });
 
   step("A3 edge: a second spawn with the same name");
   refused("a second spawn of the same name", "E_INSTANCE_NAME_TAKEN", "spawn", { soul: A.soul, name: A.instance, task: "again", key: "spawn-2b1d8c6f" }, ["spawn", A.soul]);

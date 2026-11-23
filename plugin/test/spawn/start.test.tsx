@@ -22,7 +22,7 @@ afterEach(() => {
 
 const recorded = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: Record<string, unknown> }).result;
 type Event = { type: string; seq: number; data: Record<string, unknown> };
-const events = (name: "never-started" | "later-turn-failed"): Event[] => JSON.parse(readFileSync(join(process.cwd(), `test/fixtures/outside/events-${name}.json`), "utf8"));
+const events = (name: "never-started" | "later-turn-failed"): Event[] => JSON.parse(readFileSync(join(process.cwd(), `test/fixtures/outside/events/${name}.json`), "utf8"));
 const REASON = 'Failed to resolve Pi model "nosuchmodel"';
 
 /** The form, ready to spawn; bb answers the new thread's status from `statuses` (its last one from then on; with none, bb never answers) and its events from `log`. */

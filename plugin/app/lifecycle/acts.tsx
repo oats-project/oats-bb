@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { ReactNode } from "react";
 import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
+import { threadWorks } from "../../model/view";
 import { newKey } from "../keys";
 import { isUnconfirmed } from "../../contract/shared";
 import { CommandText } from "../panel/parts";
@@ -406,7 +407,9 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     if (current === request) set(null);
   };
   const plan = state.phase === "ready" || state.phase === "applying" ? state.plan : state.phase === "reading" ? state.kept : (state.sent?.plan ?? null);
-  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, stopArchivesThread(versionOf(plan))) : retirePlanView(plan, discard);
+  // Who of the plan works on a turn now: bb's own word on each agent's thread, as the roster holds it (never the plan's midTask).
+  const working = new Set(plan !== null && plan.action === "stop" && oats.phase === "ready" ? plan.targets.filter((target) => { const node = oats.nodeByInstance.get(target.instance); return node !== undefined && threadWorks(node.thread); }).map((target) => target.instance) : []);
+  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, stopArchivesThread(versionOf(plan)), working) : retirePlanView(plan, discard);
   const shownFor = plan === null ? null : plan.instance;
   const choose = (checked: boolean) => {
     if (verb === "stop") {
@@ -499,7 +502,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
-            // What a person should see before confirming (an agent in the middle of a task, no way back): set apart
+            // What a person should see before confirming (uncommitted work, a turn in progress, no way back): set apart
             // in the attention tone, under a heading of its own, never as more of "What is kept".
             <section data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Before you confirm</h3>

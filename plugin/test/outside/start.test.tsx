@@ -3,7 +3,7 @@
 // sidebar say "error" for it as for a thread whose later turn failed; bb's EVENTS tell them apart
 // (app/outside/threads.ts). From that one fact: "Failed" in every place, bb's reason under
 // Details, Start and Retire, and never that a message carries it on.
-// The events are RECORDED (test/fixtures/outside/events-*.json: the pi run's probe).
+// The events are RECORDED (test/fixtures/outside/events/*.json: the pi run's probe).
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
@@ -27,7 +27,7 @@ import type { Contract } from "../helpers/render";
 afterEach(resetApp);
 
 type Event = { type: string; seq: number; data: Record<string, unknown> };
-const events = (name: "never-started" | "ran-then-stopped" | "later-turn-failed"): Event[] => JSON.parse(readFileSync(resolve(process.cwd(), `test/fixtures/outside/events-${name}.json`), "utf8"));
+const events = (name: "never-started" | "ran-then-stopped" | "later-turn-failed"): Event[] => JSON.parse(readFileSync(resolve(process.cwd(), `test/fixtures/outside/events/${name}.json`), "utf8"));
 const of = (all: Event[], type: string) => all.filter((event) => event.type === type);
 const REASON = 'Failed to resolve Pi model "nosuchmodel"';
 

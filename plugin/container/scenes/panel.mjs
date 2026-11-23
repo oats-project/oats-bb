@@ -1037,7 +1037,9 @@ const more = [
 
         // Retry, once OATS answers again.
         setStatus({ stdout: JSON.stringify(states(threads)) });
-        await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-panel-page-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry").click()`);
+        // The press waits for the act to say Retry: while a read is in flight the same button says "Reading…".
+        const pressed = await page.until(`(() => { const act = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-agent-page")} ${inPanel("oats-panel-page-instance")} ${testId("oats-notice")} button`)})].find((e) => e.innerText.trim() === "Retry"); if (!act) return ""; act.click(); return "pressed"; })()`, 30);
+        check(pressed === "pressed", `${at} the notice's act says Retry, and it is pressed`, await page.evaluate(noticeOf("oats-panel-page-instance")));
         check(Boolean(await page.until(`${visible(testId("oats-panel"))} && ${textOf(model)}.startsWith(${JSON.stringify(RUNNING_MODEL)})`, 40)), `${at} Retry reads OATS again and shows the agent`, await page.evaluate(textOf(model)));
       } finally {
         setStatus({ stdout: JSON.stringify(states(threads)) });

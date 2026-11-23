@@ -90,9 +90,16 @@ export default [
       check(outside.scrolls === false && outside.out.length === 0, `${at} nothing of the row is cut or out of sight`, JSON.stringify(outside));
       await page.shot(`a13-${viewport.name}-thread`, { targets: true });
       // A confirmation opened from a real row: Stop on the line reads the plan and asks, and stops nothing by itself.
+      // On the thread of the agent whose stop plan was recorded (redesign-ui-lead: the fake answers that plan),
+      // so the dialog is the one of the row pressed.
+      const lead = threads.get("thr_redesign");
+      await page.goto(`/projects/${lead.projectId}/threads/${lead.id}`);
+      const leadLine = await statusOf(page, "working");
+      check(leadLine !== null && leadLine.act === "Stop", `${at} a working agent's line offers Stop`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
-      const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return t.startsWith("Stop ") ? t : ""; })()`, 20);
-      check(asked === "Stop Desktop mockups developer?", `${at} Stop on the thread's line opens the stop confirmation of that agent, by its one name`, asked ?? (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))})?.innerText.slice(0, 300) ?? "no dialog"`)));
+      // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
+      const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
+      check(asked === "Stop Redesign ui lead?", `${at} Stop on the thread's line opens the stop confirmation of that agent, by its one name, once the plan is read`, asked ?? (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))})?.innerText.slice(0, 300) ?? "no dialog"`)));
       await page.shot(`a13-${viewport.name}-thread-stop-asked`, { targets: true });
       await page.press("Escape");
       await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10);

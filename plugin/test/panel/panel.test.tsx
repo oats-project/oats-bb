@@ -840,7 +840,7 @@ test("the header offers the lifecycle's acts that apply to the agent's state, un
   expect(slot.inspection.rpcCalls.slice(before).map((call) => call.method).filter((method) => !["snapshot", "souls", "panelInstance"].includes(method))).toEqual([]);
 });
 
-test("an agent with no thread in bb has its acts on its own page: Start and Retire for one whose thread is gone, Stop and Retire for one on tmux", async () => {
+test("an agent with no thread in bb has its acts on its own page: Start and Retire for one whose thread is gone, Stop, Restart and Retire for one that runs on tmux", async () => {
   const byName = (change: Partial<Agent>) => {
     const agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, waiting: null, ...change } : agent));
     return renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, {
@@ -856,7 +856,8 @@ test("an agent with no thread in bb has its acts on its own page: Start and Reti
   gone.unmount();
   const tmux = byName({ backend: "tmux", threadId: null, running: true, runtimeState: "running" });
   await tmux.findByTestId("oats-panel-work");
-  expect(actsOf(tmux)).toEqual(["Stop…", "Retire…"]);
+  // An agent on tmux has the acts of its state as one on bb has: Start and Restart open its dialog, which opens no thread.
+  expect(actsOf(tmux)).toEqual(["Stop…", "Restart…", "Retire…"]);
 });
 
 test("while the roster is the last one read the acts are off, and say why", async () => {

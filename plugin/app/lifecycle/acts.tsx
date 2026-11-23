@@ -1,7 +1,9 @@
 // What the plugin does to an agent: Stop, Start, Restart and Retire, each through the plugin's
 // server and so through OATS, each in a dialog first: nothing runs on one press. Stop and Retire
 // show the kernel's plan as what will happen and what is kept, and ask once; Start and Restart
-// check the agent as the kernel has it now and offer the harness and the model of the start. The
+// check the agent as the kernel has it now and, for an agent on bb, offer the harness and the model
+// of the start (an agent on tmux starts with the launch its home recorded; one whose session was
+// lost is brought back in its last conversation). The
 // act in progress, its result and its refusal are said in the same dialog. The requests come from
 // thread menus, pages, the instance panel and the keyboard; one overlay per app window draws them.
 // The words are the OATS Desktop's (./words.ts).
@@ -11,12 +13,14 @@ import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, u
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { newKey } from "../keys";
 import { isUnconfirmed } from "../../contract/shared";
+import { CommandText } from "../panel/parts";
+import { attachCommand, attachWhere } from "../panel/words";
 import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
-import { Button, Confirm, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
+import { Button, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge } from "../ui/words";
@@ -28,6 +32,8 @@ import {
   carriesOn,
   LEAVE,
   piOnBb,
+  RESUME,
+  resumable,
   SHOW_RESULT,
   toasted,
   checkAgainRefused,
@@ -43,6 +49,7 @@ import {
   retirePlanView,
   START,
   startOutcome,
+  startSays,
   startRefused,
   stopArchivesThread,
   stopOutcome,
@@ -62,7 +69,7 @@ export type { PlanVerb, RunVerb, Verb };
  */
 type Resume =
   | { plan: Extract<PlanState, { phase: "settled" }>; recursive: boolean; discard: boolean }
-  | { start: Extract<StartState, { phase: "settled" }>; harness: string; model: string };
+  | { start: Extract<StartState, { phase: "settled" }>; harness: string; model: string; fresh: boolean };
 type Request = { verb: Verb; instance: string; id: number; resume?: Resume };
 
 let current: Request | null = null;
@@ -99,8 +106,8 @@ function reopen(verb: Verb, instance: string, resume: Resume): void {
  * Tell the result of an act whose dialog is gone (`toasted`): a plain one whole, with the way to
  * the agent; any other by its title, staying until dismissed, with "Show result".
  */
-function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null): void {
-  const { plain, ...toast } = toasted(verb, outcome);
+function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null, threadless = false): void {
+  const { plain, ...toast } = toasted(verb, outcome, threadless);
   if (plain) notify({ ...toast, ...(open === null ? {} : { open }) });
   else notify({ ...toast, stays: true, open: { label: SHOW_RESULT, run: () => reopen(verb, instance, resume) } });
 }
@@ -108,7 +115,8 @@ function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, op
 export const askPlan = (verb: PlanVerb, instance: string): void => openAct(verb, instance);
 /**
  * Start or restart an agent: opens its dialog. Nothing is started on this call (the Desktop's
- * Start… and Restart…); the dialog starts it, and opens the thread the kernel answers with.
+ * Start… and Restart…); the dialog starts it, and opens the thread the kernel answers with
+ * (an agent on tmux has none: its result says where it runs).
  * The last two arguments are no longer read: the overlay has its own.
  */
 export async function run(verb: RunVerb, instance: string, _rpc?: unknown, _navigate?: unknown): Promise<void> {
@@ -246,7 +254,8 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
     </>
   );
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
-  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.tone, title: outcome.title, lines: outcome.lines, code: outcome.code, actions: next };
+  // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
+  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, code: outcome.code, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), code: outcome.code, actions: next };
 }
 
@@ -607,6 +616,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   /** "" keeps the recorded harness: nothing is passed. */
   const [harness, setHarness] = useState(kept?.harness ?? "");
   const [model, setModel] = useState(kept?.model ?? "");
+  /** For a tmux agent whose session was lost: the plain start, on purpose, in place of the resume. Off by default. */
+  const [fresh, setFresh] = useState(kept?.fresh ?? false);
+  /** The row changed under a resume (the kernel: its session is not lost): said first when the check comes back. */
+  const [changed, setChanged] = useState(false);
   const live = useRef(true);
   const ticket = useRef(0);
   useEffect(() => {
@@ -652,34 +665,62 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     if (resumed === null) check();
   }, [check, resumed]);
 
+  /** Refresh status: the row is read again, and what was said of the row before it no longer stands. */
+  const refresh = () => {
+    setChanged(false);
+    check();
+  };
+
   const known = state.phase === "checking" ? null : state.check;
   const name = known?.instance ?? instance;
   const typed = model.trim();
   const badModel = typed !== "" && !isModel(typed);
   // The harness that will run: the chosen one, else the recorded one. Its models are the ones suggested.
   const running = harness !== "" ? harness : (known?.harness ?? null);
-  const suggestions = useModelSuggestions(known === null ? null : running);
+  // (An agent that is not on bb has no model field: nothing is asked of bb for it.)
+  const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
+  // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
+  // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
+  // person turned on the plain start.
+  const onBb = known === null || known.backend === "bb";
+  const lost = verb === "start" && known !== null && resumable(known);
+  const resumes = lost && !fresh;
+
   const start = () => {
-    if (state.phase !== "ready" || held !== null || badModel) return;
+    if (state.phase !== "ready" || held !== null || (onBb && badModel)) return;
     const { check: checked } = state;
+    setChanged(false);
     setState({ phase: "running", check: checked });
-    rpc.call(verb, { instance, ...(harness === "" ? {} : { harness }), ...(typed === "" ? {} : { model: typed }) }).then(
+    const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
+    rpc.call(verb, asked).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
-        const open = { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(started.threadId) };
+        const threadId = started.threadId;
+        // A home that is not on bb has no thread to open: its result says where it is.
+        const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };
         if (live.current && current === request) {
-          setState({ phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId });
+          setState({ phase: "settled", check: checked, outcome, refusal: null, threadId });
           // The agent's new thread opens behind the result, as the Desktop opens its terminal: Close leaves the person on it.
-          navigate.toThread(started.threadId);
-        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId }, harness, model }, open);
+          if (threadId !== null) navigate.toThread(threadId);
+        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId }, harness, model, fresh }, open, checked.backend !== "bb");
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
-        const outcome = startRefused(verb, checked.instance, refusal);
+        // The row changed under a resume (its session is not lost any more): back to the check, which says what Start does now.
+        if (refusal.code === "E_RESUME_NOT_LOST" && live.current && current === request) {
+          setChanged(true);
+          check();
+          return;
+        }
+        const outcome = startRefused(verb, checked.instance, refusal, checked.backend === "tmux");
+        // Launch settings that changed leave one way to start it: fresh. The dialog that Refresh status brings back
+        // has that choice ON, with its line on what is lost: the person sees it and presses Start, or turns it off.
+        const onlyFresh = refusal.code === "E_LAUNCH_ENV_CHANGED";
+        if (onlyFresh && live.current) setFresh(true);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
-        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model }, null);
+        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model, fresh: fresh || onlyFresh }, null);
       },
     );
   };
@@ -706,9 +747,26 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                 state.outcome,
                 <>
                   {state.outcome.offers.includes("refresh") ? (
-                    <Button data-testid="oats-start-refresh" onClick={check}>
+                    <Button data-testid="oats-start-refresh" onClick={refresh}>
                       {START.refresh}
                     </Button>
+                  ) : null}
+                  {state.outcome.waiting === true ? (
+                    // The start succeeded and the harness waits for its person in its terminal: said apart, in the attention tone.
+                    <div data-testid="oats-start-waiting" className="w-full">
+                      <Notice title={RESUME.waiting} tone="warning" />
+                    </div>
+                  ) : null}
+                  {(state.outcome.tone === "done" || state.outcome.tone === "unknown") && state.check !== null && state.check.backend === "tmux" ? (
+                    // An agent on tmux has no thread to open: where it runs, and the way into it (the panel's own words and
+                    // command). Under a start that is done, and under one whose end is not known: its session is or may be there.
+                    <div data-testid="oats-start-where" className="flex w-full min-w-0 flex-col gap-1 text-sm">
+                      <p>{shown(attachWhere(state.check.machine === "" ? null : state.check.machine))}</p>
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <CommandText command={attachCommand(state.check.home)} />
+                        <CopyButton text={attachCommand(state.check.home)} name="Copy the command" />
+                      </span>
+                    </div>
                   ) : null}
                 </>,
               );
@@ -729,12 +787,17 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
-      happens={known === null || state.phase === "settled" ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      happens={known === null || state.phase === "settled" ? [] : startSays(verb, { onBb, resumes, harness: known.harness, begins })}
       kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
-      blocked={held?.reason ?? (badModel ? START.badModel : null)}
+      blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
       notice={
-        carryOn !== null ? (
+        changed ? (
+          // A resume the kernel refused because the row changed: said first, as a plan that changed is.
+          <Notice title="Something changed since you opened this" tone="warning">
+            <p>{RESUME.notLost}</p>
+          </Notice>
+        ) : carryOn !== null ? (
           <Notice
             title={START.carryOn}
             actions={
@@ -754,12 +817,26 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         <div data-testid="oats-start" className="flex min-w-0 flex-col gap-3">
           <Facts>
             {/* With a choice of harness, the field's first entry says which one is recorded: it is not said twice. */}
-            {known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
+            {onBb && known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
             {/* The kernel's row is a record the agent can write: its harness, model and home are drawn through the display filter. */}
             <Fact label="Machine">{shown(known.machine)}</Fact>
             <Fact label="Home">{shown(known.home)}</Fact>
           </Facts>
-          {known.harnesses.length > 1 ? (
+          {lost ? (
+            // A tmux agent whose session was lost: Start brings it back; the plain start stays, on purpose, and says what it loses.
+            // (A choice made before the press: this block is not drawn beside a result; Refresh status brings the dialog back.)
+            <div className="flex flex-col gap-1">
+              <span data-testid="oats-start-fresh-choice" className="flex">
+                <Switch label={RESUME.freshChoice} checked={fresh} disabled={!editable} onChange={setFresh} />
+              </span>
+              {fresh ? (
+                <p role="status" data-testid="oats-start-fresh-warning" className="break-words text-destructive-text">
+                  {RESUME.freshWarning}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {onBb && known.harnesses.length > 1 ? (
             <Field label={START.harness}>
               <select data-testid="oats-start-harness" className={INPUT} value={harness} disabled={!editable} {...(editable ? { "data-autofocus": "" } : {})} onChange={(event) => setHarness(event.currentTarget.value)}>
                 <option value="">{shown(resolvedLabel(KEEP_HARNESS, recorded))}</option>
@@ -771,6 +848,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               </select>
             </Field>
           ) : null}
+          {/* A home on tmux starts with the launch it recorded: bb's harnesses and their models are no choice of its start. */}
+          {!onBb ? null : (
           <Field
             label={START.model}
             optional
@@ -790,11 +869,14 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               onChange={(event) => setModel(event.currentTarget.value)}
             />
           </Field>
+          )}
+          {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
             {suggestions.models.map((each) => (
               <option key={each.id} value={each.id} label={shown(each.label)} />
             ))}
           </datalist>
+          )}
           {state.phase === "ready" ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{held === null ? START.ready : held.reason}</span>
@@ -804,7 +886,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                   {`Open ${agentName(name)}`}
                 </Button>
               ) : null}
-              <Button variant="ghost" data-testid="oats-start-refresh" onClick={check}>
+              <Button variant="ghost" data-testid="oats-start-refresh" onClick={refresh}>
                 {START.refresh}
               </Button>
             </p>

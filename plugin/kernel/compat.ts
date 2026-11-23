@@ -4,9 +4,10 @@
 // kernel/roster.ts `parseVersion`; `core.versionOf()` on the server).
 
 /**
- * The oldest OATS the plugin works with: its verbs and JSON answers exist from here on, and it is
- * the kernel the real run pins. Never below the floor of the bb session provider it ships beside
- * (`compatibility.oats` of oats-package/'s two manifests): a test holds that.
+ * The oldest OATS the plugin works with: its verbs and JSON answers exist from here on. Never
+ * below the floor of the bb session provider it ships beside (`compatibility.oats` of
+ * oats-package/'s two manifests), and never above the minor of the kernel the real run pins: a
+ * test holds both.
  */
 export const OATS_FLOOR = "0.70.5";
 

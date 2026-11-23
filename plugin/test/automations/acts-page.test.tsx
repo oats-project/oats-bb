@@ -3,16 +3,21 @@
 // act calls the plugin's server once with the row's id, and what the kernel answered or refused is
 // said where the person is looking, in the Desktop's words.
 import type { ComponentType } from "react";
-import { afterEach, describe, expect, it } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { parseHostInstall, parseScheduleReconcile, parseScheduleRun, parseTest } from "../../kernel/automations-acts";
+import { TestCard } from "../../app/automations/acts";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { AT, OATS } from "./handlers";
 import { answer, rowOf, schedules, triggers } from "./fixtures";
 
 afterEach(resetApp);
+// A test that sets the clock (below) gives it back.
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 /** The page's component as the slot drew it: drawn again at another route, it is the same page. */
 let Drawn: ComponentType<{ subPath: string }> | undefined;
@@ -154,10 +159,30 @@ describe("Test (D-281, D-282)", () => {
   const card = async (slot: Slot) => (await slot.findByTestId("oats-automation-test")).textContent;
 
   it("a schedule that would run here", async () => {
+    // The page draws against its own clock, and the recorded due time is a fixed day: the test sets the
+    // clock (two hours before it), and only the clock, so the page's waits and timers run as they do.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse(value(parseTest(answer("schedule-test.json"), "schedule", null)).nextDue!) - 2 * 3600e3);
     const slot = await page("schedules/local/daily-review", { automationTest: tested("schedule-test.json", "schedule", null) });
     fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
-    expect(await card(slot)).toMatch(/^Test resultReady: it would run here\.Next due in .+$/);
+    expect(await card(slot)).toBe("Test resultReady: it would run here.Next due in 2 h");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
+  });
+
+  it("a due time ahead is next; one that has passed was due, and is never called next", () => {
+    const test = value(parseTest(answer("schedule-test.json"), "schedule", null));
+    const due = Date.parse(test.nextDue!);
+    expect(Number.isFinite(due)).toBe(true);
+    const drawn = (now: number) => {
+      const view = render(<TestCard tested={{ test }} now={now} />);
+      const text = view.getByTestId("oats-automation-test").textContent;
+      view.unmount();
+      return text;
+    };
+    expect(drawn(due - 2 * 3600e3)).toBe("Test resultReady: it would run here.Next due in 2 h");
+    expect(drawn(due + 3 * 60e3)).toBe("Test resultReady: it would run here.Was due 3 min ago");
+    expect(drawn(due)).toMatch(/^Test resultReady: it would run here\.Was due /);
+    expect(drawn(due + 2 * 86400e3)).not.toContain("Next");
   });
 
   it("one placed elsewhere is not ready here, and says why", async () => {

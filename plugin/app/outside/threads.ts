@@ -29,15 +29,13 @@ onWindowReset(() => {
 /** bb takes at most 200 ids in one request. */
 const PAGE = 200;
 
-type Lister = { threads: { list(args: { threadIds: readonly string[]; archived: boolean; includeHidden: boolean }): Promise<readonly { id: string; archivedAt: number | null }[]> } };
-
 /**
  * bb's answer for each of `ids`, by id; an id with no entry was not answered yet (or bb could not
  * say). Asked again whenever the ids or `token` change: `token` is what the caller knows of the
  * moment (the roster read, the minute), since bb tells nobody that an archived thread was deleted.
  */
 export function useArchived(ids: readonly string[], token: string): ReadonlyMap<string, Answer> {
-  const sdk = useSdk() as unknown as Lister;
+  const sdk = useSdk();
   const sorted = [...new Set(ids)].sort();
   const idsKey = sorted.join(" ");
   useEffect(() => {

@@ -1,7 +1,8 @@
 // The outside feature's live scenes: what the sidebar's row, the thread's line and the home's card
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
-// scene is). One stage of its own, `outside`: every row of the feature's table at once, in one
-// roster. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
+// scene is). Two stages of its own on one roster, every row of the feature's table at once:
+// `outside`, and `outside-question`, the same while bb holds a question on the thread of the agent
+// OATS recorded stopped (the home's card). What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
 //
@@ -19,6 +20,9 @@
 // answers an id it never had as it answers a deleted one (it leaves it out). The agent's bb thread
 // of the other stages is archived meanwhile, so that it is not listed as a thread of nobody's.
 import { execFileSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { showSidebar, testId, textOf, visible } from "../browser.mjs";
 
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -42,19 +46,84 @@ const ARCHIVED = ["thr_digest", "thr_research", "thr_ci"];
 /** The fixture thread whose row keeps the fixture's own id: bb has no thread of it. */
 const DELETED = "thr_ci";
 
+/** A kernel that lists `provider-outside-oats`: the fake's version for the length of the stage. */
+const VERSION = { file: "outside/version-0.70.5.json" };
+/**
+ * A change the kernel records while the stage runs, as live-ui's `record` makes one (the fake's
+ * status with `rows`, and a line in the deployment's event log, which the plugin's watch sees),
+ * keeping the stage's own version and threads: set by the stage's `enter`. → when it was recorded.
+ */
+let recordRows = () => {
+  throw new Error("outside: the stage was not entered");
+};
+const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl");
+
+/** The stage's roster: the threads said archived are archived in bb, and the fake answers ROWS on a kernel that lists the feature. */
+async function enter({ fake, statusWithRealIds, threads, untilSnapshot }) {
+  for (const id of ARCHIVED) bb("thread", "archive", threads.get(id).id);
+  const joined = new Map([...threads].filter(([id]) => id !== DELETED));
+  recordRows = (rows) => {
+    fake({ status: { stdout: statusWithRealIds(joined, rows) }, version: VERSION });
+    const at = Date.now();
+    appendFileSync(EVENTS, `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+    return at;
+  };
+  fake({ status: { stdout: statusWithRealIds(joined, ROWS) }, version: VERSION });
+  // The snapshot is read again (and with it, by Retry's own path, the kernel's version).
+  await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === OUTSIDE && agent.running === false && agent.runtimeState === "stopped"));
+}
+async function leave({ fake, threads }) {
+  for (const id of ARCHIVED) bb("thread", "unarchive", threads.get(id).id);
+  fake();
+}
+
+// bb's question on the thread of the agent OATS recorded stopped: a message there started it again,
+// and the mock model asks what the message names (real/mock-anthropic.mjs, MOCK-ASK). Asked ONCE,
+// when its stage is entered, and answered when the stage is left, as a person would: the pages of
+// the stage all see the one question.
+const QUESTION = "Keep the harvest running, or stop here?";
+const ASK = { questions: [{ question: QUESTION, header: "Harvest", multiSelect: false, options: [{ label: "Keep running", description: "Go on." }, { label: "Stop here", description: "Stop now." }] }] };
+const pendingOn = (threadId) => bbJson("thread", "interactions", "list", threadId).filter((interaction) => interaction.status === "pending");
+/** → bb's pending interaction, or undefined when none opened in `seconds`. */
+async function untilPending(threadId, seconds) {
+  for (const deadline = Date.now() + seconds * 1000; Date.now() < deadline; await sleep(1000)) {
+    const found = pendingOn(threadId)[0];
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+/** The question bb holds while the stage `outside-question` runs; undefined when none opened (its scenes then fail, and say so). */
+let question;
+
 export const stages = {
-  outside: {
-    label: "OUT",
-    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      for (const id of ARCHIVED) bb("thread", "archive", threads.get(id).id);
-      const joined = new Map([...threads].filter(([id]) => id !== DELETED));
-      fake({ status: { stdout: statusWithRealIds(joined, ROWS) }, version: { file: "outside/version-0.70.5.json" } });
-      // The snapshot is read again (and with it, by Retry's own path, the kernel's version).
-      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === OUTSIDE && agent.running === false && agent.runtimeState === "stopped"));
+  outside: { label: "OUT", enter, leave },
+  "outside-question": {
+    label: "OUTQ",
+    enter: async (stage) => {
+      await enter(stage);
+      const thread = stage.threads.get("thr_harvest");
+      question = undefined;
+      // The mock asks only when the message is the last one Claude Code sends it, which it has been
+      // seen not to be (one turn in nine, in this feature's own runs: the model answered with its
+      // line of text instead). A message that opened no question is said, and sent once more.
+      for (let attempt = 1; attempt <= 3 && question === undefined; attempt += 1) {
+        bb("thread", "tell", thread.id, `One more thing.\nMOCK-ASK:${JSON.stringify(ASK)}\n`);
+        question = await untilPending(thread.id, 45);
+        if (question === undefined) console.log(`NOTE outside: the message to "${thread.title}" opened no question in 45 s (attempt ${attempt} of 3); bb says its status is ${bbJson("thread", "show", thread.id).thread?.status}`);
+      }
     },
-    leave: async ({ fake, threads }) => {
-      for (const id of ARCHIVED) bb("thread", "unarchive", threads.get(id).id);
-      fake();
+    leave: async (stage) => {
+      const thread = stage.threads.get("thr_harvest");
+      try {
+        if (question !== undefined) {
+          const asked = question.payload.questions[0];
+          bb("thread", "interactions", "answer", question.id, thread.id, "--choice", `${asked.id}=${asked.options[0].value}`);
+          for (const deadline = Date.now() + 60_000; Date.now() < deadline && (pendingOn(thread.id).length > 0 || bbJson("thread", "show", thread.id).thread?.status !== "idle"); ) await sleep(1000);
+        }
+      } finally {
+        question = undefined;
+        await leave(stage);
+      }
     },
   },
 };
@@ -103,6 +172,33 @@ export default [
       const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
       check(cut.length === 0, `${at} no row's words are cut`, JSON.stringify(cut));
       await page.shot(`outside-${viewport.name}-sidebar`);
+    },
+  },
+  {
+    stage: "outside",
+    name: "freshness: the kernel's report of a home that runs outside OATS is on its row and on its thread within 3 s",
+    run: async ({ page, at, viewport, threads, check }) => {
+      // The agent OATS stopped whose thread is open: the kernel then reports a harness in it (a
+      // message was sent in its thread), and takes the report back once OATS has stopped it again.
+      const INSTANCE = "release-070-maintainer";
+      const thread = threads.get("thr_release");
+      const report = { code: "running-outside-oats", backend: "bb", message: MESSAGE.replaceAll(OUTSIDE, INSTANCE) };
+      await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
+      const warned = `document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-outside-warning")}[data-instance="${INSTANCE}"]`)}) !== null`;
+      const marked = `document.querySelector(${JSON.stringify(`${onThread(thread.id)} ${testId("oats-outside-mark")}`)}) !== null`;
+      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-line")}`)})?.getAttribute("data-state") === "stopped" && !(${warned})`, 30)), `${at} before the report the thread's line says "Stopped", with no warning`);
+      try {
+        const reported = recordRows({ ...ROWS, [INSTANCE]: { ...STOPPED, outsideOats: report } });
+        const onLine = (await page.until(warned, 15)) ? Date.now() - reported : null;
+        check(onLine !== null && onLine <= 3000, `${at} the thread's line carries the kernel's report ${onLine === null ? "never" : `${onLine} ms`} after the kernel recorded it (3 s at most)`);
+        // The row in the sidebar (beside the thread at 1280; in bb's drawer at 390, where it is read once the drawer is open).
+        check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+        check(Boolean(await page.until(marked, viewport.mobile ? 15 : 3)), `${at} and its row in the sidebar has the warning mark`);
+      } finally {
+        const back = recordRows(ROWS);
+        const gone = (await page.until(`!(${warned})`, 15)) ? Date.now() - back : null;
+        check(gone !== null && gone <= 3000, `${at} and the report is gone ${gone === null ? "never" : `${gone} ms`} after the kernel took it back (3 s at most)`);
+      }
     },
   },
   {
@@ -168,46 +264,26 @@ export default [
     },
   },
   {
-    stage: "outside",
+    stage: "outside-question",
     name: "the home's card of an agent OATS stopped that bb has a question open for says the kernel's report",
     run: async ({ page, at, viewport, threads, check }) => {
-      // bb has a question open on the thread of the agent OATS recorded stopped: a message there
-      // started it again (the mock model asks what the message names: real/mock-anthropic.mjs).
       const thread = threads.get("thr_harvest");
-      const QUESTION = "Keep the harvest running, or stop here?";
-      const ask = { questions: [{ question: QUESTION, header: "Harvest", multiSelect: false, options: [{ label: "Keep running", description: "Go on." }, { label: "Stop here", description: "Stop now." }] }] };
-      const pending = () => bbJson("thread", "interactions", "list", thread.id).filter((interaction) => interaction.status === "pending");
-      bb("thread", "tell", thread.id, `One more thing.\nMOCK-ASK:${JSON.stringify(ask)}\n`);
-      let asked;
-      for (const deadline = Date.now() + 60_000; Date.now() < deadline && asked === undefined; ) {
-        asked = pending()[0];
-        if (asked === undefined) await sleep(1000);
-      }
-      check(asked?.payload?.kind === "user_question", `${at} bb has a question open on the thread of the agent OATS recorded stopped`, JSON.stringify(asked ?? null));
-      try {
-        await page.goto("/plugins/oats/home");
-        const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.querySelector(${JSON.stringify(`${testId("oats-outside-warning")}[data-instance="${OUTSIDE}"]`)}))`;
-        const read = await page.until(`(() => { const flat = ${flat}; const card = ${card}; const notice = card?.querySelector(${JSON.stringify(testId("oats-notice"))}); if (!notice) return ""; notice.scrollIntoView({ block: "center" }); return JSON.stringify({ tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: [...notice.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), warnings: document.querySelectorAll(${JSON.stringify(testId("oats-outside-warning"))}).length }); })()`, 30);
-        const said = read ? JSON.parse(read) : null;
-        check(
-          said !== null && said.tone === "warning" && said.title === "Running outside OATS" && said.text.includes(MESSAGE) && same(said.acts, ["Stop", "Start"]) && said.warnings === 1,
-          `${at} the home's card of that agent says the kernel's message in the warning tone, with Stop and Start; no other card does`,
-          read ?? (await page.evaluate(textOf(testId("oats-home-needs")))),
-        );
-        await page.shot(`outside-${viewport.name}-home-card`);
-        // The thread itself: bb's question makes it "Needs you", and the report stands under the line.
-        await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
-        const line = await lineOf(page, /^! Needs you · /);
-        check(line !== null && line.words === "! Needs you · bb shows its question in this thread" && line.warning?.title === "Running outside OATS" && same(line.warning.acts, ["Stop", "Start"]), `${at} on its thread: "Needs you" for bb's question, and the kernel's report under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
-        await page.shot(`outside-${viewport.name}-thread-outside-question`, { targets: true });
-      } finally {
-        // The question is answered, as a person would, so that the next page starts from the stage's own state.
-        if (asked !== undefined) {
-          const question = asked.payload.questions[0];
-          bb("thread", "interactions", "answer", asked.id, thread.id, "--choice", `${question.id}=${question.options[0].value}`);
-          for (const deadline = Date.now() + 60_000; Date.now() < deadline && (pending().length > 0 || bbJson("thread", "show", thread.id).thread?.status !== "idle"); ) await sleep(1000);
-        }
-      }
+      check(question?.payload?.kind === "user_question", `${at} bb has a question open on the thread of the agent OATS recorded stopped`, JSON.stringify(question ?? null));
+      await page.goto("/plugins/oats/home");
+      const card = `[...document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))})].find((e) => e.querySelector(${JSON.stringify(`${testId("oats-outside-warning")}[data-instance="${OUTSIDE}"]`)}))`;
+      const read = await page.until(`(() => { const flat = ${flat}; const card = ${card}; const notice = card?.querySelector(${JSON.stringify(testId("oats-notice"))}); if (!notice) return ""; notice.scrollIntoView({ block: "center" }); return JSON.stringify({ tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: [...notice.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), asked: flat(card.querySelector(${JSON.stringify(testId("oats-needs-question"))})), warnings: document.querySelectorAll(${JSON.stringify(testId("oats-outside-warning"))}).length }); })()`, 30);
+      const said = read ? JSON.parse(read) : null;
+      check(
+        said !== null && said.tone === "warning" && said.title === "Running outside OATS" && said.text.includes(MESSAGE) && same(said.acts, ["Stop", "Start"]) && said.asked === QUESTION && said.warnings === 1,
+        `${at} the home's card of that agent has bb's question, and says the kernel's message in the warning tone, with Stop and Start; no other card does`,
+        read ?? (await page.evaluate(textOf(testId("oats-home-needs")))),
+      );
+      await page.shot(`outside-${viewport.name}-home-card`);
+      // The thread itself: bb's question makes it "Needs you", and the report stands under the line.
+      await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
+      const line = await lineOf(page, /^! Needs you · /);
+      check(line !== null && line.words === "! Needs you · bb shows its question in this thread" && line.warning?.title === "Running outside OATS" && same(line.warning.acts, ["Stop", "Start"]), `${at} on its thread: "Needs you" for bb's question, and the kernel's report under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
+      await page.shot(`outside-${viewport.name}-thread-outside-question`, { targets: true });
     },
   },
 ];

@@ -97,13 +97,15 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const now = useNow();
   const agent = outside.agentOn(threadId);
   const status = agent === undefined ? null : agentStatus(agent, null, now);
-  // A stopped agent's time is its last recorded stop, as on the roster's own row: one read, for this agent.
-  const events = usePanelEvents(agent?.instance ?? "", status?.state === "stopped");
+  const said = agent === undefined ? null : outside.of(agent);
+  // A stopped agent's time is its last recorded stop, as on the roster's own row: one read, for this
+  // agent, and only where the line says "Stopped" (a lost session's line says what happened in its place).
+  const timed = status?.state === "stopped" && said?.state == null;
+  const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
-  const said = outside.of(agent);
   const held = oats.stale !== null;
   const acts = lineActs(said, agent.instance, held);
-  const since = status.state === "stopped" && said?.state == null ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null;
+  const since = timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null;
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
       <span data-testid="oats-outside-agent" className="min-w-0 break-words font-semibold">

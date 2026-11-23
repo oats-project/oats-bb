@@ -824,6 +824,46 @@ test("the release's default shows the home alone: the Agents tile only, no count
   expect(empty.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
 });
 
+test("Home › Agents says where an agent the roster draws on no thread is, from the one answer the sidebar reads: nothing of an archived thread for a stop, the reason otherwise, and a lost tmux session", async () => {
+  const threads = (...gone: string[]) => { const all = sidebarThreads(); return { ...all, threads: all.threads.filter((thread) => !gone.includes(thread.id)) }; };
+  /** bb's own answer for the ids asked: the archived ones among them. */
+  const bb = (...archived: string[]) => ({ threads: { list: async ({ threadIds }: { threadIds: readonly string[] }) => threadIds.filter((id) => archived.includes(id)).map((id) => ({ id, archivedAt: 1 })), interactions: { list: async () => [] } } }) as never as RenderSlotOptions<Contract>["sdk"];
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const rowOf = async (agents: Agent[], instance: string, options: Pick<RenderSlotOptions<Contract>, "sidebarThreads" | "sdk">) => {
+    const list = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "agents" }, { rpc: handlers({}, agents), ...options });
+    const row = (await within(await list.findByTestId("oats-home-agents")).findAllByTestId("oats-home-agent-row")).find((each) => each.dataset.instance === instance)!;
+    return { list, row, words: () => row.querySelector("span > span.text-xs")!.textContent };
+  };
+  const DIGEST = "weekly-digest-helper"; // the sample's agent OATS stopped, on thr_digest
+  const withEnd = (sessionEnd: string) => fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd } : agent));
+  // An operator's stop whose thread bb has archived: nothing of the thread (on a provider that archives at stop that is every stopped agent), and a press opens the archived thread.
+  const stopped = await rowOf(withEnd("stopped"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
+  await waitFor(() => expect(stopped.list.inspection.sdkCalls.some((call) => call.method === "threads.list")).toBe(true));
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a reason to be drawn, if one were)
+  expect(stopped.words()).not.toMatch(/thread|archived|gone/);
+  fireEvent.click(within(stopped.row).getByTestId("oats-home-agent"));
+  await waitFor(() => expect(stopped.list.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_digest" }));
+  stopped.list.unmount();
+  resetApp();
+  // A session lost with its thread archived: the reason, as on the sidebar's row.
+  const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
+  await waitFor(() => expect(lost.words()).toContain(" · archived in bb"));
+  lost.list.unmount();
+  resetApp();
+  // bb answers that it has no thread of that id: deleted.
+  const deleted = await rowOf(withEnd("stopped"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb() });
+  await waitFor(() => expect(deleted.words()).toContain(" · deleted in bb"));
+  expect(deleted.words()).not.toContain("gone");
+  deleted.list.unmount();
+  resetApp();
+  // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs.
+  const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
+  const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
+  await waitFor(() => expect(tmux.words()).toContain(" · session lost · runs in tmux"));
+  expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
+});
+
 test("the home's count of who needs you is the sidebar's: an agent on tmux that asks is in the badge, the heading and the summary", async () => {
   const agents = [...fixtureAgents(), TMUX_ASKS];
   const latest = await badge({ rpc: handlers({}, agents) });

@@ -570,7 +570,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             ) : notReady === null ? null : (
               // One harness, so no field: what bb says of it is still said, where the field would be.
               <p data-testid="oats-spawn-harness-state" className="text-xs text-muted-foreground">
-                {notReady.sentence}
+                {notReady.alone}
               </p>
             )}
             <Field

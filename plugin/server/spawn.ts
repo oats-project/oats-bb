@@ -1,7 +1,7 @@
 // Spawn's RPC handlers: the preview, and the apply of exactly the previewed decision.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import type { rpc } from "../contract/spawn.js";
+import type { host, rpc } from "../contract/spawn.js";
 import { checkHarness, checkModel } from "../kernel/spawn.js";
 import type { Agent } from "../model/types.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core, type Value } from "./core.js";
@@ -40,7 +40,8 @@ async function digest(text: string): Promise<string> {
 }
 
 type Choices = z.infer<(typeof rpc)["spawnPlan"]["input"]>;
-type HostChoices = Omit<Choices, "relation"> & { relation?: NonNullable<Choices["relation"]> & { root?: string } };
+/** The same as the host entry takes them: the host contract's own shape, without where `oats` runs. */
+type HostChoices = Omit<z.infer<(typeof host)["spawnPreview"]["input"]>, "deployment" | "oatsBin">;
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /** key -> the decision a spawn with that key applies, so that a retry replays it. */

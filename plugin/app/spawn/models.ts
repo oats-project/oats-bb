@@ -118,12 +118,18 @@ export function useModelSuggestions(harness: string | null): ModelSuggestions {
 // Read, never guessed: while bb has not answered, or for a state the plugin does not know, nothing is said.
 
 /** What bb says of a harness's bb provider when it is not ready to run; null when it is ready, or not known. */
-export type HarnessState = { mark: string; sentence: string } | null;
-const NOT_READY: Record<string, (name: string) => { mark: string; sentence: string }> = {
-  not_installed: (name) => ({ mark: "not installed in bb", sentence: `bb has not installed ${name} on this machine, so a spawn on it is refused. Install it in bb’s settings, or pick another harness.` }),
-  unauthenticated: (name) => ({ mark: "not signed in in bb", sentence: `bb is not signed in to ${name} on this machine, so a spawn on it is refused. Sign in to it in bb’s settings, or pick another harness.` }),
-  expired: (name) => ({ mark: "sign-in expired in bb", sentence: `bb’s sign-in to ${name} has expired on this machine, so a spawn on it is refused. Sign in to it again in bb’s settings, or pick another harness.` }),
-  unsupported_version: (name) => ({ mark: "too old for bb", sentence: `bb needs a newer ${name} than the one on this machine, so a spawn on it is refused. Update it in bb’s settings, or pick another harness.` }),
+/**
+ * `sentence` is for under a Harness field, where another harness can be picked; `alone` is the
+ * same with no word of picking another, for a form that has no such field (one harness declared):
+ * a sentence names only a control that exists.
+ */
+export type HarnessState = { mark: string; sentence: string; alone: string } | null;
+const notReady = (mark: string, what: string, how: string): { mark: string; sentence: string; alone: string } => ({ mark, sentence: `${what}, so a spawn on it is refused. ${how}, or pick another harness.`, alone: `${what}, so a spawn on it is refused. ${how}.` });
+const NOT_READY: Record<string, (name: string) => { mark: string; sentence: string; alone: string }> = {
+  not_installed: (name) => notReady("not installed in bb", `bb has not installed ${name} on this machine`, "Install it in bb’s settings"),
+  unauthenticated: (name) => notReady("not signed in in bb", `bb is not signed in to ${name} on this machine`, "Sign in to it in bb’s settings"),
+  expired: (name) => notReady("sign-in expired in bb", `bb’s sign-in to ${name} has expired on this machine`, "Sign in to it again in bb’s settings"),
+  unsupported_version: (name) => notReady("too old for bb", `bb needs a newer ${name} than the one on this machine`, "Update it in bb’s settings"),
 };
 /** bb's answer as a state per bb provider id; a provider bb does not list, or a state it calls ready or unknown, has none. */
 export function providerStates(answer: unknown): Map<string, string> {

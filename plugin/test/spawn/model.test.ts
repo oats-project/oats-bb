@@ -135,7 +135,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     // A failure with no code at all says nothing of what the kernel did: not known.
     expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result", code: "OATS_FAILED", detail: "boom", outcome: "unknown" });
     // A code the preview's table holds reads the same after the press.
-    expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name.");
+    expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name.");
   });
 
   it("sends a person to the Harness field only where the form has one", () => {
@@ -219,6 +219,13 @@ describe("after the press, what is known decides what the form may offer", () =>
   });
 
   it("unconfirmed: the kernel refused and says its rollback is incomplete: never 'nothing was created', whatever the code", () => {
+    // SHAPED, not recorded: a rollback that fails cannot be made in the real run (the kernel's own
+    // removal of the home would have to fail). The words are the kernel's, from awebai/oats
+    // lib/core.mjs at 3d834aa3c, line 5231: `note = incomplete.length ? " — rollback INCOMPLETE,
+    // clean up manually: " + incomplete.join("; ") : " — spawn rolled back"`, with the entry of line
+    // 5230 ("instance home <home>: still present"); `unconfirmedSpawn` (3859-3861) sets
+    // error.details.unconfirmed on the same path. The lead of the message is the recorded one of
+    // test/fixtures/spawn/spawn-pi-refused.json.
     const left = "form-pi-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/form-pi-developer: still present";
     for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_SOMETHING_NEW"]) {
       const problem = spawnProblem({ code, message: left }, "spawn");

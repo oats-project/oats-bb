@@ -223,7 +223,8 @@ const COMMON_FACTS: Record<string, Said> = {
   E_HARNESS_UNAVAILABLE: said("The harness this soul would run isn’t installed on this machine.", "change-options"),
   E_LAUNCH_PREFERENCE_UNMATCHED: said("This machine’s launch preferences name a soul this workspace doesn’t offer, so OATS won’t choose a launch for this soul.", "change-options"),
   E_MODEL_UNKNOWN: said("That model isn’t available for this harness. Pick another model, or keep the default."),
-  E_INSTANCE_NAME_INVALID: said("Use lowercase letters, numbers and dashes, at most 64 characters, and don’t reuse a soul’s name."),
+  // The Desktop says "at most 64 characters"; the plugin's own limit, checked before any process, is 63 (contract/shared.ts): one number for one field.
+  E_INSTANCE_NAME_INVALID: said("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name."),
   E_INSTANCE_NAME_TAKEN: said("An instance with this name already exists. Choose another name."),
   E_PACKAGE_MISSING: said("A package this soul uses isn’t installed yet.", "sync-workspace"),
   E_PACKAGE_INTEGRITY: said("A package this soul uses no longer matches the lock.", "sync-workspace"),
@@ -347,6 +348,27 @@ const UNKNOWN = said("OATS didn’t say whether the instance was created.", "che
 const ROLLBACK_INCOMPLETE = /rollback INCOMPLETE/;
 const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
 /**
+ * What is known of the instance after a failure, in the order the safety rule is read (`SpawnOutcome`):
+ * `code` is the failure's own (null when it has none), `named` what the tables say of it.
+ */
+function outcomeOf(stage: "preview" | "spawn", code: string | null, message: string, named: Said | undefined, replay: boolean): SpawnOutcome {
+  // A preview starts nothing.
+  if (stage === "preview") return "refused";
+  // The kernel's own word that its rollback did not finish comes first, whatever the code.
+  if (ROLLBACK_INCOMPLETE.test(message)) return "unconfirmed";
+  // An instance exists.
+  if (code !== null && CREATED.has(code)) return "created";
+  // The kernel, or the plugin, says the outcome is not known.
+  if (named !== undefined && named.next === "check-result") return "unknown";
+  // A refusal the tables name: the kernel refused before it made anything, or undid what it made.
+  if (named !== undefined) return "refused";
+  // A call that never reached the kernel made nothing; but a Check result the plugin refused before asking learned nothing.
+  if (code !== null && NEVER_RAN.has(code) && !replay) return "refused";
+  // Anything else: rollback is never inferred.
+  return "unknown";
+}
+
+/**
  * `stage`: "preview" (working out what would be created) or "spawn" (after the press). A code the
  * tables do not know reads the stage's general sentence, with its own code. A harness that is not
  * installed is said as the kernel words it, through the drawer's display filter (`line`; the
@@ -381,20 +403,7 @@ export function spawnProblem(
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
   const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
-  // After the press, what is known: created, refused (a refusal the tables name, or a call that
-  // never ran; but a Check result that the plugin refused before asking learned nothing), else unknown.
-  const outcome: SpawnOutcome =
-    stage === "preview"
-      ? "refused"
-      : ROLLBACK_INCOMPLETE.test(message)
-        ? "unconfirmed"
-        : reason.code !== null && CREATED.has(code)
-        ? "created"
-        : named !== undefined && named.next === "check-result"
-          ? "unknown"
-          : named !== undefined || (reason.code !== null && NEVER_RAN.has(code) && !replay)
-            ? "refused"
-            : "unknown";
+  const outcome = outcomeOf(stage, reason.code, message, named, replay);
   const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;

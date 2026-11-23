@@ -461,6 +461,7 @@ test("a spawn that made an instance and did not finish (the kernel says so, or i
 });
 
 test("a refusal whose rollback the kernel could not finish is never 'nothing was created': the form stays held, with what to clean up under Details and nothing to press but Close", async () => {
+  // Shaped from the kernel's source, not recorded (test/spawn/model.test.ts says from which lines, and why).
   const left = "oats-developer-2 was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/deployment/agents/oats-developer/instances/oats-developer-2: still present";
   const slot = await ready(
     previews({
@@ -841,6 +842,14 @@ test("a harness bb cannot run here is marked at the choice and said under the fi
   expect(slot.getByTestId("oats-spawn-harness").textContent).toBe("pi · not installed in bb▾");
   expect(slot.getByTestId("oats-spawn-form").textContent).toContain(said);
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "pi" }));
+});
+
+test("with one harness declared there is no Harness field: what bb says of that harness is still said, and names no field to pick another in", async () => {
+  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["pi"], hostId: "host_falcon" }) }), { states: () => ({ providers: [{ providerId: "pi", status: "not_installed" }] }) });
+  expect(slot.queryByTestId("oats-spawn-harness")).toBeNull();
+  await waitFor(() => expect(slot.queryByTestId("oats-spawn-harness-state")).not.toBeNull());
+  expect(slot.getByTestId("oats-spawn-harness-state").textContent).toBe("bb has not installed pi on this machine, so a spawn on it is refused. Install it in bb’s settings.");
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/pick another harness/);
 });
 
 test("while bb has not said what it can run, or says a state the plugin does not know, nothing is marked", async () => {

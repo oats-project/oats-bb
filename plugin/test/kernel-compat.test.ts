@@ -15,21 +15,40 @@ test("the tested minor is the minor of the kernel the real run pins, and the flo
   expect(compatibility(pinned)).toBe("tested");
 });
 
+test("the plugin's floor is not below the floor of the bb session provider it ships beside", () => {
+  // The provider's two manifests (oats-package/, beside plugin/ in the repository; container/ci.sh
+  // copies them beside the plugin in the test container). Each says `compatibility.oats: ">=<version>"`.
+  const below = (a: readonly number[], b: readonly number[]) => a[0]! < b[0]! || (a[0] === b[0] && (a[1]! < b[1]! || (a[1] === b[1] && a[2]! < b[2]!)));
+  const mine = versionParts(OATS_FLOOR)!;
+  for (const manifest of ["oats-package.json", join("capabilities", "oats-bb", "oats.json")]) {
+    const file = join(__dirname, "..", "..", "oats-package", manifest);
+    const declared: unknown = JSON.parse(readFileSync(file, "utf8")).compatibility?.oats;
+    const floor = typeof declared === "string" ? /^>=(\d+\.\d+\.\d+)$/.exec(declared)?.[1] : undefined;
+    expect(floor, `${file} declares compatibility.oats as ">=<version>" (it says ${JSON.stringify(declared)})`).toBeTruthy();
+    // NOT BELOW, while main's manifests are behind the plugin's floor. Once the provider's floor is
+    // the plugin's (oats-bb#40 raises it to 0.70.5), this line becomes: expect(floor).toBe(OATS_FLOOR).
+    expect(below(mine, versionParts(floor!)!), `the plugin's floor ${OATS_FLOOR} is not below the provider's ${floor} (${manifest})`).toBe(false);
+  }
+});
+
 test("where an installed OATS stands: older than the floor, tested, newer than tested, or not readable", () => {
   expect(compatibility("0.69.9")).toBe("older");
   expect(compatibility("0.29.0")).toBe("older");
-  expect(compatibility("0.70.0")).toBe("tested");
-  expect(compatibility("0.70.3")).toBe("tested");
+  expect(compatibility("0.70.0")).toBe("older");
+  expect(compatibility("0.70.4")).toBe("older");
+  expect(compatibility("0.70.5")).toBe("tested");
+  expect(compatibility("0.70.12")).toBe("tested");
   expect(compatibility("0.71.0")).toBe("newer");
   expect(compatibility("1.0.0")).toBe("newer");
-  expect(compatibility("0.70.1-rc.2")).toBe("tested");
+  expect(compatibility("0.70.6-rc.2")).toBe("tested");
   for (const unreadable of ["", "latest", "v0.70", null, undefined]) expect(compatibility(unreadable)).toBe("unknown");
   expect(versionParts(" 0.70.3 ")).toEqual([0, 70, 3]);
 });
 
 test("from the kernel's own version answer: a later version of its JSON answers is said first; the recorded kernel is tested", () => {
-  expect(compat({ version: "0.70.0", desktopApi: DESKTOP_API })).toBe("tested");
-  expect(compat({ version: "0.70.0", desktopApi: DESKTOP_API + 1 })).toBe("newer-api");
+  expect(compat({ version: "0.70.5", desktopApi: DESKTOP_API })).toBe("tested");
+  expect(compat({ version: "0.70.5", desktopApi: DESKTOP_API + 1 })).toBe("newer-api");
+  expect(compat({ version: "0.70.0", desktopApi: DESKTOP_API })).toBe("older");
   expect(compat({ version: "0.69.0", desktopApi: DESKTOP_API + 1 })).toBe("newer-api");
   expect(compat({ version: "0.69.0", desktopApi: null })).toBe("older");
   expect(compat({ version: "0.71.0", desktopApi: 1 })).toBe("newer");

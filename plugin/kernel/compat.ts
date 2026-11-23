@@ -3,8 +3,12 @@
 // the plugin needs) reads these two, next to the version the kernel answers (`oats version --json`,
 // kernel/roster.ts `parseVersion`; `core.versionOf()` on the server).
 
-/** The oldest OATS the plugin works with: its verbs and JSON answers exist from here on. */
-export const OATS_FLOOR = "0.70.0";
+/**
+ * The oldest OATS the plugin works with: its verbs and JSON answers exist from here on, and it is
+ * the kernel the real run pins. Never below the floor of the bb session provider it ships beside
+ * (`compatibility.oats` of oats-package/'s two manifests): a test holds that.
+ */
+export const OATS_FLOOR = "0.70.5";
 
 /**
  * The newest OATS minor the plugin was tested against: the minor of the kernel the real run pins

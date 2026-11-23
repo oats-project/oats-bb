@@ -18,14 +18,24 @@ tarball integrity
 and the bb session provider of this repository's `main` at
 `134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5` (oats-bb#8 merged; wire 1.3), bb-app at the root `bb-version`
 (0.50.1), Claude Code on a mock model, no aweb. The floor was the provider's real one
-(`compatibility.oats: >=0.70.0`): it admits that kernel, so **no trial commit was made**, and the
-run's log says so (`workspace: … (no trial commit: its own floor (>=0.70.0) admits the kernel)`).
+(`compatibility.oats: >=0.70.0` then): it admitted that kernel, so no trial commit was made.
+
+**The run is now on OATS 0.70.5** (`@awebai/oats@0.70.5`, gitHead
+`e5e7a2a48db42140718948553e8272fb4e8e3ed4`, tarball integrity
+`sha512-vpIdpZixk1FGGeH5Vkvr/8gltddBaajc3EU40GpbI/dnYnMeIBFq110wtKrUH5aXOU4LXbc9sqHZbl68wuiKUw==`),
+which is also the plugin's own floor (`kernel/compat.ts`, `OATS_FLOOR`). It was moved on 2026-11-23
+without recording the fixtures again: every check of the run passed on 0.70.5 against the answers
+recorded at 0.70.0, and no answer it records gained or lost a field. One fixture is of the 0.70.5
+run, because it is the kernel's version itself: `roster/version.json` (`test/fixtures/README.md`).
+The floor is the provider's own (`compatibility.oats`: `>=0.70.0` when the run was moved, `>=0.70.5`
+from oats-bb#40): it admits the kernel, so **no trial commit is made**, and the run's log says so
+(`workspace: … (no trial commit: its own floor (>=…) admits the kernel)`).
 This is the run the release lane asks for before an oats-bb release.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `KERNEL_NPM` | `0.70.0` | the OATS release installed from npm: the registry's tarball is fetched once in the container (`npm pack`, kept as `kernel.json`) and that file is installed |
-| `KERNEL_INTEGRITY` | the integrity of 0.70.0's tarball, for that version; none for another | the tarball's integrity, checked before the install; with another `KERNEL_NPM`, set it too, or leave it out for no check |
+| `KERNEL_NPM` | `0.70.5` | the OATS release installed from npm: the registry's tarball is fetched once in the container (`npm pack`, kept as `kernel.json`) and that file is installed |
+| `KERNEL_INTEGRITY` | the integrity of 0.70.5's tarball, for that version; none for another | the tarball's integrity, checked before the install; with another `KERNEL_NPM`, set it too, or leave it out for no check |
 | `REQUIRE_REAL_FLOOR` | `1` | the provider's floor is its own: a floor that refuses the kernel under test fails the run. `0`: a trial, the floor is lowered inside the container (below, "The provider") |
 | `KERNEL_REPO`, `KERNEL_REF` | none | with `KERNEL_NPM=` (empty), an unreleased kernel: a clone of the OATS repository and the commit to run; the clone is only read (`git archive`) and the tree is packed in the container |
 | `UPDATE_FIXTURES` | `0` | `1`: after a run that passed, copy the recorded answers over `plugin/test/fixtures/` |
@@ -105,7 +115,7 @@ thread's own row says its agent's state at every width).
   `compatibility.oats` to `>=<the kernel's version>` in both manifests (the provider's README, "A
   trial against an unreleased kernel"); it exists only inside the container and is never pushed,
   and the line then reads `trial floor >=… in place of …`. Without it such a kernel answers
-  `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=0.70.0; this kernel is …`.
+  `E_CAPABILITY_INCOMPATIBLE: oats.bb requires oats >=<its floor>; this kernel is …`.
   The workspace pins the package by the container's commit:
   `oats.bb: git:file://…/oats-bb.git@<commit>`.
 - **The workspace**: one member repository with five souls named as the fixtures name them

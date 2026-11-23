@@ -9,7 +9,7 @@ import { startBackend, type Backend } from "../support/backend.js";
 import { FIXTURES, installFakeOats } from "../support/fake-oats.js";
 
 const recorded = async () => JSON.parse(await readFile(join(FIXTURES, "roster/version.json"), "utf8")) as { version: string; desktopApi: number; features: string[] };
-/** The `<name>Api` numbers OATS 0.70.0 prints. */
+/** The `<name>Api` numbers OATS 0.70.5 prints. */
 const APIS = {
   desktopApi: 1,
   automationsApi: 1,
@@ -36,7 +36,7 @@ describe("the kernel's version", () => {
     try {
       const version = await createOats({ bin: fake.bin, cwd: fake.deployment, processes }).version();
       const printed = await recorded();
-      expect(version).toEqual({ ok: true, value: { version: "0.70.0", desktopApi: 1, features: printed.features, apis: APIS } });
+      expect(version).toEqual({ ok: true, value: { version: "0.70.5", desktopApi: 1, features: printed.features, apis: APIS } });
       expect(printed.features).toContain("session-providers");
       const [call] = await fake.calls();
       expect(call?.argv).toEqual(["version", "--json"]);
@@ -67,7 +67,7 @@ describe("the server's one read of it", () => {
     backend = await startBackend({ load: (bb) => void (core = createCore(bb)) });
     const [one, two] = await Promise.all([core.versionOf(), core.versionOf()]);
     const again = await core.versionOf();
-    expect(one).toEqual({ version: "0.70.0", desktopApi: 1, features: (await recorded()).features, apis: APIS });
+    expect(one).toEqual({ version: "0.70.5", desktopApi: 1, features: (await recorded()).features, apis: APIS });
     expect(two).toBe(one);
     expect(again).toBe(one);
     expect(await backend.verbs()).toEqual(["version"]);
@@ -84,7 +84,7 @@ describe("the server's one read of it", () => {
     );
     expect(refused).toEqual({ code: "conflict", message: "E_NODE_UNSUPPORTED: Node 18 is not supported" });
     await backend.fake.behave({});
-    expect((await core.versionOf()).version).toBe("0.70.0");
+    expect((await core.versionOf()).version).toBe("0.70.5");
     expect(await backend.verbs()).toEqual(["version", "version"]);
   });
 });

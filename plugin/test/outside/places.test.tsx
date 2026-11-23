@@ -216,6 +216,8 @@ test("a stopped agent on its open thread: since when, then that a message here s
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(words(slot)).toHaveLength(3)); // the time is read from the agent's events, after the state
   expect(words(slot)).toEqual(["Stopped", expect.stringMatching(/^since /), "A message sent here in bb starts it again without OATS. Use Start."]);
+  // The sentence warns, and is drawn as a warning: the time beside it is not.
+  expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null, "warning"]);
   expect(acts(slot)).toEqual(["Start"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
@@ -342,4 +344,23 @@ test("a session OATS lost whose thread bb has archived says the same word in eve
   await waitFor(() => expect(places()).toEqual({ sidebar: "Archived in bb", thread: "Archived in bb", panel: "Archived in bb" }));
   // And each mark is that state's.
   for (const place of [threadless(slot), slot.getByTestId("oats-identity-row"), slot.getByTestId("oats-panel-state")]) expect(place.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("archived");
+});
+
+test("stopped with the machine, and not loaded: each says so on its row and on its line, with no warning tone", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
+  const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
+  const factsOf = (thread: string) => rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === thread)!);
+  expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Stopped · oats-expert · with the machine", "Idle · knowledge-harvester · not loaded"]);
+  expect(side.slot.queryByTestId("oats-outside-mark")).toBeNull();
+  resetApp();
+  const host = await line("thr_digest", { rpc: handlers(noEvents, agents), sidebarThreads: sidebarThreads() });
+  await host.findByTestId("oats-identity-row");
+  expect([words(host), acts(host)]).toEqual([["Stopped", "with the machine. OATS starts it again when the machine is back."], ["Start"]]);
+  expect(within(host.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null]);
+  resetApp();
+  const idle = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
+  await idle.findByTestId("oats-identity-row");
+  expect([words(idle), acts(idle)]).toEqual([["Idle", "not loaded. To carry on, send it a message here. Start begins a new conversation."], ["Start"]]);
+  expect(idle.getByTestId("oats-status-line").getAttribute("data-state")).toBe("idle");
+  expect(within(idle.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual([null]);
 });

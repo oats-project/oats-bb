@@ -15,12 +15,15 @@ export const STOPPED_OPEN = "A message sent here in bb starts it again without O
  * stopped): OATS resumes it by itself when the machine is back. No warning: nothing is wrong.
  */
 export const STOPPED_HOST = "with the machine. OATS starts it again when the machine is back.";
+/** The same on a sidebar's row, after the soul: it tells this row from an operator's stop, which says nothing there. */
+export const STOPPED_HOST_NOTE = "with the machine";
 /**
  * Its session is there and no harness is loaded (a reboot on a host without `oats host run`, or bb
  * let the harness exit): an idle agent. A message in its thread carries the conversation on, and
  * OATS reads it running at its next read; Start would begin a NEW thread. No warning.
  */
 export const NOT_LOADED = "not loaded. To carry on, send it a message here. Start begins a new conversation.";
+export const NOT_LOADED_NOTE = "not loaded";
 /** The same, as the few words a sidebar's row has room for. */
 export const ARCHIVED_NOTE = "its conversation is archived in bb";
 /** The link, on the agent's own page and in a notice, that opens the archived thread to read it. */

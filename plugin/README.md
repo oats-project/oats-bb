@@ -133,7 +133,13 @@ state function calls it idle. (A tmux row that does not run, which has no such w
 as before.) Three rows read "not running", and what a person should do differs in each: an
 operator's stop (Start, and never a message), a stop with the machine (nothing: OATS resumes it),
 and no harness loaded (a message; Start loses the conversation). They are told apart by the
-kernel's own fields (`runtimeState`, `running`, `sessionEnd`), never by a message's words. The row
+kernel's own fields (`runtimeState`, `running`, `sessionEnd`), never by a message's words, and
+they are never drawn alike: the state word tells the third from the first two ("Idle", not
+"Stopped"); the tone tells the first from the others (the operator's sentence alone is drawn in
+the warning tone: `StatusLine`'s `detailTone`, and `data-tone="warning"` on that part); and on the
+sidebar's rows the second and the third say what they are after the soul ("with the machine",
+"not loaded") where an operator's stop says nothing. One live scene draws the three side by side
+and asserts the word and the tone, not only the text. The row
 with `running: false` beside "unknown" is shaped from the kernel's contract, not recorded: the bb
 session provider prints it only from its next release, and until then an idle bb thread reads
 `running: null` and says "Idle" with nothing after it.

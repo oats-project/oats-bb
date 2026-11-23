@@ -22,8 +22,10 @@ import {
   NOT_SHOWN_NOTE,
   OUTSIDE_NOTE,
   NOT_LOADED,
+  NOT_LOADED_NOTE,
   STOPPED_DELETED,
   STOPPED_HOST,
+  STOPPED_HOST_NOTE,
   STOPPED_OPEN,
 } from "./words";
 
@@ -55,6 +57,8 @@ export type Said = {
   kind: Kind;
   /** The sentence after the state word on the thread's line; null: the roster's own. */
   sentence: string | null;
+  /** "warning": the sentence warns of something a person may do by mistake (a message that starts a stopped agent without OATS), and is drawn in the warning tone; "plain": it says how things are. */
+  tone: "warning" | "plain";
   /** The few words after the soul on the sidebar's row; null: none. */
   note: string | null;
   /** The kernel's report, said loudly (the warning tone) under the line; null: none. */
@@ -65,7 +69,7 @@ export type Said = {
   archived: boolean;
 };
 
-const base = { sentence: null, note: null, warning: null, acts: null, archived: false } as const;
+const base = { sentence: null, tone: "plain", note: null, warning: null, acts: null, archived: false } as const;
 
 /** The note of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {
@@ -114,7 +118,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   if (agent.backend === "tmux") return null;
   const note = attached ? null : whereNote(where);
   const archived = where === "archived";
-  if (agent.outsideOats != null) return { ...base, kind: "outside", note: OUTSIDE_NOTE, warning: agent.outsideOats, acts: ["stop", "start"], archived };
+  if (agent.outsideOats != null) return { ...base, kind: "outside", tone: "warning", note: OUTSIDE_NOTE, warning: agent.outsideOats, acts: ["stop", "start"], archived };
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
   // The agent's state without bb's own question on its thread (the roster says that first): what OATS and bb say of the session.
   switch (state(agent, null, where)) {
@@ -133,12 +137,12 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
       // the warning is said of every stopped agent on an open thread. With it, the same sentence
       // stays for exactly this case (a home stopped before the provider archived, or a thread a
       // person unarchived): the gate then changes no word here, only what the stop's dialog says.
-      if (where === "open" && attached && agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN };
-      if (where === "open" && attached && agent.sessionEnd === "lost") return { ...base, kind: "stopped-host", sentence: STOPPED_HOST };
+      if (where === "open" && attached && agent.sessionEnd === "stopped") return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning" };
+      if (where === "open" && attached && agent.sessionEnd === "lost") return { ...base, kind: "stopped-host", sentence: STOPPED_HOST, note: STOPPED_HOST_NOTE };
       return threadless;
     case "idle":
       // The kernel's own word that no harness runs: `running: false` (an idle agent whose harness may be loaded reads `null`).
-      if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, acts: ["start"] };
+      if (where === "open" && attached && agent.running === false) return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };
       return threadless;
     default:
       return threadless;

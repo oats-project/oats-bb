@@ -90,8 +90,11 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
-  const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
+export function StatusLine({ state, word, since, detail, detailTone, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; /** "warning": the detail warns (a stopped agent's live composer), and is drawn in bb's warning text token, which holds 4.5:1 on a page's surface; the line is never a row of a list */ detailTone?: "warning"; action?: ReactNode }) {
+  const parts = [
+    { text: shown(since), tone: undefined },
+    { text: shown(detail), tone: detailTone },
+  ].filter((part) => part.text !== "");
   // No line of it starts with a separator. Each part after the word carries its "·" in its own
   // left padding, and the row is pulled left by as much inside a frame that clips: a part that
   // wraps to the start of a line has its separator in the clipped strip, and the line starts
@@ -102,10 +105,10 @@ export function StatusLine({ state, word, since, detail, action }: { state: Agen
         <span className="pl-4 font-semibold">
           <State state={state} word={word} />
         </span>
-        {said.map((part, index) => (
-          <span key={index} data-testid="oats-status-part" className="relative min-w-0 break-words pl-4 text-muted-foreground">
-            <span data-sep="" className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
-            {part}
+        {parts.map((part, index) => (
+          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words pl-4 ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
+            <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>
+            {part.text}
           </span>
         ))}
         {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2 pl-4">{action}</span>}

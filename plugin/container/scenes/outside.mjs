@@ -68,8 +68,9 @@ let untilRoster = async () => {
 const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl");
 
 /**
- * The rows of the stage `outside-host`: two rows that are NOT a stop of OATS's, on threads that are
- * open, with nothing archived in bb. Shaped as the kernel's contract says (docs/desktop-cli-api.md
+ * The rows of the stage `outside-host`: the three rows that read "not running", on threads that
+ * are open, with nothing archived in bb: the fixtures' own operator's stop (weekly-digest-helper),
+ * and two rows that are NOT a stop of OATS's. Shaped as the kernel's contract says (docs/desktop-cli-api.md
  * at v0.70.5, "A status row of a provider home"), not recorded: `running: false` for an idle bb
  * thread exists only from the provider's next release.
  *   release-070-maintainer     stopped with the host (sessionEnd "lost"), its thread open
@@ -173,7 +174,7 @@ const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${
  */
 async function lineOf(page, wanted) {
   const read = (test) =>
-    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const notice = warning?.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, acts: acts(line), warning: notice ? { tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: acts(notice) } : null }); })()`;
+    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const notice = warning?.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, tones: [...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map((part) => part.getAttribute("data-tone")).filter(Boolean), acts: acts(line), warning: notice ? { tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: acts(notice) } : null }); })()`;
   const found = (await page.until(read(true), 30)) || (await page.evaluate(read(false)));
   return found ? JSON.parse(found) : null;
 }
@@ -357,26 +358,55 @@ export default [
   },
   {
     stage: "outside-host",
-    name: "not a stop of OATS's: stopped with the machine, and idle with no harness loaded; neither warns, and neither advises what loses the conversation",
+    name: "the three rows that read \"not running\" are never confused: an operator's stop, stopped with the machine, not loaded; on the sidebar's rows and on each thread's line",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = () => page.evaluate(textOf(testId("oats-identity-row")));
-      const host = threads.get("thr_release");
+      const [operator, host, idle] = [threads.get("thr_digest"), threads.get("thr_release"), threads.get("thr_mockups")];
+
+      // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, marks: document.querySelectorAll(${JSON.stringify(testId("oats-outside-mark"))}).length })`;
+      const settled = await page.until(`(() => { const now = ${all}; return /with the machine/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
+      const rows = JSON.parse(settled || (await page.evaluate(all)));
+      check(
+        same([rows.operator, rows.host, rows.idle], [
+          { facts: "Stopped · oats-expert", state: "stopped", warn: null },
+          { facts: "Stopped · oats-maintainer · with the machine", state: "stopped", warn: null },
+          { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", warn: null },
+        ]) && rows.marks === 0,
+        `${at} the three rows: "Stopped" (an operator's stop), "Stopped · … · with the machine", "Idle · … · not loaded": no two say the same, and the one that is not stopped does not say Stopped`,
+        JSON.stringify(rows),
+      );
+      await page.shot(`outside-${viewport.name}-three-sidebar`);
+
+      // (1) an operator's stop: "Stopped", the warning (in the warning tone), Start
+      await page.goto(`/projects/${operator.projectId}/threads/${operator.id}`);
+      const OPERATOR = new RegExp(`^Stopped${SINCE} · A message sent here in bb starts it again without OATS\\. Use Start\\.$`);
+      const one = await lineOf(page, OPERATOR);
+      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && same(one.tones, ["warning"]) && same(one.acts, ["Start"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
+      await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
+
+      // (2) stopped with the machine: "Stopped · with the machine …", no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
       const HOST = new RegExp(`^Stopped${SINCE} · with the machine\\. OATS starts it again when the machine is back\\.$`);
-      let line = await lineOf(page, HOST);
-      check(line !== null && line.state === "stopped" && HOST.test(line.words) && same(line.acts, ["Start"]) && line.warning === null && !/without OATS/.test(line.words), `${at} stopped with the host: "Stopped · with the machine", that OATS starts it again; no warning, and not the operator's sentence`, line === null ? await shown() : JSON.stringify(line));
-      await page.shot(`outside-${viewport.name}-thread-stopped-host`, { targets: true });
+      const two = await lineOf(page, HOST);
+      check(two !== null && two.state === "stopped" && HOST.test(two.words) && same(two.tones, []) && same(two.acts, ["Start"]) && two.warning === null && !/without OATS/.test(two.words), `${at} (2) stopped with the machine: "Stopped · with the machine", that OATS starts it again; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      await page.shot(`outside-${viewport.name}-three-2-stopped-with-machine`, { targets: true });
 
-      const idle = threads.get("thr_mockups");
+      // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
-      line = await lineOf(page, /^Idle · /);
-      check(line !== null && line.state === "idle" && line.words === "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." && same(line.acts, ["Start"]) && line.warning === null, `${at} no harness loaded: "Idle", never "Stopped"; that a message here carries on and Start begins a new conversation; no warning`, line === null ? await shown() : JSON.stringify(line));
-      await page.shot(`outside-${viewport.name}-thread-idle-not-loaded`, { targets: true });
+      const three = await lineOf(page, /^Idle · /);
+      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." && same(three.tones, []) && same(three.acts, ["Start"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; that a message here carries on and Start begins a new conversation; no warning tone`, three === null ? await shown() : JSON.stringify(three));
+      await page.shot(`outside-${viewport.name}-three-3-idle-not-loaded`, { targets: true });
 
-      // In the sidebar the two rows say their state and nothing more, with no mark.
-      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const rows = JSON.parse(await page.evaluate(`JSON.stringify({ host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, marks: document.querySelectorAll(${JSON.stringify(testId("oats-outside-mark"))}).length })`));
-      check(rows.host?.facts === "Stopped · oats-maintainer" && rows.idle?.facts === "Idle · oats-desktop-developer" && rows.idle.state === "idle" && rows.marks === 0, `${at} their rows say "Stopped" and "Idle", with no mark`, JSON.stringify(rows));
+      // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
+      const lines = [one, two, three];
+      check(
+        lines.every((line) => line !== null) && same(lines.map((line) => line.state), ["stopped", "stopped", "idle"]) && same(lines.map((line) => line.tones.includes("warning")), [true, false, false]) && new Set(lines.map((line) => line.words.replace(new RegExp(SINCE), ""))).size === 3,
+        `${at} the three are told apart: by the state word ("Stopped", "Stopped", "Idle") and by the tone (a warning for the operator's stop alone)`,
+        JSON.stringify(lines),
+      );
     },
   },
   {

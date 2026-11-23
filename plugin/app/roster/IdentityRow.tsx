@@ -143,6 +143,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           state={status.state}
           since={status.since}
           detail={said?.sentence ?? status.detail}
+          detailTone={said?.sentence != null && said.tone === "warning" ? "warning" : undefined}
           action={
             <>
               {saidActs === undefined ? act : saidActs}

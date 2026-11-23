@@ -570,7 +570,18 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes) });
+            for (const scene of mine) {
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes) };
+              if (!PILOT) await scene.run(given);
+              else {
+                // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.
+                try {
+                  await scene.run(given);
+                } catch (error) {
+                  fail(`${at} (image pass) the scene "${scene.name}" stopped`, String(error?.message ?? error).split("\n")[0]);
+                }
+              }
+            }
           } finally {
             await page.close();
           }

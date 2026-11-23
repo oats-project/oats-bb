@@ -152,6 +152,11 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
  * with every thread's name and status, what bb says of the ones that are not idle, and the end of
  * bb's and the mock model's logs.
  */
+// By hand only, for a look at a real deployment's roster: LIVE_UI_STATUS_FILE is the path (inside
+// the container) of an `oats status --json` answer. With it this run draws ONLY the stage
+// "local-roster" from that file; without it that stage is skipped. The file is never part of the
+// repository, and its scene prints counts only, never a name (container/README.md).
+const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
 const AGAIN_SECONDS = 180;
 // To PROVE the path a stuck thread takes (not part of a normal run): LIVE_UI_PROVE_STUCK=1 makes
@@ -389,6 +394,15 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
     },
   },
+  "local-roster": {
+    label: "LR",
+    enter: async () => {
+      const status = readFileSync(LOCAL_STATUS, "utf8");
+      const agents = JSON.parse(status).agents.flatMap((group) => group.instances).length;
+      fake({ status: { stdout: status } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === agents);
+    },
+  },
   "pages-default": {
     label: "PG",
     enter: async ({ threads }) => {
@@ -438,6 +452,7 @@ try {
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
+    if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
     try {
       await stage.enter({ fake, statusWithRealIds, threads, untilSnapshot });
       for (const theme of THEMES) {

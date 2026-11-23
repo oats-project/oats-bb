@@ -74,9 +74,22 @@ export const HELD_REASON = "Comes back when OATS is read again";
  * same words on one wrapping line, for the thread's own row: the title, the age, the held
  * sentence, Retry.
  */
-export function Unreadable({ failure, machine, at, now, onRetry, compact = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean }) {
+export function Unreadable({ failure, machine, at, now, onRetry, compact = false, inSidebar = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean; inSidebar?: boolean }) {
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
+  // A PAGE that draws the full notice over a roster kept as last read says so (whoever draws it:
+  // the home, a soul's page, Teams), so that the sidebar beside it says one line and not the same
+  // notice a second time. The sidebar's own notice (`inSidebar`) and the thread row's line do not count.
+  const fullOnPage = !compact && !inSidebar && at !== undefined;
+  useEffect(() => {
+    if (!fullOnPage) return;
+    pagesWithNotice += 1;
+    tell();
+    return () => {
+      pagesWithNotice -= 1;
+      tell();
+    };
+  }, [fullOnPage]);
   if (compact) {
     return (
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
@@ -127,18 +140,6 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
  */
 export function RosterNotice({ oats }: { oats: Oats }) {
   const now = useNow();
-  // A page that draws the full notice over a roster kept as last read says so, so that the sidebar
-  // beside it says one line and not the same notice a second time.
-  const full = oats.phase === "ready" && oats.stale !== null;
-  useEffect(() => {
-    if (!full) return;
-    pagesWithNotice += 1;
-    tell();
-    return () => {
-      pagesWithNotice -= 1;
-      tell();
-    };
-  }, [full]);
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   if (oats.phase === "ready" && oats.stale !== null) return <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
   return null;

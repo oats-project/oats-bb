@@ -63,7 +63,16 @@ if [ -f "$PLUGIN/../bb-version" ]; then
   BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
   [ -n "$BB_VERSION" ] || { echo "ci: $PLUGIN/../bb-version is empty" >&2; exit 2; }
 fi
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -w /home/node/plugin "$NAME" "$@"; }
+# LOCAL_STATUS=<path to an `oats status --json` answer> (by hand only; `live`): the live run draws
+# only the stage "local-roster" from that file. It is copied into the container's /tmp, never into
+# the tree, and nothing of it is printed but counts (container/README.md).
+LOCAL_ENV=
+if [ -n "${LOCAL_STATUS:-}" ]; then
+  docker cp "$LOCAL_STATUS" "$NAME:/tmp/local-status.json" > /dev/null
+  docker exec -u root "$NAME" chown node /tmp/local-status.json
+  LOCAL_ENV="-e LIVE_UI_STATUS_FILE=/tmp/local-status.json"
+fi
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh

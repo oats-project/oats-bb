@@ -122,7 +122,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   /** A row's two lines (D-063): the name, then where the agent is in a word, and its soul. */
   const lines = (name: ReactNode, strong: boolean, word: string, rest: string) => (
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
+      <span data-testid="oats-row-name" className={`truncate ${strong ? "font-semibold" : ""}`}>{name}</span>
       {/* What the agent is, whole: the line wraps where the sidebar is narrow, and is never cut. */}
       {/* Each phrase after the first (the soul, where it runs) moves to the next line WITH its
           separator in front of it, as one unit: no line ends with a separator, and a phrase that
@@ -255,7 +255,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       {oats.stale === null ? null : pageShowsNotice ? (
         <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       ) : (
-        <Unreadable failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+        <Unreadable inSidebar failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}
       <p data-testid="oats-workspace-line" className="truncate px-2 py-1.5 text-xs text-muted-foreground">
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>

@@ -325,4 +325,22 @@ export default [
       await page.shot(`tmux-roster-${viewport.name}-agent-page`);
     },
   },
+  {
+    // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
+    // is printed but counts; its images stay with whoever ran it.
+    stage: "local-roster",
+    name: "a real deployment's roster, drawn from its own oats status: as it is, and with the name on two lines",
+    run: async ({ page, at, viewport, check }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const rows = await page.until(`(() => { const n = document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)}).length; return n > 0 ? String(n) : ""; })()`, 30);
+      const measure = `(() => { const names = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-row-name")}`)})]; const rowsOf = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return JSON.stringify({ names: names.length, cut: names.filter((n) => n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1).length, twoLines: names.filter((n) => n.getBoundingClientRect().height > 1.5 * parseFloat(getComputedStyle(n).lineHeight)).length, rowHeights: [...new Set(rowsOf.map((r) => Math.round(r.getBoundingClientRect().height)))].sort((a, b) => a - b) }); })()`;
+      check(Number(rows) > 0, `${at} the roster is drawn: ${rows} rows; as it is: ${await page.evaluate(measure)}`);
+      await page.shot(`local-roster-${viewport.name}-a-as-it-is`);
+      // The proposal: a name wraps to at most two lines and is cut only after the second.
+      await page.evaluate(`(() => { const style = document.createElement("style"); style.textContent = '[data-testid="oats-row-name"] { white-space: normal !important; overflow: hidden !important; display: -webkit-box !important; -webkit-box-orient: vertical !important; -webkit-line-clamp: 2 !important; overflow-wrap: anywhere; }'; document.head.append(style); })()`);
+      check(true, `${at} with the name on two lines: ${await page.evaluate(measure)}`);
+      await page.shot(`local-roster-${viewport.name}-b-name-two-lines`);
+    },
+  },
 ];

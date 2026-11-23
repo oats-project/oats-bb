@@ -397,6 +397,20 @@ const holds = (text, wants) => wants.every((want) => text.includes(want));
 /** The titled notice of a part of the panel, as a person reads it: "title | role | all its text"; "" with none. */
 const noticeOf = (part) =>
   `(() => { const e = document.querySelector(${JSON.stringify(`${inPanel(part)} ${testId("oats-notice")}`)}); return e ? e.querySelector("h3").innerText.trim() + " | " + e.getAttribute("role") + " | " + e.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
+/**
+ * A part's notice once its read has ended, holding every one of `wants` (and `also`, a condition
+ * of the page). A failed read's notice is there in two states: while that read is tried again its
+ * act says "Reading…", and once it has ended, "Retry". A check of the notice's words and its act
+ * is about the second state, so it waits for it: a notice read the moment it is there can be the
+ * first. → the notice as `noticeOf` reads it; when the wait runs out, what is there then, which
+ * the check fails on and prints.
+ */
+async function noticeAtRest(page, part, { wants = [], also = "true", seconds = 30 } = {}) {
+  const notice = JSON.stringify(`${inPanel(part)} ${testId("oats-notice")}`);
+  const reading = `[...(document.querySelector(${notice})?.querySelectorAll("button") ?? [])].some((act) => act.innerText.trim() === "Reading…")`;
+  const read = await page.until(`(() => { const t = ${noticeOf(part)}; return t !== "" && !${reading} && ${JSON.stringify(wants)}.every((want) => t.includes(want)) && (${also}) ? t : ""; })()`, seconds);
+  return read ?? (await page.evaluate(noticeOf(part)));
+}
 /** Whether a notice (as `noticeOf` reads it) offers Retry. */
 const offersRetry = (read) => /(^| )Retry( |$)/.test(read ?? "");
 
@@ -547,7 +561,7 @@ const second = [
           check(tone === "info" && again === 0, `${at} it is no failure notice, and offers no reading again`, `tone: ${tone}; buttons to read again: ${again}`);
         }
         // the soul's readiness, failed, under the soul's refused read: reading again may go better, so Retry
-        const soulReadinessFailed = await page.until(noticeOf("oats-panel-readiness-soul"), 30);
+        const soulReadinessFailed = await noticeAtRest(page, "oats-panel-readiness-soul");
         check(
           (soulReadinessFailed ?? "").startsWith("Readiness could not be read | alert | ") && soulReadinessFailed.includes("The installed CLI could not complete the readiness read.") && soulReadinessFailed.includes("OATS_FAILED") && offersRetry(soulReadinessFailed),
           `${at} the soul's readiness, failed: a person's sentence, the code, and Retry`,
@@ -673,7 +687,7 @@ const second = [
         setVerb("readiness --home", FAILS);
         setVerb("instance events", FAILS);
         await page.evaluate(click(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-refresh")}`));
-        const staleReadiness = await page.until(noticeOf("oats-panel-readiness-instance"), 30);
+        const staleReadiness = await noticeAtRest(page, "oats-panel-readiness-instance", { wants: ["could not be read again"] });
         check(
           /^Readiness could not be read again \| alert \| Readiness could not be read again The installed CLI could not complete the readiness read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleReadiness ?? ""),
           `${at} readiness read again and failed: the titled notice, a person's sentence, a relative age said once, the code and Retry`,
@@ -684,7 +698,7 @@ const second = [
           check(read === "1 failing · 0 unknown · 4 required checks", `${at} and the summary read before is still shown`, read);
         }
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const staleActivity = await page.until(noticeOf("oats-panel-activity"), 30);
+        const staleActivity = await noticeAtRest(page, "oats-panel-activity", { wants: ["could not be read again"] });
         check(
           /^The recorded activity could not be read again \| alert \| The recorded activity could not be read again The installed CLI could not complete the activity read\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(staleActivity ?? ""),
           `${at} the activity read again and failed: the same drawing, with its own age`,
@@ -783,7 +797,7 @@ const second = [
         const restarted = recorded(threads);
         restarted.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance).startedAt = new Date().toISOString();
         record(restarted);
-        const stale = await page.until(noticeOf("oats-panel-soul-body"), 30);
+        const stale = await noticeAtRest(page, "oats-panel-soul-body", { wants: ["could not be read again"] });
         check(
           /^The soul as spawned could not be read again \| alert \| The soul as spawned could not be read again OATS could not finish reading it\. Showing what was read (less than a minute|\d+ (min|h|d)) ago\. OATS_FAILED .*Retry$/.test(stale ?? ""),
           `${at} the soul read again and failed: what was read stays under the titled notice, with its age, the code and Retry`,
@@ -988,7 +1002,8 @@ const more = [
         await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
         setStatus(REFUSED);
         refresh();
-        const stale = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return t.includes("E_LOCAL_MISSING") ? t : ""; })()`, 40);
+        // Waited for: the notice of the read that was refused, once that read has ended (its act says Retry, not "Reading…").
+        const stale = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["E_LOCAL_MISSING"], seconds: 40 });
         check(
           /^OATS could not read this deployment \| alert \| OATS could not read this deployment OATS says: no oats-local\.yaml at or above this directory Showing what was read (less than a minute|\d+ (min|h|d)) ago\. E_LOCAL_MISSING .*Retry$/.test(stale ?? ""),
           `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same words), how old what it shows is, the code and Retry`,
@@ -1007,7 +1022,7 @@ const more = [
         // A page opened while OATS cannot be read: the plugin's server keeps the last roster it read,
         // so the page shows the agent as last read, with how old that is and why, and Retry.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const opened = await page.until(`(() => { const t = ${noticeOf("oats-panel-page-instance")}; return document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) && t.includes("E_LOCAL_MISSING") && t.includes("Showing what was read") ? t : ""; })()`, 40);
+        const opened = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["E_LOCAL_MISSING", "Showing what was read"], also: `document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) !== null`, seconds: 40 });
         const named = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(
           // The server answers the agent's facts from the last roster it read, so the settled notice says how old they are.

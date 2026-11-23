@@ -90,7 +90,7 @@ bb settings ui reset sidebar.threadListProvider
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
 on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
 **Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
-the suffix), on the thread's status line, the OATS line under the thread's header (**Stop** for an
+the suffix), on the thread's status line, the OATS line under the thread's header (**Stop…** for an
 agent that works or is idle, **Start** for one that does not run, **Restart** for one whose session
 ended; and **Answer**, which is no act of OATS's: it opens the instance panel at what the agent
 waits for), on a soul's page for an agent whose thread bb does not have (**Start**,

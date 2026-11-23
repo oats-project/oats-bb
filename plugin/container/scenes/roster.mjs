@@ -86,7 +86,7 @@ export default [
       const line = await statusOf(page, "working");
       const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop…" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
         `${at} the row: the state in words, the act that applies (Stop) and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
         JSON.stringify({ line, facts }),
       );
@@ -106,7 +106,7 @@ export default [
       const lead = threads.get("thr_redesign");
       await page.goto(`/projects/${lead.projectId}/threads/${lead.id}`);
       const leadLine = await statusOf(page, "working");
-      check(leadLine !== null && leadLine.act === "Stop", `${at} a working agent's line offers Stop`, JSON.stringify(leadLine));
+      check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
       // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
@@ -262,7 +262,7 @@ export default [
       );
       // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off, with the reason.
       const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
-      check(heldAct === JSON.stringify({ text: "Stop", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop) is held: in its place, off, with the reason`, heldAct);
+      check(heldAct === JSON.stringify({ text: "Stop…", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop…) is held: in its place, off, with the reason`, heldAct);
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.

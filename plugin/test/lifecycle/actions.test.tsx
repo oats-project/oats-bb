@@ -1745,3 +1745,37 @@ test("the same refusal WITHOUT the kernel's marker is a refusal: the retire did 
   await phase(slot, "failed");
   expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Weekly digest helper wasn't retired");
 });
+
+test("a stop and a start refused with the kernel's marker are told as not confirmed too: Check again for the stop, Refresh status for the start (shaped from the envelope's form)", async () => {
+  const issues = [{ message: UNCONFIRMED_ISSUE.message, path: [...UNCONFIRMED_ISSUE.path] }];
+  const stop = await menu("thr_redesign", {
+    stopPlan: () => stopPlanOf(),
+    stopApply: () => {
+      throw Object.assign(new Error("E_SESSION_STOP_FAILED: its harness was signalled; whether it ended is not known"), { code: "conflict", issues });
+    },
+  });
+  await stop.pick("stop");
+  await ready(stop.slot);
+  fireEvent.click(button(stop.slot, "oats-confirm-act"));
+  await waitFor(() => expect(stop.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  expect(stop.slot.getByTestId("oats-result").textContent).toContain("OATS could not confirm what the stop left. Check again before assuming nothing happened.");
+  expect(stop.slot.getByTestId("oats-result").textContent).not.toContain("wasn't stopped");
+  expect(stop.slot.getByTestId("oats-act-check")).toBeTruthy();
+  resetApp();
+  const start = await menu("thr_digest", {
+    startCheck: ({ instance }) => startCheckOf(instance),
+    start: () => {
+      throw Object.assign(new Error("E_BACKEND_NOT_READY: the launch was sent and its session was not seen"), { code: "conflict", issues });
+    },
+  });
+  await start.pick("start");
+  await ready(start.slot);
+  fireEvent.click(button(start.slot, "oats-confirm-act"));
+  await waitFor(() => expect(start.slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  const said = start.slot.getByTestId("oats-result").textContent!;
+  expect(said).toContain("Result not confirmed");
+  expect(said).toContain("OATS could not confirm what the start left. Refresh its status before another try.");
+  expect(said).toContain("OATS says: the launch was sent and its session was not seen");
+  expect(said).not.toContain("wasn't started");
+  expect(start.slot.getByTestId("oats-start-refresh")).toBeTruthy();
+});

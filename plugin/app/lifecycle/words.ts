@@ -451,10 +451,11 @@ export function applyRefused(verb: PlanVerb, instance: string, refusal: Refusal,
   if (refusal.code !== null && LOST.has(refusal.code)) {
     return { tone: "unknown", title: "Result not confirmed", lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
-  // A retire the kernel refused AND marked unconfirmed: it says itself that it cannot tell what is left. Never
-  // "wasn't retired", whatever the code: not confirmed, with OATS's own line and Check again (as the New agent form reads the marker).
-  if (verb === "retire" && refusal.unconfirmed === true) {
-    return { tone: "unknown", title: "Result not confirmed", lines: ["OATS could not confirm what the retire left. Check again before assuming nothing happened.", ...oatsSays(refusal.message)], code: refusal.code, details: refusal.message, offers: ["check"] };
+  // An act the kernel refused AND marked unconfirmed: it says itself that it cannot tell what is left. The marker
+  // means the same whichever act carries it: never "wasn't stopped/retired", whatever the code: not confirmed,
+  // with OATS's own line and Check again (as the New agent form reads the marker).
+  if (refusal.unconfirmed === true) {
+    return { tone: "unknown", title: "Result not confirmed", lines: [`OATS could not confirm what the ${verb} left. Check again before assuming nothing happened.`, ...oatsSays(refusal.message)], code: refusal.code, details: refusal.message, offers: ["check"] };
   }
   const sentence = refusal.code === "E_UNIDENTIFIED_INSTANCE_HOME" ? unidentified(verb) : sentenceOf(refusal.code, LIFECYCLE);
   // A busy refusal's own sentence names what to check; a refusal with no sentence of the Desktop's is quoted too.
@@ -572,6 +573,9 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
     return of("unknown", `OATS could not confirm that ${name} finished starting`, ["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
   }
   if (code === "NO_THREAD_NAMED") return of("unknown", `${name} was started, but its thread isn't ready yet`, ["Open it from its row when it is."], []);
+  // A start the kernel refused AND marked unconfirmed: it cannot tell what is left, whatever the code. Never
+  // "wasn't started": not confirmed, with OATS's own line, and what a result that is not confirmed offers here (Refresh status).
+  if (refusal.unconfirmed === true) return of("unknown", "Result not confirmed", [`OATS could not confirm what the ${act} left. Refresh its status before another try.`, ...oatsSays(refusal.message)]);
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may still be running: check its row in the sidebar before you start it again."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!, ...(code === "E_SESSION_START_LOCK_STUCK" ? oatsSays(refusal.message) : [])]); // the sentence says OATS's message names what blocks: it stands under it
   if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);

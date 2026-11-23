@@ -530,9 +530,11 @@ describe("an outcome as the toaster tells it, when its dialog is gone", () => {
   });
 });
 
-describe("a retire the kernel refused and marked unconfirmed", () => {
+describe("an act the kernel refused and marked unconfirmed", () => {
+  // SHAPED, from the envelope's form (the kernel's `error.details.unconfirmed: true`, which the plugin's server
+  // hands on beside the refusal's text; #52's fixtures hold the form): no run of ours has met one for these acts.
   const marked = { code: "E_RETIRE_INCOMPLETE", message: "the home was moved aside and the retire hooks did not answer\nmore of it", unconfirmed: true };
-  it("is not confirmed: OATS's own line, the code, Check again; never \"wasn't retired\"", () => {
+  it("a retire: not confirmed, OATS's own line, the code, Check again; never \"wasn't retired\"", () => {
     expect(applyRefused("retire", "dev-1", marked)).toEqual({
       tone: "unknown",
       title: "Result not confirmed",
@@ -542,10 +544,22 @@ describe("a retire the kernel refused and marked unconfirmed", () => {
       offers: ["check"],
     });
   });
-  it("only with the marker, and only for a retire", () => {
+  it("a stop: the same, with Check again for the same apply", () => {
+    const outcome = applyRefused("stop", "dev-1", { code: "E_SESSION_STOP_FAILED", message: "its harness was signalled; whether it ended is not known", unconfirmed: true });
+    expect(outcome).toMatchObject({ tone: "unknown", title: "Result not confirmed", code: "E_SESSION_STOP_FAILED", offers: ["check"] });
+    expect(outcome.lines).toEqual(["OATS could not confirm what the stop left. Check again before assuming nothing happened.", "OATS says: its harness was signalled; whether it ended is not known"]);
+  });
+  it.each([["start", "E_SESSION_START_BUSY"], ["restart", "E_BACKEND_NOT_READY"]] as const)("a %s: not confirmed, with what its dialog offers for that (Refresh status), never \"wasn't started\"", (verb, code) => {
+    const outcome = startRefused(verb, "dev-1", { code, message: "the launch was sent and its session was not seen", unconfirmed: true });
+    expect(outcome).toMatchObject({ tone: "unknown", title: "Result not confirmed", code, offers: ["refresh"] });
+    expect(outcome.lines).toEqual([`OATS could not confirm what the ${verb} left. Refresh its status before another try.`, "OATS says: the launch was sent and its session was not seen"]);
+    // The same code without the marker is the kernel's plain refusal.
+    expect(startRefused(verb, "dev-1", { code, message: "m" }).tone).toBe("failed");
+  });
+  it("only with the marker", () => {
     expect(applyRefused("retire", "dev-1", { ...marked, unconfirmed: false })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired" });
     expect(applyRefused("retire", "dev-1", { code: marked.code, message: marked.message })).toMatchObject({ tone: "failed" });
-    expect(applyRefused("stop", "dev-1", { ...marked, code: "E_SESSION_STOP_FAILED" })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't stopped" });
+    expect(applyRefused("stop", "dev-1", { code: "E_SESSION_STOP_FAILED", message: "m" })).toMatchObject({ tone: "failed", title: "Dev 1 wasn't stopped" });
   });
   it("asked again, the kernel's same marked answer stays not confirmed, and the toaster tells it by its title, to be shown again", () => {
     expect(checkAgainRefused("retire", "dev-1", marked)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"] });

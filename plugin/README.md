@@ -695,7 +695,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   refuses it for a home that is not on tmux and never turns a resume into another start; whether
   the session is still lost is the kernel's to say (`E_RESUME_NOT_LOST`: the dialog goes back to
   its check). A lost agent on bb is unchanged (a new thread; the carry-on line). No harness or
-  model is offered for an agent on tmux: the list the dialog has is the bb session provider's.
+  model is offered for an agent on tmux, by a resume, a plain start or a restart: the only
+  harness list and model suggestions the dialog has are the bb session provider's, which say
+  nothing of a tmux home, so the kernel starts it with the launch its home recorded. The
+  sentences of a resume are this plugin's own (the Desktop resumes without a screen; WORDS.md).
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs

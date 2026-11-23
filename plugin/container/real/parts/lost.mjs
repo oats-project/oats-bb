@@ -59,7 +59,8 @@ const EXPECTED = {
   // The ruling (the specialist's, 23 Nov): where the row has a sessionEnd, IT decides: "stopped" is
   // "Stopped · <soul> · tmux" whatever runtimeState says; "lost" is "Stopped · session lost ·
   // tmux"; "exited", or "shell" with no sessionEnd, is "Failed".
-  stopped: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: WORDS ? `Stopped · ${SOUL} · tmux` : `Failed · ${SOUL} · tmux` },
+  // (Read as "Failed", a stopped tmux agent is offered Restart… beside Start…; as "Stopped", Start… alone.)
+  stopped: { acts: ACTS ? (WORDS ? ["Start…", "Retire…"] : ["Start…", "Restart…", "Retire…"]) : ["Retire…"], words: [WORDS ? "Stopped" : "Failed"], row: WORDS ? `Stopped · ${SOUL} · tmux` : `Failed · ${SOUL} · tmux` },
   lost: { acts: ACTS ? ["Start…", "Retire…"] : ["Retire…"], words: ["Stopped"], row: WORDS ? "Stopped · session lost · tmux" : `Stopped · ${SOUL} · tmux` },
 };
 // The dialogs' words for an agent on tmux, as their author gave them (bb-plugin-dialogs-developer,

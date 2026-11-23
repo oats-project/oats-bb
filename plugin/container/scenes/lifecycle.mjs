@@ -159,6 +159,11 @@ export default [
         check(await openRowMenu(page, viewport, lead.id), `${at} a right click on Redesign ui lead's row opens bb's menu of that thread`);
         const items = await menuTexts(page);
         check(["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)"].every((label) => items.includes(label)) && !items.includes("Start agent (OATS)"), `${at} the row's menu of a working agent holds Stop, Restart and Retire, each "(OATS)" beside bb's own, and no Start`, JSON.stringify(items));
+        const named = items.indexOf("Redesign ui lead · Working");
+        check(named >= 0 && items[named + 1] === "Stop agent (OATS)" && items.indexOf("Archive") > items.indexOf("Retire agent (OATS)"), `${at} the OATS entries start with a row that names the agent and its state, and stand before bb's own Archive and Delete`, JSON.stringify(items));
+        // A separator is a gap in the list: more room between Retire and Archive than between two entries of one group.
+        const apart = await page.evaluate(`(() => { const rows = [...document.querySelectorAll('[role="menuitem"]')]; const row = (text) => rows.find((each) => each.innerText.trim() === text)?.getBoundingClientRect(); const [stop, restart, retire, archive] = ["Stop agent (OATS)", "Restart agent (OATS)", "Retire agent (OATS)", "Archive"].map(row); if (!stop || !restart || !retire || !archive) return false; return archive.top - retire.bottom > restart.top - stop.bottom + 4; })()`);
+        check(apart, `${at} bb sets the OATS entries apart from its own Archive and Delete`);
         await page.shot(`lifecycle-${viewport.name}-row-menu`);
         check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed in the row's menu`);
         await page.until(phaseIs("ready"), 30);

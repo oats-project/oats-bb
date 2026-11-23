@@ -39,11 +39,13 @@ const target = (id: string): PluginThreadActionTarget => {
 async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Agent[], sdk: object = modelsSdk()) {
   const app = await loadApp();
   expect(app.threadActions.map((action) => [action.id, action.group])).toEqual([
-    ["stop", "4_lifecycle"],
-    ["start", "4_lifecycle"],
-    ["restart", "4_lifecycle"],
-    ["retire", "4_lifecycle"],
-    ["unreadable", "4_lifecycle"],
+    // A group of the plugin's own, which bb sets apart from its own Stop, Archive and Delete ("4_lifecycle") with a separator.
+    ["agent", "3_oats"],
+    ["stop", "3_oats"],
+    ["start", "3_oats"],
+    ["restart", "3_oats"],
+    ["retire", "3_oats"],
+    ["unreadable", "3_oats"],
   ]);
   expect(app.appOverlays).toHaveLength(1);
   const Overlay = app.appOverlays[0]!.component;
@@ -67,7 +69,8 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
   );
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null ? [] : [id]));
+  // (The acts that show; the group's first row, which names the agent, has its own test.)
+  const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null || id === "agent" ? [] : [id]));
   const pick = (id: string) => items[id]!.run({ requestRename: () => {} });
   return { slot, shown, pick, label: (id: string) => items[id]!.label, item: (id: string) => items[id] ?? null };
 }
@@ -1422,4 +1425,16 @@ test("bb is not asked about the thread after a stop that did not stop every sess
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   expect(asked).toEqual([]);
+});
+
+// ---- the OATS entries in bb's menu
+
+test("the OATS entries start with a row that names the agent and its state, off; a thread that is no agent's has none", async () => {
+  const working = await menu("thr_redesign");
+  expect(working.item("agent")).toMatchObject({ label: "Redesign ui lead · Working", disabled: true });
+  resetApp();
+  const stopped = await menu("thr_digest");
+  expect(stopped.item("agent")).toMatchObject({ label: "Weekly digest helper · Stopped", disabled: true });
+  resetApp();
+  expect((await menu("thr_plain")).item("agent")).toBeNull();
 });

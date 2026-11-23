@@ -152,8 +152,43 @@ describe("stop", () => {
 });
 
 describe("start and restart", () => {
+  it("a resume is `oats session start --resume` with the home and nothing else; it is a start alone, and takes no harness and no model", async () => {
+    // The shaped answer of a resume (test/fixtures/lifecycle/README.md): the ordinary start answer plus `resume`.
+    const resumed = await oats.start(home, undefined, { resume: true });
+    expect((await fake.calls()).at(-1)?.argv).toEqual(["session", "start", "--home", home, "--resume", "--json"]);
+    expect(resumed.ok && resumed.value).toMatchObject({ threadId: null, instance: "lost-tmux-developer", resume: { resumed: true, reason: null, waiting: null } }); // the recorded answer names the agent it was recorded on
+    // The kernel refuses a harness, a model or a mode beside --resume: none is ever sent, and asking for one is refused before any process.
+    const before = (await fake.calls()).length;
+    expect(await oats.start(home, undefined, { resume: true, harness: "pi" }, ["claude", "pi"])).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(await oats.start(home, undefined, { resume: true, model: "opus" })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(await oats.restart(home, undefined, { resume: true })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect((await fake.calls()).length).toBe(before);
+  });
+
+  it("reads the answers a real tmux home gave (recorded): a resume that continued, a plain start, a restart, and the two refusals of a resume, by their codes", async () => {
+    expect(await oats.start(home, undefined, { resume: true })).toMatchObject({ ok: true, value: { threadId: null, instance: "lost-tmux-developer", harness: "claude", resume: { resumed: true, reason: null, waiting: null } } });
+    await fake.behave({ "session start": { file: "lifecycle/tmux-start.json" }, "session restart": { file: "lifecycle/tmux-restart.json" } });
+    expect(await oats.start(home)).toMatchObject({ ok: true, value: { threadId: null, instance: "lost-tmux-developer", resume: null } });
+    expect(await oats.restart(home)).toMatchObject({ ok: true, value: { threadId: null, instance: "lost-tmux-developer", resume: null } });
+    await fake.behave({ "session start --resume": { file: "lifecycle/tmux-resume-not-lost.json", exit: 1 } });
+    expect(await oats.start(home, undefined, { resume: true })).toMatchObject({ ok: false, error: { code: "E_RESUME_NOT_LOST" } });
+    await fake.behave({ "session start --resume": { file: "lifecycle/tmux-resume-running.json", exit: 1 } });
+    expect(await oats.start(home, undefined, { resume: true })).toMatchObject({ ok: false, error: { code: "E_SESSION_RUNNING" } });
+  });
+
+  it("reads what a resume answered of the conversation: back in it, started fresh with the kernel's reason, the harness waiting; a start that asked for none has none", async () => {
+    await fake.behave({ "session start --resume": { file: "lifecycle/start-resume-fresh.json" } });
+    expect((await oats.start(home, undefined, { resume: true })).ok && (await oats.start(home, undefined, { resume: true }))).toMatchObject({ value: { resume: { resumed: false, reason: "no-conversation", waiting: null } } });
+    await fake.behave({ "session start --resume": { file: "lifecycle/start-resume-waiting.json" } });
+    expect(await oats.start(home, undefined, { resume: true })).toMatchObject({ value: { resume: { resumed: true, reason: null, waiting: "resume-confirmation" } } });
+    expect(await oats.start(home)).toMatchObject({ value: { resume: null } });
+    // What it says is read, never guessed: a `resume` object that does not say whether it resumed is an answer this cannot read.
+    await fake.behave({ "session start --resume": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: "kernel-fix-developer", resume: { harness: "claude" } } }) } });
+    expect(await oats.start(home, undefined, { resume: true })).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });
+  });
+
   const home = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
-  const answered = (threadId: string | null) => ({ threadId, instance: "weekly-digest-helper", harness: "claude", model: "claude-opus-5-5", warnings: [] });
+  const answered = (threadId: string | null) => ({ threadId, instance: "weekly-digest-helper", harness: "claude", model: "claude-opus-5-5", warnings: [], resume: null }); // (no resume was asked for)
   it("starts the home the kernel named and answers the new thread, and names no mode (no --yolo), no harness and no model: the home's recorded launch stands", async () => {
     expect(await oats.start(home)).toEqual({ ok: true, value: answered("thr_7nx8uibthg") });
     expect(await oats.restart(home)).toEqual({ ok: true, value: answered("thr_d5zug5fnva") });

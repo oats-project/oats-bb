@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -617,5 +617,102 @@ describe("an act the kernel refused and marked unconfirmed", () => {
   it("asked again, the kernel's same marked answer stays not confirmed, and the toaster tells it by its title, to be shown again", () => {
     expect(checkAgainRefused("retire", "dev-1", marked)).toMatchObject({ tone: "unknown", title: "Result not confirmed", offers: ["check"] });
     expect(toasted("retire", applyRefused("retire", "dev-1", marked))).toEqual({ plain: false, tone: "unknown", title: "Result not confirmed", lines: [] });
+  });
+});
+
+describe("the start of a tmux agent whose session was lost (a resume)", () => {
+  // The answers are SHAPED from the kernel's doc (test/fixtures/lifecycle/README.md).
+  const answered = (file: string) => value(parseSessionStart(fixture(file).result)); // (the envelope's result, as the runner hands it to the parser)
+  it("is decided from the rows a real tmux home gave (recorded): lost resumes; stopped with OATS and running do not", () => {
+    expect(resumable(fixture("tmux-row-lost.json"))).toBe(true);
+    expect(resumable(fixture("tmux-row-stopped.json"))).toBe(false); // runtimeState "shell", sessionEnd "stopped"
+    expect(resumable(fixture("tmux-row-running.json"))).toBe(false);
+  });
+  it("the recorded plain start and restart of a tmux home say nothing of a conversation; the two recorded refusals of a resume have their words", () => {
+    expect(startOutcome("start", "lost-tmux-developer", answered("tmux-start.json"))).toMatchObject({ tone: "done", title: "Lost tmux developer started.", lines: [] });
+    expect(startOutcome("restart", "lost-tmux-developer", value(parseSessionStart(fixture("tmux-restart.json").result, "restart")))).toMatchObject({ tone: "done", title: "Lost tmux developer restarted.", lines: [] });
+    // Stopped, not lost: back to the check. Running: told as already running, with the way to refresh.
+    expect(startRefused("start", "lost-tmux-developer", fixture("tmux-resume-not-lost.json").error)).toMatchObject({ tone: "failed", lines: ["Its session is no longer lost, so there is no conversation to bring back. Read what Start does now."] });
+    expect(startRefused("start", "lost-tmux-developer", fixture("tmux-resume-running.json").error)).toMatchObject({ tone: "failed", title: "Lost tmux developer wasn't started", lines: ["This instance is already running. Nothing was started."], offers: ["refresh"] });
+  });
+  it("is decided from the kernel's row: tmux, and a session that was lost; nothing else", () => {
+    expect(resumable({ backend: "tmux", sessionEnd: "lost" })).toBe(true);
+    expect(resumable({ backend: "tmux", sessionEnd: "stopped" })).toBe(false);
+    expect(resumable({ backend: "tmux", sessionEnd: "exited" })).toBe(false);
+    expect(resumable({ backend: "tmux", sessionEnd: null })).toBe(false);
+    expect(resumable({ backend: "bb", sessionEnd: "lost" })).toBe(false);
+    expect(resumable({ backend: null, sessionEnd: "lost" })).toBe(false);
+  });
+  it("says after the press what the kernel answered: back in its last conversation", () => {
+    expect(startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json"))).toEqual({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], code: null, details: null, offers: [] });
+  });
+  it("says that it started FRESH, first and as a warning, then the kernel's reason in words; a reason it does not know is OATS's own word", () => {
+    const fresh = answered("start-resume-fresh.json");
+    expect(startOutcome("start", "kernel-fix-developer", fresh)).toMatchObject({ tone: "done", attention: true, title: "Kernel fix developer started fresh: its last conversation was not brought back.", lines: ["Its last conversation was not found."] });
+    const because = (reason: string | null) => startOutcome("start", "kernel-fix-developer", { ...fresh, resume: { resumed: false, reason, waiting: null } }).lines;
+    expect(because("no-receipts")).toEqual(["OATS has no record of where its harness kept it."]);
+    expect(because("resume-unproven")).toEqual(["OATS cannot yet bring a Codex conversation back."]);
+    expect(because("a-later-reason")).toEqual(["OATS says: a-later-reason"]);
+    // A reason is any string of the kernel's: one that names a member every object has is still OATS's own word.
+    for (const odd of ["constructor", "toString", "__proto__", "hasOwnProperty"]) expect(because(odd)).toEqual([`OATS says: ${odd}`]);
+    expect(because(null)).toEqual([]);
+    // Never told by the toaster as a plain success: it is opened again, and in the warning tone, as the dialog draws it.
+    expect(toasted("start", startOutcome("start", "kernel-fix-developer", fresh), true)).toEqual({ plain: false, tone: "unknown", title: "Kernel fix developer started fresh: its last conversation was not brought back.", lines: [] });
+  });
+  it("no start or restart of an agent with no bb thread is told whole by a toast: its result holds where it runs and a command to copy", () => {
+    const back = startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json"));
+    const plainStart = startOutcome("start", "lost-tmux-developer", answered("tmux-start.json"));
+    const restarted = startOutcome("restart", "lost-tmux-developer", value(parseSessionStart(fixture("tmux-restart.json").result, "restart")));
+    for (const [verb, outcome] of [["start", back], ["start", plainStart], ["restart", restarted]] as const) {
+      expect(toasted(verb, outcome, true)).toEqual({ plain: false, tone: "done", title: outcome.title, lines: [] });
+      // The same result of an agent on bb, which has a thread to open, is told whole.
+      expect(toasted(verb, outcome).plain).toBe(true);
+    }
+  });
+  it("marks a start whose harness waits for its person in its terminal, which a toast cannot tell whole", () => {
+    const waiting = startOutcome("start", "kernel-fix-developer", answered("start-resume-waiting.json"));
+    expect(waiting).toMatchObject({ tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [], waiting: true });
+    expect(toasted("start", waiting)).toEqual({ plain: false, tone: "done", title: "Kernel fix developer is back in its last conversation.", lines: [] });
+    expect(startOutcome("start", "kernel-fix-developer", answered("tmux-start-resume.json")).waiting).toBeUndefined();
+  });
+  it("a start that asked for no resume says nothing of a conversation", () => {
+    expect(startOutcome("start", "weekly-digest-helper", value(parseSessionStart(fixture("start.json")))).lines).toEqual([]);
+  });
+  it("a resume the kernel refused: its session is not lost any more; or its launch settings changed, so that it can only start fresh (OATS's line under Details)", () => {
+    expect(startRefused("start", "kernel-fix-developer", { code: "E_RESUME_NOT_LOST", message: "kernel-fix-developer did not lose its session (stopped)" })).toMatchObject({
+      tone: "failed",
+      title: "Kernel fix developer wasn't started",
+      lines: ["Its session is no longer lost, so there is no conversation to bring back. Read what Start does now."],
+      offers: ["refresh"],
+    });
+    expect(startRefused("start", "kernel-fix-developer", { code: "E_LAUNCH_ENV_CHANGED", message: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key" })).toMatchObject({
+      tone: "failed",
+      title: "Kernel fix developer wasn't started",
+      lines: ["Its launch settings changed, so it can only start fresh."],
+      details: "a launch value differs from the one it last ran with: ANTHROPIC_BASE_URL, file:/abs/key",
+      offers: ["refresh"],
+    });
+  });
+});
+
+describe("what a start says before the press, and a tmux start that did not finish", () => {
+  const begins = "Starts a new conversation. The current one stays readable in bb, archived.";
+  it("on bb: what becomes of the conversation, and bb's full mode; a restart warns first", () => {
+    expect(startSays("start", { onBb: true, resumes: false, harness: "claude", begins })).toEqual([begins, "Runs in bb's full mode: no sandbox."]);
+    expect(startSays("restart", { onBb: true, resumes: false, harness: "claude", begins })).toEqual(["Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.", begins, "Runs in bb's full mode: no sandbox."]);
+  });
+  it("on tmux: nothing of a bb thread or of bb's full mode; a resume says what it tries, with the line on Claude's question for a recorded claude alone", () => {
+    const fresh = "This starts a new conversation using the saved briefing and state.";
+    expect(startSays("start", { onBb: false, resumes: false, harness: "claude", begins })).toEqual([fresh]);
+    expect(startSays("restart", { onBb: false, resumes: false, harness: "claude", begins })).toEqual(["Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.", fresh]);
+    const tries = "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.";
+    expect(startSays("start", { onBb: false, resumes: true, harness: "claude", begins })).toEqual([tries, "Claude may first ask, in its terminal, how to load a long conversation."]);
+    expect(startSays("start", { onBb: false, resumes: true, harness: "pi", begins })).toEqual([tries]);
+    expect(startSays("start", { onBb: false, resumes: true, harness: null, begins })).toEqual([tries]);
+  });
+  it("a start the kernel kept unfinished: on bb its thread is where to read it; on tmux there is none, and the sentence names none", () => {
+    const kept = { code: "E_SPAWN_INCOMPLETE", message: "launch requires inspection" };
+    expect(startRefused("start", "dev-1", kept).lines).toEqual(["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
+    expect(startRefused("start", "dev-1", kept, true)).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting", lines: ["Its session was kept. Refresh status before another try."], offers: ["refresh"] });
   });
 });

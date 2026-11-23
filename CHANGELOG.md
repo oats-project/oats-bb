@@ -89,6 +89,35 @@
     no thread of at all (and no env to remove), such as one that never ran on bb. Before,
     `archived` held only what the hook itself archived.
 
+- **`settings.oats.bb.hostDaemonPort`: a bb whose host daemon is not on bb's default
+  port.** Set it, in `oats-local.yaml` only (the key is host-only, as `server` is), when
+  a workspace's bb-app runs on other ports than bb's defaults, as the second bb of a host
+  with one bb per workspace does: the number bb-app was started with
+  (`--host-daemon-port`), beside `server`. bb's CLI finds the host daemon of its machine
+  by `BB_HOST_DAEMON_PORT` alone (38887 by default), never from the server's address, so
+  without it a home's first launch on such a bb was refused by bb ("Host not found", or
+  "Cannot reach local host daemon") at `bb project create`. With it, every bb command the
+  provider runs is told that port.
+  - **A `BB_HOST_DAEMON_PORT` exported in the environment OATS runs in no longer reaches
+    bb**, set or unset: the port comes from this setting alone, as the server comes from
+    `server` (one bb's port must never be paired with another bb's server). If you
+    exported the variable as a workaround for a bb on other ports, set
+    `settings.oats.bb.hostDaemonPort` instead. With the setting unset and nothing
+    exported, nothing changes: no bb command is told a port.
+  - A value that is not a whole number from 1 to 65535 (text such as `"38887"` included)
+    is refused by every command, `E_BACKEND_SETTINGS`, naming the key: never dropped.
+  - `daemon` follows it: where `hostDaemonPort` is set and `daemon` is not, the daemon's
+    address is that port on 127.0.0.1. The two together must name one port.
+  - `oats bb doctor` prints the port bb's CLI is told (`host daemon port: 39012
+    (settings.oats.bb.hostDaemonPort)`, or `default 38887`; `hostDaemonPort` in its
+    `--json`), and readiness checks that the daemon at that port is this bb's, not only
+    that something answers there: the daemon says which host it is and which server it
+    serves, and the server must list that host, connected (`bb host list`, asked only
+    where the setting is set). Its findings name the daemon, the server and the key.
+  - New readiness warning `session-provider-host-daemon-port`: a `daemon` address on
+    another port than 38887 with no `hostDaemonPort`. It refuses nothing.
+  - The README has the setup: [Two bbs on one host](README.md#two-bbs-on-one-host).
+
 - **A home's bb thread is titled with the instance's name as words.** bb's header and
   thread list now show the name the OATS Desktop and the OATS plugin for bb draw:
   `release-070-maintainer` is "Release 070 maintainer" (every run of `-` one space, the

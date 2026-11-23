@@ -23,7 +23,7 @@ function pinnedVersion(settings, { deadline, env }) {
   let read = null;
   return () => {
     read ??= settings.version == null ? Promise.resolve(false)
-      : bbClient({ cli: settings.cli, server: null, deadline, env }).version().then((version) => version === settings.version, (error) => {
+      : bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: null, deadline, env }).version().then((version) => version === settings.version, (error) => {
         if (!(error instanceof ProviderError)) throw error;
         return false;
       });
@@ -46,7 +46,7 @@ async function settle(answer, atPin) {
 export async function inspect(input, settings, { deadline, env = process.env } = {}) {
   try {
     const subject = readHome(input);
-    const bb = bbClient({ cli: settings.cli, server: subject.endpoint.server, deadline, env });
+    const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: subject.endpoint.server, deadline, env });
     return await settle(inspectHome(subject, await bb.threads(), processLook()), pinnedVersion(settings, { deadline, env }));
   } catch (error) { throw unavailable(error); }
 }
@@ -62,7 +62,7 @@ export async function inspectMany(input, settings, { deadline, env = process.env
   const processes = processLook();
   const atPin = pinnedVersion(settings, { deadline, env });
   const listOf = (server) => {
-    if (!lists.has(server)) lists.set(server, bbClient({ cli: settings.cli, server, deadline, env }).threads().then((threads) => ({ threads }), (error) => ({ error })));
+    if (!lists.has(server)) lists.set(server, bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server, deadline, env }).threads().then((threads) => ({ threads }), (error) => ({ error })));
     return lists.get(server);
   };
   const results = await Promise.all(input.homes.map(async (entry) => {

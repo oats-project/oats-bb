@@ -125,7 +125,11 @@ export async function fakeBackend(t, overrides = {}) {
   mkdirSync(piAgentDir);
   const piSettings = (doc) => writeFileSync(join(piAgentDir, "settings.json"), typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
   piSettings({ packages: ["npm:@awebai/oats-pi@0.70.0"] });
-  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, version: VERSION, trust: "single-user", dataDir, piAgentDir, ...extra }) };
+  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, daemonPort: daemon.address().port,
+    // As a deployment whose bb is not on bb's default ports sets them: the server, and the
+    // host daemon's port (the daemon's address is given too, and agrees with it). A test
+    // that gives a daemon address of its own gives no port with it, unless it says one.
+    settings: (extra = {}) => ({ server: serverUrl, daemon: daemonUrl, ...(Object.hasOwn(extra, "daemon") ? {} : { hostDaemonPort: daemon.address().port }), version: VERSION, trust: "single-user", dataDir, piAgentDir, ...extra }) };
 }
 
 /** A loopback port where nothing answers, held for the whole test: a listener that drops

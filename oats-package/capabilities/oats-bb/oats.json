@@ -48,6 +48,10 @@
       "default": "http://127.0.0.1:38887",
       "description": "The bb host daemon's address on this host (its /status says when threads can start). Loopback only. Set it only in oats-local.yaml."
     },
+    "hostDaemonPort": {
+      "hostOnly": true,
+      "description": "The port of this bb's host daemon, a number from 1 to 65535: what bb-app was started with (--host-daemon-port). Set it where the daemon is not on bb's default port (38887), as for a second bb on one host: bb's CLI finds its host daemon by this port alone, and every bb command the provider runs is then told it (BB_HOST_DAEMON_PORT). The daemon setting follows it where that is unset. Unset: no port is told, and bb's CLI uses its default. A BB_HOST_DAEMON_PORT in the environment OATS runs in never reaches bb: the port comes from this setting alone. Set it only in oats-local.yaml."
+    },
     "version": {
       "default": "0.50.1",
       "description": "The bb-app version this deployment runs, exactly as `bb --version` prints it. The default is the version this release of the provider is contract-tested against. Readiness and every launch refuse another version (E_BACKEND_VERSION)."

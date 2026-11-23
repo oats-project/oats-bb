@@ -120,7 +120,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
     const options = { deadline, grace: graceOf(input), now, stopCallTimeoutMs };
     if (input.endpoint === null || input.endpoint === undefined) {
       if (typeof input.home !== "string" || !isAbsolute(input.home)) throw fail("E_SESSION_STOP_FAILED", "a stop with no endpoint needs the home's absolute path");
-      const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
+      const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: loopbackOrigin(settings.server, "server"), deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
       const { projects, live } = await liveInHome(bb, input.home);
       // The home's archived threads too: bb keeps an archived thread's Claude loaded, in
       // the home. All of them: this call is told no thread to count from. Read before
@@ -148,7 +148,7 @@ export async function stop(input, settings, { deadline = Infinity, env = process
       return { stopped: true };
     }
     const endpoint = readEndpoint(input.endpoint, "E_SESSION_STOP_FAILED");
-    const bb = bbClient({ cli: settings.cli, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
+    const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: endpoint.server, deadline, env, fallbackCode: "E_SESSION_STOP_FAILED" });
     // By its id, whatever bb shows of it: a thread archived in bb is stopped like any other.
     const seen = await confirmStop(bb, endpoint.threadId, options);
     // Only once it is seen stopped: bb keeps an archived thread's agent loaded until the
@@ -196,7 +196,7 @@ export async function retire(home, readSettings, { deadline, env = process.env }
   // Threads left that way are what readiness reports as orphaned.
   try {
     const settings = readSettings();
-    const bb = bbClient({ cli: settings.cli, server: loopbackOrigin(settings.server, "server"), deadline, env });
+    const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server: loopbackOrigin(settings.server, "server"), deadline, env });
     const { projects, live } = await liveInHome(bb, home);
     const options = { deadline, grace: RETIRE_GRACE_SECONDS };
     // What this hook archived, and what it could not stop or archive.

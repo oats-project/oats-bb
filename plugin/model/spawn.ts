@@ -321,12 +321,13 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
  *   - `refused`: nothing was created. Only where something says so: the kernel's refusals the
  *     tables name (the kernel compensates an error raised after the home exists, and says when it
  *     could not: see `unconfirmed`), and the plugin's own for a call that never reached the kernel;
- *   - `unconfirmed`: the kernel refused AND says its rollback is incomplete: part of the instance
- *     may still be there (its home, quarantined or whole). Never "nothing was created", whatever
- *     the code; the form stays held, with nothing to press: the kernel's message, under Details,
- *     names what to clean up (the Desktop makes this outcome final too);
  *   - `created`: an instance exists (the kernel says so, or the spawn went through and only its
  *     thread is not known): the form stays held, and says where to open it;
+ *   - `unconfirmed`: the kernel refused AND marks that it could not confirm what is left (its
+ *     rollback is incomplete): part of the instance may still be there (its home, quarantined or
+ *     whole). Never "nothing was created", whatever the code; the form stays held, with nothing to
+ *     press: the kernel's message, under Details, names what to clean up (the Desktop makes this
+ *     outcome final too);
  *   - `unknown`: anything else: a code nobody classed, an `oats` that ended with no answer or one
  *     the plugin cannot read, a time limit. Rollback is never inferred from an arbitrary failure
  *     (the Desktop's rule: packages/client/spawn-apply.mjs `interpret`). The form stays held and
@@ -336,31 +337,38 @@ const DASHED: Record<string, readonly [SpawnNext, string]> = {
 export type SpawnOutcome = "refused" | "unconfirmed" | "created" | "unknown";
 /** A refusal as the form says it: the sentence (what happened, then what to do), the act that follows, its code, the kernel's own message for Details, and what is known of the instance. */
 export type SpawnProblem = { sentence: string; next: SpawnNext; code: string; detail: string | null; outcome: SpawnOutcome };
+/**
+ * A failed call as the form reads it: the code and the message of the refusal, and the kernel's
+ * marker that it could not confirm what is left (`error.details.unconfirmed`, carried by the
+ * plugin's envelope: kernel/result.ts `KernelError`).
+ */
+export type SpawnReason = { code: string | null; message: string | null; unconfirmed?: boolean };
 const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
 /** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
 const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
 const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
-/**
- * The kernel's own word that a spawn's rollback did not finish. Its contract's marker is
- * `error.details.unconfirmed` (docs/desktop-cli-api.md "Spawn errors": "A code says nothing about
- * how far the spawn got: details.unconfirmed does"), which the plugin's shared envelope does not
- * carry (kernel/envelope.ts keeps the code and the message). On every path that sets the marker
- * for a rollback the kernel also says so in the message, in these words (awebai/oats lib/core.mjs
- * at 3d834aa3c: "— rollback INCOMPLETE, …"): read here until the envelope carries the marker.
- */
-const ROLLBACK_INCOMPLETE = /rollback INCOMPLETE/;
 const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
 /**
  * What is known of the instance after a failure, in the order the safety rule is read (`SpawnOutcome`):
  * `code` is the failure's own (null when it has none), `named` what the tables say of it.
  */
-function outcomeOf(stage: "preview" | "spawn", code: string | null, message: string, named: Said | undefined, replay: boolean): SpawnOutcome {
+function outcomeOf(stage: "preview" | "spawn", code: string | null, unconfirmed: boolean, named: Said | undefined, replay: boolean): SpawnOutcome {
   // A preview starts nothing.
   if (stage === "preview") return "refused";
-  // The kernel's own word that its rollback did not finish comes first, whatever the code.
-  if (ROLLBACK_INCOMPLETE.test(message)) return "unconfirmed";
-  // An instance exists.
+  // An instance exists: the kernel kept it, and nothing was rolled back. (The kernel marks these
+  // unconfirmed too, E_SPAWN_INCOMPLETE among them: awebai/oats lib/core.mjs at v0.70.5, 512 and
+  // 4016. They are read first, as the Desktop reads them: packages/client/spawn-apply.mjs `interpret`.)
   if (code !== null && CREATED.has(code)) return "created";
+  // The kernel's marker that it could not confirm what is left, whatever else the code is: never
+  // "nothing was created". The marker alone says it: the kernel's words in the message
+  // ("rollback INCOMPLETE") are not read, since every path of a spawn that writes them sets the
+  // marker (lib/core.mjs at v0.70.5: 4630, 4804, 4823, 4863, 5237 with 5675, 5669, 5679), and the
+  // CLI prints it for them: lib/errors.mjs `spawnRefusalDetails` (54-90) keeps `details.unconfirmed`
+  // for every code but seven of its table, which drop the error's details (E_CHILD_SPAWNS_DISABLED,
+  // E_BRANCH_EXISTS, E_BASE_UNKNOWN, E_DECISION_STALE, E_IDEMPOTENCY_CONFLICT, E_PLACEMENT_TAKEN,
+  // E_INSTANCE_NAME_TAKEN), and those are raised before any rollback that writes the words (core.mjs:
+  // the last at 4603, the first such rollback at 4630).
+  if (unconfirmed) return "unconfirmed";
   // The kernel, or the plugin, says the outcome is not known.
   if (named !== undefined && named.next === "check-result") return "unknown";
   // A refusal the tables name: the kernel refused before it made anything, or undid what it made.
@@ -379,7 +387,7 @@ function outcomeOf(stage: "preview" | "spawn", code: string | null, message: str
  * Harness field (the provider declares several): a sentence sends a person there only when it does.
  */
 export function spawnProblem(
-  reason: { code: string | null; message: string | null },
+  reason: SpawnReason,
   stage: "preview" | "spawn" = "preview",
   { harnessField = true, replay = false }: { harnessField?: boolean; /** the failure of a Check result: of a spawn already asked once, whose outcome was not known */ replay?: boolean } = {},
 ): SpawnProblem {
@@ -391,7 +399,7 @@ export function spawnProblem(
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
   const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
-  const outcome = outcomeOf(stage, reason.code, message, named, replay);
+  const outcome = outcomeOf(stage, reason.code, reason.unconfirmed === true, named, replay);
   const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;

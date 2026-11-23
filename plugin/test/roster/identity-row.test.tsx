@@ -316,3 +316,18 @@ test("Stop on a working agent's line asks for the stop dialog of that agent, and
   expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
   expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);
 });
+
+// The time of a stop is an extra: when the read of the events fails, the line stays the state alone,
+// with no time and no error of its own (the spec's author's condition).
+test("a stopped agent whose events cannot be read says Stopped, with no time and no error on its line", async () => {
+  const slot = await render("thr_digest", fixtureAgents(), {
+    panelEvents: () => {
+      throw new Error("E_EVENTS_UNREADABLE: the instance's events could not be read");
+    },
+  });
+  await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("StoppedStartInstance panel");
+  expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("E_EVENTS_UNREADABLE");
+  expect(slot.queryByRole("alert")).toBeNull();
+});

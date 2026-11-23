@@ -9,6 +9,7 @@ export const STATE_WORD: Record<AgentState, string> = {
   stopped: "stopped",
   error: "error",
   unreachable: "unreachable",
+  outside: "running outside OATS",
 };
 
 /** `…/<last two segments>` of a home path; the whole path when it is that short. */

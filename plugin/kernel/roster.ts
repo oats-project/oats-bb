@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { Agent } from "../model/types.js";
 import { shaped } from "./envelope.js";
+import { OUTSIDE_FEATURE, readOutsideOats } from "./outside.js";
 import { ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 
@@ -25,11 +26,16 @@ const row = z.looseObject({
   runtimeError: text,
   startedAt: text,
   waitingOnYou: z.looseObject({ since: text, reason: text, message: text }).nullish(),
+  sessionEnd: text,
+  // Read with its own schema, only where the kernel lists the feature (kernel/outside.ts): a key of another shape is no report, never a failed read.
+  outsideOats: z.unknown().optional(),
 });
 const roster = z.looseObject({
   root: z.string(),
   agents: z.array(z.looseObject({ name: z.string().min(1), instances: z.array(row) })),
   workspace: z.looseObject({ key: text }).nullish(),
+  // This kernel's own list, as `oats version --json` answers it (docs/desktop-cli-api.md: feature `server-probe-features`, OATS 0.49.0).
+  features: z.array(z.string()).nullish(),
 });
 
 /**
@@ -51,7 +57,7 @@ const identityMeta = z.looseObject({ alias: text, team: text });
 export type RawRow = { row: Record<string, unknown>; agent: Record<string, unknown> };
 export type Status = { root: string; workspace: string | null; agents: Agent[]; rows: RawRow[] };
 
-function toAgent(group: { name: string }, source: z.output<typeof row>): Agent {
+function toAgent(group: { name: string }, source: z.output<typeof row>, features: readonly string[]): Agent {
   // The messaging identity: the row's own `identity`, else what a messaging capability recorded.
   let alias = source.identity?.alias ?? null;
   let team = source.identity?.team ?? null;
@@ -89,10 +95,21 @@ function toAgent(group: { name: string }, source: z.output<typeof row>): Agent {
     runtimeError: source.runtimeError ?? null,
     // When the session started, where the kernel's row says it (a row of a kernel that does not is left without).
     ...(source.startedAt ? { startedAt: source.startedAt } : {}),
+    // How the session ended, and the kernel's report of a harness that runs in a home it recorded
+    // stopped: each only where the row has it. The report is read only where the document's own
+    // `features` lists `provider-outside-oats`: on a kernel without it nothing is said of it.
+    ...(source.sessionEnd ? { sessionEnd: source.sessionEnd } : {}),
+    ...outsideOf(source, features),
     waiting: waiting
       ? { reason: waiting.reason ?? "attention", message: waiting.message ?? null, since: waiting.since ?? null }
       : null,
   };
+}
+
+function outsideOf(source: z.output<typeof row>, features: readonly string[]): { outsideOats?: NonNullable<Agent["outsideOats"]> } {
+  if (!features.includes(OUTSIDE_FEATURE)) return {};
+  const report = readOutsideOats(source.outsideOats, { backend: source.backend ?? null, running: source.running ?? null, runtimeState: source.runtimeState ?? null });
+  return report === null ? {} : { outsideOats: report };
 }
 
 /** The roster's instances, in the kernel's order. */
@@ -104,7 +121,7 @@ export function parseStatus(document: unknown): Result<Status> {
   for (const group of parsed.value.agents) {
     const { instances, ...agent } = group;
     for (const source of instances) {
-      agents.push(toAgent(group, source));
+      agents.push(toAgent(group, source, parsed.value.features ?? []));
       rows.push({ row: source, agent });
     }
   }

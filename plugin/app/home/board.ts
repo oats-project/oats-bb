@@ -35,14 +35,15 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
   const threaded: Entry[] = flatten(view.roots).map((node: Node) => ({ agent: node.agent, thread: node.thread, status: agentStatus(node.agent, node.thread, now) }));
   const threadless: Entry[] = [...view.detached, ...view.elsewhere].map((agent) => ({ agent, thread: null, status: agentStatus(agent, null, now) }));
   const all = [...threaded, ...threadless];
-  const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0 };
+  const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 };
   for (const entry of all) counts[entry.status.state] += 1;
   const order = new Map(all.map((entry, index) => [entry.agent.instance, index]));
   // Those a person can answer here (they have a thread in bb) come before those answered elsewhere;
   // within each, the newest claim first, then the sidebar's order.
   const here = (entry: Entry): number => (entry.thread === null ? 1 : 0);
   const needsYou = all
-    .filter((entry) => entry.status.state === "needs-you")
+    // (An agent that runs outside OATS is among them, as in the sidebar's foot and `view.needing`: its card says why; app/outside.)
+    .filter((entry) => entry.status.state === "needs-you" || entry.status.state === "outside")
     .sort((a, b) => here(a) - here(b) || instant(b) - instant(a) || (order.get(a.agent.instance) ?? 0) - (order.get(b.agent.instance) ?? 0));
   const unread = new Set(view.finished.map((node) => node.agent.instance));
   return {

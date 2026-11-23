@@ -4,7 +4,8 @@
 // For each view (bb's light and dark themes, at each width) one agent of its own is spawned as a
 // person's would be, on its worktree, and then, as a person does it:
 //   Stop     from the row's menu in the sidebar: the plan, confirmed; the kernel's row reads stopped
-//   Start    from the row's menu: the agent as the kernel has it now; started on a new thread
+//   Start    from the row's menu, or, on a provider that archived the thread at the stop, from the
+//            archived thread's own row: the agent as the kernel has it now; started on a new thread
 //   Restart  from the thread's own menu: restarted on a new thread
 //   Retire   from the thread's own menu: the plan, confirmed; the kernel has no such agent after it
 // A state is the same in both themes, so that each is real in light and in dark: at 1280 the agent
@@ -24,9 +25,46 @@ const words = (instance) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+/** What the Stop dialog says a stop means for the agent's bb thread (app/lifecycle/words.ts `stopThreadSentence`). */
+const stopSentence = (archives) => (archives ? "Its thread is archived. To talk to it again, start it." : "A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+/** The plugin's own threshold and its shape of a release (app/lifecycle/words.ts `ARCHIVES_AT_STOP_FROM`, `RELEASE`): restated here, a run cannot read the app's code; they move together. */
+const ARCHIVES_AT_STOP_FROM = "0.4.0";
+const RELEASE = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
+/**
+ * Whether a provider of this version archives the thread of a home it stops, compared as the
+ * plugin compares it (app/lifecycle/words.ts `stopArchivesThread`): a release from 0.4.0 on,
+ * numerically, part by part; a pre-release of 0.4.0 itself, a version that is no release (a commit,
+ * for a provider pinned by one) and none at all do not.
+ */
+function archivesByVersion(version) {
+  const [have, need] = [typeof version === "string" ? RELEASE.exec(version) : null, RELEASE.exec(ARCHIVES_AT_STOP_FROM)];
+  if (have === null || need === null) return false;
+  for (const part of [1, 2, 3]) {
+    const [mine, theirs] = [Number(have[part]), Number(need[part])];
+    if (mine !== theirs) return mine > theirs;
+  }
+  return have[4] === undefined;
+}
+
 export default async (run) => {
   const { step, check, show, note, until, oats, rowOf, rpc, recorded, fixtures, evidence, views, OUT } = run;
   let view = 0;
+
+  // The Stop dialog says two things of the agent's thread, from two facts. Before the stop (the
+  // confirmation): what a provider of this VERSION does, the version being the one the kernel
+  // prints for the capability, read here once as the plugin's server reads it. After it (the
+  // result): what bb shows of the thread, which is what the stop did (run.stopArchives()).
+  const shown = oats("capabilities", "show", "oats.bb", "--json");
+  let providerVersion = null;
+  try {
+    const version = JSON.parse(shown.stdout).result?.version;
+    providerVersion = typeof version === "string" ? version : null;
+  } catch {
+    providerVersion = null; // no JSON printed: the check below says what was
+  }
+  check(shown.exit === 0 && providerVersion !== null, "oats capabilities show oats.bb --json names the provider's version", shown.stdout.slice(0, 300) || shown.stderr);
+  const saysArchives = archivesByVersion(providerVersion);
+  note(`the bb session provider's version, as the kernel prints it: ${JSON.stringify(providerVersion)}: the Stop dialog's confirmation ${saysArchives ? "says the thread is archived (a release from " + ARCHIVES_AT_STOP_FROM + ")" : "warns that a message in the thread starts the agent again (no release from " + ARCHIVES_AT_STOP_FROM + ": below it, a pre-release of it, or a commit)"}; its result says what the stop did (${run.stopArchives() === null ? "not read: no stop of this run yet" : run.stopArchives() ? "archived" : "kept"})`);
 
   /** An agent of its own, spawned on the command line as the plugin's spawn does it (full mode, on bb). */
   const spawn = (name, parent) => {
@@ -88,7 +126,7 @@ export default async (run) => {
     await ready();
     let said = await dialog(page);
     check(said.title === `Stop ${called}?` && said.about === name && /what will happen/i.test(said.body) && /what is kept/i.test(said.body) && said.body.includes("Nothing is deleted.") && said.focus === "oats-confirm-cancel", `${at} the Stop dialog is the kernel's plan for ${name}, as what will happen and what is kept, the focus on Cancel`, JSON.stringify(said));
-    check(said.body.includes("A message sent in its thread starts it again without OATS. To talk to it again, use Start."), `${at} it says what a stop means for the agent's thread`, said.body);
+    check(said.body.includes(stopSentence(saysArchives)) && !said.body.includes(stopSentence(!saysArchives)), `${at} before the stop it says what a provider of this version does to the agent's thread: "${stopSentence(saysArchives)}"`, said.body);
     if (child !== null) {
       check(said.body.includes(`Stops 2 sessions, children first: ${called}, ${words(child)}.`) && said.body.includes("Include child instances On"), `${at} with a child, the plan stops both, children first, and offers the choice`, said.body);
       // Without the children: the kernel is asked again, for the agent alone.
@@ -107,19 +145,41 @@ export default async (run) => {
     await settledAs("done", 120);
     said = await dialog(page);
     check(said.phase === "done" && said.body.includes(child === null ? `${called} stopped.` : "2 sessions stopped."), `${at} the dialog says that it stopped`, JSON.stringify(said));
+    // What the result says of the thread is what bb shows of it after the stop, whatever the version said before.
+    check(said.body.includes(stopSentence(run.stopArchives())) && !said.body.includes(stopSentence(!run.stopArchives())), `${at} after the stop it says what the stop did to the thread: "${stopSentence(run.stopArchives())}"`, said.body);
     row = await stopped(name);
     check(row?.session?.threadId === spawnedOn, "oats status: stopped, on the same thread", JSON.stringify(row?.session));
     if (child !== null) await stopped(child);
     await shot("stop-done");
     check(await close(), `${at} Close closes the dialog`);
 
-    // ---- Start, from the row's menu
-    check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
-    check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
-    check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
+    // ---- Start: from the row's menu, or, where the provider archived the thread at the stop, from the archived thread's own row
+    const stoppedOn = run.bbThread(spawnedOn);
+    check(run.stoppedThread(stoppedOn), `bb: the stop left the thread as this run's provider leaves one: ${run.stoppedAs()}`, JSON.stringify(stoppedOn ?? null));
+    if (!run.stopArchives()) {
+      check(await rowDrawn(spawnedOn), `${at} the stopped agent keeps its row`);
+      check(await openRowMenu(page, viewport, spawnedOn), `${at} its row's menu opens`);
+      check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed`);
+    } else {
+      // bb lists no archived thread: the agent keeps a row of the roster on no thread, which opens its
+      // archived conversation, and that thread's own row has the acts (scenario.mjs, archivedShots).
+      rpc("refresh");
+      await page.goto("/");
+      await showSidebar(page, viewport);
+      const kept = `document.querySelector('[data-testid="oats-agent-row-threadless"][data-instance="${name}"][data-opens="thread"]')`;
+      check(Boolean(await page.until(`${kept} !== null`, 60)), `${at} the stopped agent keeps its row, which opens its archived thread`, await page.evaluate(`(document.querySelector('[data-testid="oats-sidebar"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`));
+      await page.evaluate(`${kept}?.click()`);
+      const start = `document.querySelector('[data-testid="oats-identity-row"][data-outside="stopped-archived"] [data-testid="oats-agent-act-start"]')`;
+      const offered = await page.until(`location.pathname.endsWith("/threads/${spawnedOn}") && ${start} !== null && ${start}.disabled === false && ${start}.innerText.trim()`, 60);
+      check(offered === "Start…", `${at} the row opens the archived thread, whose own row offers Start…`, `${offered}; at ${await page.evaluate("location.pathname")}: ${await page.evaluate(`(document.querySelector('[data-testid="oats-identity-row"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`)}`);
+      await page.evaluate(`${start}?.click()`);
+    }
     await ready();
     said = await dialog(page);
-    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes("Starts a new conversation. The current one stays readable in bb, archived.") && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
+    // What the dialog says a start begins (app/lifecycle/words.ts START): for an agent bb lists a thread of, that the
+    // current conversation stays readable, archived; for one whose conversation is archived already (bb lists none), a new one.
+    const begins = run.stopArchives() ? "This starts a new conversation using the saved briefing and state." : "Starts a new conversation. The current one stays readable in bb, archived.";
+    check(said.title === `Start ${called}` && said.about === name && said.body.includes("Ready to start.") && said.body.includes("Runs in bb's full mode: no sandbox.") && said.body.includes(begins) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
     const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));

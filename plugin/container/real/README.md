@@ -171,6 +171,30 @@ bb. Screenshots at 1280x800 and 390x800 of the tree's row and the thread's heade
 working, idle, waiting for a person and stopped by OATS, and of its soul's page ("thread missing")
 once its thread is deleted in bb.
 
+**What a stop leaves of the thread, and the two providers.** The bb provider up to 0.3 stops a
+home's thread and leaves it open in bb; from the release that archives at stop (oats-bb #40) it
+stops and archives it. The run is right with both, and reads which one it has: from what its
+first stop did (A7: the thread is archived, or there and not active), not from the provider's
+manifest, whose version is the same in both until a release names the new one. It says so in a
+NOTE and in its last line, and every later stop must leave the same (`run.stopArchives()`,
+`run.stoppedThread()`, for the parts). With a provider that keeps the thread, everything is as
+above. With one that archives: the images of the stopped agent are of its row of the roster on no
+thread ("Stopped", its soul, the plain tone; bb lists no archived thread), which opens the
+archived conversation, and of that thread's own row ("Stopped", since when, "Its conversation is
+archived in bb. Start begins a new one.", with Start… and Retire…); and the lifecycle's part
+presses Start from that row instead of the row's menu, where the Start dialog says "This starts a
+new conversation using the saved briefing and state.". What the read cannot tell: a provider that
+changed what its stop does, at every stop alike, passes as the other kind; the NOTE is where to
+look.
+
+The Stop dialog says two things of the thread, and the lifecycle's part holds each to its own
+fact: before the stop, what a provider of the version the kernel prints does (`oats capabilities
+show oats.bb --json`, compared as the plugin compares it: a release from 0.4.0 archives); after
+it, what bb shows of the thread. This run's workspace pins the provider by commit, and the kernel
+then prints the commit as its version: a commit pin reads as "not known to archive", so the
+confirmation warns on both providers here, and only the result differs. A provider pinned by a
+release is not exercised by this run.
+
 **The question** (A5c): a message in the agent's thread makes the mock have Claude Code call
 AskUserQuestion. bb then holds a pending interaction, and the hook oats.core wrote into the home's
 Claude settings sets a waiting claim: `oats status --json` shows it with `producer: "oats.core"`,

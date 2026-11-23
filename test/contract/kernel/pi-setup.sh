@@ -20,6 +20,16 @@ echo "== the provider, as it ships"
 cd "$RUN/provider"
 rm -rf .git
 git init -q -b main
+# Where the provider's floor refuses the kernel the image pins (a floor raised to an OATS
+# release the image does not hold yet), the trial floor of the README ("A trial against an
+# unreleased kernel"), as kernel/setup.sh does.
+FLOOR=$(node -pe 'JSON.parse(require("fs").readFileSync("oats-package/oats-package.json", "utf8")).compatibility.oats')
+if ! node -e 'const [floor,version]=process.argv.slice(1),m=/^>=(\d+)\.(\d+)\.(\d+)$/.exec(floor);if(!m)process.exit(1);const v=version.split(/[.-]/).map(Number);for(let i=0;i<3;i++){if(v[i]>+m[i+1])process.exit(0);if(v[i]<+m[i+1])process.exit(1)}process.exit(0)' "$FLOOR" "$KERNEL_VERSION"; then
+  for manifest in oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json; do
+    node -e 'const fs=require("fs"),[f,v]=process.argv.slice(1),m=JSON.parse(fs.readFileSync(f,"utf8"));m.compatibility.oats=">="+v;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$manifest" "$KERNEL_VERSION"
+  done
+  echo "pi-kernel-run: trial floor >=$KERNEL_VERSION in place of $FLOOR"
+fi
 git add -A
 commit -m "the provider's tree under test"
 SHIPPED=$(git rev-parse HEAD)

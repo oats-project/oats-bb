@@ -115,6 +115,22 @@ describe("A5 spawn", () => {
     expect(await leftInTemp()).toEqual([]);
   });
 
+  it("answers the kernel's marker of an unconfirmed spawn with the refusal, only where it is the literal true", async () => {
+    // SHAPED from the kernel's source, not recorded (a rollback that fails cannot be made in the real
+    // run): awebai/oats lib/core.mjs at v0.70.5, `unconfirmedSpawn` (3863-3865: `error.details =
+    // { ...error.details, unconfirmed: true }`) and the note of line 5235.
+    const message = "x-developer was not launched: oats.bb's session provider bb is not ready — rollback INCOMPLETE, clean up manually: instance home /abs/home: still present";
+    const refuse = (details: unknown) => fake.behave({ spawn: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_NOT_READY", message, details } }), exit: 1 } });
+    const spawn = () => oats.spawn({ soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" }, context());
+    await refuse({ unconfirmed: true });
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message, unconfirmed: true } });
+    await refuse({});
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message } });
+    await refuse({ unconfirmed: [{ key: "oats", reason: "unreachable", detail: "d" }] });
+    expect(await spawn()).toEqual({ ok: false, error: { code: "E_BACKEND_NOT_READY", message } });
+    expect(await leftInTemp()).toEqual([]);
+  });
+
   it("removes the task file when oats fails with no answer", async () => {
     await fake.behave({ spawn: { stdout: "", stderr: "oats: crashed\n", exit: 2 } });
     const spawned = await oats.spawn({ soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e", revision: "c557d8ec9a272ba1c1739dc3" }, context());

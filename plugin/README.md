@@ -381,14 +381,18 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, whose rollback the
-  kernel finished, or a call that never reached the kernel. Where the kernel says its rollback is
-  INCOMPLETE, part of the instance may still be there whatever the code: the form stays held,
-  says so, and the kernel's message under Details names what to clean up. (The kernel's marker
-  for this is `error.details.unconfirmed`; the plugin's envelope carries the code and the message
-  only, so the form reads the kernel's own words for it in the message, "rollback INCOMPLETE",
-  which every such path of the kernel writes: `model/spawn.ts` says where.) **Created**, where the kernel says an instance exists whose start did not
+  kernel finished, or a call that never reached the kernel. Where the kernel marks that it could
+  not confirm what is left (its rollback is incomplete), part of the instance may still be there
+  whatever the code: the form stays held, says so, and the kernel's message under Details names
+  what to clean up. It is read from the kernel's own marker, `error.details.unconfirmed: true`,
+  never from the words of its message: the envelope keeps the marker beside the code and the
+  message (`kernel/envelope.ts`, `KernelError.unconfirmed`; nothing else of an error's `details`
+  passes, and a `details.unconfirmed` that is not the literal `true` is no marker), and the
+  server's refusal carries it to the app as the refusal's one issue (`server/core.ts` `refusal`,
+  `contract/shared.ts` `isUnconfirmed`). **Created**, where the kernel says an instance exists whose start did not
   finish, or the spawn went through and named no thread: the form stays held, says so, and sends
-  the person to the sidebar. **Unknown** for everything else (the kernel's "could not confirm", a
+  the person to the sidebar; this is read before the marker, which the kernel also sets on an
+  instance it kept (`E_SPAWN_INCOMPLETE`). **Unknown** for everything else (the kernel's "could not confirm", a
   time limit, an `oats`, a machine or a server that ended without an answer or with one the plugin
   cannot read, a code nobody classed): rollback is never inferred. There the fields stay held and
   the one act is **Check result** (held like the acts while OATS cannot be read): it asks again under the same idempotency key, so the kernel

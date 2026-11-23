@@ -29,6 +29,8 @@ const STATES = [
   ["stopped", "Stopped", "stopped"],
   ["error", "Failed", "failed"],
   ["unreachable", "Unreachable", "unreachable"],
+  // OATS recorded it stopped and the kernel reports its harness running (the outside feature: README, "Outside OATS").
+  ["outside", "Running outside OATS", "running outside OATS"],
 ];
 
 export default [
@@ -43,7 +45,7 @@ export default [
           `JSON.stringify([...document.querySelectorAll('${testId("oats-patterns-state-list")} li')].map((li) => [li.querySelector('${testId("oats-state")}').getAttribute("data-state"), li.querySelector('${testId("oats-state")}').innerText.replace(/^!\\s*/, "").trim(), li.querySelector('[role="img"]').getAttribute("aria-label"), li.querySelector('${testId("oats-state")} [aria-hidden="true"]') !== null]))`,
         ),
       );
-      check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the six states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
+      check(JSON.stringify(drawn) === JSON.stringify(STATES.map((state) => [...state, true])), `${at} the seven states: each a mark and its word, the mark beside the word hidden from a screen reader, the lone mark named`, JSON.stringify(drawn));
       const lines = await page.evaluate(texts(book("oats-status-line")));
       check(lines[0] === "! Needs you · waiting 27 min (since 14:03) · Asked you a question Open" && lines[1] === "Working", `${at} the status line: the word, since when, the reason, the act`, JSON.stringify(lines));
       await page.shot(`patterns-${viewport.name}-states`, { targets: true });
@@ -285,6 +287,19 @@ export default [
         await page.press("Escape");
         await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       }
+      // An act that runs in a place that tells its result elsewhere: the dialog says it can be left, Close is on and holds the focus, and it closes.
+      await page.evaluate(`document.querySelector('${testId("oats-patterns-open-leaving")}').focus()`);
+      await page.press("Enter");
+      await page.until(visible(testId("oats-confirm-leave")), 10);
+      const leaving = JSON.parse(await page.evaluate(`JSON.stringify({ phase: document.querySelector('${testId("oats-confirm")}').getAttribute("data-phase"), line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, cancel: document.querySelector('${testId("oats-confirm-cancel")}') !== null, act: document.querySelector('${testId("oats-confirm-act")}').disabled, focus: ${FOCUSED} })`));
+      check(
+        leaving.phase === "running" && leaving.line === "You can close this; retiring continues." && leaving.close === "Close" && leaving.cancel === false && leaving.act === true && leaving.focus === "oats-confirm-leave",
+        `${at} an act that runs and can be left: the dialog says so, Close stands in Cancel's place and holds the focus, the act cannot be asked again`,
+        JSON.stringify(leaving),
+      );
+      await page.shot(`patterns-${viewport.name}-confirm-leaving`, { targets: true });
+      await page.press("Escape");
+      check(Boolean(await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10)), `${at} Escape leaves it`);
       // A result that is not confirmed: neither done nor failed, with its code after the words and the next step.
       await page.evaluate(`document.querySelector('${testId("oats-patterns-open-unknown")}').focus()`);
       await page.press("Enter");
@@ -321,21 +336,28 @@ export default [
       await page.until(`document.querySelector('${testId("oats-modal")}') === null`, 10);
       // A result through bb's own toaster (app/ui/notify.ts): `sonner` is bb's shim in the BUILT plugin, so the
       // toast is one bb draws. A result leaves by itself; a failure stays until it is dismissed.
-      const toasts = `[...document.querySelectorAll("[data-sonner-toast]")].map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      // bb puts toasts of its own in the same toaster (seen: "Enjoying bb? A star on GitHub helps bb grow."):
+      // the plugin's are found by what they say, never by their place or their number among bb's.
+      const ours = `[...document.querySelectorAll("[data-sonner-toast]")].filter((toast) => toast.innerText.includes("Weekly digest helper"))`;
+      const toasts = `${ours}.map((toast) => ({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((label) => label !== "") }))`;
+      const STARTED = "Weekly digest helper started.";
+      const REFUSED = "Weekly digest helper wasn't started";
+      const says = (text) => `${toasts}.some((toast) => toast.text.includes(${JSON.stringify(text)}))`;
       await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-failed")}').click()`);
       await page.evaluate(`document.querySelector('${testId("oats-patterns-notify-done")}').click()`);
-      const drawn = await page.until(`(() => { const all = ${toasts}; return all.length === 2 ? JSON.stringify(all) : null; })()`, 10);
+      const drawn = await page.until(`${says(STARTED)} && ${says(REFUSED)} ? JSON.stringify(${toasts}) : null`, 10);
       const both = drawn ? JSON.parse(drawn) : [];
       check(
-        both.some((toast) => toast.text.startsWith("Weekly digest helper started.") && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes("Weekly digest helper wasn't started") && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
+        both.some((toast) => toast.text.startsWith(STARTED) && toast.buttons.includes("Open Weekly digest helper")) && both.some((toast) => toast.text.includes(REFUSED) && toast.text.includes("OATS refused this start as busy. Nothing was started.")),
         `${at} a result and a failure are told through bb's own toaster: the result with "Open <agent>", the failure with its sentence`,
         JSON.stringify(both),
       );
       await page.shot(`patterns-${viewport.name}-toasts`);
-      const left = await page.until(`(() => { const all = ${toasts}; return all.length === 1 ? JSON.stringify(all) : null; })()`, 15);
-      check(Boolean(left) && JSON.parse(left)[0].text.includes("wasn't started"), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
-      await page.evaluate(`document.querySelector('[data-sonner-toast] button[aria-label="Dismiss notification"]')?.click()`);
-      await page.until(`document.querySelectorAll("[data-sonner-toast]").length === 0`, 10);
+      const left = await page.until(`!${says(STARTED)} && ${says(REFUSED)} ? JSON.stringify(${toasts}) : null`, 15);
+      check(Boolean(left), `${at} the result leaves by itself; the failure stays until it is dismissed`, String(left));
+      // Its own Dismiss, not the first toast's: bb's may stand before it.
+      await page.evaluate(`${ours}.find((toast) => toast.innerText.includes(${JSON.stringify(REFUSED)}))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+      check(Boolean(await page.until(`${ours}.length === 0`, 10)), `${at} the failure leaves when it is dismissed`);
     },
   },
 ];

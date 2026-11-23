@@ -2,8 +2,8 @@
 // A12: Stop, Start, Restart and Retire in the thread menu (experimental_threadAction), and the
 // dialog of each that the plugin's overlay draws: the kernel's plan as what will happen and what
 // is kept, the act in progress, its result and its refusal (parity D-158 to D-173).
-import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { BbNavigate, PluginThreadAction, PluginThreadActionTarget } from "@get-bb/plugin-sdk/app";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -36,14 +36,16 @@ const target = (id: string): PluginThreadActionTarget => {
  * What bb does with the plugin's registrations: calls each `useData` in the plugin's scope, asks
  * each `item` for one thread, and mounts the plugin's overlay once per app window.
  */
-async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Agent[]) {
+async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Agent[], sdk: object = modelsSdk()) {
   const app = await loadApp();
   expect(app.threadActions.map((action) => [action.id, action.group])).toEqual([
-    ["stop", "4_lifecycle"],
-    ["start", "4_lifecycle"],
-    ["restart", "4_lifecycle"],
-    ["retire", "4_lifecycle"],
-    ["unreadable", "4_lifecycle"],
+    // A group of the plugin's own, which bb sets apart from its own Stop, Archive and Delete ("4_lifecycle") with a separator.
+    ["agent", "3_oats"],
+    ["stop", "3_oats"],
+    ["start", "3_oats"],
+    ["restart", "3_oats"],
+    ["retire", "3_oats"],
+    ["unreadable", "3_oats"],
   ]);
   expect(app.appOverlays).toHaveLength(1);
   const Overlay = app.appOverlays[0]!.component;
@@ -63,11 +65,12 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
       },
     },
     {},
-    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads(), sdk: modelsSdk() },
+    { rpc: handlers(over, agents), sidebarThreads: sidebarThreads(), sdk: sdk as never },
   );
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null ? [] : [id]));
+  // (The acts that show; the group's first row, which names the agent, has its own test.)
+  const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null || id === "agent" ? [] : [id]));
   const pick = (id: string) => items[id]!.run({ requestRename: () => {} });
   return { slot, shown, pick, label: (id: string) => items[id]!.label, item: (id: string) => items[id] ?? null };
 }
@@ -95,10 +98,10 @@ test("each action shows only in the states it applies to", async () => {
   const with_ = (change: Partial<Agent>) => fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, ...change } : agent));
   expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
-  // A row the kernel calls not running with a word that is none of the known ones (a provider
-  // outside the kernel's table could print it): it reads Stopped, and is started, as its thread's
-  // own row offers. (The state's rule: test/model/view.test.ts.)
-  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["start", "retire"]);
+  // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
+  // is loaded) is IDLE, not stopped: the menu is an idle agent's, and the thread's own row says
+  // what a message and Start each do, with Start (app/outside; the state's rule: test/model/view.test.ts).
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown" }))).toEqual(["stop", "restart", "retire"]);
   expect(await by("thr_harvest", with_({ running: false, runtimeState: null }))).toEqual(["start", "retire"]);
   // Stopped while it still carries a claim: it reads Stopped, as on the Desktop (waiting-on-you.mjs
   // `waitingClaim` at 95c7b43b3; the spec's author changed this case on 2026-11-21), and is started.
@@ -209,10 +212,10 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
   expect(slot.getByTestId("oats-confirm").textContent).toContain("Stopping Redesign ui lead. This can take up to a minute.");
-  // While it runs the dialog cannot be dismissed into a lost result.
-  expect(button(slot, "oats-confirm-cancel").disabled).toBe(true);
-  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
-  expect(slot.getByRole("dialog")).toBeTruthy();
+  // While it runs the act cannot be asked twice, and the dialog says that it can be left: its result is never lost
+  // (it is told through the toaster then: the tests of "a way out of a dialog whose act runs", below).
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; stopping continues.");
   release();
   await phase(slot, "done");
   const result = slot.getByTestId("oats-result");
@@ -518,8 +521,10 @@ test("Retire without the tick applies the plan and keeps the worktree; the resul
   expect(texts(result, "p")).toEqual([
     "1 child instance stopped and kept.",
     "Home folder deleted.",
-    "Worktree kept at /abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper.",
-    "Recovery copy saved at /abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+    "Worktree kept, at:",
+    "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
+    "Recovery copy saved at:",
+    "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
     "Its conversation stays readable in bb, archived.",
   ]);
   expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });
@@ -765,6 +770,22 @@ test("a command acts on the agent whose thread is in view: it opens the act's di
   expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
 });
 
+test("a command on an agent that runs outside OATS: Stop and Start open their dialogs; Restart says it cannot, and never that the agent is stopped", async () => {
+  // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`): its state is "Running outside OATS".
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, outsideOats: report } : agent));
+  const { slot, shown } = await menu("thr_digest", {}, agents);
+  expect(shown()).toEqual(["stop", "start", "retire"]);
+  const { asked, commands } = await import("../../app/lifecycle");
+  const press = (id: string) => commands.find((each) => each.id === id)!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  await press("agent-restart");
+  expect(notified().at(-1)).toMatchObject({ tone: "hint", title: "Weekly digest helper can't be restarted now." });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/is stopped/);
+  expect(slot.queryByRole("dialog")).toBeNull();
+  await press("agent-stop");
+  expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+});
+
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const { slot } = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
@@ -897,7 +918,7 @@ test("the Start dialog draws the kernel's row (a record the agent can write) thr
   }
 });
 
-test("a start that fails after the person moved on is told through the toaster with Open; one that is not confirmed is told as that, not as a failure", async () => {
+test("a start that fails after the person moved on is told through the toaster with Show result; one that is not confirmed is told as that, not as a failure", async () => {
   for (const [refusal, tone] of [
     ["E_SESSION_START_BUSY: a start is already in progress", "failed"],
     ["E_SPAWN_INCOMPLETE: launch requires inspection", "unknown"],
@@ -914,9 +935,13 @@ test("a start that fails after the person moved on is told through the toaster w
     await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper?"));
     fail();
     await waitFor(() => expect(notified().length).toBe(before + 1));
-    expect(notified().at(-1)).toMatchObject({ tone, open: { label: "Open Weekly digest helper" } });
-    notified().at(-1)!.open!.run();
-    expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
+    // Neither is a result a toast can hold (a refusal has Details and Refresh status): it stays, and Show result
+    // opens the Start dialog again on it, in the place of the dialog the person had moved on to.
+    expect(notified().at(-1)).toMatchObject({ tone, stays: true, open: { label: "Show result" } });
+    act(() => notified().at(-1)!.open!.run());
+    await waitFor(() => expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Weekly digest helper"));
+    expect(slot.getByTestId("oats-result")).toBeTruthy();
+    expect(slot.inspection.navigateCalls).toEqual([]);
     resetApp();
   }
 });
@@ -1281,4 +1306,371 @@ test("a cut-off agent whose thread cannot take a message gets no line: bb says i
   expect(archived.text).toContain("This starts a new conversation using the saved briefing and state.");
   const there = await withThreads(fixtureThreads());
   expect(there.line).toBe(true);
+});
+
+// ---- a way out of a dialog whose act runs
+
+test("while a stop runs the dialog says it can be closed and that stopping continues; closed, the result reaches the person through the toaster", async () => {
+  let answer!: (receipt: ReturnType<typeof stopReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof stopReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; stopping continues.");
+  // Close, not Cancel: nothing is cancelled. The act's own button stays off.
+  expect(slot.queryByTestId("oats-confirm-cancel")).toBeNull();
+  expect(button(slot, "oats-confirm-leave").textContent).toBe("Close");
+  expect(button(slot, "oats-confirm-leave").disabled).toBe(false);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+  const before = notified().length;
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  expect(notified().length).toBe(before); // nothing is said before there is a result
+  answer(stopReceiptOf());
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  // A stop that is done is told whole, with the way to the agent, and may leave by itself: a toast can hold it.
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "done", title: "3 sessions stopped.", open: { label: "Open Redesign ui lead" } });
+  expect(toast.stays).toBeUndefined();
+  expect(toast.lines).toEqual(["Harvest knowledge helper: Was already stopped", "Desktop mockups developer: Stopped", "Redesign ui lead: Stopped", "A message sent in its thread starts it again without OATS. To talk to it again, use Start."]);
+  expect(calls(slot, "stopApply")).toHaveLength(1);
+});
+
+test("a restart that runs says that it can be closed and that restarting continues", async () => {
+  const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }), restart: () => new Promise(() => undefined) });
+  await pick("restart");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; restarting continues.");
+  expect(button(slot, "oats-confirm-leave").disabled).toBe(false);
+});
+
+test("Escape leaves a running dialog too, and a refusal that arrives after it is told as a failure, never lost", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; retiring continues.");
+  fireEvent.keyDown(slot.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  refuse(new Error("E_CHILDREN_RUNNING: a child would not stop"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "failed", title: "Weekly digest helper wasn't retired" });
+});
+
+test("a start that runs can be left as well: the dialog says so, and the start's result comes through the toaster with the way to the new thread", async () => {
+  let answer!: (started: ReturnType<typeof startedIn>) => void;
+  const held = new Promise<ReturnType<typeof startedIn>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  expect(slot.getByTestId("oats-confirm-leave-line").textContent).toBe("You can close this; starting continues.");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  const before = notified().length;
+  answer(startedIn("thr_digest_2"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Weekly digest helper started." });
+  // The person left: the new thread is offered, not opened under them.
+  expect(slot.inspection.navigateCalls).toEqual([]);
+});
+
+// ---- a retire refused while bb lists a pi agent's models
+
+test("a retire of an agent that runs pi on bb, refused because a process works in its home, says to try again in a minute; for another harness it does not", async () => {
+  const refusal = "E_RUNTIME_QUIESCE_FAILED: the bb session of weekly-digest-helper stopped, and a process works in its home (pid 4242 pi); stop it, then retire again.";
+  const WAIT = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
+  const refused = async (harness: string | null) => {
+    const { slot, pick } = await menu("thr_digest", {
+      retirePlan: () => retirePlanOf(undefined, harness),
+      retireApply: () => {
+        throw new Error(refusal);
+      },
+    });
+    await pick("retire");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "failed");
+    const text = slot.getByTestId("oats-result").textContent!;
+    resetApp();
+    return text;
+  };
+  const pi = await refused("pi");
+  expect(pi).toContain("OATS says: the bb session of weekly-digest-helper stopped, and a process works in its home (pid 4242 pi); stop it, then retire again.");
+  expect(pi).toContain(WAIT);
+  expect(pi.indexOf(WAIT)).toBeGreaterThan(pi.indexOf("OATS says:"));
+  expect(await refused("claude")).not.toContain(WAIT);
+  expect(await refused(null)).not.toContain(WAIT);
+});
+
+// ---- what a stop's result says of the thread is what bb shows of it
+
+test("a stop's result says of the agent's thread what bb shows after the stop: archived, or still taking messages; where bb cannot be asked, what the confirmation said", async () => {
+  const MESSAGE = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+  const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
+  const stopped = async (get: (args: { threadId: string }) => Promise<unknown>) => {
+    const asked: string[] = [];
+    const sdk = { ...modelsSdk(), threads: { get: (args: { threadId: string }) => (asked.push(args.threadId), get(args)) } };
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => stopReceiptOf() }, undefined, sdk);
+    await pick("stop");
+    await ready(slot);
+    // Before the act the dialog says what the provider's version says: today, that a message starts it again.
+    expect(slot.getByTestId("oats-confirm").textContent).toContain(MESSAGE);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "done");
+    const text = slot.getByTestId("oats-result").textContent!;
+    resetApp();
+    return { text, asked };
+  };
+  // bb shows the thread archived (a provider that archives at stop): the result says so, whatever the confirmation said.
+  const archived = await stopped(async ({ threadId }) => ({ id: threadId, archivedAt: 1_763_000_000_000 }));
+  expect(archived.asked).toEqual(["thr_redesign"]); // bb is asked once, for the agent's own thread, after the stop
+  expect(archived.text).toContain(ARCHIVED);
+  expect(archived.text).not.toContain(MESSAGE);
+  // bb shows it as it was: a message there still starts the agent.
+  const live = await stopped(async ({ threadId }) => ({ id: threadId, archivedAt: null }));
+  expect(live.text).toContain(MESSAGE);
+  expect(live.text).not.toContain(ARCHIVED);
+  // bb cannot be asked, or answers nothing of it: not known, and the result keeps the confirmation's sentence.
+  for (const get of [async () => Promise.reject(new Error("bb did not answer")), async () => ({ id: "thr_redesign" }), async () => null]) {
+    const unknown = await stopped(get);
+    expect(unknown.text).toContain(MESSAGE);
+    expect(unknown.text).not.toContain(ARCHIVED);
+  }
+});
+
+test("bb is not asked about the thread after a stop that did not stop every session", async () => {
+  const asked: string[] = [];
+  const sdk = { ...modelsSdk(), threads: { get: async (args: { threadId: string }) => (asked.push(args.threadId), { archivedAt: null }) } };
+  const failed = { ...stopReceiptOf(), ok: false };
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => failed }, undefined, sdk);
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(asked).toEqual([]);
+});
+
+// ---- the OATS entries in bb's menu
+
+test("the OATS entries start with a row that names the agent and its state, off; a thread that is no agent's has none", async () => {
+  const working = await menu("thr_redesign");
+  expect(working.item("agent")).toMatchObject({ label: "Redesign ui lead · Working", disabled: true });
+  resetApp();
+  const stopped = await menu("thr_digest");
+  expect(stopped.item("agent")).toMatchObject({ label: "Weekly digest helper · Stopped", disabled: true });
+  resetApp();
+  expect((await menu("thr_plain")).item("agent")).toBeNull();
+});
+
+// ---- what the toaster tells of an act whose dialog is gone
+
+/** Leave the dialog of `verb` while it runs: the press, the wait for the running line, Close. */
+async function leave(slot: Awaited<ReturnType<typeof menu>>["slot"]) {
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  fireEvent.click(button(slot, "oats-confirm-leave"));
+  await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
+  return notified().length;
+}
+
+test("a retire that is left while it runs and keeps the home: the toast stays, says first that its thread can bring it back with no OATS around it, and Show result opens the dialog on the whole result", async () => {
+  let answer!: (receipt: ReturnType<typeof retireReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof retireReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
+  await ready(slot);
+  const before = await leave(slot);
+  answer({ ...retireReceiptOf(), removedDir: false, retainedHome: "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", recoveryPath: null, incomplete: ["retire hook oats.aweb: the team certificate could not be removed (exit 1)"] });
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "failed", title: "Retirement didn't finish", stays: true });
+  // What the dialog sets apart, first and in the warning tone, is the toast's one line: a toast has no place apart.
+  expect(toast.lines).toEqual(["Its home was kept. Its thread can be unarchived in bb, and a message then starts it again with no OATS around it."]);
+  expect(toast.open!.label).toBe("Show result");
+  // Show result: the dialog again, on that result, with the warning, the steps and Details; the kernel is not asked.
+  const asked = calls(slot, "retirePlan", "retireApply").length;
+  act(() => toast.open!.run());
+  await phase(slot, "failed");
+  expect(within(slot.getByTestId("oats-act-warning")).getByTestId("oats-notice").getAttribute("data-tone")).toBe("warning");
+  expect(slot.getByTestId("oats-result").textContent).toContain("Home folder kept, at:");
+  expect(slot.getByTestId("oats-act-details").textContent).toContain("the team certificate could not be removed");
+  expect(calls(slot, "retirePlan", "retireApply")).toHaveLength(asked);
+});
+
+test("a retire that finished after its dialog was left: the toast stays until dismissed, and Show result opens where the worktree and the recovery copy are, and the warnings", async () => {
+  let answer!: (receipt: ReturnType<typeof retireReceiptOf>) => void;
+  const held = new Promise<ReturnType<typeof retireReceiptOf>>((resolve) => (answer = resolve));
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => held });
+  await pick("retire");
+  await ready(slot);
+  const before = await leave(slot);
+  answer({ ...retireReceiptOf(), warnings: ["the bb thread of weekly-digest-helper could only be archived"] });
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  // Done, and not lost to a timer: what it leads to can be read nowhere else once the agent's row is gone.
+  expect(toast).toMatchObject({ tone: "done", title: "Weekly digest helper retired.", stays: true, lines: [] });
+  expect(toast.open!.label).toBe("Show result");
+  act(() => toast.open!.run());
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result").textContent!;
+  expect(result).toContain("Worktree kept, at:");
+  expect(result).toContain("/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper");
+  expect(result).toContain("Recovery copy saved at:");
+  expect(result).toContain("OATS says: the bb thread of weekly-digest-helper could only be archived");
+});
+
+test("a stop that is left and whose answer is lost: the toast says the result is not confirmed and names no button; Show result opens the dialog, where Check again asks for THAT apply", async () => {
+  let second = false;
+  const { slot, pick } = await menu("thr_redesign", {
+    stopPlan: () => stopPlanOf(),
+    stopApply: () => {
+      if (second) return stopReceiptOf();
+      second = true;
+      return new Promise((_, reject) => setTimeout(() => reject(new Error("OATS_TIMEOUT: `oats` did not answer within 120 s and was stopped")), 30));
+    },
+  });
+  await pick("stop");
+  await ready(slot);
+  const before = await leave(slot);
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "unknown", title: "Result not confirmed", lines: [] });
+  expect(JSON.stringify({ ...toast, open: toast.open!.label })).not.toMatch(/Check again|Review again|Details/);
+  act(() => toast.open!.run());
+  await waitFor(() => expect(slot.getByTestId("oats-result").getAttribute("data-tone")).toBe("unknown"));
+  fireEvent.click(button(slot, "oats-act-check"));
+  await phase(slot, "done");
+  // The same apply was asked for: its revision and its key, which the result kept.
+  const sent = calls(slot, "stopApply").map((call) => call.input as { key: string; revision: string });
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toEqual(sent[0]);
+});
+
+test("a start that is refused after its dialog was left: the toast names no button of the dialog, and Show result opens the refusal with Refresh status and Details", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  const before = await leave(slot);
+  refuse(new Error("E_WORKSPACE_PATH_UNSAFE: directory instance home was removed or exchanged"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  const toast = notified().at(-1)!;
+  expect(toast).toMatchObject({ tone: "failed", title: "OATS refused to start Weekly digest helper", lines: [], stays: true });
+  expect(toast.open!.label).toBe("Show result");
+  const checks = calls(slot, "startCheck").length;
+  act(() => toast.open!.run());
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").textContent).toContain("OATS says: directory instance home was removed or exchanged");
+  expect(slot.getByTestId("oats-act-details")).toBeTruthy();
+  expect(calls(slot, "startCheck")).toHaveLength(checks); // nothing is asked until the person asks
+  expect(slot.getByTestId("oats-start-refresh")).toBeTruthy();
+});
+
+// ---- a dialog opened again on a result keeps what the person had chosen
+
+test("Show result keeps a stop's choice of its children: Review again reads the plan the person had asked for", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: ({ recursive }) => ({ ...stopPlanOf(), recursive: recursive !== false }), stopApply: () => held });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(within(slot.getByTestId("oats-plan-choice")).getByRole("switch")); // without its children
+  await waitFor(() => expect(calls(slot, "stopPlan")).toHaveLength(2));
+  await ready(slot);
+  const before = await leave(slot);
+  refuse(new Error("E_SESSION_STOP_FAILED: its harness was signalled and still runs"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  act(() => notified().at(-1)!.open!.run());
+  await phase(slot, "failed");
+  fireEvent.click(button(slot, "oats-act-review"));
+  await waitFor(() => expect(calls(slot, "stopPlan")).toHaveLength(3));
+  expect(calls(slot, "stopPlan").map((call) => (call.input as { recursive?: boolean }).recursive)).toEqual([true, false, false]);
+});
+
+test("Show result keeps the harness and the model of a start that was refused: the field the refusal points at holds what was typed", async () => {
+  let refuse!: (cause: Error) => void;
+  const held = new Promise<never>((_, reject) => (refuse = reject));
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
+  await pick("start");
+  await ready(slot);
+  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  fireEvent.change(slot.getByTestId("oats-start-model"), { target: { value: "no-such-model" } });
+  const before = await leave(slot);
+  refuse(new Error("E_MODEL_UNKNOWN: pi has no model no-such-model"));
+  await waitFor(() => expect(notified().length).toBe(before + 1));
+  act(() => notified().at(-1)!.open!.run());
+  await phase(slot, "failed");
+  expect(slot.getByTestId("oats-result").textContent).toContain("Change it under “Model for this start”, or leave the field blank.");
+  fireEvent.click(button(slot, "oats-start-refresh"));
+  await ready(slot);
+  expect((slot.getByTestId("oats-start-harness") as HTMLSelectElement).value).toBe("pi");
+  expect((slot.getByTestId("oats-start-model") as HTMLInputElement).value).toBe("no-such-model");
+});
+
+test("a stop's result does not wait on bb's word of the thread beyond a moment: a read that never answers leaves the confirmation's sentence", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const sdk = { ...modelsSdk(), threads: { get: () => new Promise(() => undefined) } };
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => stopReceiptOf() }, undefined, sdk);
+    await pick("stop");
+    await ready(slot);
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "running");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100);
+    });
+    await phase(slot, "done");
+    expect(slot.getByTestId("oats-result").textContent).toContain("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// ---- the provider's version reaches the one function that decides what a stop says of the thread
+
+test("the Stop dialog says what the provider's version says a stop does to the thread: archived from oats-bb 0.4.0 on; a message starts it again below it, for a commit, and for none", async () => {
+  const MESSAGE = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+  const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
+  for (const [version, sentence, other] of [
+    ["0.3.0", MESSAGE, ARCHIVED],
+    ["0.4.0", ARCHIVED, MESSAGE],
+    ["0.10.0", ARCHIVED, MESSAGE],
+    ["0.4.0-rc.1", MESSAGE, ARCHIVED],
+    ["9b95a56f237ff4006a69545963d5130d6eb4ddc5", MESSAGE, ARCHIVED],
+    [null, MESSAGE, ARCHIVED],
+  ] as const) {
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, version), stopApply: () => stopReceiptOf() });
+    await pick("stop");
+    await ready(slot);
+    const said = slot.getByTestId("oats-confirm").textContent!;
+    expect(said, String(version)).toContain(sentence);
+    expect(said, String(version)).not.toContain(other);
+    // The result, where bb cannot be asked for the thread (this test gives it no such read): the same sentence.
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await phase(slot, "done");
+    expect(slot.getByTestId("oats-result").textContent, String(version)).toContain(sentence);
+    resetApp();
+  }
+});
+
+test("on a provider that archives at stop, the result still says what bb SHOWS: a thread bb holds live is told as one a message starts", async () => {
+  const sdk = { ...modelsSdk(), threads: { get: async ({ threadId }: { threadId: string }) => ({ id: threadId, archivedAt: null }) } };
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(undefined, "0.4.0"), stopApply: () => stopReceiptOf() }, undefined, sdk);
+  await pick("stop");
+  await ready(slot);
+  expect(slot.getByTestId("oats-confirm").textContent).toContain("Its thread is archived. To talk to it again, start it.");
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(slot.getByTestId("oats-result").textContent).toContain("A message sent in its thread starts it again without OATS. To talk to it again, use Start.");
 });

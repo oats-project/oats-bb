@@ -5,7 +5,7 @@ import { Button, Card, Chip, Code, Confirm, CopyButton, DisabledReason, Disclosu
 import type { ConfirmProps } from "../ui";
 import { instanceDisplayName, waitingLabel, waitingSince } from "../ui/words";
 
-const STATES: AgentState[] = ["needs-you", "working", "idle", "stopped", "error", "unreachable"];
+const STATES: AgentState[] = ["needs-you", "working", "idle", "stopped", "error", "unreachable", "outside"];
 const INSTANCE = "weekly-digest-helper";
 const NAME = instanceDisplayName(INSTANCE);
 // A fixed instant, so the page reads the same at every run.
@@ -26,6 +26,7 @@ const PHASES: Record<string, Phase> = {
   },
   ready: { kind: "ready" },
   running: { kind: "running", doing: "Retiring…" },
+  leaving: { kind: "running", doing: "Retiring…", leave: "You can close this; retiring continues." },
   done: { kind: "done", title: `${NAME} was retired.`, lines: ["Its work tree is kept, moved out of the home."] },
   failed: {
     kind: "failed",
@@ -82,6 +83,8 @@ export function PatternBook() {
         <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "question", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
+        {/* A line that warns (a stopped agent's live composer): the mark and the sentence in the warning tone; the time beside it is not toned. */}
+        <StatusLine state="stopped" since="since 14:03" detail="A message sent here in bb starts it again without OATS. Use Start." tone="warning" action={<Button>Start</Button>} />
         <StatusLine state="unreachable" detail="OATS cannot reach its session" action={<Button>Retry</Button>} />
       </section>
 
@@ -209,6 +212,9 @@ export function PatternBook() {
           </Button>
           <Button data-testid="oats-patterns-open-checking" onClick={() => setDialog({ destructive: false, phase: "checking" })}>
             Reading, in the place's own words
+          </Button>
+          <Button data-testid="oats-patterns-open-leaving" onClick={() => setDialog({ destructive: true, phase: "leaving" })}>
+            Running, and can be left
           </Button>
           <Button data-testid="oats-patterns-open-unknown" onClick={() => setDialog({ destructive: true, phase: "unknown" })}>
             A result that is not confirmed

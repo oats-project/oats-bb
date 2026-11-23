@@ -3,9 +3,6 @@
 // feature places (`AgentActs`), and the overlay that draws their dialogs. Every way in opens the
 // act's dialog: nothing runs on one press.
 import { useEffect, useState } from "react";
-import {
-  experimental_THREAD_ACTION_GROUPS as THREAD_ACTION_GROUPS,
-} from "@get-bb/plugin-sdk/app";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, Node } from "../../model/types";
 import { state } from "../../model/view";
@@ -16,7 +13,7 @@ import type { Oats } from "../oats";
 import { Button, DisabledReason } from "../ui";
 import { ActsOverlay, openAct } from "./acts";
 import { notify } from "../ui";
-import { agentName } from "../ui/words";
+import { agentName, STATE } from "../ui/words";
 import { cannotAct, NO_TARGET } from "./words";
 import type { Verb } from "./words";
 
@@ -42,7 +39,12 @@ export const ACTS: readonly {
   destructive: boolean;
   when: (state: AgentState, agent: Agent) => boolean;
 }[] = [
-  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, when: (state) => state === "working" || state === "idle" || state === "needs-you" },
+  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
+    // An agent that runs is stopped. So is one that runs outside OATS (the state "outside": OATS
+    // recorded it stopped and the kernel reports its harness running): Stop asks the provider to
+    // stop it again. README, "Outside OATS".
+    when: (state) => state === "working" || state === "idle" || state === "needs-you" || state === "outside",
+  },
   {
     verb: "start",
     button: "Start…",
@@ -57,7 +59,7 @@ export const ACTS: readonly {
     // same agents.
     when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped",
   },
-  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" },
+  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
@@ -145,7 +147,8 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
-  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you", known: state !== "unreachable" });
+  // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
+  const why = cannotAct(verb, agent.instance, { running: state === "working" || state === "idle" || state === "needs-you" || state === "outside", known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);
@@ -165,7 +168,33 @@ export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => 
   run: (context) => runCommand(act.verb, context.threadId),
 }));
 
+/**
+ * The OATS entries are a group of their own in bb's thread menus, which bb sets apart with a
+ * separator: by the SDK's string order of groups it stands after bb's organize group and before
+ * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire agent (OATS)" never
+ * stands directly over bb's Delete. The SDK allows no more: bb's own entries cannot be taken out
+ * of an agent's menu, nor asked to confirm.
+ */
+export const OATS_GROUP = "3_oats";
+
 export function register(app: PluginAppBuilder): void {
+  // The group's first row names the agent the entries act on, and its state: a menu covers the row
+  // it was opened from (at a phone's width, most of the list), and a person checks the target here.
+  // bb's menus have no heading: it is a row that is off.
+  app.slots.experimental_threadAction({
+    id: "agent",
+    // (bb also lists a thread action where a person picks a row's quick actions, by this title: it says what the row is.)
+    title: "OATS agent's name and state",
+    icon: ICON.oats,
+    group: OATS_GROUP,
+    order: -1,
+    useData: useActionData,
+    item: ({ thread, data }: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {
+      const node = data.oats.phase === "ready" ? data.oats.nodeByThread.get(thread.id) : undefined;
+      return node === undefined ? null : { label: `${agentName(node.agent.instance)} · ${STATE[node.state].word}`, icon: ICON.oats, disabled: true, run: () => undefined };
+    },
+  });
+
   // One lifecycle action each in every thread menu, shown only on a thread that is an OATS agent
   // and only in the states it applies to. Each goes through OATS, so a stopped agent stays stopped.
   ACTS.forEach((act, order) => {
@@ -173,7 +202,7 @@ export function register(app: PluginAppBuilder): void {
       id: act.verb,
       title: act.menu,
       icon: act.icon,
-      group: THREAD_ACTION_GROUPS.lifecycle,
+      group: OATS_GROUP,
       order,
       useData: useActionData,
       item: (input: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {
@@ -199,7 +228,7 @@ export function register(app: PluginAppBuilder): void {
     id: "unreadable",
     title: "OATS agents",
     icon: ICON.oats,
-    group: THREAD_ACTION_GROUPS.lifecycle,
+    group: OATS_GROUP,
     order: 4,
     useData: useActionData,
     item: ({ data }: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {

@@ -510,15 +510,22 @@ test("while the roster cannot be read the tab keeps the view of the agent it sho
 });
 
 test("while OATS cannot be read after it was, the home keeps what it showed, under the same notice as the sidebar's, with its age", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const slot = await homePage({
-    rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
-  });
-  const notice = await slot.findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
-  expect(notice.textContent).toContain("Showing what was read 2 min ago.");
-  expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
-  expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
+  // A clock of its own: the age it asserts is of a time it names, not of however long the test took.
+  const NOW = Date.parse("2026-11-20T10:00:00.000Z");
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  try {
+    const last = { at: new Date(NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+    const slot = await homePage({
+      rpc: handlers({ snapshot: () => ({ ok: false, at: new Date(NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
+    });
+    const notice = await slot.findByRole("alert");
+    expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
+    expect(notice.textContent).toContain("Showing what was read 2 min ago.");
+    expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
+    expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // ---- Home › Agents, the empty workspace, the agents with no bb thread, what is held while stale
@@ -824,6 +831,37 @@ test("the home's count of who needs you is the sidebar's: an agent on tmux that 
   const slot = await homePage({ rpc: handlers({}, agents) });
   expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you4");
   expect(slot.getByTestId("oats-home-summary").textContent).toContain(" · 4 need you");
+});
+
+test("an agent that runs outside OATS is one of those that need you, in every place by one number: the badge, the heading, the summary; its card holds the notice with Stop and Start, and no choice and no reply", async () => {
+  // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`; app/outside).
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb, and OATS recorded this instance stopped: stop it with `oats instance stop weekly-digest-helper`, or start it from OATS" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, sessionEnd: "stopped", outsideOats: report } : agent));
+  const before = await badge({ rpc: handlers({}, fixtureAgents()) });
+  let n = 0;
+  await waitFor(() => {
+    const now = before();
+    expect(now === null || now === "unset").toBe(false);
+    n = (now as ExperimentalBadge).count as number;
+  });
+  resetApp();
+  const latest = await badge({ rpc: handlers({}, agents) });
+  await waitFor(() => expect(latest()).toMatchObject({ count: n + 1, tone: "warning" }));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  expect(heading(await slot.findByTestId("oats-home-needs"))).toBe(`Needs you${n + 1}`);
+  const summary = slot.getByTestId("oats-home-summary").textContent!;
+  expect(summary).toContain(` · ${n + 1} need you`);
+  expect(summary).not.toMatch(/outside/i); // counted once, among those that need you
+  const card = await cardOf(slot, "weekly-digest-helper");
+  expect(offerOf(card)).toBe("outside");
+  expect(within(card).getByTestId("oats-state").textContent).toBe("Running outside OATS");
+  const notice = within(card).getByTestId("oats-outside-warning");
+  expect(notice.textContent).toContain("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
+  expect(Array.from(notice.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop", "Start"]);
+  for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(notice).getByRole("button", { name: "Stop" }));
+  expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 
 // ---- what a card offers, by what its agent asks (the lead's ruling on the home's UX read)

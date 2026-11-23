@@ -3,13 +3,15 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { OutsideAgent } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
 import { isKernelCode } from "../../kernel/result";
-import type { Agent, AgentState, BbThread, Node } from "../../model/types";
+import type { Agent, AgentState, BbThread, Node, ThreadWhere } from "../../model/types";
 import { claimOf, isListed } from "../../model/view";
+import { AgentActs } from "../lifecycle";
 import { agentStatus } from "../roster/status";
 import { Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
@@ -27,11 +29,11 @@ import { useNow, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { SHARED_TITLE, ageText, attachCommand, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
+import { SHARED_TITLE, ageText, attachCommand, attachOffered, attachWhere, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
 /** What the panel reads of the roster beside its agent: the souls' names, and the threads its links go to. */
-type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { /** the machine OATS is read on, by the name bb gives it; null while none is known */ machine: string | null; nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[] };
+type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { /** the machine OATS is read on, by the name bb gives it; null while none is known */ machine: string | null; nodeByInstance: ReadonlyMap<string, Node>; /** the instances whose parent is the agent shown, in the roster's order */ children: readonly string[]; /** what bb says of the thread an agent's row names (`Oats.whereOf`); "unknown" while there is no roster */ whereOf(agent: Agent): ThreadWhere };
 /** The agent a panel shows, and for which thread or name it is shown. */
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
@@ -108,6 +110,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
     threadById: oats.threadById,
     retry: oats.retry,
     machine: oats.phase === "ready" ? oats.deployment.machine : oats.phase === "failed" ? oats.machine : null,
+    whereOf: oats.phase === "ready" ? oats.whereOf : () => "unknown",
     nodeByInstance: oats.phase === "ready" ? oats.nodeByInstance : NO_NODES,
     children: oats.phase === "ready" ? oats.agents.filter((other) => other.parent === held.agent.instance).map((other) => other.instance) : [],
   };
@@ -191,6 +194,8 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
           <KernelSays text={status.kernel} />
         </div>
+        {/* What a person can do with the agent, where its state is said: the lifecycle's own acts (each opens its dialog; nothing runs on the press), the ones that apply to its state, held with the reason while the roster is the last one read. Here an agent with no thread in bb has them too: its row opens this panel on its own page. */}
+        <AgentActs instance={agent.instance} />
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           <span>instance of</span>
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
@@ -214,7 +219,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
       </div>
     </>
   );
@@ -266,12 +271,17 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
   );
 }
 
-function InstancePage({ oats, agent, read, now, state: readState, status }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState }) {
+function InstancePage({ oats, agent, read, now, state: readState, status, held }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean }) {
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
   return (
     <>
+      {/* What happened to it outside OATS (app/outside), first on the page and scrolling with it (the
+          header over the tabs does not scroll, and says the state): the kernel's report, and
+          for an agent the roster draws on no thread, what happened. The acts are the header's
+          (`AgentActs`, above); the block adds one only where the header offers none. */}
+      <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         <Section title="Needs input" testId="oats-panel-waiting">
           {/* The reason in words; how long it has waited is the header's to say, once. */}
@@ -287,7 +297,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status }: { oa
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} now={now} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} now={now} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} />
       {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
       <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} />
@@ -296,7 +306,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status }: { oa
 }
 
 /** `state` is the state the header says: what OATS says of an unreachable session is said there, once, and an agent that does not run was last started, not started. */
-function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: PanelInstance; state: AgentState; now: number }) {
+function InstanceFacts({ oats, facts, state, running, now }: { oats: Roster; facts: PanelInstance; state: AgentState; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; now: number }) {
   const unreachable = state === "unreachable";
   const runs = state !== "stopped" && state !== "error";
   const navigate = useBbNavigate();
@@ -421,8 +431,8 @@ function InstanceFacts({ oats, facts, state, now }: { oats: Roster; facts: Panel
                 </Fact>
               )}
             </Facts>
-            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel says it runs (it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses. */}
-            {where?.where === "tmux session" && (state === "working" || state === "needs-you") ? (
+            {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel itself says it runs (`running: true`; it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses, also when such an agent still carries a claim. */}
+            {attachOffered(where?.where === "tmux session", running, state) ? (
               <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
                 <p className="m-0">{attachWhere(oats.machine === null ? null : shown(oats.machine))}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">

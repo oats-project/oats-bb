@@ -7,7 +7,7 @@
 // The words are the OATS Desktop's (./words.ts).
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { experimental_PluginRpcCallError as PluginRpcCallError, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle";
 import { newKey } from "../keys";
 import { errorMessage, onWindowReset } from "../store";
@@ -25,6 +25,10 @@ import {
   applyRefused,
   applying,
   carriesOn,
+  LEAVE,
+  piOnBb,
+  SHOW_RESULT,
+  toasted,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -49,7 +53,16 @@ import type { Outcome, PlanVerb, Refusal, RunVerb, Verb } from "./words";
 
 export type { PlanVerb, RunVerb, Verb };
 
-type Request = { verb: Verb; instance: string; id: number };
+/**
+ * A result whose dialog went before it arrived, kept so that the dialog can be opened again ON it
+ * (the toaster's "Show result"): the settled state as the dialog held it, with what "Check again"
+ * needs (the plan and its key) and what the person chose (a stop's children, a retire's worktree,
+ * a start's harness and model).
+ */
+type Resume =
+  | { plan: Extract<PlanState, { phase: "settled" }>; recursive: boolean; discard: boolean }
+  | { start: Extract<StartState, { phase: "settled" }>; harness: string; model: string };
+type Request = { verb: Verb; instance: string; id: number; resume?: Resume };
 
 let current: Request | null = null;
 let sequence = 0;
@@ -76,6 +89,19 @@ export const asked = (): { verb: Verb; instance: string } | null => (current ===
 /** Open the dialog of an act on an agent. It asks the kernel first, and acts only on its own button. */
 export function openAct(verb: Verb, instance: string): void {
   set({ verb, instance, id: ++sequence });
+}
+/** Open an act's dialog again on a result it had when it was gone: nothing is asked of the kernel. */
+function reopen(verb: Verb, instance: string, resume: Resume): void {
+  set({ verb, instance, id: ++sequence, resume });
+}
+/**
+ * Tell the result of an act whose dialog is gone (`toasted`): a plain one whole, with the way to
+ * the agent; any other by its title, staying until dismissed, with "Show result".
+ */
+function tell(verb: Verb, instance: string, outcome: Outcome, resume: Resume, open: { label: string; run: () => void } | null): void {
+  const { plain, ...toast } = toasted(verb, outcome);
+  if (plain) notify({ ...toast, ...(open === null ? {} : { open }) });
+  else notify({ ...toast, stays: true, open: { label: SHOW_RESULT, run: () => reopen(verb, instance, resume) } });
 }
 /** Ask for the kernel's plan to stop or retire an agent; the overlay shows it and asks once. */
 export const askPlan = (verb: PlanVerb, instance: string): void => openAct(verb, instance);
@@ -191,7 +217,7 @@ function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "k
       if (dialog === null) return;
       // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
       if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
-      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-loading" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
+      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
     // Once more when the dialog has said what is out of sight ("More above", "More below"): those lines take room of their own.
@@ -230,7 +256,7 @@ function CannotRead({ refusal, onRetry }: { refusal: Refusal; onRetry: () => voi
 
 // ---- Stop and Retire ----
 
-type Plan = StopPlan | RetirePlan;
+type Plan = Answer<"stopPlan"> | Answer<"retirePlan">;
 type PlanState =
   /** `kept`: the plan under review stays on screen while a new one is read for a choice or a check. */
   | { phase: "reading"; kept: Plan | null; why: string }
@@ -239,17 +265,54 @@ type PlanState =
   | { phase: "applying"; plan: Plan; key: string }
   | { phase: "settled"; outcome: Outcome; refusal: Refusal | null; sent: { plan: Plan; key: string } | null };
 
+/**
+ * Whether bb holds the thread archived NOW, as bb itself answers (`sdk.threads.get`): true or
+ * false; null when bb cannot be asked or does not say. Read after a stop, for what its result
+ * says of the thread: the provider's release decides whether a stop archives, and what a person
+ * is told is what happened, not what a version number promises.
+ */
+async function threadArchived(sdk: ReturnType<typeof useSdk>, threadId: string): Promise<boolean | null> {
+  // The stop is done and the kernel has answered: its result never waits long on this read.
+  const limit = new AbortController();
+  const timer = setTimeout(() => limit.abort(), THREAD_READ_MS);
+  try {
+    const thread: unknown = await Promise.race([
+      sdk.threads.get({ threadId, signal: limit.signal }),
+      new Promise<null>((resolve) => limit.signal.addEventListener("abort", () => resolve(null), { once: true })),
+    ]);
+    if (typeof thread !== "object" || thread === null || !("archivedAt" in thread)) return null;
+    return thread.archivedAt !== null && thread.archivedAt !== undefined;
+  } catch {
+    // bb could not be asked (or this bb has no such read): not known, and the result says what the confirmation said.
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+/** How long a stop's result waits for bb's word on the thread before it says what the confirmation said. */
+const THREAD_READ_MS = 5_000;
+
+/**
+ * The bb session provider's version, by which the dialog knows whether a stop archives the
+ * agent's thread (`stopArchivesThread`: one fact, one function): the plugin's server answers it
+ * beside the stop plan. A plan that names none, and a retire's, is not known.
+ */
+const versionOf = (plan: Plan | null): string | null => (plan !== null && plan.action === "stop" ? plan.providerVersion : null);
+
 function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const rpc = useRpc<Contract>();
+  const sdk = useSdk();
   const navigate = useBbNavigate();
   const oats = useOats();
   const { verb, instance } = request;
   const threadId = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(threadId);
-  const [state, setState] = useState<PlanState>({ phase: "reading", kept: null, why: checking(verb, instance) });
+  // Opened again on a result (the toaster's "Show result"): that result, and nothing is read.
+  const resumed = request.resume !== undefined && "plan" in request.resume ? request.resume : null;
+  const [state, setState] = useState<PlanState>(resumed?.plan ?? { phase: "reading", kept: null, why: checking(verb, instance) });
   /** The plan's one tick: a stop's children (on, the kernel's default), a retire's worktree (off). */
-  const [recursive, setRecursive] = useState(true);
-  const [discard, setDiscard] = useState(false);
+  const [recursive, setRecursive] = useState(resumed?.recursive ?? true);
+  const [discard, setDiscard] = useState(resumed?.discard ?? false);
   const [now, setNow] = useState(() => Date.now());
   const live = useRef(true);
   /** The read whose answer is still wanted: a newer read, or a close, drops an older one's. */
@@ -263,11 +326,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
   }, []);
 
-  // Whether the provider archives the thread of a home it stops: from its version, which the spawn
-  // module's read of the provider will expose; until it does the version is not known here, and
-  // the answer is the one that is true of every provider released so far.
-  const archives = stopArchivesThread(null);
-
   const read = useCallback(
     (why: string, withChildren: boolean, changedFrom: Plan | null = null) => {
       const mine = ++ticket.current;
@@ -276,7 +334,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       asked.then(
         (plan) => {
           // A new plan is a new intent: it gets its own idempotency key.
-          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, archives) });
+          if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, stopArchivesThread(versionOf(plan)), stopArchivesThread(versionOf(changedFrom))) });
         },
         (cause: unknown) => {
           const refusal = refusalOf(cause);
@@ -288,11 +346,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
         },
       );
     },
-    [rpc, verb, instance, archives],
+    [rpc, verb, instance],
   );
   useEffect(() => {
-    read(checking(verb, instance), true);
-  }, [read, verb, instance]);
+    if (resumed === null) read(checking(verb, instance), true);
+    // (`resumed` is the request's, and a dialog has one request for its whole life.)
+  }, [read, verb, instance, resumed]);
 
   /** `again`: the same revision and key, sent to read the result of an apply whose answer was lost ("Check again"). */
   const send = (plan: Plan, key: string, again = false) => {
@@ -300,22 +359,28 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     const sent = { plan, key };
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
-      // The person moved on (another act's dialog took this one's place): the result reaches them where they are.
-      // What is not confirmed is told as that, never as a failure.
-      else notify({ tone: outcome.tone, title: outcome.title, lines: outcome.lines, ...(threadId === null || verb === "retire" ? {} : { open: { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) } }) });
+      // The person moved on (they left the dialog, or another act's took its place): the result reaches them
+      // where they are, and what a toast cannot hold is one press away ("Show result").
+      else tell(verb, instance, outcome, { plan: { phase: "settled", outcome, refusal, sent }, recursive, discard }, threadId === null || verb === "retire" ? null : { label: `Open ${agentName(instance)}`, run: () => navigate.toThread(threadId) });
     };
     const answered =
       plan.action === "stop"
-        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then((receipt) => stopOutcome(receipt, plan.instance ?? instance, plan.targets.some((target) => target.backend === "bb"), archives))
+        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then(async (receipt) => {
+            const onBb = plan.targets.some((target) => target.backend === "bb");
+            // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
+            const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
+            return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan)));
+          })
         : rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard }).then((receipt) => retireOutcome(receipt, plan));
     answered.then(
       (outcome) => settle(outcome, null),
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         // The plan changed under the confirmation: back to review with the plan as it is now.
-        if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal), refusal);
+        const pi = plan.action === "retire" && piOnBb(plan); // (a retire's plan alone says the backend and the harness)
+        if (again) settle(checkAgainRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
         else if (refusal.code === "E_PLAN_STALE" && live.current && current === request) read(checking(verb, instance), recursive, plan);
-        else settle(applyRefused(verb, plan.instance ?? instance, refusal), refusal);
+        else settle(applyRefused(verb, plan.instance ?? instance, refusal, pi), refusal);
       },
     );
   };
@@ -325,7 +390,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     if (current === request) set(null);
   };
   const plan = state.phase === "ready" || state.phase === "applying" ? state.plan : state.phase === "reading" ? state.kept : (state.sent?.plan ?? null);
-  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, archives) : retirePlanView(plan, discard);
+  const view = plan === null ? null : plan.action === "stop" ? stopPlanView(plan, stopArchivesThread(versionOf(plan))) : retirePlanView(plan, discard);
   const shownFor = plan === null ? null : plan.instance;
   const choose = (checked: boolean) => {
     if (verb === "stop") {
@@ -356,7 +421,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "applying"
-          ? { kind: "running", doing: applying(verb, plan?.instance ?? instance) }
+          ? { kind: "running", doing: applying(verb, plan?.instance ?? instance), leave: LEAVE[verb] }
           : settledPhase(
               state.outcome,
               <>
@@ -383,8 +448,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       title={titleOf(verb, shownFor, plan !== null, state.phase === "settled" && state.sent !== null)}
       about={instance}
       shownFor={shownFor}
-      happens={view?.happens ?? []}
-      kept={view?.kept ?? []}
+      // Once the act has an answer the plan gives way to it, a refusal as a result: "What will happen" over
+      // "wasn't stopped" would say in the future what did not happen. Review again brings the plan back.
+      happens={state.phase === "settled" ? [] : (view?.happens ?? [])}
+      kept={state.phase === "settled" ? [] : (view?.kept ?? [])}
       confirmLabel={view?.confirm ?? (verb === "stop" ? "Stop" : "Retire")}
       // Both acts end something a person may want running: the focus starts on Cancel for each.
       destructive
@@ -416,13 +483,18 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
-            <ul data-testid="oats-plan-attention" className="flex flex-col gap-1 text-foreground">
-              {view.attention.map((line, index) => (
-                <li key={index} className="break-words font-semibold">
-                  <Lines text={line} />
-                </li>
-              ))}
-            </ul>
+            // What a person should see before confirming (an agent in the middle of a task, no way back): set apart
+            // in the attention tone, under a heading of its own, never as more of "What is kept".
+            <section data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Before you confirm</h3>
+              <ul className="flex flex-col gap-1">
+                {view.attention.map((line, index) => (
+                  <li key={index} className="break-words font-semibold">
+                    <Lines text={line} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           <section className="flex flex-col gap-1">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current state</h3>
@@ -505,13 +577,22 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
-  /** bb's own row of the agent's thread as it is at each render: read when the check answers. */
+  /**
+   * bb's own row of the agent's thread, as it is when the check answers: kept for that answer by an
+   * effect after each draw (never written while drawing), declared before the effect that asks.
+   */
+  const thread = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const threadNow = useRef<{ id: string; status: string } | null>(null);
-  threadNow.current = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
-  const [state, setState] = useState<StartState>({ phase: "checking" });
+  useEffect(() => {
+    threadNow.current = thread;
+  }, [thread]);
+  // Opened again on a result (the toaster's "Show result"): that result and what the person had chosen.
+  const kept = request.resume !== undefined && "start" in request.resume ? request.resume : null;
+  const resumed = kept?.start ?? null;
+  const [state, setState] = useState<StartState>(resumed ?? { phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
-  const [harness, setHarness] = useState("");
-  const [model, setModel] = useState("");
+  const [harness, setHarness] = useState(kept?.harness ?? "");
+  const [model, setModel] = useState(kept?.model ?? "");
   const live = useRef(true);
   const ticket = useRef(0);
   useEffect(() => {
@@ -528,16 +609,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       (answer) => {
         if (!live.current || mine !== ticket.current) return;
         // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
-        const thread = threadNow.current;
+        const threadThen = threadNow.current;
         setState({
           phase: "ready",
           check: {
             ...answer,
             // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
-            begins: thread === null ? START.fresh : START.newThread,
+            begins: threadThen === null ? START.fresh : START.newThread,
             // Cut off, with a thread that can take a message: said first, with the way to that thread, in both dialogs
             // (a restart loses the agent's place in its conversation exactly as a start does); the act stays possible.
-            carryOn: thread !== null && carriesOn(answer, thread) ? thread.id : null, // (the first check narrows `thread` for its id)
+            carryOn: threadThen !== null && carriesOn(answer, threadThen) ? threadThen.id : null, // (the first check narrows it for its id)
           },
         });
       },
@@ -547,7 +628,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       },
     );
   }, [rpc, verb, instance]);
-  useEffect(check, [check]);
+  useEffect(() => {
+    // Opened again on a result: nothing is asked until the person asks (Refresh status).
+    if (resumed === null) check();
+  }, [check, resumed]);
 
   const known = state.phase === "checking" ? null : state.check;
   const name = known?.instance ?? instance;
@@ -570,14 +654,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           setState({ phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId });
           // The agent's new thread opens behind the result, as the Desktop opens its terminal: Close leaves the person on it.
           navigate.toThread(started.threadId);
-        } else notify({ tone: "done", title: outcome.title, lines: outcome.lines, open });
+        } else tell(verb, checked.instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal: null, threadId: started.threadId }, harness, model }, open);
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         const outcome = startRefused(verb, checked.instance, refusal);
         if (live.current && current === request) setState({ phase: "settled", check: checked, outcome, refusal, threadId: null });
-        // The agent's thread, as the roster on screen has it, is where a person looks next.
-        else notify({ tone: outcome.tone, title: outcome.title, lines: outcome.lines, ...(rowThread === null ? {} : { open: { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(rowThread) } }) });
+        else tell(verb, instance, outcome, { start: { phase: "settled", check: checked, outcome, refusal, threadId: null }, harness, model }, null);
       },
     );
   };
@@ -597,7 +680,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       : state.phase === "ready"
         ? { kind: "ready" }
         : state.phase === "running"
-          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting }
+          ? { kind: "running", doing: verb === "restart" ? START.restarting : START.starting, leave: LEAVE[verb] }
           : unreadable !== null
             ? { kind: "failed", title: `Couldn't check ${agentName(instance)}`, refusal: "", actions: <CannotRead refusal={unreadable} onRetry={check} /> }
             : settledPhase(
@@ -626,8 +709,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
-      happens={known === null ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
-      kept={known === null ? [] : [START.continues]}
+      // And once the start has an answer, none of it either: a refusal is not read under "What will happen".
+      happens={known === null || state.phase === "settled" ? [] : verb === "restart" ? [START.restartWarning, begins, FULL_MODE] : [begins, FULL_MODE]}
+      kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (badModel ? START.badModel : null)}
       notice={

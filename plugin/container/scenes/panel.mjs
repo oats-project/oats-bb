@@ -791,7 +791,9 @@ const second = [
         const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
         // When it is not there, the check prints what the Soul tab says in its place, a notice's folded details included (seen once: the read was refused).
         check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only !== "" ? only : `(no capabilities part; the Soul tab says: ${await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 900)`)})`);
-        await bring(page, check, at, "oats-panel-core");
+        // The image is named for the part that says so: with the header's acts above the tabs, the Core
+        // capabilities part alone fills a phone's window, and is the same in the scene before this one.
+        await bring(page, check, at, "oats-panel-capabilities");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");
         await page.shot(`panel-${viewport.name}-soul-core-only`);
@@ -844,6 +846,11 @@ const more = [
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const running = await page.evaluate(said);
       check(/^Working(· session started .+)?$/.test(running), `${at} a running agent's header says Working, the word its row and its thread say`, running);
+      {
+        // The lifecycle's acts for its state stand under it, in the header.
+        const acts = await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-header")} ${testId("oats-agent-acts")} button`)})].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")))`);
+        check(acts === JSON.stringify(["Stop…", "Restart…", "Retire…"]), `${at} and offers the acts of a working agent under it: Stop…, Restart…, Retire…`, acts);
+      }
       {
         const started = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-started"))})?.closest(${JSON.stringify(testId("oats-fact"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
         check(/^Started (just now|\d+ (min|h|d) ago|\d{4}-\d\d-\d\d)$/.test(started), `${at} since when it runs is a labelled fact of its session: Started …`, started);
@@ -1058,4 +1065,52 @@ const more = [
 /** For the other scenes of this developer (the home's): the every-image measurement, the wait before an image, the printing check, and the fake's verbs. */
 export { FAILS, fits, printing, refresh, setVerb, settled };
 
-export default [...first, ...second, ...more];
+/**
+ * The lifecycle's acts on the agent's own page, where an agent with no thread in bb has them. The
+ * release's default shows the home alone: the Souls page, where such an agent's Start and Retire
+ * also are, is not shown then, so the page its row opens is the one place for them.
+ */
+const acts = [
+  {
+    stage: "detached",
+    name: "under the release's default pages, the page of an agent whose bb thread is gone offers Start and Retire",
+    run: async ({ page, at, viewport, check: plain, pages, ALL_PAGES }) => {
+      const check = printing(plain);
+      const GONE = "weekly-digest-helper";
+      const actsNow = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-agent-acts")} button`)})].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")))`;
+      pages("home");
+      try {
+        await page.goto(`/plugins/oats/agent/${GONE}`);
+        const drawn = await page.until(`(() => { const acts = ${actsNow}; return acts !== "[]" ? acts : ""; })()`, 40);
+        check(drawn === JSON.stringify(["Start…", "Retire…"]), `${at} the page of an agent whose bb thread is gone offers Start… and Retire…, and no other act`, drawn ?? (await page.evaluate(textOf(testId("oats-agent-page")))));
+        const header = await page.evaluate(`(() => { const header = document.querySelector(${JSON.stringify(inPanel("oats-panel-header"))}); return JSON.stringify({ name: header?.querySelector('[data-testid="oats-panel-name"]')?.innerText.trim(), state: (header?.querySelector('[data-testid="oats-panel-state"]')?.innerText ?? "").replace(/\\s+/g, " ").trim(), actsInHeader: header?.querySelector('[data-testid="oats-agent-acts"]') !== null }); })()`);
+        check(JSON.parse(header).name === "Weekly digest helper" && /Stopped/.test(JSON.parse(header).state) && JSON.parse(header).actsInHeader === true, `${at} they stand in the header, under the agent's name and its state`, header);
+        // The page under the header is drawn before its image: this agent's facts start at Session (a stopped agent whose thread is gone has no Work part).
+        const session = await page.until(`(() => { const t = ${textOf(inPanel("oats-panel-session-line"))}; return t !== "" ? t : ""; })()`, 30);
+        check(Boolean(session), `${at} and its facts are drawn under the header: where its session ran`, session ?? (await page.evaluate(textOf(testId("oats-agent-page")))));
+        // Instance readiness is a later read (a command of its own), and it is in the image: the page is whole once it says its answer.
+        const readiness = await page.until(`(() => { const t = ${textOf(`${inPanel("oats-panel-readiness-instance")} ${testId("oats-panel-readiness-summary")}`)}; return t !== "" ? t : ""; })()`, 40);
+        check(Boolean(readiness), `${at} and its readiness is read before the image: the page is whole`, readiness ?? (await page.evaluate(textOf(inPanel("oats-panel-readiness-instance")))));
+        await settled(page, viewport);
+        await fitted(page, viewport, check, at, "page-missing-acts");
+        await page.shot(`panel-${viewport.name}-page-missing-acts`);
+        // A press opens that act's dialog, about this agent; nothing runs on the press.
+        await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-agent-act-start"))})?.click()`);
+        const dialog = await page.until(`(() => { const body = document.querySelector(${JSON.stringify(testId("oats-confirm"))}); return body ? JSON.stringify({ about: body.getAttribute("data-about"), title: body.closest('[role="dialog"]')?.querySelector("h2, h3")?.innerText.trim() ?? null }) : ""; })()`, 20);
+        check(Boolean(dialog) && JSON.parse(dialog).about === GONE, `${at} Start… opens the lifecycle's dialog, about this agent`, dialog ?? (await page.evaluate(textOf("body")).catch((error) => String(error))));
+        await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-confirm-cancel"))}) ?? document.querySelector(${JSON.stringify(testId("oats-confirm-close"))}))?.click()`);
+        check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-confirm"))}) === null`, 10)), `${at} and its Cancel closes it`, await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase") ?? "gone"`));
+        // The default is in force: the Souls page, the other place of those acts, answers that it is not shown.
+        const notShown = await (async () => {
+          await page.goto("/plugins/oats/souls");
+          return page.until(`document.querySelector(${JSON.stringify(testId("oats-page-not-shown"))}) !== null ? "not shown" : ""`, 20);
+        })();
+        check(notShown === "not shown", `${at} and the Souls page, where those acts also are, is not shown under the default`, notShown);
+      } finally {
+        pages(ALL_PAGES);
+      }
+    },
+  },
+];
+
+export default [...first, ...second, ...more, ...acts];

@@ -3,7 +3,7 @@ import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sd
 import { z } from "zod";
 import type { rpc } from "../contract/lifecycle.js";
 import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
-import { harnessesOf } from "./spawn.js";
+import { harnessesOf, providerVersionOf } from "./spawn.js";
 
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
 const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish(), sessionEnd: z.string().nullish() });
@@ -11,6 +11,17 @@ const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().
 /** Only what was given: a host call's input is JSON, which has no `undefined`. */
 const given = <Fields extends Record<string, unknown>>(fields: Fields): { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> } =>
   Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> };
+
+/** How long a stop plan the kernel has answered waits for the provider's version before it goes without it. */
+const VERSION_WAIT_MS = 3_000;
+/** `asked`, or null when it has not answered within `ms` (its timer is cleared either way). */
+function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([asked, late]).finally(() => clearTimeout(timer));
+}
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /**
@@ -42,7 +53,14 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   return {
     async stopPlan({ instance, recursive }, context) {
       await core.agentForAct(instance);
-      return core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal);
+      // The provider's version beside the plan (the read every dialog shares). It is an optional fact: a version
+      // that cannot be read, or is not read within a moment, fails and holds nothing: it is then not known, and
+      // the dialog keeps the sentence that warns.
+      // Both are asked at once; the version is waited for only a moment AFTER the plan answered (one that came
+      // while the kernel made its plan cost nothing, and is used).
+      const version = providerVersionOf(core).catch(() => null);
+      const plan = await core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal);
+      return { ...plan, providerVersion: await within(VERSION_WAIT_MS, version) };
     },
     async stopApply({ instance, revision, key, recursive }) {
       await core.agentForAct(instance);
@@ -80,7 +98,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     restart: (input) => begin("restart", input),
     async retirePlan({ instance }, context) {
       await core.agentForAct(instance);
-      return core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal);
+      // The harness is the kernel's status row's, not the plan's: the roster this act was admitted on holds it.
+      // (A row that cannot be read now fails nothing: the harness is then not known, and the plan the kernel answered stands.)
+      const [plan, row] = await Promise.all([core.call("retirePlan", { instance }, HOST_TIMEOUT.read, context.experimental_signal), core.rowOf(instance).then(({ row }) => row, () => null)]);
+      const read = launch.safeParse(row);
+      return { ...plan, harness: read.success ? (read.data.harness ?? null) : null };
     },
     async retireApply({ instance, revision, key, discardWorktree }) {
       const sent = retires.get(key);

@@ -86,6 +86,16 @@ test("Stop shows on a working agent's thread, and not on a thread that is no age
   expect(plain.shown()).toEqual([]);
 });
 
+test("an agent the kernel calls stopped beside another word (the stale stop; a tmux-like \"shell\" beside an operator's stop) is offered Start while bb holds a question on its thread", async () => {
+  // It counts as needing you (bb's question), so the kernel's own reading of the row is asked: `recordedStopped`.
+  for (const change of [{ running: false as const, runtimeState: "unknown", sessionEnd: "stopped" }, { running: false as const, runtimeState: "shell", sessionEnd: "stopped" }]) {
+    const agents = fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change } : agent));
+    const { shown } = await menu("thr_ci", {}, agents);
+    expect(shown(), JSON.stringify(change)).toContain("start");
+    resetApp();
+  }
+});
+
 test("each action shows only in the states it applies to", async () => {
   const by = async (threadId: string, agents?: Agent[]) => {
     const shown = (await menu(threadId, {}, agents)).shown();

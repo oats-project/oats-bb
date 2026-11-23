@@ -1,24 +1,20 @@
 // The one reading of "how an agent that does not run is at rest", and of "a message in its thread
 // is the designed way to carry it on": every row the kernel prints, and the ones it does not.
 // The three tmux rows are RECORDED (OATS 0.70.5, the real run: test/fixtures/lifecycle/tmux-row-*.json).
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { messageResumes, rest } from "../../model/rest";
 import { recordedStopped } from "../../model/view";
+import { tmuxRow } from "../outside/rows";
 
 const row = (running: boolean | null, runtimeState: string | null, sessionEnd?: string | null, backend = "bb") => ({ running, runtimeState, sessionEnd, backend });
 const listed = { status: "idle" };
-/** A recorded row of `oats status --json`, as the roster's parser reads these fields of it. */
-const recorded = (name: string) => {
-  const raw = JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "lifecycle", name), "utf8")) as { running?: boolean | null; runtimeState?: string | null; sessionEnd?: string | null; session?: { backend?: string } };
-  return { running: raw.running ?? null, runtimeState: raw.runtimeState ?? null, sessionEnd: raw.sessionEnd ?? null, backend: raw.session?.backend ?? "tmux" };
-};
+/** A recorded row of an agent on tmux, as the roster's parser reads it (test/outside/rows.ts). */
+const recorded = (name: Parameters<typeof tmuxRow>[0]) => tmuxRow(name);
 
 describe("the three recorded rows of an agent on tmux", () => {
   test("running: it runs", () => {
     const running = recorded("tmux-row-running.json");
-    expect([running.running, running.runtimeState, running.sessionEnd, running.backend]).toEqual([true, null, null, "tmux"]);
+    expect([running.running, running.runtimeState, running.sessionEnd ?? null, running.backend]).toEqual([true, null, null, "tmux"]);
     expect([rest(running), recordedStopped(running)]).toEqual(["runs", false]);
   });
   test("stopped with OATS (its window is left at a shell, and the row says an operator stopped it): STOPPED, never failed", () => {
@@ -53,6 +49,8 @@ describe("rest(): how an agent that does not run is at rest", () => {
       expect([rest(row(false, "unknown", end)), recordedStopped(row(false, "unknown", end))], String(end)).toEqual(["unloaded", false]);
     }
     expect(rest(row(null, "stopped"))).toBe("stopped"); // the word alone
+    // The word "stopped" with no word that it does not run is a stop whatever else the row says: the thread's line then warns, as the card refuses.
+    for (const running of [null, true]) for (const end of ["lost", "exited", "stopped"]) expect(rest(row(running, "stopped", end)), `${running} ${end}`).toBe("stopped");
   });
   test("a session the kernel cannot reach is its own answer, never stopped, lost or running: nobody can tell", () => {
     // The row the kernel prints is `running: null` beside "unreachable" (awebai/oats lib/instance-listing.mjs at v0.70.5); the others are held too.

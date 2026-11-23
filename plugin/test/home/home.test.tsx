@@ -864,6 +864,41 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
 });
 
+test("the card of an agent that asks and that bb lists no thread of says \"Its bb thread is gone\" only where bb answers that it is deleted; else as far as bb's answer goes, and its button says where it leads", async () => {
+  const CI = "flaky-ci-developer"; // the sample's agent that asks (it carries a claim), on thr_ci
+  const without = () => { const all = sidebarThreads(); return { ...all, threads: all.threads.filter((thread) => thread.id !== "thr_ci") }; };
+  const bb = (...archived: string[]) => ({ threads: { list: async ({ threadIds }: { threadIds: readonly string[] }) => threadIds.filter((id) => archived.includes(id)).map((id) => ({ id, archivedAt: 1 })), interactions: { list: async () => [] } } }) as never as RenderSlotOptions<Contract>["sdk"];
+  const cardOn = async (agents: Agent[], sdk: RenderSlotOptions<Contract>["sdk"]) => {
+    const slot = await homePage({ rpc: handlers({}, agents), sidebarThreads: without(), sdk });
+    const card = await cardOf(slot, CI);
+    return { slot, card, says: () => within(card).getByTestId("oats-needs-elsewhere").textContent!, button: () => within(card).getByTestId("oats-needs-open").textContent };
+  };
+  // bb answers that it has no thread of that id: deleted. "Gone", and the reason on the card's second line; the button leads to its page.
+  const deleted = await cardOn(fixtureAgents(), bb());
+  await waitFor(() => expect(deleted.card.textContent).toContain(" · deleted in bb"));
+  expect(deleted.says()).toContain("Its bb thread is gone, so nothing can be sent to it from here.");
+  expect(deleted.says()).not.toContain("bb lists no thread of it");
+  expect([deleted.button(), deleted.says().includes("Open its page shows who it is and how it runs.")]).toEqual(["Open its page", true]);
+  deleted.slot.unmount();
+  resetApp();
+  // bb has it archived (and the agent still runs): never "gone"; the button leads to the archived thread, and says so.
+  const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
+  await waitFor(() => expect(archived.card.textContent).toContain(" · archived in bb"));
+  expect(archived.says()).toContain("bb lists no thread of it to write in, so nothing can be sent to it from here.");
+  expect(archived.says()).not.toMatch(/gone|Open its page shows/);
+  expect(archived.button()).toBe("Open thread");
+  fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));
+  expect(archived.slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_ci" });
+  archived.slot.unmount();
+  resetApp();
+  // Its row names no thread at all: "no bb thread", never "gone"; the button leads to its page.
+  const none = await cardOn(fixtureAgents().map((agent): Agent => (agent.instance === CI ? { ...agent, threadId: null } : agent)), bb());
+  await waitFor(() => expect(none.card.textContent).toContain(" · no bb thread"));
+  expect(none.says()).toContain("bb lists no thread of it to write in, so nothing can be sent to it from here.");
+  expect(none.says()).not.toContain("gone");
+  expect(none.button()).toBe("Open its page");
+});
+
 test("the home's count of who needs you is the sidebar's: an agent on tmux that asks is in the badge, the heading and the summary", async () => {
   const agents = [...fixtureAgents(), TMUX_ASKS];
   const latest = await badge({ rpc: handlers({}, agents) });

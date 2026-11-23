@@ -27,7 +27,7 @@ from a contract:
 - **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. The ROW is
   RECORDED: `threadDeleted` in `../roster/status-recorded.json`, an agent whose thread was deleted
   in bb; with no thread in bb it gets no line. What is SHAPED is only its pairing with a thread bb
-  still has: a home stopped with the host (`oats host run`'s shutdown; the kernel's
+  still has: for example a home stopped with the host (`oats host run`'s shutdown; the kernel's
   `lib/instance-listing.mjs` answers the same three fields for it). Its thread is not archived,
   and a message in it carries the conversation on (confirmed by the kernel's side). The live scene
   is that pairing: the same fields over the recorded roster, on a thread the run's bb has. A

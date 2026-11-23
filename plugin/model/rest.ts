@@ -27,6 +27,9 @@ export function rest(agent: Row): Rest {
   // prints it `running: null` beside "unreachable"): its own answer, before every other.
   if (agent.runtimeState === "unreachable") return "unreachable";
   if (agent.running !== false && agent.runtimeState !== "stopped") return "runs";
+  // The word "stopped" with no word that it does not run (`running` null or true): a stop, whatever
+  // else the row says of how its session ended. The kernel prints "stopped" beside `running: false`.
+  if (agent.running !== false) return "stopped";
   if (agent.sessionEnd === "lost") return "lost";
   if (agent.sessionEnd === "exited") return "ended";
   if (recordedStopped(agent) || agent.runtimeState === "stopped" || agent.sessionEnd === "stopped") return "stopped";

@@ -73,6 +73,5 @@ export function refusal(agent: Row, thread: object | null): "stopped" | "unreach
   if (how === "unreachable") return "unreachable";
   return how === "runs" || messageResumes(agent, thread) ? null : "stopped";
 }
-export const refuses = (agent: Row, thread: object | null): boolean => refusal(agent, thread) !== null;
 /** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent it refuses (above). The card's handlers ask this, whatever drew the control that was pressed. */
-export const mayAnswer = (agent: Row, thread: object | null, held: boolean): boolean => !held && !refuses(agent, thread);
+export const mayAnswer = (agent: Row, thread: object | null, held: boolean): boolean => !held && refusal(agent, thread) === null;

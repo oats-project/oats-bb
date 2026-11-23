@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, Node } from "../../model/types";
-import { state } from "../../model/view";
+import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
 import { failureWords, HELD_REASON } from "../roster/unreadable";
@@ -57,7 +57,8 @@ export const ACTS: readonly {
     // one the kernel calls stopped while bb holds a question on its thread (it then counts as
     // needing you, so the kernel's word is asked too). The thread's own row offers Start for the
     // same agents.
-    when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped",
+    // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
+    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped",
   },
   { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },

@@ -1,7 +1,7 @@
 // The home's board and its words: grouped from the roster the sidebar shows, counted by the one
 // function for a state.
 import { describe, expect, it } from "vitest";
-import { board, mayAnswer, refusal, refuses } from "../../app/home/board";
+import { board, mayAnswer, refusal } from "../../app/home/board";
 import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
 import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
@@ -110,7 +110,7 @@ describe("what the home may send to an agent's thread", () => {
       expect(refusal(resumable, null), JSON.stringify(resumable)).toBe("stopped"); // bb lists no thread of it: nothing to write in
     }
     // An agent on tmux is never written to from bb.
-    expect(refuses({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe(true);
+    expect(refusal({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe("stopped");
   });
 });
 

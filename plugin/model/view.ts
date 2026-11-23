@@ -68,23 +68,23 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * WORKING and IDLE, for an agent on a bb thread, are bb's own status of that thread, never the
  * kernel's `running`: `running` is endpoint activity (true: a harness is loaded; false: it is
  * gone; null: the provider cannot tell), and a provider answers true for an idle agent whose
- * harness is loaded. The kernel's `running` is read for two things only: false with no word
- * beside it, or on a tmux row, which is "stopped" (what the kernel prints for a tmux row whose
- * window is gone or whose harness does not run: `{ running: false }`, no `runtimeState`; a bb row
- * OATS stopped comes with "stopped" beside it; the next paragraph says the rest); and a
- * TMUX row's activity, where it is the kernel's own word for whether the agent works.
+ * harness is loaded. The kernel's `running` is read for two things only: false, which with what
+ * the row says of how its session ended decides whether it is stopped or failed (the next
+ * paragraph); and a TMUX row's activity, where it is the kernel's own word for whether the agent works.
  * A provider's agent whose thread bb does not list (archived, deleted, hidden) is "idle": its
  * thread's status cannot be seen, and a loaded harness does not say that it works.
  * A session that ended in a shell, or that the kernel cannot reach, is told first. The one rule
  * for the sidebar's rows, the thread's row, the home and the instance panel.
  *
- * STOPPED, beyond the word "stopped" itself: a row that is not running with no word at all
- * (`recordedStopped`, above, which holds for both), or a tmux row that does not run. A row of a session provider always has a word (docs/desktop-cli-api.md at v0.70.5, "A
- * status row of a provider home"): stopped is said of it only when that word is "stopped" (OATS
- * stopped it, or it stopped with the host). `running: false` beside "unknown" is a session that is
- * there with no harness loaded (a reboot on a host without `oats host run`, or bb let the harness
- * exit): it is not stopped, and reads as bb says of its thread. Calling it stopped would advise
- * Start, which begins a new thread and leaves its conversation behind.
+ * STOPPED and FAILED, for a row that does not run: `recordedStopped` (above) decides, for every
+ * backend. Where the row says how its session ended, that decides beside any word: an operator's
+ * stop and a lost session are stopped (a tmux agent stopped with OATS reads "shell"), a harness
+ * that ended by itself ("exited") failed. Where it does not say: the word "stopped", or no word at
+ * all, is stopped; "shell" failed; a tmux row that does not run is stopped. `running: false`
+ * beside "unknown" is a session that is there with no harness loaded (a reboot on a host without
+ * `oats host run`, or bb let the harness exit): it is not stopped, and reads as bb says of its
+ * thread. Calling it stopped would advise Start, which begins a new thread and leaves its
+ * conversation behind.
  *
  * "outside" comes before everything else: the kernel reports that a harness runs in a home OATS
  * recorded stopped (`outsideOats` on the row, feature `provider-outside-oats`: a message sent in

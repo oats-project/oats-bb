@@ -58,7 +58,7 @@ type Ready = Extract<Oats, { phase: "ready" }>;
  * Where an agent opens: its bb thread, or, for an agent with none (on tmux, or its thread gone), its
  * own page. The roster comes from the one `useOats` of the view: a second call would read it again.
  */
-function useOpen(oats: Ready): (entry: Entry) => { href?: string; onClick(event: React.MouseEvent): void } {
+function useOpen(oats: Ready): (entry: Entry) => { href?: string; /** where a press leads: a thread of bb's (the agent's own, or its archived one), or the agent's page */ leads: "thread" | "page"; onClick(event: React.MouseEvent): void } {
   const navigate = useBbNavigate();
   const outside = outsideOf(oats);
   return (entry) => {
@@ -66,9 +66,10 @@ function useOpen(oats: Ready): (entry: Entry) => { href?: string; onClick(event:
     if (thread === undefined) {
       // Its archived conversation, where bb keeps one, as the sidebar's row opens it; else its own page.
       const archived = outside.of(entry.agent)?.archived === true && entry.agent.threadId !== null ? entry.agent.threadId : null;
-      return { onClick: () => void (archived === null ? openAgentPage(navigate as BbNavigate, entry.agent.instance) : navigate.toThread(archived)) };
+      return { leads: archived === null ? "page" : "thread", onClick: () => void (archived === null ? openAgentPage(navigate as BbNavigate, entry.agent.instance) : navigate.toThread(archived)) };
     }
     return {
+      leads: "thread",
       href: thread.href,
       onClick: (event) => {
         if (!plainClick(event)) return;
@@ -203,7 +204,7 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
   const open = useOpen(oats)(entry);
   const name = agentName(entry.agent.instance);
   const said = outsideOf(oats).of(entry.agent);
-  const paged = entry.thread === null || !oats.threadById.has(entry.thread.id);
+  const paged = open.leads === "page"; // (the button says where it leads: an archived thread is a thread)
   return (
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer="outside">
       <Card testId="oats-needs-card-body">
@@ -331,7 +332,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   // again behind OATS's back (a stopped agent stays stopped). The card then offers neither: it
   // says so, and offers Start, the lifecycle's own act, which starts it through OATS. An agent
   // whose session was LOST, or that has no harness loaded, is answered as any other: a message in
-  // its thread is how it comes back (`refuses`, board.ts: the Start dialog's own reading).
+  // its thread is how it comes back (`refusal`, board.ts: the Start dialog's own reading).
   const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
     thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
@@ -354,8 +355,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             <span className="break-words text-xs text-muted-foreground">{[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), where].filter((part) => part !== null).join(" · ")}</span>
           </div>
           {/* The button says where it leads: the agent's thread, or, for an agent with none, its own page. */}
-          <Button data-testid="oats-needs-open" aria-label={`${thread === undefined ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
-            {thread === undefined ? OPEN_PAGE : OPEN_THREAD}
+          <Button data-testid="oats-needs-open" aria-label={`${open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
+            {open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}
           </Button>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
@@ -424,7 +425,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             ) : (
               <p className="m-0">{/* "gone" only where bb answers that it has no thread of that id (deleted); else as far as bb's answer goes. */ oats.whereOf(entry.agent) === "missing" ? THREAD_GONE : THREAD_NOT_LISTED}</p>
             )}
-            <p className="m-0">{PAGE_LEADS}</p>
+            {/* Said of the button only where it leads to the page (an agent whose thread bb has archived is opened on that thread). */}
+            {open.leads === "page" ? <p className="m-0">{PAGE_LEADS}</p> : null}
           </div>
         )}
         {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}

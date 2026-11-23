@@ -30,14 +30,16 @@ const read = <Value>(result: { ok: true; value: Value } | { ok: false; error: { 
 };
 
 /** The recorded stop plan (redesign-ui-lead and its two children), as the kernel named it or for `instance` alone. */
-export function stopPlanOf(instance?: string): StopPlan {
-  const plan = read(parseStopPlan(recorded("stop-plan.json")));
+export function stopPlanOf(instance?: string, providerVersion: string | null = null): StopPlan & { providerVersion: string | null } {
+  // The provider's version is read beside the plan by the plugin's server (contract `stopPlanRead`).
+  const plan = { ...read(parseStopPlan(recorded("stop-plan.json"))), providerVersion };
   return instance === undefined ? plan : { ...plan, instance, targets: [{ ...plan.targets[0]!, instance }] };
 }
 export const stopReceiptOf = (): StopReceipt => read(parseStopApply(recorded("stop-apply.json")));
 /** The recorded retire plan (weekly-digest-helper, on a worktree, with one child), or the same facts for `instance`. */
-export function retirePlanOf(instance?: string): RetirePlan {
-  const plan = read(parseRetirePlan(recorded("retire-plan.json")));
+export function retirePlanOf(instance?: string, harness: string | null = null): RetirePlan & { harness: string | null } {
+  // The harness is the status row's, read beside the plan by the plugin's server (contract `retirePlanRead`).
+  const plan = { ...read(parseRetirePlan(recorded("retire-plan.json"))), harness };
   return instance === undefined ? plan : { ...plan, instance };
 }
 export function retireReceiptOf(instance?: string): RetireReceipt {

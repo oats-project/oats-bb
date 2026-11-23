@@ -36,3 +36,11 @@ edit. `../README.md` says how the first two were recorded.
   has (`E_MODEL_UNKNOWN`).
   These seven were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
   npm); the live checks' stages (`container/scenes/spawn.mjs`, `stages`) answer them.
+
+No file here is shaped. The one answer of a spawn that is shaped is made where it is used, and says
+so there: a spawn the kernel refused and could not roll back completely (`details.unconfirmed`),
+which the real run cannot make (the kernel's own removal of the home would have to fail). The live
+stage `spawn-unconfirmed` (`container/scenes/spawn.mjs`, `rollbackIncomplete`) builds it from
+`spawn-pi-refused.json` with the words and the marker the kernel writes on that path, and the unit
+tests (`test/spawn/model.test.ts`, `kernel.test.ts`, `page.test.tsx`, `test/host.test.ts`,
+`test/server.test.ts`) cite the lines of awebai/oats `lib/core.mjs` at v0.70.5 they follow.

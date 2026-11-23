@@ -124,11 +124,17 @@ agent's."). bb does not run a plugin command's shortcut while its Terminal tab h
   both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
   Restart says that it stops the current harness first. An agent the kernel says is running is
   not started again: the dialog says so and offers its thread.
-- **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
-  same dialog, in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept
-  at …", "Recovery copy saved at …"); a start opens the agent's new thread behind it. When the
-  person opened another act's dialog meanwhile, the result reaches them through bb's toaster, with
-  **Open <agent>**.
+- **While the act runs** the dialog says so, and that it can be closed ("You can close this;
+  stopping continues."), with Close in Cancel's place. **Its result** is said in the same dialog,
+  in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept, at:" and
+  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  gone by then (the person closed it, or opened another act's), the result reaches them through
+  bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
+  and leaves by itself. Anything else (a refusal, a result that is not confirmed, a retire,
+  whose result holds where the worktree and the recovery copy are) is told by its title, with
+  what the dialog sets first (a home that was kept); that toast stays until dismissed and has
+  **Show result**, which opens the dialog again on that result, with its Details, its paths and
+  its next step ("Check again" asks for the same apply: the plan and its key are kept).
 - **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
   message under **Details**. What to do next is a button: **Review again** reads a new plan (also
   when the plan changed under the confirmation: it comes back as it is now, with what changed
@@ -153,8 +159,9 @@ commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the tw
 `Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
 dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
 "Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
-`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). No place draws `AgentActs` yet: the
-instance panel and the agent's own page take it in their own change.
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). The instance panel places it in its
+header, under the agent's state: on the thread's OATS tab and on the agent's own page
+(`app/panel/Panel.tsx`).
 
 ## The home
 
@@ -250,7 +257,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel says runs (it works, or it waits on a person), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off, with the reason beside them, while the roster is the last one read; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop… and Retire… for one on tmux), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Runs in tmux on <machine>. Attach from a terminal:" and the kernel's own command to copy, `oats session attach --home <its home>`, the one the home's card of such an agent gives), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
@@ -381,14 +388,18 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, whose rollback the
-  kernel finished, or a call that never reached the kernel. Where the kernel says its rollback is
-  INCOMPLETE, part of the instance may still be there whatever the code: the form stays held,
-  says so, and the kernel's message under Details names what to clean up. (The kernel's marker
-  for this is `error.details.unconfirmed`; the plugin's envelope carries the code and the message
-  only, so the form reads the kernel's own words for it in the message, "rollback INCOMPLETE",
-  which every such path of the kernel writes: `model/spawn.ts` says where.) **Created**, where the kernel says an instance exists whose start did not
+  kernel finished, or a call that never reached the kernel. Where the kernel marks that it could
+  not confirm what is left (its rollback is incomplete), part of the instance may still be there
+  whatever the code: the form stays held, says so, and the kernel's message under Details names
+  what to clean up. It is read from the kernel's own marker, `error.details.unconfirmed: true`,
+  never from the words of its message: the envelope keeps the marker beside the code and the
+  message (`kernel/envelope.ts`, `KernelError.unconfirmed`; nothing else of an error's `details`
+  passes, and a `details.unconfirmed` that is not the literal `true` is no marker), and the
+  server's refusal carries it to the app as the refusal's one issue (`server/core.ts` `refusal`,
+  `contract/shared.ts` `isUnconfirmed`). **Created**, where the kernel says an instance exists whose start did not
   finish, or the spawn went through and named no thread: the form stays held, says so, and sends
-  the person to the sidebar. **Unknown** for everything else (the kernel's "could not confirm", a
+  the person to the sidebar; this is read before the marker, which the kernel also sets on an
+  instance it kept (`E_SPAWN_INCOMPLETE`). **Unknown** for everything else (the kernel's "could not confirm", a
   time limit, an `oats`, a machine or a server that ended without an answer or with one the plugin
   cannot read, a code nobody classed): rollback is never inferred. There the fields stay held and
   the one act is **Check result** (held like the acts while OATS cannot be read): it asks again under the same idempotency key, so the kernel
@@ -726,14 +737,16 @@ to draw), and on `navPanel`:
 
 App, hooks and components: `experimental_useSidebarThreads`, `experimental_useRpcQuery` (the
 watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisible`,
-`experimental_usePluginId`, `experimental_THREAD_ACTION_GROUPS`,
+`experimental_usePluginId`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,
 `experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
 Open file: a file of the machine that holds the deployment, in bb's own preview).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 
-Not experimental, but bb's to change: the thread rows' `data-sidebar-thread-shortcut-target` and
+Not experimental, but bb's to change: the strings of bb's thread action groups and their order
+(`app/lifecycle/index.tsx` `OATS_GROUP`, "3_oats": a group of the plugin's own, which stands
+between bb's "2_organize" and its "3_settings" and "4_lifecycle" by the SDK's string order), the thread rows' `data-sidebar-thread-shortcut-target` and
 `data-sidebar-thread-id` attributes, the settings route `/settings/plugins/<plugin id>` (the
 "Choose a machine" link), the icon names (each feature's `ICON`; `app.tsx` says how to check one), and bb's compact breakpoint
 `(max-width: 767px)` (`app/roster/IdentityRow.tsx`).

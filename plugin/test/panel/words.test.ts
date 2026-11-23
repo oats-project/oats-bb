@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ageText, attachWhere, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
+import { ageText, attachOffered, attachWhere, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -11,6 +11,17 @@ describe("an agent on tmux", () => {
   it("where it runs, with the machine when one is known", () => {
     expect(attachWhere("falcon")).toBe("Runs in tmux on falcon. Attach from a terminal:");
     expect(attachWhere(null)).toBe("Runs in tmux. Attach from a terminal:");
+  });
+  it("the attach line: only while the kernel's own word is that it runs, whatever its state says", () => {
+    expect(attachOffered(true, true, "working")).toBe(true);
+    expect(attachOffered(true, true, "needs-you")).toBe(true);
+    // one the kernel cannot reach, or says nothing of, that needs the person by a claim it still carries: `oats session attach` refuses for it
+    expect(attachOffered(true, null, "needs-you")).toBe(false);
+    expect(attachOffered(true, false, "needs-you")).toBe(false);
+    expect(attachOffered(true, true, "stopped")).toBe(false);
+    expect(attachOffered(true, true, "unreachable")).toBe(false);
+    // an agent on a session provider has a thread, not a terminal
+    expect(attachOffered(false, true, "working")).toBe(false);
   });
 });
 

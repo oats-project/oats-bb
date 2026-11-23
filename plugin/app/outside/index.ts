@@ -4,7 +4,7 @@
 // (README, "Outside OATS"). The STATE of such an agent is the one state function's (model/view.ts).
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
 
-export { detachedActs, lineActs, OutsideActs, OutsideAgent, OutsideMark, OutsideThreadRow, OutsideWarning } from "./parts";
+export { DetachedActs, lineActs, OutsideActs, OutsideAgent, OutsideMark, OutsideThreadRow, OutsideWarning } from "./parts";
 export { said } from "./say";
 export type { Act, Kind, Said } from "./say";
 export { outsideOf } from "./use";

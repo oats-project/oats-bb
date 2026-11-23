@@ -21,7 +21,7 @@ describe("stopped (an operator's stop: sessionEnd \"stopped\")", () => {
     for (const where of WHERES) expect(state(agent, null, where)).toBe("stopped");
   });
   it("with its thread archived in bb: the fact after \"Stopped\", the way to it, and Start", () => {
-    expect(said(agent, "archived", false)).toEqual({ kind: "stopped-archived", sentence: "Its conversation is archived in bb", tone: "plain", note: "its conversation is archived in bb", warning: null, acts: ["start"], archived: true });
+    expect(said(agent, "archived", false)).toEqual({ kind: "stopped-archived", sentence: "Its conversation is archived in bb", tone: "plain", note: "its conversation is archived in bb", warning: null, acts: null, archived: true });
   });
   it("on its open thread: the interim warning, that a message there starts it again without OATS; the roster's own Start", () => {
     expect(said(agent, "open", true)).toEqual({ kind: "stopped-open", sentence: "A message sent here in bb starts it again without OATS. Use Start.", tone: "warning", note: null, warning: null, acts: null, archived: false });
@@ -33,7 +33,7 @@ describe("stopped (an operator's stop: sessionEnd \"stopped\")", () => {
     expect(said(agent, "open", false)).toEqual({ kind: "threadless", sentence: null, tone: "plain", note: "its bb thread is not shown", warning: null, acts: null, archived: false });
   });
   it("with its thread deleted in bb: that it was deleted, and Start for a new one; never \"its bb thread is gone\"", () => {
-    expect(said(agent, "missing", false)).toEqual({ kind: "stopped-deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "plain", note: "its conversation was deleted in bb", warning: null, acts: ["start"], archived: false });
+    expect(said(agent, "missing", false)).toEqual({ kind: "stopped-deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "plain", note: "its conversation was deleted in bb", warning: null, acts: null, archived: false });
   });
   it("before bb has answered, nothing is claimed of its thread", () => {
     expect(said(agent, "unknown", false)).toBeNull();
@@ -89,15 +89,15 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   it("is the recorded row of an agent whose thread was deleted in bb", () => {
     expect([agent.running, agent.runtimeState, agent.sessionEnd]).toEqual([false, "stopped", "lost"]);
   });
-  it("archived in bb is a state of its own, \"Archived in bb\": its process still runs; Stop (then Start)", () => {
+  it("archived in bb is a state of its own, \"Archived in bb\": its process still runs; the acts are the lifecycle's for that state", () => {
     expect(state(agent, null, "archived")).toBe("archived");
     expect(agentStatus(agent, null, NOW, "archived")).toMatchObject({ state: "archived", word: "Archived in bb", since: null, detail: null });
-    expect(said(agent, "archived", false)).toEqual({ kind: "lost-archived", sentence: "OATS lost its session, and its process still runs. Stop it, then start it from OATS.", tone: "plain", note: "OATS lost its session", warning: null, acts: ["stop"], archived: true });
+    expect(said(agent, "archived", false)).toEqual({ kind: "lost-archived", sentence: "OATS lost its session, and its process still runs. Stop it, then start it from OATS.", tone: "plain", note: "OATS lost its session", warning: null, acts: null, archived: true });
   });
   it("deleted in bb is a state of its own, \"Deleted in bb\": its conversation is gone; Start for a new one", () => {
     expect(state(agent, null, "missing")).toBe("deleted");
     expect(agentStatus(agent, null, NOW, "missing")).toMatchObject({ state: "deleted", word: "Deleted in bb" });
-    expect(said(agent, "missing", false)).toEqual({ kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", tone: "plain", note: "its conversation is gone", warning: null, acts: ["start"], archived: false });
+    expect(said(agent, "missing", false)).toEqual({ kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", tone: "plain", note: "its conversation is gone", warning: null, acts: null, archived: false });
   });
   it("the two states have their word and their accessible name", () => {
     expect([STATE.archived, STATE.deleted]).toEqual([{ word: "Archived in bb", name: "archived in bb" }, { word: "Deleted in bb", name: "deleted in bb" }]);
@@ -166,8 +166,8 @@ describe("the three rows that read \"not running\" are never confused", () => {
 describe("failed (its session ended in a shell)", () => {
   // No recording holds this state: the sample's row with the fields the live scenes give it.
   const agent = sample("harvest-knowledge-helper", { running: false, runtimeState: "shell" });
-  it("on an open thread: a message there starts it again; Restart, and no warning", () => {
-    expect(said(agent, "open", true)).toEqual({ kind: "failed-open", sentence: "Its session ended. Restart it, or send a message here.", tone: "plain", note: null, warning: null, acts: ["restart"], archived: false });
+  it("on an open thread: a message there starts it again; the line's own Restart, and no warning", () => {
+    expect(said(agent, "open", true)).toEqual({ kind: "failed-open", sentence: "Its session ended. Restart it, or send a message here.", tone: "plain", note: null, warning: null, acts: null, archived: false });
   });
   it("where its thread is not open, only where the thread is", () => {
     expect(said(agent, "archived", false)).toEqual({ kind: "threadless", sentence: null, tone: "plain", note: "its conversation is archived in bb", warning: null, acts: null, archived: true });

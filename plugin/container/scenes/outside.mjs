@@ -69,14 +69,17 @@ const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl
 
 /**
  * The rows of the stage `outside-host`: the three rows that read "not running", on threads that
- * are open, with nothing archived in bb: the fixtures' own operator's stop (weekly-digest-helper),
- * and two rows that are NOT a stop of OATS's. Shaped as the kernel's contract says (docs/desktop-cli-api.md
+ * are open, with nothing archived in bb: an operator's stop, and two rows that are NOT a stop of
+ * OATS's. (The operator's stop is not the fixtures' own stopped agent: its thread's image is the
+ * roster's `a13-…-thread-stopped`, and no two images of a run may be the same image.)
+ *   harvest-knowledge-helper   stopped by an operator (sessionEnd "stopped"), its thread open Shaped as the kernel's contract says (docs/desktop-cli-api.md
  * at v0.70.5, "A status row of a provider home"), not recorded: `running: false` for an idle bb
  * thread exists only from the provider's next release.
  *   release-070-maintainer     stopped with the host (sessionEnd "lost"), its thread open
  *   desktop-mockups-developer  idle, no harness loaded (running false, runtimeState "unknown", no sessionEnd)
  */
 const HOST_ROWS = {
+  "harvest-knowledge-helper": STOPPED,
   "release-070-maintainer": LOST,
   "desktop-mockups-developer": { running: false, runtimeState: "unknown", waitingOnYou: null },
 };
@@ -160,6 +163,8 @@ export const stages = {
 };
 
 const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+/** The acts of a place, in order: this feature's own buttons and the line's (`oats-status-act`), and the lifecycle's `AgentActs` (`oats-agent-act-<verb>`, named with "…": each opens its dialog). */
+const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
 /** One row of the sidebar by its instance (a row with no thread to open) or by its thread: → `{ facts, state, warn, tag }`. */
 const rowOf = (selector) =>
   `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; return { facts: flat(row.querySelector(${JSON.stringify(testId("oats-row-facts"))})), state: row.querySelector("[data-mark][data-state]")?.getAttribute("data-state") ?? null, warn: row.querySelector(${JSON.stringify(testId("oats-outside-mark"))})?.getAttribute("aria-label") ?? null }; })()`;
@@ -174,7 +179,7 @@ const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${
  */
 async function lineOf(page, wanted) {
   const read = (test) =>
-    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const notice = warning?.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, tones: [...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map((part) => part.getAttribute("data-tone")).filter(Boolean), acts: acts(line), warning: notice ? { tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: acts(notice) } : null }); })()`;
+    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(ACT)})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const notice = warning?.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, tones: [...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map((part) => part.getAttribute("data-tone")).filter(Boolean), acts: acts(line), warning: notice ? { tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), acts: acts(notice) } : null }); })()`;
   const found = (await page.until(read(true), 30)) || (await page.evaluate(read(false)));
   return found ? JSON.parse(found) : null;
 }
@@ -254,7 +259,7 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${digest.id}")`, 15)), `${at} the row of a stopped agent whose conversation is archived opens that thread in bb`, await page.evaluate("location.pathname"));
       let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`));
-      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`).test(line.words) && same(line.acts, ["Start", "Retire"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and "Its conversation is archived in bb", with Start and Retire`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb$`).test(line.words) && same(line.acts, ["Start…", "Retire…"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and "Its conversation is archived in bb", with the lifecycle's Start… and Retire…`, line === null ? await shown() : JSON.stringify(line));
       // What bb 0.50.1 itself does with an archived thread opened by its id: the conversation, no composer, and its own bar.
       const bar = await page.until(`(() => { const text = document.body.innerText.replace(/\\s+/g, " "); return /Thread is archived/.test(text) ? JSON.stringify({ composer: document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length, unarchive: [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Unarchive") }) : ""; })()`, 15);
       check(bar === JSON.stringify({ composer: 0, unarchive: true }), `${at} bb shows the archived thread to read: no composer, "Thread is archived" and its own Unarchive`, bar ?? (await page.evaluate(`document.body.innerText.replace(/\\s+/g, " ").slice(-300)`)));
@@ -264,7 +269,7 @@ export default [
       await open("thr_research");
       const LOST = "Archived in bb · OATS lost its session, and its process still runs. Stop it, then start it from OATS.";
       line = await lineOf(page, /^Archived in bb · /);
-      check(line !== null && line.kind === "lost-archived" && line.state === "archived" && line.words === LOST && same(line.acts, ["Stop", "Retire"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, with Stop (then Start) and Retire`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "lost-archived" && line.state === "archived" && line.words === LOST && same(line.acts, ["Stop…", "Retire…"]) && line.warning === null, `${at} lost, archived: "Archived in bb", that its process still runs, with the lifecycle's Stop… (Start comes once it is stopped) and Retire…`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-lost-archived`, { targets: true });
 
       // the kernel's report, on the open thread
@@ -309,12 +314,12 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
-        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); if (!block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat) }); })()`,
+        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); if (!block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat) }); })()`,
         30,
       );
       check(
-        read === JSON.stringify({ name: "Flaky ci developer", state: "Deleted in bb", kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start", "Retire"] }),
-        `${at} its page says "Deleted in bb", that its conversation is gone, and has Start and Retire`,
+        read === JSON.stringify({ name: "Flaky ci developer", state: "Deleted in bb", kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] }),
+        `${at} its page says "Deleted in bb", that its conversation is gone, and has the lifecycle's Start… and Retire…`,
         read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
       );
       await page.shot(`outside-${viewport.name}-agent-deleted`, { targets: true });
@@ -337,7 +342,7 @@ export default [
         await untilRoster(reported);
         await page.goto(`/plugins/oats/agent/${INSTANCE}`);
         const read = await page.until(
-          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const first = panel?.querySelector("h2, h3"); if (!block || !panel || !tabs || !first || flat(first) !== "SESSION") return ""; /* the tab's own first part, once the instance's facts are read */ const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ acts: [...block.querySelectorAll(${JSON.stringify(testId("oats-status-act"))})].map(flat), notice: flat(block.querySelector("h3")), header: box(head), tabs: box(tabs), first: { ...box(first), text: flat(first) }, panel: box(panel), window: innerHeight }); })()`,
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = head?.querySelector(${JSON.stringify(`${testId("oats-outside-agent-block")}[data-outside="outside"]`)}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const first = panel?.querySelector("h2, h3"); if (!block || !panel || !tabs || !first || flat(first) !== "SESSION") return ""; /* the tab's own first part, once the instance's facts are read */ const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), notice: flat(block.querySelector("h3")), header: box(head), tabs: box(tabs), first: { ...box(first), text: flat(first) }, panel: box(panel), window: innerHeight }); })()`,
           30,
         );
         const drawn = read ? JSON.parse(read) : null;
@@ -361,7 +366,7 @@ export default [
     name: "the three rows that read \"not running\" are never confused: an operator's stop, stopped with the machine, not loaded; on the sidebar's rows and on each thread's line",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = () => page.evaluate(textOf(testId("oats-identity-row")));
-      const [operator, host, idle] = [threads.get("thr_digest"), threads.get("thr_release"), threads.get("thr_mockups")];
+      const [operator, host, idle] = [threads.get("thr_harvest"), threads.get("thr_release"), threads.get("thr_mockups")];
 
       // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
       await page.goto("/");
@@ -371,7 +376,7 @@ export default [
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(
         same([rows.operator, rows.host, rows.idle], [
-          { facts: "Stopped · oats-expert", state: "stopped", warn: null },
+          { facts: "Stopped · knowledge-harvester", state: "stopped", warn: null },
           { facts: "Stopped · oats-maintainer · with the machine", state: "stopped", warn: null },
           { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", warn: null },
         ]) && rows.marks === 0,

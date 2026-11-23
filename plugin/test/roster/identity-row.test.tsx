@@ -10,6 +10,7 @@ import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { asked } from "../../app/lifecycle";
 import type { Contract } from "../helpers/render";
 
 afterEach(() => {
@@ -96,12 +97,14 @@ test("an agent that needs you: since when and its question, on its own thread", 
   expect(line.textContent).toMatch(/^!Needs you· waiting 12 min \(since \d\d:\d\d\)· Green light at 9f2e1c\?Instance panel$/);
 });
 
-test("a stopped agent says Stopped and offers Start, through OATS; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
+test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says so in words, with what OATS says under Details, and Retry", async () => {
   // (Its events hold no "stopped" here: the kernel recorded no time, and the line says none.)
-  const stopped = await render("thr_digest", fixtureAgents(), { start: () => ({ threadId: "thr_started" }), panelEvents: () => ({ ...recordedEvents(), events: [] }) });
+  const stopped = await render("thr_digest", fixtureAgents(), { panelEvents: () => ({ ...recordedEvents(), events: [] }) });
   expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
   fireEvent.click(stopped.getByTestId("oats-status-act"));
-  await vi.waitFor(() => expect(stopped.inspection.rpcCalls.filter((call) => call.method === "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]));
+  // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
+  expect(asked()).toEqual({ verb: "start", instance: "weekly-digest-helper" });
+  expect(stopped.inspection.rpcCalls.filter((call) => call.method === "start")).toEqual([]);
   stopped.unmount();
   const states = fixtureAgents().map((agent) =>
     agent.instance === "harvest-knowledge-helper"

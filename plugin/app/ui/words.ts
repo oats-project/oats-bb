@@ -113,6 +113,13 @@ export function readAge(at: string | number, now: number = Date.now()): string |
 export const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
 
 /**
+ * Said wherever an agent is launched from bb (the New agent form, the Start and Restart dialogs): the
+ * bb session provider launches in bb's full mode only, with no sandbox between the agent and the
+ * account bb runs as. There is no control: one line says it before the act.
+ */
+export const FULL_MODE = "Runs in bb's full mode: no sandbox.";
+
+/**
  * An agent's NAME, the one every place of the plugin draws (a row, the thread's row, a page, a
  * confirmation): its instance name as words (`instanceDisplayName`, the Desktop's rule), through
  * the display filter; the instance itself where that leaves nothing. bb's title for the agent's

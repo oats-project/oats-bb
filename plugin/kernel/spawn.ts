@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
-import { ok, type Result } from "./result.js";
+import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
@@ -128,8 +128,48 @@ export function parseSpawn(document: unknown): Result<{ instance: string; thread
   return ok({ instance: parsed.value.instance, threadId: parsed.value.session?.endpoint?.threadId ?? null });
 }
 
+// ---- the harnesses the bb session provider launches ----
+/**
+ * The ONE read of the list (the harness interface, point 1): the bb capability as the deployment
+ * resolves it, whose manifest declares the harnesses its session provider can launch.
+ */
+export const harnessListArgv = (): string[] => ["capabilities", "show", "oats.bb", "--json"];
+/** A harness's id as a manifest declares it: never an option, never a path. */
+const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
+const shownCapability = z.looseObject({ sessionProviders: z.looseObject({ bb: z.looseObject({ harnesses: z.unknown().optional() }).nullish() }).nullish() });
+/**
+ * `result.sessionProviders.bb.harnesses`, in the manifest's order, each once. A provider from
+ * before the list carries none: the answer is then empty, and a form offers no choice and passes
+ * no `--harness`.
+ */
+export function parseHarnessList(document: unknown): Result<{ harnesses: string[] }> {
+  const parsed = shaped(shownCapability, document, "oats capabilities show oats.bb");
+  if (!parsed.ok) return parsed;
+  const declared = parsed.value.sessionProviders?.bb?.harnesses;
+  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
+  return ok({ harnesses: [...new Set(harnesses)] });
+}
+
+/**
+ * A harness named for a spawn, a start or a restart (`--harness <id>`): one the bb session provider
+ * declares. Anything else starts no process.
+ */
+export function checkHarness(harness: string, declared: readonly string[]): Result<string> {
+  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness the bb session provider declares (${declared.join(", ") || "none"})`);
+}
+/**
+ * A model named for a spawn, a start or a restart (`--model <id>`): any id a person typed or picked,
+ * as one argv element that cannot be read as an option. The kernel refuses what it cannot launch.
+ */
+export function checkModel(model: string): Result<string> {
+  return model !== "" && model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model) ? ok(model) : err(codes.invalidInput, "a model is one line of up to 256 characters that does not start with a dash");
+}
+
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
+  /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
+  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[] }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
+
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the
    * call. A soul not in the list or a name that is no instance name starts no process and writes

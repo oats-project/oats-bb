@@ -1,17 +1,16 @@
 // What the places draw of this feature: the acts of a line, the kernel's report as a notice, and
 // the thread's own row of an agent whose thread bb has archived. Drawn with the patterns of
 // app/ui.tsx; the acts go through OATS (app/lifecycle/acts.tsx).
-import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
-import { askPlan, run } from "../lifecycle/acts";
+import { AgentActs, openAct } from "../lifecycle";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus, stoppedSince } from "../roster/status";
 import { HELD_REASON, Unreadable } from "../roster/unreadable";
 import { usePanelEvents } from "../panel/read";
-import type { Contract } from "../store";
 import { Button, Notice, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
@@ -21,28 +20,19 @@ import type { Act, Said } from "./say";
 import type { Outside } from "./use";
 import { OUTSIDE_TITLE } from "./words";
 
-const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", restart: "Restart", retire: "Retire" };
+const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
 
 /**
- * The acts this feature offers for an agent, as buttons, in order: the lifecycle's own
- * (app/lifecycle/acts.tsx), never a second path to `oats`. Stop and Retire ask the kernel's plan
- * and confirm once, Start and Restart run through OATS. `held`: the roster is the last one read, and
- * the acts stay in their place, off, with the reason (the Desktop's rule).
+ * The acts this feature itself offers for an agent, as buttons, in order. Each opens the
+ * lifecycle's own dialog for that act (`openAct`, app/lifecycle): the kernel is asked first and
+ * nothing runs on one press. Never a second path to `oats`. `held`: the roster is the last one
+ * read, and the acts stay in their place, off, with the reason (the Desktop's rule).
  */
 export function OutsideActs({ instance, acts, held }: { instance: string; acts: readonly Act[]; held: boolean }) {
-  const rpc = useRpc<Contract>();
-  const navigate = useBbNavigate();
   return (
     <>
       {acts.map((act) => (
-        <Button
-          key={act}
-          data-testid="oats-status-act"
-          data-act={act}
-          disabled={held}
-          title={held ? HELD_REASON : undefined}
-          onClick={() => (act === "stop" || act === "retire" ? askPlan(act, instance) : void run(act, instance, rpc, navigate))}
-        >
+        <Button key={act} data-testid="oats-status-act" data-act={act} disabled={held} title={held ? HELD_REASON : undefined} onClick={() => openAct(act, instance)}>
           {LABEL[act]}
         </Button>
       ))}
@@ -63,11 +53,13 @@ export function lineActs(said: Said | null, instance: string, held: boolean): Re
 
 /**
  * The acts of an agent the roster draws on no thread (its thread archived or deleted in bb), for
- * the place that shows that agent (its archived thread's row, its own page): what mends its state,
- * then Retire. The acts of the kernel's report are in its notice, not here.
+ * the place that shows that agent (its archived thread's row, its own page): the lifecycle's own
+ * buttons for its state (`AgentActs`: what mends it, and Retire). Where the kernel also reports it
+ * running outside OATS, its Stop and Start are in the report's notice, and Retire alone is here.
  */
-export function detachedActs(said: Said | null): readonly Act[] {
-  return [...(said === null || said.acts === null || said.warning !== null ? [] : said.acts), "retire"];
+export function DetachedActs({ said, instance, held }: { said: Said | null; instance: string; held: boolean }) {
+  if (said !== null && said.warning !== null) return <OutsideActs instance={instance} acts={["retire"]} held={held} />;
+  return <AgentActs instance={instance} />;
 }
 
 /**
@@ -116,9 +108,9 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const events = usePanelEvents(agent?.instance ?? "", timed);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
   const held = oats.stale !== null;
-  // The thread's menu is bb's, and the roster's entries in it are for a thread it draws an agent
-  // on: this thread is none, so the agent's acts are here, Retire among them.
-  const acts = <OutsideActs instance={agent.instance} acts={detachedActs(said)} held={held} />;
+  // The thread's menu is bb's, and the lifecycle's entries in it are for a thread the roster draws
+  // an agent on: this thread is none, so the agent's acts are here, Retire among them.
+  const acts = <DetachedActs said={said} instance={agent.instance} held={held} />;
   const since = timed ? stoppedSince(events.data?.events, agent.startedAt ?? null, now) : null;
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
@@ -165,7 +157,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
       {attached || said.sentence === null ? null : <p className="m-0 min-w-0 break-words text-muted-foreground">{said.sentence}</p>}
       {attached ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <OutsideActs instance={agent.instance} acts={detachedActs(said)} held={held} />
+          <DetachedActs said={said} instance={agent.instance} held={held} />
         </div>
       )}
       <OutsideWarning said={said} instance={agent.instance} held={held} />

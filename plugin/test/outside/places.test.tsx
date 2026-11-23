@@ -8,6 +8,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps, PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { setAgentPage } from "../../app/home/agent-tab";
+import { asked } from "../../app/lifecycle";
 import type { Agent } from "../../model/types";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
@@ -138,12 +139,15 @@ const words = (slot: Awaited<ReturnType<typeof line>>) => {
   const status = within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line");
   return [within(status).getByTestId("oats-state").textContent, ...within(status).queryAllByTestId("oats-status-part").map((part) => part.textContent!.replace(/^· /, ""))];
 };
-const acts = (slot: Awaited<ReturnType<typeof line>>, within_ = "oats-identity-row") => within(slot.getByTestId(within_)).queryAllByTestId("oats-status-act").map((button) => button.textContent);
+/** The acts of a place, in order: this feature's own buttons and the line's (`oats-status-act`), and the lifecycle's `AgentActs` (`oats-agent-act-<verb>`, each named with its "…": it opens a dialog). */
+const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
+const actsIn = (place: HTMLElement) => Array.from(place.querySelectorAll(ACT)).map((button) => button.textContent);
+const acts = (slot: Awaited<ReturnType<typeof line>>, within_ = "oats-identity-row") => actsIn(slot.getByTestId(within_));
 const calls = (slot: Awaited<ReturnType<typeof line>>, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method).map((call) => call.input);
 const noEvents: Partial<Handlers> = { panelEvents: () => ({ events: [] }) as never };
 
 test("the kernel's report on the open thread: the line keeps the state OATS recorded, and under it the message, loudly, with Stop and Start", async () => {
-  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }, { ...noEvents, start: () => ({ threadId: "thr_new" }) }), sidebarThreads: sidebarThreads() });
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }, noEvents), sidebarThreads: sidebarThreads() });
   const warning = await slot.findByTestId("oats-outside-warning");
   expect(words(slot)[0]).toBe("Stopped");
   const notice = within(warning).getByTestId("oats-notice");
@@ -153,15 +157,16 @@ test("the kernel's report on the open thread: the line keeps the state OATS reco
   // The two acts are the notice's; the line carries no second Start.
   expect(within(warning).getAllByTestId("oats-status-act").map((button) => button.textContent)).toEqual(["Stop", "Start"]);
   expect(within(slot.getByTestId("oats-status-line")).queryAllByTestId("oats-status-act")).toEqual([]);
+  // Start is the lifecycle's own act: its dialog is asked for, and nothing runs on one press.
   fireEvent.click(within(warning).getByRole("button", { name: "Start" }));
-  await waitFor(() => expect(calls(slot, "start")).toEqual([{ instance: DIGEST }]));
+  expect(asked()).toEqual({ verb: "start", instance: DIGEST });
+  expect(calls(slot, "start")).toEqual([]);
 });
 
-test("Stop on the report asks OATS for the plan of that agent", async () => {
-  const stopPlan = vi.fn(() => ({ revision: "r1", lines: ["stop weekly-digest-helper"], instance: DIGEST }));
-  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }, { ...noEvents, stopPlan }), sidebarThreads: sidebarThreads() });
+test("Stop on the report opens the lifecycle's Stop dialog for that agent", async () => {
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }, noEvents), sidebarThreads: sidebarThreads() });
   fireEvent.click(within(await slot.findByTestId("oats-outside-warning")).getByRole("button", { name: "Stop" }));
-  await waitFor(() => expect(calls(slot, "stopPlan")).toEqual([{ instance: DIGEST }]));
+  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
 });
 
 test("a stopped row with no report (an OATS that does not list the feature answers none) is the roster's own line: nothing is said of it", async () => {
@@ -182,34 +187,33 @@ test("failed, on its open thread: \"Failed\", that a message here starts it agai
 });
 
 test("the archived thread of a stopped agent has its own row: who it is, \"Stopped\", the fact, and Start", async () => {
-  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }, { ...noEvents, start: () => ({ threadId: "thr_new" }) }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }, noEvents), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("stopped-archived");
   expect(within(row).getByTestId("oats-outside-agent").textContent).toBe("Weekly digest helper");
   expect(words(slot)).toEqual(["Stopped", "Its conversation is archived in bb"]);
   // Its acts are on this row: bb's menu of an archived thread has none of the roster's.
-  expect(acts(slot)).toEqual(["Start", "Retire"]);
-  fireEvent.click(within(row).getByRole("button", { name: "Start" }));
-  await waitFor(() => expect(calls(slot, "start")).toEqual([{ instance: DIGEST }]));
+  expect(acts(slot)).toEqual(["Start…", "Retire…"]);
+  fireEvent.click(within(row).getByRole("button", { name: "Start…" }));
+  expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
-test("the archived thread of an agent whose session OATS lost: \"Archived in bb\", that its process still runs, and Stop", async () => {
-  const stopPlan = vi.fn(() => ({ revision: "r1", lines: ["stop weekly-digest-helper"], instance: DIGEST }));
-  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }, { stopPlan }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+test("the archived thread of an agent whose session OATS lost: \"Archived in bb\", that its process still runs, and the acts of that state: Stop and Retire", async () => {
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   const row = await slot.findByTestId("oats-identity-row");
   expect(row.getAttribute("data-outside")).toBe("lost-archived");
   expect(words(slot)).toEqual(["Archived in bb", "OATS lost its session, and its process still runs. Stop it, then start it from OATS."]);
   expect(within(row).getByTestId("oats-status-line").getAttribute("data-state")).toBe("archived");
-  expect(acts(slot)).toEqual(["Stop", "Retire"]);
-  fireEvent.click(within(row).getByRole("button", { name: "Stop" }));
-  await waitFor(() => expect(calls(slot, "stopPlan")).toEqual([{ instance: DIGEST }]));
+  // OATS reads it not running; its process runs: Stop is offered, and no Start until it is stopped.
+  expect(acts(slot)).toEqual(["Stop…", "Retire…"]);
+  fireEvent.click(within(row).getByRole("button", { name: "Stop…" }));
+  expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
 });
 
-test("Retire on the archived thread's row asks OATS for the retire plan of that agent", async () => {
-  const retirePlan = vi.fn(() => ({ revision: "r1", lines: ["Removed: the home of weekly-digest-helper"], instance: DIGEST }));
-  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }, { ...noEvents, retirePlan }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  fireEvent.click(within(await slot.findByTestId("oats-identity-row")).getByRole("button", { name: "Retire" }));
-  await waitFor(() => expect(calls(slot, "retirePlan")).toEqual([{ instance: DIGEST }]));
+test("Retire on the archived thread's row opens the lifecycle's Retire dialog for that agent", async () => {
+  const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }, noEvents), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
+  fireEvent.click(within(await slot.findByTestId("oats-identity-row")).getByRole("button", { name: "Retire…" }));
+  expect(asked()).toEqual({ verb: "retire", instance: DIGEST });
 });
 
 test("a stopped agent on its open thread: since when, then that a message here starts it again without OATS, and Start", async () => {
@@ -252,28 +256,27 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
     state: within(within(head).getByTestId("oats-panel-state")).getByTestId("oats-state").textContent,
     kind: block?.getAttribute("data-outside") ?? null,
     sentence: block?.querySelector(":scope > p")?.textContent ?? null,
-    acts: block === null ? [] : within(block).queryAllByTestId("oats-status-act").map((button) => button.textContent),
+    acts: block === null ? [] : actsIn(block),
     block,
   };
 };
 
 test("an agent whose thread was deleted in bb: its own page says \"Deleted in bb\", what happened, and has Start and Retire", async () => {
-  const start = vi.fn(() => ({ threadId: "thr_new" }));
-  const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }, { start }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
+  const slot = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "lost" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(slot).state).toBe("Deleted in bb"));
-  expect(header(slot)).toMatchObject({ kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start", "Retire"] });
-  fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Start" }));
-  await waitFor(() => expect(calls(slot, "start")).toEqual([{ instance: DIGEST }]));
+  expect(header(slot)).toMatchObject({ kind: "lost-deleted", sentence: "Its conversation is gone. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] });
+  fireEvent.click(within(header(slot).block!).getByRole("button", { name: "Start…" }));
+  expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
 test("a stopped agent whose thread bb has archived, or deleted: its own page says what happened, with Start and Retire", async () => {
   const archived = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   await waitFor(() => expect(header(archived).kind).toBe("stopped-archived"));
-  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", acts: ["Start", "Retire"] });
+  expect(header(archived)).toMatchObject({ state: "Stopped", sentence: "Its conversation is archived in bb", acts: ["Start…", "Retire…"] });
   resetApp();
   const deleted = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
   await waitFor(() => expect(header(deleted).kind).toBe("stopped-deleted"));
-  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start", "Retire"] });
+  expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", acts: ["Start…", "Retire…"] });
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
@@ -304,9 +307,10 @@ test("on a roster that is the last one read the acts are held, on the archived t
     return { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:32:00.000Z", code: "OATS_TIMEOUT", message: "slow", machine: "falcon", last: { at: last.at, deployment: last.deployment, agents: last.agents } }) };
   };
   const archived = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped" } })) }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  const start = within(await archived.findByTestId("oats-identity-row")).getByRole("button", { name: "Start" }) as HTMLButtonElement;
-  expect((within(archived.getByTestId("oats-identity-row")).getByRole("button", { name: "Retire" }) as HTMLButtonElement).disabled).toBe(true);
-  expect([start.disabled, start.title]).toEqual([true, "Comes back when OATS is read again"]);
+  // The lifecycle's buttons, held with their reason beside them.
+  const held = within(await archived.findByTestId("oats-identity-row")).getByTestId("oats-agent-acts");
+  expect(Array.from(held.querySelectorAll("button")).map((button) => [button.textContent, button.disabled])).toEqual([["Start…", true], ["Retire…", true]]);
+  expect(within(held).getByTestId("oats-disabled-reason").textContent).toBe("Comes back when OATS is read again");
   expect(archived.getByTestId("oats-unreadable").getAttribute("data-compact")).toBe("");
   resetApp();
   const open = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } })) }), sidebarThreads: sidebarThreads() });

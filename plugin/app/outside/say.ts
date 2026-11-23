@@ -29,7 +29,7 @@ import {
   STOPPED_OPEN,
 } from "./words";
 
-export type Act = "stop" | "start" | "restart" | "retire";
+export type Act = "stop" | "start" | "retire";
 
 export type Kind =
   /** OATS recorded it stopped and a harness runs in it: the kernel's own report. */
@@ -63,7 +63,12 @@ export type Said = {
   note: string | null;
   /** The kernel's report, said loudly (the warning tone) under the line; null: none. */
   warning: OutsideOats | null;
-  /** The acts offered, in order, through OATS; null: the roster's own for the state. */
+  /**
+   * The acts this feature itself offers, in order: the two of the kernel's report's notice (Stop,
+   * Start) and Start on the line of an agent that is not loaded. null: the acts are the
+   * lifecycle's own for the agent's state (the line's own act; `AgentActs` for an agent with no
+   * listed thread).
+   */
   acts: readonly Act[] | null;
   /** Whether bb still has the conversation, archived, to read. */
   archived: boolean;
@@ -102,10 +107,10 @@ function whereNote(where: ThreadWhere): string | null {
  *
  * First match wins:
  * 1. `outsideOats` on the row: the kernel's message, whatever bb says of the thread. Stop, Start.
- * 2. the state "archived" (a session lost, the thread archived in bb): Stop, then Start.
- * 3. the state "deleted" (a session lost, no such thread in bb): Start.
- * 4. the state "error" (its session ended in a shell) on an open thread: that a message there starts it again. Restart.
- * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted, Start;
+ * 2. the state "archived" (a session lost, the thread archived in bb): to stop it, then start it.
+ * 3. the state "deleted" (a session lost, no such thread in bb): to start it.
+ * 4. the state "error" (its session ended in a shell) on an open thread: that a message there starts it again.
+ * 5. the state "stopped": by bb's answer, archived (the fact, and the way to it) or deleted;
  *    on an open thread, by how the kernel says the session ended: an OPERATOR's stop
  *    (`sessionEnd: "stopped"`, and only that) takes the interim warning that a message there
  *    starts it without OATS; one stopped WITH THE HOST (`sessionEnd: "lost"`) says that OATS starts
@@ -123,14 +128,14 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   // The agent's state without bb's own question on its thread (the roster says that first): what OATS and bb say of the session.
   switch (state(agent, null, where)) {
     case "archived":
-      return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, note: LOST_ARCHIVED_NOTE, acts: ["stop"], archived };
+      return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, note: LOST_ARCHIVED_NOTE, archived };
     case "deleted":
-      return { ...base, kind: "lost-deleted", sentence: LOST_DELETED, note: LOST_DELETED_NOTE, acts: ["start"] };
+      return { ...base, kind: "lost-deleted", sentence: LOST_DELETED, note: LOST_DELETED_NOTE };
     case "error":
-      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN, acts: ["restart"] } : threadless;
+      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
     case "stopped":
-      if (where === "archived") return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, acts: ["start"], archived };
-      if (where === "missing") return { ...base, kind: "stopped-deleted", sentence: STOPPED_DELETED, note: DELETED_NOTE, acts: ["start"] };
+      if (where === "archived") return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, note: ARCHIVED_NOTE, archived };
+      if (where === "missing") return { ...base, kind: "stopped-deleted", sentence: STOPPED_DELETED, note: DELETED_NOTE };
       // THE GATE (the one place): whether the bb session provider archives the thread of a home it
       // stops is `stopArchivesThread(providerVersion)` of app/lifecycle/words.ts, which is not on
       // main yet. Until it is, and for every provider version, a stop leaves the thread open, and

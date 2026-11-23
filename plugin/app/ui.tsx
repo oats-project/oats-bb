@@ -1,5 +1,5 @@
 // The plugin's few drawing primitives, on bb's theme tokens only (light and dark follow bb).
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { AgentState } from "../model/types";
 import { STATE_WORD } from "./format";
@@ -10,6 +10,8 @@ import { refusalLines } from "./ui/text";
 export { Confirm } from "./ui/confirm";
 export type { ConfirmProps } from "./ui/confirm";
 export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
+export { notified, notify } from "./ui/notify";
+export type { Notification } from "./ui/notify";
 export type { MenuItem, TabItem } from "./ui/controls";
 export { Card, Code, DisabledReason, Disclosure, Empty, Fact, Facts, Field, INPUT, KernelSays, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";
 
@@ -160,6 +162,35 @@ export function Modal({
 }) {
   const titleId = useId();
   const card = useRef<HTMLDivElement>(null);
+  // The body scrolls between the title and the buttons where the window is short (a phone): what
+  // is out of sight above or below is SAID, so that nothing is cut by the buttons without a sign.
+  const body = useRef<HTMLDivElement>(null);
+  // The two lines keep their room for as long as the body holds more than fits, and only their
+  // words come and go: a line that appeared and took room from the body would move what is read,
+  // and could put the body back over the threshold it had just crossed.
+  const [more, setMore] = useState({ overflows: false, above: false, below: false });
+  useEffect(() => {
+    const scroller = body.current;
+    if (scroller === null) return;
+    const measure = () => {
+      const overflows = scroller.scrollHeight - scroller.clientHeight > 1;
+      const above = overflows && scroller.scrollTop > 1;
+      const below = overflows && scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 1;
+      setMore((now) => (now.overflows === overflows && now.above === above && now.below === below ? now : { overflows, above, below }));
+    };
+    measure();
+    scroller.addEventListener("scroll", measure, { passive: true });
+    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    watch?.observe(scroller);
+    for (const child of Array.from(scroller.children)) watch?.observe(child);
+    const grown = new MutationObserver(measure);
+    grown.observe(scroller, { childList: true, subtree: true, characterData: true });
+    return () => {
+      scroller.removeEventListener("scroll", measure);
+      watch?.disconnect();
+      grown.disconnect();
+    };
+  }, []);
   const after = useRef(returnFocus);
   after.current = returnFocus;
   useEffect(() => {
@@ -226,7 +257,19 @@ export function Modal({
         <h2 id={titleId} className="text-base font-semibold">
           {title}
         </h2>
-        <div className="min-h-0 overflow-y-auto">{children}</div>
+        {more.overflows ? (
+          <p {...(more.above ? { "data-testid": "oats-modal-above" } : { "aria-hidden": true })} className={`text-center text-xs text-muted-foreground ${more.above ? "" : "invisible"}`}>
+            More above
+          </p>
+        ) : null}
+        <div ref={body} data-testid="oats-modal-body" className="min-h-0 overflow-y-auto">
+          {children}
+        </div>
+        {more.overflows ? (
+          <p {...(more.below ? { "data-testid": "oats-modal-below" } : { "aria-hidden": true })} className={`text-center text-xs text-muted-foreground ${more.below ? "" : "invisible"}`}>
+            More below
+          </p>
+        ) : null}
         <div className="flex flex-wrap justify-end gap-2">{footer}</div>
       </div>
     </div>

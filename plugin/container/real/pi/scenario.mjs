@@ -194,7 +194,8 @@ async function needsYou(scene, { instance, soul, threadId, projectId, text, choi
     await page.evaluate(`(${cardOf(text)})?.scrollIntoView({ block: "center" })`);
     await shot("home");
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
-    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "needs-you" && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
+    // Waited for: the line that says what it waits for. A thread with a pending interaction can read "Needs you" before the claim's text has reached the page.
+    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "needs-you" && ${textOf(testId("oats-status-line"))}.includes(${JSON.stringify(text)}) && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
     check(line.state === "needs-you" && line.status.replace(/^! /, "").startsWith("Needs you") && line.status.includes(text) && line.row.includes(`instance of ${soul}`), `${at}: the thread's status line says "Needs you" and what it waits for`, JSON.stringify(line));
     show("status line", line.status);
     await shot("thread");

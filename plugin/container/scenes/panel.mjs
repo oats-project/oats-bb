@@ -788,7 +788,9 @@ const second = [
         const only = await page.evaluate(flat(inPanel("oats-panel-capabilities")));
         // When it is not there, the check prints what the Soul tab says in its place, a notice's folded details included (seen once: the read was refused).
         check(/^capabilities 0 No other capabilities: only the core ones\.$/i.test(only), `${at} a soul with only core capabilities: No other capabilities: only the core ones.`, only !== "" ? only : `(no capabilities part; the Soul tab says: ${await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 900)`)})`);
-        await bring(page, check, at, "oats-panel-core");
+        // The image is named for the part that says so: with the header's acts above the tabs, the Core
+        // capabilities part alone fills a phone's window, and is the same in the scene before this one.
+        await bring(page, check, at, "oats-panel-capabilities");
         await settled(page, viewport);
         await fitted(page, viewport, check, at, "a soul with only its core capabilities");
         await page.shot(`panel-${viewport.name}-soul-core-only`);

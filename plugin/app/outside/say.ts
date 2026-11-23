@@ -40,7 +40,7 @@ export type Act = "stop" | "start" | "retire";
 export type Kind =
   /** OATS recorded it stopped and a harness runs in it: the kernel's own report. Its state is "Running outside OATS". */
   | "outside"
-  /** Stopped, and not with the host, on a thread that is open: a message there starts it again without OATS. */
+  /** Stopped (an operator's stop, or a stop that does not say how its session ended), on a thread that is open: a message there starts it again without OATS. */
   | "stopped-open"
   /** Its session was lost, on bb, on a thread that is open: a message there carries it on. */
   | "lost-open"
@@ -128,10 +128,14 @@ function whereNote(where: ThreadWhere): string | null {
  *   - bb has it archived, and OATS LOST the session (`sessionEnd: "lost"`): bb's Archive never
  *     ends the harness, so its process may still run; to stop it, then start it. A warning, with Stop.
  *   - bb has it archived, otherwise: the fact, and the way to it (what a stop leaves once the provider archives).
- *   - its thread is open, and it stopped WITH THE HOST (`sessionEnd: "lost"`): that OATS starts it again by itself.
- *   - its thread is open, for EVERY OTHER end of its session (an operator's stop, "exited", none):
- *     the interim warning that a message there starts it without OATS. The spec's author's ruling
- *     of 23 Nov 2026: the warning is the default, and only a stop with the host is spared it.
+ *   - its thread is open, and its session was LOST (`sessionEnd: "lost"`): that nobody stopped it,
+ *     and that a message there carries it on. No cause, no time, no promise.
+ *   - its thread is open, for every other stop (an operator's, or one that does not say how its
+ *     session ended): the interim warning that a message there starts it without OATS. The
+ *     warning is the default (the spec's author's ruling of 23 Nov 2026). A harness that ended by
+ *     itself ("exited") is not a stop: the state function calls it failed ("error", above).
+ * - an agent on TMUX whose session was lost: that nobody stopped it (`sentenceOf` adds what Start
+ *   does where the lifecycle offers Start for it). Nothing else is said of an agent on tmux.
  * - "idle" of a row the kernel calls not running (`running: false` beside `runtimeState:
  *   "unknown"`: no harness is loaded), on an open thread: that a message there carries the
  *   conversation on, and that Start begins a new one. Start.
@@ -180,9 +184,9 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
         // whatever its state's word is (bb's own question on the thread makes it "Needs you").
         if (lost) return { ...base, kind: "lost-open", sentence: LOST_OPEN, note: LOST_NOTE, acts: ["start"] };
         // Every other stop warns: a safety sentence fails CLOSED. An operator's stop (`sessionEnd:
-        // "stopped"`), a harness that ended by itself ("exited"), and a row that names no end of
-        // its session (the kernel gives none while a retire is pending, a rollback is incomplete or
-        // a spawn is in progress): in each, a message in bb starts a harness OATS does not expect.
+        // "stopped"`) and a row that names no end of its session (the kernel gives none while a
+        // retire is pending, a rollback is incomplete or a spawn is in progress): in each, a
+        // message in bb starts a harness OATS does not expect.
         return { ...base, kind: "stopped-open", sentence: STOPPED_OPEN, tone: "warning", acts: ["start"] };
       }
       return threadless;

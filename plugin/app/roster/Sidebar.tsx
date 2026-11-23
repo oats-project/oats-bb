@@ -130,7 +130,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   on tmux where it is (`where`: "tmux"). The state's word and `where` are never cut. Where the
    *   line does not fit, the SOUL gives way, down to room for its "…".
    *   What happened to an agent outside OATS (`reason`, app/outside `rowParts`: "archived in bb",
-   *   "with the machine") stands in the soul's place and does not give way to anything: it is the
+   *   "session lost") stands in the soul's place and does not give way to anything: it is the
    *   fact a person needs, and the longest of them fits the line beside the state's word. (Should
    *   one ever not fit, it is cut with "…" and whole in the title: never drawn past the row.)
    *   Nothing is drawn past the row (the block clips), and the whole line is its title.

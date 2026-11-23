@@ -68,7 +68,7 @@ export function lineActs(said: Said | null, instance: string, held: boolean, sta
 /**
  * What a sidebar's row says after the state's word, in the soul's place, and whether its mark is in
  * the warning tone: the reason, where the row's state is the one it follows; null (the soul, the
- * state's own mark) where it is not ("Needs you · with the machine" is no sentence), and where this
+ * state's own mark) where it is not ("Needs you · session lost" is no sentence), and where this
  * feature has nothing to say.
  */
 export function rowParts(said: Said | null, state: AgentState): { note: string | null; tone: "warning" | undefined } {

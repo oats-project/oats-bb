@@ -181,8 +181,9 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 
 | What OATS says | What bb says of its thread | The thread's line | The sidebar's row | Acts |
 |---|---|---|---|---|
-| stopped, and not with the machine (`sessionEnd` "stopped", "exited" or none: every end but "lost") | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
-| stopped with the machine (`sessionEnd: "lost"`) | open | "Stopped · with the machine. OATS starts it again when the machine is back." No warning: OATS resumes it by itself. | "Stopped · with the machine" | Start |
+| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
+| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation." No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| its session lost, on TMUX (no thread in bb) | none | on its page: "Its session ended without OATS stopping it. Nobody stopped it." and "Last started <time>" where the row has it; "Start tries to continue its last conversation." after the first only where the lifecycle offers Start for that agent | "Stopped · session lost · tmux" | the header's (the lifecycle's) |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped, its session not lost | archived | "Stopped · since when · Its conversation is archived in bb. Start begins a new one." (so that nobody expects the archived one to continue). The row opens the archived thread, which bb shows to read (no composer). | "Stopped · <soul>", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
 | its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
@@ -221,20 +222,29 @@ of who needs a person):
   null` and says "Idle" with nothing after it.
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
-never a message), a stop with the machine (nothing to do: OATS resumes it), and no harness loaded
-(a message; Start begins a new conversation). The state word tells the third from the first two;
+never a message), a session that was lost (nobody stopped it: a message carries it on), and no
+harness loaded (a message; Start begins a new conversation). The state word tells the third from the first two;
 the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
 sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
 alone: the sentence does.
 
-**The warning fails closed.** A stopped agent on an open thread gets the operator's sentence for
-EVERY end of its session but one: `sessionEnd: "stopped"` (an operator's stop), `"exited"` (a
-harness that ended by itself), and none at all (the kernel gives none while a retire is pending, a
-rollback is incomplete or a spawn is in progress). In each, a message in bb would start a harness
-OATS does not expect. Only `sessionEnd: "lost"` (stopped with the machine: OATS resumes it) is
-spared it. The spec's author's ruling of 23 Nov 2026, which reversed "an operator's stop, and only
-that". `outsideOats` stays what the kernel says: only an operator's stop carries it.
+**One reading of a row that does not run** (`model/rest.ts`: `rest`, `messageResumes`; and
+`recordedStopped`, `model/view.ts`), which the state, the claim's gate, this feature's reasons,
+the home's card and the Start dialog all read. Where the row says how its session ended
+(`sessionEnd`), that decides, for every backend: "stopped" is an operator's stop and "lost" a
+lost session, both Stopped beside any word (a tmux agent stopped with OATS reads "shell": the
+stop leaves its window at a shell); "exited" is a harness that ended by itself: Failed. Where it
+does not say: the word "stopped", or no word at all, is a stop. THE RULE for a message: it is
+refused only for a stop (an operator's, or one that does not say that its session was lost: a
+message in bb would start a harness OATS does not expect) and where nobody can tell (the kernel
+cannot reach its session); everything else that does not run, on bb, with a thread bb lists,
+carries on by a message (the kernel's contract for a provider home, `docs/desktop-cli-api.md` at
+v0.70.5: a session that a message started reads running at the next status, and `outsideOats` is
+reported only against a recorded stop). So **the warning fails closed**: a stopped agent on an
+open thread gets the operator's sentence unless its row says "lost" or "exited", and the home's
+card of such an agent offers no answer and no reply, and Start. `test/outside/table.test.ts`
+prints the table of every row. The spec's author's rulings of 23 Nov 2026.
 
 `outsideOats` is read by the roster's parser (`kernel/roster.ts`, with `kernel/outside.ts`) only
 where the status document's own `features` lists `provider-outside-oats` (OATS 0.70.5; `features`

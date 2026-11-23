@@ -354,6 +354,13 @@ describe("retire", () => {
     expect(applied.ok === false && applied.error.code).toBe(codes.failed);
   });
 
+  it("answers the refusal of a retire asked while a process works in the home, as the pi run recorded it (exit 1), unchanged", async () => {
+    const printed = JSON.parse(await readFile(join(FIXTURES, "lifecycle/retire-pi-refused.json"), "utf8"));
+    await fake.behave({ retire: { file: "lifecycle/retire-pi-refused.json", exit: 1 } });
+    const applied = await oats.retireApply({ instance: "pi-form-developer", revision: "c87783b6406fc307bf5353b9", key: "retire-1f2e3d4c5b6a" });
+    expect(applied).toEqual({ ok: false, error: { code: "E_RUNTIME_QUIESCE_FAILED", message: printed.error.message } });
+  });
+
   it("answers the kernel's refusal unchanged", async () => {
     await fake.behave({ retire: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CHILDREN_RUNNING", message: "1 child still runs: digest-links-helper", details: {} } }) } });
     const applied = await oats.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" });

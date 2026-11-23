@@ -49,12 +49,10 @@ the retire's result is an array of strings). To be recorded when a run produces 
 
 ## The retire refused while a process works in the home (`E_RUNTIME_QUIESCE_FAILED`)
 
-No file yet. The message in `test/lifecycle/words.test.ts` is the kernel's as the plugin's RPC
-relayed it the one time the pi run met it (its first development run, OATS 0.70.3: "the bb
-session of pi-form-developer stopped, and a process works in its home (pid 5020 pi); stop it,
-then retire again. …"). It is not the kernel's own stdout, stderr and exit code, so it is no
-fixture. The pi run (`container/real/pi`) waits for that pi to leave before it retires; its
-owner adds a step that asks the retire at once and keeps the kernel's answer as
-`real/pi/out/answers/retire-pi-refused.json`. The test takes that file when it exists. The line
-the dialog adds does not depend on the message: it is decided from the code, the plan's backend
-and the row's harness.
+`retire-pi-refused.json`: RECORDED by the pi run (`container/real/pi`, OATS 0.70.5), the kernel's
+stdout for `oats retire pi-form-developer --plan-revision <rev> --idempotency-key <key> --json`
+asked through the plugin within a minute of opening the agent's pi thread in bb, printed with
+exit 1 and an empty stderr. The plan before it went through; nothing was removed; 50 s later
+the same retire, from a new plan, went through. Copied as printed: it holds no path, so nothing
+is substituted. The line the dialog adds does not depend on its message: it is decided from the
+code, the plan's backend and the row's harness.

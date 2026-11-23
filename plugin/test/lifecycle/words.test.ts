@@ -442,17 +442,15 @@ describe("a retire's warnings", () => {
 });
 
 describe("a retire refused because a process still works in the home", () => {
-  // The kernel's message as it was MET, once, in the pi run's first development run (OATS 0.70.3; relayed by the
-  // plugin's RPC, not the kernel's own stdout: test/fixtures/lifecycle/README.md). Its words are the kernel's source's
-  // (lib/core.mjs `unquiet`, lib/instance-listing.mjs `namedProcesses`).
-  const refusal = {
-    code: "E_RUNTIME_QUIESCE_FAILED",
-    message: "the bb session of pi-form-developer stopped, and a process works in its home (pid 5020 pi); stop it, then retire again. A shell named here may be your own: one whose working directory is in the home counts, and leaving the home's directory clears it",
-  };
+  // RECORDED by the pi run (OATS 0.70.5): what the kernel printed for a retire asked within a minute of opening
+  // the agent's pi thread, with exit 1 (test/fixtures/lifecycle/README.md).
+  const refusal: { code: string; message: string } = (fixture("retire-pi-refused.json") as { error: { code: string; message: string } }).error;
   const WAIT = "If its thread was opened in the last minute, bb may still be listing models in its home. Try again in a minute.";
   it("for an agent that runs pi on bb says, after OATS's own line, that bb may still be listing models and to try again in a minute", () => {
     const outcome = applyRefused("retire", "dev-1", refusal, piOnBb({ backend: "bb", harness: "pi" }));
     expect(outcome).toMatchObject({ tone: "failed", title: "Dev 1 wasn't retired", code: "E_RUNTIME_QUIESCE_FAILED", offers: ["review"] });
+    expect(refusal.code).toBe("E_RUNTIME_QUIESCE_FAILED");
+    expect(refusal.message).toMatch(/^the bb session of pi-form-developer stopped, and a process works in its home \(pid \d+ pi\); stop it, then retire again\./);
     expect(outcome.lines).toEqual(["OATS tried to end a session or a process and couldn't confirm that it ended.", `OATS says: ${refusal.message}`, WAIT]);
   });
   it("is decided from read facts alone: the code, the plan's backend, the row's harness; never from what the message names", () => {

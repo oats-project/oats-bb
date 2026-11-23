@@ -28,7 +28,7 @@ import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { notify } from "../ui";
 import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
-import { DETAIL_WITHHELD, displayLine, refusalCode, refusalLines, shown } from "../ui/text";
+import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
 import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
@@ -94,12 +94,6 @@ function useFlight(): { soul: string } | null {
 
 type Preview = { key: string; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
-
-/** One line of the kernel's text as the form may show it; null where the display filter leaves nothing, or withholds it. */
-const kernelLine = (text: string): string | null => {
-  const line = displayLine(text);
-  return line === null || line === "" || line === DETAIL_WITHHELD ? null : line;
-};
 
 /** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
 const piece = (text: string): string => `${/^\s/u.test(text) ? " " : ""}${shown(text)}${/\s$/u.test(text) ? " " : ""}`;
@@ -313,7 +307,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           },
           (cause: unknown) => {
             if (serial.current !== ticket) return;
-            setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField, line: kernelLine }) });
+            setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField }) });
             setReading(false);
           },
         );
@@ -379,7 +373,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         (cause: unknown) => {
           setFlight(null);
           // What is known decides what can be pressed next (model/spawn.ts `SpawnOutcome`).
-          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay, line: kernelLine });
+          const problem = spawnProblem(reasonOf(cause), "spawn", { harnessField: latest.current.harnessField, replay });
           if (!alive.current) {
             // The person left the form: what became of the spawn is told where they are, and stays until dismissed.
             notify({ tone: problem.outcome === "refused" || problem.outcome === "unconfirmed" ? "failed" : "unknown", title: W.FAILURE_TITLE[problem.outcome], lines: [problem.outcome === "unknown" ? W.UNKNOWN_AWAY : problem.sentence, problem.code] });

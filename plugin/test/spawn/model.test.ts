@@ -5,17 +5,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DETAIL_WITHHELD, displayLine } from "../../app/ui/text";
 import { formFacts, harnessLabel, homeText, launchFromText, moduleSourceText, previewFacts, relationText, spawnProblem, worksInText } from "../../model/spawn";
 
 const recorded = (name: string): Record<string, unknown> => (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn", name), "utf8")) as { result: Record<string, unknown> }).result;
 const preview = recorded("spawn-preview.json");
-
-/** The display filter as the form hands it to the model: a line it may show, or null. */
-const line = (text: string): string | null => {
-  const shown = displayLine(text);
-  return shown === null || shown === "" || shown === DETAIL_WITHHELD ? null : shown;
-};
 
 describe("what will be created, from the kernel's preview", () => {
   it("says the name and the home, where it works, the harness and model with where they came from, and the team", () => {
@@ -115,10 +108,8 @@ describe("a refusal, in a person's words, with what to do", () => {
   });
 
   it("a harness that is not installed is said as the kernel words it", () => {
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed: npm i -g @mariozechner/pi" }, "preview", { line }).sentence).toBe("pi is not installed: npm i -g @mariozechner/pi Install it, or pick another harness above.");
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: null }, "preview", { line }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
-    // The kernel's words are said only through the drawer's filter: with none given, the table's sentence stands.
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed: npm i -g @mariozechner/pi" }).sentence).toBe("pi is not installed: npm i -g @mariozechner/pi Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: null }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
   });
 
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
@@ -144,7 +135,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     expect(spawnProblem({ code: "E_LAUNCH_EXECUTABLE", message: "x" }, "preview", one).sentence).toBe("The chosen launch configuration can’t start on this machine. See Details.");
     expect(spawnProblem({ code: "E_LAUNCH_CONFIG_AMBIGUOUS", message: "x" }, "preview", one).sentence).toBe("This machine has more than one launch configuration for this soul’s harness, and none is the default. Make one of them the default with oats launch-config on that machine.");
     expect(spawnProblem({ code: "E_LAUNCH_PREFERENCE_UNMATCHED", message: "x" }, "preview", one).sentence).toMatch(/Correct the preference \(Details\)\.$/);
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }, "preview", { ...one, line }).sentence).toBe("pi is not installed Install it on that machine.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is not installed" }, "preview", one).sentence).toBe("pi is not installed Install it on that machine.");
     for (const code of ["E_BACKEND_HARNESS", "E_HARNESS_UNAVAILABLE", "E_LAUNCH_EXECUTABLE", "E_LAUNCH_ENV_MISSING", "E_LAUNCH_PROBE_UNSUPPORTED", "E_LAUNCH_CONFIG_UNKNOWN", "E_LAUNCH_CONFIG_AMBIGUOUS", "E_LAUNCH_PREFERENCE_UNMATCHED"]) {
       expect(spawnProblem({ code, message: null }, "preview", one).sentence, code).not.toMatch(/harness above|harnesses above/);
       expect(spawnProblem({ code, message: null }, "preview").sentence, code).toMatch(/harness above|harnesses above/);
@@ -155,11 +146,11 @@ describe("a refusal, in a person's words, with what to do", () => {
 
   it("the kernel's words for a harness that is not installed go through the display filter; where it leaves nothing, the table's sentence stands", () => {
     const unsafe = "harness pi not found\u202E at /opt/x; set token=abc123 in env\nsecond line";
-    const said = spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: unsafe }, "preview", { line });
+    const said = spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: unsafe });
     expect(said.sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
     expect(said.sentence).not.toMatch(/token|\u202E|\n/);
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is\nnot on PATH" }, "preview", { line }).sentence).toBe("pi is not on PATH Install it, or pick another harness above.");
-    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "" }, "preview", { line }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "pi is\nnot on PATH" }).sentence).toBe("pi is not on PATH Install it, or pick another harness above.");
+    expect(spawnProblem({ code: "E_HARNESS_UNAVAILABLE", message: "" }).sentence).toBe("The harness this soul would run isn’t installed on this machine. Install it, or pick another harness above.");
   });
 });
 
@@ -253,12 +244,11 @@ describe("after the press, what is known decides what the form may offer", () =>
 });
 
 describe("model/spawn.ts stands on nothing of app/", () => {
-  it("imports no module of the app: what it answers is filtered by whoever draws it", () => {
+  it("imports the plugin's one display filter from model/, and nothing else", () => {
     const source = readFileSync(join(process.cwd(), "model/spawn.ts"), "utf8");
-    expect(source.match(/^import .*$/gm) ?? []).toEqual([]);
+    expect(source.match(/^import .*$/gm) ?? []).toEqual(['import { DETAIL_WITHHELD, displayLine } from "./text.js";']);
     // A capability's name in the Setup row comes as the kernel printed it; the column draws it through the filter.
     const hooked = { ...preview, worktreeHooks: [{ capability: "oats.build\u202E", required: true }] };
     expect(previewFacts(hooked).facts.find((fact) => fact.label === "Setup")!.parts[0]!.text).toBe("oats.build\u202E (required)");
   });
 });
-

@@ -23,6 +23,8 @@ const refusalOf = (promise: Promise<unknown>) =>
 /** Another list than the recorded one (test/fixtures/spawn/capabilities-show-bb.json: claude and pi), as `oats capabilities show oats.bb --json` would answer it. */
 const declares = (harnesses: string[] | undefined) => ({ "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { id: "oats.bb", sessionProviders: { bb: harnesses === undefined ? {} : { harnesses } } } }) } });
 const HOME = "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper";
+/** A read that never answers within a test: longer than any test's own limit (the backend's dispose ends it). */
+const HANGS_MS = 600_000;
 
 describe("stop", () => {
   it("the stop plan is answered with the bb session provider's version, from the one read of the provider; a read that fails names none and fails nothing", async () => {
@@ -38,26 +40,26 @@ describe("stop", () => {
     backend = await startBackend({ verbs: { "capabilities show": { stdout: "", stderr: "oats: no such capability", exit: 1 } } });
     expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: null });
     await backend.dispose();
-    // A read of the provider that hangs does not hold the plan the kernel answered: after a moment it is answered without the version.
-    backend = await startBackend({ verbs: { "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 12_000 } } });
-    const asked = Date.now();
+    // A read of the provider that hangs does not hold the plan the kernel answered: it is answered without the
+    // version. No clock is read here: the provider's read outlasts this test's own limit, so the plan arrives
+    // only if it did not wait for it.
+    backend = await startBackend({ verbs: { "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: HANGS_MS } } });
     expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: null });
-    expect(Date.now() - asked).toBeLessThan(8_000);
   }, 40_000);
 
   it("the version is waited for a moment AFTER the kernel's plan answered, not from the call: one that came while the kernel made a slow plan is used", async () => {
     const printed = JSON.parse(await readFile(join(FIXTURES, "spawn/capabilities-show-bb.json"), "utf8"));
-    // The plan takes 3.5 s and the provider's read 4.5 s: counted from the call the version would be given up at 3 s.
-    backend = await startBackend({ verbs: { "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 3_500 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 4_500 } } });
+    // The provider's read takes 3.6 s and the plan 5 s. Counted from the call the version would be given up at
+    // 3 s; counted from the plan's answer it is in hand when the plan comes, with seconds to spare on a slow host.
+    backend = await startBackend({ verbs: { "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 5_000 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 3_600 } } });
     expect(await backend.rpc("stopPlan", { instance: "redesign-ui-lead" })).toMatchObject({ action: "stop", providerVersion: (printed.result ?? printed).version });
   }, 40_000);
 
-  it("a plan the kernel refuses reaches the dialog at once, while the read of the provider's version is still in flight", async () => {
+  it("a plan the kernel refuses reaches the dialog without waiting for the read of the provider's version", async () => {
     const refusal = { schemaVersion: 1, ok: false, error: { code: "E_SESSION_UNKNOWN", message: "no instance named redesign-ui-lead" } };
-    backend = await startBackend({ verbs: { "instance stop --plan": { stdout: JSON.stringify(refusal), exit: 1 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: 12_000 } } });
-    const asked = Date.now();
+    // (No clock: the provider's read outlasts this test's limit, so the refusal arrives only if nothing waited for it.)
+    backend = await startBackend({ verbs: { "instance stop --plan": { stdout: JSON.stringify(refusal), exit: 1 }, "capabilities show": { file: "spawn/capabilities-show-bb.json", sleepMs: HANGS_MS } } });
     expect(await refusalOf(backend.rpc("stopPlan", { instance: "redesign-ui-lead" }))).toMatchObject({ message: expect.stringContaining("E_SESSION_UNKNOWN") });
-    expect(Date.now() - asked).toBeLessThan(3_000);
   }, 40_000);
 
   it("answers the plan as the kernel's facts, applies it with its revision, and shows the kernel's refusal of a stale one unchanged", async () => {

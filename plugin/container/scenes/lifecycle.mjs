@@ -386,18 +386,18 @@ export default [
   },
   {
     stage: "lifecycle",
-    name: "Start, of an agent that was cut off (its session is there, no harness loaded): first, that a message in its thread carries its conversation on, with the way there",
+    name: "Start, of an agent whose session was lost (not stopped by an operator): first, that a message in its thread carries its conversation on, with the way there",
     run: async ({ page, at, viewport, threads, check }) => {
       const helper = threads.get(HELPER);
       const shot = (name) => dialogShot({ page, at, viewport, check }, "start", name);
       try {
-        // The kernel's row after a reboot: not running, and a runtime state it cannot tell.
-        changes = { "weekly-digest-helper": { running: false, runtimeState: "unknown", sessionEnd: null } };
+        // The kernel's row of a session lost with the host (lib/instance-listing.mjs): not running, stopped, and not by an operator.
+        changes = { "weekly-digest-helper": { running: false, runtimeState: "stopped", sessionEnd: "lost" } };
         answers();
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
         check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
-        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Start dialog of a cut-off agent points at its thread`);
+        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Start dialog of an agent whose session was lost points at its thread`);
         const said = JSON.parse(
           await page.evaluate(
             `(() => { const confirm = document.querySelector(${JSON.stringify(confirm)}); const notice = confirm.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ first: confirm.firstElementChild === notice, title: notice?.querySelector("h3")?.innerText ?? null, open: document.querySelector(${JSON.stringify(testId("oats-start-thread"))})?.innerText ?? null, next: notice?.nextElementSibling?.innerText ?? "" }); })()`,

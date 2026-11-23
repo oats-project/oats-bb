@@ -14,3 +14,21 @@
 Recorded on 2026-11-22 with the versions `../README.md` names, the same one substitution (the
 paths), and no other edit. Neither is a default answer of the fake (`verbs.json`): a test names
 the file for the verb it asks.
+
+## The rows of an agent that does not run (the Start dialog's "cut off" line)
+
+No file: the tests of `carriesOn` and of the Start dialog (`test/lifecycle/words.test.ts`,
+`actions.test.tsx`) name the three rows by their fields. Which is recorded, and which is shaped
+from a contract:
+
+- **An operator's stop**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "stopped"`.
+  RECORDED: the row of `weekly-digest-helper` in `../roster/status.json` and
+  `../roster/status-recorded.json`.
+- **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. SHAPED
+  from the kernel's source, not recorded (`lib/instance-listing.mjs` of awebai/oats: a session the
+  host's shutdown stopped, or one that is gone on a home OATS did not stop). The live scene uses
+  the same shape over the recorded roster.
+- **A thread at rest with no harness loaded**: `running: false`, `runtimeState: "unknown"`, no
+  `sessionEnd`. SHAPED from the contract of the bb session provider's NEXT release (its harness
+  scan answers `running` for an idle thread); the provider on main answers `running: null` for
+  that thread, so no kernel prints this row yet. To be recorded when that release is pinned.

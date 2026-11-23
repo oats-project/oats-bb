@@ -550,7 +550,7 @@ test("a retire the kernel would refuse is blocked, and the reason beside Retire 
 // ---- Start and Restart (D-158 to D-166) ----
 
 test("Start opens a dialog first: nothing is started on one press; it checks the agent as the kernel has it now and is titled with that", async () => {
-  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") }); // (an operator's stop: the recorded row)
   await pick("start");
   const dialog = await slot.findByRole("dialog");
   await ready(slot);
@@ -1188,9 +1188,16 @@ test("an agent with no thread in bb has no conversation to archive: its Start sa
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
-test("an agent that was cut off (its session is there, no harness loaded): Start says first to send a message in its thread to carry on, with the way there; Start stays possible", async () => {
-  const cutOff = { running: false, runtimeState: "unknown" } as const;
-  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, cutOff), start: () => startedIn("thr_digest_2") });
+// The rows an agent that does not run can read (test/fixtures/lifecycle/README.md says which are recorded and which are shaped from the contract).
+const LOST = { running: false, runtimeState: "stopped", sessionEnd: "lost" } as const; // its session was lost with the host, or its harness is gone
+const AT_REST = { running: false, runtimeState: "unknown", sessionEnd: null } as const; // from the bb provider's next release: its thread at rest, no harness loaded
+const OPERATOR_STOP = { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as const;
+
+test.each([
+  ["whose session was lost", LOST],
+  ["whose thread is at rest with no harness loaded", AT_REST],
+])("an agent that was cut off (%s): Start says first to send a message in its thread to carry on, with the way there; Start stays possible", async (_, row) => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, row), start: () => startedIn("thr_digest_2") });
   await pick("start");
   await ready(slot);
   const confirm = slot.getByTestId("oats-confirm");
@@ -1210,7 +1217,7 @@ test("an agent that was cut off (its session is there, no harness loaded): Start
   expect(calls(slot, "start", "restart")).toEqual([]);
 });
 
-test("the cut-off line is for that state alone: not for a stopped agent, not for one whose state is not known, and not on a Restart", async () => {
+test("the cut-off line is for that state alone: never after an operator's stop, never for a row that does not say how its session ended, never on a Restart, never for a state that is not known", async () => {
   const pointed = async (verb: "start" | "restart", thread: string, change: Parameters<typeof startCheckOf>[1]) => {
     const { slot, pick } = await menu(thread, { startCheck: ({ instance }) => startCheckOf(instance, change) });
     await pick(verb);
@@ -1219,9 +1226,35 @@ test("the cut-off line is for that state alone: not for a stopped agent, not for
     resetApp();
     return there;
   };
-  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "unknown" })).toBe(true);
-  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "stopped" })).toBe(false);
-  expect(await pointed("start", "thr_digest", { running: false, runtimeState: null })).toBe(false);
-  expect(await pointed("start", "thr_digest", { running: null, runtimeState: "unknown" })).toBe(false);
-  expect(await pointed("restart", "thr_redesign", { running: false, runtimeState: "unknown" })).toBe(false);
+  expect(await pointed("start", "thr_digest", LOST)).toBe(true);
+  expect(await pointed("start", "thr_digest", OPERATOR_STOP)).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "unknown", sessionEnd: "stopped" })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: false, runtimeState: "stopped", sessionEnd: null })).toBe(false);
+  expect(await pointed("start", "thr_digest", { running: null, runtimeState: "unknown", sessionEnd: null })).toBe(false);
+  expect(await pointed("restart", "thr_redesign", LOST)).toBe(false);
+});
+
+test("a cut-off agent whose thread cannot take a message gets no line: bb says its thread is in error, or shows none", async () => {
+  const withThreads = async (threads: ReturnType<typeof fixtureThreads>) => {
+    const app = await loadApp();
+    const Overlay = app.appOverlays[0]!.component;
+    const slot = renderSlot<object, Contract>({ component: () => <Overlay /> }, {}, { rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance, LOST) }), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { openAct } = await import("../../app/lifecycle");
+    openAct("start", "weekly-digest-helper");
+    await ready(slot);
+    const said = { line: slot.queryByTestId("oats-start-thread") !== null, text: slot.getByTestId("oats-confirm").textContent! };
+    resetApp();
+    return said;
+  };
+  const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)));
+  expect(inError.line).toBe(false);
+  // Its thread is still there for bb: a start archives it, and the dialog says so.
+  expect(inError.text).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
+  const archived = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, isArchived: true } : thread)));
+  expect(archived.line).toBe(false);
+  expect(archived.text).toContain("This starts a new conversation using the saved briefing and state.");
+  const there = await withThreads(fixtureThreads());
+  expect(there.line).toBe(true);
 });

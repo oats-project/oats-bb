@@ -99,6 +99,8 @@ describe("start and restart", () => {
       running: false,
       runtimeState: "stopped",
       runtimeError: null,
+      // How its session ended, as the kernel's own row says it: an operator's stop.
+      sessionEnd: "stopped",
       harnesses: ["claude", "pi"],
     });
     // One more read of the one status everybody shares, and the provider asked once for every dialog.

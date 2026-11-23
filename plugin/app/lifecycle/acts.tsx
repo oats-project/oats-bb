@@ -24,6 +24,7 @@ import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "
 import {
   applyRefused,
   applying,
+  carriesOn,
   checkAgainRefused,
   checking,
   CHECKING_AGAIN,
@@ -467,7 +468,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
 
 // ---- Start and Restart ----
 
-type Check = Answer<"startCheck">;
+/**
+ * The kernel's answer, with what the dialog says of the agent's conversation: decided ONCE, from
+ * bb's threads as they were when the check answered. The launch archives the thread the agent
+ * had, so the same question asked while it runs would answer something else.
+ */
+type Check = Answer<"startCheck"> & { begins: string; carryOn: string | null };
 type StartState =
   | { phase: "checking" }
   | { phase: "ready"; check: Check }
@@ -498,6 +504,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
+  /** bb's own row of the agent's thread as it is at each render: read when the check answers. */
+  const threadNow = useRef<{ id: string; status: string } | null>(null);
+  threadNow.current = rowThread === null || oats.phase !== "ready" ? null : (oats.threadById.get(rowThread) ?? null);
   const [state, setState] = useState<StartState>({ phase: "checking" });
   /** "" keeps the recorded harness: nothing is passed. */
   const [harness, setHarness] = useState("");
@@ -516,7 +525,19 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     setState({ phase: "checking" });
     rpc.call("startCheck", { instance }).then(
       (answer) => {
-        if (live.current && mine === ticket.current) setState({ phase: "ready", check: answer });
+        if (!live.current || mine !== ticket.current) return;
+        // bb's thread of the agent NOW: in the sidebar (not archived, not hidden), with bb's own status of it.
+        const thread = threadNow.current;
+        setState({
+          phase: "ready",
+          check: {
+            ...answer,
+            // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
+            begins: thread === null ? START.fresh : START.newThread,
+            // Cut off, with a thread that can take a message: said first, with the way to that thread; Start stays possible.
+            carryOn: verb === "start" && thread !== null && carriesOn(answer, thread) ? thread.id : null,
+          },
+        });
       },
       (cause: unknown) => {
         const refusal = refusalOf(cause);
@@ -592,11 +613,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   useReveal(state.phase === "running" ? "running" : state.phase === "settled" ? "result" : "top");
   useKeepFocus();
   const recorded = known?.harness ?? null;
-  // An agent with a thread in bb gets a NEW one from a start or a restart, and the one it has is archived.
-  const begins = rowThread === null ? START.fresh : START.newThread;
-  // Cut off: its session is there and no harness is loaded (after a reboot). A message in its thread carries its
-  // conversation on; a start begins another. Said first, with the way to that thread; Start stays possible.
-  const cutOff = verb === "start" && state.phase === "ready" && rowThread !== null && known !== null && known.running === false && known.runtimeState === "unknown";
+  const begins = known?.begins ?? START.fresh;
+  const carryOn = state.phase === "ready" ? state.check.carryOn : null;
 
   return (
     <Confirm
@@ -610,11 +628,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       blocked={held?.reason ?? (badModel ? START.badModel : null)}
       notice={
-        cutOff ? (
+        carryOn !== null ? (
           <Notice
             title={START.carryOn}
             actions={
-              <Button data-testid="oats-start-thread" onClick={() => openThread(rowThread)}>
+              <Button data-testid="oats-start-thread" onClick={() => openThread(carryOn)}>
                 {`Open ${agentName(name)}`}
               </Button>
             }

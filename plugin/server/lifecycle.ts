@@ -6,7 +6,7 @@ import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
 import { harnessesOf } from "./spawn.js";
 
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
-const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish() });
+const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish(), sessionEnd: z.string().nullish() });
 
 /** Only what was given: a host call's input is JSON, which has no `undefined`. */
 const given = <Fields extends Record<string, unknown>>(fields: Fields): { [Key in keyof Fields]?: Exclude<Fields[Key], undefined> } =>
@@ -72,6 +72,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         running: agent.running,
         runtimeState: agent.runtimeState,
         runtimeError: agent.runtimeError,
+        sessionEnd: read.success ? (read.data.sessionEnd ?? null) : null,
         harnesses: declared,
       };
     },

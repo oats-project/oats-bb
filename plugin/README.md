@@ -473,12 +473,18 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
-  launch stops and archives the one the agent had (the kernel's `lib/launch.mjs`). Both dialogs
+  launch stops and archives the one the agent had (the bb session provider's
+  `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
   say so before the act ("Starts a new conversation. The current one stays readable in bb,
-  archived."), and the result opens the new thread. For an agent that was cut off (its session is
-  there and no harness is loaded, as after a reboot: the kernel's `running: false` with
-  runtimeState `unknown`) the Start dialog says first that a message in its thread carries its
-  conversation on, with a button to that thread; Start stays possible.
+  archived."), and the result opens the new thread. For an agent that was cut off the Start
+  dialog says first that a message in its thread carries its conversation on, with a button to
+  that thread; Start stays possible. Cut off is two facts, both read: the kernel's row says the
+  agent does not run and that no operator stopped it (a session lost with the host or with its
+  harness: `running: false`, `sessionEnd: "lost"`; from the bb provider's next release also a
+  thread at rest with no harness loaded: `running: false` with a runtime state that is not
+  `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
+  gets the line. The sentence under "What will happen" is decided once, when the check answers:
+  the launch archives the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
   (`--expect-decision`), so Spawn reads the kernel's preview and applies exactly that decision with
   the key; asked again with the same key, it replays the same spawn. A spawn or a retire that runs

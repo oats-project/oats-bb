@@ -56,7 +56,8 @@ export type { PlanVerb, RunVerb, Verb };
 /**
  * A result whose dialog went before it arrived, kept so that the dialog can be opened again ON it
  * (the toaster's "Show result"): the settled state as the dialog held it, with what "Check again"
- * needs (the plan and its key) and the plan's tick.
+ * needs (the plan and its key) and what the person chose (a stop's children, a retire's worktree,
+ * a start's harness and model).
  */
 type Resume =
   | { plan: Extract<PlanState, { phase: "settled" }>; recursive: boolean; discard: boolean }

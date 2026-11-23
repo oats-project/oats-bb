@@ -377,7 +377,7 @@ async function shots(scene, { instance, soul, threadId, state }) {
       // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
       const line = JSON.parse(await page.evaluate(`JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`));
       const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
-      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`Soul ${soul}`) && line.row.includes("OATS"), `${at}: the thread's row says "${WORD[state]}", and the soul`, JSON.stringify(line));
+      check(line.state === state && line.status.replace(/^! /, "").startsWith(WORD[state]) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}", the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
@@ -393,7 +393,7 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = ${textOf(testId("oats-soul-agent-detached"))}; return t.includes(${JSON.stringify(instance)}) ? t : ""; })()`, 30);
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
       check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
@@ -536,6 +536,8 @@ try {
       await page.goto("/plugins/oats/home");
       const choices = await page.until(`(() => { const c = ${card}; const b = c ? [...c.querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].map((e) => e.innerText.trim()) : []; return b.length > 0 ? JSON.stringify({ question: c.querySelector(${JSON.stringify(testId("oats-needs-question"))})?.innerText.trim(), choices: b }) : ""; })()`, 30);
       check(choices === JSON.stringify({ question: QUESTION, choices: ["Retry", "Mark failed"] }), `${at}: the home's card shows the question and its two choices`, choices ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
+      // The home's tiles count what OATS lists: the image is taken once none still says "Counting…" (one state in an image). True at once on a home with no tiles.
+      await page.until(`![...document.querySelectorAll('[data-testid="oats-home-tiles"] button')].some((tile) => tile.innerText.includes("Counting"))`, 20);
       await page.shot(`real-question-${viewport.name}-home${suffix}`);
       if (view !== VIEWS[VIEWS.length - 1]) continue;
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
@@ -582,7 +584,7 @@ try {
   step("A7 stop: the plan, then the apply");
   const stale = act("a stop plan, read and kept aside", "stopPlan", { instance: A.instance });
   const plan = act("stop plan", "stopPlan", { instance: A.instance });
-  check(plan?.lines[0]?.startsWith(`Stop ${A.instance} (${A.soul}): `), "the plan names the agent", JSON.stringify(plan));
+  check(plan?.instance === A.instance && plan.targets?.[0]?.instance === A.instance && plan.targets[0].soul === A.soul, "the plan names the agent", JSON.stringify(plan));
   // What the kernel's plan says of an agent whose thread is idle in bb (README, "What the run found").
   const idlePlan = recorded(["instance", "stop", A.instance], ["--plan"]);
   evidence.keep("stop-plan-idle.json", idlePlan.stdout);
@@ -606,7 +608,7 @@ try {
 
   step("A9 edge: stop on a stopped agent");
   const again = act("stop plan of a stopped agent", "stopPlan", { instance: A.instance });
-  check(/: not running$/.test(again?.lines[0] ?? ""), "the plan says it is not running", JSON.stringify(again));
+  check(again?.targets?.[0]?.session === "none", "the plan says it is not running", JSON.stringify(again));
   act("stop apply on a stopped agent", "stopApply", { instance: A.instance, revision: again.revision, key: "stop-112233445566" });
   show("the kernel's receipt", JSON.parse(recorded(["instance", "stop"], ["--apply", "stop-112233445566"]).stdout).result.results);
   row = rowOf(A.instance);
@@ -655,7 +657,7 @@ try {
 
   step("A14 retire: the plan, then the apply");
   const retirePlan = act("retire plan", "retirePlan", { instance: A.instance });
-  check(retirePlan?.lines[0]?.startsWith(`Removed: the home of ${A.instance} (${home}).`), "the plan says what is removed", JSON.stringify(retirePlan));
+  check(retirePlan?.instance === A.instance && retirePlan.home === home, "the plan is for the agent, and names the home that is removed", JSON.stringify(retirePlan));
   // The thread archived by hand in A12 is the home's too: the provider's stop ends its Claude, so nothing works in the home.
   act("retire apply", "retireApply", { instance: A.instance, revision: retirePlan.revision, key: "retire-0a1b2c3d4e5f" });
   check(rowOf(A.instance) === undefined && !existsSync(home), "oats status: no row is left, and the home is removed");
@@ -752,7 +754,7 @@ try {
   step("B1c the lead's stop, and a stale plan");
   const leadPlan = act("stop plan of the lead", "stopPlan", { instance: lead });
   evidence.keep("stop-plan.json", recorded(["instance", "stop", lead], ["--plan"]).stdout);
-  check(leadPlan?.lines.length >= 4 && leadPlan.lines[1].startsWith("Stop its child "), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
+  check(leadPlan?.targets?.length === 3 && leadPlan.targets[0].instance === lead && leadPlan.targets.slice(1).every((target) => target.depth === 1), "the plan lists the lead, then its children", JSON.stringify(leadPlan));
   // Another stop in between: one child is stopped by itself, so the lead's plan is no longer the one read.
   const one = act("stop plan of one child", "stopPlan", { instance: "harvest-knowledge-helper" });
   act("stop apply of that child", "stopApply", { instance: "harvest-knowledge-helper", revision: one.revision, key: "stop-5e6f7a8b9c0d" });
@@ -834,7 +836,26 @@ try {
   // files' order). A part's default export is `async (run) => {…}`: `run` holds this script's own
   // helpers, so its acts go through the plugin's RPC and are recorded like the ones above.
   const PARTS = join(HERE, "parts");
-  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, VIEWPORTS, DEPLOY, OUT };
+  /**
+   * For a part that takes images of its own screens on the run's real agents: `draw` is called once
+   * per view (bb's light and dark themes, at each width), with a page of that view whose theme is
+   * checked, and `shot(name)`, which saves `<scene>-<width>x<height>-<name>[-dark].png` beside the
+   * run's other images. The part navigates, WAITS on what it reads (`page.until`), checks it with
+   * `check`, then shoots: the image-set rule is one state per scene in both themes.
+   */
+  const views = async (scene, draw) => {
+    for (const view of VIEWS) {
+      const { viewport, theme, suffix } = view;
+      const at = `${scene} ${theme} ${viewport.name}`;
+      const page = await viewPage(browser, view, at);
+      try {
+        await draw({ page, at, viewport, theme, shot: (name) => page.shot(`${scene}-${viewport.name}-${name}${suffix}`) });
+      } finally {
+        await page.close();
+      }
+    }
+  };
+  const run = { step, check, pass, fail, note, show, until, sleep, bb, bbJson, oats, status, rowOf, rpc, act, records, recorded, refused, fixtures, evidence, browser, views, VIEWPORTS, DEPLOY, OUT };
   for (const file of existsSync(PARTS) ? readdirSync(PARTS).filter((name) => name.endsWith(".mjs")).sort() : []) {
     step(`C ${file.slice(0, -4)}`);
     await (await import(pathToFileURL(join(PARTS, file)).href)).default(run);

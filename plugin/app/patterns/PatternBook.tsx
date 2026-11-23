@@ -1,7 +1,7 @@
 // Every pattern of app/ui.tsx in each of its states (index.ts says what the page is for).
 import { useEffect, useState } from "react";
 import type { AgentState } from "../../model/types";
-import { Button, Card, Chip, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Heading, INPUT, LINK, Loading, Menu, Notice, Page, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../ui";
+import { Button, Card, Chip, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Heading, INPUT, LINK, Loading, Menu, notify, Notice, Page, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { instanceDisplayName, waitingLabel, waitingSince } from "../ui/words";
 
@@ -15,6 +15,15 @@ const SINCE = waitingSince(new Date(2026, 10, 21, 14, 3).toISOString(), NOW);
 type Phase = ConfirmProps["phase"];
 const PHASES: Record<string, Phase> = {
   reading: { kind: "reading" },
+  checking: { kind: "reading", text: "Checking instance…" },
+  unknown: {
+    kind: "done",
+    tone: "unknown",
+    title: "Result not confirmed",
+    lines: ["OATS didn't confirm the result. Check again before assuming nothing happened."],
+    code: "OATS_TIMEOUT",
+    actions: <Button>Check again</Button>,
+  },
   ready: { kind: "ready" },
   running: { kind: "running", doing: "Retiring…" },
   done: { kind: "done", title: `${NAME} was retired.`, lines: ["Its work tree is kept, moved out of the home."] },
@@ -32,6 +41,9 @@ const PHASES: Record<string, Phase> = {
     ),
   },
 };
+
+/** A plan that no window shows whole: the dialog's body scrolls, and says that there is more above and below. */
+const LONG_PLAN = Array.from({ length: 40 }, (_, index) => `Stops the session of agent ${index + 1} of 40.`);
 
 export function PatternBook() {
   const [tab, setTab] = useState<"schedules" | "triggers" | "history">("schedules");
@@ -70,7 +82,7 @@ export function PatternBook() {
         <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "question", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
-        <StatusLine state="unreachable" detail="OATS says: bb did not answer" action={<Button>Retry</Button>} />
+        <StatusLine state="unreachable" detail="OATS cannot reach its session" action={<Button>Retry</Button>} />
       </section>
 
       <section data-testid="oats-patterns-facts" className="flex flex-col gap-2">
@@ -195,11 +207,31 @@ export function PatternBook() {
           <Button data-testid="oats-patterns-open-reading" onClick={() => setDialog({ destructive: true, phase: "reading" })}>
             Reading the plan
           </Button>
+          <Button data-testid="oats-patterns-open-checking" onClick={() => setDialog({ destructive: false, phase: "checking" })}>
+            Reading, in the place's own words
+          </Button>
+          <Button data-testid="oats-patterns-open-unknown" onClick={() => setDialog({ destructive: true, phase: "unknown" })}>
+            A result that is not confirmed
+          </Button>
+          <Button data-testid="oats-patterns-open-long" onClick={() => setDialog({ destructive: false, phase: "long" })}>
+            A plan longer than the window
+          </Button>
           <Button data-testid="oats-patterns-open-blocked" onClick={() => setDialog({ destructive: true, phase: "blocked" })}>
             Blocked
           </Button>
           <Button data-testid="oats-patterns-open-unnamed" onClick={() => setDialog({ destructive: true, phase: "unnamed" })}>
             A plan that names no agent
+          </Button>
+        </div>
+      </section>
+      <section data-testid="oats-patterns-notify" className="flex flex-col gap-2">
+        <Heading>A result through bb's toaster</Heading>
+        <div className="flex flex-wrap gap-2">
+          <Button data-testid="oats-patterns-notify-done" onClick={() => notify({ tone: "done", title: `${NAME} started.`, open: { label: `Open ${NAME}`, run: () => setPicked("Open") } })}>
+            Notify: done, with Open
+          </Button>
+          <Button data-testid="oats-patterns-notify-failed" onClick={() => notify({ tone: "failed", title: `${NAME} wasn't started`, lines: ["OATS refused this start as busy. Nothing was started."] })}>
+            Notify: failed (stays until dismissed)
           </Button>
         </div>
       </section>
@@ -217,9 +249,9 @@ export function PatternBook() {
         <Confirm
           title={`${dialog.destructive ? "Retire" : "Stop"} ${NAME}?`}
           about={INSTANCE}
-          shownFor={dialog.phase === "other" ? "flaky-ci-developer" : dialog.phase === "unnamed" || dialog.phase === "reading" ? null : INSTANCE}
+          shownFor={dialog.phase === "other" ? "flaky-ci-developer" : dialog.phase === "unnamed" || dialog.phase === "reading" || dialog.phase === "checking" ? null : INSTANCE}
           blocked={dialog.phase === "blocked" ? "Tick the box to discard its work." : null}
-          happens={dialog.destructive ? ["Its home is removed.", "Its session is open and is stopped first."] : ["Its session is stopped."]}
+          happens={dialog.phase === "long" ? LONG_PLAN : dialog.destructive ? ["Its home is removed.", "Its session is open and is stopped first."] : ["Its session is stopped."]}
           kept={dialog.destructive ? ["Its work tree, moved out of the home, and its branch."] : ["Its home, its work, its transcript and its launch settings. Start brings it back."]}
           confirmLabel={dialog.destructive ? "Retire" : "Stop"}
           destructive={dialog.destructive}

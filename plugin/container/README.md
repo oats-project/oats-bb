@@ -105,9 +105,9 @@ open, a confirmation before its act, in progress, done, refused and with another
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
   and their preview (Preview and Spawn enabled).
 - **A14** with `oats` removed after it was read: the roster stays as last read under the notice
-  ("OATS is not installed on …", "Showing what was read <age>", Retry, Open settings) and "Last
-  observation — <age>"; a thread opens from it and its own row says "as of <age>"; the home keeps
-  its cards under the same notice.
+  ("OATS is not installed on …", "Showing what was read <age>.", that the acts are held, Retry,
+  Open settings); a thread opens from it and its own row says the same on one line, with its act
+  off; the home keeps its cards under the same notice.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
@@ -165,6 +165,11 @@ docker exec -u node -w /home/node/plugin bb-plugin-dev npx vitest run test/kerne
 docker exec -u node -w /home/node/plugin bb-plugin-dev bash container/live.sh
 docker rm -f bb-plugin-dev
 ```
+
+`ci.sh` also copies the bb session provider's two manifests (`oats-package/oats-package.json`,
+`oats-package/capabilities/oats-bb/oats.json`) beside the plugin, to `/home/node/oats-package/`:
+`test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
+needs them there too.
 
 ## Against a real kernel
 

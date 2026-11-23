@@ -214,6 +214,8 @@ describe("A2 state(): first match wins", () => {
   });
   test("the fixtures: three need you, two work, one is stopped, one is idle and unread", () => {
     const v = view(fixtureAgents(), fixtureThreads());
+    // Who waits, counted once for every place: the tree's three; none of them is thread-less here.
+    expect(v.needing.map((agent) => agent.instance).sort()).toEqual(["flaky-ci-developer", "ranker-v3-probe", "release-070-maintainer"]);
     expect(names(v.needsYou).sort()).toEqual(["flaky-ci-developer", "ranker-v3-probe", "release-070-maintainer"]);
     expect(names(v.working).sort()).toEqual(["desktop-mockups-developer", "redesign-ui-lead"]);
     expect(names(v.finished)).toEqual(["harvest-knowledge-helper"]);

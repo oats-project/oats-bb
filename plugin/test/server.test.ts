@@ -221,6 +221,45 @@ describe("snapshot", () => {
     expect(failed.machine).toBe("falcon"); // the machine it looked on, by the name bb gives it
   }, 20_000);
 
+  it("a read in flight across a settings change keeps nothing: a client waits for the new deployment's answer, and an act is refused, never given the old deployment's home", async () => {
+    // The old deployment is read and held in its status call; the settings then name a directory that
+    // holds no deployment; the old read answers after that.
+    expect((await rpc("snapshot")).ok).toBe(true);
+    await fake.behave({ status: { sleepMs: 2_000 } });
+    const before = (await verbs()).length;
+    const reading = rpc("refresh"); // a read is asked; it is in flight under the old settings
+    await expect.poll(async () => (await verbs()).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(before + 1);
+    await server.harness.setSettings({ deployment: join(fake.deployment, "agents") }); // holds no oats-local.yaml
+    // What a client is answered next is the new deployment's: never the old roster.
+    const next = await rpc("snapshot");
+    expect([next.ok, next.code]).toEqual([false, codes.noDeployment]);
+    expect(next.last).toBeNull();
+    // An act asked now is refused with why; no `oats session start` ran for the old deployment's home.
+    await expect(rpc("start", { instance: "redesign-ui-lead" })).rejects.toThrow(/No OATS deployment found/);
+    expect((await verbs()).slice(before)).not.toContain("start");
+    await reading.catch(() => undefined); // the old read's own answer is nobody's
+    expect((await rpc("snapshot")).code).toBe(codes.noDeployment);
+  }, 30_000);
+
+  it("a change of a setting the app alone reads (`pages`) is no other deployment: the roster, and the last one kept while OATS cannot be read, stay", async () => {
+    const read = await rpc("snapshot");
+    expect(read.ok).toBe(true);
+    const before = (await verbs()).length;
+    await server.harness.setSettings({ pages: "home, souls" });
+    // The roster is still the one read: no client waits for another, and nothing is read for the change.
+    expect((await rpc("snapshot")).at).toBe(read.at);
+    expect((await verbs()).length).toBe(before);
+    // OATS cannot be read: the last roster is kept, also across another change of `pages`.
+    await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
+    await rpc("refresh").catch(() => undefined);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    const failed = await rpc("snapshot");
+    expect(failed.last?.at).toBe(read.at);
+    await server.harness.setSettings({ pages: "home" });
+    const after = await rpc("snapshot");
+    expect([after.ok, after.last?.at]).toEqual([false, read.at]);
+  }, 20_000);
+
   it("asks to choose a machine when the server has several and none is set", async () => {
     await server.harness.dispose();
     hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" }), makeHostResponse({ id: "host_kite", name: "kite" })];
@@ -284,6 +323,34 @@ describe("the pages", () => {
 });
 
 describe("acts", () => {
+  // The acts are HELD while OATS cannot be read (R4): each lifecycle handler refuses with why,
+  // also for an agent of the roster that is still shown, and runs nothing.
+  it("takes no act while OATS cannot be read, also on an agent of the last roster read: each of the six is refused with the failure, and no oats verb runs for it", async () => {
+    const read = await rpc("snapshot");
+    expect(read.ok).toBe(true);
+    await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
+    await rpc("refresh").catch(() => undefined);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    // The roster is kept as last read, and the agent is one of it.
+    const failed = await rpc("snapshot");
+    expect(failed.last?.agents.some((agent: { instance: string }) => agent.instance === "weekly-digest-helper")).toBe(true);
+    const before = (await verbs()).length;
+    const instance = "weekly-digest-helper";
+    const acts: [string, Record<string, string>][] = [
+      ["stopPlan", { instance }],
+      ["stopApply", { instance, revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }],
+      ["start", { instance }],
+      ["restart", { instance }],
+      ["retirePlan", { instance }],
+      ["retireApply", { instance, revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" }],
+    ];
+    for (const [method, input] of acts) {
+      expect(await refusalOf(rpc(method, input)), method).toEqual({ code: "conflict", message: "E_CONFIG_BROKEN: oats-local.yaml cannot be read" });
+    }
+    // Nothing but reads of the roster ran meanwhile.
+    expect((await verbs()).slice(before).filter((verb) => verb !== "status")).toEqual([]);
+  }, 30_000);
+
   it("spawns through a preview and an apply bound to its decision, and answers the thread", async () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
     expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
@@ -350,69 +417,7 @@ describe("acts", () => {
     expect(await refusalOf(rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
   });
 
-  it("stops with the plan's revision, and shows the kernel's refusal of a stale one unchanged", async () => {
-    const plan = await rpc("stopPlan", { instance: "redesign-ui-lead" });
-    expect(plan.revision).toBe("9c1f2e3d4b5a69788796a5b4");
-    expect(plan.lines[0]).toMatch(/^Stop redesign-ui-lead/);
-    expect(await rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" })).toEqual({ ok: true });
-    await fake.behave({ "instance stop --apply": { file: "lifecycle/stop-apply-stale.json" } });
-    expect(await refusalOf(rpc("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-0000aaaa1111" }))).toEqual({
-      code: "conflict",
-      message: "E_PLAN_STALE: the stop plan changed since it was shown (f9dcbb5542487fc328e88b07 → c30af39bbdfb748db5e0b1b5); review the fresh plan",
-    });
-  });
-
-  it("acts only on an instance of the current snapshot, and takes the home from it", async () => {
-    for (const method of ["stopPlan", "start", "restart", "retirePlan"]) {
-      expect(await refusalOf(rpc(method, { instance: "not-in-the-snapshot" })), method).toMatchObject({ code: "invalid" });
-    }
-    expect(await refusalOf(rpc("stopApply", { instance: "not-in-the-snapshot", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }))).toMatchObject({ code: "invalid" });
-    expect(await refusalOf(rpc("retireApply", { instance: "not-in-the-snapshot", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }))).toMatchObject({ code: "invalid" });
-    await expect(rpc("start", { instance: "weekly-digest-helper", home: "/somewhere/else" })).rejects.toThrow();
-    expect(await verbs()).toEqual(["status"]);
-
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_7nx8uibthg" });
-    expect(await rpc("restart", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_d5zug5fnva" });
-    const sessions = (await fake.calls()).filter((call) => call.verb.startsWith("session"));
-    expect(sessions.map((call) => call.argv)).toEqual([
-      ["session", "start", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
-      ["session", "restart", "--home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper", "--json"],
-    ]);
-  });
-
-  it("takes the thread from the next snapshot when a start's answer names none", async () => {
-    await rpc("snapshot");
-    await fake.behave({ "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: "weekly-digest-helper", backend: "bb", warnings: [] } }) } });
-    expect(await rpc("start", { instance: "weekly-digest-helper" })).toEqual({ threadId: "thr_digest" });
-  }, 20_000);
-
-  it("refuses with a code of its own, never a kernel code, when no thread is named anywhere", async () => {
-    const roster = JSON.parse(await readFile(join(FIXTURES, "roster/status.json"), "utf8"));
-    for (const group of roster.agents) for (const instance of group.instances) if (instance.instance === "weekly-digest-helper") delete instance.session;
-    await fake.behave({
-      status: { stdout: JSON.stringify(roster) },
-      "session start": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: "weekly-digest-helper", backend: "bb", warnings: [] } }) },
-    });
-    expect(await refusalOf(rpc("start", { instance: "weekly-digest-helper" }))).toEqual({
-      code: "conflict",
-      message: "NO_THREAD_NAMED: Started weekly-digest-helper, but the kernel named no bb thread for it",
-    });
-  }, 20_000);
-
-  it("retires through the plan and its guarded apply", async () => {
-    const plan = await rpc("retirePlan", { instance: "weekly-digest-helper" });
-    expect(plan.revision).toBe("ef5028f1e6cb517560247307");
-    expect(plan.lines[0]).toMatch(/^Removed: the home of weekly-digest-helper/);
-    expect(await rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" })).toEqual({ ok: true });
-    const retire = (await fake.calls()).find((call) => call.verb === "retire")!;
-    expect(retire.argv).toEqual(["retire", "weekly-digest-helper", "--plan-revision", "ef5028f1e6cb517560247307", "--idempotency-key", "retire-2b9d4e6f8a1c", "--json"]);
-  });
-
-  it("rereads the snapshot after an act", async () => {
-    await rpc("snapshot");
-    await rpc("stopApply", { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" });
-    await expect.poll(async () => (await verbs()).filter((verb) => verb === "status").length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
-  }, 20_000);
+  // Stop, start, restart and retire: test/lifecycle/server.test.ts.
 });
 
 describe("the host-call limits", () => {
@@ -427,7 +432,7 @@ describe("the host-call limits", () => {
     // the pages, spawn and the lifecycle; another feature holds the list of its own verbs in its tests.
     const mine = { ...rosterHost, ...workspaceHost, ...spawnHost, ...lifecycleHost };
     const retryable = Object.entries(mine).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnPreview", "status", "stopPlan", "teams", "version"]);
+    expect(retryable.sort()).toEqual(["capabilities", "discover", "servers", "souls", "spawnHarnesses", "spawnPreview", "status", "stopPlan", "teams", "version"]);
   });
 });
 

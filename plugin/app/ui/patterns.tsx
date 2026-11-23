@@ -5,7 +5,7 @@ import { cloneElement, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
 import type { AgentState } from "../../model/types";
 import { refusalLines, shown } from "./text";
-import { STATE } from "./words";
+import { showingRead, STATE } from "./words";
 
 /** A control's height: 32 px, and 44 px at bb's compact (phone) width, where a finger presses it. */
 export const TARGET = "min-h-11 md:min-h-8";
@@ -84,18 +84,29 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * the question or the reason, and the act that applies, as a button. The thread's identity row,
  * the panel's header and the home's rows draw this one. `since` and `detail` are text from OATS or
  * an agent and go through the display filter here; the line wraps, and nothing in it is cut.
+ * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
+ * with a separator), and a list that opens from the line would be cut.
  */
 export function StatusLine({ state, word, since, detail, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; action?: ReactNode }) {
   const said = [since, detail].map((part) => shown(part)).filter((part) => part !== "");
+  // No line of it starts with a separator. Each part after the word carries its "·" in its own
+  // left padding, and the row is pulled left by as much inside a frame that clips: a part that
+  // wraps to the start of a line has its separator in the clipped strip, and the line starts
+  // with its words. (The frame's own padding keeps a focus ring of the act from being clipped.)
   return (
-    <div data-testid="oats-status-line" data-state={state} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground">
-      <span className="font-semibold">
-        <State state={state} word={word} />
-      </span>
-      {said.map((part, index) => (
-        <span key={index} className="min-w-0 break-words text-muted-foreground">{`· ${part}`}</span>
-      ))}
-      {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2">{action}</span>}
+    <div data-testid="oats-status-line" data-state={state} className="-m-1 min-w-0 overflow-hidden p-1 text-sm text-foreground">
+      <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
+        <span className="pl-4 font-semibold">
+          <State state={state} word={word} />
+        </span>
+        {said.map((part, index) => (
+          <span key={index} data-testid="oats-status-part" className="relative min-w-0 break-words pl-4 text-muted-foreground">
+            <span data-sep="" className="absolute left-0 top-0 w-4 text-center">{"· "}</span>
+            {part}
+          </span>
+        ))}
+        {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2 pl-4">{action}</span>}
+      </div>
     </div>
   );
 }
@@ -130,10 +141,12 @@ export const LINK = "underline underline-offset-2 hover:opacity-80";
  */
 export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
   return (
-    <details data-testid={testId} className="group min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
+    <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
       <summary className={`${TARGET} inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground hover:text-foreground`}>
-        {/* The mark that says it opens, turned when it is open (the summary's own triangle is lost with its flex layout). */}
-        <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">
+        {/* The mark that says it opens, turned when THIS fold is open (the summary's own triangle is
+            lost with its flex layout). By its own details alone: a fold inside an open fold is closed
+            until it is opened, and a rule on any open ancestor would turn its mark too. */}
+        <span aria-hidden="true" data-testid="oats-disclosure-mark" className="inline-block transition-transform [details[open]>summary>&]:rotate-90">
           ▸
         </span>
         {summary}
@@ -143,13 +156,26 @@ export function Disclosure({ summary, children, open, onToggle, testId = "oats-d
   );
 }
 
+/**
+ * What the kernel itself says behind a status line's words (of a session it cannot reach: often a
+ * raw URL or an errno): one press away, under Details, never the line's words. The one drawing, for
+ * the thread's row and the instance panel's header. Nothing for no text.
+ */
+export function KernelSays({ text }: { text: string | null }) {
+  const said = text === null ? "" : shown(text);
+  if (said === "") return null;
+  return (
+    <Disclosure summary="Details" testId="oats-status-kernel">
+      <p className="text-xs text-muted-foreground">{`OATS says: ${said}`}</p>
+    </Disclosure>
+  );
+}
+
 /** A kernel's own word inside a sentence (a code, a flag, a file's name): drawn as that, through the display filter. */
 export function Code({ children }: { children: string }) {
   return <code className="break-all rounded bg-muted px-1 py-0.5 text-xs text-foreground">{shown(children)}</code>;
 }
 
-/** The Desktop's sentence for content read earlier: with its age, or without one when the age is not known. */
-const showingRead = (age: string | null): string => (age === null ? "Showing what was last read." : `Showing what was read ${age}.`);
 
 const TONE = {
   info: { frame: "border-border", title: "text-foreground", role: "status" },

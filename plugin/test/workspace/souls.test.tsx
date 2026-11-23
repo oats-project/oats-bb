@@ -6,6 +6,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { asked } from "../../app/lifecycle";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
@@ -53,7 +54,7 @@ test("the picked soul: description, origin, capabilities, and its agents by wher
   fireEvent.click(inTree);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_ci" }]);
   // on tmux: labelled with the backend
-  expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("kernel-fix-developeron tmux");
+  expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("Kernel fix developeron tmux");
 });
 
 test("the New agent form says, in words and with no control, that the agent runs in bb's full mode", async () => {
@@ -179,13 +180,16 @@ test("spawnable: false shows the problem and no form", async () => {
 
 test("an agent whose thread is archived shows as thread missing, with Start and Retire", async () => {
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
-  const slot = await souls("oats-developer", { start: () => ({ threadId: "thr_restarted" }) }, fixtureAgents(), threads);
+  const slot = await souls("oats-developer", {}, fixtureAgents(), threads);
   const missing = await slot.findByTestId("oats-soul-agent-detached");
-  expect(missing.textContent).toBe("flaky-ci-developerthread missingStartRetire");
+  expect(missing.textContent).toBe("Flaky ci developerthread missingStartRetire");
   expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-detached-start"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_restarted" }]));
-  expect(rpcOf(slot, "start").map((call) => call.input)).toEqual([{ instance: "flaky-ci-developer" }]);
+  // Start opens the act's own dialog (test/lifecycle/actions.test.tsx holds what it does): nothing is started on one press.
+  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
+  expect(rpcOf(slot, "start")).toEqual([]);
+  fireEvent.click(slot.getByTestId("oats-detached-retire"));
+  expect(asked()).toEqual({ verb: "retire", instance: "flaky-ci-developer" });
 });
 
 test("a soul name in the URL that the deployment does not have says so", async () => {
@@ -303,13 +307,13 @@ test("a soul's page while OATS cannot be read: the notice with the age above its
   const notice = await stale.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(notice.textContent).toContain("Showing what was read 40 min ago.");
-  expect(stale.getByTestId("oats-soul-detail").textContent).toContain("flaky-ci-developer");
+  expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
   const never = await souls("oats-developer", { snapshot: failed(null) });
   const alone = await never.findByRole("alert");
   expect(alone.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("flaky-ci-developer");
+  expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("Flaky ci developer");
   expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
 
@@ -332,4 +336,21 @@ test("the Souls list while OATS cannot be read: the page's one notice, with the 
   const picked = await souls("oats-developer", { snapshot: failed(last) });
   await picked.findByRole("alert");
   expect(picked.getAllByTestId("oats-unreadable")).toHaveLength(1);
+});
+
+// The acts are held on the last roster read (R4), in this place too: Start and Retire of an agent
+// whose thread is missing stay in their place, off, with the reason.
+test("a soul's page on the last roster read: Start and Retire of an agent whose thread is missing are off, with the reason, and press nothing", async () => {
+  const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
+  const last = { at: new Date(Date.now() - 3 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const slot = await souls("oats-developer", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", machine: "falcon", last }) }, fixtureAgents(), threads);
+  await slot.findByTestId("oats-soul-agent-detached");
+  for (const id of ["oats-detached-start", "oats-detached-retire"]) {
+    const button = slot.getByTestId(id) as HTMLButtonElement;
+    expect([id, button.disabled, button.title]).toEqual([id, true, "Comes back when OATS is read again"]);
+    fireEvent.click(button);
+  }
+  expect(rpcOf(slot, "start")).toEqual([]);
+  expect(rpcOf(slot, "retirePlan")).toEqual([]);
+  expect(asked()).toBeNull(); // and no dialog was asked for either
 });

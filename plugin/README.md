@@ -46,13 +46,17 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
+| `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. Not behind the setting yet, each its owner's to close: the home's Workspace tiles and the panel's "Open soul page" still lead to a hidden page (which answers "not shown"), and the home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words, what to do, the code, the plugin's or the kernel's own message
 under Details, Retry, and Open settings where a setting mends it. Where OATS was read before, the
-roster stays as last read, marked with its age ("Last observation — <age>"), and its acts stay,
-each "as of <age>": an act goes to the kernel, which answers for what it knows now. Where it never
-was, bb's threads are listed as usual under the notice. The notice's code:
+roster stays as last read under that notice, which says its age once ("Showing what was read
+<age>."), and the OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start,
+Restart and Retire stay in their place, off, each with the reason, the notice says so in one
+sentence with Retry first, and the plugin's server takes no act meanwhile. What a place still
+shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
 |---|---|
@@ -80,15 +84,77 @@ bb settings ui set sidebar.threadListProvider oats/agents
 bb settings ui reset sidebar.threadListProvider
 ```
 
-## Stopping an agent
+## Stopping, starting, restarting and retiring an agent
 
-Stop an OATS agent with **Stop agent (OATS)** in the thread's menu: it stops the agent through
-OATS (the kernel's plan, then one confirmation), so a stopped agent stays stopped. bb's own
-composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts on its
-own when one of them is used: an agent whose thread was archived or deleted in bb stays in the
-roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its soul's
-page says "thread missing", with Start and Retire. Nothing is retired because
-a thread was deleted.
+The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
+on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
+**Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
+the suffix), on the thread's status line (**Start** for an agent that does not run, **Restart** for
+one whose session ended), on a soul's page for an agent whose thread bb does not have (**Start**,
+**Retire**), and in bb's command palette, each with a shortcut:
+
+| Command | Default shortcut | Acts on |
+|---|---|---|
+| OATS: Stop agent… | Alt+Shift+X | the agent whose thread is in view |
+| OATS: Restart agent… | Alt+Shift+R | the same |
+| OATS: Start agent… | Alt+Shift+S | the same |
+| OATS: Retire agent… | Alt+Shift+D | the same |
+
+The letters are the OATS Desktop's (after its leader key); the chord is bb's, and every one is
+rebound in bb's Settings, Keyboard. A key that cannot act says why in one line, through bb's
+toaster ("Weekly digest helper is stopped: Start it instead.", "This thread is not an OATS
+agent's."). bb does not run a plugin command's shortcut while its Terminal tab has the focus.
+
+- **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
+  PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
+  each session and of its uncommitted work, and what a person should see first (an agent in the
+  middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
+  reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
+  with a worktree of its own, with what would be lost said under it; without it the worktree is
+  kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
+  agent's thread (as the provider is today, a message sent in it starts the agent again without
+  OATS); Retire says that it cannot be undone and that the agent's conversation stays readable in
+  bb, archived. Where a retire kept the home (its cleanup did not finish), the result says that
+  the thread can be unarchived in bb and a message there starts the agent with no OATS around it.
+- **Start** and **Restart** first read the agent as the kernel has it now ("Checking
+  instance…"), and show its harness, machine and home. **Harness** starts on "Keep the recorded
+  harness" and passes nothing; one the bb session provider declares is passed as `--harness`. With
+  one harness declared there is no choice. **Model for this start** is blank for the recorded or
+  default model, or a model id. Neither act names a mode (the home's recorded choice stands), and
+  both say what that mode is on bb: "Runs in bb's full mode: no sandbox."
+  Restart says that it stops the current harness first. An agent the kernel says is running is
+  not started again: the dialog says so and offers its thread.
+- **While the act runs** the dialog says so and cannot be dismissed. **Its result** is said in the
+  same dialog, in the Desktop's lines ("3 sessions stopped.", "Home folder deleted.", "Worktree kept
+  at …", "Recovery copy saved at …"); a start opens the agent's new thread behind it. When the
+  person opened another act's dialog meanwhile, the result reaches them through bb's toaster, with
+  **Open <agent>**.
+- **A refusal** leads with a person's words, the kernel's code after them, and the kernel's own
+  message under **Details**. What to do next is a button: **Review again** reads a new plan (also
+  when the plan changed under the confirmation: it comes back as it is now, with what changed
+  said first, and cannot be confirmed until it was reviewed again), **Check again** asks
+  for the answer to what was already sent (same revision, same key: an answer that was lost reads
+  "Result not confirmed", never "nothing happened"), **Refresh status** reads the agent again
+  before another start. A plan refused for a name the kernel does not know (`E_SESSION_UNKNOWN`,
+  on a stop or a retire plan and nowhere else) says that the agent is not in OATS any more.
+- **On a roster that is the last one read** (OATS cannot be read) the acts stay where they are,
+  off, with when they come back.
+
+bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
+on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
+the roster, as a row that says "its bb thread is gone" and opens the agent's own page, and its
+soul's page says "thread missing", with Start and Retire. Nothing is retired because a thread was
+deleted. A thread stopped in bb alone is not stopped for OATS: stop an agent with the OATS act, so
+that it stays stopped.
+
+How it is built: `kernel/lifecycle.ts` reads a plan and a receipt into typed facts (nothing is
+worded there), `app/lifecycle/words.ts` makes the sentences from them (the Desktop's, with the
+commit they were copied at in its header), `app/lifecycle/acts.tsx` draws the two dialogs on the
+`Confirm` pattern, and `app/lifecycle/index.tsx` registers the ways in. Another feature opens a
+dialog with `openAct(verb, instance)`, and can place the acts of one agent as buttons ("Stop…",
+"Start…", "Restart…", "Retire…": the ones that apply, for an agent with no bb thread too) with
+`<AgentActs instance={…} />` (`app/lifecycle/index.tsx`). No place draws `AgentActs` yet: the
+instance panel and the agent's own page take it in their own change.
 
 ## The instance panel
 
@@ -99,7 +165,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS says: …"), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
+| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working · session started 14:03", "Needs you · waiting 12 min (since 14:03)", "Stopped", "Idle", "Failed · Its session ended", "Unreachable · OATS cannot reach its session"; for an unreachable agent what OATS itself says is one press away, under Details), and "instance of <soul>" (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. **Needs input**, while the agent waits on a person: the reason in words and its message (how long it waits is the status line's to say, once). **Work**: the work mode in one sentence, with **Paths** (the folder and the home, each with its Copy; "shared" where the folder is a link to a tree other instances use). **Session**: the harness, the model and where the choice came from, where the session runs ("bb thread", and the thread's id on a line of its own), since when it was started ("Last started" for an agent that does not run), and what OATS says of the session when it has something to say and the status line has not said it. **Messaging & Teams**: the messaging id, with its Copy. **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page** (off, with the reason beside it, for a soul OATS does not list); the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each and why), its **Capabilities** with the source of each and why it is there (a default, the soul's own, turned off by the soul), the capability **Warnings**; **Soul readiness**; **Details** (the agents root, with its Copy). |
 
 The Instance tab ends with two more sections. **Instance readiness** (`oats readiness`): one line
@@ -287,7 +353,7 @@ every layer, and the entry of a layer only composes them:
 | host | `host/<feature>.ts`: `handlers(core)`, one per verb of its `host` | `host.ts` | `host/core.ts` |
 | kernel | `kernel/<feature>.ts` (and `kernel/<feature>-*.ts`): `verbs(oats)`, the argv and the parser of each command | `kernel/index.ts` | `kernel/runner.ts`, `run.ts`, `envelope.ts`, `input.ts`, `result.ts`, `task-file.ts` |
 | app | `app/<feature>/`: its components, and `register(app)` in its `index` | `app.tsx` | `app/ui.tsx`, `app/ui/`, `app/oats.ts`, `app/store.ts`, `app/format.ts`, `app/keys.ts` |
-| model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts` |
+| model | `model/<feature>.ts` for types and pure functions of its own | | `model/types.ts`, `model/view.ts`, `model/text.ts` |
 | unit tests | `test/<feature>/`, with `handlers.ts`: the slot tests' default answer of each of its RPC verbs | `test/helpers/render.ts` | `test/helpers/`, `test/support/` |
 | fixtures | `test/fixtures/<feature>/`, with `verbs.json`: each `oats` verb the fake answers, and its file | `container/fake-oats.mjs` | |
 | live checks | `container/scenes/<feature>.mjs` | `container/live-ui.mjs` | `container/` |
@@ -325,9 +391,20 @@ What the features share, beyond the entries:
   with a view of one agent (the instance panel) names its component with `setAgentTab`
   (`app/home/agent-tab.ts`) in its `register`: the tab shows it on that agent's thread, and the home
   on every other, and while the roster cannot be read it keeps the view of the agent it showed there.
-  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's OATS
+  `setAgentPage(open)` names how to open one agent's own page (by instance): the thread row's "Instance panel"
   button opens it at the phone's width, and an agent with no bb thread opens it from its row in the sidebar and from its soul's page.
   `openSoul(navigate, key)` (`app/workspace/pages.ts`) opens one soul's page.
+- **Whether a page is shown** (the setting `pages`). A page's `navPanel` component is
+  `shownPage("<id>", Page)` (`app/workspace/pages.ts`): it draws the page where the release shows
+  it, the "not shown" line where it does not, and nothing while bb is still reading the settings.
+  A place that links to a page asks `usePageShown("<id>")` (or `usePagesShown()` for several) and
+  draws plain text, or nothing, where the page is not shown. A feature tests both cases: a slot
+  rendered with no settings stands for every page shown (`test/helpers/render.ts`), and a test
+  of the default names `settings: { pages: "home" }`.
+- **"New agent".** The form's feature names how to open it, once, in its `register`:
+  `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
+  "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
+  page where that page is shown, and is absent where it is not.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
@@ -352,8 +429,9 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 | failed, stale, not configured, cannot show | `Notice` | a title in a person's words, sentences, the age of what is still shown, the code after the words, the acts that help |
 | nothing to list; a read in flight | `Empty`, `Loading` | the Desktop's sentence and the act that fills it; "Reading …", announced |
 | content read earlier | `Stale` | its age, why the unsafe acts are held, a re-read in flight |
-| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog; it shows no plan that is another agent's |
+| an act on an agent | `Confirm` | the act and the agent in the title, what will happen, what is kept, the button named for the act, the act in progress and its result in the same dialog (done, refused, or not confirmed, with the code after the words); while the kernel is asked, the line of the place that asks ("Checking instance…"); it shows no plan that is another agent's |
 | what happened | `Result` | done, failed or not known, in words, with the code after and the next step |
+| what happened, once the person has moved on | `notify` | a result or a failure through bb's own toaster (`sonner`, which bb shims for plugins: a type-only devDependency at bb's version, no Toaster of the plugin's), with "Open <agent>"; a failure stays until dismissed; `notified()` is what a slot test reads |
 | a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
 | tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
 | the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
@@ -363,7 +441,7 @@ A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
 ### Text from OATS or an agent
 
 Everything the plugin draws that OATS or an agent wrote (a name, a description, a message, a
-refusal) goes through one display filter, `app/ui/text.ts`: the OATS Desktop's
+refusal) goes through one display filter, `app/ui/text.ts` (its functions are in `model/text.ts`): the OATS Desktop's
 (`packages/client/display-text.mjs`). Control characters and line breaks never reach the screen (a
 character that is not text is drawn as U+FFFD), a line is cut at 2048 characters, and a text that
 looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `shown(text)` is
@@ -430,8 +508,8 @@ Backend tests: `experimental_createHostEntryHarness` (`experimental_call`,
 `experimental_emitHostSignal`, `experimental_watchRpc`.
 
 App, slots: `experimental_threadList`, `experimental_threadHeaderRow`, `experimental_tab` (a fixed
-thread tab), `experimental_threadAction`, `experimental_appOverlay` (draws the plan dialogs of Stop
-and Retire and the progress and failure of Start and Restart, which a thread action has no place
+thread tab), `experimental_threadAction`, `experimental_appOverlay` (draws the dialogs of Stop,
+Start, Restart and Retire, which a thread action has no place
 to draw), and on `navPanel`:
 `experimental_useBadge`, `experimental_hideFromNavigation`.
 

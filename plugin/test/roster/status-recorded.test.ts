@@ -47,6 +47,7 @@ const one = {
   server: null,
   projectId: null,
   runtimeError: null,
+  startedAt: "2026-11-21T15:44:59.291Z", // when the session started, as the kernel's row says it
 };
 
 describe("a real kernel's status, read by the parser", () => {
@@ -93,7 +94,7 @@ describe("a real kernel's status, read by the parser", () => {
   });
 
   it("its thread deleted in bb: running false, state stopped, still naming the thread that is gone", () => {
-    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_4m85rand5n", running: false, runtimeState: "stopped", waiting: null }]);
+    expect(agentsOf("threadDeleted")).toEqual([{ ...one, threadId: "thr_4m85rand5n", running: false, runtimeState: "stopped", startedAt: "2026-11-21T15:49:07.053Z", waiting: null }]); // started again before its thread was deleted
   });
 
   it("a parent with two children: each child names its parent, in the kernel's order", () => {

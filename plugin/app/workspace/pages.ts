@@ -2,6 +2,7 @@
 // the plugin (`/plugins/oats/<path>`) and its title.
 import { createElement, useEffect, useSyncExternalStore } from "react";
 import type { ComponentType } from "react";
+import { useBbNavigate, useSettings } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 
 export const PAGES = [
@@ -61,15 +62,46 @@ const setOpen = (path: string | null) => {
  */
 export function shownPage<Props extends object>(path: string, Page: ComponentType<Props>): ComponentType<Props> {
   return function ShownPage(props: Props) {
-    useEffect(() => {
-      setOpen(path);
-      // Only the page that is still the open one takes the selection away: the next page may have set its own first.
-      return () => {
-        if (open === path) setOpen(null);
-      };
-    }, []);
-    return createElement(Page, props);
+    // A page that is not shown in this release has no route: its path answers one line, with a way back.
+    const pages = usePagesShown();
+    // Which pages are shown is not known until bb has read the settings: nothing is drawn till
+    // then, so a page that IS shown never says for a moment that it is not.
+    if (!pages.known) return null;
+    return pages.has(path) ? createElement(Open<Props>, { path, Page, props }) : createElement(NotShown, { path });
   };
+}
+
+/** The page itself, marked as the open one while it is drawn. */
+function Open<Props extends object>({ path, Page, props }: { path: string; Page: ComponentType<Props>; props: Props }) {
+  useEffect(() => {
+    setOpen(path);
+    // Only the page that is still the open one takes the selection away: the next page may have set its own first.
+    return () => {
+      if (open === path) setOpen(null);
+    };
+  }, [path]);
+  return createElement(Page, props);
+}
+
+/** What the path of a page that is not shown answers: that it is not shown, and the way back. */
+function NotShown({ path }: { path: string }) {
+  const navigate = useBbNavigate();
+  const home = usePageShown("home");
+  return createElement(
+    "div",
+    { "data-testid": "oats-page-not-shown", "data-page": path, className: "flex flex-col items-start gap-3 p-4 text-sm text-foreground" },
+    createElement("p", null, "This page is not shown in this release of the OATS plugin."),
+    createElement(
+      "button",
+      {
+        type: "button",
+        "data-testid": "oats-page-not-shown-back",
+        className: "inline-flex min-h-11 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-accent md:min-h-8",
+        onClick: () => (home && path !== "home" ? navigate.toPluginPanel("home") : window.history.back()),
+      },
+      home && path !== "home" ? "Back to Home" : "Back",
+    ),
+  );
 }
 
 /** The path of the plugin's page that is drawn now, or null: a thread, or a page of bb's own, is shown. */
@@ -82,3 +114,74 @@ export function useOpenPage(): string | null {
     () => open,
   );
 }
+
+// ---- which pages are shown (the plugin's setting `pages`) ----
+// A release shows only the pages that are finished: the others are built and tested, and left out of
+// the navigation. One switch, read here by every place that links to a page or is one.
+
+/** The ids a page can have in the setting `pages`. `home` is the default's only one. */
+export const PAGE_IDS = ["home", "automations", "souls", "capabilities", "teams", "machines"] as const;
+export const DEFAULT_PAGES = "home";
+/** For the unit tests alone: an unset `pages` stands for every page, a feature's own included. */
+let everyPageWhenUnset = false;
+/**
+ * The unit tests' harness gives a slot no settings unless a test names them. There an unset
+ * `pages` stands for a deployment that shows every page, so that each page's tests run
+ * (test/helpers/render.ts); a test of the release's default names `settings: { pages: "home" }`.
+ */
+export function showEveryPageWhenUnset(on: boolean): void {
+  everyPageWhenUnset = on;
+}
+
+/**
+ * The pages a `pages` value names: its ids, with commas or spaces between them, in any case (the
+ * six of PAGE_IDS, and the id of a page a feature adds). The default for a value that is no text
+ * (the setting is not set, or bb could not give the settings).
+ */
+export function pagesShown(value: unknown): { has(id: string): boolean } {
+  if (typeof value !== "string" && everyPageWhenUnset) return { has: () => true };
+  // A cleared field is the default, as for every other setting of the plugin.
+  const ids = new Set((typeof value === "string" && value.trim() !== "" ? value : DEFAULT_PAGES).split(/[\s,]+/).map((id) => id.trim().toLowerCase()).filter((id) => id !== ""));
+  return { has: (id) => ids.has(id.toLowerCase()) };
+}
+
+const NONE = { has: () => false, known: false } as const;
+
+/**
+ * The pages shown in this release, from the plugin's settings: `has(id)` for a link to a page, a
+ * mark of it, and its own route. `known` is false while bb is still reading the settings: no page
+ * is shown till then (a link that appears, never one that is taken away), and a page's own route
+ * draws nothing. Settings bb cannot give at all are the default's.
+ */
+export function usePagesShown(): { has(id: string): boolean; known: boolean } {
+  return pagesOf(useSettings());
+}
+/** The rule of `usePagesShown`, given what bb says of the settings. */
+export function pagesOf(settings: { values: Record<string, unknown> | undefined; isLoading: boolean }): { has(id: string): boolean; known: boolean } {
+  if (settings.values === undefined && settings.isLoading) return NONE;
+  return { ...pagesShown(settings.values?.pages), known: true };
+}
+
+/** Whether the page `id` is shown in this release: `usePagesShown().has(id)`, for a place that asks for one. */
+export const usePageShown = (id: string): boolean => usePagesShown().has(id);
+
+// ---- "New agent" ----
+// The form is the spawn feature's own page. It names how to open it here, in its `register`
+// (`setNewAgent(openNewAgent)` of app/spawn); until it does, "New agent" opens the Souls page, where
+// the form is today, when that page is shown.
+/** Where "New agent" starts: with a soul chosen (its key, as `oats souls` names it), or with none. */
+export type NewAgentTarget = { soul?: string };
+type OpenNewAgent = (navigate: BbNavigate, target?: NewAgentTarget) => void;
+let newAgent: OpenNewAgent | null = null;
+export function setNewAgent(open: OpenNewAgent | null): void {
+  newAgent = open;
+}
+/** Opens the New agent form; false when there is nowhere to open it (no feature named one, and the Souls page is not shown). */
+export function openNewAgent(navigate: BbNavigate, soulsShown: boolean, target?: NewAgentTarget): boolean {
+  if (newAgent !== null) newAgent(navigate, target);
+  else if (soulsShown) navigate.toPluginPanel("souls", target?.soul === undefined ? undefined : { subPath: target.soul });
+  else return false;
+  return true;
+}
+/** Whether "New agent" has somewhere to open. */
+export const hasNewAgent = (soulsShown: boolean): boolean => newAgent !== null || soulsShown;

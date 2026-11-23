@@ -96,6 +96,8 @@ mkdir -p "$LIVE"
 (cd "$PLUGIN" && tar -c --exclude ./dist --exclude ./.git --exclude ./container/out .) | tar -x -C "$LIVE"
 bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
+# Every page is shown for the run (the plugin's setting `pages`; a release's default is `home` alone).
+bb plugin config oats set pages "home, automations, souls, capabilities, teams, machines" > /dev/null
 bb plugin list | grep -q '^oats@.* running' || { echo "setup: the plugin is not running" >&2; bb plugin list; exit 1; }
 bb plugin config oats set deployment "$REAL/deploy" > /dev/null
 bb plugin config oats set oatsBin "$REAL/bin/oats-record" > /dev/null

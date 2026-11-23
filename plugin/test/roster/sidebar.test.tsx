@@ -6,7 +6,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
-import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { ALL_PAGES, handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
 afterEach(resetApp);
@@ -48,7 +48,7 @@ test("a row is two lines: its name, then its state in a word and its soul; the m
   const facts = (id: string) => within(row(id)).getByTestId("oats-row-facts").textContent;
   const mark = (id: string) => row(id).querySelector("[data-mark]")!;
 
-  expect(row("thr_release").textContent).toContain("Release 0.70");
+  expect(row("thr_release").textContent).toContain("Release 070 maintainer"); // the instance name as words, never bb's title for the thread (R1)
   expect(facts("thr_release")).toBe("Needs you · oats-maintainer");
   expect(facts("thr_ci")).toBe("Needs you · oats-developer"); // a claim, and a bb pending interaction
   expect(facts("thr_redesign")).toBe("Working · oats-product-expert");
@@ -346,7 +346,7 @@ test("a feature's own page is a row under the four pages, with its mark while it
   expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
 });
 
-test("while OATS cannot be read after it was, the tree stays as last read, under the notice and its age: never bb's flat list", async () => {
+test("while OATS cannot be read after it was, the tree stays as last read under the one notice: its age said once, that the acts are held, Retry; never bb's flat list", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const { slot } = await sidebar({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) });
   const rows = await slot.findAllByTestId("oats-agent-row");
@@ -355,7 +355,10 @@ test("while OATS cannot be read after it was, the tree stays as last read, under
   const notice = slot.getByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
   expect(notice.textContent).toContain("Showing what was read 2 min ago.");
-  expect(slot.getByTestId("oats-last-observation").textContent).toBe("Last observation — 2 min ago");
+  // The age is said once, in one form; the acts are held, and the sentence names Retry first.
+  expect(slot.getByTestId("oats-sidebar").textContent!.match(/2 min ago/g)).toHaveLength(1);
+  expect(slot.queryByTestId("oats-last-observation")).toBeNull();
+  expect(slot.getByTestId("oats-held").textContent).toBe("Press Retry: Stop, Start, Restart and Retire come back when OATS is read again.");
   expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
@@ -382,7 +385,7 @@ test("the row of the plugin's page that is shown is the selected one (D-037), an
   expect(current()).toEqual([]);
   const { shownPage } = await import("../../app/workspace/pages");
   const Teams = shownPage("teams", () => null);
-  const page = render(<Teams />);
+  const page = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(current()).toEqual(["teams"]));
   expect(slot.getByTestId("oats-page-link-teams").className).toContain("bg-accent");
   page.unmount();
@@ -415,4 +418,103 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
   const header = await slot.findByTestId("oats-panel-state");
   expect(header.querySelector("[data-state]")!.getAttribute("data-state")).toBe("stopped");
   expect(header.textContent).toContain("Stopped");
+});
+
+// The plugin's setting `pages`: a release shows only the pages that are finished (its default: the
+// home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
+// waits still opens the home; "New agent" is there only where it has somewhere to open.
+test("with the release's default (pages: home) the sidebar has the roster, who waits and no page link; with every page, all of them", async () => {
+  const withPages = async (pages: string) => {
+    const app = await loadApp();
+    return renderSlot<PluginThreadListProps, Contract>(
+      app.threadLists[0]!,
+      { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages } },
+    );
+  };
+  const pilot = await withPages("home");
+  await pilot.findByTestId("oats-tree");
+  expect(pilot.queryByTestId("oats-pages")).toBeNull();
+  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  expect(pilot.queryByTestId("oats-new-agent")).toBeNull(); // nowhere to open yet: the form's own page names itself
+  fireEvent.click(pilot.getByTestId("oats-needs-line"));
+  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  pilot.unmount();
+  resetApp();
+  const all = await withPages(ALL_PAGES);
+  await all.findByTestId("oats-tree");
+  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
+  expect(all.getByTestId("oats-new-agent")).toBeTruthy();
+  all.unmount();
+  resetApp();
+  // With the home itself left out, the count is said and opens nothing.
+  const none = await withPages("souls");
+  await none.findByTestId("oats-tree");
+  expect(none.getByTestId("oats-needs-line").tagName).toBe("P");
+  expect(none.getByTestId("oats-page-link-souls")).toBeTruthy();
+});
+
+test("the path of a page that is not shown answers one line and the way back; the page itself is not drawn", async () => {
+  const { shownPage } = await import("../../app/workspace/pages");
+  const Teams = shownPage("teams", () => <p data-testid="the-page">teams</p>);
+  const hidden = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home" } });
+  expect(hidden.getByTestId("oats-page-not-shown").textContent).toBe("This page is not shown in this release of the OATS plugin.Back to Home");
+  expect(hidden.queryByTestId("the-page")).toBeNull();
+  fireEvent.click(hidden.getByTestId("oats-page-not-shown-back"));
+  expect(hidden.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
+  hidden.unmount();
+  const shown_ = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home, Teams" } });
+  expect(shown_.getByTestId("the-page")).toBeTruthy();
+});
+
+test("\"New agent\" opens the form's own page once the spawn feature names it, whatever pages are shown", async () => {
+  const { setNewAgent } = await import("../../app/workspace/pages");
+  const app = await loadApp();
+  setNewAgent((navigate) => navigate.toPluginPanel("new-agent"));
+  try {
+    const slot = renderSlot<PluginThreadListProps, Contract>(
+      app.threadLists[0]!,
+      { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+      { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages: "home" } },
+    );
+    fireEvent.click(await slot.findByTestId("oats-new-agent"));
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
+  } finally {
+    setNewAgent(null);
+  }
+});
+
+// One count of who waits (model/view.ts `needing`), read by the sidebar's foot (the home follows in its owner's change):
+// an agent with no bb thread that waits on a person is counted, as its own row says it does.
+test("the foot counts every agent that waits, the ones with no bb thread included", async () => {
+  const claim = { reason: "question", message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
+  // The tmux agent runs and carries a claim; the stopped agent's thread is gone (it shows none).
+  const agents = fixtureAgents().map((agent) => (agent.backend === "tmux" ? { ...agent, running: true, runtimeState: null, waiting: claim } : agent));
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) }, null, { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_digest") });
+  await slot.findByTestId("oats-tree");
+  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // three in the tree, and the one on tmux
+  const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
+  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · runs in tmux");
+});
+
+// On a deployment that shows more than the default, a page opened by its path must not say "not
+// shown" for the moment bb takes to read the settings (round 1 of the second pass).
+test("while bb is still reading the settings no page is known to be shown or hidden; settings bb cannot give are the default's", async () => {
+  const { pagesOf, showEveryPageWhenUnset } = await import("../../app/workspace/pages");
+  showEveryPageWhenUnset(false); // as in the built app
+  try {
+    const loading = pagesOf({ values: undefined, isLoading: true });
+    expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
+    const unavailable = pagesOf({ values: undefined, isLoading: false });
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
+    const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
+    expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // A cleared field is the default, as for the plugin's other settings.
+    const cleared = pagesOf({ values: { pages: " " }, isLoading: false });
+    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, false]);
+    // The values of a read before stay while bb reads them again.
+    expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
+  } finally {
+    showEveryPageWhenUnset(true);
+  }
 });

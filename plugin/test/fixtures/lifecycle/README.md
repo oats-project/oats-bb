@@ -46,3 +46,15 @@ No recorded receipt carries the key: the kernel prints it only with something to
 that read warnings (`test/lifecycle/kernel.test.ts`, `words.test.ts`) add strings to the recorded
 `retire-apply.json`, SHAPED from the kernel's source (`lib/core.mjs` of awebai/oats: `warnings` of
 the retire's result is an array of strings). To be recorded when a run produces one.
+
+## The retire refused while a process works in the home (`E_RUNTIME_QUIESCE_FAILED`)
+
+No file yet. The message in `test/lifecycle/words.test.ts` is the kernel's as the plugin's RPC
+relayed it the one time the pi run met it (its first development run, OATS 0.70.3: "the bb
+session of pi-form-developer stopped, and a process works in its home (pid 5020 pi); stop it,
+then retire again. …"). It is not the kernel's own stdout, stderr and exit code, so it is no
+fixture. The pi run (`container/real/pi`) waits for that pi to leave before it retires; its
+owner adds a step that asks the retire at once and keeps the kernel's answer as
+`real/pi/out/answers/retire-pi-refused.json`. The test takes that file when it exists. The line
+the dialog adds does not depend on the message: it is decided from the code, the plan's backend
+and the row's harness.

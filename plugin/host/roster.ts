@@ -2,8 +2,9 @@
 // deployment's event log.
 import { existsSync } from "node:fs";
 import { hostname } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ExperimentalHostWatchSubscription } from "@get-bb/plugin-sdk";
+import { CHANGED_FILES_MAX, eventFileName } from "../contract/index.js";
 import type { host } from "../contract/roster.js";
 import type { Handlers, HostCore } from "./core.js";
 
@@ -15,6 +16,25 @@ const DEPLOYMENT_MARKER = "oats-local.yaml";
  * directory. It does not change when a harness exits by itself; the server's slow poll carries that.
  */
 const EVENTS = [".agents", "events"] as const;
+
+/**
+ * The watch's wait before it delivers a batch: bb's own defaults (75 ms of quiet, 500 ms at most).
+ * The event path reads one instance's events on the signal, so the wait is part of how soon a
+ * claim or a stop is on the screen; a longer one (it was 250 ms and 2 s) bought fewer signals in a
+ * burst, which the server's own rules now bound (one events read per instance at a time, one
+ * `oats status` at a time with its pause).
+ */
+const WATCH = { debounceMs: 75, maxWaitMs: 500 } as const;
+
+/**
+ * The instances' files a batch of changes names: base names only (the watcher's path may be
+ * absolute or relative to the watched directory), each once, only names of the log's own form;
+ * none when the batch names more than CHANGED_FILES_MAX (the status read carries a sweep).
+ */
+export function changedFiles(changes: readonly { path: string }[]): string[] {
+  const names = [...new Set(changes.map((change) => basename(change.path)).filter((name) => eventFileName.safeParse(name).success))];
+  return names.length > CHANGED_FILES_MAX ? [] : names;
+}
 
 export const handlers = (core: HostCore): Handlers<typeof host> => {
   let watching: { path: string; subscription: ExperimentalHostWatchSubscription } | null = null;
@@ -38,6 +58,7 @@ export const handlers = (core: HostCore): Handlers<typeof host> => {
     },
 
     status: (base, context) => core.run(base, context, (oats) => oats.status(context.signal)),
+    rosterEvents: ({ instance, home, since, ...base }, context) => core.run(base, context, (oats) => oats.rosterEvents(instance, home, since, context.signal)),
     version: (base, context) => core.run(base, context, (oats) => oats.version(context.signal)),
 
     watch: ({ deployment }, context) => {
@@ -52,13 +73,13 @@ export const handlers = (core: HostCore): Handlers<typeof host> => {
         }
         // No event log yet (a deployment nothing was spawned in): the server asks again later.
         if (path === null || !existsSync(path)) return { watching: null };
-        const subscription = await context.experimental_watch({ rootPath: path, debounceMs: 250, maxWaitMs: 2_000 }, async (event) => {
+        const subscription = await context.experimental_watch({ rootPath: path, ...WATCH }, async (event) => {
           if (event.kind === "watch-error") {
             // The daemon's watcher gave up on this directory: forget it, so the next call watches again.
             if (watching?.path === path) watching = null;
             await subscription.dispose();
           }
-          await context.experimental_emitSignal("changed", { reason: event.kind });
+          await context.experimental_emitSignal("changed", { reason: event.kind, files: event.kind === "changed" ? changedFiles(event.changes) : [] });
         });
         watching = { path, subscription };
         return { watching: path };

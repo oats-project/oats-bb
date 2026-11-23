@@ -8,6 +8,7 @@ import { z } from "zod";
 import { hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
 import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
+import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
@@ -135,6 +136,15 @@ export function createCore(bb: BbPluginApi) {
   let lastTook = 0;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
+  // ---- the event path (below, "between two status reads") ----
+  /**
+   * Per instance, the last events answer applied to its row, and when the read that brought it
+   * STARTED: kept so that a status answer OLDER than it (a status read that started before it) does
+   * not take the change off the screen again. Dropped by the first status read that started after it.
+   */
+  const patches = new Map<string, { said: EventsSaid; startedAt: number }>();
+  /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
+  const eventsReads = new Map<string, { again: boolean }>();
   let watchers = 0;
   let clientSeenAt = 0;
   const pages = new Map<string, { at: number; value: Promise<unknown> }>();
@@ -279,6 +289,10 @@ export function createCore(bb: BbPluginApi) {
       lastTook = 0;
       return next;
     }
+    // The event path's patches that are NEWER than this read (their events read started after this
+    // status read did) still stand over it; the others are older than it, and this read is the truth.
+    if (next.ok) next = { ...next, agents: withPatches(next.agents, next.at, lastStart) };
+    else patchesOlderThan(lastStart);
     const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
     const changed = key !== comparable;
     cached = next;
@@ -290,6 +304,116 @@ export function createCore(bb: BbPluginApi) {
     lastTook = next.ok ? lastEnd - lastStart : 0;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
+  }
+
+  // ---- between two status reads: the event path ----
+  //
+  // A change OATS itself makes (a claim set or cleared, a stop) appends a line to that instance's
+  // file in the deployment's event log, and the watch names the file. `oats instance events` for
+  // ONE instance answers in about a tenth of a status read: the server reads it, moves that
+  // agent's row to what it says (model/events.ts `withEvents`: the claim and a stop, nothing
+  // else) and publishes, so that the change is on the screen without waiting for `oats status`.
+  // The status read is asked for exactly as before, and it is the truth:
+  //
+  // - Every answer is ranked by WHEN ITS READ STARTED. An events answer whose read started before
+  //   the snapshot's status read did is dropped (that status read is newer). A status answer whose
+  //   read started before an events read that patched a row is OLDER than the patch: the same
+  //   function is applied to its row again from the kept answer (`withPatches`), so the change
+  //   does not leave the screen and come back. The first status read that started AFTER that
+  //   events read is taken whole, and the kept answer is dropped.
+  // - FAIL SAFE: an events read that fails, times out, answers a shape this does not know, or is
+  //   for an instance the snapshot does not hold changes nothing, and is said at debug level.
+  // - Only the snapshot's agents are patched. What the kernel printed (`rawRows`: the lifecycle's
+  //   and the automations' reads) is the status read's alone: an act on a patched agent reads the
+  //   kernel's own row and goes to the kernel, as it does on any roster that is a moment old.
+  // - The snapshot's `at` stays the status read's start: it is how old the roster is.
+
+  /** Drops the kept answers a status read that started at `statusStart` is newer than. */
+  function patchesOlderThan(statusStart: number): void {
+    for (const [instance, kept] of patches) if (kept.startedAt <= statusStart) patches.delete(instance);
+  }
+  /** A status answer's agents, with the kept answers that are newer than that read applied again. */
+  function withPatches(agents: Agent[], readAt: string, statusStart: number): Agent[] {
+    patchesOlderThan(statusStart);
+    if (patches.size === 0) return agents;
+    return agents.map((agent) => {
+      const kept = patches.get(agent.instance);
+      return kept === undefined ? agent : withEvents(agent, kept.said, readAt);
+    });
+  }
+  /** What a patch changed, in words for the log. */
+  const patchSaid = (before: Agent, after: Agent): string =>
+    [
+      before.waiting === null && after.waiting !== null ? "a claim set" : null,
+      before.waiting !== null && after.waiting === null ? "the claim cleared" : null,
+      before.waiting !== null && after.waiting !== null && before.waiting !== after.waiting ? "the claim changed" : null,
+      before.running !== false && after.running === false ? "stopped" : null,
+    ]
+      .filter((part) => part !== null)
+      .join(", ") || "the row";
+
+  /**
+   * Reads one instance's events and applies what they say to its row. Never two reads at once for
+   * one instance: a signal that names it meanwhile makes one more read when this one ends.
+   */
+  async function readEvents(instance: string): Promise<void> {
+    const reading = eventsReads.get(instance);
+    if (reading !== undefined) {
+      reading.again = true;
+      return;
+    }
+    const mine = { again: false };
+    eventsReads.set(instance, mine);
+    try {
+      do {
+        mine.again = false;
+        await readEventsOnce(instance);
+      } while (mine.again && !lifetime.signal.aborted);
+    } finally {
+      eventsReads.delete(instance);
+    }
+  }
+  async function readEventsOnce(instance: string): Promise<void> {
+    const dropped = (why: string) => bb.log.debug(`the event path: ${instance}: nothing changed: ${why}`);
+    const generation = settingsGeneration;
+    const from = cached;
+    const at = target;
+    const agent = from !== null && from.ok ? from.agents.find((candidate) => candidate.instance === instance) : undefined;
+    if (from === null || !from.ok || agent === undefined || at === null) return dropped("the snapshot holds no such agent now");
+    const startedAt = Date.now();
+    let answer: Answer<EventsSaid>;
+    try {
+      answer = await host.call(
+        "rosterEvents",
+        { deployment: at.deployment, oatsBin: (await settings.get()).oatsBin, instance, home: agent.home, since: from.at },
+        { hostId: at.hostId, signal: lifetime.signal, timeoutMs: HOST_TIMEOUT.read },
+      );
+    } catch (error) {
+      return dropped(`its events could not be read: ${String((error as Error).message)}`);
+    }
+    const took = Date.now() - startedAt;
+    if (!answer.ok) return dropped(`oats instance events answered ${answer.error.code} in ${took} ms`);
+    if (generation !== settingsGeneration || lifetime.signal.aborted) return dropped("the settings changed while its events were read");
+    const now = cached;
+    if (now === null || !now.ok) return dropped("OATS cannot be read now: the roster shown is the last one read");
+    // A status read that started after this events read did is newer than it: it is the truth.
+    if (Date.parse(now.at) >= startedAt) return dropped(`a status read that started after its events read (${took} ms) has answered`);
+    const row = now.agents.find((candidate) => candidate.instance === instance);
+    if (row === undefined) return dropped("the snapshot holds no such agent now");
+    patches.set(instance, { said: answer.value, startedAt });
+    const next = withEvents(row, answer.value, now.at);
+    if (next === row) return dropped(`its events say what the row says (read in ${took} ms)`);
+    cached = { ...now, agents: now.agents.map((candidate) => (candidate === row ? next : candidate)) };
+    comparable = JSON.stringify({ ...cached, at: null, last: null, root: rawRows?.root ?? "", rows: rawRows === null ? null : [...rawRows.rows] });
+    bb.log.debug(`the event path: ${instance}: ${patchSaid(row, next)}, from its events read in ${took} ms`);
+    // The token is this read's start, not the snapshot's `at` (which stays the status read's): a client acts once per token.
+    if (!lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: new Date(startedAt).toISOString() });
+  }
+  /** The agent of the snapshot whose event file is `file` (`<agent>--<instance>.jsonl`), when exactly one is. */
+  function agentOfFile(file: string): string | null {
+    if (cached === null || !cached.ok) return null;
+    const named = cached.agents.filter((agent) => `${agent.soul}--${agent.instance}.jsonl` === file);
+    return named.length === 1 ? named[0]!.instance : null;
   }
 
   /**
@@ -463,6 +587,11 @@ export function createCore(bb: BbPluginApi) {
     const offChanged = host.experimental_onSignal("changed", ({ hostId, payload }) => {
       if (target && hostId !== target.hostId) return;
       if (payload.reason !== "changed") watchAsserted = false; // a watcher error or a rescan: assert the watch again
+      // The event path: each instance the watch named is read by itself; the status read follows as before.
+      for (const file of payload.files) {
+        const instance = agentOfFile(file);
+        if (instance !== null) void readEvents(instance);
+      }
       rereadSoon();
     });
     const offWorkerExit = host.experimental_onWorkerExit(() => {
@@ -480,6 +609,7 @@ export function createCore(bb: BbPluginApi) {
       // its last one. Until the new one is read there is none: a client and an act wait for it.
       cached = null;
       comparable = "";
+      patches.clear();
       lastRoster = null;
       rawRows = null;
       target = null;

@@ -412,6 +412,9 @@ const BUILT_IN = {
     enter: async ({ threads }) => {
       fake({ status: { stdout: statusWithRealIds(threads) } });
       pages("home");
+      // The fixtures' roster is WAITED for: the stage before this one drew another (found by a run whose
+      // image of this stage was the tmux roster's).
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper") && snapshot.agents.length === 8);
     },
     leave: async () => pages(ALL_PAGES),
   },

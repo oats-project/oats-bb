@@ -383,12 +383,11 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     <artifact> provider-<id> <data dir>` per thread, with the thread's harness as its
     direct child; neither that process's command line nor its environment names the
     thread (the harness's environment does). A bb that moves the file or the word is
-    another version than the pin (the contract tests fail at such a bump; a pin moved
-    along with bb, before the provider knows that bb, makes its harnesses read `false`,
-    the safe direction too): there a loaded
+    another version than the pin (the contract tests fail at such a bump): there a loaded
     harness reads `running: null`, never `true`, so a home stopped with the host is
     resumed by an input all the same, and a harness started again in a stopped home goes
-    unseen until the provider knows that bb's runner.
+    unseen until the provider knows that bb's runner. A pin moved along with bb, before
+    the provider knows that bb, makes its harnesses read `false`: the safe direction too.
   - Where bb's host daemon ends under a loaded harness (seen with the daemon killed, for
     pi and for Claude, pinned by `test/contract`): bb-app starts the daemon again, the
     harness ends with the old one and no process is left that carries the thread's id

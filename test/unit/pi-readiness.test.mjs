@@ -153,7 +153,7 @@ for (const [name, write] of [
 
 for (const [name, leave, restore] of [
   ["settings.json.bak", (dir) => { writeFileSync(join(dir, "settings.json.bak"), JSON.stringify({ packages: [BRIDGE] })); writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"); }, /then copy settings\.json\.bak back to settings\.json\./],
-  ["config.yml", (dir) => writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"), /then give it a settings\.json listing it \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\)\./],
+  ["config.yml", (dir) => writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"), /then give it a settings\.json listing npm:@awebai\/oats-pi \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\)\./],
 ]) {
   test(`oh-my-pi moved bb's pi settings (${name} there, no settings.json): refused E_BACKEND_NOT_READY naming the cause and both remedies`, async (t) => {
     const { backend, bb, launch, check } = await setup(t);

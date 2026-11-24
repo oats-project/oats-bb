@@ -181,7 +181,7 @@ export async function piConfigurationProblems(agentDir, globalEnvNames) {
   const problems = [];
   if (found.moved !== undefined) {
     // One sentence a person can act on: the cause, the two commands, and last the file read.
-    const restore = found.moved === "settings.json.bak" ? "then copy settings.json.bak back to settings.json" : "then give it a settings.json listing it (PI_CODING_AGENT_DIR=<that directory> pi install npm:" + PI_BRIDGE + ")";
+    const restore = found.moved === "settings.json.bak" ? "then copy settings.json.bak back to settings.json" : "then give it a settings.json listing npm:" + PI_BRIDGE + " (PI_CODING_AGENT_DIR=<that directory> pi install npm:" + PI_BRIDGE + ")";
     problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi has no settings.json, and ${found.moved} is there instead: oh-my-pi moved it (bb runs it as its acp-omp provider, with this pi folder). Turn that off (bb provider disable acp-omp), ${restore}. Read: ${join(agentDir, "settings.json")}` });
   } else if (!found.bridge) {
     problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi would load none of the home's skills, and nothing would say so: ${PI_BRIDGE} is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:${PI_BRIDGE}), or point settings.oats.bb.piAgentDir at the directory bb's server uses (in the team image for bb: /state/home/.bb-pi). Read: ${join(agentDir, "settings.json")}` });

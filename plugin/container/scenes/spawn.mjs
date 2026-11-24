@@ -459,9 +459,8 @@ export default [
       // The form is settled before its image: the focus lands on the soul a moment after the form shows.
       check((await page.until(`${FOCUSED} === "oats-spawn-soul"`, 10)) === true, `${at} the focus starts on the first field, the soul`, await page.evaluate(FOCUSED));
       // At a phone's width bb's sidebar is in its drawer, and the form opened from it is then the very picture the
-      // form's own stage takes there (spawn-390x800-empty), and the run refuses two images that are the same. (It
-      // passed only while this image was taken before the focus had landed: a different file by chance.) The checks
-      // above hold the scene at both widths; the image is the desktop's, where the sidebar stands beside the form.
+      // form's own stage takes there (spawn-390x800-empty), and the run refuses two images that are the same. The
+      // checks above hold the scene at both widths; the image is the desktop's, where the sidebar stands beside the form.
       if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here

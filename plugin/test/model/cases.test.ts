@@ -38,12 +38,14 @@ function rowOf(recorded: string): Agent {
   if (status.value.agents.length !== 1) throw new Error(`${recorded}: expected one row, found ${status.value.agents.length}`);
   return status.value.agents[0]!;
 }
-/** bb's thread as the table's column says it: in a turn, at rest, or one bb does not list (archived, deleted). */
+/** bb's thread as the table's column says it: in a turn, at rest, failed at its start, or one bb does not list (archived, deleted). */
 function threadOf(column: string): BbThread | null {
   const thread = (status: string): BbThread => ({ id: "thr_case", projectId: null, displayTitle: "case", updatedAt: 0, isUnread: false, isArchived: false, isHidden: false, hasPendingInteraction: false, status, queuedWork: "none" }) as BbThread;
   if (column === "in a turn") return thread("active");
   if (column === "at rest") return thread("idle");
   if (column === "at rest, a turn in line") return { ...thread("idle"), queuedWork: "waiting" } as BbThread;
+  // A thread bb lists in "error" whose events say that it failed at its start (an error and never a turn): the app joins that on the thread (app/outside/threads.ts).
+  if (column === 'in "error", failed at its start') return { ...thread("error"), startFailure: { message: "Command thread.start failed", detail: null } } as BbThread;
   if (column === "archived" || column === "deleted" || column === "any") return null;
   throw new Error(`the table's thread column says ${JSON.stringify(column)}, which this test does not know`);
 }

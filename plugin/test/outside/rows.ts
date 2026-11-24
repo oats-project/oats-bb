@@ -44,6 +44,8 @@ export function outsideDocument(feature = true): Document {
 export const outside = (feature = true): Agent => only(agentsOf(outsideDocument(feature)));
 /** An agent idle with no harness loaded (`running: false` beside `runtimeState: "unknown"`), recorded live by the real run. */
 export const notLoaded = (): Agent => only(agentsOf(read("outside/status-not-loaded.json")));
+/** The REAL kernel's row of a home whose bb thread failed at its start (recorded by the pi run's P6: test/fixtures/outside/README.md): a lost session's row. */
+export const failedAtStartRow = (): Agent => only(agentsOf(read("outside/status-failed-at-start.json")));
 
 /** A row of the pinned sample (test/fixtures/roster/status.json), with fields replaced as the live scenes replace them for a state no recording holds. */
 export function sample(instance: string, change: Record<string, unknown> = {}): Agent {

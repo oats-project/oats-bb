@@ -325,7 +325,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // What the kernel resolved, through the display filter like every text of the kernel's: a model is a soul's own text.
   const kernelResolved = preview?.facts.resolved ?? null;
   const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
-  const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
+  // The answer the model is read on: the kernel's for the values on screen, and, while another field's change is
+  // read, the last one if it was for this soul, harness and model: the harness whose list bb gives, the mark and the
+  // column stay as they are until the new answer lands.
+  const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
+  const effectiveHarness = harness !== "" ? harness : shown(modelAnswer?.facts.resolved?.harness ?? "") || null;
   const suggestions = useModelSuggestions(effectiveHarness);
   // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
   // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
@@ -335,7 +339,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     if (kernelResolved !== null && harness === "" && soul !== "") setOwn({ soul, harness: kernelResolved.harness });
   }, [kernelResolved, harness, soul]);
   const ownKnown = own !== null && own.soul === soul;
-  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown;
+  // An ask the kernel refused is not an answer: it is asked again when the form's values change, or with Retry.
+  const ownTry = `${key}\n${again}`;
+  const [ownFailed, setOwnFailed] = useState<string | null>(null);
+  const ownTryNow = useRef(ownTry);
+  ownTryNow.current = ownTry;
+  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown && ownFailed !== ownTry;
   useEffect(() => {
     if (!ownAsked) return;
     let current = true;
@@ -343,9 +352,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       (answer) => {
         if (current) setOwn({ soul, harness: answer.facts.resolved?.harness ?? null });
       },
-      // The kernel would not preview this soul on its own: its harness stays unknown, and a chosen one is held for a model.
+      // The kernel did not answer for this soul on its own: its harness stays unknown, and a chosen one is held for a model.
       () => {
-        if (current) setOwn({ soul, harness: null });
+        if (current) setOwnFailed(ownTryNow.current);
       },
     );
     return () => {
@@ -355,9 +364,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const soulHarness = ownKnown ? own.harness : null;
   // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
   // harness the person chose that is not the soul's own, and it must be one bb serves exactly once where bb lists
-  // its models by provider. It is decided on the kernel's answer for the values on screen, and, while another field's
-  // change is read, on the last answer if it was for this soul, harness and model: the mark and the column stay.
-  const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
+  // its models by provider.
   // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
   const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
   // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.

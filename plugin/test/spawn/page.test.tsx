@@ -277,6 +277,29 @@ test("the same values arm or hold Spawn whatever the order of the clicks: a harn
   expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
 });
 
+test("the soul's own harness asked and not answered is not an answer: held meanwhile, and asked again when the form's values change", async () => {
+  // The soul's own harness is pi and it declares no model; the kernel fails once on the soul asked alone.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  let fail = true;
+  const slot = await form("", {
+    spawnPlan: (input) => {
+      if (input.harness === undefined && fail) throw new Error("OATS_TIMEOUT: oats did not answer in time");
+      return { facts: formFacts(unset, { name: input.name ?? null }), revision: REVISION };
+    },
+  });
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  choose(slot, "oats-spawn-harness", "pi");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  // Not known: a chosen harness is held for a model.
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Required"]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
+  // The values change: asked again, answered, and the soul's own harness is not held.
+  fail = false;
+  set(slot, "oats-spawn-task", "do it");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(2);
+});
+
 test("while bb's list of models for the harness is being read, Spawn is off with the form's own \"Reading defaults…\": whether bb serves the model is not known yet", async () => {
   let answer: (list: unknown) => void = () => undefined;
   const pending = new Promise((resolve) => {
@@ -303,6 +326,10 @@ test("the model must be one bb serves exactly once, where bb lists its models by
   expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default · claude-fable-5.1", "github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1", "Custom…"]);
   fireEvent.click(submit(slot));
   expect(calls(slot, "spawn")).toHaveLength(0);
+  // Another field changed, on the soul's default harness: the mark stays while its preview is read.
+  set(slot, "oats-spawn-task", "do it");
+  expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Reading defaults…", "Pick provider"]);
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Pick provider", "Pick provider"]));
   // One of them picked: armed.
   choose(slot, "oats-spawn-model", "anthropic/claude-fable-5.1");
   await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));

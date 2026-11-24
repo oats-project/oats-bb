@@ -410,8 +410,8 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     needsYou: pick((node) => node.state === "needs-you"),
     // Every agent that needs a person, whether bb has a thread for it or not: the ONE number a
     // place says of who needs one. An agent that waits on a person; and one that runs outside OATS
-    // (the state "outside"), which only a person can stop or start again. The sidebar's foot, the
-    // home's badge and the home's list (app/home/board.ts) count the same agents. In the kernel's order.
+    // (the state "outside"), which only a person can stop or start again. The home's badge, its
+    // heading and its list (app/home/board.ts) count the same agents. In the kernel's order.
     needing: agents.filter((agent) => {
       const node = drawn.get(agent.instance);
       const now = node !== undefined && node.agent === agent ? node.state : state(agent, null);

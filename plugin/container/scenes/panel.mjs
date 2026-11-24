@@ -63,8 +63,8 @@ const withMessaging = (soul = null) =>
 /** A read that fails with no answer of the kernel's: the process ends badly. Reading again can go better. */
 const FAILS = { stdout: "", stderr: "oats: internal error", exit: 1 };
 const FAKE_CONFIG = join(homedir(), ".local/bin/fake-oats.json");
-const CHILD = { instance: "panel-worktree-helper", recorded: "thr_t9xz6jqajf", thread: "thr_mockups" };
-const PARENT = { instance: "redesign-ui-lead", recorded: "thr_uz64t6aahn", thread: "thr_redesign" };
+const CHILD = { instance: "panel-worktree-helper", recorded: "thr_kjrgkze2sz", thread: "thr_mockups" };
+const PARENT = { instance: "redesign-ui-lead", recorded: "thr_bkyz48xf96", thread: "thr_redesign" };
 // The second stage's agents of their own: copies of the child's row.
 const IDLE = { instance: "panel-idle-helper", thread: "thr_ci" };
 const SHELL = { instance: "panel-shell-helper", thread: "thr_harvest" };
@@ -303,7 +303,8 @@ const first = [
       }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the Instance tab");
-      await page.shot(`panel-${viewport.name}-instance`);
+      // The Instance tab's cards, each as high as what it holds: Work, Session, Lineage, Readiness, Activity.
+      await page.shot(`panel-${viewport.name}-instance`, { gaps: ["oats-panel-work", "oats-panel-session", "oats-panel-lineage", "oats-panel-readiness-instance", "oats-panel-activity"].map(inPanel).join(", ") });
 
       // the older-build chip and the paths, open
       const moved = ["older build", "Its soul's repository has moved on since it was spawned."];
@@ -456,6 +457,13 @@ const second = [
       const fourChecks = ["Instance: panel-worktree-helper · ", "Independent kernel observations, not launch permission.", "Target: instance.", "Installed pass", "Configured not-applicable", "Member pass", "Providers pass", "oats.bb session backend bb · pass · required · 2 warnings", "View policy"];
       const checks = await reads(page, inPanel("oats-panel-readiness-checks"), fourChecks);
       check(holds(checks, fourChecks), `${at} Checks and policy: the four checks with their items, and the policy`, checks);
+      {
+        // An item that does not apply says so in the kernel's word, as the Desktop's line does: for an agent on a session
+        // provider the kernel reads no folder trust (OATS 0.70.5), and names no configuration file.
+        const launch = await page.evaluate(`(() => { const item = [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-panel-readiness-checks")} ${testId("oats-panel-check-item")}`)})].map((node) => ({ node, line: (node.querySelector("summary") ?? node).textContent.split("▸").join("").split(/\\s+/).join(" ").trim() })).find((each) => each.line.startsWith("launch ")); return item ? JSON.stringify({ line: item.line, facts: [...item.node.querySelectorAll("dt")].map((dt) => dt.textContent.trim()) }) : ""; })()`);
+        const read = launch ? JSON.parse(launch) : null;
+        check(read !== null && read.line === "launch · not-applicable · optional" && read.facts.includes("Reason") && !read.facts.includes("Configuration file"), `${at} the launch item, which does not apply to an agent on a session provider, says "not-applicable" on its line, with the kernel's reason and no configuration file`, launch || checks);
+      }
       const allowed = ["Lifecycle authority, not an OS sandbox.", "Child spawns: allowed · enforced · default: no spawn option: children allowed"];
       const policy = await reads(page, inPanel("oats-panel-policy"), allowed);
       check(holds(policy, allowed), `${at} View policy: what is allowed, and by whom`, policy);
@@ -490,7 +498,7 @@ const second = [
       // the Soul tab: the soul as spawned
       await page.evaluate(click(inPanel("oats-tab-soul")));
       const spawned = await page.until(`${textOf(inPanel("oats-panel-spawned-from"))}`, 30);
-      check(spawned === "Spawned from oats-expert @ 0ab9f62", `${at} the Soul tab: where the instance was spawned from`, spawned);
+      check(spawned === "Spawned from oats-expert @ ca07fa8", `${at} the Soul tab: where the instance was spawned from`, spawned);
       {
         const read = await page.evaluate(`JSON.stringify({ sentence: document.querySelector(${JSON.stringify(inPanel("oats-panel-as-spawned"))}) !== null, modules: document.querySelector(${JSON.stringify(inPanel("oats-panel-modules"))}) !== null, said: /never changes under itself|Modules as spawned/.test(document.querySelector(${JSON.stringify(inPanel("oats-panel-soul-body"))}).innerText) })`);
         check(read === JSON.stringify({ sentence: false, modules: false, said: false }), `${at} with no sentence that explains "as spawned", and no count of modules`, read);
@@ -672,7 +680,7 @@ const second = [
         setVerb("instance events", derived("events.json", (result) => {
           result.truncated = true;
           result.integrity.unreadableRows = 1;
-          result.events.push({ ...result.events[1], at: "2026-11-21T18:40:00.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
+          result.events.push({ ...result.events[1], at: "2026-11-23T18:27:26.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
         }));
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
         const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Last: Launch prompt · ")`, 30);

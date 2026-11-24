@@ -15,7 +15,7 @@
    "soul": null,
    "agentsRoot": null
   },
-  "at": "2026-11-21T18:25:21.168Z",
+  "at": "2026-11-23T18:01:10.204Z",
   "checks": {
    "installed": {
     "status": "pass",
@@ -30,9 +30,9 @@
        "from": {
         "kind": "package",
         "package": "oats.bb",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+        "version": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "integrity": "sha256-d07c9b40f1c8b24e8f3ec9834902fb424ac1057e01d9b2b45bba3905c404a2c7",
         "repoKey": "local//abs/real/oats-bb.git"
        }
       },
@@ -69,15 +69,15 @@
     "items": [
      {
       "subject": "launch",
-      "status": "unknown",
+      "status": "not-applicable",
       "required": false,
-      "reason": "claude folder trust is not established in /abs/home/.claude.json (the pane's environment is not established: a session provider runs this launch, which has no pane; read instead: this process's CLAUDE_CONFIG_DIR (not set), this process's HOME): oats harness trust --dir /abs/deployment",
+      "reason": "a session provider runs this launch (backend bb), with no OATS pane: claude folder trust is not read for it; the provider's own readiness item, where it declares a check, answers for its launch",
       "producer": "harness folder trust",
       "evidence": null,
       "remedy": null,
       "code": "harness-trust",
       "harness": "claude",
-      "file": "/abs/home/.claude.json",
+      "file": null,
       "deployment": "/abs/deployment"
      }
     ]
@@ -94,7 +94,7 @@
       "evidence": {
        "repoKey": "local//abs/real/src/oats-real",
        "workspace": "local//abs/real/src/oats-real",
-       "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a"
+       "commit": "bd67121a08cf55224dd4053449dd7220e54ba643"
       },
       "remedy": null
      }
@@ -143,7 +143,7 @@
    "missing": []
   },
   "kernelCopies": {
-   "store": "11a993ba71ef",
+   "store": "0b47c668f48e",
    "differing": []
   },
   "summary": {

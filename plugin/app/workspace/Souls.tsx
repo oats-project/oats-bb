@@ -78,11 +78,12 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
             <li key={agent.instance} data-testid="oats-soul-agent-detached" data-instance={agent.instance} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
               <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
               <span className="text-xs text-muted-foreground">thread missing</span>
+              {/* (The dots: each opens its dialog, and nothing runs on the press; one rule for every act of the plugin.) */}
               <Button data-testid="oats-detached-start" disabled={held} onClick={() => void run("start", agent.instance, rpc, navigate)}>
-                Start
+                Start…
               </Button>
               <Button data-testid="oats-detached-retire" disabled={held} onClick={() => askPlan("retire", agent.instance)}>
-                Retire
+                Retire…
               </Button>
             </li>
           );

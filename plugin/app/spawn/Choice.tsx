@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { INPUT, TARGET } from "../ui";
+import { NO_MATCH } from "./words";
 
 /** `unavailable`: an option a person can still choose, to read why it will not do (a soul that cannot be spawned, a harness bb has not installed): drawn muted. */
 export type ChoiceOption = { id: string; label: string; detail?: string | undefined; disabled?: boolean | undefined; unavailable?: boolean | undefined };
@@ -30,7 +31,7 @@ export function Choice({
   options: readonly ChoiceOption[];
   onChange: (id: string) => void;
   placeholder: string;
-  /** The filter's accessible name and placeholder: "Filter souls". */
+  /** The filter's accessible name and placeholder: "Filter". */
   filterLabel: string;
   disabled?: boolean;
   testId: string;
@@ -191,7 +192,7 @@ export function Choice({
           >
             {shown.length === 0 ? (
               <li role="presentation" className="px-3 py-2 text-muted-foreground">
-                Nothing matches this filter.
+                {NO_MATCH}
               </li>
             ) : null}
             {shown.map((option, index) => (

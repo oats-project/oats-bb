@@ -22,13 +22,14 @@ import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { useNow } from "../roster/now";
-import { noteActed } from "../roster/reading";
+import { keptState, noteActed, stateIn } from "../roster/reading";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge, showingRead } from "../ui/words";
 import { notify } from "../ui";
+import { restartModel } from "../../model/restart-model";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
@@ -262,7 +263,7 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
   );
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
   // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
-  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, actions: next };
+  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, warns: outcome.warns === true, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), actions: next };
 }
 
@@ -328,8 +329,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const navigate = useBbNavigate();
   const oats = useOats();
   const rosterAt = useRef<string | null>(null);
+  const oatsNow = useRef(oats);
   useEffect(() => {
     rosterAt.current = oats.phase === "ready" ? oats.at : null;
+    oatsNow.current = oats;
   });
   const { verb, instance } = request;
   // When the plan on screen was read, by the window's clock; and the clock (the age is said under Details).
@@ -388,8 +391,11 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     // The roster the window holds as the act is sent: a result that says the agents changed is true of them
     // before that roster is read again, and the places that say their state say "Reading…" until it is (app/roster/reading.tsx).
     const sentAt = rosterAt.current;
+    const acted = plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance];
+    // (And each agent's state in that roster: a roster that reaches the window during the act can still say it.)
+    const was = new Map(acted.map((each) => [each, keptState(plan.action === "stop" ? "stop" : "retire", stateIn(oatsNow.current, each))]));
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
-      if (outcome.tone === "done") noteActed(plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance], sentAt);
+      if (outcome.tone === "done") noteActed(acted, sentAt, was);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
@@ -597,6 +603,18 @@ type StartState =
   | { phase: "running"; check: Check }
   | { phase: "settled"; check: Check | null; outcome: Outcome; refusal: Refusal | null; threadId: string | null };
 
+/** How long bb's model list may be read before a Restart reads it as no list: it then holds (a restart may not go without the list). */
+const LIST_WAIT_MS = 10_000;
+/** Whether `of` (null: nothing is waited for) has been waited for `ms`, without a break. (An `of` that was overdue and is waited for again is overdue at once: that holds, the safe side.) */
+function useOverdue(of: string | null, ms: number): boolean {
+  const [late, setLate] = useState<string | null>(null);
+  useEffect(() => {
+    if (of === null) return;
+    const timer = setTimeout(() => setLate(of), ms);
+    return () => clearTimeout(timer);
+  }, [of, ms]);
+  return of !== null && late === of;
+}
 /** What a model field may hold: one line that cannot be read as an option (kernel/spawn.ts `checkModel` holds the rule; this says it before any call). */
 const isModel = (model: string): boolean => model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model);
 
@@ -619,8 +637,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const navigate = useBbNavigate();
   const oats = useOats();
   const rosterAt = useRef<string | null>(null);
+  const oatsNow = useRef(oats);
   useEffect(() => {
     rosterAt.current = oats.phase === "ready" ? oats.at : null;
+    oatsNow.current = oats;
   });
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
@@ -699,6 +719,33 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
+  // A RESTART stops the running session before the provider judges the MODEL it was asked for: the kernel's order.
+  // So a model that was CHANGED is sent only when it can be shown to start (model/restart-model.ts): bb's list for
+  // the harness serves it exactly once. Held here, in the app: nothing is sent to the plugin's server. (A start
+  // that is refused harms nothing: the Start dialog holds none of this. A harness bb cannot run is refused by the
+  // kernel BEFORE the stop: nothing is held for it, and its refusal is the dialog's ordinary refused result.)
+  const restarts = verb === "restart" && known !== null && known.backend === "bb";
+  const harnessChanged = known !== null && harness !== "" && harness !== known.harness;
+  // A list bb is still reading says nothing yet; one still unread after LIST_WAIT_MS reads as no list, which holds.
+  const listPending = restarts && typed !== "" && suggestions.status === "loading";
+  const overdue = useOverdue(listPending ? (running ?? "") : null, LIST_WAIT_MS);
+  const hold = !restarts
+    ? null
+    : restartModel({
+        typed,
+        harnessChanged,
+        // pi's models are resolved by their provider; any other harness's list names ids whole.
+        byProvider: running === "pi",
+        listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
+      });
+  const heldModel = hold !== null && hold.kind === "held" ? hold : null;
+  /** The word, said once: the Model field's mark. */
+  const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
+  // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
+  /** The id of the Model field's mark: what the off button is described by. */
+  const modelMark = `oats-start-model-mark-${request.id}`;
+  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : modelWord;
+
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
   // person turned on the plain start.
@@ -707,17 +754,19 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const resumes = lost && !fresh;
 
   const start = () => {
-    if (state.phase !== "ready" || held !== null || (onBb && badModel)) return;
+    if (state.phase !== "ready" || held !== null || (onBb && badModel) || notArmed !== null) return;
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
-    // (As for a stop: the roster held as the act is sent; app/roster/reading.tsx.)
+    // (As for a stop: the roster held as the act is sent, and for a start the agent's state in it; a restart's
+    // state is the same word before and after, so the roster's stamp alone decides; app/roster/reading.tsx.)
     const sentAt = rosterAt.current;
+    const was = new Map([[checked.instance, keptState(verb, stateIn(oatsNow.current, checked.instance))] as const]);
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
     rpc.call(verb, asked).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
-        if (outcome.tone === "done") noteActed([checked.instance], sentAt);
+        if (outcome.tone === "done") noteActed([checked.instance], sentAt, was);
         const threadId = started.threadId;
         // A home that is not on bb has no thread to open: its result says where it is.
         const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };
@@ -808,7 +857,15 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
       says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
-      blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
+      // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
+      // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
+      // only what the person typed wrong.
+      // Held on what is in the Model field: a model name that is none, or in a Restart a changed model bb's list does
+      // not serve (#77). The word stands ONCE, as the field's mark ("Enter a model name, …", "Not found", "Required",
+      // "Pick provider"); the button is off and described by that mark, with no copy of the word beside it (the
+      // lead's L9). While bb's list is still read it is off with no word at all.
+      held={held !== null || notArmed !== null || (onBb && badModel)}
+      describedBy={(onBb && badModel) || (notArmed !== null && notArmed !== "") ? modelMark : undefined}
       notice={
         changed ? (
           // A resume the kernel refused because the row changed: said first, as a plan that changed is.
@@ -841,6 +898,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                   {line}
                 </p>
               ))}
+              {/* The one way to a model bb does not list, only while the field says "Not found": in the dialog's ONE fold (never a second "Details"). */}
+              {heldModel !== null && heldModel.why === "not-found" && !badModel ? (
+                <p data-testid="oats-start-unlisted" className="break-words">
+                  {START.unlisted}
+                </p>
+              ) : null}
               <Facts>
                 {/* With a choice of harness, the field's first entry says which one is recorded: it is not said twice. */}
                 {onBb && known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
@@ -883,8 +946,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           <Field
             label={START.model}
             optional
-            hint={START.modelSaved}
-            error={badModel ? START.badModel : null}
+            errorId={modelMark}
+            error={badModel ? START.badModel : modelWord}
           >
             <input
               data-testid="oats-start-model"
@@ -902,12 +965,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           )}
           {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
-            {suggestions.models.map((each) => (
+            {/* Several listed models serve the id that was typed: the field offers only those. */}
+            {suggestions.models.filter((each) => heldModel === null || heldModel.why !== "pick-provider" || heldModel.serving.includes(each.id)).map((each) => (
               <option key={each.id} value={each.id} label={shown(each.label)} />
             ))}
           </datalist>
           )}
-          {/* Only where Start is off: why (beside the button too), and the way to read its status again. A start that can run says nothing here. */}
+          {/* Only where Start is off: why, said here and nowhere else in the dialog, and the way to read its status again. A start that can run says nothing here. */}
           {state.phase === "ready" && held !== null ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{held.reason}</span>

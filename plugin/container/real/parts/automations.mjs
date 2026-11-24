@@ -46,7 +46,7 @@ export default async (run) => {
       check(JSON.stringify(triggers.map((row) => row.id).sort()) === JSON.stringify(ids(kernel("trigger").triggers)), "the plugin's triggers are the kernel's own list's", JSON.stringify(triggers.map((row) => row.id)));
       const digest = schedules.find((row) => row.id === "local/real-run-digest");
       check(digest !== undefined && digest.run === "spawn" && digest.backend === "bb" && digest.yolo === true && digest.runsHere === true && digest.group === "here" && digest.description === "The real run's schedule" && digest.soul?.name === "oats-developer",
-        "the schedule's row: a spawn on bb in full mode, placed on this computer by the kernel, with its summary and its soul", JSON.stringify(digest));
+        "the schedule's row: a spawn on bb in full mode, placed on the machine by the kernel, with its summary and its soul", JSON.stringify(digest));
       const scheduler = lists.schedule.list.scheduler;
       check(scheduler !== null && typeof scheduler.installed === "boolean" && typeof scheduler.active === "boolean", "the list says what the host scheduler is", JSON.stringify(scheduler));
       check(lists.oats !== null && lists.oats.features.includes("automations") && lists.oats.automationsApi === 1, "the plugin knows this OATS serves automations, from the kernel's own version", JSON.stringify(lists.oats && { version: lists.oats.version, automationsApi: lists.oats.automationsApi }));
@@ -66,7 +66,7 @@ export default async (run) => {
   const schedule = (id) => JSON.parse(oats("schedule", "show", id, "--json").stdout).result?.schedule;
   const argv = (words) => JSON.stringify(recorded(words).argv);
 
-  const off = act("turn the schedule off on this computer", "automationEnable", { kind: "schedule", id: "local/real-run-digest", enabled: false });
+  const off = act("turn the schedule off on the machine", "automationEnable", { kind: "schedule", id: "local/real-run-digest", enabled: false });
   check(off?.row?.enabledHere === false && schedule("real-run-digest")?.enabled === false && argv(["schedule", "disable"]) === JSON.stringify(["schedule", "disable", "local/real-run-digest", "--json"]), "the kernel holds the schedule as off, and the plugin ran `oats schedule disable local/real-run-digest --json`", JSON.stringify(off?.row && { enabledHere: off.row.enabledHere }));
   const on = act("turn it on again", "automationEnable", { kind: "schedule", id: "local/real-run-digest", enabled: true });
   check(on?.row?.enabledHere === true && schedule("real-run-digest")?.enabled === true, "the kernel holds the schedule as on again", JSON.stringify(on?.row && { enabledHere: on.row.enabledHere }));
@@ -93,9 +93,9 @@ export default async (run) => {
   check(reconciled !== undefined && "reconciled" in reconciled && argv(["schedule", "reconcile"]) === JSON.stringify(["schedule", "reconcile", "local/real-run-digest", "--json"]),
     "the kernel answers the check of a run's state", JSON.stringify(reconciled));
 
-  // The trigger: off and on on this computer, and its summary.
+  // The trigger: off and on on the machine, and its summary.
   const trigger = (id) => JSON.parse(oats("trigger", "show", id, "--json").stdout).result?.trigger;
-  const triggerOff = act("turn the trigger off on this computer", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: false });
+  const triggerOff = act("turn the trigger off on the machine", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: false });
   check(triggerOff?.row?.enabledHere === false && trigger("real-run-prs")?.enabled === false && argv(["trigger", "disable"]) === JSON.stringify(["trigger", "disable", "local/real-run-prs", "--json"]),
     "the kernel holds the trigger as off", JSON.stringify(triggerOff?.row && { enabledHere: triggerOff.row.enabledHere }));
   const triggerOn = act("turn it on again", "automationEnable", { kind: "trigger", id: "local/real-run-prs", enabled: true });

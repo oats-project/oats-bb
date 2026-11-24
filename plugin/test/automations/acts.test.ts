@@ -246,6 +246,11 @@ describe("check a run, delete, install the host timer", () => {
     expect(recorded("schedule-remove-unknown.json")).toMatchObject({ ok: false, error: { code: "E_SCHEDULE_UNKNOWN" } });
   });
 
+  it("a schedule that was removed after the list was read: the kernel refuses each act the page still offers on it", () => {
+    for (const file of ["schedule-enable-unknown.json", "schedule-describe-unknown.json", "schedule-test-unknown.json"])
+      expect(recorded(file)).toMatchObject({ ok: false, error: { code: "E_SCHEDULE_UNKNOWN", message: 'no schedule "weekly-cleanup" in /abs/deployment' } });
+  });
+
   it("the host timer installed: on, for this deployment", () => {
     expect(parseHostInstall(answer("host-install.json"))).toEqual({ ok: true, value: { scheduler: { installed: true, active: true, registered: true, lastTick: null, maxConcurrent: 5 }, warnings: [] } });
     expect(parseHostInstall({ scheduler: { installed: true }, warnings: ["w", { message: "m" }] })).toMatchObject({ ok: true, value: { scheduler: { active: false, registered: null }, warnings: ["w", "m"] } });

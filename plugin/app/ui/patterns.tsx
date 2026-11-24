@@ -266,7 +266,7 @@ export function Empty({ title, children, action }: { title?: string; /** the sen
   );
 }
 
-/** A read in flight, in the place the content will be: "Reading your agents…". Polite: it is said once, not at every re-read. */
+/** A read in flight, in the place the content will be: "Reading…". Polite: it is said once, not at every re-read. */
 export function Loading({ children = "Reading OATS…" }: { children?: ReactNode }) {
   return (
     <p role="status" aria-live="polite" data-testid="oats-loading" className="py-2 text-sm text-muted-foreground">
@@ -303,9 +303,11 @@ export function Result({ title, tone = "done", children, code, actions }: { titl
       className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${tone === "failed" ? "border-destructive-text" : tone === "unknown" ? "border-warning-text" : "border-border"}`}
     >
       <h3 className={`font-semibold ${tone === "failed" ? "text-destructive-text" : ""}`}>{title}</h3>
-      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
+      {/* (A part with nothing drawn in it takes no room: a caller's list of no lines, or acts that are all absent, is
+          not null, and its empty block kept the gap over it: a result of one title was a line too high.) */}
+      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words empty:hidden">{children}</div>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
-      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2 empty:hidden">{actions}</div>}
     </section>
   );
 }
@@ -343,11 +345,12 @@ export const INPUT = `${TARGET} w-full rounded-md border border-border bg-backgr
  * it (`aria-describedby`), and a refusal marks it invalid and is announced. `children` is the one
  * control (an input, a textarea, a select): the field gives it its id.
  */
-export function Field({ label, optional = false, hint, error, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
+export function Field({ label, optional = false, hint, error, errorTitle, errorId, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; /** what a pointer shows on the mark: the kernel's code of the fault it says in words */ errorTitle?: string; /** the id of the field's mark (its error), for a control elsewhere that the mark explains (a button it holds off): `aria-describedby` there */ errorId?: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
   const id = useId();
   const hasHint = hint !== undefined && hint !== null;
   const hasError = error !== undefined && error !== null;
-  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? `${id}-error` : null].filter((part) => part !== null).join(" ");
+  const mark = errorId ?? `${id}-error`;
+  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? mark : null].filter((part) => part !== null).join(" ");
   return (
     <div data-testid="oats-field" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
       <label htmlFor={id}>
@@ -357,7 +360,7 @@ export function Field({ label, optional = false, hint, error, children }: { labe
       {cloneElement(children, { id, ...(describedBy === "" ? {} : { "aria-describedby": describedBy }), ...(hasError ? { "aria-invalid": true } : {}) })}
       {hasHint ? <span id={`${id}-hint`}>{hint}</span> : null}
       {hasError ? (
-        <span id={`${id}-error`} role="alert" className="text-destructive-text">
+        <span id={mark} role="alert" title={errorTitle} className="text-destructive-text">
           {error}
         </span>
       ) : null}

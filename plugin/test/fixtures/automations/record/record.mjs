@@ -247,6 +247,11 @@ keep("schedule-reconcile.json", "ok", "schedule", "reconcile", "status-check", "
 keep("schedule-remove.json", "ok", "schedule", "remove", "weekly-cleanup", "--json");
 keep("schedule-remove-workspace.json", "E_AUTOMATION_WORKSPACE", "schedule", "remove", "oats-real/nightly-digest", "--json");
 keep("schedule-remove-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "remove", "weekly-cleanup", "--json");
+// The same schedule, gone, acted on from a page that still lists it (someone removed it after the
+// list was read): what the kernel answers to each act the page offers on such a row.
+keep("schedule-enable-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "enable", "weekly-cleanup", "--json");
+keep("schedule-describe-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "update", "weekly-cleanup", "--description=Clean the week's scratch", "--json");
+keep("schedule-test-unknown.json", "E_SCHEDULE_UNKNOWN", "schedule", "test", "weekly-cleanup", "--json");
 keep("trigger-remove.json", "ok", "trigger", "remove", "old-prs", "--json");
 
 const version = must("version", "--json");

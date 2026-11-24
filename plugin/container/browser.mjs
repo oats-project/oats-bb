@@ -185,15 +185,49 @@ export const lowTargets = (min) =>
 
 /**
  * Every block `selector` finds that is drawn, measured for EMPTY ROOM: a block is as high as what it
- * holds. Its content boxes are the elements that hold text of their own, the controls and the marks;
- * `worst` is the largest empty gap between two vertical neighbours among them, `edge` the largest
- * at its top or bottom (its padding), `boxes` each box as [top, bottom, its first words], for a
- * failing check to print. A line stretched to ten times its height, or a row kept for something that
- * was cut, shows as a gap: no check of words can see it.
- * → JSON `[{ worst, edge, height, boxes }]`.
+ * holds. Its content boxes are the elements that hold text of their own, the controls and the marks,
+ * and every FRAME in it: an element with a visible border or a background of its own (a card, a fact
+ * box) is a thing a person sees, so toward its neighbours it is one box, measured to its border; and
+ * its inside is measured as a block of its own (from its border to its first and last line: its
+ * padding). `worst` is the largest empty gap between two vertical neighbours, in the block or in any
+ * frame inside it; `edge` the largest at a top or a bottom; `boxes` each box of the block's own
+ * level as [top, bottom, its first words], and `frames` the same for each frame, for a failing check
+ * to print. A line stretched to ten times its height, or a row kept for something that was cut,
+ * shows as a gap: no check of words can see it. What a closed fold holds is not drawn, and not measured.
+ * → JSON `[{ worst, edge, height, boxes, frames }]`.
  */
-export const gapsIn = (selector) =>
-  `JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].filter((root) => root.getClientRects().length > 0).map((root) => { const boxes = [...root.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden" && ([...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== "") || e.matches("button, input, textarea, select, [data-mark]"))).map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), ((e.innerText ?? "").replace(/\\s+/g, " ").trim() || e.getAttribute("placeholder") || e.tagName.toLowerCase()).slice(0, 28)]; }).filter(([top, bottom]) => bottom > top).sort((a, b) => a[0] - b[0]); const r = root.getBoundingClientRect(); let reach = boxes.length ? boxes[0][1] : r.top; let worst = 0; for (const [top, bottom] of boxes) { worst = Math.max(worst, top - reach); reach = Math.max(reach, bottom); } const edge = boxes.length ? Math.max(boxes[0][0] - r.top, r.bottom - reach) : 0; return { worst: Math.round(worst), edge: Math.round(edge), height: Math.round(r.height), boxes }; }))`;
+const GAPS = String.raw`(root) => {
+  const drawn = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden" && (e.checkVisibility?.() ?? true);
+  const control = (e) => e.matches("button, input, textarea, select, [data-mark]");
+  const seen = (color) => color !== "" && color !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(color);
+  const frame = (e) => { if (control(e)) return false; const c = getComputedStyle(e); return (["Top", "Bottom"].some((side) => parseFloat(c["border" + side + "Width"]) > 0 && c["border" + side + "Style"] !== "none" && seen(c["border" + side + "Color"])) && e.getBoundingClientRect().height > 0) || seen(c.backgroundColor); };
+  const words = (e) => ((e.innerText ?? "").replace(/\s+/g, " ").trim() || e.getAttribute("placeholder") || e.tagName.toLowerCase()).slice(0, 28);
+  const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), words(e)]; };
+  const frames = [];
+  const measure = (block) => {
+    const boxes = [];
+    const walk = (e) => {
+      for (const child of e.children) {
+        if (!drawn(child)) continue;
+        if (frame(child)) { boxes.push(box(child)); frames.push(measure(child)); continue; }
+        if (control(child)) { boxes.push(box(child)); continue; }
+        if ([...child.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== "")) boxes.push(box(child));
+        walk(child);
+      }
+    };
+    walk(block);
+    const kept = boxes.filter(([top, bottom]) => bottom > top).sort((x, y) => x[0] - y[0]);
+    const r = block.getBoundingClientRect();
+    let reach = kept.length ? kept[0][1] : r.top;
+    let worst = 0;
+    for (const [top, bottom] of kept) { worst = Math.max(worst, top - reach); reach = Math.max(reach, bottom); }
+    const edge = kept.length ? Math.max(kept[0][0] - r.top, r.bottom - reach) : 0;
+    return { worst: Math.round(worst), edge: Math.round(edge), height: Math.round(r.height), boxes: kept };
+  };
+  const own = measure(root);
+  return { worst: Math.max(own.worst, ...frames.map((each) => each.worst)), edge: Math.max(own.edge, ...frames.map((each) => each.edge)), height: own.height, boxes: own.boxes, frames: frames.filter((each) => each.boxes.length > 0).map((each) => ({ worst: each.worst, edge: each.edge, height: each.height, boxes: each.boxes })) };
+}`;
+export const gapsIn = (selector) => `JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].filter((root) => root.getClientRects().length > 0).map(${GAPS}))`;
 /** The most empty room a block may hold between two of its lines, or at an edge: a gap of the pattern book's, never a line's height or more. */
 export const MAX_GAP = 24;
 /** Whether every measured block (`gapsIn`) holds no gap over MAX_GAP, and there is at least one. */

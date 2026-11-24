@@ -42,7 +42,7 @@ export function board(view: Pick<View, "rows" | "finished">, now: number): Board
   // within each, the newest claim first, then the sidebar's order.
   const here = (entry: Entry): number => (entry.thread === null ? 1 : 0);
   const needsYou = all
-    // (An agent that runs outside OATS is among them, as in the sidebar's foot and `view.needing`: its card says why; app/outside.)
+    // (An agent that runs outside OATS is among them, as in `view.needing` (the home's badge): its card says why; app/outside.)
     .filter((entry) => entry.status.state === "needs-you" || entry.status.state === "outside")
     .sort((a, b) => here(a) - here(b) || instant(b) - instant(a) || (order.get(a.agent.instance) ?? 0) - (order.get(b.agent.instance) ?? 0));
   const unread = new Set(view.finished.map((node) => node.agent.instance));

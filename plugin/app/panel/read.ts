@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import type { PluginRpcResult, StandardSchemaV1InferInput } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../../contract";
-import { errorMessage, onWindowReset, type Read } from "../store";
+import { errorMessage, onWindowReset, reread, type Read } from "../store";
 
 type Contract = typeof rpcContract;
 /** The panel's reads of one instance. */
@@ -79,8 +79,12 @@ function usePanelRead<Method extends PanelMethod>(
     readFor.current = again;
     if (enabled && !unknown) retry();
   }, [again, enabled, key, retry]);
+  // Whether this read's FIRST answer is on its way (set as it is drawn): an event that comes then is not served by that
+  // answer, which the server made from before the change; the read is made once more when it is here (app/store.ts `reread`).
+  const first = useRef(false);
+  first.current = query.isFetching && query.data === undefined;
   useRealtime(REALTIME_CHANGED, () => {
-    if (live && enabled) void refetch.current();
+    if (live && enabled) reread(key, first.current, () => refetch.current());
   });
   const data = query.data as PanelAnswer<Method> | undefined;
   const fetching = query.isFetching;

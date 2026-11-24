@@ -7,13 +7,14 @@
 //
 // Rosters are compared, never clocks: the roster's `at` is the server's stamp, and the window's
 // clock is another machine's. What is kept is the `at` of the roster the window held when the act
-// was SENT, and the STATE each agent of the act had in it. "Reading…" stands while the window's
-// roster is still that one, or an older one; and also while a later roster still says of the agent
-// what the one at the send said (a roster can reach the window DURING an act that takes seconds: a
-// stop of three agents changes the roster at each, and the first of those rosters still says that
-// the last one runs: without this the header behind "3 sessions stopped." said "Working"; found
-// by the first review round). A restart keeps the first rule alone: its agent's state is the same
-// word before and after.
+// was SENT, the act, and the STATE each agent of the act had in it where the act must change that
+// word. For such an agent "Reading…" stands until its state in the window's roster says that the
+// act happened (a stop: Stopped; a retire: gone; a start: neither Stopped nor Failed), whatever the
+// roster's stamp: a roster can reach the window DURING an act that takes seconds and still say
+// that the agent runs (the first review round); a bb agent's word can change with bb's own thread
+// list while its row has not (the second); and the server can patch the row on the roster of the
+// send (#74). Where no state is kept (a restart: the same word before and after) "Reading…" stands
+// while the window's roster is still the one of the send, or an older one.
 // And it is bounded: after BOUND_MS the roster's own state is drawn whatever it says (a watch that
 // died must not leave "Reading…" on a page). The window's memory only.
 import { useSyncExternalStore } from "react";
@@ -40,17 +41,39 @@ export function beforeAct(sentAt: string, rosterAt: string | null): boolean {
   return !Number.isNaN(sent) && !Number.isNaN(held) && held <= sent;
 }
 
+/** The acts whose result marks an agent. */
+export type ActVerb = "stop" | "start" | "restart" | "retire";
+
 /**
- * Whether the window still shows an agent as it was before an act. Pure. `sentAt` and `was`: the
- * stamp of the roster held when the act was sent, and the agent's state in it (null: not kept: a
- * restart); `rosterAt` and `now`: the stamp of the roster the window holds, and the agent's state
- * in it (null: it is not in the roster any more).
+ * Whether the roster's ROW says that the act happened to the agent: a stop's agent reads Stopped; a
+ * retire's is gone from the roster (null); a start's reads neither Stopped nor Failed. (A restart
+ * has no such word: the same before and after.) Pure.
  */
-export function fromBefore(acted: { sentAt: string; was: AgentState | null }, rosterAt: string | null, now: AgentState | null): boolean {
-  // Where a state is kept it decides ALONE: the plugin's server patches a row from the instance's own events and
-  // keeps the roster's stamp (#74), so a roster with the stamp of the send can already say the new state: that is
-  // read, not "before". The stamp's rule serves only what keeps no state (a restart; a stop of a stopped target).
-  return acted.was !== null ? rosterAt !== null && now === acted.was : beforeAct(acted.sentAt, rosterAt);
+export function ended(verb: ActVerb, now: AgentState | null): boolean {
+  if (verb === "stop") return now === "stopped";
+  if (verb === "retire") return now === null;
+  if (verb === "start") return now !== null && now !== "stopped" && now !== "error";
+  return false;
+}
+
+/**
+ * Whether the window still shows an agent as it was before an act. Pure. `sentAt`, `was` and
+ * `verb`: the stamp of the roster held when the act was sent, the agent's state in it where one is
+ * kept (null: none: a restart, a stop of a stopped target), and the act; `rosterAt` and `now`: the
+ * stamp of the roster the window holds (null: none is read: nothing is drawn of the agent, and
+ * nothing is left standing on nothing), and the agent's state in it (null: it is not in the roster).
+ *
+ * Where a state is kept, "before" lasts until the agent's state says that the ACT HAPPENED (`ended`),
+ * whatever the roster's stamp. Not "until the state differs from the kept one": an agent on a bb
+ * thread reads Working or Idle by bb's own status of its thread, and a stop archives that thread, so
+ * on the very roster of the send it already reads "Idle" with its acts on, behind "… stopped." (the
+ * second review round's finding). And not the stamp: the server patches a row from the agent's own
+ * events and keeps the roster's stamp (#74), so the roster of the send can already say Stopped: that
+ * is read. Where no state is kept, the stamp's rule alone.
+ */
+export function fromBefore(acted: { sentAt: string; was: AgentState | null; verb: ActVerb | null }, rosterAt: string | null, now: AgentState | null): boolean {
+  if (acted.was === null || acted.verb === null) return beforeAct(acted.sentAt, rosterAt);
+  return rosterAt !== null && !ended(acted.verb, now);
 }
 
 /**
@@ -62,7 +85,7 @@ export function fromBefore(acted: { sentAt: string; was: AgentState | null }, ro
  * roster); a restart none (the same word after). Null: the stamp's rule alone, never ten seconds of "Reading…" over
  * a state that will not change (the first review round's delta read).
  */
-export function keptState(verb: "stop" | "start" | "restart" | "retire", was: AgentState | null): AgentState | null {
+export function keptState(verb: ActVerb, was: AgentState | null): AgentState | null {
   if (was === null || verb === "restart") return null;
   if (verb === "stop") return was === "stopped" ? null : was;
   if (verb === "start") return was === "stopped" || was === "error" ? was : null;
@@ -78,7 +101,7 @@ export function stateIn(oats: Oats, instance: string): AgentState | null {
   return agent === undefined ? null : stateOf(agent, null);
 }
 
-type Acted = { sentAt: string; was: AgentState | null; timer: ReturnType<typeof setTimeout> };
+type Acted = { sentAt: string; was: AgentState | null; verb: ActVerb | null; timer: ReturnType<typeof setTimeout> };
 let acted: ReadonlyMap<string, Acted> = new Map();
 const watchers = new Set<() => void>();
 const set = (next: ReadonlyMap<string, Acted>) => {
@@ -95,16 +118,17 @@ const drop = (instance: string, entry: Acted) => {
 /**
  * A lifecycle result says these agents started, restarted, stopped or were retired. `sentAt`: the
  * stamp of the roster the window held when the act was sent (null: it held none: nothing to mark);
- * `was`: each agent's state in that roster (absent, or with no entry for an agent: the stamp alone
- * decides, as for a restart).
+ * `kept`: the act, and each agent's state in that roster where one is kept (`keptState`). Absent, or
+ * with no entry for an agent: the stamp alone decides, as for a restart.
  */
-export function noteActed(instances: readonly string[], sentAt: string | null, was: ReadonlyMap<string, AgentState | null> = new Map()): void {
+export function noteActed(instances: readonly string[], sentAt: string | null, kept?: { verb: ActVerb; was: ReadonlyMap<string, AgentState | null> }): void {
   if (sentAt === null || instances.length === 0) return;
   const next = new Map(acted);
   for (const instance of instances) {
     const before = next.get(instance);
     if (before !== undefined) clearTimeout(before.timer);
-    const entry: Acted = { sentAt, was: was.get(instance) ?? null, timer: setTimeout(() => drop(instance, entry), BOUND_MS) };
+    const was = kept?.was.get(instance) ?? null;
+    const entry: Acted = { sentAt, was, verb: was === null ? null : (kept?.verb ?? null), timer: setTimeout(() => drop(instance, entry), BOUND_MS) };
     next.set(instance, entry);
   }
   set(next);

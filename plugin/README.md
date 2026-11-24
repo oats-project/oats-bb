@@ -710,8 +710,8 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   (its placeholder) or marked (the button is described by that mark), the column's refusal, the
   roster's notice ("Acts are off."). The same holds for its key. With no soul chosen, or a value
   that cannot be asked, the column is not drawn: no heading stands over nothing.
-- It applies the decision that preview showed (its revision goes with the call), so "Spawn refuses
-  if this changes before you confirm" is true: a decision that moved is refused by the kernel,
+- It applies the decision that preview showed (its revision goes with the call), so a spawn is
+  refused if the decision changes before the press: a decision that moved is refused by the kernel,
   nothing is created, the preview that was on screen can no longer be pressed, and the column is
   read again and says so.
 - On the press the button reads "Spawning…" and is held, with every field: one press makes one
@@ -1156,7 +1156,13 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
   each read asked for mid-read took. Each
-  reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
+  reread that differs publishes `oats/changed`, and the app refetches. A window that LOADS while
+  the server reads a change is given the roster from before it (the server answers from its
+  cache at once) and hears the change published while that first answer is still on its way: the
+  app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window
+  never keeps the roster from before the change. (bb does not start again a read that has no
+  answer yet; before this the event was taken as served, and the window showed the old roster
+  until another agent changed.) A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
   that finds it gone.

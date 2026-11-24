@@ -545,8 +545,7 @@ export const START = {
   restartWarning: "Stops what it is doing now.",
   harness: "Harness",
   model: "Model",
-  /** Under the model field: the choice outlives this start. */
-  // (Under Details, away from the Model field: the line names what is saved.)
+  /** Under Details: the model's choice outlives this start. (Away from the Model field: the line names what is saved.) */
   modelSaved: "The model is saved for later starts too.",
   badModel: "Enter a model name, not a command-line option.",
   refresh: "Refresh status",
@@ -556,7 +555,7 @@ export const START = {
   /**
    * A RESTART is held on a model the person changed unless bb's list for the harness serves it
    * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
-   * judges the model). The word on the Model field and beside the button.
+   * judges the model). The word, said once: the Model field's mark, which the off button is described by.
    */
   notFound: "Not found",
   pickProvider: "Pick provider",

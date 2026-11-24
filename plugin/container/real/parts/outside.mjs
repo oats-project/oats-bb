@@ -32,7 +32,7 @@ const SOUL = "oats-developer";
 // The plugin's words (app/outside/words.ts, app/ui/words.ts), restated: a run cannot read the app's code; they move together.
 const SAYS = {
   notLoaded: "not loaded",
-  notLoadedRow: "Idle · not loaded",
+  notLoadedRow: `Idle · ${SOUL} · not loaded`, // (the row's title, whole: state · soul · reason)
   outsideState: "Running outside OATS",
   outsideRecorded: "recorded stopped",
   outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
@@ -142,7 +142,7 @@ export default async (run) => {
   keepStatus("outside/status-not-loaded.json");
   await views("real-outside", async ({ page, at, viewport, shot }) => {
     const facts = await rowSays(page, viewport, SAYS.notLoadedRow);
-    check(facts.startsWith(SAYS.notLoadedRow), `${at} not loaded: the sidebar's row says "${SAYS.notLoadedRow}", never "Stopped"`, facts);
+    check(facts.startsWith(SAYS.notLoadedRow), `${at} not loaded: the sidebar's row says, whole in its title, "${SAYS.notLoadedRow}", never "Stopped"`, facts);
     await page.goto(threadPath);
     const line = await lineOf(page, ["Idle", SAYS.notLoaded]);
     check(line !== null && line.words.includes("Idle") && line.words.includes(SAYS.notLoaded) && !line.words.includes("Stopped") && line.notice === null, `${at} not loaded: the thread's line says "Idle · ${SAYS.notLoaded}", with no warning`, JSON.stringify(line));

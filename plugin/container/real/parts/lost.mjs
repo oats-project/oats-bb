@@ -57,9 +57,14 @@ const EXPECTED = {
   stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux`, drawn: ["Stopped"] },
   lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · session lost · tmux`, drawn: ["Lost"] },
 };
-/** The lost tmux agent's page: its header's state line, whole (the reason on the line, as on its row's title); and what the page no longer says (the text cut). */
+/**
+ * The lost tmux agent's page: its header's state line, whole (the reason on the line, as on its row's title); and what
+ * the page no longer says (the text cut). ("Last started <age>" is not among them: it is the Session card's own
+ * labelled fact for an agent that does not run, where the row names a start; what went is the line of that name
+ * under the header: `lastStarted`, below.)
+ */
 const LOST_LINE = /^Stopped\s*·\s*session lost$/;
-const LOST_NEVER = /Nobody stopped|without OATS stopping|Start tries|Last started/;
+const LOST_NEVER = /Nobody stopped|without OATS stopping|Start tries/;
 /** The dialogs' ONE consequence line each, and the results' words (app/lifecycle/words.ts START, RESUME; the text cut). */
 const SAYS = {
   start: "Starts a new conversation.",
@@ -182,7 +187,7 @@ export default async (run) => {
   const clean = (expression) => `(${expression} ?? "").replace(/\\s+/g, " ").trim()`;
   /** The agent's page once it shows a state among `words` (a wait on the state it asserts) → what it says and offers. */
   const pageSays = (words) =>
-    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), kind: s.getAttribute("data-outside"), block: p.querySelector('[data-testid="oats-outside-agent-block"]') !== null, whole: ${clean("p.innerText")} }); })()`;
+    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), kind: s.getAttribute("data-outside"), block: p.querySelector('[data-testid="oats-outside-agent-block"]') !== null, lastStarted: p.querySelector('[data-testid="oats-outside-last-started"]') !== null, whole: ${clean("p.innerText")} }); })()`;
   const pageNow = `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); return p ? ${clean("p.innerText")}.slice(0, 600) : ${clean("document.body.innerText")}.slice(0, 300); })()`;
   /** The agent's row in the sidebar, once its state is one of `words` → its facts, whole (the row's own title: state · soul or reason · where). */
   const rowSays = (words) => `(() => { const facts = document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? ""; return ${JSON.stringify(words)}.some((word) => facts.startsWith(word)) ? facts : ""; })()`;
@@ -199,7 +204,7 @@ export default async (run) => {
     const inRow = await page.until(rowSays(words), 60);
     check(inRow === rowWords, `${at} the ${state} tmux agent's row in the sidebar, among the agents with no bb thread: "${rowWords}"`, inRow ?? (await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.innerText ?? document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
     // What the row DRAWS in the state's place (its title, above, says all of it).
-    const word = await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-phrase="state"]')?.innerText`)}`);
+    const word = (await page.until(`(() => { const word = ${clean(`document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-phrase="state"]')?.innerText`)}; return ${JSON.stringify(drawn)}.includes(word) ? word : ""; })()`, 10)) ?? (await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-phrase="state"]')?.innerText`)}`));
     check(drawn.includes(word), `${at} and it draws ${drawn.map((each) => `"${each}"`).join(" or ")} in the state's place`, String(word));
     await shot(`${state}-row`);
     await page.goto(`/plugins/oats/agent/${NAME}`);
@@ -207,7 +212,7 @@ export default async (run) => {
     const read = said ? JSON.parse(said) : null;
     check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
     check(JSON.stringify(read?.acts) === JSON.stringify(acts), `${at} the page offers ${acts.join(" and ")}`, JSON.stringify(read?.acts));
-    if (state === "lost") check(read?.kind === "lost-tmux" && LOST_LINE.test(read.state) && read.block === false && !LOST_NEVER.test(read.whole), `${at} the lost agent's page says "Stopped · session lost" on its header's state line, and nothing of it under the tabs: no sentence, no "Last started"`, JSON.stringify(read));
+    if (state === "lost") check(read?.kind === "lost-tmux" && LOST_LINE.test(read.state) && read.block === false && read.lastStarted === false && !LOST_NEVER.test(read.whole), `${at} the lost agent's page says "Stopped · session lost" on its header's state line, and nothing of it under the tabs: no sentence, and no "Last started" line of its own (when it started is the Session card's fact)`, JSON.stringify(read));
     if (state === "stopped") check(read?.state === "Stopped" && read.block === false, `${at} the page of an agent stopped with OATS says nothing more than "Stopped": no block of what happened outside OATS`, JSON.stringify(read));
     await shot(`${state}-page`);
     return { at, row: inRow ?? null, ...read };
@@ -272,7 +277,9 @@ export default async (run) => {
         // BEHIND THE RESULT (the text cut's L13): the page's header never says the state from before the act plainly: it
         // says "Reading…" until the roster is read again, and then what the roster says.
         const behind = await page.evaluate(`(() => { const s = document.querySelector(${JSON.stringify(`${PAGE} [data-testid="oats-panel-state"]`)}); return JSON.stringify({ reading: s?.querySelector('[data-testid="oats-reading"]') !== null, state: ${clean("s?.innerText")} }); })()`);
-        check(result.tone === "failed" || JSON.parse(behind).reading === true || !(verb === "start" && /^Stopped/.test(JSON.parse(behind).state)), `${at} ${name}: behind the result the page's header says "Reading…", or already what the roster says now: never the state from before the act`, behind);
+        // (Asserted for a START: before it the state is "Stopped", which must not stand behind "… started.". A restart's
+        // state is the same word before and after, so the header's words prove nothing there, and nothing is claimed of it.)
+        if (verb === "start") check(result.tone === "failed" || JSON.parse(behind).reading === true || !/^Stopped/.test(JSON.parse(behind).state), `${at} ${name}: behind a start's result the page's header says "Reading…", or already what the roster says now: never "Stopped" from before the act`, behind);
         await shot(`${name}-done`);
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} ${name}: Close closes the dialog`);

@@ -517,7 +517,10 @@ export const START = {
    */
   carryOn: "To continue its conversation, message it instead.",
   checking: "Checking…",
-  /** A restart's ONE consequence line. */
+  /**
+   * Beside a restart's line (`begins`), ONLY where the agent is known to work on a turn now (bb's own
+   * word on its thread): what a restart cuts. Not said of an idle agent, nor on tmux, where nobody knows.
+   */
   restartWarning: "Stops what it is doing now.",
   harness: "Harness",
   model: "Model",
@@ -578,21 +581,23 @@ export const RESUME = {
 } as const;
 
 /**
- * What the dialog says a start or a restart does, before the press: ONE line. A restart: that it
- * stops what the agent does now. A start: a new conversation; for a tmux agent whose session was
- * lost, that it tries to continue the last one (and no more: the result says which happened).
+ * What the dialog says a start or a restart does, before the press. A start: ONE line: a new
+ * conversation; for a tmux agent whose session was lost, that it tries to continue the last one
+ * (and no more: the result says which happened). A restart: that it starts a new conversation,
+ * ALWAYS (on bb and on tmux a restart never resumes: the conversation's fate is said before the
+ * act, in Start's words); and, first and only where the agent WORKS on a turn now, that it stops
+ * what it is doing: two short lines at most.
  */
-export function startSays(verb: RunVerb, { resumes }: { resumes: boolean }): string[] {
-  if (verb === "restart") return [START.restartWarning];
+export function startSays(verb: RunVerb, { resumes, working = false }: { resumes: boolean; working?: boolean }): string[] {
+  if (verb === "restart") return [...(working ? [START.restartWarning] : []), START.begins];
   return [resumes ? RESUME.tries : START.begins];
 }
 /**
- * And under the dialog's Details, as sentences: for a restart, that it starts a new conversation
- * too; on bb, the access it runs with (bb's full mode: said in view where an agent is made, the
- * New agent form, and here one press away).
+ * And under the dialog's Details, as a sentence: on bb, the access it runs with (bb's full mode:
+ * said in view where an agent is made, the New agent form, and here one press away).
  */
-export function startDetails(verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
-  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [FULL_MODE] : [])];
+export function startDetails(_verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
+  return onBb ? [FULL_MODE] : [];
 }
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {

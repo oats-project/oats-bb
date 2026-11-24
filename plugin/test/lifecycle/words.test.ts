@@ -732,19 +732,25 @@ describe("the start of a tmux agent whose session was lost (a resume)", () => {
 });
 
 describe("what a start says before the press, and a tmux start that did not finish", () => {
-  it("ONE line: a start begins a new conversation, on bb and on tmux; a restart stops what the agent does now", () => {
+  it("a start: ONE line, a new conversation, on bb and on tmux", () => {
     expect(startSays("start", { resumes: false })).toEqual(["Starts a new conversation."]);
-    expect(startSays("restart", { resumes: false })).toEqual(["Stops what it is doing now."]);
-    expect(startSays("restart", { resumes: true })).toEqual(["Stops what it is doing now."]);
+    expect(startSays("start", { resumes: false, working: true })).toEqual(["Starts a new conversation."]);
+  });
+  it("a restart ALWAYS says that it starts a new conversation (it never resumes); that it stops what the agent is doing, first, ONLY where the agent works now: two lines at most", () => {
+    expect(startSays("restart", { resumes: false })).toEqual(["Starts a new conversation."]);
+    expect(startSays("restart", { resumes: false, working: false })).toEqual(["Starts a new conversation."]);
+    expect(startSays("restart", { resumes: false, working: true })).toEqual(["Stops what it is doing now.", "Starts a new conversation."]);
+    // A restart is never a resume, whatever the row says of a lost session.
+    expect(startSays("restart", { resumes: true })).toEqual(["Starts a new conversation."]);
   });
   it("a resume says what it tries, and promises no more; nothing of a question a harness may ask (the result says it when it happens)", () => {
     expect(startSays("start", { resumes: true })).toEqual(["Tries to continue its last conversation; else starts fresh."]);
   });
-  it("under Details: bb's full mode for an agent on bb, never for one on tmux; and for a restart, that it starts a new conversation too", () => {
+  it("under Details: bb's full mode for an agent on bb, never for one on tmux; a restart's new conversation is said in view, not here", () => {
     expect(startDetails("start", { onBb: true })).toEqual(["Runs in bb's full mode: no sandbox."]);
-    expect(startDetails("restart", { onBb: true })).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+    expect(startDetails("restart", { onBb: true })).toEqual(["Runs in bb's full mode: no sandbox."]);
     expect(startDetails("start", { onBb: false })).toEqual([]);
-    expect(startDetails("restart", { onBb: false })).toEqual(["Starts a new conversation."]);
+    expect(startDetails("restart", { onBb: false })).toEqual([]);
   });
   it("a start the kernel kept unfinished: on bb its thread is where to read it; on tmux there is none, and the sentence names none", () => {
     const kept = { code: "E_SPAWN_INCOMPLETE", message: "launch requires inspection" };

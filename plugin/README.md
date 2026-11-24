@@ -144,7 +144,8 @@ while its Terminal tab has the focus.
   **Details** (Joan's direction of 23 Nov 2026, by the text audit ruled on it): Stop "Archives its
   thread."; Retire "This cannot be undone."; Start "Starts a new conversation." (an agent on tmux
   whose session was lost: "Tries to continue its last conversation; else starts fresh."); Restart
-  "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
+  "Starts a new conversation." too (a restart never resumes, on bb or on tmux), and before it,
+  only where bb says the agent works on a turn now, "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
   second and last line.
 - **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
   was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set

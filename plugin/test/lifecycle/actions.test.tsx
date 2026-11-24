@@ -700,7 +700,7 @@ test("with one harness declared no choice is shown, and the focus starts on the 
   await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-start-model")));
 });
 
-test("Restart opens its dialog with its one line, that it stops what the agent does now, and nothing restarts until its button is pressed", async () => {
+test("Restart opens its dialog with what it does: for an agent that works now, that it stops what it is doing, then that it starts a new conversation; and nothing restarts until its button is pressed", async () => {
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "unknown" }), restart: () => held.then(() => startedIn("thr_redesign_2", "redesign-ui-lead")) });
@@ -708,10 +708,11 @@ test("Restart opens its dialog with its one line, that it stops what the agent d
   const dialog = await slot.findByRole("dialog");
   await ready(slot);
   expect(dialog.querySelector("h2")!.textContent).toBe("Restart Redesign ui lead");
-  expect(says(slot)).toEqual(["Stops what it is doing now."]);
+  // (bb says its thread runs a turn: Working.)
+  expect(says(slot)).toEqual(["Stops what it is doing now.", "Starts a new conversation."]);
   plain(slot);
-  // Under Details: that it starts a new conversation too, and bb's full mode.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  // Under Details: bb's full mode alone.
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
   expect(calls(slot, "restart")).toEqual([]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
@@ -1306,13 +1307,26 @@ test("a start the lock blocks says so in a sentence that points at Details, wher
 
 // ---- a start begins a new conversation
 
-test("Restart says in its one line that it stops what the agent does now; that it starts a new conversation is under Details", async () => {
+test("Restart ALWAYS says that it starts a new conversation (it never resumes); that it stops what the agent is doing ONLY of an agent that works now: never of an idle one", async () => {
+  // Working: bb says its thread runs a turn.
   const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }) });
   await pick("restart");
   await ready(slot);
-  expect(says(slot)).toEqual(["Stops what it is doing now."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  expect(says(slot)).toEqual(["Stops what it is doing now.", "Starts a new conversation."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+  resetApp();
+  // Idle: its harness is loaded and bb's thread is at rest: nothing is being done, and nothing is said to be stopped.
+  const idle = await menu("thr_harvest", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "unknown", sessionEnd: null }) });
+  await idle.pick("restart");
+  await ready(idle.slot);
+  expect(says(idle.slot)).toEqual(["Starts a new conversation."]);
+  resetApp();
+  // bb's thread says a turn runs, and the kernel says the agent does not run: the kernel's word decides, nothing is being done.
+  const ended = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: false, runtimeState: "shell", sessionEnd: null }) });
+  await ended.pick("restart");
+  await ready(ended.slot);
+  expect(says(ended.slot)).toEqual(["Starts a new conversation."]);
 });
 
 test("an agent whose recorded thread bb does not have (deleted, or bb cannot be asked) says the same one line: a start begins a new conversation, wherever the last one is", async () => {
@@ -1387,7 +1401,8 @@ test.each([
   expect(notice.querySelector("h3")!.textContent).toBe("To continue its conversation, message it instead.");
   expect(confirm.firstElementChild).toBe(notice);
   expect(notice.nextElementSibling).toBe(slot.getByTestId("oats-confirm-says"));
-  expect(says(slot)).toEqual(["Stops what it is doing now."]);
+  // The conversation's fate, in Start's words; nothing of stopping: the kernel says it does not run.
+  expect(says(slot)).toEqual(["Starts a new conversation."]);
   expect(button(slot, "oats-start-thread").textContent).toBe("Open Redesign ui lead");
   expect(button(slot, "oats-confirm-act").disabled).toBe(false);
   expect(button(slot, "oats-confirm-act").textContent).toBe("Restart");
@@ -2121,9 +2136,11 @@ test("Restart of an agent on tmux is the plain restart: no harness or model, no 
   const { openAct } = await import("../../app/lifecycle");
   openAct("restart", TMUX);
   await ready(slot);
-  expect(says(slot)).toEqual(["Stops what it is doing now."]);
-  // Under Details: that it starts a new conversation too; nothing of bb's full mode (it does not run in bb).
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation."]);
+  // On tmux nobody knows whether it works on a turn: that it stops what it is doing is not said. A restart there
+  // never resumes: a new conversation.
+  expect(says(slot)).toEqual(["Starts a new conversation."]);
+  // Under Details: nothing of bb's full mode (it does not run in bb).
+  expect(under(slot, "oats-start-details", "p")).toEqual([]);
   expect(slot.queryByTestId("oats-start-harness")).toBeNull();
   expect(slot.queryByTestId("oats-start-model")).toBeNull();
   expect(slot.queryByTestId("oats-start-fresh-choice")).toBeNull();
@@ -2180,7 +2197,7 @@ test("tmux, rule 2: the consequence is said before the press, for each of its th
   expect(await says("start", { running: false, runtimeState: null, sessionEnd: "lost" })).toEqual(["Tries to continue its last conversation; else starts fresh."]);
   // Stopped by an operator (the kernel's row of a tmux home stopped with OATS: runtimeState "shell", sessionEnd "stopped"): the same words as for bb, and nothing of a bb thread.
   expect(await says("start", { running: false, runtimeState: "shell", sessionEnd: "stopped" })).toEqual(["Starts a new conversation."]);
-  expect(await says("restart", { running: true, runtimeState: null, sessionEnd: null })).toEqual(["Stops what it is doing now."]);
+  expect(await says("restart", { running: true, runtimeState: null, sessionEnd: null })).toEqual(["Starts a new conversation."]);
 });
 
 test("tmux, rule 3: one act per press: opening the dialog starts nothing, and a second press while it runs sends nothing more", async () => {

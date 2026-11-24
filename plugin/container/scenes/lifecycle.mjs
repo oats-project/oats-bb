@@ -756,7 +756,7 @@ export default [
         check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
-        check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Stops what it is doing now."]) && !/full mode|stays readable|Save any in-progress/.test(before.body) && /Starts a new conversation\..*Runs in bb's full mode: no sandbox\./.test(JSON.parse(await page.evaluate(folded("oats-start-details"))).text) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its ONE line says that it stops what the agent does now; that it starts a new conversation, and bb's full mode, are under Details`, JSON.stringify(before));
+        check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Starts a new conversation."]) && !/full mode|stays readable|Save any in-progress|Stops what it is doing/.test(before.body) && (({ text }) => /Runs in bb's full mode: no sandbox\./.test(text) && !/Starts a new conversation/.test(text))(JSON.parse(await page.evaluate(folded("oats-start-details")))) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its line says that it starts a new conversation (of an agent that is idle nothing is said to be stopped); bb's full mode is under Details`, JSON.stringify(before));
         check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);

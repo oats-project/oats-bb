@@ -748,6 +748,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
   // person turned on the plain start.
   const onBb = known === null || known.backend === "bb";
+  // Whether the agent works on a turn NOW: bb's own word on its thread, as the roster holds it (the Stop dialog's
+  // reading), of an agent the kernel does not say has stopped running. Known for an agent on bb alone: of one on
+  // tmux nobody knows, and nothing is said.
+  const itsNode = oats.phase === "ready" ? oats.nodeByInstance.get(instance) : undefined;
+  const working = known !== null && known.backend === "bb" && known.running !== false && itsNode !== undefined && itsNode.thread !== null && threadWorks(itsNode.thread);
   const lost = verb === "start" && known !== null && resumable(known);
   const resumes = lost && !fresh;
 
@@ -853,7 +858,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
-      says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
+      says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes, working })}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
       // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands

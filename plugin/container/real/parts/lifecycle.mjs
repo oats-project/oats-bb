@@ -215,7 +215,7 @@ export default async (run) => {
     check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed`);
     await ready();
     said = await dialog(page);
-    check(said.title === `Restart ${called}` && JSON.stringify(await saysOf(page)) === JSON.stringify(["Stops what it is doing now."]) && (await foldOf(page, "oats-start-details")).includes("Starts a new conversation.") && said.act === "Restart", `${at} the Restart dialog's one line says that it stops what the agent does now (that it starts a new conversation is under Details), and it restarts nothing by itself`, JSON.stringify(said));
+    check(said.title === `Restart ${called}` && (await saysOf(page)).at(-1) === "Starts a new conversation." && (await saysOf(page)).length <= 2 && (await saysOf(page)).slice(0, -1).every((line) => line === "Stops what it is doing now.") && said.act === "Restart", `${at} the Restart dialog says that it starts a new conversation (and first, only where bb says the agent works on a turn now, that it stops what it is doing), and it restarts nothing by itself`, JSON.stringify(said));
     await shot("restart-before");
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 180);

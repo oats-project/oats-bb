@@ -9,10 +9,14 @@
 //   the window opened is never remembered: its row warns, as before; an agent on tmux has no thread);
 // - only once bb has ANSWERED that the same thread is archived or gone (never on "not known yet";
 //   a new thread id is a start or a restart);
-// - never for a stop through OATS, which archives the thread itself, from this plugin or from a
-//   terminal: bb's list changes before the roster is read, so OATS is asked again ONCE, and the
-//   roster read AFTER decides: a row that says an operator stopped it (`sessionEnd: "stopped"`),
-//   or an agent that is gone from it, is told to nobody;
+// - never for an act through OATS, which archives the thread itself, from this plugin or from a
+//   terminal (a stop, a retire, a restart): bb's list changes before the roster is read, so OATS is
+//   asked again ONCE, and a roster read AFTER that (its stamp is the asked read's, or later) decides,
+//   and only on what the row SAYS: told where it says the agent runs, or that its session was lost
+//   (the two rows a kernel prints after bb's archive); dropped where it says an operator stopped it
+//   (`sessionEnd: "stopped"`), where the agent is gone, on a new thread, or its thread is back; and
+//   where the row says neither (not running with no word how its session ended: a retire on its way;
+//   unreachable: a restart on its way) the look WAITS for a later roster, asking nothing more;
 // - never while an act of ours is in flight or its dialog is on screen: the look waits for it;
 // - once per agent and thread in an app window.
 import { rest } from "../../model/rest";
@@ -23,8 +27,15 @@ type Ready = Extract<Oats, { phase: "ready" }>;
 
 /** Each agent as last seen ON its listed thread: which thread, and whether it ran. */
 const seen = new Map<string, { threadId: string; ran: boolean }>();
-/** An agent that ran and whose thread bb now says is archived or gone: `askedAt` is the roster's stamp when OATS was asked again (null: not asked yet). */
-const candidates = new Map<string, { threadId: string; askedAt: string | null }>();
+/**
+ * An agent that ran and whose thread bb now says is archived or gone. `after`: the stamp of the read
+ * OATS made when it was asked again (null: not asked yet, or the answer is not here yet); `asking`:
+ * the question that is out (null: none; an answer to an earlier one is nobody's); `failedAt`: the roster's stamp
+ * when the question failed (asked again on a later roster).
+ */
+type Candidate = { threadId: string; after: string | null; asking: number | null; failedAt: string | null };
+let questions = 0;
+const candidates = new Map<string, Candidate>();
 /** Told already in this window, by agent and thread. */
 const told = new Set<string>();
 const keyOf = (instance: string, threadId: string) => `${instance}\n${threadId}`;
@@ -40,12 +51,23 @@ const left = (oats: Ready, agent: Ready["agents"][number]): boolean => {
   return where === "archived" || where === "missing";
 };
 
+export type Look = {
+  /** An act of ours is in flight, or its dialog is on screen. */
+  busy: boolean;
+  /**
+   * Ask OATS to read its status again now, and have the window read it: resolves to the stamp of
+   * that read (the plugin server's `refresh`), or null where it could not be asked.
+   */
+  ask: () => Promise<string | null>;
+  /** Called at most once per agent and thread. */
+  tell: (instance: string) => void;
+};
+
 /**
- * Look at the roster the window holds now. `busy`: an act of ours is in flight, or its dialog is on
- * screen. `tell` is called at most once per agent and thread. Called at each draw of the overlay;
- * it asks OATS again (`oats.retry`) once per candidate, and decides on the roster read after.
+ * Look at the roster the window holds now. Called at each draw of the overlay; it asks OATS again
+ * once per candidate, and decides on a roster read after that.
  */
-export function lookForLeft(oats: Oats, busy: boolean, tell: (instance: string) => void): void {
+export function lookForLeft(oats: Oats, { busy, ask, tell }: Look): void {
   // Only a roster that was just read says anything: the last one kept while OATS cannot be read is not asked.
   if (oats.phase !== "ready" || oats.stale !== null) return;
   const byInstance = new Map(oats.agents.map((agent) => [agent.instance, agent]));
@@ -56,7 +78,7 @@ export function lookForLeft(oats: Oats, busy: boolean, tell: (instance: string) 
     if (agent === undefined) seen.delete(instance);
     else if (agent.threadId === was.threadId && left(oats, agent)) {
       seen.delete(instance);
-      if (was.ran && !told.has(keyOf(instance, was.threadId)) && !candidates.has(instance)) candidates.set(instance, { threadId: was.threadId, askedAt: null });
+      if (was.ran && !told.has(keyOf(instance, was.threadId)) && !candidates.has(instance)) candidates.set(instance, { threadId: was.threadId, after: null, asking: null, failedAt: null });
     }
   }
 
@@ -70,25 +92,47 @@ export function lookForLeft(oats: Oats, busy: boolean, tell: (instance: string) 
   for (const [instance, candidate] of candidates) {
     const agent = byInstance.get(instance);
     // Retired meanwhile, on a new thread (a start, a restart), or its thread is back (unarchived): nothing to tell.
-    if (agent === undefined || oats.gone.has(instance) || agent.threadId !== candidate.threadId || !left(oats, agent)) {
+    if (agent === undefined || oats.gone.has(instance) || agent.threadId !== candidate.threadId || oats.whereOf(agent) === "open") {
       candidates.delete(instance);
       continue;
     }
+    // bb does not say of the thread now (it is asked again at each roster and each minute, and one failed answer
+    // forgets them all): the candidate is kept, and nothing is decided until bb says again that it is archived or gone.
+    if (!left(oats, agent)) continue;
     // An act of ours may be what archived it (a stop, a retire, of it or of its parent): the look waits, and asks after.
     if (busy) {
-      candidate.askedAt = null;
+      candidate.after = null;
+      candidate.asking = null;
       continue;
     }
-    if (candidate.askedAt === null) {
-      candidate.askedAt = oats.at;
-      oats.retry();
+    if (candidate.after === null) {
+      if (candidate.asking !== null || candidate.failedAt === oats.at) continue;
+      const question = ++questions;
+      candidate.asking = question;
+      const askedOn = oats.at;
+      void ask().then((at) => {
+        // (An act of ours began meanwhile, or a new window: this answer is nobody's.)
+        if (candidates.get(instance) !== candidate || candidate.asking !== question) return;
+        candidate.asking = null;
+        if (at === null) candidate.failedAt = askedOn;
+        else candidate.after = at;
+      });
       continue;
     }
-    // The roster read after OATS was asked again decides.
-    if (oats.at === candidate.askedAt) continue;
-    candidates.delete(instance);
-    if (agent.sessionEnd === "stopped") continue; // a stop through OATS: its thread was archived by it
-    told.add(keyOf(instance, candidate.threadId));
-    tell(instance);
+    // A roster read after OATS was asked again decides (the server's stamps are times, in one form: they compare as text).
+    if (oats.at < candidate.after) continue;
+    // What the row says. An operator's stop: its thread was archived by that stop.
+    if (agent.sessionEnd === "stopped") {
+      candidates.delete(instance);
+      continue;
+    }
+    // It runs, or its session was lost: the two rows a kernel prints of an agent whose thread bb archived under it.
+    if (rest(agent) === "runs" || agent.sessionEnd === "lost") {
+      candidates.delete(instance);
+      told.add(keyOf(instance, candidate.threadId));
+      tell(instance);
+    }
+    // Else the row says neither (not running, with no word how its session ended: a retire on its way; unreachable:
+    // a restart on its way): a later roster decides, and OATS is not asked again.
   }
 }

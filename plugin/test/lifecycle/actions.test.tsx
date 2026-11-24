@@ -71,6 +71,10 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
   // (The acts that show; the group's first row, which names the agent, has its own test.)
+  // Retire is NOT bb's red bin (bb's own Delete, two rows below it, is): the folder with a minus, in the destructive tone.
+  expect(app.threadActions.find((action) => action.id === "retire")!.icon).toBe("FolderMinus");
+  expect(app.threadActions.filter((action) => action.icon === "Trash2" || action.icon === "Trash")).toEqual([]);
+  if (items.retire != null) expect([items.retire.icon, items.retire.variant]).toEqual(["FolderMinus", "destructive"]);
   const shown = () => Object.entries(items).flatMap(([id, item]) => (item === null || id === "agent" ? [] : [id]));
   const pick = (id: string) => items[id]!.run({ requestRename: () => {} });
   return { slot, shown, pick, label: (id: string) => items[id]!.label, item: (id: string) => items[id] ?? null };

@@ -83,11 +83,15 @@ function set(next: Request | null): void {
 }
 /** The acts that were sent and have not answered yet, whether their dialog is still there or not. */
 let inFlight = 0;
+/** The app window the count is of: an act sent in a window that is gone lands in nobody's count. */
+let flightsOf = 0;
 /** Count an act from its sending to its answer (a result or a refusal). */
 function flying<T>(sent: Promise<T>): Promise<T> {
+  const window = flightsOf;
   inFlight += 1;
   for (const listener of [...listeners]) listener();
   const landed = () => {
+    if (window !== flightsOf) return;
     inFlight -= 1;
     for (const listener of [...listeners]) listener();
   };
@@ -107,6 +111,7 @@ const get = () => current;
 onWindowReset(() => {
   current = null;
   inFlight = 0;
+  flightsOf += 1;
   listeners.clear();
 });
 

@@ -545,7 +545,7 @@ export default [
         check(await open(), `${at} Retire is asked again from the thread's menu`);
         await page.until(phaseIs("failed"), 30);
         const left = await dialog(page);
-        check(left.title === "Retire Weekly digest helper" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog names no agent in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
+        check(left.title === "Retire Weekly digest helper" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog keeps the asked agent's name in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
         await shot("gone");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);

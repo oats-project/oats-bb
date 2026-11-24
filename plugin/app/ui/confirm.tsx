@@ -203,9 +203,12 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
                 {shown(phase.refusal.split("\n")[0] ?? "")}
               </p>
             ) : null}
-            <p className="text-muted-foreground">
-              <Lines text={phase.warns === true ? phase.refusal.split("\n").slice(1).join("\n") : phase.refusal} />
-            </p>
+            {/* (A warning that is the whole refusal: nothing more is drawn, not an empty line under it.) */}
+            {phase.warns === true && phase.refusal.split("\n").length === 1 ? null : (
+              <p className="text-muted-foreground">
+                <Lines text={phase.warns === true ? phase.refusal.split("\n").slice(1).join("\n") : phase.refusal} />
+              </p>
+            )}
           </Result>
         ) : null}
       </div>

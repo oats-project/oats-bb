@@ -3,12 +3,14 @@
 // feature places (`AgentActs`), and the overlay that draws their dialogs. Every way in opens the
 // act's dialog: nothing runs on one press.
 import { useEffect, useState } from "react";
+import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, BbThread, Node } from "../../model/types";
 import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
+import type { Contract } from "../store";
 import { useReading } from "../roster/reading";
 import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
@@ -24,7 +26,8 @@ export { askPlan, asked, openAct, run } from "./acts";
 export type { Verb } from "./words";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
-// (bb draws a name it does not know as its default mark. Retire is NOT a bin: bb's own Delete, two rows below it in
+// (bb draws a name it does not know as its default mark: "FolderMinus" was read in bb-app 0.50.1's own bundle, among
+// the names its icon component maps, and seen drawn in the menu at 1280 and 390. Retire is NOT a bin: bb's own Delete, two rows below it in
 // the same menu, is the red bin, and a person who means Retire must not find two of them. Its mark is the folder
 // with a minus: a retire deletes the agent's home. The entry keeps its destructive tone.)
 const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "FolderMinus", oats: "Bot" } as const;
@@ -212,8 +215,21 @@ function Overlay() {
   // A thread that bb archived or deleted under an agent that ran: told at once, and it stays (a warning,
   // not a failure), with the way to stop the agent through OATS. Looked for at each draw: the rule is left.ts's.
   const busy = useActsBusy();
+  const rpc = useRpc<Contract>();
   useEffect(() => {
-    lookForLeft(oats, busy, (instance) => notify({ tone: "unknown", title: mayStillRun(instance), open: { label: MAY_STILL_RUN_ACT, run: () => openAct("stop", instance) } }));
+    lookForLeft(oats, {
+      busy,
+      // The server reads OATS again and answers with that read's stamp; then the window reads what the server holds.
+      ask: () =>
+        rpc.call("refresh", null).then(
+          ({ at }) => {
+            oats.retry();
+            return at;
+          },
+          () => null,
+        ),
+      tell: (instance) => notify({ tone: "unknown", title: mayStillRun(instance), open: { label: MAY_STILL_RUN_ACT, run: () => openAct("stop", instance) } }),
+    });
   });
   return <ActsOverlay />;
 }

@@ -811,3 +811,59 @@ test("a fold's mark turns for its own fold alone: one inside an open fold is not
   expect((screen.getByTestId("inner") as HTMLDetailsElement).open).toBe(false);
   expect(screen.getByTestId("inner").matches("details[open] > summary > *")).toBe(false);
 });
+
+describe("a confirmation that interrupts, and a refusal that warns (the lifecycle dialogs' two cases)", () => {
+  const base: ConfirmProps = {
+    title: "Restart Weekly digest",
+    about: "weekly-digest-helper",
+    shownFor: "weekly-digest-helper",
+    says: ["Stops what it is doing now.", "Starts a new conversation."],
+    confirmLabel: "Restart",
+    phase: { kind: "ready" },
+    onConfirm: () => undefined,
+    onClose: () => undefined,
+  };
+
+  test("`interrupts`: the focus starts on Cancel, as for a destructive act, and the primary button keeps its plain look; without it, on the primary button", () => {
+    render(<Confirm {...base} interrupts />);
+    expect(document.activeElement).toBe(screen.getByTestId("oats-confirm-cancel"));
+    const act = screen.getByTestId("oats-confirm-act");
+    expect(act.hasAttribute("data-autofocus")).toBe(false);
+    const plain = act.className;
+    cleanup();
+    render(<Confirm {...base} />);
+    expect(document.activeElement).toBe(screen.getByTestId("oats-confirm-act"));
+    expect(screen.getByTestId("oats-confirm-act").className).toBe(plain); // the same look: it deletes nothing
+    expect(screen.getByTestId("oats-confirm-cancel").hasAttribute("data-autofocus")).toBe(false);
+    cleanup();
+    render(<Confirm {...base} destructive />);
+    expect(screen.getByTestId("oats-confirm-act").className).not.toBe(plain); // (a destructive act's button is not the plain one)
+  });
+
+  test("a failed phase with `warns`: the headline, then the refusal's first line in the warning tone, then the rest, which does not repeat it; without `warns`, one block as before", () => {
+    const refusal = "Its home was kept: a message in its thread would start it outside OATS.\nHome folder kept.\nCheck what was kept before trying again.";
+    render(<Confirm {...base} phase={{ kind: "failed", title: "Retirement didn't finish", refusal, warns: true }} />);
+    const result = screen.getByTestId("oats-result");
+    const headline = result.querySelector("h3")!;
+    const warning = screen.getByTestId("oats-result-warning");
+    expect(headline.textContent).toBe("Retirement didn't finish");
+    expect(warning.textContent).toBe("Its home was kept: a message in its thread would start it outside OATS.");
+    expect(warning.getAttribute("data-tone")).toBe("warning");
+    expect(result.contains(warning)).toBe(true);
+    expect(headline.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const paragraphs = Array.from(result.querySelectorAll("p"));
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[1]!.textContent).toBe("Home folder kept.Check what was kept before trying again.");
+    expect(result.textContent!.split("Its home was kept")).toHaveLength(2); // said once
+    cleanup();
+    render(<Confirm {...base} phase={{ kind: "failed", title: "Retirement didn't finish", refusal }} />);
+    expect(screen.queryByTestId("oats-result-warning")).toBeNull();
+    expect(Array.from(screen.getByTestId("oats-result").querySelectorAll("p")).map((p) => p.textContent)).toEqual(["Its home was kept: a message in its thread would start it outside OATS.Home folder kept.Check what was kept before trying again."]);
+  });
+
+  test("a refusal of ONE line with `warns`: the warning alone, and nothing is drawn after it (no empty line)", () => {
+    render(<Confirm {...base} phase={{ kind: "failed", title: "Retirement didn't finish", refusal: "Its home was kept.", warns: true }} />);
+    const paragraphs = Array.from(screen.getByTestId("oats-result").querySelectorAll("p"));
+    expect(paragraphs.map((p) => [p.getAttribute("data-testid"), p.textContent])).toEqual([["oats-result-warning", "Its home was kept."]]);
+  });
+});

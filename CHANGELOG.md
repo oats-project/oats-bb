@@ -32,6 +32,9 @@ and what it says when something happened to an agent outside OATS. Package `oats
   the next release.
 - A tmux agent's stopped and started states reach the plugin through OATS's status read: a
   few seconds after the act on a loaded host.
+- A bb window that loads while the plugin reads a change can keep the roster from before
+  that change until the next change it hears; reload the window to read it again. The same
+  was so in 0.3.0; the fix comes in the next release.
 
 ### The session provider
 

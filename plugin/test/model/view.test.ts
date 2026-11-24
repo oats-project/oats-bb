@@ -87,7 +87,7 @@ describe("A1 view(): the tree", () => {
     expect(shape(view(agents, threadsFor(agents)).roots)).toEqual(["self"]);
   });
 
-  test("order at every level: needs-you, then working, then the rest, each newest first", () => {
+  test("order at every level: what needs you first (a parent rises with a child that waits), then the rest in the kernel's order; never by the thread's updatedAt, and working is not above idle (test/model/order.test.ts holds the table)", () => {
     const agents = [
       agent("idle-old"),
       agent("idle-new"),
@@ -118,18 +118,18 @@ describe("A1 view(): the tree", () => {
       agents.map((a) => thread(a.threadId!, { updatedAt: at[a.instance]!, status: a.instance.includes("working") ? "active" : "idle" })),
     );
     expect(names(v.roots)).toEqual([
-      "needs-new",
+      "idle-new", // its child waits: it rises with it, first by the kernel's order among those that wait
       "needs-old",
-      "working-new",
+      "needs-new",
+      "idle-old", // then the rest, in the kernel's order: idle, working and stopped together
       "working-old",
+      "working-new",
       "stopped-newest",
-      "idle-new",
-      "idle-old",
     ]);
     expect(names(v.roots.find((node) => node.agent.instance === "idle-new")!.children)).toEqual([
       "kid-needs",
-      "kid-working",
       "kid-idle",
+      "kid-working",
     ]);
   });
 

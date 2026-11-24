@@ -150,12 +150,12 @@ describe("a real kernel's status, joined to bb's threads by the model", () => {
     expect(result.others.map((thread) => thread.id)).toEqual(["thr_another"]);
   });
 
-  it("the two children are drawn under their parent, the working one first", () => {
+  it("the two children are drawn under their parent, in the kernel's order (a working one is not above an idle one)", () => {
     const result = drawn("parentWithTwoChildren");
     expect(result.roots.map((node) => [node.agent.instance, node.state, node.depth])).toEqual([["redesign-ui-lead", "working", 0]]);
     expect(result.roots[0]!.children.map((node) => [node.agent.instance, node.state, node.depth])).toEqual([
-      ["desktop-mockups-developer", "working", 1],
       ["harvest-knowledge-helper", "idle", 1],
+      ["desktop-mockups-developer", "working", 1],
     ]);
     expect(result.working.map((node) => node.agent.instance).sort()).toEqual(["desktop-mockups-developer", "redesign-ui-lead"]);
   });

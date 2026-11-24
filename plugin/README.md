@@ -86,6 +86,18 @@ bb settings ui set sidebar.threadListProvider oats/agents
 bb settings ui reset sidebar.threadListProvider
 ```
 
+**The order of the rows** is ONE for every agent, whatever its backend (`model/view.ts`, `RANK`
+and `view().rows`; its table is `test/model/order.test.ts`). Three ranks: an agent that needs you;
+then one a person must look at (it runs outside OATS, or it failed); then everything else together
+(working, idle, stopped, unreachable). A row is placed by the most urgent rank anywhere in its own
+subtree, so a parent rises with a child that waits; children the same way under their parent; and
+within a rank by the kernel's own order of the agents. An agent with no bb thread (on tmux, or
+whose thread bb does not list) is a root in that same order, not a block after the tree. The order
+never follows a thread's latest activity and never puts Working above Idle: no row moves while a
+person reads it, unless an agent starts to need them (it rises) or is answered (it falls back to
+its kernel place). The sidebar has no line that counts who waits: those rows are first and
+marked, and bb's badge on the plugin's entry says how many.
+
 ## Stopping, starting, restarting and retiring an agent
 
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs

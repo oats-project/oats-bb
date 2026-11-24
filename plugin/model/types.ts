@@ -93,8 +93,17 @@ export type Node = {
   children: Node[];
 };
 
+/**
+ * One top row of the roster, in the ONE order every row has whatever its backend: a root of the
+ * tree (an agent on its bb thread, with its children under it), or an agent with no bb thread
+ * (on tmux; or one whose thread bb does not list), which is a root in that same order.
+ */
+export type Top = { node: Node } | { agent: Agent; where: "tmux" | "detached" };
+
 export type View = {
-  /** the agents tree */
+  /** The roster as it is drawn, top row by top row, in its one order (model/view.ts says the rule). */
+  rows: Top[];
+  /** the agents tree (the roots among `rows`, in the same order) */
   roots: Node[];
   /** threads with no agent */
   others: BbThread[];

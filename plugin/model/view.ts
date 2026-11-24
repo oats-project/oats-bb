@@ -1,5 +1,5 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, Top, View } from "./types";
 
 /**
  * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
@@ -112,22 +112,28 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   return threadWorks(thread) ? "working" : "idle";
 }
 
-const RANK: Record<AgentState, number> = {
+/**
+ * The roster's ONE order, for every row whatever its backend (the lead's ruling on the text audit,
+ * 23 Nov 2026). Three ranks only:
+ *   0  it needs you;
+ *   1  a person must look: it runs outside OATS, or it failed;
+ *   2  everything else, TOGETHER: working, idle, stopped, unreachable.
+ * A row is ordered by the lowest rank anywhere in its own SUBTREE (a parent with a waiting child
+ * rises with it), roots among roots and children among their siblings; and within a rank by the
+ * kernel's own order of the agents (their place in the snapshot). Never by a thread's `updatedAt`
+ * and never by a state of the same rank: the order does not jump while a person reads it. An agent
+ * that goes from Working to Idle, or a message in a thread, moves no row; an agent that starts to
+ * need a person rises, and falls back to its kernel place once answered.
+ */
+export const RANK: Record<AgentState, 0 | 1 | 2> = {
   "needs-you": 0,
-  working: 1,
-  unreachable: 2,
-  stopped: 2,
-  error: 2,
-  idle: 2,
-  // An agent that runs outside OATS is listed with the ones a person must look at: after those
-  // that wait, before the rest.
   outside: 1,
+  error: 1,
+  working: 2,
+  idle: 2,
+  stopped: 2,
+  unreachable: 2,
 };
-
-/** needs-you, then working, then the rest; each by the thread's `updatedAt`, newest first. */
-function byAttention(a: Node, b: Node): number {
-  return RANK[a.state] - RANK[b.state] || b.thread.updatedAt - a.thread.updatedAt;
-}
 
 /**
  * The instances whose parent link is dropped so the tree has no cycle. Walking up from each
@@ -214,20 +220,46 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     if (parentNode === undefined) roots.push(node);
     else parentNode.children.push(node);
   }
+  // The kernel's order: each agent's place in the snapshot (the first, for a name it lists twice).
+  const place = new Map<string, number>();
+  agents.forEach((agent, index) => {
+    if (!place.has(agent.instance)) place.set(agent.instance, index);
+  });
+  const placeOf = (agent: Agent): number => place.get(agent.instance) ?? agents.length;
+  // A subtree's rank: the lowest rank in it.
+  const urgency = new Map<Node, number>();
+  const rankOf = (node: Node): number => {
+    const known = urgency.get(node);
+    if (known !== undefined) return known;
+    const rank = Math.min(RANK[node.state], ...node.children.map(rankOf));
+    urgency.set(node, rank);
+    return rank;
+  };
+  const inOrder = (a: Node, b: Node): number => rankOf(a) - rankOf(b) || placeOf(a.agent) - placeOf(b.agent);
   const settle = (nodes: Node[], depth: number) => {
-    nodes.sort(byAttention);
+    nodes.sort(inOrder);
     for (const node of nodes) {
       node.depth = depth >= 2 ? 2 : depth === 1 ? 1 : 0; // deeper than 2 is drawn at 2
       settle(node.children, depth + 1);
     }
   };
   settle(roots, 0);
+  // An agent with no bb thread is a root in that same order, not a block after the tree. (It is
+  // drawn flat, under no parent, whatever its `parent`: as before.)
+  const tops: { top: Top; rank: number; place: number }[] = [
+    ...roots.map((node) => ({ top: { node }, rank: rankOf(node), place: placeOf(node.agent) })),
+    ...detached.map((agent) => ({ top: { agent, where: "detached" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
+    ...elsewhere.map((agent) => ({ top: { agent, where: "tmux" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
+  ];
+  // (A stable sort: two rows of one agent name, which the kernel should never list, keep the order they were made in.)
+  tops.sort((a, b) => a.rank - b.rank || a.place - b.place);
 
   const all = flatten(roots);
   const newest = (a: Node, b: Node) => b.thread.updatedAt - a.thread.updatedAt;
   const pick = (keep: (node: Node) => boolean) => all.filter(keep).sort(newest);
 
   return {
+    rows: tops.map((each) => each.top),
     roots,
     others: threads
       .filter((thread) => !taken.has(thread.id) && isListed(thread))

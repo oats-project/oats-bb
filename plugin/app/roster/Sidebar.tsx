@@ -292,11 +292,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
-          {agentRows(view.roots)}
-          {/* Where its thread is, by bb's own answer, after the state's word; nothing until bb has answered. */}
-          {view.detached.map((agent) => threadlessRow(agent, undefined, outside.of(agent)))}
-          {/* An agent on tmux whose session was lost says so ("Stopped · session lost", then where it is): nobody stopped it. */}
-          {view.elsewhere.map((agent) => threadlessRow(agent, TMUX, outside.of(agent)))}
+          {/* ONE order for every row, whatever its backend (model/view.ts): a root of the tree with its children, or an agent
+              with no bb thread, which is a root in that same order.
+              - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
+              - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
+          {view.rows.map((top) => ("node" in top ? agentRows([top.node]) : threadlessRow(top.agent, top.where === "tmux" ? TMUX : undefined, outside.of(top.agent))))}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

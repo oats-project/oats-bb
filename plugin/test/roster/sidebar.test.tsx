@@ -85,14 +85,16 @@ test("an agent with no bb thread stays in the roster: one that runs in tmux, and
   const rows = await slot.findAllByTestId("oats-agent-row-threadless");
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
     // Where its thread is (archived in bb, or deleted) is bb's own answer, which the outside feature asks and says (test/outside/places.test.tsx); bb says nothing here.
-    ["weekly-digest-helper", "Stopped"],
+    // (In the kernel's order, as every row of their rank: the one on tmux is listed before the stopped one.)
     ["kernel-fix-developer", "Working · tmux"],
+    ["weekly-digest-helper", "Stopped"],
   ]);
-  expect(rows[1]!.textContent).toContain("Kernel fix developer");
+  expect(rows[0]!.textContent).toContain("Kernel fix developer");
+  // (That neither is in a block of its own after the tree is the model's table: test/model/order.test.ts.)
   // The workspace's name alone heads the roster (no machine, no count); every agent is a row.
   expect(slot.getByTestId("oats-workspace-line").textContent).toBe("oats");
   expect(slot.getAllByTestId("oats-agent-row").length + rows.length).toBe(8);
-  fireEvent.click(rows[0]!);
+  fireEvent.click(rows[1]!);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "weekly-digest-helper" } }]); // the agent's own page, where its acts are
   expect(navigated()).toBe(1);
 });

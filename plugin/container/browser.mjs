@@ -230,14 +230,23 @@ async function showsSidebar(page, viewport) {
 }
 
 /**
- * Presses the chevron of every closed parent of the roster's tree, until none is closed (a child
- * that is a parent too is closed when its parent opens). It waits a little for the tree first: a
- * sidebar with no roster (not read, no agents) has nothing to open. → how many it pressed.
+ * Presses the chevron of every closed parent of the roster's tree, one at a time, until none is
+ * closed (a child that is a parent too is closed when its parent opens). Each press is WAITED
+ * for: the parent says it is open before the next closed one is looked for. (Pressed in one go
+ * with no wait, the page had not always drawn the first press when the second looked: the same
+ * chevron was then pressed again and again.) It waits a little for the tree first: a sidebar
+ * with no roster (not read, no agents) has nothing to open. → how many it pressed.
  */
 export async function openParents(page) {
   await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-tree")}, ${testId("oats-no-agents")}`)}) !== null`, 5);
-  return page.evaluate(
-    `(() => { let pressed = 0; for (;;) { const closed = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-row-toggle")}[aria-expanded="false"]`)}); if (!closed || pressed > 200) return pressed; closed.click(); pressed += 1; } })()`,
-  );
+  const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+  let pressed = 0;
+  for (; pressed < 200; pressed += 1) {
+    const instance = await page.evaluate(`(() => { const closed = document.querySelector(${JSON.stringify(`${toggle}[aria-expanded="false"]`)}); if (!closed) return null; closed.click(); return closed.getAttribute("data-instance"); })()`);
+    if (typeof instance !== "string") return pressed;
+    const opened = await page.until(`[...document.querySelectorAll(${JSON.stringify(toggle)})].some((each) => each.getAttribute("data-instance") === ${JSON.stringify(instance)} && each.getAttribute("aria-expanded") === "true") ? "1" : ""`, 10);
+    if (!opened) throw new Error(`openParents: the chevron of ${instance} was pressed and its parent did not open`);
+  }
+  return pressed;
 }
 

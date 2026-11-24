@@ -162,7 +162,15 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
   const threadRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && THREAD_STATUSES.has(row.status)
     && (row.projectId === null || row.projectId === undefined || typeof row.projectId === "string") && stamp(row.archivedAt) && stamp(row.deletedAt)
     && (row.queuedWork === null || row.queuedWork === undefined || typeof row.queuedWork === "string")
-    && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string");
+    && (row.environmentPath === null || row.environmentPath === undefined || typeof row.environmentPath === "string")
+    && (row.environmentId === null || row.environmentId === undefined || typeof row.environmentId === "string");
+  // An environment as bb shows one (`bb environment show`, bb-app 0.50.1): what it is (the
+  // environment provider that made it, and whether bb manages its directory), where it
+  // is (`path`: null once it is destroyed), and its status. One that does not say all of
+  // it cannot show that it is a home's own local directory.
+  const environmentRow = (row) => isObject(row) && typeof row.id === "string" && row.id !== "" && typeof row.status === "string" && row.status !== ""
+    && typeof row.environmentProviderId === "string" && typeof row.managed === "boolean"
+    && (row.path === null || row.path === undefined || typeof row.path === "string");
   // A source row as bb writes one: its kind, and for a directory on a machine its path. A
   // source that does not say what it is cannot show that a project is NOT rooted at a
   // home: such a list is unreadable, never "no project here".
@@ -236,5 +244,28 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
     async hosts() { return list(await must(["host", "list", "--json"]), "bb host list", hostRow); },
     stop(id, options) { return raw(["thread", "stop", id, "--json"], options); },
     archive(id) { return raw(["thread", "archive", id, "--json"]); },
+    /** The environment, or null when bb has none by that id. */
+    async environment(id) {
+      const answer = await raw(["environment", "show", id, "--json"]);
+      if (answer.ok) {
+        if (!environmentRow(answer.value) || answer.value.id !== id) throw fail(fallbackCode, "bb environment show answered no environment this provider can read");
+        return answer.value;
+      }
+      if (answer.code === "environment_not_found") return null;
+      throw refusal(answer, ["environment", "show"]);
+    },
+    /** Every thread on one environment, archived and hidden ones included: one read, and
+     *  it is whole or it throws (a row that cannot be read, or one that is of another
+     *  environment, and the list proves nothing). bb leaves deleted threads out. */
+    async threadsOn(environmentId) {
+      const rows = list(await must(["thread", "list", "--environment", environmentId, "--include-archived", "--include-hidden", "--json"]), "bb thread list --environment", threadRow);
+      const other = rows.findIndex((row) => row.environmentId !== environmentId);
+      if (other !== -1) throw fail(fallbackCode, `bb thread list --environment answered a thread that is not on that environment (row ${other + 1} of ${rows.length})`);
+      return rows;
+    },
+    /** Ask bb to delete an environment: bb marks it destroyed, answers at once, and tears
+     *  it down afterwards. For an environment that is a local directory bb does not
+     *  manage, the directory is not touched. bb refuses while a thread on it is unarchived. */
+    environmentDelete(id) { return raw(["environment", "delete", id, "--json"]); },
   };
 }

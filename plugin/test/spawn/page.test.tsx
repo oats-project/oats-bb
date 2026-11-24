@@ -4,7 +4,7 @@
 // reason when it is off, a refusal in a person's words, the held state, the keys.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { notified } from "../../app/ui";
@@ -275,6 +275,36 @@ test("the same values arm or hold Spawn whatever the order of the clicks: a harn
   choose(slot, "oats-spawn-harness", "claude");
   await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
   expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
+});
+
+test("a list of models bb never gives does not hold the form: after 10 seconds it reads as not read and Spawn goes on the kernel's answer; a list that answers later is read by the rule", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium" });
+  let answer: (list: unknown) => void = () => undefined;
+  const pending = new Promise((resolve) => {
+    answer = resolve;
+  });
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.1" }, { name: input.name ?? null }), revision: REVISION }) }, { models: () => pending }, false);
+    await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading defaults…"]));
+    // Short of the ten seconds: still read.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8_000);
+    });
+    expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading defaults…"]);
+    // Past them: not read, and the kernel's answer stands.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+    // The list answers after all, and two providers serve the soul's bare model: held by the rule.
+    await act(async () => {
+      answer({ modelLoadError: null, models: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"].map(bbModel) });
+    });
+    await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Pick provider"]));
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("the soul's own harness asked and not answered is not an answer: held meanwhile, and asked again when the form's values change", async () => {

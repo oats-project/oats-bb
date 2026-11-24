@@ -95,6 +95,8 @@ function useFlight(): { soul: string } | null {
   return flight;
 }
 
+/** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
+const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
 
@@ -370,7 +372,18 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
   const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
   // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
-  const modelsReading = suggestions.status === "loading";
+  // A list bb has not given after MODELS_WAIT_MS reads as not read: Spawn goes on the kernel's answer, as where bb
+  // gives no list, and the rule is read on the list if it answers later. A call of bb's that never settles does not
+  // hold the form.
+  const listLoading = suggestions.status === "loading";
+  const [listLate, setListLate] = useState(false);
+  useEffect(() => {
+    setListLate(false);
+    if (!listLoading) return;
+    const timer = setTimeout(() => setListLate(true), MODELS_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [listLoading, effectiveHarness]);
+  const modelsReading = listLoading && !listLate;
   // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
   const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.

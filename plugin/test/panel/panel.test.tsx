@@ -667,6 +667,12 @@ test("an agent's page while the roster is the last one read: ONE Retry on it, th
   const retry = within(page.getByTestId("oats-agent-page")).getAllByRole("button", { name: "Retry" });
   expect(retry).toHaveLength(1);
   expect(retry[0]!.closest('[role="alert"]')!.querySelector("h3")!.textContent).not.toContain("Readiness");
+  // That one Retry reads the failed part again too, on the press: the server answers a part from the last roster, so
+  // it can succeed while the roster still cannot be read (the fourth review round).
+  const asked = () => page.inspection.rpcCalls.filter((call) => call.method === "panelReadiness").length;
+  const before = asked();
+  fireEvent.click(retry[0]!);
+  await waitFor(() => expect(asked()).toBeGreaterThan(before));
   page.unmount();
   resetApp();
   const gone = await agentPage("gone-helper", { rpc: handlers({ snapshot: () => stale }) });

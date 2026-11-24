@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
-import { act, fireEvent, waitFor } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { notified } from "../../app/ui";
 import { UNCONFIRMED_ISSUE } from "../../contract/shared";
@@ -800,6 +800,31 @@ test("the same refusal without the kernel's marker is what its code says, whatev
   expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent]).toEqual(["failed", "The agent was not spawned"]);
   expect(result.querySelector("p")!.textContent).toMatch(/^bb isn’t ready to launch this agent, so the spawn was rolled back\. Nothing was created\./);
   await waitFor(() => expect([fieldset(slot).disabled, submit(slot).textContent]).toEqual([false, "Spawn"]));
+});
+
+// ONE Retry on a screen (T3; PR E's fourth review round): while OATS cannot be read the roster's notice has it; the
+// harness list, which fails for the same cause, keeps its sentence and draws no second button named Retry.
+test("while OATS cannot be read the form draws ONE button named Retry, the notice's: the harness list's own is not drawn beside it", async () => {
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  let stale = false;
+  const live = handlers().snapshot;
+  const slot = await ready(
+    previews({
+      snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
+      spawnHarnesses: () => {
+        throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+      },
+    }),
+  );
+  const named = () => within(slot.getByTestId("oats-new-agent-page")).queryAllByRole("button", { name: "Retry" });
+  expect(slot.getByTestId("oats-spawn-harness-retry")).not.toBeNull();
+  stale = true;
+  await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:16:56.000Z" });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
+  expect(named()).toHaveLength(1);
+  expect(named()[0]!.closest('[data-testid="oats-unreadable"]')).not.toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Harnesses could not be read"); // the sentence stays
 });
 
 test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {

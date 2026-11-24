@@ -161,8 +161,8 @@ export function RosterNotice({ oats, seen = true }: { oats: Oats; /** false: the
 // sidebar's comes back when that notice leaves (ruled 24 Nov 2026, with the lead's T3).
 // THE RULE HOLDS ON THE PILOT'S SCREENS: the sidebar, a thread's line and tab, the home, Home › Agents, an agent's
 // page, the New agent form. In the instance panel the parts with a read of their own (readiness, the soul, the
-// activity) draw NO Retry and hold their Refresh and Load while the roster cannot be read: the one Retry reads them
-// again (app/panel/state.tsx `CommandState`). NOT COUNTED, and left as they are: the pages that are no pilot screen
+// activity) draw NO Retry and hold their Refresh and Load while the roster cannot be read: a part that failed is read
+// again on each press of the one Retry, and when the roster is read again (app/panel/state.tsx `CommandState`). NOT COUNTED, and left as they are: the pages that are no pilot screen
 // (Souls, Teams, Machines, Capabilities, Automations), where a page's own failed read draws a Retry of its own (an
 // `ErrorLine`, the Automations page's notice over a kept list) beside the roster's.
 // "ONE Retry on a screen" counts the panes a person can PRESS: a modal dialog is its own place. Its own notice's Retry

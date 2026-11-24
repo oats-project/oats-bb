@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Loading, Notice } from "../ui";
 import type { Read } from "../store";
 import { readAge } from "../ui/words";
+import { useRosterAsked } from "../oats";
 import { refusalWords } from "./refusal-words";
 
 /**
@@ -39,8 +40,9 @@ export const mendable = (read: CommandRead, of: "readiness" | "activity" | "soul
  *
  * `unread`: the ROSTER cannot be read (it is the last one read, or OATS was never read). The pane
  * then holds the one notice of that, with the one Retry of the screen (app/roster/unreadable.tsx):
- * a part whose own read failed says its sentence WITHOUT an act of its own, and is read again by
- * itself when the roster is (the one Retry reads everything again).
+ * a part whose own read failed says its sentence WITHOUT an act of its own, and is read again on each
+ * press of that one Retry (the server answers a part from the last roster, so it can succeed while
+ * the roster still cannot be read), and when the roster is read again.
  */
 export function CommandState({ read, of, reading, failed, at = null, now, unread = false }: { read: CommandRead; of: "readiness" | "activity" | "soul"; reading: string; failed: string; at?: string | null; now: number; unread?: boolean }) {
   // The panel's clock ticks every half minute: a failure is aged by the clock as it was when the
@@ -50,12 +52,16 @@ export function CommandState({ read, of, reading, failed, at = null, now, unread
   useEffect(() => {
     if (failing) setSeen(Date.now());
   }, [failing, read.error]);
-  // The roster is read again: a part that failed while it could not be is read again with it.
-  const wasUnread = useRef(unread);
+  // A part that failed while the roster could not be read is read again on each press of the roster's Retry (the one
+  // on the screen then), and when the roster is read again.
+  const asked = useRosterAsked();
+  const last = useRef({ unread, asked });
   useEffect(() => {
-    if (wasUnread.current && !unread && read.status === "error" && !read.fetching) read.retry();
-    wasUnread.current = unread;
-  }, [unread, read]);
+    const before = last.current;
+    last.current = { unread, asked };
+    const again = (before.unread && !unread) || (unread && asked !== before.asked);
+    if (again && read.status === "error" && !read.fetching) read.retry();
+  }, [unread, asked, read]);
   if (read.status === "loading") return <Loading>{reading}</Loading>;
   if (read.status !== "error") return null;
   const code = codeOf(read.error);

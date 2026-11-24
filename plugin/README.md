@@ -65,8 +65,8 @@ the whole one, with the Retry. A notice counts as a pane's only while it is SEEN
 thread's tab says none while bb keeps that tab mounted out of sight, nor beside a thread whose own
 line says it. The panel in a thread's tab draws none: it holds its buttons; and on an
 agent's page too the panel's parts with a read of their own (readiness, the soul, the activity)
-draw no Retry and hold their Refresh and Load while the roster cannot be read: the one Retry reads
-them again. The rule holds on the pilot's screens; on Souls, Teams, Machines, Capabilities and
+draw no Retry and hold their Refresh and Load while the roster cannot be read: a part that failed
+is read again on each press of the one Retry, and when the roster is read again. The rule holds on the pilot's screens; on Souls, Teams, Machines, Capabilities and
 Automations a page's own failed read still draws a Retry of its own, which is not counted. Where OATS was NEVER
 read the same rule holds: beside a pane that shows the notice the sidebar says one line, the
 notice's TITLE alone, and so does the home in a thread's tab there (every thread's line says the
@@ -74,7 +74,8 @@ notice then: never an empty pane). A modal dialog is its own place: its own "can
 keeps its Retry over a pane that has one ("one Retry on a screen" counts the panes a person can
 press). A thread's line, the one notice on its screen, has Retry and, where the
 cause offers them, "Open settings". What a place still
-shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+shows of an agent (its soul, its events, its readiness) is still read when the place opens (the
+server answers it from the last roster); reading it AGAIN is held with the other acts. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |

@@ -25,7 +25,12 @@ it (it must be all of them; which millisecond the load falls in is chance, so ma
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
-`plugin/container/out/` (ignored by git). The artefacts have an owner (`out/.owner`: the OATS
+`plugin/container/out/` (ignored by git). A run that fails also keeps bb's own logs and crash
+reports there, cut short, under `bb-logs/` (`real/bb-logs.sh`, `real/README.md`): never the
+plugin's own log file, and nothing of bb's data. bb's logs name threads and environments by their
+ids, and carry the text of an error and what a plugin's worker printed on its standard error:
+after a failed run by hand on a person's own roster (`LOCAL_STATUS`, below), `out/bb-logs/` is as
+private as that run's images. The artefacts have an owner (`out/.owner`: the OATS
 instance that ran, else the user; `ARTEFACTS_OWNER` to name one): the first to run in a checkout
 owns `out/`, and a run by another (a reviewer attached to an author's tree) leaves `out/` as it is
 and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them. A run

@@ -19,7 +19,8 @@ two refusals the run makes, and for P6's spawn and `oats status`; the last is th
 fixture copied by hand: "The fixture P6 is the source of", below),
 `kernel.json` and `bridge.json` (what npm says of those two tarballs), `pi.json` (what pi's lock
 says of pi's own tarball, and how many packages it names), `doctor.txt`, `bb.out`,
-`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about five and a half
+`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests), and, when the run failed, `bb-logs/`
+(bb's own logs, cut short, and its crash reports: `../bb-logs.sh`). A run takes about five and a half
 minutes (338 s from the start of `ci.sh pi` to its end, on 2026-11-24; P6 is about two of them).
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead

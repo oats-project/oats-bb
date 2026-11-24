@@ -266,7 +266,7 @@ export function Empty({ title, children, action }: { title?: string; /** the sen
   );
 }
 
-/** A read in flight, in the place the content will be: "Reading your agents…". Polite: it is said once, not at every re-read. */
+/** A read in flight, in the place the content will be: "Reading…". Polite: it is said once, not at every re-read. */
 export function Loading({ children = "Reading OATS…" }: { children?: ReactNode }) {
   return (
     <p role="status" aria-live="polite" data-testid="oats-loading" className="py-2 text-sm text-muted-foreground">
@@ -303,9 +303,11 @@ export function Result({ title, tone = "done", children, code, actions }: { titl
       className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${tone === "failed" ? "border-destructive-text" : tone === "unknown" ? "border-warning-text" : "border-border"}`}
     >
       <h3 className={`font-semibold ${tone === "failed" ? "text-destructive-text" : ""}`}>{title}</h3>
-      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
+      {/* (A part with nothing drawn in it takes no room: a caller's list of no lines, or acts that are all absent, is
+          not null, and its empty block kept the gap over it: a result of one title was a line too high.) */}
+      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words empty:hidden">{children}</div>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
-      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2 empty:hidden">{actions}</div>}
     </section>
   );
 }

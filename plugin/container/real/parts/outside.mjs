@@ -181,7 +181,7 @@ export default async (run) => {
     check(Array.isArray(line?.acts) && line.acts.some((label) => label.startsWith("Stop")) && line.acts.some((label) => label.startsWith("Start")), `${at} the line offers Stop… and Start…`, JSON.stringify(line?.acts));
     await shot("outside-thread");
     // The notice's Stop: the harness that runs outside OATS is stopped, as OATS recorded it.
-    await page.evaluate(`[...document.querySelector(${JSON.stringify(IDENTITY)}).querySelectorAll('[data-testid="oats-outside-warning"] button')].find((button) => button.innerText.trim().startsWith("Stop")).click()`);
+    await page.evaluate(`[...document.querySelector(${JSON.stringify(IDENTITY)}).querySelectorAll('[data-testid="oats-status-line"] [data-testid="oats-status-act"]')].find((button) => button.innerText.trim().startsWith("Stop")).click()`); // (Stop… is the line's own act)
     let said = await confirm(page, at, "the notice's Stop");
     check(said.phase === "done" && said.body.includes(`${CALLED} stopped.`), `${at} the dialog says that it stopped`, JSON.stringify(said));
     const mended = await untilRow("to be stopped, the report gone", (r) => r.running === false && r.runtimeState === "stopped" && (r.outsideOats ?? null) === null);

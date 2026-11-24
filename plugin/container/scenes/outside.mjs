@@ -398,7 +398,8 @@ export default [
         `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then what OATS recorded, with Stop… and Start… as the line's own acts; under it no box and no title: ONE fold, Details, closed, holding what happened in a person's words, then the kernel's code and sentence (no command and no backtick in view)`,
         line === null ? await shown() : JSON.stringify(line),
       );
-      await page.shot(`outside-${viewport.name}-thread-outside`, { targets: true });
+      // The line with the kernel's report under it (the notice: one fold): as high as what it holds.
+      await page.shot(`outside-${viewport.name}-thread-outside`, { targets: true, gaps: testId("oats-identity-row") });
 
       // The home counts it as the roster's foot does, and its card holds the same notice: no choice, no reply.
       await page.goto("/plugins/oats/home");

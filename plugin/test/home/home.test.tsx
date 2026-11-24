@@ -857,7 +857,9 @@ test("an oats that speaks a newer desktop API: the card names the plugin as the 
   const slot = await withCli({ version: "0.74.0", desktopApi: 2, state: "newer-api" });
   const card = await slot.findByTestId("oats-home-cli");
   expect(card.querySelector("h3")!.textContent).toBe("This plugin is older than the installed oats CLI");
-  expect(card.textContent).toBe(`This plugin is older than the installed oats CLIUpdate the OATS plugin.Detected0.74.0Required${OATS_FLOOR} or newerCheck again`); // what to do, in four words
+  expect(card.textContent).toBe("This plugin is older than the installed oats CLIUpdate the OATS plugin.Detected0.74.0Check again"); // what to do, in four words
+  // The floor is not the bound that is broken here: no "Required <floor> or newer" beside a version that IS newer (it denied the title).
+  expect(within(card).getAllByTestId("oats-fact").map((fact) => fact.textContent)).toEqual(["Detected0.74.0"]);
   expect(card.querySelector("code")).toBeNull();
   expect(card.textContent).not.toContain("npm");
   // no command to copy: the one thing to press asks again, after the plugin was updated

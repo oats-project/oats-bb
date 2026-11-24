@@ -397,6 +397,46 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "the event path: a claim the kernel records is in the tree while the status read is still held, and the status read then confirms it",
+    run: async ({ page, at, viewport, threads, check, sleep, record, recordFor, statusAnsweredSinceRecord, snapshot }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const drawn = (state) => `document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`;
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} before the change the agent is drawn idle`);
+      const waits = (shot) => shot.ok === true && shot.agents.some((agent) => agent.instance === "harvest-knowledge-helper" && agent.waiting !== null);
+      // The kernel records a claim of that agent: a line in ITS file of the event log, which the watch
+      // names; its events say the claim; and `oats status` is HELD, so no status read can answer yet.
+      const HELD_MS = 6000;
+      const claim = { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" };
+      const recorded = recordFor(
+        { agent: "knowledge-harvester", instance: "harvest-knowledge-helper" },
+        { changes: { "harvest-knowledge-helper": { waitingOnYou: claim } }, said: { waitingOnYou: claim, waitingClaims: [{ producer: "agent", waiting: true, since: claim.since, reason: "attention", message: claim.message }] }, statusHeldMs: HELD_MS },
+      );
+      const shown = (await page.until(drawn("needs-you"), 15)) ? Date.now() - recorded : null;
+      // By the server's own order, not by the clock: the snapshot that has the claim is still the
+      // one of a status read that STARTED BEFORE the kernel recorded it. Only the events can have put it there.
+      // And no status read that could carry the claim has answered yet (the fake's own log): the status is still held.
+      const answered = statusAnsweredSinceRecord();
+      const during = snapshot();
+      check(
+        shown !== null && waits(during) && Date.parse(during.at) < recorded && answered === false,
+        `${at} the tree shows the agent waiting ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it, from its events alone: the snapshot is still the status read from before the record (the status is held ${HELD_MS} ms)`,
+        JSON.stringify({ shown, ok: during.ok, at: during.at, recorded: new Date(recorded).toISOString(), waits: waits(during), aStatusReadAnswered: answered }),
+      );
+      await page.shot(`event-path-${viewport.name}-claim-before-status`);
+      // The status read that the same signal asked for answers, with the claim: it confirms, and the row stays.
+      let confirmed = during;
+      for (const deadline = Date.now() + 30_000; Date.now() < deadline && !(confirmed.ok === true && Date.parse(confirmed.at) >= recorded); await sleep(250)) confirmed = snapshot();
+      const still = await page.evaluate(drawn("needs-you"));
+      check(confirmed.ok === true && Date.parse(confirmed.at) >= recorded && waits(confirmed) && still === true, `${at} and the status read that started after the record confirms it: the agent still waits`, JSON.stringify({ ok: confirmed.ok, at: confirmed.at, waits: waits(confirmed), still }));
+      // And back, so the scenes after this one draw the fixtures.
+      record();
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} and idle again once the kernel's status says so`);
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
@@ -482,7 +522,7 @@ export default [
       // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is, and Retry.
       if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
       const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))})?.innerText.trim() ?? null, off: s.querySelector(${JSON.stringify(testId("oats-new-agent"))})?.disabled ?? null }) : ""; })()`, 15);
-      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Retry","full":false,"why":null,"off":true\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>." and Retry; New agent stays off, with no reason under it (the page's notice says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Acts are off\\. Retry","full":false,"why":null,"off":true\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>. Acts are off." and Retry; New agent stays off under it, with no reason of its own (in bb's drawer, over the page, the line itself says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // (The home's image, below, holds the sidebar's one line beside the page's notice.)
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
@@ -618,7 +658,7 @@ export default [
         await page.goto("/");
         check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
         const titles = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")} ${testId("oats-row-facts")}`)})].map((e) => e.getAttribute("title"))`;
-        const lost = await page.until(`(() => { const now = ${titles}; return now.length === ${TMUX_ROSTER.tmux.length} && now.every((title) => / · session lost · tmux$/.test(title)) ? JSON.stringify(now) : ""; })()`, 30);
+        const lost = (await page.until(`(() => { const now = ${titles}; return now.length === ${TMUX_ROSTER.tmux.length} && now.every((title) => / · session lost · tmux$/.test(title)) ? JSON.stringify(now) : ""; })()`, 30)) ?? null; // (the harness's until answers undefined at its time's end: null, so that the check fails with what was read, never a throw)
         const wanted = TMUX_ROSTER.tmux.map(([, soul]) => `Stopped · ${soul} · session lost · tmux`).sort();
         check(lost !== null && JSON.stringify(JSON.parse(lost).sort()) === JSON.stringify(wanted), `${at} each of the ${TMUX_ROSTER.tmux.length} rows says, whole in its title, "Stopped · <soul> · session lost · tmux"`, lost ?? (await page.evaluate(`JSON.stringify(${titles})`)));
         const measured = await rowLines(page);
@@ -682,7 +722,7 @@ export default [
       const before = await dialog(page);
       const says = await page.evaluate(saysNow);
       check(before.about === LOST && before.act === "Start" && before.off === false && says === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) && !/full mode|Claude may|how to load/.test(before.body), `${at} Start… opens the dialog for that agent: its one line says that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode`, JSON.stringify({ before, says }));
-      const dialogGaps = JSON.parse(await page.evaluate(gapsIn(testId("oats-modal"))));
+      const dialogGaps = JSON.parse(await page.evaluate(gapsIn(`${testId("oats-modal")} [role="dialog"]`))); // (the dialog's own box: oats-modal is the screen's veil)
       check(dialogGaps.length === 1 && tight(dialogGaps), `${at} the dialog is as high as what it holds: no gap over ${MAX_GAP} px between two of its lines or at its edges (${dialogGaps[0]?.height} px)`, loose(dialogGaps));
       await page.shot(`tmux-roster-${viewport.name}-lost-start-before`, { targets: true });
       // The press: the kernel's recorded answer to a resume that brought the conversation back (test/fixtures/lifecycle/tmux-start-resume.json,
@@ -704,7 +744,7 @@ export default [
         check(done.body.includes("Overnight sweep developer is back in its last conversation.") && !done.body.includes("started fresh") && where.startsWith("Attach:") && where.includes("oats session attach --home ") && where.includes(LOST) && done.focus === "oats-confirm-close", `${at} after the press the result says that it is back in its last conversation, with the command that attaches to it; the focus is on Close`, JSON.stringify({ done, where }));
         await page.shot(`tmux-roster-${viewport.name}-lost-start-done`, { targets: true });
         // The roster is read again (within the ten seconds "Reading…" can stand): the header says what it says now.
-        const settled = await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20);
+        const settled = (await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20)) ?? null;
         check(settled !== null && JSON.parse(settled).state === "Running" && JSON.parse(settled).acts.every((off) => off === false), `${at} once the roster is read again the header says "Running" (on tmux: that it runs is all OATS knows), with its acts on`, settled ?? (await page.evaluate(header)));
         // OATS says it runs: its row says so, at its kernel place, with no reason.
         fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }) } });

@@ -3,7 +3,7 @@
 // awebai/oats 95c7b43b), over the plugin's own states: an agent's state is the one function every
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
-import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
+import type { Agent, AgentState, BbThread, View } from "../../model/types";
 import { messageResumes, rest } from "../../model/rest";
 import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";

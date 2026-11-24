@@ -399,7 +399,7 @@ export function createCore(bb: BbPluginApi) {
       return;
     }
     if (eventsLine.includes(instance)) return;
-    if (eventsReads.size < EVENTS_READS_MAX && eventsLine.length === 0) void readEvents(instance);
+    if (eventsReads.size < EVENTS_READS_MAX && eventsLine.length === 0) startEvents(instance);
     else inLine(instance);
   }
   function inLine(instance: string): void {
@@ -409,6 +409,9 @@ export function createCore(bb: BbPluginApi) {
       eventsLine.length = 0;
     }
   }
+  /** Starts a read nobody awaits: whatever it throws is said at debug level and changes nothing (fail safe, by construction). */
+  const startEvents = (instance: string): void =>
+    void readEvents(instance).catch((error: unknown) => bb.log.debug(`the event path: ${instance}: nothing changed: its read ended with ${String((error as Error)?.message ?? error)}`));
   /** Reads one instance's events, and then the next in line. */
   async function readEvents(instance: string): Promise<void> {
     const mine = { again: false };
@@ -422,7 +425,7 @@ export function createCore(bb: BbPluginApi) {
         if (mine.again) inLine(instance);
         // The place this read leaves is the next in line's.
         const next = eventsLine.shift();
-        if (next !== undefined) void readEvents(next);
+        if (next !== undefined) startEvents(next);
       }
     }
   }
@@ -452,20 +455,16 @@ export function createCore(bb: BbPluginApi) {
     // A status read that started after this events read did is newer than it: it is the truth.
     if (Date.parse(now.at) >= startedAt) return dropped(`a status read that started after its events read (${took} ms) has answered`);
     const shown = now.agents.find((candidate) => candidate.instance === instance);
-    if (shown === undefined || statusAgents === null) return dropped("the snapshot holds no such agent now");
+    // (The status read's own agents hold the same instances as the snapshot: one block of read() sets both.)
+    if (shown === undefined || statusAgents === null || !statusAgents.some((candidate) => candidate.instance === instance)) return dropped("the snapshot holds no such agent now");
     // The row is computed from what the STATUS read said of it, with this answer in the place of any
     // earlier one: never from a row that is patched already (an answer that says "stopped, then
     // started again" must take an earlier answer's "stopped" off).
     patches.set(instance, { said: answer.value, startedAt });
     const agents = withPatches(statusAgents, now.at);
-    const next = agents.find((candidate) => candidate.instance === instance);
+    const next = agents.find((candidate) => candidate.instance === instance)!;
     const patchedSnapshot: Snapshot = { ...now, agents };
     const key = keyOf(patchedSnapshot, rawRows?.root ?? "", rawRows?.rows ?? null);
-    if (next === undefined) {
-      // (It cannot be: one block of read() sets both. Said loudly, and nothing changes: this read is not awaited by anyone.)
-      bb.log.warn(`the event path: ${instance} is in the snapshot and not among the status read's own agents: nothing changed`);
-      return;
-    }
     if (key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
     cached = patchedSnapshot;
     comparable = key;

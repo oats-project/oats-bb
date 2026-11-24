@@ -42,7 +42,8 @@ const LIFECYCLE: ReadonlySet<string> = new Set(["stopped", "launched", "restarte
  *
  * STOPPED: the newest event of a kind that says where the session is, WRITTEN BY THE KERNEL (a
  * home's log is the agent's to write too: a row of another producer says nothing of the
- * session), in the answer's incarnation and after `readAt` (the start of the status read the row
+ * session), in the answer's incarnation (as the kernel's own rule: an answer that names no
+ * incarnation, or a row that names none, says nothing of this home's session) and after `readAt` (the start of the status read the row
  * came from: an older event is in that read already), is `stopped`: the row does not run, and
  * its session ended by a stop. A provider's row then carries the kernel's word "stopped"; a tmux
  * row keeps the word it has (the kernel prints "shell" for it: its window is left at a shell),
@@ -90,7 +91,7 @@ export function withEvents(agent: Agent, said: EventsSaid, readAt: string): Agen
   // Where the session is: the newest event of the kernel's that says, of this incarnation, newer than the row's read.
   const since = Date.parse(readAt);
   const newest = said.events
-    .filter((event) => LIFECYCLE.has(event.kind) && (event.producer === null || event.producer === "kernel") && (said.incarnation === null || event.incarnation === null || event.incarnation === said.incarnation))
+    .filter((event) => LIFECYCLE.has(event.kind) && (event.producer === null || event.producer === "kernel") && said.incarnation !== null && event.incarnation === said.incarnation)
     .map((event) => ({ kind: event.kind, at: Date.parse(event.at) }))
     .filter((event) => Number.isFinite(event.at) && Number.isFinite(since) && event.at > since)
     .reduce<{ kind: string; at: number } | null>((last, event) => (last === null || event.at >= last.at ? event : last), null);

@@ -138,6 +138,8 @@ describe("what an instance's events say of its row", () => {
     expect(withEvents(row, said({ events: [event("stopped", before)] }), READ_AT)).toBe(row); // older than the row's own read
     expect(withEvents(row, said({ events: [event("stopped", READ_AT)] }), READ_AT)).toBe(row); // at that moment: the read has it or the next has
     expect(withEvents(row, said({ events: [event("stopped", after, "2026-11-01T00:00:00.000Z")] }), READ_AT)).toBe(row); // a home of this name before this one
+    expect(withEvents(row, said({ incarnation: null, events: [event("stopped", after)] }), READ_AT)).toBe(row); // an answer that does not know its incarnation: whose stop it is is not known
+    expect(withEvents(row, said({ events: [event("stopped", after, null)] }), READ_AT)).toBe(row); // a row that names no incarnation is not this home's, as the kernel reads it
     expect(withEvents(row, said({ events: [event("stop-refused", after), event("worktree-added", after), event("some-kind-of-2027", later)] }), READ_AT)).toBe(row);
     // A row that is not the kernel's says nothing of the session (a home's log is the agent's to write too); one that names no producer is the kernel's.
     expect(withEvents(row, said({ events: [event("stopped", after, INCARNATION, "agent")] }), READ_AT)).toBe(row);

@@ -394,20 +394,57 @@ describe("the event path", () => {
 
   it("a status answer OLDER than the patch never removes it: the read that was in flight when the events were read keeps the claim", async () => {
     const first = await rpc<Shown>("snapshot");
-    await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
+    // The status read in flight answers a roster with one agent more (so that it publishes), and no claim.
+    await fake.behave({ status: { stdout: (await rosterOf(1)).stdout, sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
     // A status read is in flight (it started before the events read will), and it will answer with no claim.
     const inFlight = rpc<{ at: string }>("refresh");
     await until(async () => (await calls("status")).length === 2, "the second status read started");
+    const published = server.harness.realtimeSignals.length;
     await named();
     await until(async () => lead(await rpc<Shown>("snapshot")).waiting !== null, "the claim is shown");
     expect((await rpc<Shown>("snapshot")).at).toBe(first.at); // shown over the first read, while the second is in flight
     const older = await inFlight; // the read that started BEFORE the events read answers now, with no claim of its own
     const after = await rpc<Shown>("snapshot");
     expect(after.at).toBe(older.at);
+    expect(after.agents).toHaveLength(first.agents.length + 1); // it is that read's roster
     expect(lead(after).waiting).toMatchObject({ message: "Keep the retry, or fail the job?" }); // the patch stands over it
+    // EVERY publish has a token later than the one before: the status read's too, though ITS read started before the patch's did.
+    const [patch, status] = server.harness.realtimeSignals.slice(published).map((signal) => (signal.payload as { at: string }).at) as [string, string];
+    expect(Date.parse(older.at)).toBeLessThan(Date.parse(patch));
+    expect(Date.parse(status)).toBeGreaterThan(Date.parse(patch));
     // The next status read started after the events read: the truth, whole (the fake's roster has no claim).
     await until(async () => (await rpc<Shown>("snapshot")).at !== older.at, "the status read after the events read answers");
     expect(lead(await rpc<Shown>("snapshot")).waiting).toBeNull();
+  }, 60_000);
+
+  it("events that say what is shown publish nothing", async () => {
+    await rpc<Shown>("snapshot");
+    await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: claimed() } });
+    const before = server.harness.realtimeSignals.length;
+    await named();
+    await until(() => server.harness.realtimeSignals.length === before + 1, "the patch is published");
+    await named(); // the same file, the same answer
+    await until(() => eventPath().some((line) => line.includes("its events say what is shown")), "the second read says so");
+    expect(server.harness.realtimeSignals.length).toBe(before + 1);
+  }, 40_000);
+
+  it("a status read that FAILS shows the last roster as oats status said it: a patch leaves the screen with it", async () => {
+    const first = await rpc<Shown>("snapshot");
+    // A status read in flight, older than the patch: it answers, and the patch stands over it (as the test above).
+    await fake.behave({ status: { sleepMs: 3_000 }, [EVENTS]: { stdout: claimed() } });
+    const inFlight = rpc<{ at: string }>("refresh");
+    await until(async () => (await calls("status")).length === 2, "the second status read started");
+    await named();
+    await until(async () => lead(await rpc<Shown>("snapshot")).waiting !== null, "the claim is shown");
+    const older = await inFlight;
+    expect(lead(await rpc<Shown>("snapshot")).waiting).not.toBeNull(); // over the older read's roster too
+    // The status read the signal asked for FAILS (it starts after the pause: the fake fails from now on).
+    await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom" } });
+    await until(async () => (await rpc<{ ok: boolean }>("snapshot")).ok === false, "the status read fails");
+    const failed = await rpc<{ ok: boolean; last: { at: string; agents: Shown["agents"] } | null }>("snapshot");
+    // What is kept and shown as the last observation is that older read's roster AS OATS STATUS SAID IT: no claim.
+    expect(failed.last?.at).toBe(older.at);
+    expect(failed.last?.agents).toEqual(first.agents);
   }, 60_000);
 
   it("an events answer OLDER than the snapshot's status read is dropped", async () => {

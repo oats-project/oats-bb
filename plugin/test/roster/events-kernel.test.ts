@@ -1,7 +1,10 @@
 // The roster's narrow reader of `oats instance events` (kernel/roster-events.ts): the one argument
 // form it builds, what it refuses to build, and the six fields it reads of an answer.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRosterEvents, rosterEventsArgv, ROSTER_EVENTS_LIMIT } from "../../kernel/roster-events.js";
+import { FIXTURES } from "../support/fake-oats.js";
 
 const HOME = "/abs/deployment/agents/oats-developer/instances/flaky-ci-developer";
 const SINCE = "2026-11-23T10:00:00.000Z";
@@ -20,6 +23,19 @@ describe("oats instance events, for the roster's event path", () => {
     expect(rosterEventsArgv("Flaky CI", HOME, SINCE).ok).toBe(false);
     expect(rosterEventsArgv("flaky-ci-developer", "relative/home", SINCE).ok).toBe(false);
     expect(rosterEventsArgv("flaky-ci-developer", "--home", SINCE).ok).toBe(false);
+  });
+
+  it("reads the answer the kernel printed (the instance panel's recording): its claim, and every row's kind, time, incarnation and producer", () => {
+    const recorded = JSON.parse(readFileSync(join(FIXTURES, "panel", "events.json"), "utf8")) as { result: { events: { kind: string }[]; incarnation: string } };
+    const read = parseRosterEvents(recorded.result);
+    if (!read.ok) throw new Error(`${read.error.code}: ${read.error.message}`);
+    expect(read.value.truncated).toBe(false);
+    expect(read.value.incarnation).toBe(recorded.result.incarnation);
+    expect(read.value.waitingOnYou).toMatchObject({ reason: "attention", message: "Which base branch?" });
+    expect(read.value.waitingClaims.some((claim) => claim.waiting)).toBe(true);
+    expect(read.value.events.map((event) => event.kind)).toEqual(recorded.result.events.map((event) => event.kind));
+    expect(read.value.events.map((event) => event.kind)).toEqual(expect.arrayContaining(["stopped", "launched", "waiting"]));
+    expect(read.value.events.every((event) => Number.isFinite(Date.parse(event.at)) && event.incarnation !== null && event.producer !== null)).toBe(true);
   });
 
   it("reads six fields of the answer, and an event of a kind it has never heard of is no failure", () => {

@@ -195,7 +195,7 @@ export default [
   {
     stage: "fixtures",
     name: "the event path: a claim the kernel records is in the tree while the status read is still held, and the status read then confirms it",
-    run: async ({ page, at, viewport, threads, check, sleep, record, recordFor, snapshot }) => {
+    run: async ({ page, at, viewport, threads, check, sleep, record, recordFor, statusAnsweredSinceRecord, snapshot }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
@@ -213,11 +213,13 @@ export default [
       const shown = (await page.until(drawn("needs-you"), 15)) ? Date.now() - recorded : null;
       // By the server's own order, not by the clock: the snapshot that has the claim is still the
       // one of a status read that STARTED BEFORE the kernel recorded it. Only the events can have put it there.
+      // And no status read that could carry the claim has answered yet (the fake's own log): the status is still held.
+      const answered = statusAnsweredSinceRecord();
       const during = snapshot();
       check(
-        shown !== null && waits(during) && Date.parse(during.at) < recorded,
+        shown !== null && waits(during) && Date.parse(during.at) < recorded && answered === false,
         `${at} the tree shows the agent waiting ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it, from its events alone: the snapshot is still the status read from before the record (the status is held ${HELD_MS} ms)`,
-        JSON.stringify({ shown, ok: during.ok, at: during.at, recorded: new Date(recorded).toISOString(), waits: waits(during) }),
+        JSON.stringify({ shown, ok: during.ok, at: during.at, recorded: new Date(recorded).toISOString(), waits: waits(during), aStatusReadAnswered: answered }),
       );
       await page.shot(`event-path-${viewport.name}-claim-before-status`);
       // The status read that the same signal asked for answers, with the claim: it confirms, and the row stays.

@@ -1139,7 +1139,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   reread that differs publishes `oats/changed`, and the app refetches. One reread is published
   also when it says nothing new: the one a stop, a start, a restart or a retire asks for as it
   ends (`rereadAfterAct`), because the window holds "Reading…" over the agent until it has a
-  roster read after the act's end (`app/roster/reading.tsx`). A window that LOADS while
+  roster read after the act's end (`app/roster/reading.tsx`): the app reads the snapshot again on
+  `oats/changed` and takes the new roster's `at`, also when nothing else in it differs. A read's
+  start and an act's end are ONE strictly increasing stamp of the server (`stamp()`), so the two
+  are never the same instant. A window that LOADS while
   the server reads a change is given the roster from before it (the server answers from its
   cache at once) and hears the change published while that first answer is still on its way: the
   app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window

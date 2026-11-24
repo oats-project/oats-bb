@@ -685,18 +685,26 @@ front for them and never uses bb's own automations. The page is the OATS Desktop
 page, in its words.
 
 - **Two tabs, Schedules and Triggers**, each with its count. A list groups its rows by where they
-  run, because the first question is what this computer does: **Runs on this computer**, **Needs
-  attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
+  run, because the first question is what the machine that holds the deployment does: **Runs on
+  <machine>** (by bb's name for it, since the browser that draws the page may be anywhere; the
+  Desktop's "this computer" stands only while bb gives no name), **Needs attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
   **Runs elsewhere**. All / Workspace / Local filters by where the definition lives; the search
   reads the id, the soul, the task or wake message, the summary, the host and the account.
 - **A row** says its name and where it is from, its summary (or the first line of its prompt, in
   italics), its soul, when it runs in words, where it runs and as whom, and its last and next run.
+  A last run that failed is marked as a failure, one whose launch is not known as a warning, each
+  with its word. A next run whose time has passed reads "Was due <age>", and while the host
+  scheduler is off no row is drawn as one that runs: the group is "Set to run on <machine>", the
+  mark is muted and "Scheduler off" stands where the next run would be.
   The kernel places every row (`runsHere`, `reason`, `enabledHere`); the plugin reads those facts
   and derives none.
 - **A row's page** shows what it sends, whole (the prompt, the wake message, the command's argv,
   the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
-  this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
-  that did not happen says why in the kernel's words. **Open file** previews the definition from
+  that machine, what is wrong with it, its run state, where it runs and where it comes from, as
+  cards of equal width; a schedule whose agent is woken again has a **Recurring wake-up** card.
+  What is wrong (an invalid or unreadable definition, a source check that failed, an unknown run
+  state, a failed poll) is one sentence in a person's words, with the kernel's own message, code
+  and field under **Details**. A run that did not happen says why in the kernel's words. **Open file** previews the definition from
   the machine that holds the deployment, or opens its web page for a member with no clone here. A schedule's or a trigger's Prompt and a wake's message are
   the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
   lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
@@ -724,7 +732,7 @@ asked: the page says which OATS it needs.
 **Acting on a row** goes through the kernel's own verbs, for a row the current list names:
 
 - **The switch** (and Turn off here / Turn on here in the row's ⋯ menu) turns a row on or off on
-  this computer: a local item's own switch, a workspace item's entry in this host's opt-outs.
+  that machine: a local item's own switch, a workspace item's entry in this host's opt-outs.
 - **Run now** (a schedule that runs here) says what the run did in words: Agent launched, Launch
   failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
   a run whose state is unknown.

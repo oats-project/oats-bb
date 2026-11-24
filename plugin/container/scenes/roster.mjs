@@ -1,6 +1,9 @@
 // The roster's live scenes: the sidebar's tree, an agent's thread with its header row, the states
 // of the dot, and the sidebar while OATS cannot be read. (container/live-ui.mjs says what a scene is.)
+import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
 import { TMUX_ROSTER } from "../tmux-roster.mjs";
 import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
@@ -382,8 +385,8 @@ export default [
     // The pilot's own screen: an agent on tmux whose session was lost (a host that was restarted prints that row for
     // every tmux agent). Its page says the reason alone; what Start does is its dialog's one line.
     stage: "tmux-roster",
-    name: "the page of a tmux agent whose session was lost, opened from its row: Stopped, \"session lost\", no sentence; Start… and Retire…; Start's dialog says that it tries to continue its last conversation",
-    run: async ({ page, at, viewport, check }) => {
+    name: "the page of a tmux agent whose session was lost, opened from its row: Stopped, \"session lost\", no sentence; Start… and Retire…; Start's dialog says that it tries to continue its last conversation; after the press it is back, and its row says Working",
+    run: async ({ page, at, viewport, check, fake, tmuxStatus }) => {
       const [LOST] = TMUX_ROSTER.tmux.find(([, , , how]) => how === "lost");
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
@@ -410,8 +413,31 @@ export default [
       const says = await page.evaluate(saysNow);
       check(before.about === LOST && before.act === "Start" && before.off === false && says === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) && !/full mode|Claude may|how to load/.test(before.body), `${at} Start… opens the dialog for that agent: its one line says that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode`, JSON.stringify({ before, says }));
       await page.shot(`tmux-roster-${viewport.name}-lost-start-before`, { targets: true });
-      await page.evaluate(click("oats-confirm-cancel"));
-      check(Boolean(await page.until(closed, 10)), `${at} Cancel closes the dialog, and nothing was started`);
+      // The press: the kernel's recorded answer to a resume that brought the conversation back (test/fixtures/lifecycle/tmux-start-resume.json,
+      // for this agent's name). The result says what the kernel answered, with the command that attaches; no thread opens.
+      const resumed = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "lifecycle", "tmux-start-resume.json"), "utf8").replaceAll("lost-tmux-developer", LOST);
+      try {
+        fake({ status: { stdout: tmuxStatus() }, "session start --resume": { stdout: resumed, sleepMs: 1500 } });
+        await page.evaluate(click("oats-confirm-act"));
+        await page.until(phaseIs("done"), 30);
+        const done = await dialog(page);
+        const where = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
+        check(done.body.includes("Overnight sweep developer is back in its last conversation.") && !done.body.includes("started fresh") && where.startsWith("Attach:") && where.includes("oats session attach --home ") && where.includes(LOST) && done.focus === "oats-confirm-close", `${at} after the press the result says that it is back in its last conversation, with the command that attaches to it; the focus is on Close`, JSON.stringify({ done, where }));
+        await page.shot(`tmux-roster-${viewport.name}-lost-start-done`, { targets: true });
+        // OATS now says it runs: its row says so, at its kernel place, with no reason.
+        fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }) } });
+        await page.evaluate(click("oats-confirm-close"));
+        check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
+        check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
+        const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; return text === "Working · tmux" ? text : ""; })()`, 60);
+        check(after === "Working · tmux", `${at} its row then says "Working", and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
+        await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.scrollIntoView({ block: "center" })`);
+        await page.shot(`tmux-roster-${viewport.name}-lost-row-after`);
+      } finally {
+        // The stage's own roster again, for the next theme and width: the agent's session lost.
+        fake({ status: { stdout: tmuxStatus() } });
+        await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); return facts && /session lost/.test(facts.innerText) ? "1" : ""; })()`, 60);
+      }
     },
   },
   {

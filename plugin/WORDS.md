@@ -374,6 +374,7 @@ its meaning now. A row above that was shortened says its new words there, and ke
 | "OATS runs your agents: each one is a soul at work on a machine of yours." / "Start one, and Home shows what needs you and what you have." | the empty workspace | "No agents yet."; New agent is the primary button over it |
 | "Needs you" on a card under the heading "Needs you" | a needs card's status line | the heading over the cards; the card keeps the mark (its accessible name says the state) and the wait ("4 d") |
 | "Answer it in its thread." | a card whose request is answered in its thread | the card's button: "Answer" |
+| the underline under an agent's name, and the rule between two rows of a list | the home's cards and lists | the name in its weight is the link (underlined on hover and on keyboard focus); no rule between rows, as in bb's own lists (the lead's rulings L7 and L8) |
 
 ### The lifecycle dialogs
 

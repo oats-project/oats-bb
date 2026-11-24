@@ -24,7 +24,7 @@ import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TmuxMark } from "../ui";
-import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, LINK, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
+import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
@@ -83,7 +83,9 @@ function useOpen(oats: Ready): (entry: Entry) => { href?: string; /** where a pr
 function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
   const open = useOpen(oats)(entry);
   const name = agentName(entry.agent.instance);
-  const look = `${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-left font-semibold text-foreground`;
+  // The name in its weight is the link, as a row's name is in bb's own lists: no underline at rest; it shows on
+  // hover and on keyboard focus (the focus ring is bb's own; the link keeps its role and its accessible name).
+  const look = `${TARGET} inline-flex min-w-0 items-center break-words text-left font-semibold text-foreground underline-offset-2 hover:underline focus-visible:underline`;
   return open.href === undefined ? (
     <button type="button" data-testid={testId} title={shown(entry.agent.instance)} className={look} onClick={open.onClick}>
       {name}
@@ -461,7 +463,9 @@ function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oat
   // The line under the name is the reason, where there is one ("session lost"; what became of a thread bb does not list).
   const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : elsewhere(entry, said);
   return (
-    <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border py-1 first:border-t-0">
+    // A row is its name's ONE line (with the glyph of an agent on tmux after it), and the reason under it where there
+    // is one. No rule between rows: bb's own lists draw none between theirs.
+    <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground">
           <AgentName entry={entry} oats={oats} testId="oats-home-agent" />

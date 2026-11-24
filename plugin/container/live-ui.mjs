@@ -278,14 +278,16 @@ function statusWithRealIds(threads, changes = {}) {
  * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
  * runtimeState word (README).
  */
-function tmuxRoster(threads) {
+/** `as`: by instance, another `how` than the roster's own (a scene that starts a lost agent draws it running after). */
+function tmuxRoster(threads, as = {}) {
   const status = JSON.parse(statusWithRealIds(threads));
   const rows = status.agents.flatMap((group) => group.instances);
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
   for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
   for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
-  for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
+  for (const [instance, soul, parent, listed] of TMUX_ROSTER.tmux) {
+    const how = as[instance] ?? listed;
     const row = structuredClone(model);
     Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
     row.tmux = { ...model.tmux, window: instance };
@@ -581,7 +583,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes) };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as) => tmuxRoster(threads, as) };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

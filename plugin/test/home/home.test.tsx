@@ -64,6 +64,16 @@ test("a card says who (the name as words, and no soul or machine), what it asks 
   const slot = await homePage();
   const release = await cardOf(slot, "release-070-maintainer");
   expect(within(release).getByTestId("oats-needs-name").textContent).toBe("Release 070 maintainer");
+  // The name in its weight is the link: no underline at rest; it shows on hover and on keyboard focus. It stays a link, by its name.
+  const named = within(release).getByTestId("oats-needs-name");
+  expect(named.className.split(/\s+/)).not.toContain("underline");
+  expect(named.className.split(/\s+/)).toEqual(expect.arrayContaining(["font-semibold", "hover:underline", "focus-visible:underline"]));
+  expect([named.tagName, named.getAttribute("href") !== null]).toEqual(["A", true]);
+  // A row of the Working list: one line (its name), the same link, and no rule between rows.
+  const worker = within(slot.getByTestId("oats-home-working")).getAllByTestId("oats-working-row")[0]!;
+  expect(worker.className).not.toMatch(/border/);
+  expect(within(worker).getByTestId("oats-home-agent").className.split(/\s+/)).not.toContain("underline");
+  expect(within(worker).queryByTestId("oats-home-agent-where")).toBeNull();
   // Its soul and its machine are on its page, not on the card; an agent on its thread has no second line at all.
   expect(release.textContent).not.toMatch(/falcon|oats-maintainer/);
   expect(within(release).queryByTestId("oats-needs-where")).toBeNull();

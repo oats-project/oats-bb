@@ -148,7 +148,7 @@ export function RosterNotice({ oats }: { oats: Oats }) {
 
 // ---- one full notice on a screen ----
 // The sidebar and a page are drawn side by side. While a page shows the full notice over what it
-// keeps, the sidebar says ONE line (how old the roster is, that the acts are off, and Retry): `LastObservation`.
+// keeps, the sidebar says ONE line (how old the roster is, that the acts are off): `LastObservation`.
 let pagesWithNotice = 0;
 const noticeWatchers = new Set<() => void>();
 const tell = () => {
@@ -168,26 +168,18 @@ export function usePageShowsNotice(): boolean {
 }
 
 /**
- * The sidebar's one line beside a page's full notice: "Read 2 min ago. Acts are off.", and Retry (or
- * the settings, where only they mend it). It says that the acts are off itself, as the thread's
- * compact line does: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent,
- * off under this line, would have only an age above it (an off control is never alone on a screen).
+ * The sidebar's one line beside a pane's notice: "Read 2 min ago. Acts are off.", and nothing to press. The ONE Retry
+ * on the screen is the pane's, in its notice, where the person looks (the lead's T3, in the form the specialist
+ * ruled: a pane cannot know whether bb shows its sidebar, which is a drawer at a phone's width, so the Retry is never
+ * the sidebar's while a pane has one: never two on a screen, and never none). The line says that the acts are off
+ * itself: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent, off under this line, would
+ * have only an age above it (an off control is never alone on a screen).
  */
-export function LastObservation({ failure, machine, at, now, onRetry }: { failure: Failure; machine: string | null; at: string; now: number; onRetry: () => void }) {
+export function LastObservation({ failure, machine, at, now }: { failure: Failure; machine: string | null; at: string; now: number }) {
   const words = failureWords(failure, machine);
-  const settings = useSettingsHref();
   return (
     <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
       <span className="min-w-0">{`${showingRead(readAge(at, now))} ${HELD}`}</span>
-      {words.retry ? (
-        <span className="ml-auto shrink-0">
-          <Button onClick={onRetry}>Retry</Button>
-        </span>
-      ) : words.settings ? (
-        <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
-          Open settings
-        </a>
-      ) : null}
     </div>
   );
 }

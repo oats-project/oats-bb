@@ -1049,8 +1049,10 @@ const more = [
         const reread = await page.until(`${textOf(model)}.startsWith("claude-fable-5.2")`, 20);
         check(Boolean(reread), `${at} a panel opened again shows what OATS says now, not what it read before`, await page.evaluate(textOf(model)));
 
-        // OATS cannot be read again: the panel keeps what it read, with its age, the code and Retry,
-        // in the thread's tab as on the agent's page.
+        // OATS cannot be read again: the panel keeps what it read. THE NOTICE STANDS ONCE, in the pane a person is
+        // looking at (the lead's T3): on the agent's page (a phone: the panel is the page) the panel says it, whole,
+        // with the one Retry; in the thread's tab (a wide window) the thread's own line says it and the tab draws
+        // none: it only holds its buttons.
         {
           const opened = await open(page, viewport, threads, CHILD);
           check(opened.ok, `${at} the panel is open before OATS stops answering`, opened.read);
@@ -1058,14 +1060,29 @@ const more = [
         await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
         setStatus(REFUSED);
         refresh();
+        /** The Retry buttons drawn in the window now (whoever draws them): the lead's "one Retry on a screen". */
+        const RETRIES = `[...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry" && b.getClientRects().length > 0).length`;
+        if (viewport.mobile) {
         // Waited for: the notice of the read that was refused, once that read has ended (its act says Retry, not "Reading…").
         const stale = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["OATS could not read this deployment", "Read "], seconds: 40 });
         check(
           /^OATS could not read this deployment \| alert \| OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. Acts are off\. ▸ ?Details Retry$/.test(stale ?? ""),
-          `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same title), how old what it shows is, that the acts are off, Details and Retry`,
+          `${at} when OATS cannot be read again the agent's page says it as the sidebar does (the titled notice, the same title), how old what it shows is, that the acts are off, Details and Retry`,
           stale,
         );
+        } else {
+          // The thread's own line says it, on one line; the tab beside it draws no notice of the roster's and holds its acts.
+          const line = `${testId("oats-identity-row")} ${testId("oats-unreadable")}[data-compact]`;
+          const said = (await page.until(`(() => { const e = document.querySelector(${JSON.stringify(line)}); const t = (e?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Acts are off\\. Retry$/.test(t) ? t : ""; })()`, 40)) ?? null;
+          check(said !== null && /^OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. Acts are off\. Retry$/.test(said), `${at} when OATS cannot be read again the thread's own line says it: the title, how old what is shown is, that the acts are off, and Retry`, said ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
+          const tab = JSON.parse(await page.evaluate(`JSON.stringify({ notice: ${noticeOf("oats-panel-page-instance")}, held: document.querySelector(${JSON.stringify(inPanel("oats-held"))}) !== null, acts: [...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-agent-acts")} button`)})].map((b) => b.disabled) })`));
+          check(tab.notice === "" && tab.held === false && tab.acts.length > 0 && tab.acts.every((off) => off === true), `${at} and the tab beside it draws no notice of its own (it stood there a second or third time): it keeps what it read and holds its buttons`, JSON.stringify(tab));
+        }
         {
+          const retries = await page.evaluate(RETRIES);
+          check(retries === 1, `${at} ONE Retry on the screen while OATS cannot be read (${viewport.mobile ? "the agent's page's" : "the thread's line's; none in the sidebar beside it, none in the tab"})`, String(retries));
+        }
+        if (viewport.mobile) {
           // The kernel's code and its line are one press away, as in the sidebar's notice.
           const under = ["E_LOCAL_MISSING: no oats-local.yaml at or above this directory"];
           const folded = await reads(page, `${inPanel("oats-panel-page-instance")} ${testId("oats-notice-details")}`, under);

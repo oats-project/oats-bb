@@ -496,6 +496,9 @@ export default [
       check(newAgent === JSON.stringify({ text: "New agent", off: true, why: "", said: false }), `${at} "New agent" stays in its place, off, under the notice that says why: no reason beside it or in a title`, newAgent);
       await page.shot(`a14-${viewport.name}-sidebar`);
 
+      // THE NOTICE ONCE, AND ONE RETRY ON A SCREEN (the lead's T3): counted in each of the three cases below, at this width.
+      const RETRIES = `[...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry" && b.getClientRects().length > 0).length`;
+      check((await page.evaluate(RETRIES)) === 1, `${at} no pane shows the notice (a page of bb's own): the sidebar's notice is the whole one, and its Retry is the ONE on the screen`, String(await page.evaluate(RETRIES)));
       const target = threads.get("thr_redesign");
       await page.evaluate(`document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${target.id}"]').click()`);
       const opened = await page.until(`location.pathname.endsWith("/threads/${target.id}")`, 15);
@@ -509,6 +512,10 @@ export default [
         `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, that the acts are off, Retry`,
         kept ?? (await page.evaluate(textOf(testId("oats-identity-row")))),
       );
+      // The thread's line is the pane's notice: the sidebar beside it (where bb shows it: not a drawer) says its one line with nothing to press, and ONE Retry is on the screen.
+      const besideThread = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s) return ${JSON.stringify(JSON.stringify({ sidebar: false }))}; const l = s.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ sidebar: true, line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, press: l.querySelectorAll("button, a").length }) : ""; })()`, 15);
+      check(besideThread === JSON.stringify({ sidebar: false }) || new RegExp(`^\\{"sidebar":true,"line":"Read ${AGE}\\. Acts are off\\.","full":false,"press":0\\}$`).test(besideThread ?? ""), `${at} beside the thread's line the sidebar says one line, "Read <age>. Acts are off.", with nothing to press (or is not drawn: bb's drawer)`, besideThread ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check((await page.evaluate(RETRIES)) === 1, `${at} an agent's thread on screen: ONE Retry, the thread's line's`, String(await page.evaluate(RETRIES)));
       // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off; the notice under it says why.
       const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
       check(heldAct === JSON.stringify({ text: "Stop…", off: true, why: "" }), `${at} the act on the thread's line (Stop…) is held: in its place, off, over the one-line notice that says why`, heldAct);
@@ -519,10 +526,11 @@ export default [
       const home = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-home-page")} ${testId("oats-unreadable")}`)}); const cards = document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length; return e && cards > 0 ? JSON.stringify({ title: e.querySelector("h3")?.innerText ?? "", text: e.innerText.replace(/\\s+/g, " "), cards }) : ""; })()`, 30);
       const shown = home ? JSON.parse(home) : null;
       check(shown !== null && /^OATS is not installed on /.test(shown.title) && new RegExp(`Read ${AGE}\\. Acts are off\\.`).test(shown.text) && shown.cards === 3, `${at} the home keeps its three cards under the same notice, with the age of what it shows and that the acts are off`, home ?? (await page.evaluate(textOf(testId("oats-home-page")))));
-      // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is, and Retry.
+      // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is and that the acts are off, with nothing to press: the one Retry is the page's.
       if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
-      const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))})?.innerText.trim() ?? null, off: s.querySelector(${JSON.stringify(testId("oats-new-agent"))})?.disabled ?? null }) : ""; })()`, 15);
-      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Acts are off\\. Retry","full":false,"why":null,"off":true\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>. Acts are off." and Retry; New agent stays off under it, with no reason of its own (in bb's drawer, over the page, the line itself says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))})?.innerText.trim() ?? null, off: s.querySelector(${JSON.stringify(testId("oats-new-agent"))})?.disabled ?? null, press: l.querySelectorAll("button, a").length }) : ""; })()`, 15);
+      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Acts are off\\.","full":false,"why":null,"off":true,"press":0\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>. Acts are off.", with nothing to press; New agent stays off under it, with no reason of its own (in bb's drawer, over the page, the line itself says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check((await page.evaluate(RETRIES)) === 1, `${at} a page shows the notice: ONE Retry on the screen, the page's`, String(await page.evaluate(RETRIES)));
       // (The home's image, below, holds the sidebar's one line beside the page's notice.)
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
@@ -532,6 +540,7 @@ export default [
       check(await showSidebar(page, viewport), `${at} the sidebar is shown after the home is left`);
       const whole = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); return s?.querySelector(${JSON.stringify(testId("oats-held"))}) ? JSON.stringify({ line: s.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))}) !== null }) : ""; })()`, 15);
       check(whole === JSON.stringify({ line: false, why: false }), `${at} with the home left the sidebar's notice is whole again: no one line, and no reason under New agent`, whole ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check((await page.evaluate(RETRIES)) === 1, `${at} and its Retry is again the ONE on the screen`, String(await page.evaluate(RETRIES)));
     },
   },
   {

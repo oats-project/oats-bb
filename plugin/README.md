@@ -55,8 +55,13 @@ Details. Where OATS was read before, the
 roster stays as last read under that notice, which says its age once ("Read <age>."), and the
 OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start, Restart, Retire and
 New agent stay in their place, drawn off, the notice says "Acts are off." with its Retry, and the
-plugin's server takes no act meanwhile. Beside a page
-that shows that notice the sidebar says one line, "Read <age>.", with Retry. What a place still
+plugin's server takes no act meanwhile. THE NOTICE STANDS ONCE ON A SCREEN, with ONE Retry (the
+lead's T3): in the pane a person is looking at: a page of the plugin's (the home, an agent's page,
+the New agent form), or an agent's thread, whose own line says it on one line. Beside such a pane
+the sidebar says one line, "Read <age>. Acts are off.", with nothing to press (a pane cannot know
+whether bb shows its sidebar, a drawer at a phone's width: so the Retry is the pane's, and there
+are never two on a screen and never none); where no pane shows the notice, the sidebar's own is
+the whole one, with the Retry. The panel in a thread's tab draws none: it holds its buttons. What a place still
 shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 
@@ -598,9 +603,12 @@ that reading again cannot change as things are, the notice offers none, and the 
 way to read again for whoever mended it (Refresh; on the Soul tab, Retry). A read again
 that fails keeps what was read under the same titled notice ("Readiness could not be read again"),
 which says once how old what is shown is, always relative ("Read 12 min ago.").
-When OATS itself cannot be read, the panel says it in the words the sidebar and the thread's row
-say it (`app/roster/unreadable.tsx`: `Unreadable` whole where nothing was ever read, `failureWords`
-in the same notice over what was read).
+When OATS itself cannot be read, the panel as an agent's PAGE says it, whole, in the notice every
+place shows (`app/roster/unreadable.tsx` `Unreadable`, with the age of what it keeps and that the
+acts are off). As the TAB beside a thread it draws no notice of the roster's over what it read:
+the thread's own line says it, once on the screen, and the tab only holds its buttons. Where
+nothing was ever read it shows the notice whole in either place. Its own notice ("This instance
+could not be read again") is for its own read's failure.
 
 Who the agent is and where it is (the soul's mark, its name, the status line, its soul's name, the
 older-build fold) stands over the tabs and does not scroll: a page scrolled to its activity, at any

@@ -309,9 +309,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     // (no page link, no needs line) waits on this first.
     <div data-testid="oats-sidebar" data-pages={pagesNow.known ? "known" : "reading"} className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
-      {/* Where a page beside it shows the full notice, one line here: how old the roster is, and Retry. */}
+      {/* Where a pane beside it shows the notice (a page's; a thread's own line), one line here: how old the roster is, that the acts are off. The one Retry is the pane's. */}
       {oats.stale === null ? null : pageShowsNotice ? (
-        <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+        <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} />
       ) : (
         <Unreadable inSidebar failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}

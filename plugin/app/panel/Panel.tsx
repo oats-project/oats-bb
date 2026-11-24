@@ -24,7 +24,7 @@ import { shown } from "../ui/text";
 import { agentName, readAge, showingRead, waitingClock, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
-import { CommandText, PathLine, SoulMark } from "./parts";
+import { AgentMark, CommandText, PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
 import { useNow, usePanelEvents, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
@@ -187,7 +187,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
       <header data-testid="oats-panel-header" className="flex min-w-0 shrink-0 flex-col gap-1 px-3 pt-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <SoulMark soul={oats.soulOf(agent)} />
+          <AgentMark instance={agent.instance} />
           <h2 data-testid="oats-panel-name" title={shown(agent.instance)} className="m-0 min-w-0 break-words text-base font-semibold">
             {agentName(agent.instance)}
           </h2>

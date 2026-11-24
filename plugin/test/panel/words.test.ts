@@ -1,6 +1,6 @@
 // The instance panel's words: the OATS Desktop's, for the same facts.
 import { describe, expect, it } from "vitest";
-import { ATTACH, ageText, attachOffered, driftLines, harnessName, markText, modelFromText, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
+import { ATTACH, ageText, attachOffered, driftLines, harnessName, markText, modelFromText, nameMark, sessionWhere, sharedWork, workFolder, whenText, workSentence } from "../../app/panel/words";
 
 const NOW = Date.parse("2026-11-21T18:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -107,6 +107,20 @@ describe("the Session card", () => {
     expect(whenText(new Date(2026, 10, 21, 9, 5, 0).toISOString(), noon)).toBe("09:05");
     expect(whenText(new Date(2026, 10, 20, 18, 23, 0).toISOString(), noon)).toBe("Nov 20, 18:23");
     expect(whenText("never", noon)).toBe("never");
+  });
+});
+
+describe("an agent's mark", () => {
+  it("the letters of its NAME, as the words beside it read: the first two words' initials, or a single word's first two characters", () => {
+    expect(["overnight-sweep-developer", "roster-round-3-reviewer", "bb-plugin-lead", "panel-worktree-helper", "dev", "x", "ßeta-max", "3-reviewers", "Émile-zola"].map(nameMark)).toEqual([
+      "OS", "RR", "BP", "PW", "DE", "X", "SM", "3R", "ÉZ",
+    ]);
+  });
+  it("none where the name has no letter or digit", () => {
+    expect(["--", "", "…"].map(nameMark)).toEqual([null, null, null]);
+  });
+  it("never the soul's letters: a name keeps its first word, which a soul's mark drops as a namespace", () => {
+    expect([nameMark("oats-desktop-developer"), markText("oats-desktop-developer")]).toEqual(["OD", "DD"]);
   });
 });
 

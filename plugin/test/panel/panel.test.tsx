@@ -56,7 +56,7 @@ test("two tabs, Instance first; the header names the instance as words, its soul
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(CHILD);
   // Its soul, by its name alone (no "instance of"): the name is the way to the Soul tab.
-  expect(text(slot.getByTestId("oats-panel-header"))).toBe("OEPanel worktree helperIdleStop…Restart…Retire…oats-expert");
+  expect(text(slot.getByTestId("oats-panel-header"))).toBe("PWPanel worktree helperIdleStop…Restart…Retire…oats-expert");
   expect(text(slot.getByTestId("oats-panel-soul-link"))).toBe("oats-expert");
   expect(slot.getByTestId("oats-panel-soul-link").tagName).toBe("BUTTON");
   // The kernel says neither running nor stopped for an agent idle in bb: the tree's word, never "Not reported".
@@ -500,12 +500,16 @@ test("an agent that needs you for a question bb shows, with no claim, says Needs
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull();
 });
 
-test("both headers draw the soul's mark, hidden from a screen reader beside the name it repeats", async () => {
+test("the agent's header draws the letters of its NAME, the Soul tab's the soul's: each hidden from a screen reader beside the name it repeats", async () => {
   const slot = panel();
-  const mark = within(await slot.findByTestId("oats-panel-header")).getByTestId("oats-soul-mark");
-  expect([text(mark), mark.getAttribute("aria-hidden")]).toEqual(["OE", "true"]);
+  const header = within(await slot.findByTestId("oats-panel-header"));
+  // "Panel worktree helper" is "PW": the initials of the words beside the tile, not its soul's ("OE", oats-expert).
+  const mark = header.getByTestId("oats-agent-mark");
+  expect([text(header.getByTestId("oats-panel-name")), text(mark), mark.getAttribute("aria-hidden")]).toEqual(["Panel worktree helper", "PW", "true"]);
+  expect(header.queryByTestId("oats-soul-mark")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-tab-soul"));
-  expect(text(within(await slot.findByTestId("oats-panel-soul-header")).getByTestId("oats-soul-mark"))).toBe("OE");
+  const soul = within(await slot.findByTestId("oats-panel-soul-header")).getByTestId("oats-soul-mark");
+  expect([text(soul), soul.getAttribute("aria-hidden")]).toEqual(["OE", "true"]);
 });
 
 test("what the kernel's row holds is drawn through the display filter, and copied as the kernel gave it", async () => {

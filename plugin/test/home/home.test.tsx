@@ -44,9 +44,9 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   // bb's bar over the page names it: the page has no heading "Home" of its own.
   expect(slot.queryByTestId("oats-home-title")).toBeNull();
   expect(slot.getByTestId("oats-home-page").querySelector("h1")).toBeNull();
-  // No summary line here: the headings count who needs you and who works, and the Agents tile counts every agent OATS has, once.
+  // No summary line here: the headings count who needs you and who works. And no tile for the agents: the sidebar lists every one.
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
-  expect(slot.getByTestId("oats-tile-agents").textContent).toBe(`Agents${fixtureAgents().length}`);
+  expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
   const working = slot.getByTestId("oats-home-working");
   expect(heading(working)).toBe(`Working${within(working).getAllByTestId("oats-working-row").length}`);
   // The heading says the state: no row under it repeats the word.
@@ -308,10 +308,10 @@ const plainTab = async (options: RenderSlotOptions<Contract> = {}) => {
   );
 };
 
-test("the tiles: Agents and the plugin's pages, each with its count, each leading to its page", async () => {
+test("the tiles: the plugin's pages that are shown, each with its count, each leading to its page; no tile for the agents", async () => {
   const slot = await plainTab();
   expect(heading(await slot.findByTestId("oats-home-needs"))).toBe("Needs you3");
-  expect(slot.getByTestId("oats-tile-agents").textContent).toBe(`Agents${fixtureAgents().length}`);
+  expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
   await waitFor(() => expect(slot.getByTestId("oats-tile-souls").textContent).toBe("Souls2"));
   expect(slot.getByTestId("oats-tile-capabilities").textContent).toBe("Capabilities1");
   expect(slot.getByTestId("oats-tile-teams").textContent).toBe("Teams1");
@@ -561,9 +561,11 @@ const TMUX_ASKS: Agent = {
 test("Home › Agents: every agent OATS has, in the sidebar's order, each with its state, the one count line, and the way back", async () => {
   const agents = [...fixtureAgents(), TMUX_ASKS];
   const slot = await homePage({ rpc: handlers({}, agents) });
-  fireEvent.click(await slot.findByTestId("oats-tile-agents"));
-  // the page's Home › Agents has its own address
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home", options: { subPath: "agents" } }]);
+  // The home draws no tile for the agents and nothing else that leads to Home › Agents: the view is reached by its address alone (below).
+  await slot.findByTestId("oats-home-needs");
+  expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
+  expect(slot.queryByTestId("oats-home-agents")).toBeNull();
+  expect(slot.inspection.navigateCalls).toEqual([]);
   slot.unmount();
 
   const app = await loadApp();
@@ -604,14 +606,22 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(list.inspection.navigateCalls).toHaveLength(2);
 });
 
-test("in the thread's tab Home › Agents is a view of the tab: Agents opens it and ‹ Home closes it", async () => {
+test("in the thread's tab the home has no way to Home › Agents: no tile for the agents, and the tab stays the home; the page's address opens the view, and ‹ Home there leads back", async () => {
   const slot = await plainTab();
-  fireEvent.click(await slot.findByTestId("oats-tile-agents"));
-  expect(heading(await slot.findByTestId("oats-home-agents"))).toBe(`Agents${fixtureAgents().length}`);
-  expect(slot.queryByTestId("oats-home-needs")).toBeNull();
-  expect(slot.inspection.navigateCalls).toEqual([]);
-  fireEvent.click(slot.getByTestId("oats-home-back"));
   expect(await slot.findByTestId("oats-home-needs")).toBeTruthy();
+  expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
+  expect(slot.queryByTestId("oats-home-agents")).toBeNull();
+  expect(slot.queryByTestId("oats-home-back")).toBeNull();
+  slot.unmount();
+  resetApp();
+  // The view itself is there, at the page's address.
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const list = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "agents" }, { rpc: handlers(), sidebarThreads: sidebarThreads(), sdk: NO_INTERACTIONS });
+  expect(heading(await list.findByTestId("oats-home-agents"))).toBe(`Agents${fixtureAgents().length}`);
+  expect(list.queryByTestId("oats-home-needs")).toBeNull();
+  fireEvent.click(list.getByTestId("oats-home-back"));
+  expect(list.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }]);
 });
 
 test("an agent with no bb thread that needs the person has its card: what it asks, where to answer it in five words, Open to its own page, and no reply and no command", async () => {
@@ -858,16 +868,16 @@ test("behind the card New agent is off, and the card on the same screen says why
   expect(list.getByTestId("oats-home-agents")).toBeTruthy();
 });
 
-test("the release's default shows the home alone: the Agents tile only, no count read for a page that is not shown, and New agent, which opens the form", async () => {
+test("the release's default shows the home alone: no tile at all, no count read for a page that is not shown, and New agent, which opens the form", async () => {
   const slot = await homePage({ settings: { pages: "home" } });
   await slot.findByTestId("oats-home-needs");
-  expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-agents"]);
+  expect(slot.queryByTestId("oats-home-tiles")).toBeNull(); // no page is shown, and the agents have no tile: nothing is drawn, not an empty list
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => ["capabilities", "teams", "machines"].includes(method))).toEqual([]);
   slot.unmount();
   const some = await homePage({ settings: { pages: "home, teams" } });
   await some.findByTestId("oats-home-needs");
-  expect(Array.from(some.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-agents", "oats-tile-teams"]);
+  expect(Array.from(some.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-teams"]);
   some.unmount();
   const empty = await homePage({ rpc: handlers({}, []), sidebarThreads: calm(), settings: { pages: "home" } });
   await empty.findByTestId("oats-empty");

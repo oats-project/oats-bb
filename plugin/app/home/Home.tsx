@@ -495,8 +495,13 @@ function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: numbe
   );
 }
 
-/** The workspace's tiles: Agents (Home › Agents) and the plugin's pages, each with its count. */
-function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onAgents: () => void }) {
+/**
+ * The workspace's tiles: the plugin's pages that this release shows, each with its count. With the
+ * default (the home alone) there is none, and nothing is drawn. No tile for the agents: the
+ * sidebar lists every one (the lead's ruling L1 on the text audit, 23 Nov 2026). Home › Agents
+ * stays, reached by its address alone.
+ */
+function Tiles({ visible }: { visible: boolean }) {
   const navigate = useBbNavigate();
   // A tile leads to a page: only the pages this release shows have one, and only their counts are read.
   const pages = usePagesShown();
@@ -512,15 +517,11 @@ function Tiles({ made, visible, onAgents }: { made: Board; visible: boolean; onA
     machines: counted(machines, machines.data?.machines.length),
   };
   const tile = "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md border border-border bg-card px-3 py-2 text-left hover:bg-accent";
+  const shown = pageLinks().filter((page) => pages.has(page.path));
+  if (shown.length === 0) return null;
   return (
     <ul data-testid="oats-home-tiles" className="m-0 grid list-none grid-cols-2 gap-2 p-0 md:grid-cols-3">
-      <li>
-        <button type="button" data-testid="oats-tile-agents" className={`${TARGET} ${tile}`} onClick={onAgents}>
-          <span className="font-semibold text-foreground">Agents</span>
-          <span className="text-xs text-muted-foreground">{tileCount(made.all.length)}</span>
-        </button>
-      </li>
-      {pageLinks().filter((page) => pages.has(page.path)).map((page) => (
+      {shown.map((page) => (
         <PageTile key={page.path} page={page} n={counts[page.path] ?? null} look={`${TARGET} ${tile}`} visible={visible} onOpen={() => navigate.toPluginPanel(page.path)} />
       ))}
     </ul>
@@ -628,7 +629,7 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
-function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onAgents: () => void; onBack: () => void }) {
+function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
@@ -678,7 +679,7 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
         {stale}
         {notice}
         <Empty>{FIRST_RUN}</Empty>
-        <Tiles made={made} visible={visible} onAgents={onAgents} />
+        <Tiles visible={visible} />
       </>
     );
   }
@@ -698,7 +699,7 @@ function Sections({ oats, visible, agents, onAgents, onBack }: { oats: Oats; vis
           </Cropped>
         )}
       </Section>
-      <Tiles made={made} visible={visible} onAgents={onAgents} />
+      <Tiles visible={visible} />
       {made.working.length === 0 ? null : (
         <Section title={WORKING} n={made.working.length} testId="oats-home-working">
           <Cropped items={made.working} shown={WORKING_SHOWN} more={showAll} testId="oats-home-working-all">
@@ -729,7 +730,7 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
   const agents = subPath.split("/").find((segment) => segment !== "") === AGENTS;
   return (
     <Page testId="oats-home-page">
-      <Sections oats={oats} visible agents={agents} onAgents={() => navigate.toPluginPanel("home", { subPath: AGENTS })} onBack={() => navigate.toPluginPanel("home")} />
+      <Sections oats={oats} visible agents={agents} onBack={() => navigate.toPluginPanel("home")} />
     </Page>
   );
 }
@@ -741,8 +742,6 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
 export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
-  // In the tab, Home › Agents is a view of the tab itself: it has no address of its own.
-  const [agents, setAgents] = useState(false);
   const AgentTab = getAgentTab();
   const ready = oats.phase === "ready";
   const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
@@ -765,7 +764,8 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   }
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
-      <Sections oats={oats} visible={visible} agents={agents} onAgents={() => setAgents(true)} onBack={() => setAgents(false)} />
+      {/* The tab is the home alone: Home › Agents has an address of the page's, and nothing in the tab leads to it. */}
+      <Sections oats={oats} visible={visible} agents={false} onBack={() => undefined} />
     </div>
   );
 }

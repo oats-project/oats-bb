@@ -3,7 +3,7 @@
 //
 //   detached     an agent whose session failed, one the kernel cannot reach, one whose bb thread is
 //                gone: in the summary and in Home › Agents
-//   pages-default  the release's default: the home alone, so the Agents tile and no other
+//   pages-default  the release's default: the home alone, so no tile at all
 //   fixtures     the recorded roster: three agents need the person (each card with its own reply),
 //                the summary, the tiles, who works, what is finished; Home › Agents; a tile whose
 //                count cannot be read; how soon a change the kernel records is on the home
@@ -234,7 +234,7 @@ export default [
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
       check(await open(page, within("oats-needs-card")), `${at} the home draws its cards`, await page.evaluate(textOf(PAGE)));
-      // bb's bar over the page names it: the page has no heading "Home" of its own, and no summary line (the headings and the Agents tile count).
+      // bb's bar over the page names it: the page has no heading "Home" of its own, and no summary line (the headings count).
       const bare = await page.evaluate(`JSON.stringify({ title: document.querySelector(${JSON.stringify(within("oats-home-title"))}) !== null, h1: document.querySelector(${JSON.stringify(`${PAGE} h1`)}) !== null, summary: document.querySelector(${JSON.stringify(within("oats-home-summary"))}) !== null })`);
       check(bare === JSON.stringify({ title: false, h1: false, summary: false }), `${at} the page has no heading of its own and no summary line`, bare);
       // New agent is on every home, first on the page: at a phone's width bb's sidebar is in a drawer, and the home is what a person sees.
@@ -283,8 +283,8 @@ export default [
       await page.evaluate(click(`${waits} ${testId("oats-needs-message")} summary`));
 
       // the tiles, with their counts read, and who works
-      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 5 && tiles.slice(0, 5).every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
-      check(Boolean(tiles) && JSON.parse(tiles)[0] === "Agents 8", `${at} the tiles: Agents and the pages, each of the five the home counts with its count`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 4 && tiles.slice(0, 4).every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
+      check(Boolean(tiles) && JSON.parse(tiles).every((tile) => !/^Agents\b/.test(tile)), `${at} the tiles: the pages that are shown, each the home counts with its count; no tile for the agents (the sidebar lists them)`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
       // the Automations tile carries the mark its row in the sidebar carries (a run failed, in these fixtures)
       const mark = await page.until(`document.querySelector(${JSON.stringify(`${within("oats-tile-automations")} [aria-label]`)})?.getAttribute("aria-label") ?? ""`, 15);
       check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
@@ -301,10 +301,11 @@ export default [
     name: "Home › Agents: every agent OATS has, and the way back",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      check(await open(page, within("oats-tile-agents")), `${at} the home draws the Agents tile`, await page.evaluate(textOf(PAGE)));
-      await page.evaluate(click(within("oats-tile-agents")));
+      // Nothing on the home leads to it (no tile for the agents): the view is reached by its address.
+      check(await open(page, within("oats-home-needs")) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-tile-agents"))}) === null`)) === true, `${at} the home draws no tile for the agents`, await page.evaluate(textOf(PAGE)));
+      check(await open(page, within("oats-home-agents"), `${HOME}/agents`), `${at} Home › Agents opens at its address`, await page.evaluate(textOf(PAGE)));
       const title = await page.until(`${heading("oats-home-agents", "agents 8")} ? ${headingOf("oats-home-agents")} : ""`, 15);
-      check(Boolean(title) && (await page.evaluate("location.pathname")).endsWith("/home/agents"), `${at} Agents opens Home › Agents, at its own address, with every agent`, `${await page.evaluate(headingOf("oats-home-agents"))} at ${await page.evaluate("location.pathname")}`);
+      check(Boolean(title) && (await page.evaluate("location.pathname")).endsWith("/home/agents"), `${at} Home › Agents, at its own address, has every agent`, `${await page.evaluate(headingOf("oats-home-agents"))} at ${await page.evaluate("location.pathname")}`);
       // ("tmux" is read by the glyph's name: on a row it is bb's terminal glyph, named "tmux".)
       const rows = JSON.parse(await page.evaluate(`JSON.stringify(${textsNamed(within("oats-home-agent-row"))})`));
       check(rows.length === 8 && rows.some((row) => /\btmux\b/.test(row) && !/runs in/.test(row)) && rows.some((row) => /Stopped$/.test(row)) && rows.every((row) => !/started by|${MACHINE}|oats-/.test(row)), `${at} the stopped agent and the one on tmux are in the list, each row with its state, the reason alone ("tmux"), and no soul, machine or who started it`, JSON.stringify(rows));
@@ -416,13 +417,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default shows the home alone: the Agents tile and no other",
+    name: "the release's default shows the home alone: no tile at all",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      check(await open(page, within("oats-home-tiles")), `${at} the home draws its tiles`, await page.evaluate(textOf(PAGE)));
-      const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length === 1 && /\\d$/.test(tiles[0]) ? JSON.stringify(tiles) : ""; })()`, 30);
-      check(Boolean(tiles) && /^\["Agents \d+"\]$/.test(tiles), `${at} with the default the one tile is Agents: a tile leads to a page that is shown`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
-      await shown(page, check, at, within("oats-home-tiles"), "the one tile");
+      check(await open(page, within("oats-home-needs")), `${at} the home draws who needs the person`, await page.evaluate(textOf(PAGE)));
+      // (bb gives the plugin's settings a moment after the page: the tiles of the other pages, if they were drawn first, go.)
+      const tiles = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null ? "none" : ""`, 30);
+      check(tiles === "none", `${at} with the default the home has no tile: a tile leads to a page that is shown, and the agents have none`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      await shown(page, check, at, within("oats-home-needs"), "what needs the person");
       await sound(page, viewport, check, at, "the home under the default");
       await page.shot(`home-${viewport.name}-default`);
     },
@@ -469,8 +471,8 @@ export default [
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-tiles")), `${at} the home draws its tiles`, await page.evaluate(textOf(PAGE)));
-      const total = await page.until(`(() => { const text = ${textOf(within("oats-tile-agents"))}; return /^Agents \\d+$/.test(text) ? text : ""; })()`, 20);
-      check(Boolean(total) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-summary"))}) === null`)) === true, `${at} the home counts its agents on the Agents tile, and has no summary line`, total ?? (await page.evaluate(textOf(PAGE))));
+      const total = await page.evaluate(`JSON.stringify({ agents: document.querySelector(${JSON.stringify(within("oats-tile-agents"))}) !== null, summary: document.querySelector(${JSON.stringify(within("oats-home-summary"))}) !== null })`);
+      check(total === JSON.stringify({ agents: false, summary: false }), `${at} the home has no tile for the agents, and no summary line`, total);
       await shown(page, check, at, within("oats-home-tiles"), "the tiles");
       await sound(page, viewport, check, at, "the home with a failed and an unreachable agent");
       await page.shot(`home-${viewport.name}-states`);
@@ -478,6 +480,8 @@ export default [
       // The one count line of the home is Home › Agents': it counts the failed agent and the unreachable one, each agent once, with no total.
       const summary = await page.until(`(() => { const text = ${textOf(within("oats-home-summary"))}; return /1 failed/.test(text) && /1 unreachable/.test(text) ? text : ""; })()`, 20);
       const numbers = String(summary ?? "").split(" · ").map((part) => Number(part.split(" ")[0]));
+      const listed = await page.evaluate(headingOf("oats-home-agents"));
+      check(Boolean(summary) && !/agents/.test(summary) && new RegExp(`^agents ?${numbers.reduce((sum, n) => sum + n, 0)}$`, "i").test(listed), `${at} the count line counts the failed agent and the unreachable one, each agent once: as many as the heading over the list says`, `${summary ?? (await page.evaluate(textOf(within("oats-home-summary"))))} under "${listed}"`);
       const read = `JSON.stringify(Object.fromEntries([...document.querySelectorAll(${JSON.stringify(within("oats-home-agent-row"))})].map((row) => [row.dataset.instance, row.innerText.replace(/\\s+/g, " ").trim()])))`;
       // Where its thread is comes from bb's own answer for its id (the one the sidebar's row reads): waited for.
       const answered = await page.until(`(() => { const rows = ${read}; return /deleted in bb/.test(JSON.parse(rows)["weekly-digest-helper"] ?? "") ? rows : ""; })()`, 30);

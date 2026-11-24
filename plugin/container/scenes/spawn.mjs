@@ -428,11 +428,11 @@ export default [
       // (the home's own image of this stage is of its summary and its one tile, further down), and where the press lands
       // is the image above.
       await page.goto("/plugins/oats/home");
-      // Read once the home itself says the default has drawn: its tiles are the Agents tile alone, counted (as the home's own
+      // Read once the home itself says the default has drawn: it has no tile at all (as the home's own
       // scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
       const HOME = `(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return JSON.stringify({ words: b?.innerText.trim() ?? null, off: b?.disabled ?? null, tiles: [...document.querySelectorAll(${q("oats-home-tiles")} + " button")].map((tile) => tile.getAttribute("data-testid")), links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`;
-      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && (() => { const tiles = [...document.querySelectorAll(${q("oats-home-tiles")} + " button")]; return tiles.length === 1 && /\\d$/.test(tiles[0].innerText.trim()); })() && ${HOME}`, 30);
-      check(onHome === JSON.stringify({ words: "New agent", off: false, tiles: ["oats-tile-agents"], links: 0 }), `${at} with only the home shown (its one tile is Agents), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
+      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 0 && ${HOME}`, 30);
+      check(onHome === JSON.stringify({ words: "New agent", off: false, tiles: [], links: 0 }), `${at} with only the home shown (it has no tile), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
       await page.evaluate(click(testId("oats-home-new-agent")));
       // The form takes the focus in an effect after it is drawn: the wait is for the focus too, and a wait that ends without it prints where it was.
       const LANDED = `JSON.stringify({ path: location.pathname, first: document.querySelector(${q("oats-spawn-form")}) ? ${FIRST} : null, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`;

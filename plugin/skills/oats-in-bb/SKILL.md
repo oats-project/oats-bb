@@ -67,8 +67,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
   outside OATS): it offers Start…. One the kernel cannot reach offers neither, and no Start. An
   agent that does not run and that nobody stopped (its session lost, ended, or not loaded) is
   answered as any other: a message in its thread is how it comes back.
-  **New agent** is first on every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
-  with no bb thread among them, with its state, under one count line ("3 working · 3 need you · …").
+  **New agent** is first on every home. Home › Agents (`/plugins/oats/home/agents`, by its address: nothing on the home leads
+  to it) lists every agent OATS has, the stopped ones and the ones with no bb thread among them,
+  with its state, under one count line ("3 working · 3 need you · …"); the sidebar lists them too.
   While OATS cannot be read the cards' choices and replies are off, and the notice over them says
   "Acts are off.", with Retry. The home also says when the
   installed `oats` is older than the plugin works with, or newer than it reads.

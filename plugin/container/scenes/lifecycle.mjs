@@ -210,7 +210,7 @@ export default [
         check(stopPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} the dialog has none of the four section headings, and ONE fold`, stopPlain);
         const stopFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
         check(stopFold !== null && stopFold.open === false && /Details$/.test(stopFold.summary) && stopFold.text.includes("Nothing is deleted.") && stopFold.text.includes("Redesign ui lead") && stopFold.text.includes("Session running"), `${at} under Details, closed: that nothing is deleted, and each session's state`, JSON.stringify(stopFold));
-        check(before.body.includes("Redesign ui lead · uncommitted work") && !before.body.includes("in the middle of a task") && !before.body.includes("Check again"), `${at} it says who has uncommitted work, one line per agent: the facts that are a reason not to confirm, set apart; Check again is not on the dialog's face`, before.body);
+        check(!before.body.includes("uncommitted work") && !before.body.includes("in the middle of a task") && !before.body.includes("Check again"), `${at} it says nothing of uncommitted work (a stop deletes nothing: the box says only what the act affects, a turn in progress); Check again is not on the dialog's face`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
         await shot("before");
         const order = await walk(page, 4);

@@ -149,10 +149,10 @@ while its Terminal tab has the focus.
   second and last line.
 - **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
   was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set
-  apart, only when true. For a stop those are said from facts, never from the plan's `midTask`
-  (reported activity: true for every session that runs, an idle one too): "<Name> has uncommitted
-  work." (the plan's own observation of its work tree) and, for an agent on bb, "<Name> is
-  mid-turn." (bb's word on its thread); an agent whose session runs with neither gets no line.
+  apart, only when true. For a stop that is ONE fact, said from bb's word on its thread and never from the plan's
+  `midTask` (reported activity: true for every session that runs, an idle one too): "<Name> ·
+  mid-turn", what the stop cuts; an agent that is not in a turn gets no line. Uncommitted work is
+  not said of a stop (nothing is deleted); a retire says it, at its tick.
   Under Details: what is kept and deleted ("Nothing is deleted."; "Deletes its home.", "Keeps its
   worktree, moved aside, on branch <b>."), who is left out, and the state of each session and of
   its uncommitted work. Stop has the switch **Include child instances** (on: the kernel's default;

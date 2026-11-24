@@ -37,8 +37,8 @@ describe("a stop plan", () => {
       // On a provider that archives the thread at stop (the pilot's): the one line; then, second and last, who else is stopped.
       says: ["Archives its thread.", "Also stops: Desktop mockups developer, Harvest knowledge helper."],
       warns: false,
-      // From the plan's facts: the two whose work tree holds uncommitted work (the recorded plan: 2 changed, 1 untracked each). Not from its midTask.
-      attention: ["Redesign ui lead · uncommitted work", "Desktop mockups developer · uncommitted work"], // one line per agent; the third has no fact, and no line
+      // Nobody is said to be in a turn here (no `working`), and uncommitted work (the recorded plan: 2 changed, 1 untracked for two of them) is not a stop's to say: nothing is deleted. Never from its midTask.
+      attention: [],
       details: ["Nothing is deleted."],
       state: [
         { label: "Redesign ui lead", value: "Session running" },
@@ -72,8 +72,8 @@ describe("a stop plan", () => {
     const view = stopPlanView({ ...plan, targets: [{ ...plan.targets[0]!, session: "unknown", midTask: "unknown" }], ambiguous: ["lost-child"] });
     expect(view.choice).toBeNull();
     expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Session unknown (couldn't be checked)" }]);
-    // Its uncommitted work is said whatever is known of its session (the recorded plan observed its work tree).
-    expect(view.attention).toEqual(["Redesign ui lead · uncommitted work"]);
+    // Its uncommitted work (the recorded plan observed its work tree) is not said of a stop.
+    expect(view.attention).toEqual([]);
     // Who is left out of the plan is under Details, by its name.
     expect(view.details).toEqual(["Nothing is deleted.", "Not included: Lost child."]);
   });
@@ -209,26 +209,24 @@ describe("a stop and the agent's thread", () => {
 
 describe("what a stop says first, before the confirmation: from facts, never from the plan's midTask", () => {
   // The kernel's `midTask: true` is reported activity: a session that runs (an idle agent's harness is loaded) or
-  // uncommitted work; never "it runs a turn" (the kernel side's ruling, 23 Nov). The dialog says the two facts.
+  // uncommitted work; never "it runs a turn" (the kernel side's ruling, 23 Nov). The dialog says the one fact a stop affects: a turn in progress.
   const one = (change: Partial<StopPlan["targets"][number]>): StopPlan => {
     const plan = stopPlan();
     return { ...plan, recursive: false, targets: [{ ...plan.targets[0]!, ...change }] };
   };
   const clean = { observed: true, branch: "agents/redesign-ui-lead", detached: false, drift: false, changed: 0, untracked: 0 };
 
-  it("uncommitted work: said, from the plan's own observation of the work tree (changed or untracked files)", () => {
-    expect(stopPlanView(one({ work: { ...clean, changed: 1 } })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
-    expect(stopPlanView(one({ work: { ...clean, untracked: 3 } })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
-    // Whatever midTask says of it.
-    expect(stopPlanView(one({ work: { ...clean, changed: 1 }, midTask: false })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
-    // A work tree that was not observed says nothing of work.
+  it("uncommitted work is NOT said of a stop, whatever the plan observed: a stop deletes nothing, and the box says only what the act affects", () => {
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 } })).attention).toEqual([]);
+    expect(stopPlanView(one({ work: { ...clean, untracked: 3 } })).attention).toEqual([]);
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 }, midTask: false })).attention).toEqual([]);
     expect(stopPlanView(one({ work: { ...clean, observed: false, changed: 4 } })).attention).toEqual([]);
   });
 
-  it("a bb agent whose thread runs a turn: said, from bb's word on its thread (the caller's `working`)", () => {
+  it("a bb agent whose thread runs a turn: said, from bb's word on its thread (the caller's `working`): what a stop cuts", () => {
     expect(stopPlanView(one({ work: clean }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead · mid-turn"]);
-    // Both facts, on the agent's ONE line: the work first.
-    expect(stopPlanView(one({ work: { ...clean, untracked: 1 } }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead · uncommitted work · mid-turn"]);
+    // With uncommitted work too: the turn alone.
+    expect(stopPlanView(one({ work: { ...clean, untracked: 1 } }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead · mid-turn"]);
     // An agent that is not of the plan is not said.
     expect(stopPlanView(one({ work: clean }), false, new Set(["someone-else"])).attention).toEqual([]);
   });
@@ -251,16 +249,16 @@ describe("what a stop says first, before the confirmation: from facts, never fro
 });
 
 describe("a plan that changed under the confirmation", () => {
-  it("says what differs, in sentences: who is in it, whose session runs; uncommitted work that came or went has no sentence of its own", () => {
+  it("says what differs, in sentences: who is in it, whose session runs; uncommitted work that came or went changes nothing a stop says", () => {
     const before = stopPlan();
     // The recorded case: one child stopped by itself between the plan and its apply.
     const after = { ...before, targets: before.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target.instance === "desktop-mockups-developer" ? { ...target, midTask: false, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
     expect(planChanges(before, after)).toEqual(["Harvest knowledge helper: its session was running, and is now not running."]);
     expect(planChanges(after, before)).toEqual(["Harvest knowledge helper: its session was not running, and is now running."]);
-    // Its work alone came or went: the dialog draws another box, and the one line says that what this would do has changed.
+    // Its work alone came or went: a stop says nothing of uncommitted work (it deletes nothing), so nothing it shows has changed.
     const worked = { ...before, targets: before.targets.map((target) => (target.instance === "desktop-mockups-developer" ? { ...target, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
-    expect(planChanges(before, worked)).toEqual([PLAN_CHANGED]);
-    expect(planChanges(worked, before)).toEqual([PLAN_CHANGED]);
+    expect(planChanges(before, worked)).toEqual([]);
+    expect(planChanges(worked, before)).toEqual([]);
     // The plan's midTask alone is no fact a person is told: a change of it changes no line.
     expect(planChanges(before, { ...before, targets: before.targets.map((target) => ({ ...target, midTask: false as const })) })).toEqual([]);
     expect(planChanges(before, { ...before, targets: before.targets.slice(0, 2) })).toEqual(["Harvest knowledge helper is no longer in this plan."]);

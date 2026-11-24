@@ -37,7 +37,7 @@ export type PlanView = {
   says: string[];
   /** `says[0]` is a warning (a stop on a provider that leaves the thread open): drawn in the warning tone. */
   warns: boolean;
-  /** The facts that are a reason not to confirm, set apart: an agent with uncommitted work or in a turn, a work tree on another branch. Only what is true. */
+  /** The facts that are a reason not to confirm, set apart: for a stop, an agent in a turn (what the stop cuts); for a retire, a work tree on another branch. Only what is true. */
   attention: string[];
   /** Under Details: everything else the dialog says before the act, as sentences. */
   details: string[];
@@ -96,25 +96,21 @@ export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
 export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
-/** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
-const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
 /**
- * The facts that are a reason not to stop an agent, as words after its name, ONE line per agent:
- * "Redesign ui lead · uncommitted work · mid-turn". Only the facts that hold; an agent with none
- * has no line (null).
- * - `work`: uncommitted work in its home (the plan's own observation of its work tree);
- * - `turn`: its thread runs a turn now (bb's own word on the thread: the model's `threadWorks`).
+ * The ONE fact that is a reason not to stop an agent, as a word after its name, one line per agent:
+ * "Redesign ui lead · mid-turn": its thread runs a turn now (bb's own word on the thread: the
+ * model's `threadWorks`), which a stop cuts. An agent that is not in a turn has no line (null).
+ * Uncommitted work is NOT said of a stop: a stop deletes nothing and the work stays where it is
+ * (the lead's read: the box says only what the act affects). A RETIRE says it, at its tick.
  */
-export const WORK_FACT = "uncommitted work";
 export const TURN_FACT = "mid-turn";
-export const stopFacts = (instance: string, { work, turn }: { work: boolean; turn: boolean }): string | null =>
-  work || turn ? [agentName(instance), ...(work ? [WORK_FACT] : []), ...(turn ? [TURN_FACT] : [])].join(" · ") : null;
+export const stopFacts = (instance: string, { turn }: { turn: boolean }): string | null => (turn ? `${agentName(instance)} · ${TURN_FACT}` : null);
 /**
  * `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`).
  * `working`: the plan's agents whose bb thread runs a turn now. What a person should see before
- * confirming is said from those FACTS, never from the plan's `midTask` (reported activity: true
- * for every session that runs, an idle one too): an agent whose session runs and has neither gets
- * no line, and the state under Details says "Session running" of it already.
+ * confirming is said from that FACT, never from the plan's `midTask` (reported activity: true
+ * for every session that runs, an idle one too): an agent that is not in a turn gets no line,
+ * and the state under Details says "Session running" of it already.
  */
 export const alsoStops = (instances: readonly string[]): string => `Also stops: ${names(instances)}.`;
 export const NOTHING_DELETED = "Nothing is deleted.";
@@ -129,7 +125,7 @@ export function stopPlanView(plan: StopPlan, archives = false, working: Readonly
   return {
     says: [...(onBb ? [stopThreadLine(archives)] : []), ...(plan.recursive && others.length > 0 ? [alsoStops(others)] : [])],
     warns: onBb && !archives,
-    attention: targets.flatMap((target) => stopFacts(target.instance, { work: uncommitted(target.work), turn: working.has(target.instance) }) ?? []),
+    attention: targets.flatMap((target) => stopFacts(target.instance, { turn: working.has(target.instance) }) ?? []),
     details: [NOTHING_DELETED, ...plan.ambiguous.map(ambiguous)],
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
@@ -250,8 +246,7 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
       if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
       else {
         if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
-        // (Uncommitted work that came or went has no sentence of its own: the box below says what is so now, and
-        // where nothing else differs the one line for "what this would do has changed" stands, below.)
+        // (Uncommitted work that came or went is no change of a stop: a stop says nothing of it, and deletes nothing.)
       }
     }
     for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);

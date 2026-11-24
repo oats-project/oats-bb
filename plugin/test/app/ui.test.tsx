@@ -123,6 +123,29 @@ describe("a state", () => {
     render(<StatusLine state="working" since={null} detail="" />);
     expect(screen.getByTestId("oats-status-line").textContent).toBe("Working");
   });
+
+  test("the status line's mark has a tone of its own where one is given: an agent's dot keeps one colour under a sentence that warns", () => {
+    const read = (line: HTMLElement) => ({
+      state: within(line).getByTestId("oats-state").getAttribute("data-tone"),
+      mark: line.querySelector("[data-mark]")!.getAttribute("data-tone"),
+      parts: within(line).getAllByTestId("oats-status-part").map((part) => [part.textContent, part.getAttribute("data-tone"), part.className.includes("text-warning-text")]),
+    });
+    // Not given: the line's tone, for the mark and the sentence.
+    const { unmount } = render(<StatusLine state="stopped" detail="A message here starts it outside OATS." tone="warning" />);
+    expect(read(screen.getByTestId("oats-status-line"))).toEqual({ state: "warning", mark: "warning", parts: [["· A message here starts it outside OATS.", "warning", true]] });
+    unmount();
+    // null: the state's own mark (no tone on it), and the sentence still in the warning tone.
+    const second = render(<StatusLine state="stopped" detail="A message here starts it outside OATS." tone="warning" markTone={null} />);
+    expect(read(screen.getByTestId("oats-status-line"))).toEqual({ state: null, mark: null, parts: [["· A message here starts it outside OATS.", "warning", true]] });
+    second.unmount();
+    // The mark alone (a card under its state's heading): the same.
+    const third = render(<StatusLine state="stopped" markOnly detail="A message here starts it outside OATS." tone="warning" markTone={null} />);
+    expect(read(screen.getByTestId("oats-status-line"))).toMatchObject({ state: null, mark: null, parts: [["A message here starts it outside OATS.", "warning", true]] });
+    third.unmount();
+    // "warning" for the mark under a plain line: the mark alone warns.
+    render(<StatusLine state="stopped" since="2 h" markTone="warning" />);
+    expect(read(screen.getByTestId("oats-status-line"))).toEqual({ state: "warning", mark: "warning", parts: [["· 2 h", null, false]] });
+  });
 });
 
 describe("facts, notices and the states of a list", () => {

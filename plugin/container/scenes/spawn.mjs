@@ -6,7 +6,8 @@
 // pressed (held, one spawn for three presses; where it lands has no image here: the fake makes no
 // agent, and the created agent's thread is the real run's image); a spawn that ended
 // without an answer (held, Check result under the same key); a refused spawn; a spawn the kernel
-// refused and could not undo completely (its marker, through bb's own RPC); the form held while
+// refused and could not undo completely (its marker, through bb's own RPC); a harness chosen with
+// no model resolved (the Model field marked Required, Spawn held); the form held while
 // OATS cannot be read; and the way in under the release's default pages. What the fake `oats`
 // answers is what the real kernel printed, recorded by the real run (test/fixtures/spawn/README.md).
 import { fill, FOCUSED, showSidebar, testId, textOf, visible } from "../browser.mjs";
@@ -28,6 +29,10 @@ const FIRST = `document.querySelector(${q("oats-spawn-form")}).querySelector("bu
 /** What will be created is read for the values on screen: the facts are drawn, none being read again, and Spawn can be pressed. → the column's text. */
 const READ = `(() => { const c = document.querySelector(${q("oats-spawn-preview")}); return c?.querySelector('[data-testid="oats-fact"]') && !c.querySelector(${q("oats-spawn-updating")}) && document.querySelector(${q("oats-spawn-submit")})?.disabled === false ? c.innerText.replace(/\\s+/g, " ").trim() : ""; })()`;
 const reasonOf = textOf(testId("oats-disabled-reason"));
+/** What the off Spawn is described by for a screen reader (aria-describedby): the words of the field's mark it points at; "" when it points at none. */
+const describedOf = `(document.getElementById(document.querySelector(${q("oats-spawn-submit")})?.getAttribute("aria-describedby") ?? "")?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+/** The column's rows under its one fold ("Details"), by label, read from the DOM (closed, they are not drawn): { folds, open, rows }. */
+const FOLDED = `JSON.stringify((() => { const c = document.querySelector(${q("oats-spawn-preview")}); const folds = [...(c?.querySelectorAll("details") ?? [])]; return { folds: folds.length, open: folds[0]?.open ?? null, labels: [...(folds[0]?.querySelectorAll('[data-testid="oats-fact"] dt') ?? [])].map((e) => e.textContent.trim()), sections: [...(folds[0]?.querySelectorAll("section h3, section h4, section h2") ?? [])].map((e) => e.textContent.trim()) }; })())`;
 const fieldError = `(document.querySelector(${q("oats-spawn-form")})?.querySelector('[role="alert"]')?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 /** Nothing of the form is wider than its page: no sideways scroll at any width. */
 const FITS = `(() => { const p = document.querySelector(${q("oats-new-agent-page")}); if (!p) return false; const edge = p.getBoundingClientRect().right; return p.scrollWidth <= p.clientWidth + 1 && [...p.querySelectorAll('[role="radio"], button, input, textarea, label')].every((e) => e.getBoundingClientRect().right <= edge + 1); })()`;
@@ -116,18 +121,18 @@ export default [
   },
   {
     stage: "spawn-form",
-    name: "the New agent form, empty: the soul first and in focus, nothing read, Spawn off with its reason",
+    name: "the New agent form, empty: the soul first and in focus, nothing read, Spawn off with the empty field in view",
     run: async ({ page, at, viewport, check }) => {
       check(await open(page), `${at} /plugins/oats/new-agent is the form, with the souls OATS lists`, await whole(page));
-      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: ${FIRST}, labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label")].map((e) => e.innerText.trim()), spawn: ${SPAWN}.disabled, reason: ${reasonOf}, column: ${textOf(testId("oats-spawn-preview"))}, mode: ${textOf(testId("oats-spawn-mode"))}, key: ${textOf(testId("oats-spawn-key"))} })`);
+      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: ${FIRST}, labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label")].map((e) => e.innerText.trim()), spawn: ${SPAWN}.disabled, reason: ${reasonOf}, column: document.querySelector(${q("oats-spawn-preview")}) !== null, soul: ${textOf(testId("oats-spawn-soul"))}, heading: document.querySelector(${q("oats-spawn-title")}).getBoundingClientRect().width <= 1, key: document.querySelector(${q("oats-spawn-key")}) !== null, whole: /Choose a soul first|full mode|Enter/.test(document.querySelector(${q("oats-new-agent-page")}).innerText) })`);
       check(
-        first === JSON.stringify({ title: "New agent", first: "oats-spawn-soul", labels: ["Soul", "Opening instruction · optional", "Harness", "Model", "Relationship", "Name · optional"], spawn: true, reason: "Choose a soul first.", column: "WHAT WILL BE CREATED Choose a soul to see what will be created.", mode: "Runs in bb's full mode: no sandbox.", key: "Ctrl+Enter" }),
-        `${at} the empty form: titled New agent, the soul first, the Desktop's fields in its order, Spawn off and saying why, its key beside it, the one line about bb's full mode`,
+        first === JSON.stringify({ title: "New agent", first: "oats-spawn-soul", labels: ["Soul", "Opening instruction · optional", "Harness", "Model", "Relationship", "Name · optional"], spawn: true, reason: "", column: false, soul: "Choose a soul… ▾", heading: true, key: false, whole: false }),
+        `${at} the empty form: named New agent for a screen reader with no heading drawn (bb's bar says it), the soul first and saying "Choose a soul…", the Desktop's fields in its order, Spawn off with no sentence beside it, no column over nothing, no key hint, no line about the mode before there is an agent to make`,
         first,
       );
       check((await page.until(`${FOCUSED} === "oats-spawn-soul"`, 10)) === true, `${at} the focus starts on the first field, the soul`, await page.evaluate(FOCUSED));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
-      await page.shot(`spawn-${viewport.name}-empty`, { targets: true });
+      await page.shot(`spawn-${viewport.name}-empty`, { targets: true, gaps: testId("oats-spawn-form") });
     },
   },
   {
@@ -136,28 +141,40 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       check(await open(page, "oats-developer"), `${at} /plugins/oats/new-agent/oats-developer is the form with that soul chosen`, await whole(page));
       const landed = await page.until(`${FOCUSED} === "oats-spawn-task" && JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, soul: document.querySelector(${q("oats-spawn-soul")}).getAttribute("data-value") })`, 10);
-      check(landed === JSON.stringify({ title: "Spawn oats-developer in oats", soul: "oats-developer" }), `${at} opened with a soul: named as the Desktop names its dialog, the soul chosen, the focus on the instruction`, landed ?? (await page.evaluate(FOCUSED)));
+      check(landed === JSON.stringify({ title: "New agent", soul: "oats-developer" }), `${at} opened with a soul: the soul chosen, the focus on the instruction`, landed ?? (await page.evaluate(FOCUSED)));
       const read = await fillNamed(page);
       check(
-        Boolean(read) && new RegExp(`^WHAT WILL BE CREATED Name ${NAME} Home .+ Soul oats-developer Works in .+ Runs on .+ Harness .+ Session bb thread Access full mode: no sandbox Team .+ CORE CAPABILITIES Knowledge .+ Messaging .+ Tasks .+ CAPABILITIES \\d+ .+ Resolved by the installed CLI\\. Spawn refuses if this changes before you confirm\\.$`).test(read ?? ""),
-        `${at} What will be created, from the kernel's answer: the name and the home, the soul, where it works and on which machine, the harness and the model, a bb thread in full mode, the team, the capabilities`,
+        Boolean(read) && new RegExp(`^WHAT WILL BE CREATED Name ${NAME} Works in .+ Harness .+ Access full mode: no sandbox \\S? ?Details$`).test(read ?? ""),
+        `${at} What will be created, from the kernel's answer, in view: the name, where it works, the harness and the model, full mode with no sandbox; then the word Details, and no foot`,
         read ?? (await whole(page)),
       );
+      const folded = await page.evaluate(FOLDED);
+      check(
+        /^\{"folds":1,"open":false,"labels":\["Home","Soul","Runs on","Harness","Session","Team",.*"Knowledge","Messaging","Tasks"\],"sections":\["Core capabilities","Capabilities.*"\]\}$/.test(folded ?? ""),
+        `${at} the column has ONE fold, closed: the home, the soul, the machine, where the harness came from, the session, the team and the capabilities are one press away`,
+        folded,
+      );
+      await page.evaluate(`document.querySelector(${q("oats-spawn-more")} + " summary").click()`);
+      const opened = await page.until(`document.querySelector(${q("oats-spawn-more")}).open && ${textOf(testId("oats-spawn-more"))}`, 10);
+      check(Boolean(opened) && /Home .+ Soul oats-developer Runs on .+ Session bb thread Team .+ CORE CAPABILITIES Knowledge .+ Messaging .+ Tasks .+ CAPABILITIES \d+ /.test(opened ?? ""), `${at} opened, Details holds them, as the kernel answered`, opened ?? (await whole(page)));
+      await page.shot(`spawn-${viewport.name}-details`, { targets: true });
+      await page.evaluate(`document.querySelector(${q("oats-spawn-more")} + " summary").click()`);
+      await page.until(`!document.querySelector(${q("oats-spawn-more")}).open`, 10);
       const quiet = await page.evaluate(`JSON.stringify({ warnings: document.querySelector(${q("oats-spawn-preview")}).querySelectorAll(${q("oats-notice")}).length, whole: ${NO_BREAK_INSIDE} })`);
       check(quiet === JSON.stringify({ warnings: 0, whole: true }), `${at} no warning (the kernel gave none), and no value of the column is broken inside a word`, quiet);
-      const foot = await page.evaluate(`JSON.stringify({ name: document.querySelector(${q("oats-spawn-form")}).innerText.includes(${JSON.stringify(`Instance name: ${NAME}`)}), foot: JSON.parse(${FOOT}) })`);
-      check(foot === JSON.stringify({ name: true, foot: { button: "Spawn", off: false, reason: "", fields: false } }), `${at} the name's line says the resulting name; the button is named for the act and can be pressed, with no reason beside it`, foot);
+      const foot = await page.evaluate(`JSON.stringify({ name: document.querySelector(${q("oats-spawn-form")}).innerText.includes("Instance name:"), foot: JSON.parse(${FOOT}) })`);
+      check(foot === JSON.stringify({ name: false, foot: { button: "Spawn", off: false, reason: "", fields: false } }), `${at} nothing under the name repeats it (the column's Name row says it); the button is named for the act and can be pressed, with nothing beside it`, foot);
       // What will be created comes before the buttons: beside the fields on a wide page, between the fields and the buttons on a phone.
       const order = await page.evaluate(`(() => { const c = document.querySelector(${q("oats-spawn-preview")}).getBoundingClientRect(); const b = ${SPAWN}.getBoundingClientRect(); const f = ${FIELDS}.getBoundingClientRect(); return JSON.stringify({ beside: c.left >= f.right, above: c.bottom <= b.top }); })()`);
       check(order === JSON.stringify(viewport.mobile ? { beside: false, above: true } : { beside: true, above: false }), `${at} ${viewport.mobile ? "on a phone what will be created is above Cancel and Spawn: it is read before the press" : "what will be created stands beside the fields and the buttons"}`, order);
       // The focus order, by Tab from the first field.
       await page.evaluate(`document.querySelector(${q("oats-spawn-soul")}).focus()`);
       const stops = [await page.evaluate(FOCUSED)];
-      for (let i = 0; i < 7; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await page.press("Tab");
         stops.push(await page.evaluate(FOCUSED));
       }
-      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, Cancel, Spawn`, JSON.stringify(stops));
+      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "▸ Details", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, the column's Details, Cancel, Spawn`, JSON.stringify(stops));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-task"));
       await page.shot(`spawn-${viewport.name}-filled`, { targets: true });
@@ -186,8 +203,8 @@ export default [
       await page.shot(`spawn-${viewport.name}-harness-open`, { targets: true });
       await page.press("Escape");
       check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} pi can still be chosen`, await whole(page));
-      const said = await page.until(`/bb has not installed pi on this machine, so a spawn on it is refused\\. Install it in bb’s settings, or pick another harness\\./.test(document.querySelector(${q("oats-spawn-form")}).innerText) && document.querySelector(${q("oats-spawn-harness")}).innerText.replace(/\\s+/g, " ").trim()`, 10);
-      check(said === "pi · not installed in bb ▾", `${at} chosen, the field keeps the mark and says under it what bb lacks and what to do, before any press`, said ?? (await whole(page)));
+      const said = await page.until(`/Install it in bb’s settings, or pick another\\./.test(document.querySelector(${q("oats-spawn-form")}).innerText) && !/so a spawn on it is refused/.test(document.querySelector(${q("oats-spawn-form")}).innerText) && document.querySelector(${q("oats-spawn-harness")}).innerText.replace(/\\s+/g, " ").trim()`, 10);
+      check(said === "pi · not installed in bb ▾", `${at} chosen, the field keeps the mark (the fault) and says under it only the way on ("Install it in bb’s settings, or pick another."), before any press`, said ?? (await whole(page)));
       await page.evaluate(show("oats-spawn-harness"));
       await page.shot(`spawn-${viewport.name}-harness-not-installed`, { targets: true });
     },
@@ -199,10 +216,10 @@ export default [
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       await page.until(READ, 30);
       await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));
-      const refused = await page.until(`${fieldError} !== "" && JSON.stringify({ error: ${fieldError}, reason: ${reasonOf}, spawn: ${SPAWN}.disabled, column: ${textOf(testId("oats-spawn-preview"))} })`, 10);
+      const refused = await page.until(`${fieldError} !== "" && JSON.stringify({ error: ${fieldError}, reason: ${reasonOf}, described: ${describedOf}, spawn: ${SPAWN}.disabled, column: document.querySelector(${q("oats-spawn-preview")}) !== null })`, 10);
       check(
-        refused === JSON.stringify({ error: "A space can’t be in a name. Use letters, digits and dashes.", reason: "The name can’t be used: its field says why.", spawn: true, column: "WHAT WILL BE CREATED Shown once the values above can be used." }),
-        `${at} a name with a space: the fault under the name, Spawn off with the reason beside it, and no stale facts in the column`,
+        refused === JSON.stringify({ error: "A space can’t be in a name. Use letters, digits and dashes.", reason: "", described: "A space can’t be in a name. Use letters, digits and dashes.", spawn: true, column: false }),
+        `${at} a name with a space: the fault under the name, once; Spawn off and described by it, with no sentence beside it; and no column of stale facts`,
         refused ?? (await whole(page)),
       );
       await page.evaluate(show("oats-spawn-name"));
@@ -210,7 +227,7 @@ export default [
       await page.evaluate(fill(testId("oats-spawn-name"), ""));
       check(await page.evaluate(choose("oats-spawn-model", "__custom__")), `${at} Custom… is picked in the model's list`, await whole(page));
       const typed = await page.until(`document.querySelector(${q("oats-spawn-model-id")}) && JSON.stringify({ placeholder: document.querySelector(${q("oats-spawn-model-id")}).placeholder, foot: JSON.parse(${FOOT}) })`, 10);
-      check(typed === JSON.stringify({ placeholder: "Type a model ID", foot: { button: "Spawn", off: true, reason: "Type the model ID, or choose Default.", fields: false } }), `${at} a field for the model's id appears under the choice, and Spawn waits for it, saying so`, typed ?? (await whole(page)));
+      check(typed === JSON.stringify({ placeholder: "Type a model ID", foot: { button: "Spawn", off: true, reason: "", fields: false } }), `${at} a field for the model's id appears under the choice, saying what it wants, and Spawn waits for it with no sentence beside it`, typed ?? (await whole(page)));
       await page.evaluate(show("oats-spawn-model-id"));
       await page.shot(`spawn-${viewport.name}-model-id`, { targets: true });
     },
@@ -222,11 +239,11 @@ export default [
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-spawn-relation")} [role="radio"]`)})].find((e) => e.innerText.trim() === "Child of").click()`);
       const asked = await page.until(`document.querySelector(${q("oats-spawn-relative")}) && JSON.stringify({ label: [...document.querySelector(${q("oats-spawn-relation")}).querySelectorAll("label")].map((e) => e.innerText.trim()), name: document.querySelector(${q("oats-spawn-relative")}).getAttribute("aria-label"), line: ${textOf(testId("oats-spawn-relation-line"))}, reason: ${reasonOf} })`, 10);
-      check(asked === JSON.stringify({ label: ["Which instance"], name: "Child of which instance?", line: "Pick the instance this one is a child of.", reason: "Pick the instance first, or choose Independent." }), `${at} Child of asks which instance, under its label, and Spawn waits for it, saying so`, asked ?? (await whole(page)));
+      check(asked === JSON.stringify({ label: [], name: "Child of which instance?", line: "", reason: "" }) && (await page.evaluate(textOf(testId("oats-spawn-relative")))) === "Choose an instance… ▾", `${at} Child of asks which instance with the choice alone ("Choose an instance…", named for a screen reader), and Spawn waits for it with no sentence`, asked ?? (await whole(page)));
       const read = await fillNamed(page, { relation: true });
       const facts = JSON.parse((await page.evaluate(FACTS)) ?? "{}");
       const line = await page.evaluate(textOf(testId("oats-spawn-relation-line")));
-      check(Boolean(read) && facts.Relationship === "child of Harvest knowledge helper" && line === "Spawns as a child of Harvest knowledge helper.", `${at} with the instance picked the form says whose child it will be, and What will be created says it too, from the kernel's answer: "Relationship ${facts.Relationship}"`, JSON.stringify({ facts, line }));
+      check(Boolean(read) && facts.Relationship === "child of Harvest knowledge helper" && line === "" && (await page.evaluate(textOf(testId("oats-spawn-relative")))) === "Harvest knowledge helper ▾", `${at} with the instance picked the choice names it, no line repeats it, and What will be created says whose child it will be, in view, from the kernel's answer: "Relationship ${facts.Relationship}"`, JSON.stringify({ facts, line }));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-relation"));
       await page.shot(`spawn-${viewport.name}-relation`, { targets: true });
@@ -242,22 +259,22 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       const since = Date.now();
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
-      const reading = await page.until(`${reasonOf} === "Reading defaults…" && JSON.stringify({ column: ${textOf(testId("oats-spawn-preview"))}, foot: JSON.parse(${FOOT}) })`, 10);
-      check(reading === JSON.stringify({ column: "WHAT WILL BE CREATED Reading defaults…", foot: { button: "Spawn", off: true, reason: "Reading defaults…", fields: false } }), `${at} while the first preview is read the column says Reading defaults… in the place the facts will be, and Spawn is off with that as its reason`, reading ?? (await whole(page)));
+      const reading = await page.until(`${reasonOf} === "Reading…" && JSON.stringify({ column: ${textOf(testId("oats-spawn-preview"))}, foot: JSON.parse(${FOOT}) })`, 10);
+      check(reading === JSON.stringify({ column: "WHAT WILL BE CREATED Reading…", foot: { button: "Spawn", off: true, reason: "Reading…", fields: false } }), `${at} while the first preview is read the column says Reading… in the place the facts will be, and Spawn is off with that word beside it`, reading ?? (await whole(page)));
       // A press now, by the button or by the key, would start an agent the screen has not shown: it starts nothing.
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
       await page.evaluate(show("oats-spawn-submit"));
       await page.shot(`spawn-${viewport.name}-reading`, { targets: true });
       const read = await page.until(READ, 30);
-      check(Boolean(read) && (read ?? "").includes("Resolved by the installed CLI"), `${at} then what will be created, and only then its foot ("Resolved by the installed CLI…") and a Spawn that can be pressed`, read ?? (await whole(page)));
+      check(Boolean(read) && (read ?? "").includes("Access full mode: no sandbox") && !(read ?? "").includes("Resolved by the installed CLI"), `${at} then what will be created (with the access it runs with, in view; no foot), and only then a Spawn that can be pressed`, read ?? (await whole(page)));
       check(applied(since).length === 0 && (await page.evaluate("location.pathname")).startsWith(FORM), `${at} and the presses made during the read started nothing: the kernel was asked to apply no spawn`, JSON.stringify(applied(since)));
       await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
       await page.shot(`spawn-${viewport.name}-read`);
       // A value changes: the last facts stay, marked as being read again, and Spawn waits for the new ones.
       await page.evaluate(fill(testId("oats-spawn-task"), TASK));
       const updating = await page.until(`document.querySelector(${q("oats-spawn-updating")}) && JSON.stringify({ mark: ${textOf(testId("oats-spawn-updating"))}, facts: document.querySelectorAll(${q("oats-spawn-preview")} + ' [data-testid="oats-fact"]').length > 0, foot: JSON.parse(${FOOT}) })`, 10);
-      check(updating === JSON.stringify({ mark: "Updating…", facts: true, foot: { button: "Spawn", off: true, reason: "Reading defaults…", fields: false } }), `${at} after a change the facts stay under "Updating…", and Spawn is off until the preview of the new values is on screen`, updating ?? (await whole(page)));
+      check(updating === JSON.stringify({ mark: "Updating…", facts: true, foot: { button: "Spawn", off: true, reason: "Reading…", fields: false } }), `${at} after a change the facts stay under "Updating…", and Spawn is off until the preview of the new values is on screen`, updating ?? (await whole(page)));
       await page.shot(`spawn-${viewport.name}-updating`);
       await page.until(READ, 30);
     },
@@ -299,7 +316,7 @@ export default [
       const unknown = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return r && ${SPAWN}.innerText.trim() === "Check result" ? JSON.stringify({ tone: r.getAttribute("data-tone"), title: r.querySelector("h3").innerText, words: r.querySelector("p").innerText, foot: JSON.parse(${FOOT}), path: location.pathname }) : ""; })()`;
       const said = await page.until(unknown, 30);
       check(
-        said === JSON.stringify({ tone: "unknown", title: "It is not known whether the agent was spawned", words: "OATS ended without saying whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", foot: { button: "Check result", off: false, reason: "", fields: true }, path: `${FORM}/oats-developer` }),
+        said === JSON.stringify({ tone: "unknown", title: "It is not known whether the agent was spawned", words: "OATS ended without saying whether the instance was created. Press Check result: nothing starts twice.", foot: { button: "Check result", off: false, reason: "", fields: true }, path: `${FORM}/oats-developer` }),
         `${at} the outcome is not known: the form says so in a person's words, holds every field, and offers Check result alone`,
         said ?? (await whole(page)),
       );
@@ -319,23 +336,23 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       await page.evaluate(fill(testId("oats-spawn-name"), ANCHOR));
-      const said = await page.until(`${fieldError} !== "" && JSON.stringify({ error: ${fieldError}, reason: ${reasonOf}, notice: document.querySelector(${q("oats-spawn-preview")}).querySelector(${q("oats-notice")}) !== null })`, 30);
-      check(said === JSON.stringify({ error: "An instance with this name already exists. Choose another name. (E_INSTANCE_NAME_TAKEN)", reason: "The name can’t be used: its field says why.", notice: false }), `${at} a name that is an agent's: the kernel's refusal in the Desktop's sentence under the name, with its code, once; Spawn off with its reason`, said ?? (await whole(page)));
+      const said = await page.until(`${fieldError} !== "" && JSON.stringify({ error: ${fieldError}, code: document.querySelector(${q("oats-spawn-form")}).querySelector('[role="alert"]').getAttribute("title"), reason: ${reasonOf}, described: ${describedOf}, notice: document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")}) !== null })`, 30);
+      check(said === JSON.stringify({ error: "An instance with this name already exists. Choose another name.", code: "E_INSTANCE_NAME_TAKEN", reason: "", described: "An instance with this name already exists. Choose another name.", notice: false }), `${at} a name that is an agent's: the kernel's refusal in the Desktop's sentence under the name, once (its code is the sentence's title); Spawn off and described by it, with no sentence beside it`, said ?? (await whole(page)));
       await page.evaluate(show("oats-spawn-name"));
       await page.shot(`spawn-${viewport.name}-name-taken`, { targets: true });
     },
   },
   {
     stage: "spawn-preview-refused",
-    name: "the New agent form: a preview the kernel refuses is a notice where the facts would be, in a person's words, with its code, Details and Retry; Spawn is off and says where the reason is",
+    name: "the New agent form: a preview the kernel refuses is a notice where the facts would be, in a person's words, with its code under Details, and Retry; Spawn is off with the notice in view",
     run: async ({ page, at, viewport, check }) => {
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       check(await page.evaluate(choose("oats-spawn-model", "__custom__")), `${at} Custom… is picked in the model's list`, await whole(page));
       await page.evaluate(fill(testId("oats-spawn-model-id"), "no-such-provider/no-such-model"));
-      const refused = await page.until(`(() => { const n = document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")}); const d = n?.querySelector(${q("oats-notice-details")}); return n ? JSON.stringify({ tone: n.getAttribute("data-tone"), title: n.querySelector("h3").innerText, words: n.querySelector("div p").innerText, code: n.querySelector(":scope > p").innerText, details: d !== null && !d.open, retry: [...n.querySelectorAll("button")].map((b) => b.innerText.trim()), foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
+      const refused = await page.until(`(() => { const n = document.querySelector(${q("oats-spawn-preview")} + " " + ${q("oats-notice")}); const d = n?.querySelector(${q("oats-notice-details")}); return n ? JSON.stringify({ tone: n.getAttribute("data-tone"), title: n.querySelector("h3").innerText, words: n.querySelector("div p").innerText, face: n.querySelectorAll(":scope > p").length, code: (d?.querySelector("p")?.textContent ?? "").split(":")[0], details: d !== null && !d.open, retry: [...n.querySelectorAll("button")].map((b) => b.innerText.trim()), foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
       check(
-        refused === JSON.stringify({ tone: "error", title: "This can’t be spawned as it is", words: "That model isn’t available for this harness. Pick another model, or keep the default.", code: "E_MODEL_UNKNOWN", details: true, retry: ["Retry"], foot: { button: "Spawn", off: true, reason: "OATS refused these values: “What will be created” says why.", fields: false } }),
-        `${at} a model no harness has: the kernel's refusal of the preview as a notice in the column (the Desktop's sentence, the code, Details closed, Retry), and Spawn off, saying where the reason is`,
+        refused === JSON.stringify({ tone: "error", title: "This can’t be spawned as it is", words: "That model isn’t available for this harness. Pick another model, or keep the default.", face: 0, code: "E_MODEL_UNKNOWN", details: true, retry: ["Retry"], foot: { button: "Spawn", off: true, reason: "", fields: false } }),
+        `${at} a model no harness has: the kernel's refusal of the preview as a notice in the column (the Desktop's sentence; the code under Details, closed, and nowhere on its face; Retry), and Spawn off with the notice in view and no second sentence beside it`,
         refused ?? (await whole(page)),
       );
       await page.evaluate(`${SPAWN}.scrollIntoView({ block: "end" })`);
@@ -349,20 +366,53 @@ export default [
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       check(Boolean(await fillNamed(page)), `${at} the form is filled and its preview read`, await whole(page));
       await page.evaluate(`${SPAWN}.click()`);
-      const refused = await page.until(`(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); const d = r?.querySelector(${q("oats-spawn-details")}); const again = r?.querySelector(${q("oats-spawn-reread")}); return r && again && !${SPAWN}.disabled ? JSON.stringify({ role: r.getAttribute("role"), title: r.querySelector("h3").innerText, words: r.querySelector("p").innerText, again: again.innerText, code: [...r.querySelectorAll(":scope > p")].at(-1).innerText, details: d !== null && !d.open && d.querySelector("summary").innerText.replace(/\\s+/g, " ").trim(), kept: [document.querySelector(${q("oats-spawn-task")}).value, document.querySelector(${q("oats-spawn-name")}).value], foot: JSON.parse(${FOOT}), path: location.pathname }) : ""; })()`, 40);
+      const refused = await page.until(`(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); const d = r?.querySelector(${q("oats-spawn-details")}); return r && !${SPAWN}.disabled ? JSON.stringify({ role: r.getAttribute("role"), title: r.querySelector("h3").innerText, words: r.querySelector("p").innerText, again: /was read again/.test(r.innerText), face: r.querySelectorAll(":scope > p").length, code: d?.querySelector("p")?.textContent ?? null, details: d !== null && !d.open && d.querySelector("summary").innerText.replace(/\\s+/g, " ").trim(), kept: [document.querySelector(${q("oats-spawn-task")}).value, document.querySelector(${q("oats-spawn-name")}).value], foot: JSON.parse(${FOOT}), path: location.pathname }) : ""; })()`, 40);
       check(
         refused ===
-          JSON.stringify({ role: "alert", title: "The agent was not spawned", words: "Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.", again: "“What will be created” was read again: it shows the values as they are now.", code: "E_DECISION_STALE", details: "▸ Details", kept: [TASK, NAME], foot: { button: "Spawn", off: false, reason: "", fields: false }, path: `${FORM}/oats-developer` }),
-        `${at} a refused spawn: what happened and what to do in a person's words, that the preview was read again, the kernel's code, its own message behind Details (drawn as something to press); the instruction and the name are kept, and Spawn is back`,
+          JSON.stringify({ role: "alert", title: "The agent was not spawned", words: "Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.", again: false, face: 0, code: "E_DECISION_STALE", details: "▸ Details", kept: [TASK, NAME], foot: { button: "Spawn", off: false, reason: "", fields: false }, path: `${FORM}/oats-developer` }),
+        `${at} a refused spawn: what happened and what to do in a person's words, once; the kernel's code and its own message behind Details (drawn as something to press), not on the face; no sentence that the column was read again; the instruction and the name are kept, and Spawn is back`,
         refused ?? (await whole(page)),
       );
       await page.evaluate(show("oats-result"));
       await page.shot(`spawn-${viewport.name}-refused`, { targets: true });
       await page.evaluate(click(`${testId("oats-spawn-details")} summary`));
-      const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(`${testId("oats-spawn-details")} p`)}`, 10);
-      check(/^the previewed decision changed/.test(details ?? ""), `${at} Details opens to the kernel's own message`, String(details));
+      const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(testId("oats-spawn-details"))}`, 10);
+      check(/Details E_DECISION_STALE the previewed decision changed/.test(details ?? ""), `${at} Details opens to the kernel's code and its own message`, String(details));
       await page.evaluate(show("oats-spawn-submit"));
       await page.shot(`spawn-${viewport.name}-refused-details`);
+    },
+  },
+  {
+    stage: "spawn-model-required",
+    name: "the New agent form: a harness the person chose that is not the soul's own, for which the kernel resolves no model: the Model field is marked Required, Spawn is held and described by that mark, and no default is promised",
+    run: async ({ page, at, viewport, check }) => {
+      const since = Date.now();
+      check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
+      await page.until(READ, 30);
+      // The Harness row (its value, then where it came from), the Model field (what it shows, its mark) and the button.
+      const MODEL = `(() => { const field = document.querySelector(${q("oats-spawn-model")}); const error = field?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]'); const harness = [...document.querySelectorAll(${q("oats-spawn-preview")} + ' [data-testid="oats-fact"]')].find((fact) => fact.querySelector("dt")?.innerText.trim() === "Harness")?.querySelector("dd")?.innerText.replace(/\\s+/g, " ").trim() ?? null; const from = [...document.querySelectorAll(${q("oats-spawn-more")} + ' [data-testid="oats-fact"]')].find((fact) => fact.querySelector("dt")?.textContent.trim() === "Harness")?.querySelector("dd")?.textContent.trim() ?? null; return JSON.stringify({ harness, from, described: ${describedOf}, field: field?.innerText.replace(/\\s+/g, " ").trim() ?? null, mark: error ? error.innerText.trim() : null, invalid: field?.getAttribute("aria-invalid") === "true", foot: JSON.parse(${FOOT}) }); })()`;
+      const is = (read, harness, field, rest) => read !== null && harness(read.harness ?? "", read.from ?? "") && field.test(read.field ?? "") && JSON.stringify({ mark: read.mark, described: read.described, invalid: read.invalid, foot: read.foot }) === JSON.stringify(rest);
+      // The soul's own harness, as the kernel resolves it with none chosen: its own model, and nothing held.
+      const own = await page.until(`${READ} && ${MODEL}`, 30);
+      check(is(own ? JSON.parse(own) : null, (row) => row.startsWith("Claude Code · claude-opus-5-5"), /^Default · claude-opus-5-5 ?▾$/, { mark: null, described: "", invalid: false, foot: { button: "Spawn", off: false, reason: "", fields: false } }), `${at} with no harness chosen: the soul's own harness and model, and Spawn is not held`, own ?? (await page.evaluate(MODEL)));
+      // Another harness, CHOSEN by the person: the kernel resolves no model for it (the soul's is Claude Code's), and one is required.
+      check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at} pi is chosen in the harness's list`, await whole(page));
+      const held = await page.until(`(() => { const read = JSON.parse(${MODEL}); return read.mark === "Required" && read.described === "Required" ? JSON.stringify(read) : ""; })()`, 30);
+      check(is(held ? JSON.parse(held) : null, (row, from) => /^pi(?! ·)/.test(row) && from.includes("chosen for this spawn"), /^Default ?▾$/, { mark: "Required", described: "Required", invalid: true, foot: { button: "Spawn", off: true, reason: "", fields: false } }), `${at} chosen by the person: the column names the harness alone (that it was chosen for this spawn is under Details), the Model field says "Default" and is marked "Required", once: Spawn is off and described by that mark, with no copy of the word beside it; no sentence, and no default promised`, held ?? (await page.evaluate(MODEL)));
+      check(!/bb’s default|harness’s own|harness's own/.test(await whole(page)), `${at} nothing on the form promises a default`, await whole(page));
+      // A press, by the button or by the key, starts nothing: read after the time a spawn takes to reach the fake's log.
+      await page.evaluate(`${SPAWN}.click()`);
+      await page.evaluate(MOD_ENTER);
+      await page.until("false", 2);
+      check(applied(since).length === 0, `${at} and a press starts nothing: the kernel was asked to apply no spawn`, JSON.stringify(applied(since)));
+      await page.evaluate(show("oats-spawn-model"));
+      await page.shot(`spawn-${viewport.name}-model-required`, { targets: true });
+      // A model picked: the mark goes and Spawn is armed.
+      check(await page.evaluate(choose("oats-spawn-model", "__custom__")), `${at} Custom… is picked in the model's list`, await whole(page));
+      await page.evaluate(fill(testId("oats-spawn-model-id"), "github-copilot/claude-fable-5.2"));
+      const ARMED = `(() => { const read = JSON.parse(${MODEL}); return read.mark === null && read.foot.off === false && read.foot.reason === "" ? JSON.stringify(read) : ""; })()`;
+      const armed = await page.until(`${READ} && ${ARMED}`, 30);
+      check(Boolean(armed), `${at} a model picked: the mark goes, and Spawn is armed`, armed ?? (await page.evaluate(MODEL)));
     },
   },
   {
@@ -373,12 +423,12 @@ export default [
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       check(Boolean(await fillNamed(page)), `${at} the form is filled and its preview read`, await whole(page));
       await page.evaluate(`${SPAWN}.click()`);
-      const SAID = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: r?.querySelector("h3").innerText ?? null, words: r?.querySelector("p").innerText ?? null, code: r ? [...r.querySelectorAll("p, span, code")].some((e) => e.innerText.trim() === "E_BACKEND_NOT_READY") : null, button: ${SPAWN}.innerText.trim(), off: ${SPAWN}.disabled, fields: ${FIELDS}.disabled, cancel: ${textOf(testId("oats-spawn-cancel"))}, path: location.pathname }); })()`;
+      const SAID = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: r?.querySelector("h3").innerText ?? null, words: r?.querySelector("p").innerText ?? null, code: r ? [...r.querySelectorAll(${q("oats-spawn-details")} + " p")].some((e) => e.textContent.trim() === "E_BACKEND_NOT_READY") && ![...r.querySelectorAll(":scope > p, :scope > div > p")].some((e) => e.textContent.includes("E_BACKEND_NOT_READY")) : null, button: ${SPAWN}.innerText.trim(), off: ${SPAWN}.disabled, fields: ${FIELDS}.disabled, cancel: ${textOf(testId("oats-spawn-cancel"))}, path: location.pathname }); })()`;
       const said = await page.until(`document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}) && ${SPAWN}.innerText.trim() !== "Spawning…" && ${SPAWN}.innerText.trim() !== "Spawn" && ${SAID}`, 30);
       check(
         said ===
-          JSON.stringify({ tone: "failed", title: "The spawn was refused, and could not be undone completely", words: "OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.", code: true, button: "Spawn incomplete", off: true, fields: true, cancel: "Close", path: `${FORM}/oats-developer` }),
-        `${at} the kernel's marker reached the form: it says the spawn was refused and not undone completely, with the kernel's code; every field and the button are held, and the one press left is Close`,
+          JSON.stringify({ tone: "failed", title: "The spawn was refused, and could not be undone completely", words: "Part of the instance may remain. See Details before spawning again.", code: true, button: "Spawn incomplete", off: true, fields: true, cancel: "Close", path: `${FORM}/oats-developer` }),
+        `${at} the kernel's marker reached the form: it says the spawn was refused and not undone completely, with the kernel's code (under Details); every field and the button are held, and the one press left is Close`,
         said ?? (await page.evaluate(SAID)),
       );
       // A press, by the button or by the key, asks the kernel nothing more: the one spawn stays the one.
@@ -387,8 +437,8 @@ export default [
       await page.evaluate(show("oats-result"));
       await page.shot(`spawn-${viewport.name}-unconfirmed`, { targets: true });
       await page.evaluate(click(`${testId("oats-spawn-details")} summary`));
-      const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(`${testId("oats-spawn-details")} p`)}`, 10);
-      check(/rollback INCOMPLETE, clean up manually: instance home .+: still present$/.test(details ?? ""), `${at} Details opens to the kernel's own message, which names what is left`, String(details));
+      const details = await page.until(`document.querySelector(${q("oats-spawn-details")})?.open && ${textOf(testId("oats-spawn-details"))}`, 10);
+      check(/Details E_BACKEND_NOT_READY .*rollback INCOMPLETE, clean up manually: instance home .+: still present$/.test(details ?? ""), `${at} Details opens to the kernel's own message, which names what is left`, String(details));
       // An absence is not read at once: a second spawn would be in the fake's log well within two seconds of its press (the one made is there in under one).
       await page.until("false", 2);
       const keys = applied(since);
@@ -400,8 +450,8 @@ export default [
     name: "the New agent form while OATS cannot be read: held like the acts, under the roster's own notice with the age of what is shown",
     run: async ({ page, at, viewport, check }) => {
       await page.goto(`${FORM}/oats-developer`);
-      const held = await page.until(`(() => { const n = document.querySelector(${q("oats-new-agent-page")} + " " + ${q("oats-unreadable")}); const f = ${FIELDS}; return n && f ? JSON.stringify({ title: n.querySelector("h3").innerText, age: /Read .+ ago\\./.test(n.innerText), held: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-held")}).length, notices: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-notice")}).length, foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
-      check(/^\{"title":"OATS is not installed on [^"]+","age":true,"held":1,"notices":1,"foot":\{"button":"Spawn","off":true,"reason":"Comes back when OATS is read again","fields":true\}\}$/.test(held ?? ""), `${at} the roster's one notice (what is wrong, the age of what is shown, the acts held, Retry), every field and Spawn off with the acts' own reason, and no second notice`, held ?? (await whole(page)));
+      const held = await page.until(`(() => { const n = document.querySelector(${q("oats-new-agent-page")} + " " + ${q("oats-unreadable")}); const f = ${FIELDS}; return n && f ? JSON.stringify({ title: n.querySelector("h3").innerText, age: /Read .+ ago\\.\\s+Acts are off\\./.test(n.innerText), held: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-held")}).length, notices: document.querySelectorAll(${q("oats-new-agent-page")} + " " + ${q("oats-notice")}).length, foot: JSON.parse(${FOOT}) }) : ""; })()`, 30);
+      check(/^\{"title":"OATS is not installed on [^"]+","age":true,"held":1,"notices":1,"foot":\{"button":"Spawn","off":true,"reason":"","fields":true\}\}$/.test(held ?? ""), `${at} the roster's one notice (what is wrong, the age of what is shown, "Acts are off.", Retry), every field and Spawn off with no second reason beside the button, and no second notice`, held ?? (await whole(page)));
       // A press, by the button or by the key, starts nothing.
       await page.evaluate(`${SPAWN}.click()`);
       await page.evaluate(MOD_ENTER);
@@ -422,8 +472,11 @@ export default [
       await page.evaluate(click(testId("oats-new-agent")));
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
-      // The image is of the form beside a sidebar with no page link: at a phone's width the sidebar is in bb's drawer and
-      // the form alone is the image the form's own scene takes (spawn-390x800-empty): not taken twice.
+      // The form is settled before its image: the focus lands on the soul a moment after the form shows.
+      check((await page.until(`${FOCUSED} === "oats-spawn-soul"`, 10)) === true, `${at} the focus starts on the first field, the soul`, await page.evaluate(FOCUSED));
+      // At a phone's width bb's sidebar is in its drawer, and the form opened from it is then the very picture the
+      // form's own stage takes there (spawn-390x800-empty), and the run refuses two images that are the same. The
+      // checks above hold the scene at both widths; the image is the desktop's, where the sidebar stands beside the form.
       if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here
@@ -479,6 +532,26 @@ const rollbackIncomplete = () => {
   answer.error.details = { ...answer.error.details, unconfirmed: true };
   return JSON.stringify(answer);
 };
+/**
+ * The preview of a harness the person chose, for which the kernel resolves no model. SHAPED, not
+ * recorded: the real run's bb has no pi to preview (the kernel refuses that preview from 0.70.1:
+ * spawn-preview-pi-refused.json). It is the recorded preview of the form filled
+ * (spawn-preview-named.json: the soul's own launch, Claude Code and its model) with the harness
+ * "pi" and no model in each place the kernel says them (`harness`, `model`, `modelSource`,
+ * `launch.effective`, `decision.effective`), and `launch.from: "flag"`, the kernel's word for a
+ * harness named on the call ("chosen for this spawn"): what OATS 0.70.0 answered `--harness pi` on
+ * a soul that declares claude, as the first form's real run met it. The stage answers it only to
+ * a preview that names a harness; one that names none gets the recorded answer.
+ */
+const noModel = () => {
+  const answer = JSON.parse(read(join(FIXTURES, "spawn-preview-named.json"), "utf8"));
+  const result = answer.result;
+  if (result.harness !== "claude" || typeof result.model !== "string") throw new Error("spawn-preview-named.json no longer resolves claude with a model of the soul's");
+  Object.assign(result, { harness: "pi", model: null, modelSource: null });
+  result.launch = { ...result.launch, effective: { ...result.launch.effective, harness: "pi", model: null }, from: "flag" };
+  result.decision.effective = { ...result.decision.effective, harness: "pi", model: null };
+  return JSON.stringify(answer);
+};
 export const stages = {
   // The form's own stage: the preview the kernel printed for a named, independent agent (no warning: it gave none).
   "spawn-form": stage("SP0", () => ({})),
@@ -498,4 +571,6 @@ export const stages = {
   "spawn-refused": stage("SP6", () => ({ spawn: { file: "spawn/spawn-decision-stale.json" } })),
   // The preview answers; the apply is refused, and the kernel marks that it could not undo all of it.
   "spawn-unconfirmed": stage("SP8", () => ({ spawn: { stdout: rollbackIncomplete(), exit: 1 } })),
+  // A preview that names a harness (the fake tells a verb by its flags) resolves that harness and no model; one that names none, the soul's own.
+  "spawn-model-required": stage("SP9", () => ({ "spawn --preview --harness": { stdout: noModel() } })),
 };

@@ -161,8 +161,6 @@ const shellWord = (text: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(tex
 export const attachCommand = (home: string): string => `oats session attach --home ${shellWord(home)}`;
 /** Over the command that reaches the session of an agent on tmux ("Runs in" beside it already says tmux). */
 export const ATTACH = "Attach:";
-/** The longer form, which the lifecycle's tmux results still say until the dialogs' part of the text cut (the audit's X7 makes it "Attach:" there too). */
-export const attachWhere = (machine: string | null): string => (machine === null ? "Runs in tmux. Attach from a terminal:" : `Runs in tmux on ${machine}. Attach from a terminal:`);
 /**
  * Whether the attach line is drawn: for an agent on tmux, while the kernel's own word is that it
  * runs (`running === true`) and its state is one of an agent that runs (it works, or it waits on a

@@ -22,6 +22,16 @@ edit. `../README.md` says how the first two were recorded.
   provider it can launch (`E_BACKEND_NOT_READY`, the bb session provider's; the spawn is rolled
   back), as OATS 0.70.0 printed it: there the preview of the same choices answers, and the
   provider is asked at the launch.
+- `spawn-pi-model-refused.json`: the kernel's refusal of a spawn on pi whose model bb's pi does
+  not have (`E_BACKEND_LAUNCH_ARG`, the bb session provider's check of a pi model id; the spawn is
+  rolled back and nothing is left: no home, no row in `oats status`). RECORDED, whole and with no
+  edit (it holds no path; its instance was named `shape-refused`), by the provider's developer on
+  the real kernel, OATS 0.70.5 with the provider of oats-bb #65: `oats spawn … --model
+  claude-fable-9 --json`, exit 1 (the kernel side's evidence `pi-model-check/refusal-shapes/`,
+  its file `1-spawn-refused.stdout`, byte for byte; `1-after.txt` there says what was left: no home,
+  no row). The PREVIEW of the same values passes (a planned launch carries
+  no model at this kernel), so the form meets this refusal at the press. The error names no
+  argument: no field of the form is marked by it.
 - `spawn-preview-pi-refused.json`: the same refusal one step earlier, as OATS 0.70.5 printed it on
   2026-11-23: from 0.70.1 a preview asks the provider's own check, so the PREVIEW with
   `--harness pi` is refused ("… would not be launched … nothing was created") and no spawn is
@@ -37,10 +47,21 @@ edit. `../README.md` says how the first two were recorded.
   These seven were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
   npm); the live checks' stages (`container/scenes/spawn.mjs`, `stages`) answer them.
 
-No file here is shaped. The one answer of a spawn that is shaped is made where it is used, and says
+No file above is shaped. One answer of a spawn that is shaped is made where it is used, and says
 so there: a spawn the kernel refused and could not roll back completely (`details.unconfirmed`),
 which the real run cannot make (the kernel's own removal of the home would have to fail). The live
 stage `spawn-unconfirmed` (`container/scenes/spawn.mjs`, `rollbackIncomplete`) builds it from
 `spawn-pi-refused.json` with the words and the marker the kernel writes on that path, and the unit
 tests (`test/spawn/model.test.ts`, `kernel.test.ts`, `page.test.tsx`, `test/host.test.ts`,
 `test/server.test.ts`) cite the lines of awebai/oats `lib/core.mjs` at v0.70.5 they follow.
+
+One file here IS shaped, and says so: `spawn-preview-soul-launch.json`, the preview of a soul that
+declares its own launch (`launch: { harness: pi, model: claude-fable-5.1 }`), which the kernel
+resolves whole from the soul (`harness`, `model`, `modelSource: "soul preference"`, `launch.from:
+"soul"`). It has the shape of a real answer of OATS 0.70.4 on 2026-11-23 (`oats spawn <soul>
+--preview --json` in a deployment whose souls declare that launch; no `--backend`, so its backend
+is tmux), member for member, with every name invented (the soul, the workspace, the capabilities,
+the paths, the revisions): the real answer is of a private workspace and is not in the repository.
+The form's tests read from it that such a soul's harness and model are the soul's, with no model
+asked of the person.
+

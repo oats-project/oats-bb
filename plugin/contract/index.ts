@@ -52,6 +52,19 @@ export const hostContract = {
 /** The closed list of the host's verbs: the methods of `hostContract`. */
 export const hostVerbs = Object.keys(hostContract) as (keyof typeof hostContract)[];
 
+/** The most event files one `changed` signal names: a batch larger than this (a sweep, a mass stop) names none, and the status read carries it. */
+export const CHANGED_FILES_MAX = 8;
+/**
+ * The name of one instance's file in the deployment's event log, `<agent>--<instance>.jsonl`: the
+ * base name alone, never a path. The server only uses it to SELECT a row of its own snapshot (the
+ * instance and the home it then reads are that row's).
+ */
+export const eventFileName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}--[a-z0-9][a-z0-9-]{0,62}\.jsonl$/);
 export const hostSignals = {
-  changed: { payload: z.object({ reason: z.string() }).strict() },
+  /**
+   * The deployment's event log changed. `reason` is the watcher's word ("changed", a rescan, an
+   * error); `files` names the instances' files that changed, where the watcher said which and they
+   * are few: empty for a rescan, an error, a batch over CHANGED_FILES_MAX, or names that are none.
+   */
+  changed: { payload: z.object({ reason: z.string(), files: z.array(eventFileName).max(CHANGED_FILES_MAX) }).strict() },
 } satisfies ExperimentalHostSignals;

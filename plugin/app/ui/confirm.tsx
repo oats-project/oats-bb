@@ -40,6 +40,11 @@ export type ConfirmProps = {
   destructive?: boolean;
   /** Why the primary button is off, in words, beside it; null when it can be pressed. */
   blocked?: string | null;
+  /**
+   * The id of what says why the act is off, where that is said ONCE elsewhere in the dialog (a field's mark): the
+   * button is described by it (`aria-describedby`) and no copy of the word stands beside it. With `held`.
+   */
+  describedBy?: string;
   /** The primary button is off and the dialog already says why, in view (a notice with its own act): no words beside the button. */
   held?: boolean;
   phase:
@@ -59,7 +64,7 @@ export type ConfirmProps = {
      * lost): neither done nor failed, drawn as such, with the next step ("Check again") in
      * `actions`. `code` is the kernel's or the plugin's code, after the words.
      */
-    | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; code?: string | null; actions?: ReactNode }
+    | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; /** the first line is a warning: drawn in the warning tone, as the dialog's one line is (`saysWarns`) */ warns?: boolean; code?: string | null; actions?: ReactNode }
     /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
     | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
@@ -68,7 +73,7 @@ export type ConfirmProps = {
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, describedBy, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
@@ -134,7 +139,7 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
                 Cancel
               </Button>
             )}
-            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
+            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(off && describedBy !== undefined ? { "aria-describedby": describedBy } : {})} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
               {confirmLabel}
             </Button>
           </>
@@ -179,7 +184,9 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
         {phase.kind === "done" ? (
           <Result title={phase.title} tone={phase.tone ?? "done"} code={phase.code} actions={phase.actions}>
             {(phase.lines ?? []).map((line, index) => (
-              <p key={index}>{shown(line)}</p>
+              <p key={index} {...(index === 0 && phase.warns === true ? { "data-tone": "warning", className: "font-semibold text-warning-text" } : {})}>
+                {shown(line)}
+              </p>
             ))}
           </Result>
         ) : null}

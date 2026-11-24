@@ -1,7 +1,8 @@
 // The OATS home: what needs you, and what you have, on one screen. As the OATS Desktop's Home
-// (packages/desktop/renderer/views/home.mjs): the agents that wait on the person, a summary line,
-// the workspace's tiles, the agents at work, and Home › Agents, every agent OATS has. A full page
-// (navPanel `home`, the phone's page and the target of "N need you") and, on desktop, the same view
+// (packages/desktop/renderer/views/home.mjs): the agents that wait on the person, the tiles of the
+// pages that are shown, the agents at work, and Home › Agents, every agent OATS has, with the one
+// count line (reached by its address alone). A full page
+// (navPanel `home`, the phone's page, where bb's badge on the plugin's entry leads) and, on desktop, the same view
 // in a thread's fixed tab. Drawn with the patterns of app/ui.tsx.
 //
 // Answering is the person's act through bb's SDK: a choice bb offers, or a message sent as the
@@ -596,18 +597,21 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
       {checking ? CHECKING : CHECK_AGAIN}
     </Button>
   );
+  const found = <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>;
   const facts = (
     <Facts>
-      <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>
+      {found}
       <Fact label={REQUIRED}>{required(OATS_FLOOR)}</Fact>
     </Facts>
   );
   if (cli.state === "newer-api") {
+    // The CLI is too NEW for the plugin: the floor ("<floor> or newer") is not the bound that is broken, and beside a
+    // newer version it reads as a denial of the title. The card says what was found, and what to do; no "Required" row.
     return (
       <div data-testid="oats-home-cli" data-state={cli.state}>
         <Notice title={CLI_NEWER_API} tone="warning" actions={again}>
           <p className="m-0">{NEWER_API_WHY}</p>
-          {facts}
+          <Facts>{found}</Facts>
           {failed}
         </Notice>
       </div>
@@ -730,7 +734,7 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
 /** The sub-path of Home › Agents on the home's page. */
 const AGENTS = "agents";
 
-/** The full page: the phone's home, and where "N need you" leads. `/plugins/oats/home/agents` is Home › Agents. */
+/** The full page: the phone's home, and where bb's badge on the plugin's entry leads. `/plugins/oats/home/agents` is Home › Agents. */
 export function HomePage({ subPath }: PluginNavPanelProps) {
   const oats = useOats();
   const navigate = useBbNavigate();

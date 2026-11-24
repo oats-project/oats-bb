@@ -282,8 +282,10 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   await phase(slot, "done");
   const result = slot.getByTestId("oats-result");
   expect(result.querySelector("h3")!.textContent).toBe("3 sessions stopped.");
-  // The title is the result: no row for a session that stopped. One line more, since bb did not archive the thread: the warning.
+  // The title is the result: no row for a session that stopped. One line more, since bb did not archive the thread: the
+  // warning, in the warning tone as the dialog's one line was; the result itself is done.
   expect(texts(result, "p")).toEqual(["A message in its thread starts it outside OATS."]);
+  expect([result.getAttribute("data-tone"), result.querySelector("p")!.getAttribute("data-tone")]).toEqual(["done", "warning"]);
   await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
   const made = calls(slot, "stopPlan", "stopApply");
   expect(made.map((call) => call.method)).toEqual(["stopPlan", "stopApply"]);
@@ -645,7 +647,7 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   // Not cut off (the kernel says stopped): nothing points at its thread.
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // One press away, under the dialog's one Details: a start from bb runs in bb's full mode (there is no control for it), and the agent's facts.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(under(slot, "oats-start-details", "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
   expect(dialog.textContent).not.toMatch(/existing home|saved briefing|stays readable/);
   // A start that can run says nothing more: no status line, and no "Refresh status" (it is for a Start that is off).
@@ -656,8 +658,10 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   const harness = slot.getByTestId("oats-start-harness") as HTMLSelectElement;
   expect(harness.value).toBe("");
   expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
-  // Under the model field: that the choice outlives this start, and no more.
-  expect(slot.getByTestId("oats-start").textContent).toContain("Saved for later starts too.");
+  // That the choice outlives this start is said once, under Details: nothing stands under the model field.
+  expect(slot.getByTestId("oats-start").textContent!.split("The model is saved for later starts too.")).toHaveLength(2);
+  expect(slot.getByTestId("oats-start-details").textContent).toContain("The model is saved for later starts too.");
+  expect(slot.getByTestId("oats-start-model").getAttribute("aria-describedby")).toBeNull();
   expect(slot.getByTestId("oats-start").textContent).not.toMatch(/Leave blank|No model suggestions/);
   await waitFor(() => expect(document.activeElement).toBe(harness));
   expect(button(slot, "oats-confirm-act").textContent).toBe("Start");
@@ -683,6 +687,9 @@ test("a chosen harness and a typed model are passed; a model that is no model na
   fireEvent.change(model, { target: { value: "--yolo" } });
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(slot.getByRole("alert").textContent).toBe("Enter a model name, not a command-line option.");
+  // Said once, as the field's mark: the off button is described by it, with no copy beside it.
+  expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+  expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)).toBe(slot.getByRole("alert"));
   fireEvent.change(model, { target: { value: " anthropic/claude-opus-5-5 " } });
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
@@ -709,7 +716,7 @@ test("Restart opens its dialog with its one line, that it stops what the agent d
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
   plain(slot);
   // Under Details: that it starts a new conversation too, and bb's full mode.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(calls(slot, "restart")).toEqual([]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
@@ -768,7 +775,10 @@ test("Start on an agent the kernel says runs is held: the dialog says so and off
   await pick("start");
   await ready(slot);
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
-  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("This instance is already running.");
+  // Why it is off is said ONCE in the dialog: on the status line, with the way to its thread; never a second time beside the button.
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("This instance is already running.");
+  expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+  expect(slot.getByTestId("oats-confirm").textContent!.split("This instance is already running.")).toHaveLength(2);
   fireEvent.click(within(slot.getByTestId("oats-start-status")).getByText("Open Weekly digest helper"));
   expect(slot.queryByRole("dialog")).toBeNull();
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
@@ -780,7 +790,8 @@ test("Start on an agent whose state the kernel cannot tell is held until its sta
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => (known ? startCheckOf(instance) : startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" })) });
   await pick("start");
   await ready(slot);
-  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect([button(slot, "oats-confirm-act").disabled, slot.queryByTestId("oats-confirm-blocked")]).toEqual([true, null]); // off, and the reason said once
   known = true;
   fireEvent.click(button(slot, "oats-start-refresh"));
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
@@ -1120,7 +1131,9 @@ test("the Start gate is the Desktop's: running is already running; what is not k
     const { slot, pick } = await menu(verb === "start" ? "thr_digest" : "thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, change) });
     await pick(verb);
     await ready(slot);
-    const reason = slot.queryByTestId("oats-confirm-blocked")?.textContent ?? null;
+    // The gate's reason, in its one place (the status line); the button is off exactly when there is one, with no copy beside it.
+    const reason = slot.queryByTestId("oats-start-status")?.querySelector("span")?.textContent ?? null;
+    expect([button(slot, "oats-confirm-act").disabled, slot.queryByTestId("oats-confirm-blocked")]).toEqual([reason !== null, null]);
     resetApp();
     return reason;
   };
@@ -1303,7 +1316,7 @@ test("Restart says in its one line that it stops what the agent does now; that i
   await pick("restart");
   await ready(slot);
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
@@ -1314,7 +1327,7 @@ test("an agent whose recorded thread bb does not have (deleted, or bb cannot be 
   openAct("start", "weekly-digest-helper");
   await ready(slot);
   expect(says(slot)).toEqual(["Starts a new conversation."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
@@ -2331,12 +2344,191 @@ test("a resume left while it runs that the kernel refuses because the session is
   expect(unknown.slot.getByTestId("oats-start-where").textContent).toContain("oats session attach --home");
 });
 
+// ---- Restart must not stop what it cannot start: a changed model, or a changed harness, that cannot be shown to start is HELD
+// (The kernel's `session restart` stops the running session before the provider judges the model or the harness:
+// a refused restart leaves the agent stopped. model/restart-model.ts is the rule; its table: test/model/restart-model.test.ts.)
+
+/**
+ * bb's model list per bb provider, as bb answers it, and what bb says of each provider. pi's models are
+ * `<provider>/<id>` with bb's `routeProviderId` (the provider it begins with); Claude Code's are bare ids
+ * with none. An id written "!id" is one bb lists for pi with NO provider (a model a person added to bb's own list).
+ */
+const listsSdk = (lists: Record<string, string[] | Promise<never>>, states: Record<string, string> = {}) => ({
+  providers: {
+    models: (async ({ providerId }: { providerId: string }) =>
+      Array.isArray(lists[providerId])
+        ? { models: (lists[providerId] as string[]).map((model) => (providerId === "pi" && !model.startsWith("!") ? { model, routeProviderId: model.slice(0, model.indexOf("/")) } : { model: model.replace(/^!/, "") })) }
+        : await lists[providerId]!) as never,
+  },
+  system: { providerStates: (async () => ({ providers: Object.entries(states).map(([providerId, status]) => ({ providerId, status })) })) as never },
+});
+const PI_LIST = ["anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5", "anthropic/claude-haiku-5", "openrouter/openai/gpt-6"];
+/** The Restart dialog of a RUNNING agent on bb whose recorded harness is pi. */
+async function restartDialog(sdk: object, over: Partial<Handlers> = {}) {
+  const { slot, pick } = await menu(
+    "thr_redesign",
+    { startCheck: ({ instance }) => startCheckOf(instance, { harness: "pi", model: "anthropic/claude-opus-5-5", running: true, runtimeState: "running", sessionEnd: null }), restart: ({ instance }) => startedIn(instance), ...over },
+    undefined,
+    sdk,
+  );
+  await pick("restart");
+  await ready(slot);
+  return slot;
+}
+const type = (slot: Awaited<ReturnType<typeof restartDialog>>, model: string) => fireEvent.change(slot.getByTestId("oats-start-model"), { target: { value: model } });
+const modelError = (slot: Awaited<ReturnType<typeof restartDialog>>) => (slot.getByTestId("oats-start-model").closest('[data-testid="oats-field"]') as HTMLElement).querySelector('[role="alert"]')?.textContent ?? null;
+/** Every call that reaches the plugin's server for an act or a plan: none may follow a held press. */
+const acted = (slot: Awaited<ReturnType<typeof restartDialog>>) => calls(slot as never, "restart", "start", "stopPlan", "stopApply", "retirePlan", "retireApply").map((call) => call.method);
+
+test("THE HARM ITSELF: a Restart whose changed model is held sends NOTHING to the kernel, for each of the three words: not a restart, not a stop, not a plan", async () => {
+  for (const [typed, harness, word] of [
+    ["claude-opus-9", null, "Not found"], // bb's list serves it by none
+    ["gpt-6", null, "Not found"], // a listed id only ENDS in it (openrouter/openai/gpt-6): pi has no such model, and the provider would refuse it AFTER the stop
+    ["claude-opus-5-5", null, "Pick provider"], // two listed models end in it
+    ["", "claude", "Required"], // the harness was changed and no model picked
+    ["my-model", null, "Not found"], // bb lists it with no provider (a person's own addition): pi resolves among its own models only
+  ] as const) {
+    const slot = await restartDialog(listsSdk({ pi: [...PI_LIST, "!my-model"], "claude-code": ["opus"] }));
+    if (harness !== null) fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: harness } });
+    if (typed !== "") type(slot, typed);
+    await waitFor(() => expect(modelError(slot), word).toBe(word));
+    // The word stands ONCE, as the Model field's mark; the button is off, described by that mark, with no copy beside it (L9).
+    expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+    expect(slot.getByRole("dialog").textContent!.split(word)).toHaveLength(2);
+    expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+    expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)!.textContent).toBe(word);
+    expect(slot.getByRole("dialog").textContent).not.toContain("Ready to start."); // it is not (and no status line is drawn for a hold on what was typed: the word says why)
+    // Pressed all the same (a click on a disabled button, and the form's own Enter): nothing is sent.
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    fireEvent.keyDown(slot.getByTestId("oats-start-model"), { key: "Enter" });
+    expect(slot.getByTestId("oats-confirm").getAttribute("data-phase")).toBe("ready");
+    expect(acted(slot), word).toEqual([]);
+    resetApp();
+  }
+});
+
+test("a changed model that bb's list serves exactly once arms Restart, and the restart is sent with it; the model left blank is sent as today", async () => {
+  // Listed whole.
+  const whole = await restartDialog(listsSdk({ pi: PI_LIST }));
+  type(whole, "openrouter/claude-opus-5-5");
+  await waitFor(() => expect(button(whole, "oats-confirm-act").disabled).toBe(false));
+  expect(modelError(whole)).toBeNull();
+  expect(whole.queryByTestId("oats-start-status")).toBeNull(); // armed: a Restart that can run says nothing (the text cut: no "Ready to start.")
+  fireEvent.click(button(whole, "oats-confirm-act"));
+  await phase(whole, "done");
+  expect(calls(whole, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", model: "openrouter/claude-opus-5-5" }]);
+  resetApp();
+  // A bare id that exactly one provider's model is: sent as typed.
+  const bare = await restartDialog(listsSdk({ pi: PI_LIST }));
+  type(bare, "claude-haiku-5");
+  await waitFor(() => expect(button(bare, "oats-confirm-act").disabled).toBe(false));
+  fireEvent.click(button(bare, "oats-confirm-act"));
+  await phase(bare, "done");
+  expect(calls(bare, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", model: "claude-haiku-5" }]);
+  resetApp();
+  // Unchanged (the field as the dialog opens it): armed whatever bb lists, and no model is sent.
+  const unchanged = await restartDialog(listsSdk({ pi: [] }));
+  expect(button(unchanged, "oats-confirm-act").disabled).toBe(false);
+  fireEvent.click(button(unchanged, "oats-confirm-act"));
+  await phase(unchanged, "done");
+  expect(calls(unchanged, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead" }]);
+});
+
+test("Not found has one line, under Details, only while the field says so; Pick provider makes the field offer only the models that serve the id; bb with no list holds too, and the note that any model can be typed is not drawn in a Restart", async () => {
+  const slot = await restartDialog(listsSdk({ pi: PI_LIST }));
+  const offered = () => Array.from(slot.getByRole("dialog").querySelectorAll("datalist option")).map((option) => option.getAttribute("value"));
+  await waitFor(() => expect(offered()).toEqual(PI_LIST));
+  expect(slot.queryByTestId("oats-start-unlisted")).toBeNull();
+  type(slot, "claude-opus-9");
+  await waitFor(() => expect(modelError(slot)).toBe("Not found"));
+  // In the dialog's ONE fold (never a second "Details"), closed until asked.
+  const details = slot.getByTestId("oats-start-details") as HTMLDetailsElement;
+  expect(slot.getByRole("dialog").querySelectorAll("details")).toHaveLength(1);
+  expect(details.open).toBe(false);
+  expect(within(details).getByTestId("oats-start-unlisted").textContent).toBe("To use a model bb does not list: stop it, then start it with that model.");
+  // Several serve it: the field offers those alone, and the line is gone.
+  type(slot, "claude-opus-5-5");
+  await waitFor(() => expect(modelError(slot)).toBe("Pick provider"));
+  expect(offered()).toEqual(["anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5"]);
+  expect(slot.queryByTestId("oats-start-unlisted")).toBeNull();
+  // Picked: armed, the whole list offered again.
+  type(slot, "anthropic/claude-opus-5-5");
+  await waitFor(() => expect(modelError(slot)).toBeNull());
+  expect(offered()).toEqual(PI_LIST);
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  expect(acted(slot)).toEqual([]);
+  resetApp();
+  // bb gives no list (or an empty one): a changed model cannot be shown to start.
+  const none = await restartDialog(listsSdk({ pi: [] }));
+  type(none, "anthropic/claude-opus-5-5");
+  await waitFor(() => expect(modelError(none)).toBe("Not found"));
+  expect(none.getByRole("dialog").textContent).not.toContain("Any model ID can be typed");
+  expect(acted(none)).toEqual([]);
+});
+
+test("while bb's list is read a changed model holds Restart with no word and no mark; a list still unread after ten seconds reads as no list: Not found", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const slot = await restartDialog(listsSdk({ pi: new Promise<never>(() => undefined) }));
+    type(slot, "anthropic/claude-opus-5-5");
+    expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+    expect(modelError(slot)).toBeNull();
+    expect([slot.queryByTestId("oats-confirm-blocked"), button(slot, "oats-confirm-act").getAttribute("aria-describedby")]).toEqual([null, null]); // off, with no word and nothing to point at yet
+    fireEvent.click(button(slot, "oats-confirm-act"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_000);
+    });
+    expect(modelError(slot)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(modelError(slot)).toBe("Not found");
+    expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+    expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)!.textContent).toBe("Not found");
+    expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+    expect(acted(slot)).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a harness changed to one bb cannot run here is NOT held: the kernel refuses that restart before it stops anything, and the dialog shows its refusal", async () => {
+  // Recorded on the real kernel (OATS 0.70.5; test/fixtures/lifecycle/README.md, "A restart the provider refuses"):
+  // E_BACKEND_NOT_READY, "… nothing was stopped or started", and the agent still runs. The message below is the recorded one.
+  const slot = await restartDialog(listsSdk({ pi: PI_LIST, "claude-code": ["opus"] }, { "claude-code": "unauthenticated" }), {
+    restart: () => {
+      throw Object.assign(new Error("E_BACKEND_NOT_READY: restart-pi was not started: oats.bb's session provider bb is not ready (unavailable): E_BACKEND_NOT_READY: bb did not report its claude-code provider's status (no claude-code entry); nothing was stopped or started"), { code: "conflict" });
+    },
+  });
+  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "claude" } });
+  type(slot, "opus");
+  await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
+  expect(slot.getByRole("dialog").textContent).not.toContain("not signed in in bb");
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(calls(slot, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", harness: "claude", model: "opus" }]);
+  // The refusal, as the kernel said it: under Details (its last clause is what matters here: nothing was stopped).
+  expect(slot.getByTestId("oats-act-details").textContent).toContain("bb did not report its claude-code provider's status (no claude-code entry); nothing was stopped or started");
+});
+
+test("the Start dialog holds none of it: a refused start harms nothing, so a model bb does not list is sent as before", async () => {
+  const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { harness: "pi" }), start: ({ instance }) => startedIn(instance) }, undefined, listsSdk({ pi: [] }));
+  await pick("start");
+  await ready(slot);
+  type(slot, "a-model-bb-does-not-list");
+  expect(modelError(slot)).toBeNull();
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper", model: "a-model-bb-does-not-list" }]);
+});
+
 // ---- behind a result (the lead's L13): a result that says the agents changed marks them, with the stamp of the roster the
 // window held when the act was SENT; the places that say their state then say "Reading…" until the roster is read again
 // (test/roster/reading.test.tsx). A result that says nothing changed marks nothing.
 
 test("a result that says the agents stopped marks every agent of the plan, with the roster's stamp from when the act was sent; nothing before the result", async () => {
-  const { actedAt } = await import("../../app/roster/reading");
+  const { actedAt, actedWas } = await import("../../app/roster/reading");
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => stopReceiptOf()) });
@@ -2345,22 +2537,27 @@ test("a result that says the agents stopped marks every agent of the plan, with 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
   const TARGETS = ["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"];
+  const WAS = ["working", "working", "idle"]; // their states in the sample's roster, as every place says them
   expect(TARGETS.map(actedAt)).toEqual([null, null, null]); // the act runs: nothing is said of its end yet
   release();
   await phase(slot, "done");
   expect(TARGETS.map(actedAt)).toEqual([fixtureSnapshot().at, fixtureSnapshot().at, fixtureSnapshot().at]); // the server's stamp of the roster, never the window's clock
   expect(actedAt("weekly-digest-helper")).toBeNull(); // no agent the plan did not stop
+  // And each agent's state in that roster (a roster that reaches the window during the act can still say it of an agent).
+  expect(TARGETS.map(actedWas).map((was) => was !== null)).toEqual([true, true, true]);
+  expect(TARGETS.map(actedWas)).toEqual(WAS);
 });
 
 test("a start and a retire that are done mark their agent; a refused apply marks nothing", async () => {
   const { actedAt } = await import("../../app/roster/reading");
+  const { actedWas } = await import("../../app/roster/reading");
   const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
   await start.pick("start");
   await ready(start.slot);
   expect(actedAt("weekly-digest-helper")).toBeNull();
   fireEvent.click(button(start.slot, "oats-confirm-act"));
   await phase(start.slot, "done");
-  expect(actedAt("weekly-digest-helper")).toBe(fixtureSnapshot().at);
+  expect([actedAt("weekly-digest-helper"), actedWas("weekly-digest-helper")]).toEqual([fixtureSnapshot().at, "stopped"]); // a start keeps the state at the send
   resetApp();
   expect(actedAt("weekly-digest-helper")).toBeNull();
   const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => retireReceiptOf() });

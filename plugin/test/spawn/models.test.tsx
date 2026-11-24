@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { harnessLabel, KEEP_HARNESS, MODEL_DEFAULT, modelOptions, NO_SUGGESTIONS, resolvedLabel, SOUL_DEFAULT, useHarnesses, useModelSuggestions } from "../../app/spawn/models";
+import { harnessLabel, KEEP_HARNESS, MODEL_DEFAULT, modelOptions, resolvedLabel, SOUL_DEFAULT, useHarnesses, useModelSuggestions } from "../../app/spawn/models";
 import { handlers, resetApp } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
@@ -23,7 +23,7 @@ function probe(harness: string | null, over: Partial<Handlers> = {}, models: (as
     rpc: handlers(over),
     sdk: { providers: { models: (async (args: Asked = {}) => (asked.push(args), models(args))) as never } },
   });
-  const read = () => JSON.parse(slot.getByTestId("read").textContent!) as { harnesses: { status: string; options: { id: string; label: string }[]; choice: boolean; hostId: string | null }; models: { status: string; models: { id: string; label: string }[]; note: string | null } };
+  const read = () => JSON.parse(slot.getByTestId("read").textContent!) as { harnesses: { status: string; options: { id: string; label: string }[]; choice: boolean; hostId: string | null }; models: { status: string; models: { id: string; label: string }[] } };
   return { slot, asked, read };
 }
 const bbModel = (model: string, displayName = model) => ({ id: model, model, displayName, description: "", isDefault: false, defaultReasoningEffort: "medium" });
@@ -56,7 +56,7 @@ describe("a harness's model suggestions", () => {
   it("are bb's own list for that harness's bb provider, on the machine that holds the deployment, asked without a project", async () => {
     const { read, asked } = probe("pi", {}, () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5"), bbModel("openai/o3")] }));
     await waitFor(() => expect(read().models.status).toBe("ready"));
-    expect(read().models).toEqual({ status: "ready", models: [{ id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 · anthropic/claude-sonnet-5" }, { id: "openai/o3", label: "openai/o3" }], note: null });
+    expect(read().models).toEqual({ status: "ready", models: [{ id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 · anthropic/claude-sonnet-5", provider: null }, { id: "openai/o3", label: "openai/o3", provider: null }] });
     expect(asked).toEqual([{ hostId: "host_falcon", providerId: "pi", preferCached: true }]);
     expect(asked.every((args) => !("projectId" in args))).toBe(true);
   });
@@ -67,20 +67,20 @@ describe("a harness's model suggestions", () => {
     expect(asked[0]).toMatchObject({ providerId: "claude-code" });
   });
 
-  it("with none reported, a list bb could not give, a harness bb has no provider for, or no harness chosen: Default plus free text, and the page says so", async () => {
+  it("with none reported, a list bb could not give, a harness bb has no provider for, or no harness chosen: Default plus free text, and no sentence says so (the first entry reads Default, and Custom… is in the list)", async () => {
     const empty = probe("pi");
     await waitFor(() => expect(empty.read().models.status).toBe("ready"));
-    expect(empty.read().models).toEqual({ status: "ready", models: [], note: NO_SUGGESTIONS });
+    expect(empty.read().models).toEqual({ status: "ready", models: [] });
     resetApp();
     const failed = probe("pi", {}, () => {
       throw new Error("bb could not list the models");
     });
     await waitFor(() => expect(failed.read().models.status).toBe("ready"));
-    expect(failed.read().models.note).toBe("No model suggestions reported. Any model ID can be typed.");
+    expect(failed.read().models).toEqual({ status: "ready", models: [] });
     resetApp();
     const unknown = probe("codex");
     await waitFor(() => expect(unknown.read().harnesses.status).toBe("ready"));
-    expect(unknown.read().models).toEqual({ status: "ready", models: [], note: NO_SUGGESTIONS });
+    expect(unknown.read().models).toEqual({ status: "ready", models: [] });
     expect(unknown.asked).toEqual([]);
     resetApp();
     const nothing = probe(null);
@@ -90,7 +90,13 @@ describe("a harness's model suggestions", () => {
   });
 
   it("bb's answer as suggestions: each model once, none that could be read as an option, nothing from a shape that is not the list", () => {
-    expect(modelOptions({ models: [bbModel("a"), bbModel("a", "Again"), bbModel("--model"), bbModel(""), { displayName: "no id" }, null, bbModel("b", "B")] })).toEqual([{ id: "a", label: "a" }, { id: "b", label: "B · b" }]);
+    expect(modelOptions({ models: [bbModel("a"), bbModel("a", "Again"), bbModel("--model"), bbModel(""), { displayName: "no id" }, null, bbModel("b", "B")] })).toEqual([{ id: "a", label: "a", provider: null }, { id: "b", label: "B · b", provider: null }]);
+    // Each model carries the provider bb routes it by, where bb names one (pi's `<provider>/<id>`).
+    expect(modelOptions({ models: [{ model: "openrouter/openai/gpt-6", displayName: "GPT 6", routeProviderId: "openrouter" }, { model: "mine", routeProviderId: "" }, { model: "odd", routeProviderId: 7 }] })).toEqual([
+      { id: "openrouter/openai/gpt-6", label: "GPT 6 · openrouter/openai/gpt-6", provider: "openrouter" },
+      { id: "mine", label: "mine", provider: null },
+      { id: "odd", label: "odd", provider: null },
+    ]);
     expect(modelOptions(null)).toEqual([]);
     expect(modelOptions({ models: "x" })).toEqual([]);
   });

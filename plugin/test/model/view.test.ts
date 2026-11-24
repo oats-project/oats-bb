@@ -215,14 +215,12 @@ describe("A2 state(): first match wins", () => {
       lost: { running: false, runtimeState: "stopped", sessionEnd: "lost" },
       "no harness loaded": { running: false, runtimeState: "unknown" },
       "operator's stop": { running: false, runtimeState: "stopped", sessionEnd: "stopped" },
-      "stopped, no word how": { running: false, runtimeState: "stopped" },
     } as const;
     const read = (over: Partial<Agent>, status: string, queuedWork = "none") => state(agent("a", over), thread("t", { status, queuedWork } as Partial<BbThread>));
     expect(Object.entries(rows).map(([name, row]) => [name, read(row, "active"), read(row, "idle")])).toEqual([
       ["lost", "working", "stopped"],
       ["no harness loaded", "working", "idle"],
       ["operator's stop", "stopped", "stopped"], // the kernel's report ("Running outside OATS") or the warning says the rest
-      ["stopped, no word how", "stopped", "stopped"],
     ]);
     // WHICH rows a message carries on is the outside feature's ONE answer (model/rest.ts `messageResumes`), and this rule
     // reads it: it names none itself. So for every row that does not run, on a thread in a turn: Working exactly where
@@ -234,6 +232,7 @@ describe("A2 state(): first match wins", () => {
       { running: false, runtimeState: "shell" },
       { running: false, runtimeState: "shell", sessionEnd: "exited" },
       { running: false, runtimeState: null },
+      { running: false, runtimeState: "stopped" }, // stopped, with no word how
     ];
     for (const row of every) {
       const turn = thread("t", { status: "active" });

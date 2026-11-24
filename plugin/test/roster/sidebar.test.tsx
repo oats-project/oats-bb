@@ -747,6 +747,7 @@ test("the sidebar's New agent is off behind an oats the plugin does not work wit
     const { slot, navigated } = await sidebar({ homeCli: () => INSTALLED[state] } as Partial<Handlers>);
     await slot.findByTestId("oats-tree");
     await waitFor(() => expect(asked(slot)).toBe(1)); // the sidebar asked: no home was ever opened in this window
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20))); // and its answer has landed: what follows is read of the answer, not of "not read yet"
     const button = () => slot.getByTestId("oats-new-agent") as HTMLButtonElement;
     const held = state === "older" || state === "unknown" || state === "newer-api";
     await waitFor(() => expect(button().disabled).toBe(held));
@@ -810,6 +811,45 @@ test("the answer is one for the window: the home's Check again, after an install
   expect(slot.queryByTestId("oats-home-cli")).toBeNull();
 });
 
+test("the answer is the window's, a failure is the asker's: the home's own read failing after the sidebar's answered says no \"Check failed\" (nobody pressed); a Check again that fails does", async () => {
+  let calls = 0;
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const Home = app.navPanels.find((candidate) => candidate.id === "home")!.component as (props: { subPath: string }) => ReactNode;
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <Home subPath="" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    {
+      rpc: handlers({
+        // The first read (the sidebar's) answers; every read after it fails.
+        homeCli: () => {
+          calls += 1;
+          if (calls === 1) return INSTALLED.older;
+          throw new Error("oats did not answer");
+        },
+      } as Partial<Handlers>),
+      sidebarThreads: sidebarThreads(),
+    },
+  );
+  // The card is there by the window's answer; the home's own reads (its first, and its one more try) have failed.
+  await slot.findByTestId("oats-home-cli");
+  await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(slot.queryByTestId("oats-home-cli-check-failed")).toBeNull();
+  expect([slot.getByTestId("oats-new-agent"), slot.getByTestId("oats-home-new-agent")].map((button) => (button as HTMLButtonElement).disabled)).toEqual([true, true]);
+  // A person asks: that check fails, and the card says so; what was read before stays.
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  expect((await slot.findByTestId("oats-home-cli-check-failed")).textContent).toContain("oats did not answer");
+  expect(slot.getByTestId("oats-home-cli")).toBeTruthy();
+});
+
 test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
   // The plugin's own page of that agent, as bb mounts it: it says whose it is (app/panel AgentPage, app/roster/open-agent.ts).
   const { slot, threadless, toggles } = await besidePage(nested(), "tmux-grandchild");
@@ -851,6 +891,10 @@ test("the row of the agent whose page is on screen is marked, as the open thread
   const twin = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")!;
   const twice = await besidePage([...nested(), { ...twin, threadId: "thr_plain", parent: null }], null, "thr_mockups");
   expect(marked(twice.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]);
+  resetApp();
+  // The same two rows with that name's PAGE on screen and no thread open: one row still, the first of the name.
+  const paged = await besidePage([...nested(), { ...twin, threadId: "thr_plain", parent: null }], "desktop-mockups-developer");
+  await waitFor(() => expect(marked(paged.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]));
 });
 
 test("with no agent's page on screen nothing is held open; and an open THREAD is the row on screen, whatever page last said its agent", async () => {

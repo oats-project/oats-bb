@@ -310,9 +310,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const drawnRows = flatten(view.rows);
   const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
   const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
-  // Whether a row is THE one on screen, for its mark: with a thread open, the one row found for it (never a second row
-  // of the same name); with none, the row of the agent whose own page is on screen.
-  const onScreen = (agent: Agent): boolean => (activeThreadId === null ? openAgent === agent.instance : onThread?.agent === agent);
+  // Whether a row is THE one on screen, for its mark: ONE row, never a second row of the same name. With a thread open,
+  // the row found for it; with none, the row of the agent whose own page is on screen: the first drawn of that name
+  // (the page is asked for by name, and the kernel's row of that name is the first).
+  const onPage = activeThreadId !== null || openAgent === null ? undefined : drawnRows.find((row) => row.agent.instance === openAgent);
+  const onScreen = (agent: Agent): boolean => (activeThreadId === null ? onPage?.agent === agent : onThread?.agent === agent);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.

@@ -56,9 +56,14 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
       alive.current = false;
     };
   }, []);
-  /** One read of the version. → whether it answered. */
+  /**
+   * One read of the version. → whether it answered. `asked`: a person asked for it (Check again):
+   * only then is a failure SAID (`failure`: "Check failed: …" on the card). A read a place makes by
+   * itself (as it is first seen; its one more try) that fails says nothing: the card it would be
+   * said on may be there by another place's answer (the answer is the window's), and nobody pressed.
+   */
   const read = useCallback(
-    (): Promise<boolean> =>
+    (asked = false): Promise<boolean> =>
       attempt(() => rpc.call("homeCli", null)).then(
         (answer) => {
           // The answer is the window's, also when the place that asked has left the screen.
@@ -68,7 +73,7 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
         },
         (cause: unknown) => {
           // The home keeps what it knew of the CLI, and says that the check failed where it shows a notice.
-          if (alive.current) setFailure(errorMessage(cause));
+          if (alive.current && asked) setFailure(errorMessage(cause));
           return false;
         },
       ),
@@ -99,7 +104,7 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
   const check = useCallback(() => {
     if (checking) return;
     setChecking(true);
-    const again = () => read();
+    const again = () => read(true);
     void attempt(() => rpc.call("refresh", null))
       .then(again, again)
       .finally(() => {

@@ -237,7 +237,9 @@ that title off the name (bb's own Rename and Regenerate title, which the plugin 
 away; a title bb wrote from a first message), and the acts would then sit under a name that is
 not the agent's. So the line starts with the agent's NAME whenever bb's title is not exactly it
 (`app/roster/IdentityRow.tsx`; the same name line the archived thread's row carries), and never
-when it is: no name twice.
+when it is: no name twice. "The name as the provider writes it" is the plugin's
+`instanceDisplayName` and the provider's `threadTitle`: two copies of one rule, held equal by
+`test/roster/title.contract.test.ts`.
 
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until

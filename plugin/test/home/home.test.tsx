@@ -583,10 +583,11 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(rows.map((row) => row.dataset.instance).sort()).toEqual(agents.map((agent) => agent.instance).sort());
   for (const row of rows) expect(within(row).getByTestId("oats-state").textContent).not.toBe("");
   const tmux = rows.find((row) => row.dataset.instance === "night-watch-helper")!;
-  expect(rows.indexOf(tmux)).toBe(rows.length - 1); // after the tree, as in the sidebar
+  expect(rows.indexOf(tmux)).toBeLessThan(rows.length - 1); // in the sidebar's one order: it waits, so it is among the first, not in a block after the tree
   expect(within(tmux).getByTestId("oats-home-agent").textContent).toBe("Night watch helper");
   // Where it is, the reason alone; its soul, its machine and who started it are on its page (the panel's Lineage).
-  expect(within(tmux).getByTestId("oats-home-agent-where").textContent).toBe("tmux");
+  expect(within(tmux).queryByTestId("oats-home-agent-where")).toBeNull(); // no reason: nothing stands under its name
+  expect(within(tmux).getByTestId("oats-tmux").previousElementSibling).toBe(within(tmux).getByTestId("oats-home-agent")); // where it is: on the name's line, after the name
   expect(tmux.textContent).not.toMatch(/started by|Ana|falcon/);
   expect(within(tmux).getByTestId("oats-state").textContent).toContain("Needs you");
   // An agent on its bb thread has no second line.
@@ -922,8 +923,11 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs (bb's terminal glyph, named "tmux").
   const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
   const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
-  await waitFor(() => expect(tmux.words()).toBe("session lost · tmux")); // (the test SDK's icon set has no glyph: the mark draws the word; test/app/tmux.test.tsx draws both)
-  expect(within(tmux.row).getByTestId("oats-tmux")).toBeTruthy();
+  await waitFor(() => expect(tmux.words()).toBe("session lost"));
+  // Where it is stands on the NAME's line, after the name (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
+  const mark = within(tmux.row).getByTestId("oats-tmux");
+  expect(mark.previousElementSibling).toBe(within(tmux.row).getByTestId("oats-home-agent"));
+  expect(mark.closest('[data-testid="oats-home-agent-where"]')).toBeNull();
   expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
 });
 

@@ -3,6 +3,7 @@
 import { hostname } from "node:os";
 import { showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
 import { TMUX_ROSTER } from "../tmux-roster.mjs";
+import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
 // host name, by which bb names its machine). A container started another way has no name set: the
@@ -336,7 +337,7 @@ export default [
       // Every tmux agent is a row, by its one name, and says its state and "tmux" (no soul).
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
-      const wanted = tmux.map(([instance, , , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · tmux`]);
+      const wanted = tmux.map(([instance, , , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped · session lost" : "Working"} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, then "tmux", and no soul`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // ("tmux" in that reading is the glyph's name: every tmux row draws bb's terminal glyph, named, and no word.)
@@ -375,6 +376,42 @@ export default [
       check(Boolean(opened), `${at} the row of ${instance} opens that agent's own page`, opened ?? (await page.evaluate("location.pathname")));
       await page.until(visible(testId("oats-panel")), 30);
       await page.shot(`tmux-roster-${viewport.name}-agent-page`);
+    },
+  },
+  {
+    // The pilot's own screen: an agent on tmux whose session was lost (a host that was restarted prints that row for
+    // every tmux agent). Its page says the reason alone; what Start does is its dialog's one line.
+    stage: "tmux-roster",
+    name: "the page of a tmux agent whose session was lost, opened from its row: Stopped, \"session lost\", no sentence; Start… and Retire…; Start's dialog says that it tries to continue its last conversation",
+    run: async ({ page, at, viewport, check }) => {
+      const [LOST] = TMUX_ROSTER.tmux.find(([, , , how]) => how === "lost");
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${LOST}"]`;
+      const facts = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row?.querySelector(${JSON.stringify(testId("oats-row-facts"))}); return facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; })()`, 30);
+      check(facts === "Stopped · session lost · tmux", `${at} its row: "Stopped · session lost", then where it is (bb's terminal glyph, named "tmux")`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      await page.evaluate(`document.querySelector(${JSON.stringify(row)}).click()`);
+      const opened = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${LOST}`)}) && document.querySelector(${JSON.stringify(`${testId("oats-panel-header")} ${testId("oats-agent-acts")} button`)}) !== null && document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null ? location.pathname : ""`, 30);
+      check(Boolean(opened), `${at} its row opens its own page`, opened ?? (await page.evaluate("location.pathname")));
+      const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+      const read = JSON.parse(
+        await page.evaluate(
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); const session = document.querySelector(${JSON.stringify(testId("oats-panel-session"))}); const whole = flat(document.querySelector(${JSON.stringify(testId("oats-agent-page"))})); return JSON.stringify({ state: flat(head?.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), acts: [...(head?.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)}) ?? [])].map(flat), reason: flat(block), kind: block?.getAttribute("data-outside") ?? null, session: flat(session), sentence: /Nobody stopped|without OATS stopping|Start tries|To carry on|Last started/.test(whole) }); })()`,
+        ),
+      );
+      check(read.state === "Stopped" && read.kind === "lost-tmux" && read.reason === "session lost" && read.sentence === false, `${at} its page says "Stopped", and under its header the reason alone, "session lost": no sentence, and no "Last started"`, JSON.stringify(read));
+      check(JSON.stringify(read.acts) === JSON.stringify(["Start…", "Retire…"]), `${at} its acts are Start… and Retire…, and no Restart (nothing runs)`, JSON.stringify(read.acts));
+      check(/^SESSION\b/i.test(read.session) && /Runs in tmux/.test(read.session) && !/Last started/.test(read.session), `${at} its Session card: the harness, the model, that it runs in tmux, and when it started, each a labelled fact`, read.session);
+      await page.shot(`tmux-roster-${viewport.name}-lost-page`, { targets: true });
+      // Start…: the dialog's ONE consequence line for a lost tmux agent; nothing starts on the press.
+      await page.evaluate(click("oats-agent-act-start"));
+      await page.until(phaseIs("ready"), 30);
+      const before = await dialog(page);
+      const says = await page.evaluate(saysNow);
+      check(before.about === LOST && before.act === "Start" && before.off === false && says === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) && !/full mode|Claude may|how to load/.test(before.body), `${at} Start… opens the dialog for that agent: its one line says that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode`, JSON.stringify({ before, says }));
+      await page.shot(`tmux-roster-${viewport.name}-lost-start-before`, { targets: true });
+      await page.evaluate(click("oats-confirm-cancel"));
+      check(Boolean(await page.until(closed, 10)), `${at} Cancel closes the dialog, and nothing was started`);
     },
   },
   {

@@ -296,7 +296,9 @@ function tmuxRoster(threads) {
     // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
     // the kernel it was recorded with.)
     delete row.runtimeState;
-    row.running = how !== "stopped";
+    row.running = how !== "stopped" && how !== "lost";
+    // A lost session (the kernel's recorded row for a tmux home whose window was killed): not running, no word, and `sessionEnd: "lost"`.
+    if (how === "lost") row.sessionEnd = "lost";
     status.agents.find((group) => group.name === soul).instances.push(row);
   }
   return JSON.stringify(status);

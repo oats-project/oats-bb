@@ -4,7 +4,7 @@ export const TMUX_ROSTER = {
   // One agent on a bb thread carries a long name in this stage, longer than two lines of a row, so that a SELECTED row with a name on two lines, cut after the second, is drawn.
   renamed: { "desktop-mockups-developer": "desktop-mockups-developer-for-the-overnight-redesign-sweep-of-every-page-panel-and-dialog" },
   tmux: [
-    // [instance, soul, parent, "waiting" | "stopped" | "running"]
+    // [instance, soul, parent, "waiting" | "stopped" | "running" | "lost"] ("lost": its session ended without OATS stopping it: the row a host that was restarted prints for every tmux agent)
     ["kernel-fix-developer", "oats-developer", null, "running"],
     ["bb-plugin-lead", "oats-product-expert", null, "waiting"],
     ["bb-plugin-roster-developer", "oats-developer", "bb-plugin-lead", "running"],
@@ -24,5 +24,6 @@ export const TMUX_ROSTER = {
     ["ranker-v4-probe", "research-expert", null, "running"],
     ["ranker-ablation-probe", "research-expert", null, "waiting"],
     ["docs-site-expert", "oats-expert", null, "running"],
+    ["overnight-sweep-developer", "oats-developer", null, "lost"],
   ],
 };

@@ -32,10 +32,11 @@ const instant = (entry: Entry): number => {
 };
 
 /** `view` is the roster as the sidebar draws it; `now` is the clock, for how long an agent has waited. */
-export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "finished">, now: number): Board {
-  const threaded: Entry[] = flatten(view.roots).map((node: Node) => ({ agent: node.agent, thread: node.thread, status: agentStatus(node.agent, node.thread, now) }));
-  const threadless: Entry[] = [...view.detached, ...view.elsewhere].map((agent) => ({ agent, thread: null, status: agentStatus(agent, null, now) }));
-  const all = [...threaded, ...threadless];
+export function board(view: Pick<View, "rows" | "finished">, now: number): Board {
+  // The sidebar's own order, row by row (`view.rows`: a root of the tree with its children, or an agent with no bb thread, in the one order).
+  const all: Entry[] = view.rows.flatMap((top): Entry[] =>
+    "node" in top ? flatten([top.node]).map((node: Node) => ({ agent: node.agent, thread: node.thread, status: agentStatus(node.agent, node.thread, now) })) : [{ agent: top.agent, thread: null, status: agentStatus(top.agent, null, now) }],
+  );
   const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 };
   for (const entry of all) counts[entry.status.state] += 1;
   const order = new Map(all.map((entry, index) => [entry.agent.instance, index]));

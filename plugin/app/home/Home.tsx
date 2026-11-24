@@ -455,13 +455,21 @@ function Cropped<Item>({ items, shown: most, more, testId, children }: { items: 
  * does not repeat it on every row.
  */
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
+  const said = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
+  const onTmux = entry.thread === null && entry.agent.backend === "tmux";
+  // On a row the glyph of an agent on tmux stands on the NAME's line, after the name: alone on a line under it, it reads as an orphan.
+  // The line under the name is the reason, where there is one ("session lost"; what became of a thread bb does not list).
+  const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : elsewhere(entry, said);
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border py-1 first:border-t-0">
       <span className="flex min-w-0 flex-1 flex-col">
-        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        {entry.thread !== null || elsewhere(entry, outsideOf(oats).of(entry.agent)) === null ? null : (
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground">
+          <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
+          {onTmux ? <TmuxMark /> : null}
+        </span>
+        {reason === null ? null : (
           <span data-testid="oats-home-agent-where" className="break-words text-xs text-muted-foreground">
-            {elsewhere(entry, outsideOf(oats).of(entry.agent))}
+            {reason}
           </span>
         )}
       </span>

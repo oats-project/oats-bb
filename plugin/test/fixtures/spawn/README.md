@@ -27,7 +27,9 @@ edit. `../README.md` says how the first two were recorded.
   rolled back and nothing is left: no home, no row in `oats status`). RECORDED, whole and with no
   edit (it holds no path; its instance was named `shape-refused`), by the provider's developer on
   the real kernel, OATS 0.70.5 with the provider of oats-bb #65: `oats spawn … --model
-  claude-fable-9 --json`, exit 1. The PREVIEW of the same values passes (a planned launch carries
+  claude-fable-9 --json`, exit 1 (the kernel side's evidence `pi-model-check/refusal-shapes/`,
+  its file `1-spawn-refused.stdout`, byte for byte; `1-after.txt` there says what was left: no home,
+  no row). The PREVIEW of the same values passes (a planned launch carries
   no model at this kernel), so the form meets this refusal at the press. The error names no
   argument: no field of the form is marked by it.
 - `spawn-preview-pi-refused.json`: the same refusal one step earlier, as OATS 0.70.5 printed it on

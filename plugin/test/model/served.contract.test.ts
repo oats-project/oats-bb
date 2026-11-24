@@ -49,12 +49,14 @@ const CASES: [what: string, id: string, rows: BbRow[], answer: Served][] = [
   ["and does not make a second of another's bare id", "echo", [{ id: "echo" }, ...by("mock/echo")], { kind: "once", ids: ["mock/echo"] }],
   ["an id that ends in a date and is not listed (bb holds such a model back)", "claude-fable-5-20261101", TWO, { kind: "none", ids: [] }],
   ["an id that ends in a date and is listed, whole", "anthropic/claude-fable-5-20261101", by("anthropic/claude-fable-5-20261101"), { kind: "whole", ids: ["anthropic/claude-fable-5-20261101"] }],
+  ["a list that names one model twice has two rows of it: the provider counts rows, and refuses its bare id (app/spawn/models.ts drops a repeated id before any rule reads the list: bb is not known to list a model twice)", "gpt-6", [...by("openai/gpt-6"), ...by("openai/gpt-6")], { kind: "several", ids: ["openai/gpt-6", "openai/gpt-6"] }],
+  ["and the model named whole is still that model", "openai/gpt-6", [...by("openai/gpt-6"), ...by("openai/gpt-6")], { kind: "whole", ids: ["openai/gpt-6"] }],
   ["a list without providers: nothing in it counts", "claude-opus-5-5", [{ id: "claude-opus-5-5" }, { id: "claude-sonnet-5" }], { kind: "unlisted", ids: [] }],
   ["an empty list", "anything", [], { kind: "unlisted", ids: [] }],
   ["a list the provider cannot read (a model that does not begin with its provider)", "claude-haiku-5", [{ id: "claude-haiku-5", routeProviderId: "anthropic" }, ...by("openai/gpt-6")], { kind: "unlisted", ids: [] }],
 ];
 // And every id against every list, both ways (the lists and ids on which a first rule of the plugin and the provider's differed).
-const LISTS: BbRow[][] = [THROUGH, by("openai/gpt-6", "openrouter/openai/gpt-6"), [{ id: "my-model" }, ...by("mock/echo")], TWO, [], [{ id: "claude-opus-5-5" }], by("openrouter/openai/gpt-7", "requesty/openai/gpt-7", "openai/gpt-7-20261101")];
+const LISTS: BbRow[][] = [by("openai/gpt-6", "openai/gpt-6", "mock/echo"), THROUGH, by("openai/gpt-6", "openrouter/openai/gpt-6"), [{ id: "my-model" }, ...by("mock/echo")], TWO, [], [{ id: "claude-opus-5-5" }], by("openrouter/openai/gpt-7", "requesty/openai/gpt-7", "openai/gpt-7-20261101")];
 const IDS = ["gpt-6", "openai/gpt-6", "openrouter/openai/gpt-6", "my-model", "echo", "mock/echo", "claude-opus-5-5", "claude-haiku-5", "haiku-5", "nosuchmodel", "openrouter", "openai", "openai/gpt-7", "gpt-7-20261101", "gpt-9-20261101"];
 const DATED = /-\d{8}$/;
 
@@ -90,6 +92,30 @@ describe("the plugin's reading of bb's list is the provider's own", () => {
   });
   test.each(LISTS.map((rows, index) => [index, rows] as const))("every id against list %i, both ways", (_index, rows) => {
     for (const id of IDS) agree(id, rows);
+  });
+});
+
+describe("and on lists nobody thought of", () => {
+  // A fixed seed: the same lists every run (a failure names its list and id).
+  let state = 0x5eed1234;
+  const next = (n: number) => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state % n;
+  };
+  const PROVIDERS = ["openai", "openrouter", "anthropic", "mock"];
+  const BARE = ["gpt-6", "openai/gpt-6", "echo", "claude-haiku-5", "gpt-7-20261101", "openrouter/openai/gpt-6"];
+  const row = (): BbRow => {
+    const bare = BARE[next(BARE.length)]!;
+    const shape = next(10);
+    if (shape === 0) return { id: bare }; // a model with no provider
+    const provider = PROVIDERS[next(PROVIDERS.length)]!;
+    return { id: `${provider}/${bare}`, routeProviderId: provider };
+  };
+  test("20 000 random lists of up to five models (repeats, nested ids, models with no provider), every id of each: the same answer, both ways", () => {
+    for (let round = 0; round < 20_000; round += 1) {
+      const rows = Array.from({ length: next(6) }, row);
+      for (const id of [...BARE, ...rows.map((each) => each.id), "nosuchmodel"]) agree(id, rows);
+    }
   });
 });
 

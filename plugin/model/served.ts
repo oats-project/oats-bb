@@ -16,8 +16,9 @@ export type ListedModel = { id: string; provider: string | null };
  * What the list says of an id:
  * - `whole`: a listed model has exactly this id: that model, alone (`ids`: the id);
  * - `once`: it is the BARE id of exactly one listed model (`ids`: that model's id);
- * - `several`: it is the bare id of more than one (`ids`: each, in the list's order: the ids the
- *   provider's own refusal names);
+ * - `several`: it is the bare id of more than one ROW of the list (`ids`: each row's id, in the
+ *   list's order: the ids the provider's own refusal names; a list that names one model twice
+ *   has two rows of it, and the provider, which counts rows, refuses its bare id);
  * - `none`: no listed model has it, whole or bare;
  * - `unlisted`: the list cannot say: it holds no model that counts (`ids`: none).
  */
@@ -39,17 +40,17 @@ export type Served = { kind: "whole" | "once" | "several" | "none" | "unlisted";
  * provider) a model with no provider serves its own id, whole.
  */
 export function served(id: string, models: readonly ListedModel[], byProvider: boolean): Served {
-  const rows = new Map<string, string | null>(); // a listed id -> its bare id (null: it has none)
+  const rows: [listed: string, bare: string | null][] = []; // each row that counts: its id, and its bare id (null: it has none)
   for (const { id: listed, provider } of models) {
     const prefix = provider === null || provider === "" ? null : `${provider}/`;
     const routed = prefix !== null && listed.startsWith(prefix) && listed.length > prefix.length;
     if (byProvider && prefix !== null && !routed) return { kind: "unlisted", ids: [] };
     if (byProvider && !routed) continue;
-    if (!rows.has(listed)) rows.set(listed, routed ? listed.slice(prefix.length) : null);
+    rows.push([listed, routed ? listed.slice(prefix.length) : null]);
   }
-  if (rows.size === 0) return { kind: "unlisted", ids: [] };
+  if (rows.length === 0) return { kind: "unlisted", ids: [] };
   if (id === "") return { kind: "none", ids: [] };
-  if (rows.has(id)) return { kind: "whole", ids: [id] };
-  const ids = [...rows].filter(([, bare]) => bare === id).map(([listed]) => listed);
+  if (rows.some(([listed]) => listed === id)) return { kind: "whole", ids: [id] };
+  const ids = rows.filter(([, bare]) => bare === id).map(([listed]) => listed);
   return { kind: ids.length === 0 ? "none" : ids.length === 1 ? "once" : "several", ids };
 }

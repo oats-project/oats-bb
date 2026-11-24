@@ -102,6 +102,46 @@ export const ACTS: readonly {
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
 
+/** How long bb's menu may take to leave the screen before the dialog opens all the same: a press is never lost. */
+const MENU_GONE_WITHIN_MS = 1500;
+const MENU_LOOK_MS = 16;
+/**
+ * Whether bb's own menu is still ON SCREEN: an entry of it is drawn inside the window. bb takes a
+ * menu out of the page when it has faded (at a desk's width); a sheet (at a phone's width) stays in
+ * the page, closed, slid out below the window: so what is asked is where its entries ARE.
+ */
+function menuOnScreen(): boolean {
+  for (const entry of Array.from(document.querySelectorAll('[role="menuitem"]'))) {
+    const box = entry.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth) return true;
+  }
+  return false;
+}
+/**
+ * Open a dialog that was asked for from bb's own menu AFTER that menu has left the screen. bb
+ * closes its menu (a sheet, at a phone's width) with an animation, after the entry's `run`: a
+ * dialog opened at once is drawn UNDER its last frames, its buttons covered. With no menu on
+ * screen (a press of a page's button, a key) this opens at once.
+ */
+export function afterMenu(open: () => void): void {
+  if (typeof document === "undefined" || !menuOnScreen()) return open();
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(limit);
+    open();
+  };
+  // Looked at about once a frame: a sheet that slides out changes nothing in the page that could be listened for.
+  const look = () => {
+    if (done) return;
+    if (menuOnScreen()) setTimeout(look, MENU_LOOK_MS);
+    else finish();
+  };
+  setTimeout(look, MENU_LOOK_MS);
+  const limit = setTimeout(finish, MENU_GONE_WITHIN_MS);
+}
+
 /**
  * The acts that apply to an agent now, and why they are held when they are (the roster is the last
  * one read). For any agent the roster names, with a bb thread or without one (its thread gone, or
@@ -260,7 +300,8 @@ export function register(app: PluginAppBuilder): void {
         // the entry stays where it was, off, so that a person sees that the act exists and does not
         // reach for bb's own Stop. A menu has no place for a reason: the roster's notice says "Acts are off.", with Retry.
         if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
-        return { label: act.menu, icon: act.icon, variant, run: () => openAct(act.verb, node.agent.instance) };
+        // From bb's own menu: the dialog opens once that menu is gone (it closes with an animation, over the dialog).
+        return { label: act.menu, icon: act.icon, variant, run: () => afterMenu(() => openAct(act.verb, node.agent.instance)) };
       },
     });
   });

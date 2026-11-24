@@ -2628,3 +2628,57 @@ test("the plan's age follows the window's clock from the moment the plan was rea
     vi.useRealTimers();
   }
 });
+
+// ---- a dialog asked for from bb's own menu opens after that menu is gone (the lead's read, T9)
+
+test("from bb's own menu the dialog opens once the menu has left the screen: never under its closing frames; with no menu on screen it opens at once", async () => {
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+  // bb's menu is still on the page when its entry runs (it closes with an animation, after the entry's `run`).
+  const bbMenu = document.createElement("div");
+  bbMenu.setAttribute("role", "menu");
+  bbMenu.innerHTML = '<div role="menuitem">Stop (OATS)</div>';
+  document.body.append(bbMenu);
+  // (jsdom draws nothing: the entry says where it is. On screen first; then slid out below the window, as bb's
+  // sheet is at a phone's width, where it STAYS in the page, closed.)
+  const entry = bbMenu.firstElementChild as HTMLElement;
+  const at = (top: number) => (entry.getBoundingClientRect = () => ({ top, bottom: top + 40, left: 0, right: 300, width: 300, height: 40, x: 0, y: top, toJSON: () => ({}) }));
+  at(600);
+  try {
+    await pick("stop");
+    // Asked, and not opened: nothing is drawn, and nothing is asked of the kernel, while the menu is there.
+    expect(slot.queryByRole("dialog")).toBeNull();
+    expect(calls(slot, "stopPlan")).toEqual([]);
+    // The menu leaves the SCREEN (it is still in the page, below the window): the dialog opens, for the agent that was asked for.
+    at(window.innerHeight + 200);
+    await ready(slot);
+    expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
+    expect(calls(slot, "stopPlan")).toHaveLength(1);
+  } finally {
+    bbMenu.remove();
+  }
+  resetApp();
+  // No menu on the page (every other test of this file; a page's button; a key): at once.
+  const direct = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+  await direct.pick("stop");
+  expect(direct.slot.queryByRole("dialog")).not.toBeNull();
+});
+
+test("a menu that never leaves the screen does not lose the press: the dialog opens all the same, after a bound", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const stuck = document.createElement("div");
+  stuck.setAttribute("role", "menuitem");
+  stuck.getBoundingClientRect = () => ({ top: 600, bottom: 640, left: 0, right: 300, width: 300, height: 40, x: 0, y: 600, toJSON: () => ({}) });
+  document.body.append(stuck);
+  try {
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+    await pick("stop");
+    expect(slot.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_600);
+    });
+    expect(slot.queryByRole("dialog")).not.toBeNull();
+  } finally {
+    stuck.remove();
+    vi.useRealTimers();
+  }
+});

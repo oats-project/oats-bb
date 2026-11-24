@@ -144,6 +144,8 @@ const whole = (key) => `(() => {
   const frame = body.getBoundingClientRect();
   const inBody = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1; };
   const onScreen = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; };
+  // And nothing lies over it: what is at its own centre is the button itself (bb's menu, closing, once covered them).
+  const uncovered = (node) => { const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2); return at !== null && (at === node || node.contains(at)); };
   // What matters now: what the scene names; else, while the act runs, the line that says so; once it has an answer, the result; before, the notice or the first sentence of the plan.
   const phase = document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase");
   const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-running"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
@@ -151,7 +153,7 @@ const whole = (key) => `(() => {
   const says = [${JSON.stringify(testId("oats-modal-above"))}, ${JSON.stringify(testId("oats-modal-below"))}].map((id) => document.querySelector(id)?.innerText ?? null);
   const above = body.scrollTop > 1;
   const below = body.scrollHeight - body.clientHeight - body.scrollTop > 1;
-  return JSON.stringify({ ok: first !== null && inBody(first) && buttons.length > 0 && buttons.every(onScreen) && (!above || says[0] !== null) && (!below || says[1] !== null), first: first?.innerText.slice(0, 60) ?? null, above, below, says });
+  return JSON.stringify({ ok: first !== null && inBody(first) && buttons.length > 0 && buttons.every(onScreen) && buttons.every(uncovered) && (!above || says[0] !== null) && (!below || says[1] !== null), first: first?.innerText.slice(0, 60) ?? null, above, below, says, covered: buttons.filter((button) => !uncovered(button)).map((button) => button.innerText.trim()) });
 })()`;
 /** The image of a dialog's state, taken once the dialog is whole on screen (WHOLE) and its controls are high enough. */
 async function dialogShot({ page, at, viewport, check }, verb, name, key = null) {
@@ -290,6 +292,8 @@ export default [
         answers({ "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 5000 } });
         await open();
         await page.until(phaseIs("reading"), 10);
+        // The dialog is there only once bb's own menu has left the screen: it never lies under the menu's closing frames.
+        check(await page.evaluate(`[...document.querySelectorAll('[role="menuitem"]')].every((entry) => { const box = entry.getBoundingClientRect(); return !(box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight); })`), `${at} the dialog opens after bb's menu has left the screen (at this width bb keeps a closed sheet in the page, below the window)`);
         const reading = await dialog(page);
         check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
         await shot("reading");

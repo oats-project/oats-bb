@@ -91,12 +91,25 @@ and `view().rows`; its table is `test/model/order.test.ts`). Three ranks: an age
 then one a person must look at (it runs outside OATS, or it failed); then everything else together
 (working, idle, stopped, unreachable). A row is placed by the most urgent rank anywhere in its own
 subtree, so a parent rises with a child that waits; children the same way under their parent; and
-within a rank by the kernel's own order of the agents. An agent with no bb thread (on tmux, or
-whose thread bb does not list) is a root in that same order, not a block after the tree. The order
+within a rank by the kernel's own order of the agents. The order
 never follows a thread's latest activity and never puts Working above Idle: no row moves while a
 person reads it, unless an agent starts to need them (it rises) or is answered (it falls back to
 its kernel place). The sidebar has no line that counts who waits: those rows are first and
 marked, and bb's badge on the plugin's entry says how many.
+
+**ONE tree for every agent, whatever its backend** (`model/view.ts` `view().rows`, the type `Row`;
+its table is `test/model/tree.test.ts`). An agent with no bb thread (on tmux; or one whose thread
+bb does not list: archived, deleted, hidden) is a row of the same tree as the others: under its
+parent where the parent is a row, whatever either's backend (a tmux child under an agent on a bb
+thread, an agent on a thread under a tmux parent), and a root where it has no parent that is
+drawn. The kernel's row names the parent; nothing of bb's is asked. The tree's rules are the same
+for all: a cycle is cut at one link, deeper than two steps is drawn at two, and every level is in
+the one order above. Such a row stays what it is: it opens the agent's own page, not a thread; and
+while that page is on screen its parents are open (the page says whose it is:
+`app/roster/open-agent.ts`). A second row of a name the kernel should never list twice is a root of
+its own. `view().roots` is still the tree of the agents on a bb thread alone, for those who read
+threads. The home's list of every agent walks the same tree (`app/home/board.ts`): a thread-less
+agent comes after its parent's rows there.
 
 **Children are collapsed by default** (`model/view.ts` `treeRows`, `insideOf`, `ancestorsOf`, whose
 table is `test/model/fold.test.ts`; `app/roster/fold.tsx`). A parent has ONE chevron before its
@@ -109,7 +122,10 @@ stored. A closed parent's children are not in the page, so nothing of them takes
 closed parent keeps its own state, mark and word, and carries after its own word, named for a
 screen reader, the mark of any row its subtree hides that itself carries one: a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
-the warning tone (archived in bb while it ran), in that tone. Of several, the most urgent. The parents of the thread that is on screen are open and are never closed over it: while a parent
+the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
+ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb
+thread, so it is inside its closed parent, and nothing else would lead a person to it). Of several,
+the most urgent. The parents of the row that is on screen (a thread; or an agent's own page) are open and are never closed over it: while a parent
 holds that row its chevron is drawn open and off (disabled, out of the tab order, named
 "<Name>'s agents shown"), and is live again once another row is on screen.
 A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.

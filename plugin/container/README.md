@@ -144,6 +144,18 @@ open, a confirmation before its act, in progress, done, refused and with another
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the
   second, whole in its title; the last row and the foot can be scrolled into view; a row opens
   its agent's own page.
+  The stage also holds the ONE TREE and its fold: as the page loads the roots alone are drawn,
+  every root that has agents under it with its chevron closed (four of them on tmux), and the two
+  closed tmux parents that hide a waiting agent carry its mark; then every parent is opened by its
+  chevron and each tmux agent that has a parent is under it, one step in, a child's child two.
+  A scene of its own draws the PILOT'S OWN ROSTER SHAPE (`tmux-roster.mjs` `PILOT_ROSTER`: eight
+  agents on tmux and none on a thread, every session lost, one a child of another; made-up names,
+  derived rows like the stage's): seven rows and one closed parent as the page loads; opened, the
+  child under it; closed again with the child waiting, the parent first, saying what it is itself
+  and carrying the child's mark; opened, the child second. A scene may draw a roster of its own
+  (`tmuxStatus(as, roster)`) and puts the stage's back. In the pilot's image pass
+  (`LIVE_PILOT_IMAGES`, by hand) that scene archives the test container's own threads for its
+  images and puts them back (`ownThreads`): bb's own pane may then differ in the views after it.
 - **LR**, by hand only, never in CI: `LOCAL_STATUS=<path> container/ci.sh live` draws ONE stage,
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
   default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
